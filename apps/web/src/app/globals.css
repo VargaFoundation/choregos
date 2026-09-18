@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Thème clair et sombre : deux palettes, une seule feuille de style. */
+:root {
+  --surface: 255 255 255;
+  --surface-muted: 244 245 247;
+  --ink: 24 26 30;
+  --ink-muted: 98 104 114;
+  --line: 224 227 232;
+  --agent: 37 99 235;
+  --human: 126 58 187;
+  --system: 87 96 110;
+  --danger: 200 45 45;
+  --ok: 22 130 78;
+  --warn: 176 118 18;
+}
+
+.dark {
+  --surface: 16 18 22;
+  --surface-muted: 25 28 34;
+  --ink: 232 234 238;
+  --ink-muted: 148 156 168;
+  --line: 44 48 56;
+  --agent: 116 160 255;
+  --human: 186 140 235;
+  --system: 150 160 176;
+  --danger: 248 113 113;
+  --ok: 74 200 140;
+  --warn: 230 176 66;
+}
+
+body {
+  @apply bg-surface-muted text-ink antialiased;
+}
+
+th {
+  @apply text-left text-xs font-medium uppercase tracking-wide text-ink-muted;
+}
+
+table {
+  @apply w-full border-collapse text-sm;
+}
+
+tbody tr {
+  @apply border-t border-line;
+}
+
+td, th {
+  @apply px-3 py-2 align-middle;
+}
+
+a {
+  @apply underline-offset-2 hover:underline;
+}

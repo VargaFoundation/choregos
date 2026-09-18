@@ -27,3 +27,8 @@ build/
 tmp/
 charts/choregos/charts/
 charts/**/Chart.lock
+
+# Web
+apps/web/.next/
+apps/web/playwright-report/
+apps/web/test-results/
