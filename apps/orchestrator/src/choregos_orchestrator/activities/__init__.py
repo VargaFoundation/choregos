@@ -20,6 +20,7 @@ ALL_ACTIVITIES = [
     tracker.close_human_request,
     tracker.notify,
     tracker.close_out,
+    tracker.reconcile_tracker,
     gates.evaluate_gates,
     gates.check_scope_violations,
     scm.open_pull_request,

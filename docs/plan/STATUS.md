@@ -14,7 +14,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S0-06 | S0 | ✅ | — | 9 Protocol + fakes scriptables ; `CHOREGOS_FAKES=1` |
 | S0-07 | S0 | ✅ | — | kind, compose, Tiltfile, seed ; `make dev-up` / `dev-down` / `dev-seed` |
 | S0-08 | S0 | ✅ | — | ci.yml ciblé par chemins, nightly.yml, release.yml (cosign, SBOM, chart OCI) |
-| S0-09 | S0 | ✅ | — | 10 ADR, 8 runbooks, guide contributeur, dev.md, securite.md, SECURITY.md |
+| S0-09 | S0 | ✅ | — | 10 ADR, 9 runbooks, guide contributeur, dev.md, securite.md, SECURITY.md |
 | S1-01 | S1 | ✅ | — | worker multi-queues, répartition des activités, OTel via structlog |
 | S1-02 | S1 | ✅ | — | `WorkflowInterpreter` : boucle d'états, tentatives bornées, `continue_as_new` |
 | S1-03 | S1 | ✅ | — | activités de stage idempotentes (`run_id` déterministe), annulation, heartbeat |
@@ -42,7 +42,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S3-03 | S3 | ✅ | — | webhooks → InboundEvent, HMAC, dédup, commandes `/choregos …` |
 | S3-04 | S3 | ✅ | — | SCM : branche, PR, checks, reviews, merge queue, compare |
 | S3-05 | S3 | ✅ | — | check-runs `choregos/scope` et `choregos/evidence` alimentés par les gates |
-| S3-06 | S3 | 🟡 | — | `list_candidates` implémenté ; boucle de réconciliation périodique à brancher |
+| S3-06 | S3 | ✅ | — | `TrackerReconciliation` : rattrapage toutes les 60 s, démarrage idempotent, runbook |
 | S3-07 | S3 | ✅ | — | Slack : blocs, boutons Approuver/Renvoyer |
 | S4-01 | S4 | ✅ | — | config LiteLLM (dev + plateforme), Postgres et Redis dans les charts |
 | S4-02 | S4 | ✅ | — | GatewayAdapter : mint (plafond dur), spend, revoke, list_models |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 85 livrées, 14 partielles, 3 non commencées.
+**Total** : 86 livrées, 13 partielles, 3 non commencées.
 
 ## Ce qui tient debout aujourd'hui
 

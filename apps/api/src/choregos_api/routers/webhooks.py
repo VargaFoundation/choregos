@@ -120,6 +120,7 @@ async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
                 {
                     "work_item_key": key,
                     "sha": event.payload.get("sha", ""),
+                    "merged_at": utcnow().isoformat(),  # borne de départ du délai de livraison
                     "risk": item.risk,
                     "labels": event.payload.get("labels", []),
                     "pr_url": event.payload.get("pr_url"),

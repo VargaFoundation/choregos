@@ -33,6 +33,8 @@ class OrchestratorSettings(BaseSettings):
     fx_usd_eur: float = 0.92
     history_size_threshold: int = 20_000
     heartbeat_seconds: int = 60
+    # Polling de secours du tracker (S3-06) : 0 désactive le rattrapage.
+    reconcile_interval_seconds: int = 60
 
 
 @lru_cache(maxsize=1)

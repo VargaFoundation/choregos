@@ -7,6 +7,7 @@ from .findings import FindingsTriage
 from .interpreter import WorkflowInterpreter, load_context, signal_train
 from .memory import MemoryIngestion
 from .provisioning import ProjectProvisioning
+from .reconciliation import TrackerReconciliation
 from .train import ReleaseTrain
 
 ALL_WORKFLOWS = [
@@ -16,6 +17,7 @@ ALL_WORKFLOWS = [
     ProjectProvisioning,
     MemoryIngestion,
     EvalMatrix,
+    TrackerReconciliation,
 ]
 
 WORKFLOW_ACTIVITIES = [load_context, signal_train]
@@ -28,5 +30,6 @@ __all__ = [
     "MemoryIngestion",
     "ProjectProvisioning",
     "ReleaseTrain",
+    "TrackerReconciliation",
     "WorkflowInterpreter",
 ]

@@ -291,3 +291,75 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
                 ),
             )
         return {"closed": True, "state": item.state}
+
+
+@activity.defn(name="reconcile_tracker")
+async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
+    """Rattrapage des webhooks perdus : les tickets `agent-ready` que personne n'a vus (S3-06).
+
+    Un webhook peut se perdre — livraison en échec, plateforme injoignable, secret changé.
+    Le tracker reste alors la seule source de vérité : on relit ses candidats et on crée ce
+    qui manque. Le démarrage passe par un identifiant déterministe, donc un ticket déjà
+    traité ne repart jamais une seconde fois.
+    """
+    from choregos_api.temporal import interpreter_id
+
+    from ..train_client import start_workflow_once
+
+    created: list[str] = []
+    started: list[str] = []
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_slug"])
+        candidates = await bundle.adapters.tracker.list_candidates(bundle.config)
+        for key in candidates:
+            item = (
+                await session.execute(
+                    select(WorkItem).where(
+                        WorkItem.project_id == bundle.project.id, WorkItem.tracker_key == key
+                    )
+                )
+            ).scalar_one_or_none()
+            if item is None:
+                data = await bundle.adapters.tracker.fetch_item(key)
+                item = WorkItem(
+                    project_id=bundle.project.id,
+                    tracker_key=key,
+                    title=data.title,
+                    body_snapshot=data.body,
+                    url=data.url,
+                    size=str(data.size) if data.size else None,
+                    risk=str(data.risk) if data.risk else None,
+                    state=bundle.workflow.initial_state,
+                )
+                session.add(item)
+                await session.flush()
+                created.append(key)
+            state = bundle.workflow.states.get(item.state)
+            if item.paused or item.closed_at is not None or (state is not None and state.terminal):
+                continue
+            workflow_id = interpreter_id(bundle.slug, key)
+            fresh = await start_workflow_once(
+                "WorkflowInterpreter",
+                workflow_id,
+                {
+                    "project_id": bundle.project.id,
+                    "project_slug": bundle.slug,
+                    "work_item_id": item.id,
+                    "tracker_key": key,
+                },
+            )
+            if fresh:
+                item.temporal_wf_id = workflow_id
+                started.append(key)
+        if created or started:
+            await persist_event(
+                session,
+                EventType.WORKITEM_CREATED,
+                project_id=bundle.project.id,
+                project_slug=bundle.slug,
+                subject=bundle.slug,
+                source="reconciliation",
+                created=created,
+                started=started,
+            )
+    return {"candidates": len(candidates), "created": created, "started": started}

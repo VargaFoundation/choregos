@@ -39,6 +39,7 @@ QUEUE_ACTIVITY_PREFIX: dict[str, tuple[str, ...]] = {
         "evaluate_gates",
         "check_scope_violations",
         "triage_finding",
+        "reconcile_tracker",
     ),
     "memory": ("ingest_sources", "ingest_alert", "write_run_lesson", "accept_pending_facts"),
 }
@@ -56,6 +57,39 @@ def activities_for(queue: str) -> list[Any]:
         if definition is not None and getattr(definition, "name", "") in names:
             selected.append(candidate)
     return selected
+
+
+async def start_reconciliation_loops() -> list[str]:
+    """Une boucle de rattrapage par projet actif (S3-06).
+
+    Le démarrage est idempotent : redémarrer un worker ne crée pas une seconde boucle,
+    et un projet ajouté après coup est pris au prochain redémarrage ou par l'API.
+    """
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    from .train_client import start_workflow_once
+
+    settings = get_settings()
+    if settings.reconcile_interval_seconds <= 0:
+        logger.info("rattrapage tracker désactivé")
+        return []
+    async with session_scope() as session:
+        slugs = (
+            (await session.execute(select(Project.slug).where(Project.status == "active"))).scalars().all()
+        )
+    started: list[str] = []
+    for slug in slugs:
+        fresh = await start_workflow_once(
+            "TrackerReconciliation",
+            f"reconcile-{slug}",
+            {"project_slug": slug, "interval_seconds": settings.reconcile_interval_seconds},
+        )
+        if fresh:
+            started.append(slug)
+    logger.info("rattrapage tracker", projets=len(slugs), demarres=len(started))
+    return started
 
 
 async def run_worker(queues: list[str]) -> None:
@@ -78,6 +112,8 @@ async def run_worker(queues: list[str]) -> None:
     async with contextlib.AsyncExitStack() as stack:
         for worker in workers:
             await stack.enter_async_context(worker)
+        if "orchestrator" in queues:
+            await start_reconciliation_loops()
         await asyncio.Future()
 
 
