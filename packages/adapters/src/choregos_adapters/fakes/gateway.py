@@ -45,8 +45,11 @@ DEFAULT_MODELS = [
 class FakeGateway:
     """Gateway de test : `record_usage()` simule des requêtes, le plafond coupe comme LiteLLM."""
 
-    def __init__(self, models: list[GatewayModel] | None = None) -> None:
+    def __init__(self, models: list[GatewayModel] | None = None, *, auto_usage: bool = False) -> None:
         self.models = models or list(DEFAULT_MODELS)
+        # `auto_usage` simule la consommation d'un agent : utile pour la démo et les
+        # captures d'écran, inutile (et faussant) pour les tests de coût.
+        self.auto_usage = auto_usage
         self.keys: dict[str, VirtualKey] = {}
         self.spends: dict[str, Spend] = {}
         self.revoked: list[str] = []
@@ -67,6 +70,9 @@ class FakeGateway:
         )
         self.keys[key_id] = key
         self.spends[key_id] = Spend()
+        if self.auto_usage:
+            model = models[0] if models else "platform/standard"
+            self.record_usage(key_id, tokens_in=120_000, tokens_out=9_000, cached=60_000, model=model)
         return key
 
     def record_usage(

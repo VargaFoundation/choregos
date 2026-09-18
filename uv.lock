@@ -289,6 +289,7 @@ version = "0.1.0"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "choregos-core" },
+    { name = "choregos-orchestrator" },
     { name = "httpx" },
     { name = "pyyaml" },
     { name = "rich" },
@@ -298,6 +299,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "choregos-core", editable = "packages/core" },
+    { name = "choregos-orchestrator", editable = "apps/orchestrator" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.9" },

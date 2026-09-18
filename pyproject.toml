@@ -79,6 +79,7 @@ ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "P
 "apps/orchestrator/src/choregos_orchestrator/activities/provisioning.py" = ["ASYNC240"]
 # Le `timeout` explicite fait partie du contrat de ces fonctions (RPC, sous-processus).
 "packages/runner/src/choregos_runner/**" = ["ASYNC109"]
+"packages/adapters/src/choregos_adapters/**" = ["ASYNC109"]
 
 [tool.ruff.format]
 quote-style = "double"

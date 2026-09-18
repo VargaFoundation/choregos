@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from choregos_api.db.models import Finding, HumanRequest, Run
+from choregos_api.db.models import Finding, HumanRequest, Run, WorkItem
 from choregos_api.services import persist_event
 from choregos_contracts import EventType
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
@@ -75,6 +75,15 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
             .scalars()
             .all()
         )
+        finding_labels: list[str] = []
+        for finding in findings:
+            created = (
+                await session.get(WorkItem, finding.created_work_item_id)
+                if finding.created_work_item_id
+                else None
+            )
+            reference = created.tracker_key if created else finding.id[:8]
+            finding_labels.append(f"{reference} ({finding.type}, {finding.severity})")
 
         lines: list[StageLine] = []
         events: list[tuple[Any, str]] = [(run, "run") for run in runs] + [(req, "human") for req in requests]
@@ -140,7 +149,7 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
             run_url=f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
             estimate_eur=estimate,
             over_estimate=bool(payload.get("over_estimate")),
-            findings=[f"{f.created_work_item_id or f.id[:8]} ({f.type}, {f.severity})" for f in findings],
+            findings=finding_labels,
             memory_note=payload.get("memory_note"),
             lines=lines,
         )
