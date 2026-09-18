@@ -1,0 +1,9 @@
+# Versions des agents ACP installées dans l'image `choregos-runner`.
+# Renovate propose les montées ; chaque bump passe par la suite de conformité (S2-11).
+openhands=0.59.0
+claude-agent-acp=0.6.1
+codex-acp=0.4.2
+gemini-cli=0.12.0
+goose=1.9.0
+opencode=0.8.3
+copilot-cli=0.3.0

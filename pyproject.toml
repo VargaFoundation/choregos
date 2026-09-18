@@ -77,6 +77,8 @@ ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "P
 # Lecture de fixtures locales dans une activité : I/O disque court et assumé.
 "apps/orchestrator/src/choregos_orchestrator/activities/evals.py" = ["ASYNC240"]
 "apps/orchestrator/src/choregos_orchestrator/activities/provisioning.py" = ["ASYNC240"]
+# Le `timeout` explicite fait partie du contrat de ces fonctions (RPC, sous-processus).
+"packages/runner/src/choregos_runner/**" = ["ASYNC109"]
 
 [tool.ruff.format]
 quote-style = "double"

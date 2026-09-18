@@ -409,19 +409,25 @@ version = "0.1.0"
 source = { editable = "packages/tools-mcp" }
 dependencies = [
     { name = "choregos-core" },
+    { name = "choregos-runner" },
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "structlog" },
     { name = "typer" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "choregos-core", editable = "packages/core" },
+    { name = "choregos-runner", editable = "packages/runner" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "typer", specifier = ">=0.15" },
+    { name = "uvicorn", specifier = ">=0.32" },
 ]
 
 [[package]]
