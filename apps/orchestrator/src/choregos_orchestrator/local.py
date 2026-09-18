@@ -231,10 +231,9 @@ async def _emit_findings(project_id: str, work_item_id: str, run_id: str, result
     """
     if not result.findings:
         return
-    from sqlalchemy import select
-
     from choregos_api.db.models import Finding, Project
     from choregos_api.db.session import session_scope
+    from sqlalchemy import select
 
     async with session_scope() as session:
         project = await session.get(Project, project_id)

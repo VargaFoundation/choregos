@@ -100,7 +100,15 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
 function Graph({ graph }: { graph: NonNullable<WorkflowValidation["graph"]> }) {
   const lanes = ["agent", "human", "system", "train", "wait", "terminal"];
   const nodes = graph.nodes as Array<{ id: string; display: string; lane?: string; terminal?: boolean }>;
-  const edges = graph.edges as Array<{ from: string; to: string; actor?: string | null; gates?: string[] }>;
+  const edges = graph.edges as Array<{
+    id?: string;
+    from: string;
+    to: string;
+    kind?: string;
+    label?: string;
+    actor?: string | null;
+    gates?: string[];
+  }>;
   return (
     <div className="space-y-4">
       {lanes.map((lane) => {
@@ -127,9 +135,10 @@ function Graph({ graph }: { graph: NonNullable<WorkflowValidation["graph"]> }) {
         <p className="mb-1 text-xs uppercase tracking-wide text-ink-muted">transitions</p>
         <ul className="space-y-1 font-mono text-xs text-ink-muted">
           {edges.map((edge, index) => (
-            <li key={index}>
-              {edge.from} → {edge.to}
+            <li key={edge.id ?? index} className={edge.kind && edge.kind !== "nominal" ? "opacity-70" : ""}>
+              {edge.from} {edge.kind && edge.kind !== "nominal" ? "⇢" : "→"} {edge.to}
               {edge.actor ? ` · ${edge.actor}` : ""}
+              {edge.kind && edge.kind !== "nominal" && edge.label ? ` · ${edge.label}` : ""}
               {edge.gates?.length ? ` [${edge.gates.join(", ")}]` : ""}
             </li>
           ))}

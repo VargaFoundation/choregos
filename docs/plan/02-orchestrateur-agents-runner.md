@@ -21,29 +21,49 @@ Task queues : `orchestrator` (workflows + activités légères), `executor` (cr�
 @workflow.defn
 class WorkflowInterpreter:
     def __init__(self):
-        self.inbox: deque[Signal] = deque(); self.attempts: Counter = Counter()
-        self.state: str = ""; self.cost_usd = 0.0; self.paused = False; self.stopped = False
+        self.inbox: deque[Signal] = deque()
+        self.attempts: Counter = Counter()
+        self.state: str = ""
+        self.cost_usd = 0.0
+        self.paused = False
+        self.stopped = False
 
     # signaux
     @workflow.signal
-    def human_decision(self, d: HumanDecision): self.inbox.append(d)
+    def human_decision(self, d: HumanDecision):
+        self.inbox.append(d)
+
     @workflow.signal
-    def inbound(self, e: InboundEvent): self.inbox.append(e)          # board_moved, ci_result, pr_*, deploy_result
+    def inbound(self, e: InboundEvent):
+        self.inbox.append(e)  # board_moved, ci_result, pr_*, deploy_result
+
     @workflow.signal
-    def finding(self, f: Finding): self.pending_findings.append(f)
+    def finding(self, f: Finding):
+        self.pending_findings.append(f)
+
     @workflow.signal
-    def control(self, c: Control): ...                                 # pause | resume | stop | migrate(workflow_def_id)
+    def control(self, c: Control): ...  # pause | resume | stop | migrate(workflow_def_id)
     @workflow.query
-    def status(self) -> Status: return Status(self.state, self.cost_usd, self.attempts, self.current_run)
+    def status(self) -> Status:
+        return Status(self.state, self.cost_usd, self.attempts, self.current_run)
 
     @workflow.run
-    async def run(self, wi: WorkItem, wf: WorkflowDef, project: ProjectConfig, policy: Policy, resume_from: str | None = None):
+    async def run(
+        self,
+        wi: WorkItem,
+        wf: WorkflowDef,
+        project: ProjectConfig,
+        policy: Policy,
+        resume_from: str | None = None,
+    ):
         self.state = resume_from or wf.initial_state
         await self.act(mirror_state, wi, self.state)
         while not wf.states[self.state].terminal and not self.stopped:
             await workflow.wait_condition(lambda: not self.paused)
             t = wf.select_transition(self.state, self.last_outcome)
-            if t is None: self.state = await self.wait_external_transition(wf); continue      # état d'attente humaine (board)
+            if t is None:
+                self.state = await self.wait_external_transition(wf)
+                continue  # état d'attente humaine (board)
             if t.via == "release_train":
                 await self.act(signal_train, project, t.train.env, wi, self.last_pr)
                 deploy = await self.wait_for(DeployResult, timeout=t.timeout)
@@ -52,7 +72,7 @@ class WorkflowInterpreter:
                 res = await self.run_stage(wi, t, project, policy)
                 self.state = self.after_stage(t, res, wf)
             elif t.actor.type == "human":
-                dec = await self.wait_human(wi, t, project, policy)          # crée human_request, SLA, rappels
+                dec = await self.wait_human(wi, t, project, policy)  # crée human_request, SLA, rappels
                 self.state = t.to if dec.approved else (t.on_reject or self.state)
             else:  # system
                 ok = await self.wait_gates(t.gates, wi, timeout=t.timeout)
@@ -64,28 +84,40 @@ class WorkflowInterpreter:
         return Outcome(self.state, self.cost_usd)
 
     async def run_stage(self, wi, t, project, policy) -> StageResult:
-        attempt = self.attempts[t.id]; self.attempts[t.id] += 1
+        attempt = self.attempts[t.id]
+        self.attempts[t.id] += 1
         budget = policy.budget_for(t.actor.role, wi.size)
-        model = await self.act(resolve_model, project, t.actor.model, wi.size)             # profils → litellm_model
+        model = await self.act(resolve_model, project, t.actor.model, wi.size)  # profils → litellm_model
         key = await self.act(mint_gateway_key, project, wi, t, attempt, budget, model)
-        ctx = await self.act(build_context_pack, project, wi, t)                           # Ecphoria + tickets liés + logs CI
+        ctx = await self.act(build_context_pack, project, wi, t)  # Ecphoria + tickets liés + logs CI
         spec = StageInput.build(wi, t, project, model, key, budget, ctx, attempt)
-        ref = await self.act(start_run, spec)                                              # Executor.start → Tekton PipelineRun
-        res = await self.act(await_run, ref, heartbeat=60, timeout=budget.max_minutes + 10)  # heartbeat, cancel on stop
-        spend = await self.act(collect_spend, key); await self.act(revoke_key, key)
+        ref = await self.act(start_run, spec)  # Executor.start → Tekton PipelineRun
+        res = await self.act(
+            await_run, ref, heartbeat=60, timeout=budget.max_minutes + 10
+        )  # heartbeat, cancel on stop
+        spend = await self.act(collect_spend, key)
+        await self.act(revoke_key, key)
         self.cost_usd += spend.cost_usd
-        await self.act(record_run, wi, t, attempt, res, spend); await self.act(update_ticket_status_comment, wi)
-        for f in res.findings: await self.act(emit_finding, project, wi, ref, f)
-        for q in res.scope_changes_requested: await self.handle_scope_change(wi, t, q, policy)
-        if self.cost_usd > policy.budget_ticket(wi.size): res.status = "needs_human"; res.summary += " (budget ticket dépassé)"
+        await self.act(record_run, wi, t, attempt, res, spend)
+        await self.act(update_ticket_status_comment, wi)
+        for f in res.findings:
+            await self.act(emit_finding, project, wi, ref, f)
+        for q in res.scope_changes_requested:
+            await self.handle_scope_change(wi, t, q, policy)
+        if self.cost_usd > policy.budget_ticket(wi.size):
+            res.status = "needs_human"
+            res.summary += " (budget ticket dépassé)"
         return res
 
     def after_stage(self, t, res, wf) -> str:
         if res.status == "done":
-            gates_ok = await_gates_sync(t.gates)   # évaluées par activité ; gates asynchrones (CI) → attente signal
+            gates_ok = await_gates_sync(
+                t.gates
+            )  # évaluées par activité ; gates asynchrones (CI) → attente signal
             return t.to if gates_ok else self.retry_or_escalate(t, wf)
-        if res.status == "needs_human": return wf.defaults.on_question
-        return self.retry_or_escalate(t, wf)      # failed | blocked
+        if res.status == "needs_human":
+            return wf.defaults.on_question
+        return self.retry_or_escalate(t, wf)  # failed | blocked
 
     def retry_or_escalate(self, t, wf) -> str:
         r = t.on_fail
