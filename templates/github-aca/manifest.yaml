@@ -1,0 +1,67 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: github-aca
+  version: 1.0.0
+  display: GitHub · Azure Container Apps · Argo CD
+  description: >-
+    Les runs d'agents tournent en *jobs* Azure Container Apps — pas de cluster à tenir pour
+    les runners, une facturation à la seconde, une isolation par job. Les tickets restent
+    dans GitHub Issues et Projects v2, et le déploiement applicatif passe par Argo CD.
+    C'est le template à prendre quand l'entreprise est sur Azure mais ne veut pas d'un
+    pool Kubernetes dédié aux agents.
+requires:
+  connectors:
+    tracker: github-issues
+    scm: github
+    ci: tekton
+    cd: argocd
+    runtime: aca
+  azure_capabilities:
+    - "Microsoft.App/managedEnvironments"
+    - "Microsoft.ManagedIdentity/userAssignedIdentities"
+    - "Microsoft.ContainerRegistry/registries?"
+    - "Microsoft.OperationalInsights/workspaces?"
+defaults:
+  workflow: template:default-simple@1
+  policy: preset:solo
+  models: platform-defaults
+  agent: openhands
+inputs:
+  - { name: repo, type: github-repo, required: true, description: "owner/name du dépôt applicatif" }
+  - { name: default_branch, type: string, default: main }
+  - { name: language, type: enum, values: [python, node, go, java, dotnet, other], default: python }
+  - { name: envs, type: list, default: [dev, staging, prod] }
+  - { name: subscription_id, type: string, required: true, description: "abonnement Azure des runs" }
+  - { name: resource_group, type: string, required: true, description: "groupe de ressources des jobs" }
+  - { name: environment_id, type: string, required: true, description: "id ARM du Managed Environment ACA" }
+  - { name: identity_id, type: string, description: "identité managée qui tire l'image du runner" }
+  - { name: registry_server, type: string, description: "registre de l'image runner (ex. acme.azurecr.io)" }
+  - { name: log_analytics_workspace_id, type: string, description: "espace Log Analytics pour les logs de run" }
+  - { name: gitops_repo, type: string, description: "dépôt GitOps des environnements" }
+  - { name: project_number, type: int, description: "numéro du board Projects v2" }
+  - { name: slack_channel, type: string, default: "#choregos" }
+steps:
+  - github.install_app
+  - github.ensure_labels
+  - github.ensure_project_board: { fields: [Status, "Coût (€)", Taille, Risque, Run] }
+  - github.ensure_issue_template
+  - aca.check_environment
+  - aca.check_identity
+  - gitops.write_project_manifests: { path: "projects/{{slug}}/" }
+  - gitops.open_pr_or_commit
+  - argocd.wait_synced: { apps: ["choregos-project-{{slug}}"] }
+  - github.ensure_webhooks:
+      events: [issues, issue_comment, projects_v2_item, pull_request, pull_request_review, check_suite]
+  - repo.scaffold_pr:
+      files:
+        - AGENTS.md
+        - .choregos/workflow.yaml
+        - .choregos/policy.yaml
+        - .github/PULL_REQUEST_TEMPLATE.md
+        - CODEOWNERS
+  - memory.create_tenant
+  - memory.initial_import: { sources: [readme, docs, adr, "closed_issues:365d", "merged_prs:365d"] }
+  - gateway.create_team_and_budget
+  - notify.test_message
+scaffold: ./scaffold

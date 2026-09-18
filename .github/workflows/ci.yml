@@ -131,7 +131,9 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --frozen
       - name: conformité du backend par défaut (les autres tournent la nuit)
-        run: uv run pytest tests/conformance -m conformance -q -k "openhands or protocol"
+        run: uv run pytest tests/conformance/backends -m conformance -q -k "openhands or protocol"
+      - name: conformité des templates (connecteurs, étapes, scaffold)
+        run: uv run pytest tests/conformance/templates -m conformance -q
 
   images:
     needs: changes

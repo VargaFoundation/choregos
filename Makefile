@@ -132,7 +132,7 @@ e2e:  ## Scénarios bout en bout (kind requis)
 	$(UV) run pytest tests/e2e -m e2e -q
 
 .PHONY: conformance
-conformance:  ## Suite de conformité backends ACP
+conformance:  ## Suites de conformité (backends ACP, templates)
 	$(UV) run pytest tests/conformance -m conformance -q
 
 .PHONY: evals

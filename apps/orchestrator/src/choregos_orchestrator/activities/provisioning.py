@@ -149,6 +149,8 @@ async def _execute(
     if name == "github.ensure_webhooks":
         events = params.get("events", [])
         return f"webhooks : {', '.join(events) if events else 'par défaut'}"
+    if name in {"aca.check_environment", "aca.check_identity"}:
+        return await _check_aca(name, bundle)
     if name == "gitops.write_project_manifests":
         return await _write_manifests(bundle, params, settings)
     if name == "gitops.open_pr_or_commit":
@@ -208,6 +210,31 @@ async def _execute(
     return f"étape `{name}` ignorée (non implémentée par ce template)"
 
 
+async def _check_aca(step: str, bundle: Any) -> str:
+    """Vérifie l'environnement ACA **avant** le premier run, pas au premier ticket.
+
+    Un environnement absent ou une identité sans droit `AcrPull` ne se voit sinon qu'au
+    moment où un agent devrait démarrer : autant le dire pendant le provisioning.
+    """
+    executor = bundle.adapters.executor
+    client = getattr(executor, "client", None)
+    environment = getattr(executor, "environment_id", None)
+    if client is None or environment is None:
+        return f"étape `{step}` ignorée : l'exécuteur de ce projet n'est pas Azure Container Apps"
+    if step == "aca.check_environment":
+        found = await client.request("GET", environment)
+        if found is None:
+            raise RuntimeError(f"environnement ACA introuvable : {environment}")
+        return f"environnement ACA joignable : {environment.rsplit('/', 1)[-1]}"
+    identity = getattr(executor, "identity_id", None)
+    if not identity:
+        return "aucune identité managée déclarée : l'image runner doit être publique"
+    found = await client.request("GET", identity)
+    if found is None:
+        raise RuntimeError(f"identité managée introuvable : {identity}")
+    return f"identité managée joignable : {identity.rsplit('/', 1)[-1]}"
+
+
 async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -> str:
     """Écrit les manifests du projet dans le dépôt GitOps — Argo CD applique, pas l'API."""
     path = str(params.get("path", "projects/{{slug}}/")).replace("{{slug}}", bundle.slug)
@@ -227,6 +254,8 @@ def _remediation(step: str) -> str:
         "gitops.write_project_manifests": "Vérifier les droits d'écriture sur `choregos-infra`.",
         "argocd.wait_synced": "Regarder l'application dans Argo CD : sync manuelle possible.",
         "gateway.create_team_and_budget": "Vérifier `master_key` LiteLLM et le quota de l'équipe.",
+        "aca.check_environment": "Créer le Managed Environment ACA, ou corriger `environment_id`.",
+        "aca.check_identity": "Vérifier l'identité managée et son rôle `AcrPull` sur le registre.",
     }.get(step, "Corriger la cause puis relancer le provisioning : il reprend à l'étape échouée.")
 
 

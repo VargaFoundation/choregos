@@ -88,6 +88,7 @@ def _register_builtins() -> None:
     # ───────────────── implémentations réelles (jour 1) ─────────────────
     from .cd.argocd import ArgoCdAdapter
     from .ci.tekton import TektonCi
+    from .executor.aca import AcaExecutor, AzureArmClient
     from .executor.k8s_job import KubernetesJobExecutor
     from .executor.local_docker import LocalDockerExecutor
     from .executor.tekton import KubernetesClient, TektonExecutor
@@ -171,6 +172,23 @@ def _register_builtins() -> None:
         lambda cfg: KubernetesJobExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
             service_account=cfg.get("service_account", "choregos-runner"),
+        )
+    )
+    register("runtime", "aca")(
+        lambda cfg: AcaExecutor(
+            AzureArmClient(
+                subscription_id=cfg["subscription_id"],
+                resource_group=cfg["resource_group"],
+                tenant_id=cfg.get("tenant_id", ""),
+                client_id=cfg.get("client_id", ""),
+                client_secret=cfg.get("client_secret", ""),
+                token=cfg.get("token", ""),
+            ),
+            environment_id=cfg["environment_id"],
+            location=cfg.get("location", "westeurope"),
+            identity_id=cfg.get("identity_id"),
+            registry_server=cfg.get("registry_server"),
+            log_analytics_workspace_id=cfg.get("log_analytics_workspace_id"),
         )
     )
     register("runtime", "local_docker")(

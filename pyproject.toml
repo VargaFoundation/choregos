@@ -125,7 +125,6 @@ norecursedirs = [
   ".venv",
   "tests/e2e",
   "tests/fixtures/repos",
-  "templates",
 ]
 addopts = "-q --strict-markers --import-mode=importlib"
 markers = [

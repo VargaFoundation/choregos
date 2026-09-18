@@ -106,10 +106,10 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
 | S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
 | S13-04 | S13 | 🟡 | — | adaptateurs Jira et GitLab écrits et testés contre le protocole ; jamais joués contre une instance réelle |
-| S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
+| S13-05 | S13 | 🟡 | — | exécuteur ACA écrit et testé contre ARM ; template `github-aca` livré — `azure-devops-aca` complet attend Azure Boards/Pipelines |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 89 livrées, 11 partielles, 2 non commencées.
+**Total** : 89 livrées, 12 partielles, 1 non commencée.
 
 ## Ce qui tient debout aujourd'hui
 

@@ -1,0 +1,22 @@
+# {{ project.display_name or project.slug }} — instructions pour les agents
+
+## Contexte
+{{ project.description | default("Ce dépôt est piloté par Choregos : un ticket `agent-ready` déclenche un workflow, un agent travaille dans une branche, une PR est ouverte et relue.") }}
+
+## Commandes
+- Tests : `{{ project.repo.test_command or "make test" }}`
+- Lint : `{{ project.repo.lint_command or "make lint" }}`
+- Typage : `{{ project.repo.typecheck_command or "make typecheck" }}`
+
+## Conventions
+- Langage principal : {{ project.repo.language or "à préciser" }}
+- Commits conventionnels (`fix(scope): …`), une intention par commit.
+- Branche de travail : `{{ project.repo.branch_prefix }}<numéro-du-ticket>`.
+- Toute écriture hors des chemins autorisés du ticket est refusée par la plateforme.
+
+## Definition of done
+Tests verts, lint vert, typage vert, critères d'acceptation de la spec couverts par des tests,
+`.choregos/result.json` conforme au contrat.
+
+## Hors périmètre
+Un problème découvert hors du ticket se **signale** (`report_finding`) et ne se corrige pas ici.
