@@ -504,6 +504,11 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
             value = getattr(outputs, field, None)
             if value:
                 documents[field] = value
+        # Une PR d'infra déclarée par l'agent (`artifacts.reports["infra_pr"]`) suit le
+        # ticket jusqu'au train, qui en déclenchera l'`apply` Atlantis après approbation.
+        infra_pr = result.artifacts.reports.get("infra_pr")
+        if infra_pr:
+            documents["infra_pr_url"] = infra_pr
         item.documents = documents
         if result.artifacts.pr_url:
             item.pr_url = result.artifacts.pr_url

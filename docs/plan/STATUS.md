@@ -88,7 +88,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S9-02 | S9 | ✅ | — | CdAdapter Argo : promotion par PR GitOps, santé, rollout, abandon, fenêtres |
 | S9-03 | S9 | ✅ | — | AnalysisTemplate SLO, soak, smoke ; canary cassé → rollback prouvé par test |
 | S9-04 | S9 | ✅ | — | approbation (API + Slack + front), notes de release, incident enregistré |
-| S9-05 | S9 | 🟡 | — | politique Terraform/Atlantis modélisée ; intégration `apply` pendant le train à faire |
+| S9-05 | S9 | ✅ | — | `apply` Atlantis déclenché pendant le départ, après approbation ; échec ⇒ rollback |
 | S9-06 | S9 | ✅ | — | gate `flag_present` avec message explicite |
 | S10-01 | S10 | ✅ | — | MemoryAdapter Ecphoria (circuit-breaker) et repli pgvector, même interface |
 | S10-02 | S10 | ✅ | — | `FindingsTriage` : dédup, ticket lié, commentaire d'origine, notification, mémoire |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 88 livrées, 11 partielles, 3 non commencées.
+**Total** : 89 livrées, 10 partielles, 3 non commencées.
 
 ## Ce qui tient debout aujourd'hui
 

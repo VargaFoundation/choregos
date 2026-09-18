@@ -21,6 +21,9 @@ class FakeScm:
         self._next_number = 1
         self._diffs: dict[tuple[str, str, str], DiffSummary] = {}
         self.check_runs: list[dict[str, Any]] = []
+        self.comments: list[tuple[str, int, str]] = []
+        # Crochets scriptables : un Atlantis simulé répond au commentaire `atlantis apply`.
+        self.on_comment: list[Any] = []
 
     # ───────────────────────── scripting ─────────────────────────
 
@@ -30,6 +33,18 @@ class FakeScm:
             head=head,
             files=[DiffFile(path=p, additions=a, deletions=d) for p, a, d in files],
         )
+
+    def atlantis(self, conclusion: str = "success") -> None:
+        """Simule Atlantis : un `atlantis apply` pose le check `atlantis/apply`."""
+
+        def hook(ref: PrRef, body: str) -> None:
+            if "atlantis apply" not in body:
+                return
+            pr = self.prs[(ref.repo, ref.number)]
+            pr.checks = [c for c in pr.checks if c.name != "atlantis/apply"]
+            pr.checks.append(CheckRun(name="atlantis/apply", status="completed", conclusion=conclusion))
+
+        self.on_comment.append(hook)
 
     def set_checks(self, ref: PrRef, conclusion: str, *, scanners: bool = True) -> None:
         """Pose les check-runs de la PR. Par défaut, le projet a aussi ses scanners."""
@@ -70,6 +85,12 @@ class FakeScm:
             pr.body = body
         if draft is not None:
             pr.draft = draft
+
+    async def comment_pr(self, ref: PrRef, body: str) -> str:
+        self.comments.append((ref.repo, ref.number, body))
+        for hook in self.on_comment:
+            hook(ref, body)
+        return f"https://fake.scm/{ref.repo}/pull/{ref.number}#comment-{len(self.comments)}"
 
     async def get_pr(self, ref: PrRef) -> PrState:
         return self.prs[(ref.repo, ref.number)].model_copy(deep=True)

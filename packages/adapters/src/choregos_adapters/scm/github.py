@@ -101,6 +101,16 @@ class GitHubScm:
                 repo=ref.repo,
             )
 
+    async def comment_pr(self, ref: PrRef, body: str) -> str:
+        """Commente une PR. C'est par là que passent les ordres Atlantis (`atlantis apply`)."""
+        comment = await self.client.request(
+            "POST",
+            f"/repos/{ref.repo}/issues/{ref.number}/comments",
+            repo=ref.repo,
+            json={"body": body},
+        )
+        return str(comment.get("html_url", ""))
+
     async def get_pr(self, ref: PrRef) -> PrState:
         pr = await self.client.request("GET", f"/repos/{ref.repo}/pulls/{ref.number}", repo=ref.repo)
         sha = pr["head"]["sha"]

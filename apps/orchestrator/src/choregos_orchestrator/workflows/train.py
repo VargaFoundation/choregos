@@ -280,6 +280,22 @@ class ReleaseTrain:
                 )
                 return {"frozen": False, "reason": "approbation refusée"}
 
+        # L'infra passe avant le code : appliquer Terraform après le canary reviendrait à
+        # envoyer du code en production sur une infra qui ne l'attend pas encore.
+        terraform = await workflow.execute_activity(
+            train_activities.apply_terraform,
+            {
+                "release_id": self.current_release,
+                "project_slug": params.project_slug,
+                "env": params.env,
+            },
+            start_to_close_timeout=timedelta(minutes=45),
+            heartbeat_timeout=timedelta(minutes=5),
+            retry_policy=NO_RETRY,
+        )
+        if terraform.get("ok") is False:
+            return await self._rollback(params, config, terraform.get("reason", "apply Terraform en échec"))
+
         self.status = str(ReleaseStatus.PROMOTING)
         canary = config.get("canary") or {}
         steps = list(canary.get("steps", [100]))

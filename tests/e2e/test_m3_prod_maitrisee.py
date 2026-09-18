@@ -148,3 +148,41 @@ async def test_le_gel_exige_un_motif(platform: Platform) -> None:
         f"/api/v1/projects/{platform.project_id}/trains/prod/freeze", json={"reason": ""}
     )
     assert response.status_code == 422, "geler sans motif est refusé par le contrat"
+
+
+async def test_l_apply_terraform_part_pendant_le_depart_apres_approbation(
+    platform: Platform, worker: Any
+) -> None:
+    """Terraform s'applique dans la fenêtre du train, jamais entre deux départs (S9-05)."""
+    await login(platform.client)
+    from choregos_core.domain import PrRef, PrState
+
+    infra = "https://github.com/varga/billing-api-infra/pull/9"
+    ref = PrRef(repo="varga/billing-api-infra", number=9, url=infra)
+    platform.adapters.scm.prs[("varga/billing-api-infra", 9)] = PrState(ref=ref, title="infra")
+    platform.adapters.scm.atlantis("success")
+
+    with platform.env.auto_time_skipping_disabled():
+        async with worker():
+            handle = await platform.env.client.start_workflow(
+                "ReleaseTrain",
+                {"project_slug": platform.project_slug, "env": "prod"},
+                id=f"train-{platform.project_slug}-prod",
+                task_queue="e2e",
+            )
+            await handle.signal(
+                "merged",
+                {"work_item_key": "varga/billing-api#42", "sha": "d1", "infra_pr_url": infra},
+            )
+            await handle.signal("depart_now", {"by": "augustin@varga.dev"})
+            await _train_status(handle, lambda status: status["status"] == "awaiting_approval")
+
+            # Rien n'est appliqué tant que l'approbation n'est pas donnée.
+            assert platform.adapters.scm.comments == [], platform.adapters.scm.comments
+
+            await handle.signal("approve", {"by": "marie@varga.dev"})
+            await _train_status(handle, lambda status: status["status"] == "collecting")
+            await handle.signal("abort", {"by": "test"})
+            await handle.result()
+
+    assert ("varga/billing-api-infra", 9, "atlantis apply") in platform.adapters.scm.comments

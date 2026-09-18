@@ -660,6 +660,9 @@ async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
                 "title": item.title,
                 "merged_at": utcnow().isoformat(),
                 "sha": (item.documents or {}).get("merge_sha", ""),
+                # Déclarée par l'agent dans `artifacts.reports["infra_pr"]` : le train
+                # l'appliquera via Atlantis pendant le départ, après approbation.
+                "infra_pr_url": (item.documents or {}).get("infra_pr_url"),
                 "risk": item.risk,
                 "labels": [],
                 "pr_url": item.pr_url,

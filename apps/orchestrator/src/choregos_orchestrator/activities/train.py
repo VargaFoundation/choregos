@@ -10,7 +10,7 @@ from typing import Any
 from choregos_api.db.models import Deployment, Finding, Project, Release, WorkItem
 from choregos_api.services import persist_event
 from choregos_contracts import EventType
-from choregos_core import Change, Message, utcnow
+from choregos_core import Change, Message, PrRef, utcnow
 from sqlalchemy import func, select
 from temporalio import activity
 
@@ -465,3 +465,83 @@ async def train_stats(payload: dict[str, Any]) -> dict[str, Any]:
             )
         ).scalar_one()
         return {"releases": int(count)}
+
+
+@activity.defn(name="apply_terraform")
+async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
+    """Déclenche l'`apply` Atlantis des PR d'infra du lot, après approbation (docs/plan/05).
+
+    Choregos ne détient aucun credential cloud : il commente `atlantis apply` sur la PR
+    d'infra et attend le verdict du check `atlantis/apply`. C'est Atlantis qui tient le
+    lock et les credentials ; le train se contente de choisir le moment — pendant un
+    départ, après l'approbation, jamais entre deux.
+    """
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_slug"])
+        spec = getattr(bundle.engine.train(payload["env"]), "terraform", None)
+        if spec is None or str(getattr(spec, "via", "none")) != "atlantis":
+            return {"applied": [], "skipped": "atlantis non configuré pour cet environnement"}
+        release = await session.get(Release, payload["release_id"])
+        if release is None:
+            return {"applied": [], "skipped": "release inconnue"}
+        prs = [
+            (item.get("work_item_key", ""), str(item["infra_pr_url"]))
+            for item in release.items
+            if item.get("infra_pr_url")
+        ]
+        scm = bundle.adapters.scm
+        slug = bundle.slug
+        channel = bundle.config.notify.slack_channel or "#choregos"
+        notify = bundle.adapters.notify
+
+    if not prs:
+        return {"applied": [], "skipped": "aucune PR d'infra dans ce lot"}
+
+    applied: list[str] = []
+    for key, url in prs:
+        ref = _pr_ref(url)
+        if ref is None:
+            return {"applied": applied, "ok": False, "reason": f"URL de PR illisible : {url}"}
+        await scm.comment_pr(ref, "atlantis apply")
+        verdict = await _await_atlantis(scm, ref, int(payload.get("timeout_minutes", 30)))
+        if verdict != "success":
+            await notify.send(
+                channel,
+                Message(
+                    title=f"Terraform : apply en échec — {slug} → {payload['env']}",
+                    body=f"{key} · {url} : {verdict}",
+                    severity="error",
+                ),
+            )
+            return {"applied": applied, "ok": False, "reason": f"apply {verdict} sur {url}"}
+        applied.append(url)
+    return {"applied": applied, "ok": True}
+
+
+def _pr_ref(url: str) -> PrRef | None:
+    """`https://github.com/org/repo/pull/42` → `PrRef(repo="org/repo", number=42)`."""
+    parts = [segment for segment in url.split("/") if segment]
+    if len(parts) < 4 or not parts[-1].isdigit():
+        return None
+    return PrRef(repo=f"{parts[-4]}/{parts[-3]}", number=int(parts[-1]), url=url)
+
+
+POLL_SECONDS = 15
+
+
+async def _await_atlantis(scm: Any, ref: PrRef, timeout_minutes: int) -> str:
+    """Attend le check `atlantis/apply`. Rend sa conclusion, ou `timeout`.
+
+    Le nombre de sondages est borné, pas seulement la durée : avec les adaptateurs
+    simulés, l'attente ne coûte rien et une borne temporelle seule tournerait à vide.
+    """
+    polls = max(1, int(timeout_minutes * 60 / POLL_SECONDS))
+    for _ in range(polls):
+        state = await scm.get_pr(ref)
+        check = next((c for c in state.checks if c.name == "atlantis/apply"), None)
+        if check is not None and check.status == "completed":
+            return str(check.conclusion or "unknown")
+        with contextlib.suppress(RuntimeError):
+            activity.heartbeat({"pr": ref.number})
+        await _observe(POLL_SECONDS)
+    return "timeout"

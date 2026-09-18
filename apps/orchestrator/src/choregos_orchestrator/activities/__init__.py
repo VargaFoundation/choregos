@@ -39,6 +39,7 @@ ALL_ACTIVITIES = [
     train.finish_release,
     train.rollback,
     train.mark_release,
+    train.apply_terraform,
     train.train_stats,
     findings.triage_finding,
     findings.finding_quality_ratio,
