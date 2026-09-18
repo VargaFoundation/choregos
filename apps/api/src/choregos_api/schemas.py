@@ -533,6 +533,26 @@ class MemoryReimport(Dto):
     sources: list[str] = Field(default_factory=list)
 
 
+class CrossBackendArm(Dto):
+    """Les revues faites par le même backend que l'implémenteur, ou par un autre."""
+
+    reviews: int = 0
+    caught: int = 0
+    catch_rate: float | None = None
+    backends: list[str] = Field(default_factory=list)
+
+
+class CrossBackendReport(Dto):
+    """Le multi-backend attrape-t-il ce qu'un seul backend laisse passer ? (S13-03)"""
+
+    since: datetime
+    cross_backend_required: bool = False
+    same_backend: CrossBackendArm = Field(default_factory=CrossBackendArm)
+    other_backend: CrossBackendArm = Field(default_factory=CrossBackendArm)
+    verdict: str = "échantillon insuffisant"
+    detail: str = ""
+
+
 class MemoryAbGroup(Dto):
     """Un des deux bras de l'A/B : les projets avec, ou sans, context pack."""
 

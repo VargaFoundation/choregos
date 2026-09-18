@@ -50,6 +50,19 @@ BACKEND_MODEL_CONSTRAINTS: dict[str, tuple[str, ...]] = {
     "claude-code": ("claude", "anthropic"),
 }
 
+# Les backends ACP livrés avec l'image du runner, dans l'ordre de préférence.
+# `choregos_runner.backends` en est la source ; on la redit ici parce que l'orchestrateur
+# et l'API doivent pouvoir choisir un backend sans dépendre du paquet runner.
+KNOWN_BACKEND_NAMES: tuple[str, ...] = (
+    "openhands",
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "goose",
+    "opencode",
+    "copilot-cli",
+)
+
 
 @dataclass(slots=True)
 class ResolvedModel:

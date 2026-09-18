@@ -13,6 +13,7 @@ from hashlib import sha256
 from typing import Any
 
 from choregos_api.db.models import GatewayKeyRow, Run
+from choregos_api.logging import get_logger
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event, record_cost
 from choregos_contracts import (
@@ -29,18 +30,31 @@ from choregos_contracts import (
     RepoRef,
     StageInput,
     StageResult,
+    StageRole,
     StageStatus,
     ToolsRef,
     TransitionRef,
     WorkItemLinks,
     WorkItemRef,
 )
-from choregos_core import ExecRef, ModelResolver, Spend, StageJobSpec, elapsed_seconds, utcnow
+from choregos_core import (
+    KNOWN_BACKEND_NAMES,
+    ExecRef,
+    ModelResolutionError,
+    ModelResolver,
+    Spend,
+    StageJobSpec,
+    elapsed_seconds,
+    utcnow,
+)
+from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
 from .base import db, load_work_item, project_bundle
+
+logger = get_logger("choregos.stage")
 
 
 @dataclass
@@ -86,6 +100,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         engine = bundle.engine
         resolver = ModelResolver(gateway_url=settings.gateway_url)
         backend = plan.backend or bundle.config.agent.default_backend
+        if plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
+            backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
         resolved = resolver.resolve(
             plan.model_request, project=bundle.config, size=item.size, backend=backend
         )
@@ -548,3 +564,59 @@ async def _persist_findings(session: Any, run: Run, item: Any, result: StageResu
             bundle.slug, "finding", {"finding_id": finding_id, "project_id": run.project_id}
         )
     return created
+
+
+async def _reviewer_backend(
+    session: Any,
+    bundle: Any,
+    item: Any,
+    wanted: str,
+    resolver: ModelResolver,
+    plan: StagePlan,
+) -> str:
+    """Un relecteur qui n'est pas l'implémenteur (politique `review.cross_backend`).
+
+    La garantie est un mécanisme : si le backend prévu pour la revue est celui qui a écrit
+    le code, on en prend un autre — parmi ceux que le projet autorise et qui acceptent le
+    modèle demandé. Si aucun ne convient, on garde celui d'origine et on le dit : bloquer
+    un ticket parce qu'un seul backend est installé serait pire que la revue dégradée, et
+    `GET /projects/{id}/metrics/cross-backend` compte ces cas.
+    """
+    implementer = (
+        await session.execute(
+            select(Run.backend)
+            .where(
+                Run.work_item_id == item.id,
+                Run.stage_role == str(StageRole.IMPLEMENT),
+                Run.backend.is_not(None),
+            )
+            .order_by(Run.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not implementer or implementer != wanted:
+        return wanted
+    allowed = list(bundle.config.agent.allowed_backends) or list(KNOWN_BACKEND_NAMES)
+    for candidate in allowed:
+        if candidate == implementer:
+            continue
+        try:
+            resolver.resolve(plan.model_request, project=bundle.config, size=item.size, backend=candidate)
+        except ModelResolutionError:
+            continue
+        logger.info(
+            "revue croisée",
+            project=bundle.slug,
+            work_item=item.tracker_key,
+            implementer=implementer,
+            reviewer=candidate,
+        )
+        return str(candidate)
+    logger.warning(
+        "revue croisée impossible",
+        project=bundle.slug,
+        work_item=item.tracker_key,
+        implementer=implementer,
+        raison="aucun autre backend n'accepte le modèle demandé",
+    )
+    return wanted

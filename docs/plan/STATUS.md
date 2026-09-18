@@ -104,12 +104,12 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S12-05 | S12 | 🟡 | — | reprise sans double coût prouvée ; chaos (kill worker, nœud spot) à jouer sur kind |
 | S13-01 | S13 | ✅ | — | backend claude-code (hook de secours, modèles Claude uniquement) — conformité 7/7 |
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
-| S13-03 | S13 | 🟡 | — | politique `cross_backend` et acteur `fresh_context` disponibles ; mesure à instrumenter |
+| S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
 | S13-04 | S13 | ⬜ | — | tracker Jira/GitLab : webhooks acceptés, adaptateur non écrit |
 | S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 87 livrées, 12 partielles, 3 non commencées.
+**Total** : 88 livrées, 11 partielles, 3 non commencées.
 
 ## Ce qui tient debout aujourd'hui
 

@@ -587,6 +587,22 @@ export type MemoryAbReport = {
   detail?: string;
 };
 
+export type CrossBackendArm = {
+  reviews?: number;
+  caught?: number;
+  catch_rate?: number;
+  backends?: Array<string>;
+};
+
+export type CrossBackendReport = {
+  since: string;
+  cross_backend_required?: boolean;
+  same_backend?: CrossBackendArm;
+  other_backend?: CrossBackendArm;
+  verdict: string;
+  detail?: string;
+};
+
 export type DoraMetric = {
   value?: number;
   unit: string;
@@ -750,6 +766,7 @@ export interface Operations {
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
   getProjectCosts: { method: "GET"; path: "/projects/{id}/costs"; body: never; response: CostReport };
+  getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
   getProjectModels: { method: "GET"; path: "/projects/{id}/models"; body: never; response: ProjectModels };
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };

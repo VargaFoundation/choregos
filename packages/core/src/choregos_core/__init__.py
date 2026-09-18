@@ -67,7 +67,13 @@ from .errors import (
     ValidationError,
 )
 from .gates import GateContext, GateOutcome, evaluate, is_async_gate, known_gates, matches_any, scan_secrets
-from .models import BY_SIZE_MAP, ModelResolver, ResolvedModel, estimate_tokens
+from .models import (
+    BY_SIZE_MAP,
+    KNOWN_BACKEND_NAMES,
+    ModelResolver,
+    ResolvedModel,
+    estimate_tokens,
+)
 from .policy import (
     PRESET_NAMES,
     ApprovalDecision,
@@ -82,6 +88,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "BY_SIZE_MAP",
+    "KNOWN_BACKEND_NAMES",
     "PRESET_NAMES",
     "TEMPLATE_NAMES",
     "ApprovalDecision",

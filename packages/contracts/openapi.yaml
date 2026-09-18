@@ -481,6 +481,16 @@ paths:
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
         "200": { description: Rapport de coûts en CSV, content: { text/csv: { schema: { type: string } } } }
+  /projects/{id}/metrics/cross-backend:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [costs]
+      operationId: getProjectCrossBackend
+      summary: Revues par un autre backend contre revues par le même
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CrossBackendReport" } } } }
   /projects/{id}/metrics/dora:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1410,6 +1420,23 @@ components:
         since: { type: string, format: date-time, nullable: true }
         with_memory: { $ref: "#/components/schemas/MemoryAbGroup" }
         without_memory: { $ref: "#/components/schemas/MemoryAbGroup" }
+        verdict: { type: string }
+        detail: { type: string, default: "" }
+    CrossBackendArm:
+      type: object
+      properties:
+        reviews: { type: integer, default: 0 }
+        caught: { type: integer, default: 0 }
+        catch_rate: { type: number, nullable: true }
+        backends: { type: array, items: { type: string } }
+    CrossBackendReport:
+      type: object
+      required: [since, verdict]
+      properties:
+        since: { type: string, format: date-time }
+        cross_backend_required: { type: boolean, default: false }
+        same_backend: { $ref: "#/components/schemas/CrossBackendArm" }
+        other_backend: { $ref: "#/components/schemas/CrossBackendArm" }
         verdict: { type: string }
         detail: { type: string, default: "" }
     DoraMetric:
