@@ -2,7 +2,10 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 UV ?= uv
-PNPM ?= pnpm
+# La version de pnpm est celle de `apps/web/package.json` : corepack la récupère,
+# quelle que soit celle installée globalement (sinon ERR_PNPM_BAD_PM_VERSION).
+PNPM_VERSION ?= 9.15.0
+PNPM ?= corepack pnpm@$(PNPM_VERSION)
 PY_PATHS := packages apps/api apps/orchestrator tools tests
 
 .PHONY: help

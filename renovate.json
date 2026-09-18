@@ -1,0 +1,109 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "timezone": "Europe/Paris",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "prConcurrentLimit": 5,
+  "commitMessagePrefix": "chore(deps):",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ]
+  },
+  "vulnerabilityAlerts": {
+    "labels": [
+      "securite"
+    ],
+    "schedule": [
+      "at any time"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Les montées de patch sûres sont groupées et fusionnées seules si la CI passe.",
+      "matchUpdateTypes": [
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "groupName": "correctifs",
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Temporal, SQLAlchemy et Pydantic portent des contrats : jamais d'automerge.",
+      "matchPackageNames": [
+        "temporalio",
+        "sqlalchemy",
+        "alembic",
+        "pydantic",
+        "pydantic-settings",
+        "fastapi"
+      ],
+      "automerge": false,
+      "labels": [
+        "dependencies",
+        "revue-requise"
+      ]
+    },
+    {
+      "description": "Le front bouge ensemble (Next, React, TanStack).",
+      "matchFileNames": [
+        "apps/web/**"
+      ],
+      "groupName": "front"
+    },
+    {
+      "description": "Images et charts : par digest, la signature est revérifiée au déploiement.",
+      "matchManagers": [
+        "helmv3",
+        "dockerfile",
+        "kubernetes",
+        "argocd"
+      ],
+      "groupName": "images et charts",
+      "automerge": false
+    },
+    {
+      "description": "Backends d'agents : chaque bump doit passer la suite de conformité (S2-11).",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchFileNames": [
+        "packages/runner/src/choregos_runner/backends/versions.lock"
+      ],
+      "groupName": "backends ACP",
+      "automerge": false,
+      "labels": [
+        "dependencies",
+        "conformance"
+      ],
+      "prBodyNotes": [
+        "⚠️ Le job `conformance-backends` de la CI doit être vert : un backend qui ne passe pas les 7 vérifications ACP ne part pas en production."
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Versions des agents ACP épinglées dans l'image du runner (lignes annotées).",
+      "managerFilePatterns": [
+        "/^packages/runner/src/choregos_runner/backends/versions\\.lock$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+\\S+=(?<currentValue>\\S+)"
+      ],
+      "versioningTemplate": "semver-coerced"
+    }
+  ]
+}

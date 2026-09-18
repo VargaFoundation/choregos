@@ -1,9 +1,18 @@
 # Versions des agents ACP installées dans l'image `choregos-runner`.
 # Renovate propose les montées ; chaque bump passe par la suite de conformité (S2-11).
+#
+# Une ligne annotée `# renovate: datasource=… depName=…` est suivie automatiquement.
+# Les autres sont épinglées à la main tant que leur source amont n'est pas confirmée :
+# mieux vaut un suivi manquant qu'un dépôt inventé sur lequel Renovate ouvrirait des PR
+# fausses.
+# renovate: datasource=github-releases depName=All-Hands-AI/OpenHands
 openhands=0.59.0
 claude-agent-acp=0.6.1
 codex-acp=0.4.2
+# renovate: datasource=github-releases depName=google-gemini/gemini-cli
 gemini-cli=0.12.0
+# renovate: datasource=github-releases depName=block/goose
 goose=1.9.0
+# renovate: datasource=github-releases depName=sst/opencode
 opencode=0.8.3
 copilot-cli=0.3.0
