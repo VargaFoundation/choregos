@@ -1,0 +1,103 @@
+# Aucun humain dans la boucle avant la prod : pour les dépôts internes à faible risque.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: full-auto
+  version: 1
+  description: Triage, cadrage, implémentation, vérification et merge automatiques ; la prod reste un verrou.
+actors:
+  sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
+  refiner: { type: agent, role: refine, model: "profile:standard" }
+  dev: { type: agent, role: implement, model: "profile:by_size" }
+  checker: { type: agent, role: verify, model: "profile:standard" }
+  reviewer: { type: agent, role: review, model: "profile:strong", fresh_context: true }
+  fixer: { type: agent, role: fix_ci, model: "profile:standard" }
+  ci: { type: system }
+  captain: { type: human, group: release-captains, sla_hours: 4 }
+states:
+  inbox: { display: À trier, kind: wait, tracker: { status: Todo } }
+  triaged: { display: Trié, tracker: { status: Triaged } }
+  ready: { display: Prêt, tracker: { status: Ready } }
+  in_progress: { display: En cours, tracker: { status: In progress } }
+  verifying: { display: Vérification, tracker: { status: Verifying } }
+  reviewing: { display: Relecture agent, tracker: { status: Reviewing } }
+  pr_open: { display: PR ouverte, kind: wait, tracker: { status: In review } }
+  fixing_ci: { display: Correction CI, tracker: { status: Fixing CI } }
+  merged: { display: Fusionné, tracker: { status: Merged } }
+  deployed_prod: { display: En production, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Intervention humaine, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandonné, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-triage
+    from: inbox
+    to: triaged
+    by: sorter
+    outputs: [size, risk, duplicate_of]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-refine
+    from: triaged
+    to: ready
+    by: refiner
+    outputs: [spec, allowed_paths]
+    on_fail: { to: triaged, max_attempts: 2, escalate_to: needs_human }
+  - id: t-implement
+    from: ready
+    to: in_progress
+    by: dev
+    inputs: [spec, allowed_paths]
+    gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 40 } }]
+    on_fail: { to: ready, max_attempts: 3, escalate_to: needs_human }
+  - id: t-verify
+    from: in_progress
+    to: verifying
+    by: checker
+    gates: [evidence_present, { name: coverage_delta_min, params: { x: -0.5 } }]
+    on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
+  - id: t-review
+    from: verifying
+    to: reviewing
+    by: reviewer
+    on_changes_requested: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
+    on_fail: { to: verifying, max_attempts: 2, escalate_to: needs_human }
+  - id: t-open-pr
+    from: reviewing
+    to: pr_open
+    by: ci
+    gates: [evidence_present]
+    on_fail: { to: reviewing, max_attempts: 2, escalate_to: needs_human }
+  - id: t-fix-ci
+    from: pr_open
+    to: fixing_ci
+    by: fixer
+    on_fail: { to: pr_open, max_attempts: 3, escalate_to: needs_human }
+  - id: t-back-to-pr
+    from: fixing_ci
+    to: pr_open
+    by: ci
+    on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+  - id: t-merge
+    from: pr_open
+    to: merged
+    by: ci
+    gates: [ci_green, scans_ok]
+    timeout_hours: 24
+    on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
+  - id: t-deploy
+    from: merged
+    to: deployed_prod
+    via: release_train
+    train: { env: prod, approval: captain }
+    timeout_hours: 72
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: captain
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

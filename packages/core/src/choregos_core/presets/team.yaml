@@ -1,0 +1,83 @@
+# Preset `team` : une équipe produit, review humaine obligatoire au merge, prod approuvée.
+apiVersion: choregos/v1
+kind: Policy
+metadata:
+  name: team
+  version: 1
+  preset: team
+  description: Équipe de 3 à 10 personnes ; la spec et le merge passent par un humain, la prod par un capitaine.
+budgets:
+  ticket_usd: { S: 15, M: 45, L: 110, XL: 220 }
+  stage_usd:
+    default: { S: 5, M: 12, L: 28, XL: 50 }
+    triage: { S: 0.5, M: 0.5, L: 1, XL: 1 }
+    refine: { S: 3, M: 6, L: 12, XL: 18 }
+    plan: { S: 2, M: 4, L: 8, XL: 12 }
+    implement: { S: 8, M: 20, L: 45, XL: 80 }
+    verify: { S: 3, M: 6, L: 12, XL: 20 }
+    review: { S: 4, M: 8, L: 15, XL: 25 }
+  max_turns: { default: 100, triage: 10, refine: 40, plan: 30, implement: 150, verify: 50, review: 40 }
+  max_minutes: { default: 60, triage: 5, refine: 25, plan: 20, implement: 120, verify: 40, review: 30 }
+  daily_project_usd: 400
+  alert_at_ratio: 0.8
+approvals:
+  spec: { required: always, group: product-owners, timeout_hours: 48 }
+  merge: { required: by_risk, group: maintainers, risks: [medium, high], timeout_hours: 24 }
+  prod: { required: always, group: release-captains, timeout_hours: 4 }
+  scope_change: { required: by_size, group: maintainers, sizes: [M, L, XL] }
+attempts:
+  default_max: 2
+  by_role: { implement: 3, fix_ci: 3, address_review: 3 }
+  dod_iterations: 3
+scope:
+  auto_grant_max_files: 2
+  deny_paths: [".choregos/**", ".github/workflows/**", "charts/**", "infra/**", "deploy/**"]
+  max_diff_files: 60
+  max_diff_lines: 3000
+sandbox:
+  runtime: gvisor
+  deny_commands: [kubectl, "terraform apply", "git push --force", sudo, "helm upgrade"]
+  network:
+    allow_domains: [github.com, pypi.org, registry.npmjs.org, proxy.golang.org]
+    deny_by_default: true
+  llm_security_analyzer: true
+findings:
+  max_per_run: 5
+  dedupe_threshold: 0.86
+  auto_agent_ready_sizes: [S]
+  notify_severities: [critical, high]
+  false_positive_alert_ratio: 0.3
+memory:
+  enabled: true
+  context_budget_tokens: { refine: 4000, implement: 4000, review: 3000, plan: 3000, default: 2000 }
+  auto_accept_after_runs: 2
+  read_timeout_ms: 300
+review:
+  cross_backend: true
+  require_human_for_risk: [medium, high]
+release_train:
+  dev: { mode: auto_sync }
+  staging:
+    mode: train
+    schedule: "*/30 9-19 * * 1-5"
+    batch_max: 10
+    soak_minutes: 10
+  prod:
+    mode: train
+    schedule: "0 10,14,17 * * 1-4"
+    timezone: Europe/Paris
+    windows: ["Mon-Thu 09:00-18:00"]
+    batch_min: 1
+    batch_max: 8
+    soak_minutes: 20
+    approval: { group: release-captains, required: true, timeout_hours: 4 }
+    canary: { steps: [10, 50, 100], analysis: slo-default, step_minutes: [10, 15, 0] }
+    express_lane:
+      label: hotfix
+      soak_minutes: 5
+      skip_schedule: true
+      approval: { group: release-captains, required: true }
+    freeze: false
+    auto_rollback: true
+    freeze_on_rollback: true
+    terraform: { via: atlantis, apply_requires_approval: true }

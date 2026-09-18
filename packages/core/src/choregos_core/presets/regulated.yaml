@@ -1,0 +1,76 @@
+# Preset `regulated` : traçabilité maximale, humain à chaque porte, sandbox durcie.
+apiVersion: choregos/v1
+kind: Policy
+metadata:
+  name: regulated
+  version: 1
+  preset: regulated
+  description: Contexte régulé — toute décision structurante est humaine, la provenance est obligatoire.
+budgets:
+  ticket_usd: { S: 20, M: 60, L: 150, XL: 300 }
+  stage_usd:
+    default: { S: 6, M: 15, L: 35, XL: 60 }
+    implement: { S: 10, M: 25, L: 55, XL: 100 }
+    review: { S: 6, M: 12, L: 22, XL: 35 }
+  max_turns: { default: 100, implement: 150, review: 50 }
+  max_minutes: { default: 60, implement: 120, review: 40 }
+  daily_project_usd: 600
+  alert_at_ratio: 0.7
+approvals:
+  spec: { required: always, group: product-owners, timeout_hours: 72 }
+  merge: { required: always, group: maintainers, timeout_hours: 48 }
+  prod: { required: always, group: release-captains, timeout_hours: 8 }
+  scope_change: { required: always, group: maintainers, timeout_hours: 24 }
+attempts:
+  default_max: 2
+  by_role: { implement: 2, fix_ci: 2 }
+  dod_iterations: 2
+scope:
+  auto_grant_max_files: 0
+  deny_paths:
+    [".choregos/**", ".github/**", "charts/**", "infra/**", "deploy/**", "migrations/**", "**/secrets/**"]
+  max_diff_files: 40
+  max_diff_lines: 1500
+sandbox:
+  runtime: gvisor
+  deny_commands: [kubectl, terraform, sudo, docker, "git push --force", curl, wget]
+  network:
+    allow_domains: []
+    deny_by_default: true
+  llm_security_analyzer: true
+findings:
+  max_per_run: 3
+  dedupe_threshold: 0.9
+  auto_agent_ready_sizes: []
+  notify_severities: [critical, high, medium]
+  false_positive_alert_ratio: 0.2
+memory:
+  enabled: true
+  context_budget_tokens: { refine: 3000, implement: 3000, review: 3000, default: 1500 }
+  auto_accept_after_runs: 3
+  read_timeout_ms: 300
+review:
+  cross_backend: true
+  require_human_for_risk: [low, medium, high]
+release_train:
+  dev: { mode: train, schedule: "0 * * * *", batch_max: 5, soak_minutes: 5 }
+  staging:
+    mode: train
+    schedule: "0 9,14 * * 1-5"
+    batch_max: 5
+    soak_minutes: 30
+    approval: { group: maintainers, required: true, timeout_hours: 8 }
+  prod:
+    mode: train
+    schedule: "0 10 * * 2,4"
+    timezone: Europe/Paris
+    windows: ["Tue,Thu 09:00-16:00"]
+    batch_min: 1
+    batch_max: 4
+    soak_minutes: 60
+    approval: { group: release-captains, required: true, timeout_hours: 8 }
+    canary: { steps: [5, 25, 50, 100], analysis: slo-strict, step_minutes: [15, 30, 30, 0] }
+    freeze: false
+    auto_rollback: true
+    freeze_on_rollback: true
+    terraform: { via: atlantis, apply_requires_approval: true }

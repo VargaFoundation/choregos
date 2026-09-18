@@ -56,7 +56,8 @@ extend-exclude = [".venv", "packages/contracts/ts", "apps/web", "**/generated/**
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ASYNC", "S", "RET", "PL", "RUF"]
-ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "PLR0912", "PLR0911", "PLR0915", "SIM108"]
+# PLC0415 : les imports paresseux sont assumés (rupture de cycles, coût de démarrage).
+ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "PLR0912", "PLR0911", "PLR0915", "SIM108", "PLC0415", "PLR0917"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S", "PLR", "ASYNC"]
@@ -90,7 +91,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["packages", "apps", "tests"]
 norecursedirs = ["apps/web", "node_modules", ".venv", "tests/e2e", "templates"]
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers --import-mode=importlib"
 markers = [
   "integration: nécessite des services externes (kind, docker)",
   "e2e: scénario bout en bout",

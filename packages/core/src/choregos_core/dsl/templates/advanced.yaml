@@ -1,0 +1,165 @@
+# Le workflow complet : triage, cadrage validé, plan, implémentation, vérification,
+# review croisée agent + humaine, staging puis prod par deux trains successifs.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: advanced
+  version: 1
+  description: Chaîne complète avec plan, review croisée, staging puis production.
+actors:
+  sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
+  refiner: { type: agent, role: refine, model: "profile:standard" }
+  owner: { type: human, group: product-owners, sla_hours: 24, escalate_to: captain }
+  planner: { type: agent, role: plan, model: "profile:standard" }
+  dev: { type: agent, role: implement, model: "profile:by_size" }
+  checker: { type: agent, role: verify, model: "profile:standard" }
+  reviewer: { type: agent, role: review, model: "profile:strong", fresh_context: true }
+  responder: { type: agent, role: address_review, model: "profile:by_size" }
+  fixer: { type: agent, role: fix_ci, model: "profile:standard" }
+  scribe: { type: agent, role: release_notes, model: "profile:cheap" }
+  sentinel: { type: agent, role: verify_prod, model: "profile:standard" }
+  maintainer: { type: human, group: maintainers, sla_hours: 8 }
+  captain: { type: human, group: release-captains, sla_hours: 4 }
+  ci: { type: system }
+states:
+  inbox: { display: À trier, kind: wait, tracker: { status: Todo } }
+  triaged: { display: Trié, tracker: { status: Triaged } }
+  refining: { display: Cadrage, tracker: { status: Refining } }
+  awaiting_spec_approval: { display: Spec à valider, kind: wait, tracker: { status: Needs review } }
+  planning: { display: Plan, tracker: { status: Planning } }
+  ready: { display: Prêt, tracker: { status: Ready } }
+  in_progress: { display: En cours, tracker: { status: In progress } }
+  verifying: { display: Vérification, tracker: { status: Verifying } }
+  agent_review: { display: Relecture agent, tracker: { status: Agent review } }
+  addressing_review: { display: Réponses à la review, tracker: { status: Addressing review } }
+  pr_open: { display: PR ouverte, kind: wait, tracker: { status: In review } }
+  fixing_ci: { display: Correction CI, tracker: { status: Fixing CI } }
+  merged: { display: Fusionné, tracker: { status: Merged } }
+  deployed_staging: { display: En staging, tracker: { status: Staging } }
+  deployed_prod: { display: En production, tracker: { status: Prod } }
+  verified_prod: { display: Vérifié en production, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Intervention humaine, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandonné, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-triage
+    from: inbox
+    to: triaged
+    by: sorter
+    outputs: [size, risk, duplicate_of]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-refine
+    from: triaged
+    to: awaiting_spec_approval
+    by: refiner
+    outputs: [spec, allowed_paths]
+    on_fail: { to: triaged, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-spec
+    from: awaiting_spec_approval
+    to: planning
+    by: owner
+    on_reject: refining
+    timeout_hours: 72
+  - id: t-refine-again
+    from: refining
+    to: awaiting_spec_approval
+    by: refiner
+    on_fail: { to: refining, max_attempts: 2, escalate_to: needs_human }
+  - id: t-plan
+    from: planning
+    to: ready
+    by: planner
+    inputs: [spec]
+    outputs: [plan]
+    on_fail: { to: planning, max_attempts: 2, escalate_to: needs_human }
+  - id: t-implement
+    from: ready
+    to: in_progress
+    by: dev
+    inputs: [spec, plan, allowed_paths]
+    outputs: [branch, commits]
+    gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }]
+    on_fail: { to: ready, max_attempts: 3, escalate_to: needs_human }
+  - id: t-verify
+    from: in_progress
+    to: verifying
+    by: checker
+    gates: [evidence_present, { name: coverage_delta_min, params: { x: 0 } }]
+    on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
+  - id: t-agent-review
+    from: verifying
+    to: agent_review
+    by: reviewer
+    review: { agents: [reviewer], humans: { group: maintainers, required: by_policy } }
+    on_changes_requested: { to: addressing_review, max_attempts: 3, escalate_to: needs_human }
+    on_fail: { to: verifying, max_attempts: 2, escalate_to: needs_human }
+  - id: t-address-review
+    from: addressing_review
+    to: verifying
+    by: responder
+    on_fail: { to: addressing_review, max_attempts: 3, escalate_to: needs_human }
+  - id: t-open-pr
+    from: agent_review
+    to: pr_open
+    by: ci
+    gates: [evidence_present, scope_respected]
+    on_fail: { to: agent_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-fix-ci
+    from: pr_open
+    to: fixing_ci
+    by: fixer
+    on_fail: { to: pr_open, max_attempts: 3, escalate_to: needs_human }
+  - id: t-back-to-pr
+    from: fixing_ci
+    to: pr_open
+    by: ci
+    on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+  - id: t-merge
+    from: pr_open
+    to: merged
+    by: ci
+    gates: [ci_green, review_approved, scans_ok, provenance_signed]
+    timeout_hours: 48
+    on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
+  - id: t-deploy-staging
+    from: merged
+    to: deployed_staging
+    via: release_train
+    train: { env: staging, auto_sync: true }
+    timeout_hours: 24
+  - id: t-deploy-prod
+    from: deployed_staging
+    to: deployed_prod
+    via: release_train
+    train: { env: prod, approval: captain }
+    timeout_hours: 72
+  - id: t-verify-prod
+    from: deployed_prod
+    to: verified_prod
+    by: sentinel
+    outputs: [verdict]
+    on_fail: { to: deployed_prod, max_attempts: 2, escalate_to: needs_human }
+  - id: t-release-notes
+    from: merged
+    to: merged
+    by: scribe
+    outputs: [release_notes]
+    on_fail: { to: merged, max_attempts: 1, escalate_to: needs_human }
+  - id: t-human-review
+    from: needs_human
+    to: in_progress
+    by: maintainer
+    on_reject: abandoned
+    timeout_hours: 168
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: captain
+    timeout_hours: 336
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned
