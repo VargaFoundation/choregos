@@ -1,0 +1,142 @@
+# Choregos — commandes du monorepo (voir AGENTS.md)
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+UV ?= uv
+PNPM ?= pnpm
+PY_PATHS := packages apps/api apps/orchestrator tools tests
+
+.PHONY: help
+help:  ## Affiche cette aide
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
+
+# ───────────────────────── socle ─────────────────────────
+.PHONY: setup
+setup:  ## Installe les dépendances (Python + web)
+	$(UV) sync
+	@command -v $(PNPM) >/dev/null 2>&1 || corepack enable pnpm
+	@[ -d apps/web ] && $(PNPM) -C apps/web install --prefer-offline || true
+
+.PHONY: ci
+ci: lint typecheck test contracts-check charts-lint  ## Tout ce qui bloque une PR
+
+.PHONY: lint
+lint:  ## ruff check + format --check
+	$(UV) run ruff check $(PY_PATHS)
+	$(UV) run ruff format --check $(PY_PATHS)
+
+.PHONY: format
+format:  ## Formate le code Python
+	$(UV) run ruff format $(PY_PATHS)
+	$(UV) run ruff check --fix $(PY_PATHS)
+
+.PHONY: typecheck
+typecheck:  ## mypy --strict sur packages et apps
+	$(UV) run mypy packages/*/src apps/*/src tools
+
+.PHONY: test
+test:  ## Tests unitaires
+	$(UV) run pytest -q
+
+.PHONY: test-cov
+test-cov:  ## Tests avec couverture (seuil 80 % sur core, runner, orchestrator)
+	$(UV) run pytest --cov --cov-report=term-missing --cov-report=xml -q
+
+.PHONY: contracts
+contracts:  ## Régénère les types depuis packages/contracts (à committer)
+	$(UV) run python tools/gen_contracts.py
+
+.PHONY: contracts-check
+contracts-check:  ## Vérifie que les types générés sont à jour
+	$(UV) run python tools/gen_contracts.py --check
+
+# ───────────────────────── web ─────────────────────────
+.PHONY: web-install
+web-install:
+	$(PNPM) -C apps/web install --prefer-offline
+
+.PHONY: web-lint
+web-lint:  ## Lint du front
+	$(PNPM) -C apps/web lint
+
+.PHONY: web-typecheck
+web-typecheck:  ## Typage du front
+	$(PNPM) -C apps/web typecheck
+
+.PHONY: web-test
+web-test:  ## Tests unitaires du front
+	$(PNPM) -C apps/web test
+
+.PHONY: web-build
+web-build:  ## Build de production du front
+	$(PNPM) -C apps/web build
+
+.PHONY: web-ci
+web-ci: web-lint web-typecheck web-test web-build  ## CI du front
+
+# ───────────────────────── charts ─────────────────────────
+.PHONY: charts-lint
+charts-lint:  ## helm lint + kubeconform (ignoré si helm absent)
+	@command -v helm >/dev/null 2>&1 || { echo "helm absent — étape ignorée"; exit 0; }
+	helm lint charts/choregos
+	@command -v kubeconform >/dev/null 2>&1 \
+		&& helm template choregos charts/choregos | kubeconform -strict -ignore-missing-schemas -summary \
+		|| echo "kubeconform absent — validation de schéma ignorée"
+
+.PHONY: charts-test
+charts-test:  ## helm unittest
+	@command -v helm >/dev/null 2>&1 && helm unittest charts/choregos || echo "helm unittest absent"
+
+# ───────────────────────── dev ─────────────────────────
+.PHONY: dev-up
+dev-up:  ## Cluster kind + plateforme + Tilt
+	dev/scripts/dev-up.sh
+
+.PHONY: dev-down
+dev-down:  ## Détruit le cluster de dev
+	dev/scripts/dev-down.sh
+
+.PHONY: dev-seed
+dev-seed:  ## Org, projet démo, tickets, train
+	$(UV) run python dev/scripts/seed.py
+
+.PHONY: compose-up
+compose-up:  ## Dépendances en docker compose (sans Kubernetes)
+	docker compose -f dev/compose.yaml up -d
+
+.PHONY: compose-down
+compose-down:
+	docker compose -f dev/compose.yaml down -v
+
+.PHONY: demo
+demo:  ## Scénario bout en bout en mémoire (fakes, sans cluster)
+	CHOREGOS_FAKES=1 $(UV) run python -m choregos_orchestrator.demo
+
+.PHONY: api
+api:  ## Lance l'API en local (fakes)
+	CHOREGOS_FAKES=1 $(UV) run uvicorn choregos_api.main:app --reload --port 8000
+
+.PHONY: worker
+worker:  ## Lance les workers Temporal
+	$(UV) run python -m choregos_orchestrator.worker --queues orchestrator,executor,tracker,memory
+
+.PHONY: mock-api
+mock-api:  ## Sert l'API mockée depuis l'OpenAPI (Prism)
+	npx --yes @stoplight/prism-cli mock packages/contracts/openapi.yaml -p 4010
+
+# ───────────────────────── e2e & évals ─────────────────────────
+.PHONY: e2e
+e2e:  ## Scénarios bout en bout (kind requis)
+	$(UV) run pytest tests/e2e -m e2e -q
+
+.PHONY: conformance
+conformance:  ## Suite de conformité backends ACP
+	$(UV) run pytest tests/conformance -m conformance -q
+
+.PHONY: evals
+evals:  ## Évals des playbooks
+	$(UV) run python -m choregos_playbooks.evals.runner --all
+
+.PHONY: clean
+clean:  ## Nettoie les artefacts locaux
+	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov coverage.xml
+	find . -name __pycache__ -type d -prune -exec rm -rf {} +

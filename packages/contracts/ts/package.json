@@ -1,0 +1,13 @@
+{
+  "name": "@choregos/contracts",
+  "version": "0.1.0",
+  "description": "Types TypeScript générés depuis packages/contracts (schemas + openapi)",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": { ".": "./index.ts", "./schemas": "./schemas.ts", "./api": "./api.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "devDependencies": { "typescript": "^5.7.2" }
+}

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+# Divers
+.env
+.env.local
+*.log
+dist/
+build/
+.DS_Store
+.tilt/
+tmp/
+charts/choregos/charts/
+charts/**/Chart.lock

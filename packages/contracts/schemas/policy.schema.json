@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/policy.schema.json",
+  "title": "Policy",
+  "description": "Politique d'un projet : budgets, approbations, tentatives, périmètre, sandbox, findings, release train.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "choregos/v1" },
+    "kind": { "const": "Policy" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "version": { "type": "integer", "minimum": 1 },
+        "preset": { "type": "string", "enum": ["solo", "team", "regulated"] },
+        "description": { "type": "string" }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ticket_usd": {
+          "type": "object",
+          "description": "Plafond de coût par ticket, par taille.",
+          "additionalProperties": false,
+          "properties": {
+            "S": { "type": "number", "exclusiveMinimum": 0 },
+            "M": { "type": "number", "exclusiveMinimum": 0 },
+            "L": { "type": "number", "exclusiveMinimum": 0 },
+            "XL": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        "stage_usd": {
+          "type": "object",
+          "description": "Plafond par étape : rôle → taille → USD. La clé `default` s'applique aux rôles non listés.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "S": { "type": "number", "exclusiveMinimum": 0 },
+              "M": { "type": "number", "exclusiveMinimum": 0 },
+              "L": { "type": "number", "exclusiveMinimum": 0 },
+              "XL": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
+        "max_turns": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+        "max_minutes": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+        "daily_project_usd": { "type": "number", "exclusiveMinimum": 0 },
+        "alert_at_ratio": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.8 }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "description": "Règles d'approbation humaine par type de décision.",
+      "additionalProperties": false,
+      "properties": {
+        "spec": { "$ref": "#/$defs/approvalRule" },
+        "merge": { "$ref": "#/$defs/approvalRule" },
+        "prod": { "$ref": "#/$defs/approvalRule" },
+        "scope_change": { "$ref": "#/$defs/approvalRule" }
+      }
+    },
+    "attempts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_max": { "type": "integer", "minimum": 1, "default": 2 },
+        "by_role": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+        "dod_iterations": { "type": "integer", "minimum": 0, "maximum": 10, "default": 3 }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_grant_max_files": { "type": "integer", "minimum": 0, "default": 3 },
+        "deny_paths": { "type": "array", "items": { "type": "string" },
+          "default": [".choregos/**", ".github/workflows/**", "charts/**"] },
+        "max_diff_files": { "type": "integer", "minimum": 1, "default": 60 },
+        "max_diff_lines": { "type": "integer", "minimum": 1, "default": 3000 }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runtime": { "type": "string", "enum": ["default", "gvisor", "kata"], "default": "default" },
+        "deny_commands": { "type": "array", "items": { "type": "string" },
+          "default": ["kubectl", "terraform apply", "git push --force", "curl | sh", "sudo"] },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allow_domains": { "type": "array", "items": { "type": "string" } },
+            "deny_by_default": { "type": "boolean", "default": true }
+          }
+        },
+        "llm_security_analyzer": { "type": "boolean", "default": false }
+      }
+    },
+    "findings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_per_run": { "type": "integer", "minimum": 0, "default": 5 },
+        "dedupe_threshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.86 },
+        "auto_agent_ready_sizes": { "type": "array", "items": { "type": "string", "enum": ["S", "M", "L", "XL"] },
+          "default": [] },
+        "notify_severities": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "default": ["critical"] },
+        "false_positive_alert_ratio": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.3 }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "context_budget_tokens": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "auto_accept_after_runs": { "type": "integer", "minimum": 1, "default": 2 },
+        "read_timeout_ms": { "type": "integer", "minimum": 50, "default": 300 }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cross_backend": { "type": "boolean", "default": false,
+          "description": "Le backend de review doit différer de celui de l'implémentation." },
+        "require_human_for_risk": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high"] },
+          "default": ["high"] }
+      }
+    },
+    "release_train": {
+      "type": "object",
+      "description": "Configuration par environnement (docs/plan/05 §5.2).",
+      "additionalProperties": { "$ref": "#/$defs/trainEnv" }
+    }
+  },
+  "$defs": {
+    "approvalRule": {
+      "type": "object",
+      "required": ["required"],
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "string", "enum": ["always", "never", "by_size", "by_risk"] },
+        "group": { "type": "string" },
+        "sizes": { "type": "array", "items": { "type": "string", "enum": ["S", "M", "L", "XL"] } },
+        "risks": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high"] } },
+        "timeout_hours": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "trainEnv": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["auto_sync", "train"], "default": "train" },
+        "schedule": { "type": "string", "description": "Cron (5 champs), fuseau du projet." },
+        "timezone": { "type": "string", "default": "Europe/Paris" },
+        "windows": { "type": "array", "items": { "type": "string" },
+          "description": "Fenêtres autorisées, ex. 'Mon-Thu 09:00-18:00'." },
+        "batch_min": { "type": "integer", "minimum": 1, "default": 1 },
+        "batch_max": { "type": "integer", "minimum": 1, "default": 8 },
+        "soak_minutes": { "type": "integer", "minimum": 0, "default": 10 },
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "group": { "type": "string" },
+            "required": { "type": "boolean", "default": false },
+            "timeout_hours": { "type": "integer", "minimum": 1, "default": 4 }
+          }
+        },
+        "canary": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "steps": { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 100 } },
+            "analysis": { "type": "string" },
+            "step_minutes": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+          }
+        },
+        "express_lane": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "label": { "type": "string", "default": "hotfix" },
+            "soak_minutes": { "type": "integer", "minimum": 0, "default": 5 },
+            "skip_schedule": { "type": "boolean", "default": true },
+            "approval": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": { "group": { "type": "string" }, "required": { "type": "boolean", "default": true } }
+            }
+          }
+        },
+        "freeze": { "type": "boolean", "default": false },
+        "auto_rollback": { "type": "boolean", "default": true },
+        "freeze_on_rollback": { "type": "boolean", "default": true },
+        "terraform": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "via": { "type": "string", "enum": ["atlantis", "none"], "default": "none" },
+            "apply_requires_approval": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    }
+  }
+}

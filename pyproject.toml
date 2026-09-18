@@ -1,0 +1,117 @@
+[project]
+name = "choregos-workspace"
+version = "0.1.0"
+description = "Choregos — plateforme de delivery agentique (Varga Foundation)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "choregos-contracts",
+  "choregos-core",
+  "choregos-adapters",
+  "choregos-runner",
+  "choregos-tools-mcp",
+  "choregos-playbooks",
+  "choregos-cli",
+  "choregos-api",
+  "choregos-orchestrator",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  "mypy>=1.13",
+  "ruff>=0.8",
+  "respx>=0.21",
+  "httpx>=0.27",
+  "types-PyYAML>=6.0",
+  "datamodel-code-generator>=0.26",
+  "freezegun>=1.5",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/api", "apps/orchestrator"]
+exclude = ["packages/contracts/ts", "apps/web"]
+
+[tool.uv.sources]
+choregos-contracts = { workspace = true }
+choregos-core = { workspace = true }
+choregos-adapters = { workspace = true }
+choregos-runner = { workspace = true }
+choregos-tools-mcp = { workspace = true }
+choregos-playbooks = { workspace = true }
+choregos-cli = { workspace = true }
+choregos-api = { workspace = true }
+choregos-orchestrator = { workspace = true }
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = [".venv", "packages/contracts/ts", "apps/web", "**/generated/**"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ASYNC", "S", "RET", "PL", "RUF"]
+ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "PLR0912", "PLR0911", "PLR0915", "SIM108"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "PLR", "ASYNC"]
+"tests/**" = ["S", "PLR", "ASYNC"]
+"**/fakes/**" = ["S"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
+exclude = ["(^|/)(\\.venv|node_modules|generated)/", "^apps/web/"]
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "packages/contracts/src:packages/core/src:packages/adapters/src:packages/runner/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:apps/api/src:apps/orchestrator/src"
+
+[[tool.mypy.overrides]]
+module = ["temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "*.tests.*"]
+strict = false
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["packages", "apps", "tests"]
+norecursedirs = ["apps/web", "node_modules", ".venv", "tests/e2e", "templates"]
+addopts = "-q --strict-markers"
+markers = [
+  "integration: nécessite des services externes (kind, docker)",
+  "e2e: scénario bout en bout",
+  "conformance: suite de conformité backends/templates",
+  "slow: test long",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+branch = true
+source = ["packages/core/src", "packages/runner/src", "apps/orchestrator/src"]
+omit = ["*/generated/*", "*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true

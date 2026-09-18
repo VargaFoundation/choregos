@@ -1,0 +1,26 @@
+{
+  "schema": "choregos/StageResult/v1",
+  "status": "done",
+  "reason": null,
+  "summary": "Le total de facture tient compte des avoirs ; 3 tests ajoutés.",
+  "outputs": { "size": "M", "risk": "low", "allowed_paths": ["src/orders/**", "tests/orders/**"] },
+  "artifacts": {
+    "branch": "choregos/123-avoirs-total",
+    "commits": ["fix(orders): déduire les avoirs du total"],
+    "pr_url": null,
+    "transcript_url": "s3://choregos/runs/01J8ZQK4C9R7M3N2P5T6V7W8X9/transcript.jsonl",
+    "context_pack_url": "s3://choregos/runs/01J8ZQK4C9R7M3N2P5T6V7W8X9/context.json",
+    "reports": { "tests": "s3://choregos/runs/01J8.../tests.xml", "coverage": "s3://choregos/runs/01J8.../coverage.xml" }
+  },
+  "evidence": { "tests_passed": true, "tests_run": 412, "tests_failed": 0, "coverage_delta": 1.2,
+    "lint": "ok", "typecheck": "ok", "security_scan": "ok", "diff_files": 4, "diff_lines": 118 },
+  "questions": [],
+  "findings": [
+    { "title": "N+1 sur le chargement des lignes de commande", "type": "perf", "severity": "medium",
+      "evidence": "src/orders/repository.py:88", "suggested_fix": "selectinload sur `lines`", "estimate": "S",
+      "out_of_scope_reason": "hors des chemins autorisés de ce ticket" }
+  ],
+  "scope_changes_requested": [],
+  "diagnostics": { "turns": 43, "tool_calls": 118, "permission_denials": 2, "duration_s": 1260,
+    "agent_exit": "normal", "dod_iterations": 1, "result_repairs": 0 }
+}

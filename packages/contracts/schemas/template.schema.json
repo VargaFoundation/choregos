@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/template.schema.json",
+  "title": "Template",
+  "description": "Manifeste d'un template de stack (docs/plan/03 §3.2).",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "requires", "defaults", "inputs", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "choregos/v1" },
+    "kind": { "const": "Template" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "version", "display"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "display": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "required": ["connectors"],
+      "additionalProperties": false,
+      "properties": {
+        "connectors": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "kind → type attendu, ex. tracker: github-issues"
+        },
+        "cluster_capabilities": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workflow": { "type": "string" },
+        "policy": { "type": "string" },
+        "models": { "type": "string" },
+        "agent": { "type": "string" }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string",
+            "enum": ["string", "enum", "list", "bool", "int", "github-repo", "cluster-ref", "secret-ref"] },
+          "required": { "type": "boolean", "default": false },
+          "default": {},
+          "values": { "type": "array", "items": { "type": "string" } },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 1,
+            "additionalProperties": { "type": "object", "additionalProperties": true }
+          }
+        ]
+      }
+    },
+    "scaffold": { "type": "string", "default": "./scaffold" }
+  }
+}

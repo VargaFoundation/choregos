@@ -1,0 +1,6 @@
+{
+  "title": "Requête N+1 sur le chargement des lignes de commande", "type": "perf", "severity": "medium",
+  "evidence": "src/orders/repository.py:88 — 1 + N requêtes pour 200 lignes (log SQL du test test_invoice_total)",
+  "suggested_fix": "selectinload(Order.lines) dans OrderRepository.get", "estimate": "S",
+  "out_of_scope_reason": "hors des chemins autorisés du ticket #123"
+}

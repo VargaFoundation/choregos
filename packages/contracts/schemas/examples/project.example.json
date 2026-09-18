@@ -1,0 +1,16 @@
+{
+  "slug": "billing-api", "org": "acme", "display_name": "Billing API",
+  "template_ref": "github-tekton-argo-k8s@1.0.0",
+  "repo": { "url": "https://github.com/acme/billing-api.git", "default_branch": "main", "language": "python",
+    "clone_depth": 50, "branch_prefix": "choregos/", "test_command": "make test", "lint_command": "make lint",
+    "typecheck_command": "make typecheck" },
+  "envs": ["dev", "staging", "prod"],
+  "agent": { "default_backend": "openhands", "allowed_backends": ["openhands", "claude-code"] },
+  "models": { "profiles": { "standard": "anthropic/claude-sonnet-5",
+    "strong": { "litellm_model": "anthropic/claude-opus-5", "params": { "temperature": 0 }, "max_turns_factor": 1.5 } },
+    "allow_unvalidated": false },
+  "gitops": { "repo_url": "https://github.com/acme/billing-api-gitops.git", "path_prefix": "apps", "apps": ["billing-api"] },
+  "cluster": "prod-eu-west",
+  "notify": { "slack_channel": "#billing-choregos", "emails": [] },
+  "labels": { "team": "payments" }
+}

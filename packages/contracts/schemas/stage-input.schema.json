@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/stage-input.schema.json",
+  "title": "StageInput",
+  "description": "Contrat orchestrateur → runner (docs/plan/01 §1.5).",
+  "type": "object",
+  "required": ["schema", "run_id", "attempt", "project", "work_item", "transition", "repo", "agent",
+               "model", "budget", "allowed_paths", "playbook", "callbacks"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "choregos/StageInput/v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "trace_parent": { "type": "string", "description": "En-tête W3C traceparent propagé au runner." },
+    "project": {
+      "type": "object",
+      "required": ["slug", "org"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": { "type": "string" },
+        "org": { "type": "string" },
+        "test_command": { "type": "string" },
+        "lint_command": { "type": "string" },
+        "typecheck_command": { "type": "string" }
+      }
+    },
+    "work_item": {
+      "type": "object",
+      "required": ["key", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string", "default": "" },
+        "url": { "type": "string" },
+        "size": { "type": "string", "enum": ["S", "M", "L", "XL"] },
+        "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "links": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "spec_comment": { "type": ["string", "null"] },
+            "plan_comment": { "type": ["string", "null"] },
+            "pr": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "required": ["id", "role", "from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "outputs": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "inputs": { "type": "array", "items": { "type": "string" }, "default": [] }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "required": ["url", "base_branch", "work_branch"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string" },
+        "base_branch": { "type": "string" },
+        "work_branch": { "type": "string" },
+        "clone_depth": { "type": "integer", "minimum": 1, "default": 50 }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "required": ["backend"],
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "type": "string" },
+        "launch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": { "type": "array", "items": { "type": "string" } },
+            "env": { "type": "object", "additionalProperties": { "type": "string" } },
+            "files": { "type": "object", "additionalProperties": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["litellm_model", "base_url", "api_format"],
+      "additionalProperties": false,
+      "properties": {
+        "litellm_model": { "type": "string" },
+        "base_url": { "type": "string" },
+        "api_format": { "type": "string", "enum": ["openai", "anthropic", "gemini"] },
+        "params": { "type": "object", "additionalProperties": true, "default": {} }
+      }
+    },
+    "gateway_key": { "type": "string", "description": "Clé virtuelle du run (budget = budget de l'étape)." },
+    "budget": {
+      "type": "object",
+      "required": ["usd", "max_turns", "max_minutes"],
+      "additionalProperties": false,
+      "properties": {
+        "usd": { "type": "number", "exclusiveMinimum": 0 },
+        "max_turns": { "type": "integer", "minimum": 1 },
+        "max_minutes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "allowed_paths": { "type": "array", "items": { "type": "string" } },
+    "context_pack_url": { "type": ["string", "null"] },
+    "playbook": {
+      "type": "object",
+      "required": ["ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "type": "string" },
+        "prompt_url": { "type": ["string", "null"] },
+        "prompt": { "type": ["string", "null"], "description": "Prompt rendu en clair (dev et fakes)." }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mcp": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": { "type": "string" },
+              "command": { "type": "array", "items": { "type": "string" } },
+              "env": { "type": "object", "additionalProperties": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "write_paths": { "type": "array", "items": { "type": "string" } },
+        "deny_commands": { "type": "array", "items": { "type": "string" } },
+        "allow_domains": { "type": "array", "items": { "type": "string" } },
+        "dod_iterations": { "type": "integer", "minimum": 0, "default": 3 },
+        "max_findings": { "type": "integer", "minimum": 0, "default": 5 }
+      }
+    },
+    "callbacks": {
+      "type": "object",
+      "required": ["api_url", "run_token"],
+      "additionalProperties": false,
+      "properties": {
+        "api_url": { "type": "string" },
+        "run_token": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "apiVersion": "choregos/v1",
+  "kind": "Workflow",
+  "metadata": { "name": "default-simple", "version": 1, "description": "Le workflow par défaut : refine → validation humaine → implement → verify → PR → merge → train." },
+  "actors": {
+    "refiner": { "type": "agent", "role": "refine", "model": "profile:standard" },
+    "owner": { "type": "human", "group": "product-owners", "sla_hours": 24 },
+    "dev": { "type": "agent", "role": "implement", "model": "profile:by_size" },
+    "checker": { "type": "agent", "role": "verify", "model": "profile:standard" },
+    "ci": { "type": "system" },
+    "captain": { "type": "human", "group": "release-captains", "sla_hours": 4 }
+  },
+  "states": {
+    "inbox": { "display": "À trier", "kind": "wait", "tracker": { "status": "Todo" } },
+    "refining": { "display": "Cadrage", "tracker": { "status": "Refining" } },
+    "awaiting_spec_approval": { "display": "Spec à valider", "kind": "wait", "tracker": { "status": "Needs review" } },
+    "ready": { "display": "Prêt", "tracker": { "status": "Ready" } },
+    "in_progress": { "display": "En cours", "tracker": { "status": "In progress" } },
+    "verifying": { "display": "Vérification", "tracker": { "status": "Verifying" } },
+    "pr_open": { "display": "PR ouverte", "kind": "wait", "tracker": { "status": "In review" } },
+    "merged": { "display": "Fusionné", "tracker": { "status": "Merged" } },
+    "deployed_prod": { "display": "En production", "terminal": true, "kind": "terminal", "tracker": { "status": "Done" } },
+    "needs_human": { "display": "Intervention humaine", "kind": "wait", "tracker": { "status": "Blocked" } },
+    "abandoned": { "display": "Abandonné", "terminal": true, "kind": "terminal", "tracker": { "status": "Cancelled" } }
+  },
+  "transitions": [
+    { "id": "t-refine", "from": "inbox", "to": "awaiting_spec_approval", "by": "refiner",
+      "outputs": ["spec", "allowed_paths", "size", "risk"],
+      "on_fail": { "to": "inbox", "max_attempts": 2, "escalate_to": "needs_human" } },
+    { "id": "t-approve-spec", "from": "awaiting_spec_approval", "to": "ready", "by": "owner",
+      "on_reject": "refining", "timeout_hours": 72 },
+    { "id": "t-refine-again", "from": "refining", "to": "awaiting_spec_approval", "by": "refiner",
+      "on_fail": { "to": "refining", "max_attempts": 2, "escalate_to": "needs_human" } },
+    { "id": "t-implement", "from": "ready", "to": "in_progress", "by": "dev",
+      "inputs": ["spec", "allowed_paths"], "outputs": ["branch", "commits"],
+      "gates": ["scope_respected", { "name": "diff_size_max", "params": { "files": 60 } }, "no_secrets"],
+      "on_fail": { "to": "ready", "max_attempts": 2, "escalate_to": "needs_human" } },
+    { "id": "t-verify", "from": "in_progress", "to": "verifying", "by": "checker",
+      "gates": ["evidence_present"],
+      "on_fail": { "to": "in_progress", "max_attempts": 2, "escalate_to": "needs_human" } },
+    { "id": "t-open-pr", "from": "verifying", "to": "pr_open", "by": "ci",
+      "gates": ["evidence_present"],
+      "on_fail": { "to": "verifying", "max_attempts": 2, "escalate_to": "needs_human" } },
+    { "id": "t-merge", "from": "pr_open", "to": "merged", "by": "ci",
+      "gates": ["ci_green", "review_approved", "scans_ok"], "timeout_hours": 48,
+      "on_fail": { "to": "in_progress", "max_attempts": 3, "escalate_to": "needs_human" } },
+    { "id": "t-deploy", "from": "merged", "to": "deployed_prod", "via": "release_train",
+      "train": { "env": "prod", "approval": "captain" }, "timeout_hours": 72 },
+    { "id": "t-abandon", "from": "needs_human", "to": "abandoned", "by": "owner", "timeout_hours": 168 }
+  ],
+  "defaults": {
+    "from_any_agent_state": { "on_question": "needs_human", "on_budget_exceeded": "needs_human", "on_timeout": "needs_human" },
+    "needs_human": { "on_answer": "resume", "on_abandon": "abandoned" }
+  }
+}

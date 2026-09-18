@@ -1,0 +1,6 @@
+{
+  "type": "tracker.item.moved", "source": "github", "delivery_id": "7f1c9c10-93a1-11f0-9c4e-0242ac120002",
+  "ts": "2026-09-18T09:12:44Z", "project_slug": "billing-api", "work_item_key": "acme/billing-api#123",
+  "actor": "augustin",
+  "payload": { "from_status": "Needs review", "to_status": "Ready", "field": "Status", "project_number": 4 }
+}

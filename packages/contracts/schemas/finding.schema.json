@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/finding.schema.json",
+  "title": "Finding",
+  "description": "Problème découvert hors périmètre par un agent.",
+  "type": "object",
+  "required": ["title", "type", "severity", "evidence"],
+  "additionalProperties": false,
+  "properties": {
+    "title": { "type": "string", "minLength": 3, "maxLength": 200 },
+    "type": { "type": "string", "enum": ["perf", "bug", "security", "tech-debt", "docs", "flaky-test", "ux"] },
+    "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "evidence": { "type": "string", "minLength": 1, "description": "chemin:ligne, sortie de test, requête…" },
+    "suggested_fix": { "type": "string" },
+    "estimate": { "type": "string", "enum": ["S", "M", "L"] },
+    "out_of_scope_reason": { "type": "string" }
+  }
+}

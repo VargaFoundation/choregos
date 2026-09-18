@@ -1,0 +1,1095 @@
+# Backlog Choregos — v3 (2026-09-18)
+# Champs : id, title, stream, sprint, priority (1 = d'abord), size (S ≈ ½ j, M ≈ 1–2 j, L ≈ 3–5 j agent), depends_on, acceptance (critères vérifiables), notes.
+# Une story = une PR. Les stories d'un même sprint et d'un même flux sont séquentielles ; les flux sont parallèles.
+
+version: 1
+streams:
+  S0: "Contrats & socle"
+  S1: "Orchestrateur Temporal"
+  S2: "Runner, agents ACP, Tekton"
+  S3: "Connecteurs GitHub"
+  S4: "Gateway & coûts"
+  S5: "Front"
+  S6: "API"
+  S7: "Plateforme Kubernetes & GitOps"
+  S8: "Templates & provisioning"
+  S9: "Release train & CD"
+  S10: "Findings & mémoire (Choregos)"
+  S11: "Ecphoria (repo VargaFoundation/ecphoria)"
+  S12: "Évals & conformité"
+  S13: "Multi-backend & second écosystème"
+
+stories:
+
+  # ───────────────────────── S0 — Contrats & socle ─────────────────────────
+  - id: S0-01
+    title: "Squelette du monorepo (uv workspaces, pnpm, Makefile, pre-commit, CODEOWNERS, AGENTS.md)"
+    stream: S0
+    sprint: 0
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "`make ci` passe sur un dépôt vide de code métier"
+      - "AGENTS.md et CLAUDE.md (symlink) présents ; template de PR ; labels GitHub créés"
+      - "Layout conforme à docs/plan/01 §1.2"
+  - id: S0-02
+    title: "packages/contracts — JSON Schemas Workflow, Policy, Project, StageInput, StageResult, InboundEvent, CloudEvents types"
+    stream: S0
+    sprint: 0
+    priority: 2
+    size: L
+    depends_on: [S0-01]
+    acceptance:
+      - "Schémas 2020-12 valides ; exemples dans schemas/examples/ validés en CI"
+      - "Règles statiques du DSL (§1.4) implémentées en tests de schéma ou dans core (S0-04)"
+  - id: S0-03
+    title: "packages/contracts — OpenAPI 3.1 complet (§1.8) + génération types Python (pydantic) et TS ; mock Prism"
+    stream: S0
+    sprint: 0
+    priority: 3
+    size: L
+    depends_on: [S0-02]
+    acceptance:
+      - "`make contracts` régénère sans diff ; spectral lint vert"
+      - "`pnpm mock:api` sert l'API mockée depuis l'OpenAPI"
+  - id: S0-04
+    title: "packages/core — parseur/validateur DSL + templates full-auto/default-simple/advanced + CLI `choregos workflow validate`"
+    stream: S0
+    sprint: 0
+    priority: 4
+    size: L
+    depends_on: [S0-02]
+    acceptance:
+      - "Les 3 templates valident ; 12 cas invalides produisent des erreurs localisées (ligne/colonne)"
+      - "`select_transition(state, outcome)` déterministe et testé"
+  - id: S0-05
+    title: "packages/core — policy engine (presets solo/team, budgets, approvals, attempts, résolution par taille/risque) + résolution des profils de modèles"
+    stream: S0
+    sprint: 0
+    priority: 5
+    size: M
+    depends_on: [S0-02]
+    acceptance:
+      - "`Policy.budget_for(role,size)`, `approval_for(kind,size,risk)`, `resolve_model(profile,size)` couverts à 100 %"
+  - id: S0-06
+    title: "packages/adapters — interfaces Protocol (§1.9) + implémentations Fake* en mémoire avec scénarios scriptables"
+    stream: S0
+    sprint: 0
+    priority: 6
+    size: M
+    depends_on: [S0-02]
+    acceptance:
+      - "Fakes pour tracker, scm, ci, cd, executor, memory, gateway, notify ; `CHOREGOS_FAKES=1` les injecte"
+      - "Un test d'exemple fait traverser un WorkItem factice"
+  - id: S0-07
+    title: "dev/ — kind + Helmfile/Argo léger + Tilt + Keycloak + seed"
+    stream: S0
+    sprint: 0
+    priority: 7
+    size: L
+    depends_on: [S0-01]
+    acceptance:
+      - "`make dev-up` < 15 min sur un poste 16 Go ; `make dev-seed` crée org/projet/tickets"
+      - "`make dev-down` nettoie"
+  - id: S0-08
+    title: "CI monorepo (ci.yml ciblé par chemins, release.yml, nightly.yml squelette) + images de base signées"
+    stream: S0
+    sprint: 0
+    priority: 8
+    size: M
+    depends_on: [S0-01]
+    acceptance:
+      - "PR de test déclenche uniquement les jobs des chemins modifiés"
+      - "Images `runner-base`, `python-base` construites multi-arch et signées cosign sur main"
+  - id: S0-09
+    title: "docs/adr/ + docs/plan/STATUS.md + docs/plan/BLOCKERS.md + guide contributeur"
+    stream: S0
+    sprint: 0
+    priority: 9
+    size: S
+    depends_on: [S0-01]
+    acceptance:
+      - "ADR-0001 (contrats gelés), ADR-0002 (ACP), ADR-0003 (Temporal), ADR-0004 (coût au gateway) rédigés"
+
+  # ───────────────────────── S1 — Orchestrateur ─────────────────────────
+  - id: S1-01
+    title: "apps/orchestrator — worker, task queues, config, OTel, test harness WorkflowEnvironment"
+    stream: S1
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S0-04, S0-06]
+    acceptance:
+      - "Worker démarre sur 4 queues ; métriques SDK exposées ; test d'activité factice"
+  - id: S1-02
+    title: "WorkflowInterpreter — boucle d'états, transitions agent/humain/système, attempts, retry_or_escalate"
+    stream: S1
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S1-01]
+    acceptance:
+      - "default-simple traversé avec fakes en < 5 s de test ; attempts bornés ; escalade vers needs_human"
+      - "continue_as_new déclenché au-delà du seuil d'historique (test avec seuil abaissé)"
+  - id: S1-03
+    title: "Activités run_stage — resolve_model, mint_gateway_key, build_context_pack (fake), start_run, await_run (heartbeat, cancel), collect_spend, revoke_key, record_run"
+    stream: S1
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S1-02]
+    acceptance:
+      - "Idempotence par run_id testée (double exécution = un seul run en base)"
+      - "Annulation via control(stop) tue le run (fake executor)"
+  - id: S1-04
+    title: "Attente humaine — human_requests, SLA timers, rappels, escalade, décisions via signal"
+    stream: S1
+    sprint: 1
+    priority: 4
+    size: M
+    depends_on: [S1-02]
+    acceptance:
+      - "Rappel à sla_hours et escalade testés par time-skipping"
+  - id: S1-05
+    title: "Gates — registre, évaluation sync (scope_respected, evidence_present, diff_size_max, no_secrets) et async (ci_green, review_approved) sur InboundEvent"
+    stream: S1
+    sprint: 2
+    priority: 5
+    size: M
+    depends_on: [S1-02]
+    acceptance:
+      - "Chaque gate a un test vert/rouge ; timeout gate → retry_or_escalate"
+  - id: S1-06
+    title: "Miroir tracker — mirror_state, update_ticket_status_comment (markdown §4.3), set_fields (Coût, Taille, Risque, Run)"
+    stream: S1
+    sprint: 1
+    priority: 6
+    size: M
+    depends_on: [S1-03]
+    acceptance:
+      - "Commentaire unique réécrit (marker) ; montants et tokens exacts vs ledger fake"
+  - id: S1-07
+    title: "Findings & scope — emit_finding (signal FindingsTriage), handle_scope_change (auto ≤ N fichiers sinon human_request)"
+    stream: S1
+    sprint: 2
+    priority: 7
+    size: M
+    depends_on: [S1-04]
+    acceptance:
+      - "Scope change auto et manuel testés ; allowed_paths étendus persistés sur le work_item"
+  - id: S1-08
+    title: "Migration de workflow (control.migrate) + reprise resume_from + versioning `patched()` + test de replay"
+    stream: S1
+    sprint: 2
+    priority: 8
+    size: M
+    depends_on: [S1-02]
+    acceptance:
+      - "Historiques archivés rejoués en CI ; migration vers état existant OK ; état manquant → erreur explicite"
+  - id: S1-09
+    title: "ProjectProvisioning — squelette (steps depuis manifest, statut SSE, idempotence, reprise)"
+    stream: S1
+    sprint: 2
+    priority: 9
+    size: M
+    depends_on: [S1-01]
+    acceptance:
+      - "Manifest fake avec 5 steps ; échec au step 3 → reprise au step 3"
+  - id: S1-10
+    title: "Démarrage des workflows depuis InboundEvent (API → Temporal) : création WorkflowInterpreter sur label agent-ready / carte déplacée ; routage des signaux"
+    stream: S1
+    sprint: 1
+    priority: 10
+    size: M
+    depends_on: [S1-02]
+    acceptance:
+      - "Un même événement livré deux fois ne crée qu'un workflow (ID déterministe)"
+
+  # ───────────────────────── S2 — Runner & agents ─────────────────────────
+  - id: S2-01
+    title: "packages/runner — squelette CLI `choregos-runner run`, lecture StageInput, clone/branche, codes de sortie"
+    stream: S2
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S0-02]
+    acceptance:
+      - "Sur dépôt jouet local : clone, branche, exit 0 avec résultat 'noop' posté à une API fake"
+  - id: S2-02
+    title: "Client ACP headless (JSON-RPC stdio) : initialize, session/new avec MCP, prompt, streaming des updates, permission handler pluggable, cancel"
+    stream: S2
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S2-01]
+    acceptance:
+      - "Testé contre un agent ACP factice (fixture) : 100 % des messages du protocole v0.11 couverts par tests"
+  - id: S2-03
+    title: "Backend openhands — launch_spec, model_env, config MCP, AGENTS.md ; conformité locale"
+    stream: S2
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S2-02]
+    acceptance:
+      - "Prompt 'crée hello.py et un test' produit commit + result.json valide avec modèle cheap réel (CI nightly) et fake LLM (PR)"
+  - id: S2-04
+    title: "PolicyEngine des permissions — allowed_paths, deny_commands, motifs dangereux, réseau ; journal des décisions"
+    stream: S2
+    sprint: 1
+    priority: 4
+    size: M
+    depends_on: [S2-02]
+    acceptance:
+      - "Écriture hors périmètre refusée avec message ; commande interdite refusée ; tout journalisé en run_events"
+  - id: S2-05
+    title: "Boucle DoD externe (tests/lint/typecheck du dépôt, re-prompt borné) + vérification de diff (revert hors périmètre) + validation/réparation result.json"
+    stream: S2
+    sprint: 1
+    priority: 5
+    size: L
+    depends_on: [S2-03, S2-04]
+    acceptance:
+      - "Tests rouges → 1 re-prompt → verts (fixture) ; fichier hors périmètre revert ; result.json invalide réparé"
+  - id: S2-06
+    title: "packages/tools-mcp — serveur MCP choregos-tools (report_finding, request_scope_change, ask_human, get_ticket/spec/plan/ci_logs/context, propose_fact)"
+    stream: S2
+    sprint: 1
+    priority: 6
+    size: M
+    depends_on: [S0-03]
+    acceptance:
+      - "Chaque outil appelle l'API interne avec run_token ; plafond findings ; tests d'intégration avec API fake"
+  - id: S2-07
+    title: "Publication — commit conventionnel, push, upload transcript/rapports/context vers object store, POST result"
+    stream: S2
+    sprint: 1
+    priority: 7
+    size: M
+    depends_on: [S2-05]
+    acceptance:
+      - "Transcript JSONL des events ACP retrouvable par URL ; artefacts listés dans StageResult"
+  - id: S2-08
+    title: "Image choregos-runner (Dockerfile multi-stage, agents épinglés versions.lock, scanners, shims kubectl/terraform/az/gcloud, non-root)"
+    stream: S2
+    sprint: 1
+    priority: 8
+    size: M
+    depends_on: [S2-03]
+    acceptance:
+      - "Trivy sans CRITICAL ; `kubectl` dans l'image renvoie 'refusé' et journalise ; taille < 3 Go"
+  - id: S2-09
+    title: "Executor Tekton — Task agent-stage, PipelineRun, Secret run-<id>, watch + CloudEvents, results, nettoyage"
+    stream: S2
+    sprint: 2
+    priority: 9
+    size: L
+    depends_on: [S2-08, S0-07]
+    acceptance:
+      - "Sur kind : PipelineRun complet, result-url lu, Secret supprimé ; Chains signe le run"
+  - id: S2-10
+    title: "Executor Job Kubernetes (repli) + Executor local_docker (dev)"
+    stream: S2
+    sprint: 2
+    priority: 10
+    size: M
+    depends_on: [S2-08]
+    acceptance:
+      - "Même contrat que Tekton ; test partagé paramétré sur les 3 exécuteurs"
+  - id: S2-11
+    title: "Suite de conformité backends (tests/conformance/backends) : 7 checks §2.2, rapport JSON, désactivation automatique"
+    stream: S2
+    sprint: 2
+    priority: 11
+    size: M
+    depends_on: [S2-03]
+    acceptance:
+      - "OpenHands passe ; un backend cassé simulé est marqué disabled dans platform/backends"
+  - id: S2-12
+    title: "Sandbox — NetworkPolicy runners, RuntimeClass gvisor conditionnelle, seccomp, quotas, tests d'egress bloqué"
+    stream: S2
+    sprint: 3
+    priority: 12
+    size: M
+    depends_on: [S2-09, S7-03]
+    acceptance:
+      - "curl vers un domaine non autorisé échoue depuis le run ; LiteLLM et API joignables"
+
+  # ───────────────────────── S3 — Connecteurs GitHub ─────────────────────────
+  - id: S3-01
+    title: "App GitHub — auth JWT/installation tokens, cache, rate-limit par installation, mint_token scopé"
+    stream: S3
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S0-06]
+    acceptance:
+      - "Token de dépôt TTL 1 h ; 429 → backoff ; tests avec serveur GitHub factice (respx)"
+  - id: S3-02
+    title: "TrackerAdapter GitHub Issues + Projects v2 (GraphQL) : fetch, create, set_state (Status + label), comment/upsert, link, set_fields, list_candidates"
+    stream: S3
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S3-01]
+    acceptance:
+      - "Option Status créée si absente ; champ Coût numérique mis à jour ; tests enregistrés (cassettes)"
+  - id: S3-03
+    title: "Webhooks GitHub → InboundEvent (issues, issue_comment, projects_v2_item, label, pull_request, check_suite, review) + HMAC + dédup delivery_id + commandes `/choregos …`"
+    stream: S3
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S3-01]
+    acceptance:
+      - "Fixtures de payloads réels ; carte déplacée → tracker.item.moved(state) ; commentaire `/choregos approve` → human_decision"
+  - id: S3-04
+    title: "ScmAdapter GitHub : ensure_branch, open/update PR (template), get_pr (checks, reviews, files), request_review, enqueue_merge, compare"
+    stream: S3
+    sprint: 1
+    priority: 4
+    size: L
+    depends_on: [S3-01]
+    acceptance:
+      - "PR ouverte en draft puis ready ; merge queue déclenchée ; état lu avec checks agrégés"
+  - id: S3-05
+    title: "Check-runs `choregos/scope` et `choregos/evidence` (GitHub Checks API) alimentés par les gates"
+    stream: S3
+    sprint: 2
+    priority: 5
+    size: M
+    depends_on: [S3-04, S1-05]
+    acceptance:
+      - "Check rouge avec annotations sur fichiers hors périmètre ; vert sinon"
+  - id: S3-06
+    title: "Polling de secours (list_candidates) et réconciliation d'état board ↔ workflow"
+    stream: S3
+    sprint: 2
+    priority: 6
+    size: M
+    depends_on: [S3-02, S1-10]
+    acceptance:
+      - "Webhook perdu simulé : la carte est rattrapée en < 2 min"
+  - id: S3-07
+    title: "Notifier Slack (blocks, boutons Approuver/Renvoyer → API decisions, canal par projet)"
+    stream: S3
+    sprint: 2
+    priority: 7
+    size: M
+    depends_on: [S0-06]
+    acceptance:
+      - "Bouton → décision enregistrée avec l'identité Slack mappée sur l'utilisateur"
+
+  # ───────────────────────── S4 — Gateway & coûts ─────────────────────────
+  - id: S4-01
+    title: "Chart et config LiteLLM (values gateway.yaml §4.1), Postgres litellm (CNPG), Redis, image par digest"
+    stream: S4
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S0-07]
+    acceptance:
+      - "Sur kind : `/v1/chat/completions` et `/v1/messages` répondent via fournisseur fake ; `/v1/models` liste les alias"
+  - id: S4-02
+    title: "GatewayAdapter LiteLLM — mint_key (budget, TTL, models, metadata/tags), spend (key/info + spend/logs), revoke, list_models (+prix, capacités)"
+    stream: S4
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S4-01]
+    acceptance:
+      - "Clé coupée au plafond (test) ; spend agrégé exact sur 3 requêtes ; révocation effective"
+  - id: S4-03
+    title: "cost_ledger + fx_rate + prix internes pour modèles locaux + vues matérialisées (coûts jour/étape/modèle/backend/taille)"
+    stream: S4
+    sprint: 1
+    priority: 3
+    size: M
+    depends_on: [S4-02]
+    acceptance:
+      - "Requêtes d'agrégation < 200 ms sur 1 M lignes synthétiques"
+  - id: S4-04
+    title: "Estimation avant lancement (médiane/p80 par projet×workflow×taille sur 90 j) + alerte dépassement p80"
+    stream: S4
+    sprint: 2
+    priority: 4
+    size: S
+    depends_on: [S4-03]
+    acceptance:
+      - "Estimation affichée dans le commentaire initial ; événement cost.alert émis"
+  - id: S4-05
+    title: "Compatibilité Claude Code via LiteLLM — test des endpoints/headers requis (compat guide) dans la conformité"
+    stream: S4
+    sprint: 2
+    priority: 5
+    size: S
+    depends_on: [S4-01]
+    acceptance:
+      - "`/v1/messages/count_tokens` OK ; headers anthropic-beta relayés (test d'écho)"
+  - id: S4-06
+    title: "Profils de modèles — CRUD plateforme/projet, validation (tool calling, backend compatible, politique), `GET /platform/models`"
+    stream: S4
+    sprint: 2
+    priority: 6
+    size: M
+    depends_on: [S4-02, S0-05]
+    acceptance:
+      - "Combinaison non validée refusée avec lien matrice ; `allow_unvalidated` admin fonctionne"
+
+  # ───────────────────────── S5 — Front ─────────────────────────
+  - id: S5-01
+    title: "Socle Next.js (App Router, TS strict, Tailwind, shadcn, TanStack Query, Auth.js OIDC Keycloak, next-intl FR/EN, Playwright) contre API mock"
+    stream: S5
+    sprint: 2
+    priority: 1
+    size: L
+    depends_on: [S0-03]
+    acceptance:
+      - "Login OIDC en dev ; layout ; composants StateBadge/CostChip/ActorIcon/LiveLog/DecisionBar ; Storybook"
+  - id: S5-02
+    title: "Projets — liste, cartes, création (wizard multi-étapes avec validation par schéma), provisioning en SSE"
+    stream: S5
+    sprint: 2
+    priority: 2
+    size: L
+    depends_on: [S5-01]
+    acceptance:
+      - "Wizard complet en mode mock ; erreurs de schéma affichées à l'étape concernée"
+  - id: S5-03
+    title: "Board Kanban (colonnes = états du DSL, cartes en direct via SSE, actions Approuver/Renvoyer/Répondre)"
+    stream: S5
+    sprint: 2
+    priority: 3
+    size: L
+    depends_on: [S5-01]
+    acceptance:
+      - "Déplacement d'une carte = POST decisions ; affichage coût courant et étape/tentative"
+  - id: S5-04
+    title: "Page ticket (timeline, coûts par étape, findings, PR, transcripts) et page run (journal ACP virtualisé, diff, tests, rejouer)"
+    stream: S5
+    sprint: 2
+    priority: 4
+    size: L
+    depends_on: [S5-01]
+    acceptance:
+      - "10 000 événements affichés sans jank ; permissions refusées mises en évidence"
+  - id: S5-05
+    title: "Éditeur de workflow — Monaco YAML + schéma, rendu React Flow swimlanes (états, acteurs, gates), validation, PR"
+    stream: S5
+    sprint: 3
+    priority: 5
+    size: L
+    depends_on: [S5-01, S0-04]
+    acceptance:
+      - "Les 3 templates se rendent ; une erreur de validation pointe l'élément dans le graphe"
+  - id: S5-06
+    title: "Trains — vue par env (batch, départ, verrou, freeze, approbation, canary, historique), actions"
+    stream: S5
+    sprint: 3
+    priority: 6
+    size: M
+    depends_on: [S5-01]
+    acceptance:
+      - "Approbation avec confirmation ; freeze avec motif obligatoire"
+  - id: S5-07
+    title: "Findings (triage) et Mémoire (recherche, pending, historique bi-temporel, réimport)"
+    stream: S5
+    sprint: 3
+    priority: 7
+    size: M
+    depends_on: [S5-01]
+    acceptance:
+      - "Actions findings et pending fonctionnent en mock puis réel"
+  - id: S5-08
+    title: "Paramètres projet (connecteurs + test, modèles/profils + matrice, politique, membres/rôles, notifications, danger zone) et Admin (templates, backends, exécuteurs, gateway, utilisateurs, audit)"
+    stream: S5
+    sprint: 3
+    priority: 8
+    size: L
+    depends_on: [S5-01]
+    acceptance:
+      - "RBAC appliqué côté UI (boutons masqués) et vérifié côté API (403 testé)"
+  - id: S5-09
+    title: "Vue d'ensemble projet (débit, cycle time, coût vs budget, taux PR 1er passage, DORA) + org"
+    stream: S5
+    sprint: 4
+    priority: 9
+    size: M
+    depends_on: [S5-01, S4-03]
+    acceptance:
+      - "Graphiques alimentés par GET /costs et vues matérialisées ; export CSV"
+  - id: S5-10
+    title: "Bascule mock → API réelle, e2e Playwright des parcours clés, accessibilité (axe) et perfs (LCP < 2,5 s)"
+    stream: S5
+    sprint: 3
+    priority: 10
+    size: M
+    depends_on: [S5-02, S5-03, S5-04, S6-04]
+    acceptance:
+      - "5 parcours e2e verts sur kind ; axe sans violation sérieuse"
+
+  # ───────────────────────── S6 — API ─────────────────────────
+  - id: S6-01
+    title: "Socle FastAPI (config, structlog, OTel, SQLAlchemy async, Alembic, RLS par org, erreurs RFC 9457, healthz/readyz)"
+    stream: S6
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S0-03]
+    acceptance:
+      - "Migrations initiales (§1.3) ; RLS testée (org A ne voit pas org B)"
+  - id: S6-02
+    title: "Auth OIDC (authlib), sessions, api_tokens, RBAC 5 rôles, memberships, audit_log"
+    stream: S6
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S6-01]
+    acceptance:
+      - "Matrice rôle × endpoint testée ; audit pour toute mutation"
+  - id: S6-03
+    title: "Projets, connecteurs (CRUD, test, secret_ref), workflow/policy (validate via core), modèles (profils)"
+    stream: S6
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S6-02, S0-04, S0-05]
+    acceptance:
+      - "Schemathesis vert sur ces ressources ; PUT workflow invalide → 422 localisé"
+  - id: S6-04
+    title: "Work items, runs, timeline, decisions, actions (signaux Temporal), SSE events et run events"
+    stream: S6
+    sprint: 2
+    priority: 4
+    size: L
+    depends_on: [S6-02, S1-10]
+    acceptance:
+      - "Décision → signal reçu par le workflow (test avec WorkflowEnvironment) ; SSE reconnectable (Last-Event-ID)"
+  - id: S6-05
+    title: "Webhooks entrants — routeurs GitHub/Tekton (CloudEvents)/Argo/Alertmanager (+ Jira/GitLab stubs), vérification de signature, dédup, normalisation, réponse < 500 ms"
+    stream: S6
+    sprint: 1
+    priority: 5
+    size: L
+    depends_on: [S6-01, S3-03]
+    acceptance:
+      - "Payload invalide → 401 ; doublon → 202 idempotent ; charge 200 req/s tenue en test"
+  - id: S6-06
+    title: "API interne (JWT de run ES256) — input, events batch, result, findings, scope-change, question, context, ticket, ci-logs"
+    stream: S6
+    sprint: 1
+    priority: 6
+    size: M
+    depends_on: [S6-01]
+    acceptance:
+      - "JWT expiré/autre run → 403 ; result posté deux fois → 200 idempotent"
+  - id: S6-07
+    title: "Trains, releases, findings, memory (proxy Ecphoria/pgvector), costs, templates, admin, audit — endpoints"
+    stream: S6
+    sprint: 3
+    priority: 7
+    size: L
+    depends_on: [S6-02]
+    acceptance:
+      - "Schemathesis 100 % OpenAPI ; pagination par curseur partout"
+  - id: S6-08
+    title: "CLI `choregos` (login, projects, items, runs tail, trains, findings, workflow validate, dev)"
+    stream: S6
+    sprint: 3
+    priority: 8
+    size: M
+    depends_on: [S6-04]
+    acceptance:
+      - "`choregos runs tail <id>` suit le SSE ; complétion shell"
+
+  # ───────────────────────── S7 — Plateforme Kubernetes ─────────────────────────
+  - id: S7-01
+    title: "charts/choregos umbrella + sous-charts api/web/orchestrator/tools (HPA, PDB, HTTPRoute, ExternalSecret, Job migrations, ServiceMonitor) + helm unittest + kubeconform"
+    stream: S7
+    sprint: 1
+    priority: 1
+    size: L
+    depends_on: [S0-01]
+    acceptance:
+      - "`helm template` valide ; install sur kind avec fakes ; probes OK"
+  - id: S7-02
+    title: "choregos-infra bootstrap (app-of-apps) : cert-manager, ESO, Envoy Gateway, CNPG, Tekton operator, Argo Rollouts, Kyverno, monitoring, gVisor DaemonSet ; sync-waves"
+    stream: S7
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: []
+    acceptance:
+      - "Cluster kind → `argocd app sync bootstrap` installe tout ; idem sur staging cloud"
+  - id: S7-03
+    title: "Namespaces plateforme, NetworkPolicies, RBAC (SA executor limité aux proj-*-runners via Roles générés), ResourceQuota, PodSecurity restricted"
+    stream: S7
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S7-02]
+    acceptance:
+      - "Test d'admission : pod privileged refusé ; SA executor ne peut pas lister dans choregos-system"
+  - id: S7-04
+    title: "Postgres CNPG ×3 (choregos, temporal, litellm), PgBouncer, sauvegardes Barman vers bucket, restauration testée (Job de vérification mensuel)"
+    stream: S7
+    sprint: 2
+    priority: 4
+    size: M
+    depends_on: [S7-02]
+    acceptance:
+      - "Restauration PITR en staging documentée et automatisée ; RPO mesuré"
+  - id: S7-05
+    title: "Temporal via Helm (frontend/history/matching/worker ×2, UI OIDC, schema Jobs, numHistoryShards 512) + dashboards"
+    stream: S7
+    sprint: 2
+    priority: 5
+    size: M
+    depends_on: [S7-04]
+    acceptance:
+      - "Failover d'un pod history sans perte ; UI accessible derrière OIDC"
+  - id: S7-06
+    title: "Ecphoria dans l'umbrella (dépendance chart E-11), Redis, egress proxy (Envoy/Squid, allowlist par projet, injection credentials registres)"
+    stream: S7
+    sprint: 3
+    priority: 6
+    size: M
+    depends_on: [S7-03, S11-11]
+    acceptance:
+      - "Depuis proj-*-runners : registre privé joignable via proxy sans secret dans le pod"
+  - id: S7-07
+    title: "Observabilité — OTel Collector, Loki, Tempo, dashboards Grafana (6), alertes Alertmanager → Slack, SLO"
+    stream: S7
+    sprint: 3
+    priority: 7
+    size: M
+    depends_on: [S7-02]
+    acceptance:
+      - "Trace API → Temporal → runner visible dans Tempo ; alertes de test déclenchées"
+  - id: S7-08
+    title: "Environnements staging/prod (overlays values, DNS, TLS, OIDC prod), promotion de la plateforme (Rollouts canary sur api/web/orchestrator), Renovate"
+    stream: S7
+    sprint: 3
+    priority: 8
+    size: L
+    depends_on: [S7-05]
+    acceptance:
+      - "Tag → staging auto → PR prod approuvée → canary → 100 % ; rollback testé"
+  - id: S7-09
+    title: "Kyverno policies (images signées par digest, non-root, labels, quotas, RuntimeClass) + ApplicationSet projects (git directory generator, prune, selfHeal)"
+    stream: S7
+    sprint: 3
+    priority: 9
+    size: M
+    depends_on: [S7-03]
+    acceptance:
+      - "Image non signée refusée ; répertoire projects/<slug> créé → namespaces synchronisés en < 2 min"
+  - id: S7-10
+    title: "Runbooks (restauration, Raft Ecphoria, rotations, montée Temporal, purge, train gelé) + tests de chaos (kill worker/PipelineRun, perte nœud spot)"
+    stream: S7
+    sprint: 5
+    priority: 10
+    size: M
+    depends_on: [S7-08]
+    acceptance:
+      - "Chaque runbook exécuté une fois en staging ; chaos : aucun run perdu, aucun coût double"
+
+  # ───────────────────────── S8 — Templates & provisioning ─────────────────────────
+  - id: S8-01
+    title: "templates/github-tekton-argo-k8s — manifest.yaml, inputs du wizard, scaffold Jinja (AGENTS.md, .choregos/*, tekton/pipeline.yaml, deploy/, PR template, CODEOWNERS)"
+    stream: S8
+    sprint: 2
+    priority: 1
+    size: L
+    depends_on: [S0-02]
+    acceptance:
+      - "Rendu du scaffold testé pour 3 langages ; manifest validé par schéma Template"
+  - id: S8-02
+    title: "Activités GitHub du provisioning — install_app check, ensure_labels, ensure_project_board (champs), ensure_issue_template, ensure_webhooks, scaffold_pr"
+    stream: S8
+    sprint: 2
+    priority: 2
+    size: M
+    depends_on: [S1-09, S3-02, S3-04]
+    acceptance:
+      - "Rejouable : deuxième exécution ne crée rien en double"
+  - id: S8-03
+    title: "Activités GitOps — write_project_manifests (namespaces, quotas, netpol, rbac, Tekton EventListener + Pipeline CI + Task agent-stage, Argo Applications), commit/PR sur choregos-infra, wait_synced"
+    stream: S8
+    sprint: 3
+    priority: 3
+    size: L
+    depends_on: [S1-09, S7-09]
+    acceptance:
+      - "Sur kind : projet provisionné de bout en bout ; suppression = prune propre"
+  - id: S8-04
+    title: "Activités mémoire/gateway/notify — create_tenant, initial_import, create_team_and_budget, test_message"
+    stream: S8
+    sprint: 3
+    priority: 4
+    size: M
+    depends_on: [S10-01, S4-02, S3-07]
+    acceptance:
+      - "Tenant Ecphoria créé et peuplé (README/docs/ADR/issues fermées) ; équipe LiteLLM avec budget"
+  - id: S8-05
+    title: "Pipeline CI Tekton du template (build, test, lint, scans, image, Chains) + Triggers GitHub + CloudEvents vers API"
+    stream: S8
+    sprint: 2
+    priority: 5
+    size: L
+    depends_on: [S8-01]
+    acceptance:
+      - "Push sur PR → PipelineRun → check-run GitHub → InboundEvent ci.run.succeeded reçu"
+  - id: S8-06
+    title: "Tests de template (tests/conformance/templates) : provisioning sur kind + ticket S bout en bout"
+    stream: S8
+    sprint: 3
+    priority: 6
+    size: M
+    depends_on: [S8-03, S8-05]
+    acceptance:
+      - "Exécuté en nightly ; échec bloque la publication du template"
+
+  # ───────────────────────── S9 — Release train & CD ─────────────────────────
+  - id: S9-01
+    title: "ReleaseTrain — machine à états (§5.2), signaux, batch, cadence/fenêtres/freeze, express lane, timeouts"
+    stream: S9
+    sprint: 3
+    priority: 1
+    size: L
+    depends_on: [S1-02]
+    acceptance:
+      - "Time-skipping : deux merged à 5 min → un batch ; hotfix hors horaire → départ ; freeze bloque"
+  - id: S9-02
+    title: "CdAdapter Argo CD — promote (PR GitOps), health, rollout_status, abort, sync windows ; layout GitOps du projet"
+    stream: S9
+    sprint: 3
+    priority: 2
+    size: L
+    depends_on: [S3-04, S7-02]
+    acceptance:
+      - "Promotion staging puis prod sur kind avec Rollouts ; abort effectif"
+  - id: S9-03
+    title: "AnalysisTemplate slo-default (5xx, p95, erreurs métier) paramétrable + soak Prometheus + smoke Job Tekton"
+    stream: S9
+    sprint: 3
+    priority: 3
+    size: M
+    depends_on: [S9-02, S7-07]
+    acceptance:
+      - "Canary volontairement cassé → analyse KO → rollback → release rolled_back → train frozen"
+  - id: S9-04
+    title: "Approbation prod — Slack + GitHub Environment (required reviewers) + front ; release notes (stage release_notes) ; mark_items ; record_incident"
+    stream: S9
+    sprint: 3
+    priority: 4
+    size: M
+    depends_on: [S9-01, S3-07]
+    acceptance:
+      - "Approbation par un non-captain refusée ; notes de release postées dans la PR GitOps"
+  - id: S9-05
+    title: "Terraform via Atlantis — intégration apply pendant le départ, lock, approbation ; docs"
+    stream: S9
+    sprint: 4
+    priority: 5
+    size: M
+    depends_on: [S9-01]
+    acceptance:
+      - "Plan posté sur PR infra ; apply refusé hors train ; accepté pendant le train après approbation"
+  - id: S9-06
+    title: "Feature flags — gate flag_present (OpenFeature/Unleash), consigne refine pour risk high"
+    stream: S9
+    sprint: 4
+    priority: 6
+    size: S
+    depends_on: [S1-05]
+    acceptance:
+      - "Ticket risk:high sans flag → gate rouge avec explication"
+
+  # ───────────────────────── S10 — Findings & mémoire (Choregos) ─────────────────────────
+  - id: S10-01
+    title: "MemoryAdapter Ecphoria (REST + MCP, tenant = projet, timeouts, circuit-breaker) et MemoryAdapter pgvector (repli, même tests)"
+    stream: S10
+    sprint: 3
+    priority: 1
+    size: L
+    depends_on: [S0-06, S11-05, S11-06]
+    acceptance:
+      - "Suite de tests d'adaptateur partagée verte sur les deux implémentations ; panne Ecphoria → context pack vide en < 300 ms"
+  - id: S10-02
+    title: "FindingsTriage — dédup embeddings (platform/embed, seuil), classification (profile:cheap), create_item + liens + labels, commentaire origine, notify critical, agent-ready auto pour S"
+    stream: S10
+    sprint: 3
+    priority: 2
+    size: L
+    depends_on: [S1-07, S3-02, S4-02]
+    acceptance:
+      - "Doublon détecté (fixture) → commentaire au lieu de ticket ; nouveau finding → ticket lié et WorkflowInterpreter démarré si politique"
+  - id: S10-03
+    title: "MemoryIngestion (cron + événements) — tickets fermés, PR fusionnées, ADR/docs, déploiements/rollbacks, alertes, run_lessons, findings ; upsert idempotent"
+    stream: S10
+    sprint: 4
+    priority: 3
+    size: L
+    depends_on: [S10-01, S3-02]
+    acceptance:
+      - "Réimport complet sans doublon ; supersession observée sur un ADR modifié"
+  - id: S10-04
+    title: "build_context_pack réel — requête par rôle, kinds, paths, budget tokens ; stockage avec le run ; marquage non fiable ; MCP mémoire monté dans le workspace"
+    stream: S10
+    sprint: 4
+    priority: 4
+    size: M
+    depends_on: [S10-01, S2-06]
+    acceptance:
+      - "Context pack reproductible depuis l'URL du run ; agent peut appeler search_memory"
+  - id: S10-05
+    title: "Écriture gouvernée — write_fact (orchestrateur), propose_fact (agent → pending), règle auto-accept (≥ 2 runs), endpoints memory/pending"
+    stream: S10
+    sprint: 4
+    priority: 5
+    size: M
+    depends_on: [S10-01, S6-07]
+    acceptance:
+      - "Fait proposé visible dans pending ; accepté → recherchable ; rejeté → absent"
+  - id: S10-06
+    title: "Boucle qualité findings (ratio pertinents, seuil 30 %) et A/B mémoire (with/without) câblés dans EvalMatrix et le front"
+    stream: S10
+    sprint: 4
+    priority: 6
+    size: M
+    depends_on: [S10-02, S12-02]
+    acceptance:
+      - "Rapport A/B hebdomadaire généré ; indicateur findings sur la vue d'ensemble"
+
+  # ───────────────────────── S11 — Ecphoria ─────────────────────────
+  - id: S11-01
+    title: "E-01 Triage des 19 PR ouvertes (merger mémoire/KB/ops, parquer agentic/proxy, rebase, docs/PR-TRIAGE-2026-09.md)"
+    stream: S11
+    sprint: 0
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "0 PR sans décision ; CI verte sur main ; rapport listant chaque PR, décision, motif"
+  - id: S11-02
+    title: "E-02 Feature flags Cargo `agentic`/`llm-proxy` ; images ecphoria:memory et ecphoria:full ; docs"
+    stream: S11
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S11-01]
+    acceptance:
+      - "`cargo build --no-default-features --features memory` compile et passe les tests ; image memory < image full"
+  - id: S11-03
+    title: "E-06 Upsert idempotent par external_id/source (PUT /memories/by-external-id)"
+    stream: S11
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S11-01]
+    acceptance:
+      - "Deux upserts identiques = une mémoire ; changement de contenu = supersession"
+  - id: S11-04
+    title: "E-08 Embeddings provider openai_compatible (BASE_URL/MODEL/dims auto) testé contre LiteLLM"
+    stream: S11
+    sprint: 1
+    priority: 4
+    size: S
+    depends_on: [S11-01]
+    acceptance:
+      - "Recherche hybride fonctionne avec embeddings servis par LiteLLM"
+  - id: S11-05
+    title: "E-03 Tenant = projet ; admin API create/delete ; mapping groupes OIDC → rôles par tenant ; test d'isolation"
+    stream: S11
+    sprint: 2
+    priority: 5
+    size: M
+    depends_on: [S11-02]
+    acceptance:
+      - "Un token du tenant A ne lit rien du tenant B (test) ; suppression = effacement complet"
+  - id: S11-06
+    title: "E-04 Schémas de faits métier (kind enum, JSON Schema par kind, subject normalisé) + migration"
+    stream: S11
+    sprint: 2
+    priority: 6
+    size: M
+    depends_on: [S11-02]
+    acceptance:
+      - "Fait invalide → 422 ; supersession par subject normalisé démontrée pour decision et flaky_test"
+  - id: S11-07
+    title: "E-05 Endpoint POST /api/v1/context-pack (query, paths, kinds, budget_tokens, k) avec troncature et provenance ; test de latence"
+    stream: S11
+    sprint: 2
+    priority: 7
+    size: M
+    depends_on: [S11-06]
+    acceptance:
+      - "p95 < 300 ms sur 20 k faits ; tokens_estimated ≤ budget"
+  - id: S11-08
+    title: "E-07 File pending généralisée (POST ?status=pending, GET /pending, accept/reject, auto-accept configurable, CDC)"
+    stream: S11
+    sprint: 3
+    priority: 8
+    size: M
+    depends_on: [S11-06]
+    acceptance:
+      - "Événement CDC émis à l'acceptation ; règle auto-accept testée"
+  - id: S11-09
+    title: "E-10 Provenance obligatoire par tenant (require_provenance)"
+    stream: S11
+    sprint: 3
+    priority: 9
+    size: S
+    depends_on: [S11-05]
+    acceptance:
+      - "Écriture sans provenance → 422 quand activé"
+  - id: S11-10
+    title: "E-11 Chart Helm durci (StatefulSet ×3 Raft, PDB, NetworkPolicy, probes, PodSecurity restricted, CronJob backup S3/Blob + manifeste, restauration doc, ServiceMonitor, alertes)"
+    stream: S11
+    sprint: 3
+    priority: 10
+    size: M
+    depends_on: [S11-02]
+    acceptance:
+      - "Perte d'un pod → quorum conservé ; sauvegarde restaurée en test"
+  - id: S11-11
+    title: "Publication OCI du chart ecphoria sur ghcr.io/vargafoundation/charts + intégration dans l'umbrella choregos"
+    stream: S11
+    sprint: 3
+    priority: 11
+    size: S
+    depends_on: [S11-10]
+    acceptance:
+      - "`helm dependency update charts/choregos` récupère le chart ; install sur kind"
+  - id: S11-12
+    title: "E-09 Bench profil Choregos (20 k faits, 200 k événements, 50 r/s lecture, 5 w/s) + rapport + failover Raft"
+    stream: S11
+    sprint: 4
+    priority: 12
+    size: M
+    depends_on: [S11-07]
+    acceptance:
+      - "Rapport docs/benchmarks-choregos.md avec p50/p95, mémoire, comportement sur perte de nœud"
+  - id: S11-13
+    title: "E-12 Releases semver (cargo-release, cliff, images multi-arch signées cosign, SBOM)"
+    stream: S11
+    sprint: 4
+    priority: 13
+    size: S
+    depends_on: [S11-02]
+    acceptance:
+      - "Tag v1.0.0 produit images + chart + changelog automatiquement"
+  - id: S11-14
+    title: "E-13 Sécurité (revue wire PostgreSQL, fuzz parseurs ingestion, cargo audit/deny, SECURITY.md) et E-14 docs/integrations/choregos.md"
+    stream: S11
+    sprint: 5
+    priority: 14
+    size: M
+    depends_on: [S11-08]
+    acceptance:
+      - "Fuzz 1 h sans crash ; doc d'intégration relue par S10"
+
+  # ───────────────────────── S12 — Évals & conformité ─────────────────────────
+  - id: S12-01
+    title: "Dépôts jouets (python, node, go) avec tests, bugs plantés, tickets de référence (10 S, 5 M, 2 L) et rubriques"
+    stream: S12
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "Fixtures versionnées ; chaque ticket a un critère de succès déterministe"
+  - id: S12-02
+    title: "EvalMatrix (Temporal cron nocturne) — backend × modèle × (with/without memory) sur les tickets de référence ; coût, réussite, durée ; publication model_profiles.validated_backends et GET /models/matrix"
+    stream: S12
+    sprint: 4
+    priority: 2
+    size: L
+    depends_on: [S12-01, S1-03, S4-02]
+    acceptance:
+      - "Matrice visible dans le front ; combinaison sous seuil marquée non validée"
+  - id: S12-03
+    title: "Évals de playbooks (packages/playbooks/evals/runner.py : assertions déterministes + juge LLM) avec seuil bloquant en CI"
+    stream: S12
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S12-01]
+    acceptance:
+      - "Modification dégradante du prompt implement fait échouer la CI des playbooks"
+  - id: S12-04
+    title: "e2e nightly (tests/e2e) : scénarios M1–M5 sur kind, rapport, artefacts"
+    stream: S12
+    sprint: 2
+    priority: 4
+    size: M
+    depends_on: [S0-07]
+    acceptance:
+      - "Rapport publié ; échec ouvre une issue automatiquement"
+  - id: S12-05
+    title: "Tests de chaos (kill worker Temporal, kill PipelineRun, perte nœud spot, panne LiteLLM, panne Ecphoria) et de reprise sans double coût"
+    stream: S12
+    sprint: 5
+    priority: 5
+    size: M
+    depends_on: [S12-04, S7-08]
+    acceptance:
+      - "Chaque scénario : run rejoué une fois, coût comptabilisé une fois, ticket cohérent"
+
+  # ───────────────────────── S13 — Multi-backend & second écosystème ─────────────────────────
+  - id: S13-01
+    title: "Backend claude-code (claude-agent-acp, CLAUDE.md symlink, settings hooks de secours, ANTHROPIC_* vers LiteLLM) + conformité"
+    stream: S13
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S2-11, S4-05]
+    acceptance:
+      - "7 checks verts ; refus du modèle non-Claude à la validation projet"
+  - id: S13-02
+    title: "Backends codex, gemini-cli, goose, opencode (launch specs, model_env, conformité) + versions.lock + Renovate"
+    stream: S13
+    sprint: 4
+    priority: 2
+    size: L
+    depends_on: [S2-11]
+    acceptance:
+      - "Au moins codex et gemini-cli passent la conformité ; les autres documentés si échec"
+  - id: S13-03
+    title: "Review croisée — politique `review.backend != implement.backend`, acteur review fresh_context, mesure dans EvalMatrix"
+    stream: S13
+    sprint: 4
+    priority: 3
+    size: M
+    depends_on: [S13-01, S1-02]
+    acceptance:
+      - "Ticket M relu par claude-code après implémentation openhands ; verdict structuré dans la PR"
+  - id: S13-04
+    title: "TrackerAdapter Jira Cloud (statuts de workflow, champs personnalisés, webhooks) ou GitLab Issues (au choix du produit) + template associé"
+    stream: S13
+    sprint: 5
+    priority: 4
+    size: L
+    depends_on: [S3-02]
+    acceptance:
+      - "Ticket Jira/GitLab suit default-simple avec commentaire de coût"
+  - id: S13-05
+    title: "Executor Azure Container Apps Jobs + template azure-devops-aca (ou gitlab-ci-argo-k8s)"
+    stream: S13
+    sprint: 5
+    priority: 5
+    size: L
+    depends_on: [S2-10, S8-01]
+    acceptance:
+      - "Un stage tourne sur ACA avec le même StageResult ; template provisionné"
+  - id: S13-06
+    title: "Add-ons GitHub optionnels — workflow claude-code-action `@claude` et Code Review, documentés comme hors cœur"
+    stream: S13
+    sprint: 5
+    priority: 6
+    size: S
+    depends_on: []
+    acceptance:
+      - "Fichiers d'exemple dans templates/*/optional/ ; désactivés par défaut"

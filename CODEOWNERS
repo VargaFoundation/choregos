@@ -1,0 +1,18 @@
+# Propriétaires par défaut : le flux intégrateur
+*                         @VargaFoundation/integrators
+
+# Contrats — toute modification passe par une PR `contract-change`
+/packages/contracts/       @VargaFoundation/integrators
+/docs/plan/                @VargaFoundation/integrators
+/docs/adr/                 @VargaFoundation/integrators
+
+# Flux
+/packages/core/            @VargaFoundation/stream-s0
+/packages/adapters/        @VargaFoundation/stream-s3
+/packages/runner/          @VargaFoundation/stream-s2
+/packages/tools-mcp/       @VargaFoundation/stream-s2
+/apps/orchestrator/        @VargaFoundation/stream-s1
+/apps/api/                 @VargaFoundation/stream-s6
+/apps/web/                 @VargaFoundation/stream-s5
+/charts/                   @VargaFoundation/stream-s7
+/templates/                @VargaFoundation/stream-s8

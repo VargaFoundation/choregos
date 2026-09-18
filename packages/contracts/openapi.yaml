@@ -1,0 +1,1482 @@
+openapi: 3.1.0
+info:
+  title: Choregos API
+  version: 1.0.0
+  description: |
+    API de la plateforme Choregos. Le front et le CLI ne consomment que cette API.
+    Auth : session OIDC (cookie) ou `Authorization: Bearer <api_token>`.
+    Les routes `/internal/*` sont réservées aux runners et authentifiées par un JWT de run (ES256).
+    Erreurs : RFC 9457 (`application/problem+json`). Pagination par curseur (`cursor`, `limit`).
+  license: { name: Apache-2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
+servers:
+  - url: /api/v1
+    description: Base de l'API
+security:
+  - session: []
+  - bearer: []
+tags:
+  - { name: session }
+  - { name: projects }
+  - { name: connectors }
+  - { name: workflows }
+  - { name: models }
+  - { name: work-items }
+  - { name: runs }
+  - { name: trains }
+  - { name: findings }
+  - { name: memory }
+  - { name: costs }
+  - { name: templates }
+  - { name: admin }
+  - { name: webhooks }
+  - { name: internal }
+paths:
+  /me:
+    get:
+      tags: [session]
+      operationId: getMe
+      summary: Utilisateur courant, organisations et rôles
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /auth/login:
+    get:
+      tags: [session]
+      operationId: authLogin
+      security: []
+      summary: Redirige vers l'IdP OIDC
+      parameters:
+        - { name: redirect_to, in: query, schema: { type: string } }
+      responses:
+        "307": { description: Redirection vers l'IdP }
+  /auth/callback:
+    get:
+      tags: [session]
+      operationId: authCallback
+      security: []
+      summary: Callback OIDC (code → session)
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "307": { description: Redirection vers l'application }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /auth/logout:
+    post:
+      tags: [session]
+      operationId: authLogout
+      responses: { "204": { description: Session fermée } }
+  /orgs/{org}/projects:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [projects]
+      operationId: listProjects
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectPage" } } } }
+    post:
+      tags: [projects]
+      operationId: createProject
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectCreate" } } }
+      responses:
+        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [projects]
+      operationId: getProject
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [projects]
+      operationId: updateProject
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectUpdate" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [projects]
+      operationId: deleteProject
+      responses: { "204": { description: Archivé }, "409": { $ref: "#/components/responses/Conflict" } }
+  /projects/{id}/provision:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [projects]
+      operationId: provisionProject
+      requestBody:
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProvisionRequest" } } }
+      responses:
+        "202": { description: Provisioning démarré, content: { application/json: { schema: { $ref: "#/components/schemas/ProvisionStatus" } } } }
+    get:
+      tags: [projects]
+      operationId: getProvisionStatus
+      summary: État du provisioning (SSE si Accept text/event-stream)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/ProvisionStatus" } }
+            text/event-stream: { schema: { type: string } }
+  /projects/{id}/suspend:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [projects]
+      operationId: suspendProject
+      responses: { "200": { description: Suspendu, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } } }
+  /projects/{id}/connectors:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [connectors]
+      operationId: listConnectors
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Connector" } } } } }
+  /projects/{id}/connectors/{kind}:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/ConnectorKind" }]
+    put:
+      tags: [connectors]
+      operationId: putConnector
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorUpsert" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/connectors/{kind}/test:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/ConnectorKind" }]
+    post:
+      tags: [connectors]
+      operationId: testConnector
+      responses:
+        "200": { description: Résultat du test, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorTestResult" } } } }
+  /connectors/types:
+    get:
+      tags: [connectors]
+      operationId: listConnectorTypes
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConnectorType" } } } } }
+  /projects/{id}/workflow:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [workflows]
+      operationId: getWorkflow
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
+    put:
+      tags: [workflows]
+      operationId: putWorkflow
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /workflows/validate:
+    post:
+      tags: [workflows]
+      operationId: validateWorkflow
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidateRequest" } } }
+      responses:
+        "200": { description: Rapport de validation, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidation" } } } }
+  /workflows/templates:
+    get:
+      tags: [workflows]
+      operationId: listWorkflowTemplates
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowTemplate" } } } } }
+  /projects/{id}/policy:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [workflows]
+      operationId: getPolicy
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyDef" } } } }
+    put:
+      tags: [workflows]
+      operationId: putPolicy
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PolicyPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyDef" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /platform/models:
+    get:
+      tags: [models]
+      operationId: listPlatformModels
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayModel" } } } } }
+  /projects/{id}/models:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [models]
+      operationId: getProjectModels
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectModels" } } } }
+    put:
+      tags: [models]
+      operationId: putProjectModels
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectModels" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectModels" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/models/matrix:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [models]
+      operationId: getModelMatrix
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ModelMatrix" } } } }
+  /projects/{id}/work-items:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: listWorkItems
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: size, in: query, schema: { type: string, enum: [S, M, L, XL] } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemPage" } } } }
+  /work-items/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: getWorkItem
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /work-items/{id}/timeline:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: getWorkItemTimeline
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TimelineEntry" } } } } }
+  /work-items/{id}/decisions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [work-items]
+      operationId: postDecision
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DecisionRequest" } } }
+      responses:
+        "202": { description: Décision transmise au workflow, content: { application/json: { schema: { $ref: "#/components/schemas/HumanRequest" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /work-items/{id}/actions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [work-items]
+      operationId: postWorkItemAction
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemAction" } } }
+      responses:
+        "202": { description: Action transmise }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /work-items/{id}/runs:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: listRuns
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Run" } } } } }
+  /runs/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: getRun
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /runs/{id}/events:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: getRunEvents
+      summary: Journal ACP du run (SSE si Accept text/event-stream)
+      parameters:
+        - { name: after_seq, in: query, schema: { type: integer } }
+        - { name: Last-Event-ID, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RunEvent" } } }
+            text/event-stream: { schema: { type: string } }
+  /runs/{id}/transcript:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: getRunTranscript
+      responses:
+        "200": { description: URL signée ou contenu JSONL, content: { application/json: { schema: { $ref: "#/components/schemas/ArtifactRef" } } } }
+  /runs/{id}/diff:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: getRunDiff
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DiffSummary" } } } }
+  /projects/{id}/releases:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [trains]
+      operationId: listReleases
+      parameters:
+        - { name: env, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReleasePage" } } } }
+  /releases/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [trains]
+      operationId: getRelease
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Release" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/trains/{env}:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
+    get:
+      tags: [trains]
+      operationId: getTrainStatus
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TrainStatus" } } } }
+  /projects/{id}/trains/{env}/depart:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
+    post:
+      tags: [trains]
+      operationId: departTrain
+      responses: { "202": { description: Départ demandé }, "409": { $ref: "#/components/responses/Conflict" } }
+  /projects/{id}/trains/{env}/freeze:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
+    post:
+      tags: [trains]
+      operationId: freezeTrain
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 3 } } } } }
+      responses: { "202": { description: Gel demandé } }
+  /projects/{id}/trains/{env}/unfreeze:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
+    post:
+      tags: [trains]
+      operationId: unfreezeTrain
+      responses: { "202": { description: Dégel demandé } }
+  /releases/{id}/approve:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [trains]
+      operationId: approveRelease
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { note: { type: string } } } } }
+      responses: { "202": { description: Approbation transmise }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /releases/{id}/abort:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [trains]
+      operationId: abortRelease
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { reason: { type: string } } } } }
+      responses: { "202": { description: Abandon transmis } }
+  /projects/{id}/findings:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [findings]
+      operationId: listFindings
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, created, duplicate, dismissed] } }
+        - { name: severity, in: query, schema: { type: string, enum: [low, medium, high, critical] } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FindingPage" } } } }
+  /findings/{id}/actions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [findings]
+      operationId: postFindingAction
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/FindingAction" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FindingRecord" } } } }
+  /projects/{id}/memory/search:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [memory]
+      operationId: searchMemory
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: k, in: query, schema: { type: integer, default: 10, maximum: 100 } }
+        - { name: kinds, in: query, schema: { type: array, items: { type: string } }, style: form, explode: false }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+  /projects/{id}/memory/pending:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [memory]
+      operationId: listPendingMemory
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+    post:
+      tags: [memory]
+      operationId: decidePendingMemory
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryDecision" } } }
+      responses: { "200": { description: OK } }
+  /projects/{id}/memory/reimport:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [memory]
+      operationId: reimportMemory
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { sources: { type: array, items: { type: string } } } } } }
+      responses: { "202": { description: Import planifié } }
+  /projects/{id}/costs:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [costs]
+      operationId: getProjectCosts
+      parameters:
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size], default: day } }
+        - { name: since, in: query, schema: { type: string, format: date } }
+        - { name: until, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
+  /orgs/{org}/costs:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [costs]
+      operationId: getOrgCosts
+      parameters:
+        - { name: group_by, in: query, schema: { type: string, enum: [day, project, model], default: day } }
+        - { name: since, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
+  /templates:
+    get:
+      tags: [templates]
+      operationId: listTemplates
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TemplateSummary" } } } } }
+    post:
+      tags: [templates]
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TemplateUpsert" } } }
+      responses:
+        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateSummary" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /templates/{name}:
+    parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [templates]
+      operationId: getTemplate
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateDetail" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [templates]
+      operationId: updateTemplate
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TemplateUpsert" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateSummary" } } } }
+  /platform/backends:
+    get:
+      tags: [admin]
+      operationId: listBackends
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentBackendInfo" } } } } }
+    put:
+      tags: [admin]
+      operationId: putBackend
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentBackendUpdate" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentBackendInfo" } } } }
+  /platform/executors:
+    get:
+      tags: [admin]
+      operationId: listExecutors
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ExecutorInfo" } } } } }
+    put:
+      tags: [admin]
+      operationId: putExecutor
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ExecutorInfo" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutorInfo" } } } }
+  /platform/gateway/keys:
+    get:
+      tags: [admin]
+      operationId: listGatewayKeys
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } } } } }
+  /orgs/{org}/members:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [admin]
+      operationId: listMembers
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Membership" } } } } }
+    post:
+      tags: [admin]
+      operationId: addMember
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MembershipUpsert" } } }
+      responses:
+        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/Membership" } } } }
+  /audit:
+    get:
+      tags: [admin]
+      operationId: listAudit
+      parameters:
+        - { name: actor, in: query, schema: { type: string } }
+        - { name: target_type, in: query, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AuditPage" } } } }
+  /webhooks/github:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: githubWebhook
+      parameters:
+        - { name: X-GitHub-Event, in: header, required: true, schema: { type: string } }
+        - { name: X-GitHub-Delivery, in: header, required: true, schema: { type: string } }
+        - { name: X-Hub-Signature-256, in: header, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /webhooks/jira:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: jiraWebhook
+      parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/gitlab:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: gitlabWebhook
+      parameters:
+        - { name: X-Gitlab-Token, in: header, required: true, schema: { type: string } }
+        - { name: X-Gitlab-Event, in: header, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/tekton:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: tektonWebhook
+      parameters:
+        - { name: ce-type, in: header, required: true, schema: { type: string } }
+        - { name: ce-id, in: header, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/argocd:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: argocdWebhook
+      parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/alertmanager:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: alertmanagerWebhook
+      parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /internal/runs/{id}/input:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunInput
+      responses:
+        "200": { description: StageInput du run, content: { application/json: { schema: { $ref: "#/components/schemas/StageInput" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: Résultat déjà posté (le runner doit sortir en 0), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /internal/runs/{id}/events:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunEvents
+      summary: Journal ACP en lot (idempotent par `seq`)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [events], properties: { events: { type: array, items: { $ref: "#/components/schemas/RunEventIn" } } } } } }
+      responses: { "202": { description: Accepté } }
+  /internal/runs/{id}/result:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunResult
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/StageResult" } } } }
+      responses:
+        "200": { description: Enregistré (idempotent) }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /internal/runs/{id}/findings:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunFinding
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Finding" } } } }
+      responses:
+        "201": { description: Finding enregistré, content: { application/json: { schema: { $ref: "#/components/schemas/FindingAck" } } } }
+        "429": { description: Plafond de findings atteint, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /internal/runs/{id}/scope-change:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postScopeChange
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [paths, justification], properties: { paths: { type: array, items: { type: string } }, justification: { type: string } } } } }
+      responses:
+        "200": { description: Décision, content: { application/json: { schema: { $ref: "#/components/schemas/ScopeChangeDecision" } } } }
+  /internal/runs/{id}/question:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunQuestion
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [text], properties: { text: { type: string }, options: { type: array, items: { type: string } } } } } }
+      responses: { "202": { description: Question transmise ; le run doit se terminer en needs_human } }
+  /internal/runs/{id}/context:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunContext
+      responses:
+        "200": { description: Context pack, content: { application/json: { schema: { $ref: "#/components/schemas/ContextPack" } } } }
+  /internal/runs/{id}/ticket:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunTicket
+      responses:
+        "200": { description: Ticket et documents liés, content: { application/json: { schema: { $ref: "#/components/schemas/RunTicket" } } } }
+  /internal/runs/{id}/ci-logs:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunCiLogs
+      parameters: [{ name: tail, in: query, schema: { type: integer, default: 500, maximum: 5000 } }]
+      responses:
+        "200": { description: Logs, content: { application/json: { schema: { type: object, properties: { logs: { type: string }, ref: { type: string } } } } } }
+  /healthz:
+    get: { tags: [session], security: [], operationId: healthz, responses: { "200": { description: OK } } }
+  /readyz:
+    get: { tags: [session], security: [], operationId: readyz, responses: { "200": { description: OK }, "503": { description: Non prêt } } }
+components:
+  securitySchemes:
+    session: { type: apiKey, in: cookie, name: choregos_session }
+    bearer: { type: http, scheme: bearer, bearerFormat: choregos-api-token }
+    runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: JWT de run signé ES256, aud=internal }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string } }
+    Org: { name: org, in: path, required: true, schema: { type: string } }
+    Env: { name: env, in: path, required: true, schema: { type: string } }
+    ConnectorKind:
+      name: kind
+      in: path
+      required: true
+      schema: { type: string, enum: [tracker, scm, ci, cd, runtime, memory, notify, gateway] }
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+  responses:
+    Unauthorized:
+      description: Non authentifié
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    Forbidden:
+      description: Interdit (RBAC)
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    NotFound:
+      description: Introuvable
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    Conflict:
+      description: Conflit d'état
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    ValidationError:
+      description: Entité non traitable
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457
+      required: [type, title, status]
+      properties:
+        type: { type: string, default: about:blank }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              loc: { type: array, items: { type: string } }
+              msg: { type: string }
+              line: { type: integer }
+              column: { type: integer }
+        retry_after: { type: integer }
+    PageMeta:
+      type: object
+      required: [has_more]
+      properties:
+        next_cursor: { type: [string, "null"] }
+        has_more: { type: boolean }
+    Role:
+      type: string
+      enum: [org_admin, project_owner, developer, release_captain, viewer]
+    Size: { type: string, enum: [S, M, L, XL] }
+    Risk: { type: string, enum: [low, medium, high] }
+    Me:
+      type: object
+      required: [id, email, display_name, memberships]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        oidc_sub: { type: string }
+        last_login_at: { type: [string, "null"], format: date-time }
+        memberships: { type: array, items: { $ref: "#/components/schemas/Membership" } }
+    Membership:
+      type: object
+      required: [org, role]
+      properties:
+        user_id: { type: string }
+        email: { type: string }
+        org: { type: string }
+        project_slug: { type: [string, "null"] }
+        role: { $ref: "#/components/schemas/Role" }
+    MembershipUpsert:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+        project_slug: { type: [string, "null"] }
+    Project:
+      type: object
+      required: [id, slug, org, name, status, config]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        org: { type: string }
+        name: { type: string }
+        template_ref: { type: [string, "null"] }
+        status: { type: string, enum: [draft, provisioning, active, suspended, archived] }
+        config: { $ref: "./schemas/project.schema.json" }
+        workflow_name: { type: [string, "null"] }
+        policy_name: { type: [string, "null"] }
+        stats: { $ref: "#/components/schemas/ProjectStats" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProjectStats:
+      type: object
+      properties:
+        active_work_items: { type: integer }
+        cost_month_eur: { type: number }
+        budget_month_eur: { type: [number, "null"] }
+        trains_pending: { type: integer }
+        first_pass_merge_rate: { type: [number, "null"] }
+        cycle_time_p50_hours: { type: [number, "null"] }
+    ProjectPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Project" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ProjectCreate:
+      type: object
+      required: [slug, name, config]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        name: { type: string }
+        template_ref: { type: [string, "null"] }
+        config: { $ref: "./schemas/project.schema.json" }
+        inputs: { type: object, additionalProperties: true }
+    ProjectUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        config: { $ref: "./schemas/project.schema.json" }
+    ProvisionRequest:
+      type: object
+      properties:
+        inputs: { type: object, additionalProperties: true }
+        dry_run: { type: boolean, default: false }
+        resume: { type: boolean, default: true }
+    ProvisionStatus:
+      type: object
+      required: [project_id, status, steps]
+      properties:
+        project_id: { type: string }
+        workflow_id: { type: [string, "null"] }
+        status: { type: string, enum: [pending, running, succeeded, failed] }
+        current_step: { type: [string, "null"] }
+        steps:
+          type: array
+          items:
+            type: object
+            required: [name, status]
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [pending, running, succeeded, failed, skipped] }
+              message: { type: [string, "null"] }
+              remediation: { type: [string, "null"] }
+              started_at: { type: [string, "null"], format: date-time }
+              ended_at: { type: [string, "null"], format: date-time }
+    Connector:
+      type: object
+      required: [kind, type, status]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [tracker, scm, ci, cd, runtime, memory, notify, gateway] }
+        type: { type: string }
+        config: { type: object, additionalProperties: true }
+        secret_ref: { type: [string, "null"] }
+        status: { type: string, enum: [unknown, ok, degraded, error] }
+        last_check_at: { type: [string, "null"], format: date-time }
+        last_error: { type: [string, "null"] }
+    ConnectorUpsert:
+      type: object
+      required: [type, config]
+      properties:
+        type: { type: string }
+        config: { type: object, additionalProperties: true }
+        secret_ref: { type: [string, "null"] }
+    ConnectorTestResult:
+      type: object
+      required: [ok, checks]
+      properties:
+        ok: { type: boolean }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, ok]
+            properties:
+              name: { type: string }
+              ok: { type: boolean }
+              detail: { type: [string, "null"] }
+    ConnectorType:
+      type: object
+      required: [kind, type, display, config_schema]
+      properties:
+        kind: { type: string }
+        type: { type: string }
+        display: { type: string }
+        available: { type: boolean, default: true }
+        config_schema: { type: object, additionalProperties: true }
+    WorkflowDef:
+      type: object
+      required: [name, version, source, yaml, checksum, is_active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        source: { type: string, enum: [repo, platform, template] }
+        yaml: { type: string }
+        json: { $ref: "./schemas/workflow.schema.json" }
+        checksum: { type: string }
+        is_active: { type: boolean }
+    WorkflowPut:
+      type: object
+      required: [yaml]
+      properties:
+        yaml: { type: string }
+        source: { type: string, enum: [repo, platform, template], default: platform }
+        activate: { type: boolean, default: true }
+    WorkflowValidateRequest:
+      type: object
+      properties:
+        yaml: { type: string }
+        json: { type: object, additionalProperties: true }
+    WorkflowValidation:
+      type: object
+      required: [valid, errors, warnings]
+      properties:
+        valid: { type: boolean }
+        errors: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" } }
+        warnings: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" } }
+        graph: { $ref: "#/components/schemas/WorkflowGraph" }
+    WorkflowIssue:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        path: { type: [string, "null"] }
+        line: { type: [integer, "null"] }
+        column: { type: [integer, "null"] }
+    WorkflowGraph:
+      type: object
+      required: [nodes, edges]
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [id, display, kind]
+            properties:
+              id: { type: string }
+              display: { type: string }
+              kind: { type: string }
+              terminal: { type: boolean }
+              lane: { type: string }
+        edges:
+          type: array
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              id: { type: [string, "null"] }
+              from: { type: string }
+              to: { type: string }
+              actor: { type: [string, "null"] }
+              actor_type: { type: [string, "null"] }
+              gates: { type: array, items: { type: string } }
+              via: { type: [string, "null"] }
+    WorkflowTemplate:
+      type: object
+      required: [name, version, display, yaml]
+      properties:
+        name: { type: string }
+        version: { type: integer }
+        display: { type: string }
+        description: { type: string }
+        yaml: { type: string }
+    PolicyDef:
+      type: object
+      required: [name, version, yaml, is_active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        yaml: { type: string }
+        json: { $ref: "./schemas/policy.schema.json" }
+        is_active: { type: boolean }
+    PolicyPut:
+      type: object
+      required: [yaml]
+      properties:
+        yaml: { type: string }
+        activate: { type: boolean, default: true }
+    GatewayModel:
+      type: object
+      required: [model_name, litellm_model]
+      properties:
+        model_name: { type: string }
+        litellm_model: { type: string }
+        provider: { type: string }
+        input_cost_per_1k: { type: [number, "null"] }
+        output_cost_per_1k: { type: [number, "null"] }
+        max_input_tokens: { type: [integer, "null"] }
+        supports_tool_calling: { type: boolean, default: true }
+        supports_vision: { type: boolean, default: false }
+        internal_price: { type: boolean, default: false }
+    ProjectModels:
+      type: object
+      required: [profiles]
+      properties:
+        profiles:
+          type: object
+          additionalProperties:
+            type: object
+            required: [litellm_model]
+            properties:
+              litellm_model: { type: string }
+              params: { type: object, additionalProperties: true }
+              max_turns_factor: { type: number, default: 1 }
+        allow_unvalidated: { type: boolean, default: false }
+        inherited: { type: object, additionalProperties: { type: string } }
+    ModelMatrix:
+      type: object
+      required: [entries]
+      properties:
+        generated_at: { type: [string, "null"], format: date-time }
+        entries:
+          type: array
+          items:
+            type: object
+            required: [backend, model, validated]
+            properties:
+              backend: { type: string }
+              model: { type: string }
+              validated: { type: boolean }
+              success_rate: { type: [number, "null"] }
+              median_cost_usd: { type: [number, "null"] }
+              median_duration_s: { type: [number, "null"] }
+              with_memory: { type: [boolean, "null"] }
+              report_url: { type: [string, "null"] }
+    WorkItem:
+      type: object
+      required: [id, project_slug, tracker_key, title, state, totals]
+      properties:
+        id: { type: string }
+        project_slug: { type: string }
+        tracker_key: { type: string }
+        title: { type: string }
+        body_snapshot: { type: [string, "null"] }
+        url: { type: [string, "null"] }
+        size: { oneOf: [{ $ref: "#/components/schemas/Size" }, { type: "null" }] }
+        risk: { oneOf: [{ $ref: "#/components/schemas/Risk" }, { type: "null" }] }
+        state: { type: string }
+        state_display: { type: [string, "null"] }
+        workflow_name: { type: [string, "null"] }
+        workflow_version: { type: [integer, "null"] }
+        temporal_wf_id: { type: [string, "null"] }
+        paused: { type: boolean, default: false }
+        current_run: { oneOf: [{ $ref: "#/components/schemas/RunSummary" }, { type: "null" }] }
+        pending_request: { oneOf: [{ $ref: "#/components/schemas/HumanRequest" }, { type: "null" }] }
+        pr_url: { type: [string, "null"] }
+        totals: { $ref: "#/components/schemas/Totals" }
+        estimate: { oneOf: [{ $ref: "#/components/schemas/CostEstimate" }, { type: "null" }] }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+    Totals:
+      type: object
+      properties:
+        tokens_in: { type: integer, default: 0 }
+        tokens_out: { type: integer, default: 0 }
+        tokens_cached: { type: integer, default: 0 }
+        cost_usd: { type: number, default: 0 }
+        cost_eur: { type: number, default: 0 }
+        duration_s: { type: number, default: 0 }
+        runs: { type: integer, default: 0 }
+    CostEstimate:
+      type: object
+      properties:
+        median_usd: { type: [number, "null"] }
+        p80_usd: { type: [number, "null"] }
+        sample_size: { type: integer, default: 0 }
+        over_p80: { type: boolean, default: false }
+    WorkItemPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WorkItem" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    TimelineEntry:
+      type: object
+      required: [ts, kind, title]
+      properties:
+        ts: { type: string, format: date-time }
+        kind: { type: string, enum: [state_change, run, decision, finding, release, comment, error] }
+        title: { type: string }
+        detail: { type: [string, "null"] }
+        actor: { type: [string, "null"] }
+        actor_kind: { type: string, enum: [user, agent, system], default: system }
+        ref_id: { type: [string, "null"] }
+        cost_usd: { type: [number, "null"] }
+    DecisionRequest:
+      type: object
+      required: [kind]
+      properties:
+        request_id: { type: [string, "null"] }
+        kind: { type: string, enum: [approve, reject, answer, scope_change] }
+        answer: { type: [string, "null"] }
+        reason: { type: [string, "null"] }
+        granted_paths: { type: array, items: { type: string } }
+    HumanRequest:
+      type: object
+      required: [id, kind, requested_at]
+      properties:
+        id: { type: string }
+        work_item_id: { type: string }
+        transition_id: { type: [string, "null"] }
+        kind: { type: string, enum: [approval, question, scope_change] }
+        payload: { type: object, additionalProperties: true }
+        requested_at: { type: string, format: date-time }
+        due_at: { type: [string, "null"], format: date-time }
+        decided_by: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+        decision: { type: [object, "null"], additionalProperties: true }
+    WorkItemAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [pause, resume, stop, migrate, rerun_stage, mark_agent_ready] }
+        workflow_def_id: { type: [string, "null"] }
+        state_mapping: { type: object, additionalProperties: { type: string } }
+        run_id: { type: [string, "null"] }
+        reason: { type: [string, "null"] }
+    RunSummary:
+      type: object
+      required: [id, status, stage_role]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [queued, running, succeeded, failed, cancelled, timed_out] }
+        stage_role: { type: string }
+        attempt: { type: integer }
+        backend: { type: [string, "null"] }
+        model: { type: [string, "null"] }
+        cost_usd: { type: number, default: 0 }
+        started_at: { type: [string, "null"], format: date-time }
+    Run:
+      allOf:
+        - $ref: "#/components/schemas/RunSummary"
+        - type: object
+          properties:
+            work_item_id: { type: string }
+            project_slug: { type: string }
+            transition_id: { type: [string, "null"] }
+            actor: { type: [string, "null"] }
+            executor_kind: { type: [string, "null"] }
+            executor_ref: { type: [string, "null"] }
+            ended_at: { type: [string, "null"], format: date-time }
+            tokens: { $ref: "#/components/schemas/Totals" }
+            gateway_key_id: { type: [string, "null"] }
+            result: { oneOf: [{ $ref: "./schemas/stage-result.schema.json" }, { type: "null" }] }
+            transcript_url: { type: [string, "null"] }
+            context_pack_url: { type: [string, "null"] }
+            playbook_checksum: { type: [string, "null"] }
+            allowed_paths: { type: array, items: { type: string } }
+    RunEvent:
+      type: object
+      required: [seq, type, ts]
+      properties:
+        seq: { type: integer }
+        type: { type: string }
+        ts: { type: string, format: date-time }
+        payload: { type: object, additionalProperties: true }
+    RunEventIn:
+      type: object
+      required: [seq, type]
+      properties:
+        seq: { type: integer, minimum: 0 }
+        type: { type: string }
+        ts: { type: [string, "null"], format: date-time }
+        payload: { type: object, additionalProperties: true }
+    ArtifactRef:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: [integer, "null"] }
+        inline: { type: [string, "null"] }
+    DiffSummary:
+      type: object
+      required: [files, additions, deletions]
+      properties:
+        base: { type: [string, "null"] }
+        head: { type: [string, "null"] }
+        files:
+          type: array
+          items:
+            type: object
+            required: [path, status, additions, deletions]
+            properties:
+              path: { type: string }
+              status: { type: string, enum: [added, modified, removed, renamed] }
+              additions: { type: integer }
+              deletions: { type: integer }
+              patch: { type: [string, "null"] }
+              in_scope: { type: boolean, default: true }
+        additions: { type: integer }
+        deletions: { type: integer }
+    Release:
+      type: object
+      required: [id, project_slug, env, batch_no, status, items]
+      properties:
+        id: { type: string }
+        project_slug: { type: string }
+        env: { type: string }
+        batch_no: { type: integer }
+        status:
+          type: string
+          enum: [collecting, departing, staging, awaiting_approval, promoting, verifying, done, rolled_back, frozen]
+        items:
+          type: array
+          items:
+            type: object
+            required: [work_item_key, sha]
+            properties:
+              work_item_key: { type: string }
+              title: { type: [string, "null"] }
+              sha: { type: string }
+              pr_url: { type: [string, "null"] }
+              risk: { oneOf: [{ $ref: "#/components/schemas/Risk" }, { type: "null" }] }
+              labels: { type: array, items: { type: string } }
+        started_at: { type: [string, "null"], format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        approved_by: { type: [string, "null"] }
+        verdict: { type: [object, "null"], additionalProperties: true }
+        notes: { type: [string, "null"] }
+        promotion_url: { type: [string, "null"] }
+    ReleasePage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Release" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    TrainStatus:
+      type: object
+      required: [env, status, batch_size, frozen]
+      properties:
+        env: { type: string }
+        status: { type: string }
+        batch_size: { type: integer }
+        pending_items: { type: array, items: { type: string } }
+        next_departure: { type: [string, "null"], format: date-time }
+        frozen: { type: boolean }
+        freeze_reason: { type: [string, "null"] }
+        current_release: { oneOf: [{ $ref: "#/components/schemas/Release" }, { type: "null" }] }
+        window_open: { type: boolean, default: true }
+    FindingRecord:
+      type: object
+      required: [id, project_slug, title, type, severity, status]
+      properties:
+        id: { type: string }
+        project_slug: { type: string }
+        origin_work_item_key: { type: [string, "null"] }
+        origin_run_id: { type: [string, "null"] }
+        title: { type: string }
+        type: { type: string }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        evidence: { type: string }
+        suggested_fix: { type: [string, "null"] }
+        estimate: { type: [string, "null"] }
+        status: { type: string, enum: [pending, created, duplicate, dismissed] }
+        created_work_item_key: { type: [string, "null"] }
+        duplicate_of: { type: [string, "null"] }
+        occurrences: { type: integer, default: 1 }
+        relevant: { type: [boolean, "null"] }
+        created_at: { type: string, format: date-time }
+    FindingPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/FindingRecord" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    FindingAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [create_ticket, mark_duplicate, dismiss, agent_ready, mark_relevant, mark_false_positive] }
+        duplicate_of: { type: [string, "null"] }
+        reason: { type: [string, "null"] }
+    FindingAck:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+        finding_id: { type: [string, "null"] }
+        remaining: { type: integer, default: 0 }
+    ScopeChangeDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [granted, pending, denied] }
+        allowed_paths: { type: array, items: { type: string } }
+        reason: { type: [string, "null"] }
+    Memory:
+      type: object
+      required: [kind, subject, content]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        subject: { type: string }
+        content: { type: string }
+        score: { type: [number, "null"] }
+        status: { type: string, enum: [active, pending, superseded, rejected], default: active }
+        valid_from: { type: [string, "null"], format: date-time }
+        valid_to: { type: [string, "null"], format: date-time }
+        provenance: { type: object, additionalProperties: true }
+        proposed_by: { type: [string, "null"] }
+    MemoryDecision:
+      type: object
+      required: [id, action]
+      properties:
+        id: { type: string }
+        action: { type: string, enum: [accept, reject] }
+        reason: { type: [string, "null"] }
+    CostReport:
+      type: object
+      required: [group_by, rows, total]
+      properties:
+        group_by: { type: string }
+        currency: { type: string, default: EUR }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [key, cost_usd, cost_eur]
+            properties:
+              key: { type: string }
+              cost_usd: { type: number }
+              cost_eur: { type: number }
+              tokens_in: { type: integer, default: 0 }
+              tokens_out: { type: integer, default: 0 }
+              tokens_cached: { type: integer, default: 0 }
+              runs: { type: integer, default: 0 }
+        total:
+          type: object
+          properties:
+            cost_usd: { type: number }
+            cost_eur: { type: number }
+            budget_usd: { type: [number, "null"] }
+    TemplateSummary:
+      type: object
+      required: [name, version, display, is_published]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        display: { type: string }
+        description: { type: [string, "null"] }
+        repo_url: { type: [string, "null"] }
+        is_published: { type: boolean }
+    TemplateDetail:
+      allOf:
+        - $ref: "#/components/schemas/TemplateSummary"
+        - type: object
+          required: [manifest]
+          properties:
+            manifest: { $ref: "./schemas/template.schema.json" }
+    TemplateUpsert:
+      type: object
+      required: [manifest]
+      properties:
+        manifest: { $ref: "./schemas/template.schema.json" }
+        repo_url: { type: [string, "null"] }
+        is_published: { type: boolean, default: false }
+    AgentBackendInfo:
+      type: object
+      required: [name, enabled, capabilities]
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+        version: { type: [string, "null"] }
+        capabilities: { type: array, items: { type: string } }
+        conformance:
+          type: object
+          properties:
+            last_run_at: { type: [string, "null"], format: date-time }
+            passed: { type: [integer, "null"] }
+            total: { type: [integer, "null"] }
+            report_url: { type: [string, "null"] }
+            failures: { type: array, items: { type: string } }
+        disabled_reason: { type: [string, "null"] }
+    AgentBackendUpdate:
+      type: object
+      required: [name, enabled]
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+        disabled_reason: { type: [string, "null"] }
+    ExecutorInfo:
+      type: object
+      required: [kind, enabled]
+      properties:
+        kind: { type: string, enum: [tekton, k8s_job, local_docker, aca] }
+        enabled: { type: boolean }
+        cluster: { type: [string, "null"] }
+        namespace_pattern: { type: [string, "null"] }
+        runner_image: { type: [string, "null"] }
+        default_timeout_minutes: { type: integer, default: 120 }
+    GatewayKeyInfo:
+      type: object
+      required: [key_id, created_at]
+      properties:
+        key_id: { type: string }
+        run_id: { type: [string, "null"] }
+        project_slug: { type: [string, "null"] }
+        budget_usd: { type: [number, "null"] }
+        spend_usd: { type: number, default: 0 }
+        expires_at: { type: [string, "null"], format: date-time }
+        revoked: { type: boolean, default: false }
+        created_at: { type: string, format: date-time }
+    AuditEntry:
+      type: object
+      required: [id, actor_kind, action, ts]
+      properties:
+        id: { type: string }
+        actor_id: { type: [string, "null"] }
+        actor_kind: { type: string, enum: [user, agent, system] }
+        action: { type: string }
+        target_type: { type: [string, "null"] }
+        target_id: { type: [string, "null"] }
+        payload: { type: object, additionalProperties: true }
+        ts: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    WebhookAck:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+        duplicate: { type: boolean, default: false }
+        events: { type: integer, default: 0 }
+    RunTicket:
+      type: object
+      required: [key, title]
+      properties:
+        key: { type: string }
+        title: { type: string }
+        body: { type: string }
+        url: { type: [string, "null"] }
+        spec_markdown: { type: [string, "null"] }
+        plan_markdown: { type: [string, "null"] }
+        comments:
+          type: array
+          items:
+            type: object
+            properties:
+              author: { type: string }
+              body: { type: string }
+              ts: { type: string, format: date-time }
+    StageInput: { $ref: "./schemas/stage-input.schema.json" }
+    StageResult: { $ref: "./schemas/stage-result.schema.json" }
+    ContextPack: { $ref: "./schemas/context-pack.schema.json" }
+    Finding: { $ref: "./schemas/finding.schema.json" }
+    InboundEvent: { $ref: "./schemas/inbound-event.schema.json" }
+    ChoregosEvent: { $ref: "./schemas/event.schema.json" }
+    HumanDecision: { $ref: "./schemas/human-decision.schema.json" }

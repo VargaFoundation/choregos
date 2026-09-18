@@ -1,0 +1,50 @@
+{
+  "apiVersion": "choregos/v1",
+  "kind": "Policy",
+  "metadata": { "name": "solo", "version": 1, "preset": "solo", "description": "Un développeur, budgets serrés, approbation sur la spec et la prod." },
+  "budgets": {
+    "ticket_usd": { "S": 8, "M": 25, "L": 60, "XL": 120 },
+    "stage_usd": {
+      "default": { "S": 3, "M": 8, "L": 18, "XL": 30 },
+      "triage": { "S": 0.5, "M": 0.5, "L": 1, "XL": 1 },
+      "refine": { "S": 2, "M": 4, "L": 8, "XL": 12 },
+      "implement": { "S": 5, "M": 12, "L": 25, "XL": 45 },
+      "review": { "S": 3, "M": 6, "L": 10, "XL": 15 }
+    },
+    "max_turns": { "default": 80, "triage": 10, "refine": 30, "implement": 120, "verify": 40 },
+    "max_minutes": { "default": 60, "triage": 5, "refine": 20, "implement": 90, "verify": 30 },
+    "daily_project_usd": 150,
+    "alert_at_ratio": 0.8
+  },
+  "approvals": {
+    "spec": { "required": "by_size", "group": "product-owners", "sizes": ["M", "L", "XL"], "timeout_hours": 72 },
+    "merge": { "required": "never" },
+    "prod": { "required": "always", "group": "release-captains", "timeout_hours": 4 },
+    "scope_change": { "required": "by_size", "group": "product-owners", "sizes": ["L", "XL"] }
+  },
+  "attempts": { "default_max": 2, "by_role": { "implement": 3, "fix_ci": 3 }, "dod_iterations": 3 },
+  "scope": { "auto_grant_max_files": 3, "deny_paths": [".choregos/**", ".github/workflows/**"],
+    "max_diff_files": 60, "max_diff_lines": 3000 },
+  "sandbox": { "runtime": "default", "deny_commands": ["kubectl", "terraform apply", "git push --force", "sudo"],
+    "network": { "allow_domains": ["github.com", "pypi.org", "registry.npmjs.org"], "deny_by_default": true },
+    "llm_security_analyzer": false },
+  "findings": { "max_per_run": 5, "dedupe_threshold": 0.86, "auto_agent_ready_sizes": ["S"],
+    "notify_severities": ["critical"], "false_positive_alert_ratio": 0.3 },
+  "memory": { "enabled": true, "context_budget_tokens": { "refine": 4000, "implement": 4000, "review": 3000, "default": 2000 },
+    "auto_accept_after_runs": 2, "read_timeout_ms": 300 },
+  "review": { "cross_backend": false, "require_human_for_risk": ["high"] },
+  "release_train": {
+    "dev": { "mode": "auto_sync" },
+    "staging": { "mode": "train", "schedule": "*/30 9-19 * * 1-5", "batch_max": 10, "soak_minutes": 10 },
+    "prod": {
+      "mode": "train", "schedule": "0 10,14,17 * * 1-4", "timezone": "Europe/Paris",
+      "windows": ["Mon-Thu 09:00-18:00"], "batch_min": 1, "batch_max": 8, "soak_minutes": 20,
+      "approval": { "group": "release-captains", "required": true, "timeout_hours": 4 },
+      "canary": { "steps": [10, 50, 100], "analysis": "slo-default", "step_minutes": [10, 15, 0] },
+      "express_lane": { "label": "hotfix", "soak_minutes": 5, "skip_schedule": true,
+        "approval": { "group": "release-captains", "required": true } },
+      "freeze": false, "auto_rollback": true, "freeze_on_rollback": true,
+      "terraform": { "via": "atlantis", "apply_requires_approval": true }
+    }
+  }
+}

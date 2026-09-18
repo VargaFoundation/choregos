@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/stage-result.schema.json",
+  "title": "StageResult",
+  "description": "Contrat runner → orchestrateur (docs/plan/01 §1.6). L'agent écrit .choregos/result.json ; le runner complète artifacts/evidence/diagnostics.",
+  "type": "object",
+  "required": ["schema", "status", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "choregos/StageResult/v1" },
+    "status": { "type": "string", "enum": ["done", "blocked", "needs_human", "failed"] },
+    "reason": { "type": ["string", "null"],
+      "description": "Cause quand status != done : limit, budget, scope, invalid_result, agent_error, ci…" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "size": { "type": "string", "enum": ["S", "M", "L", "XL"] },
+        "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "allowed_paths": { "type": "array", "items": { "type": "string" } },
+        "spec_markdown": { "type": "string" },
+        "plan_markdown": { "type": "string" },
+        "review_markdown": { "type": "string" },
+        "verdict": { "type": "string", "enum": ["approve", "request_changes", "comment"] },
+        "release_notes_markdown": { "type": "string" },
+        "duplicate_of": { "type": ["string", "null"] },
+        "questions_asked": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "branch": { "type": ["string", "null"] },
+        "commits": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "pr_url": { "type": ["string", "null"] },
+        "transcript_url": { "type": ["string", "null"] },
+        "context_pack_url": { "type": ["string", "null"] },
+        "reports": { "type": "object", "additionalProperties": { "type": "string" }, "default": {} }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tests_passed": { "type": ["boolean", "null"] },
+        "tests_run": { "type": ["integer", "null"], "minimum": 0 },
+        "tests_failed": { "type": ["integer", "null"], "minimum": 0 },
+        "coverage_delta": { "type": ["number", "null"] },
+        "lint": { "type": ["string", "null"], "enum": ["ok", "failed", "skipped", null] },
+        "typecheck": { "type": ["string", "null"], "enum": ["ok", "failed", "skipped", null] },
+        "security_scan": { "type": ["string", "null"], "enum": ["ok", "failed", "skipped", null] },
+        "diff_files": { "type": ["integer", "null"], "minimum": 0 },
+        "diff_lines": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": ["text"],
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string", "minLength": 1 },
+          "options": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "findings": { "type": "array", "default": [], "items": { "$ref": "finding.schema.json" } },
+    "scope_changes_requested": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": ["paths", "justification"],
+        "additionalProperties": false,
+        "properties": {
+          "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "justification": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "turns": { "type": "integer", "minimum": 0 },
+        "tool_calls": { "type": "integer", "minimum": 0 },
+        "permission_denials": { "type": "integer", "minimum": 0 },
+        "duration_s": { "type": "number", "minimum": 0 },
+        "agent_exit": { "type": "string", "enum": ["normal", "cancelled", "crashed", "timeout", "limit"] },
+        "dod_iterations": { "type": "integer", "minimum": 0 },
+        "result_repairs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

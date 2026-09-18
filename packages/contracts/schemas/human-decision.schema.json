@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/human-decision.schema.json",
+  "title": "HumanDecision",
+  "description": "Décision humaine acheminée vers un WorkflowInterpreter (front, board, commentaire, Slack, CLI).",
+  "type": "object",
+  "required": ["kind", "decided_by", "decided_at"],
+  "additionalProperties": false,
+  "properties": {
+    "request_id": { "type": ["string", "null"] },
+    "kind": { "type": "string", "enum": ["approval", "question", "scope_change"] },
+    "approved": { "type": ["boolean", "null"] },
+    "answer": { "type": ["string", "null"] },
+    "granted_paths": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "reason": { "type": ["string", "null"] },
+    "decided_by": { "type": "string" },
+    "decided_at": { "type": "string", "format": "date-time" },
+    "channel": { "type": "string", "enum": ["web", "tracker", "slack", "cli", "api", "board"], "default": "web" }
+  }
+}

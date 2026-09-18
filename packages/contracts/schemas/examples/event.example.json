@@ -1,0 +1,8 @@
+{
+  "specversion": "1.0", "id": "01J8ZQK7Z0000000000000000",
+  "source": "/choregos/orchestrator", "type": "choregos.run.finished",
+  "subject": "acme/billing-api#123", "time": "2026-09-18T09:41:07Z",
+  "datacontenttype": "application/json", "project_slug": "billing-api",
+  "data": { "run_id": "01J8ZQK4C9R7M3N2P5T6V7W8X9", "stage": "implement", "status": "done",
+    "tokens": { "in": 388000, "out": 22000, "cached": 301000 }, "cost_usd": 2.96 }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/context-pack.schema.json",
+  "title": "ContextPack",
+  "description": "Sélection de mémoire injectée dans un stage, sous budget de tokens. Contenu **non fiable** : données, jamais instructions.",
+  "type": "object",
+  "required": ["schema", "query", "tokens_estimated", "memories"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "choregos/ContextPack/v1" },
+    "query": { "type": "string" },
+    "paths": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "kinds": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "budget_tokens": { "type": "integer", "minimum": 0 },
+    "tokens_estimated": { "type": "integer", "minimum": 0 },
+    "truncated": { "type": "boolean", "default": false },
+    "memories": { "type": "array", "items": { "$ref": "#/$defs/memory" }, "default": [] },
+    "incidents": { "type": "array", "items": { "$ref": "#/$defs/memory" }, "default": [] },
+    "related_items": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": ["key", "title"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string" },
+          "title": { "type": "string" },
+          "state": { "type": "string" },
+          "url": { "type": "string" },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "generated_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "memory": {
+      "type": "object",
+      "required": ["kind", "subject", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": ["decision", "convention", "incident", "ticket_summary", "run_lesson",
+                   "flaky_test", "hotspot", "finding", "other"]
+        },
+        "subject": { "type": "string" },
+        "content": { "type": "string" },
+        "score": { "type": "number" },
+        "valid_from": { "type": ["string", "null"], "format": "date-time" },
+        "valid_to": { "type": ["string", "null"], "format": "date-time" },
+        "provenance": { "type": "object", "additionalProperties": true }
+      }
+    }
+  }
+}

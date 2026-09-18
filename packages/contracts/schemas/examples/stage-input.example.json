@@ -1,0 +1,36 @@
+{
+  "schema": "choregos/StageInput/v1",
+  "run_id": "01J8ZQK4C9R7M3N2P5T6V7W8X9",
+  "attempt": 1,
+  "trace_parent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  "project": { "slug": "billing-api", "org": "acme", "test_command": "make test" },
+  "work_item": {
+    "key": "acme/billing-api#123",
+    "title": "Les avoirs ne sont pas pris en compte dans le total de la facture",
+    "body": "Quand une commande a un avoir, le total affiché ignore la remise.",
+    "url": "https://github.com/acme/billing-api/issues/123",
+    "size": "M", "risk": "low",
+    "links": { "spec_comment": "https://github.com/acme/billing-api/issues/123#issuecomment-1", "plan_comment": null, "pr": null }
+  },
+  "transition": { "id": "t-implement", "role": "implement", "from": "ready", "to": "in_progress",
+    "outputs": ["branch", "commits"], "inputs": ["spec", "allowed_paths"] },
+  "repo": { "url": "https://github.com/acme/billing-api.git", "base_branch": "main",
+    "work_branch": "choregos/123-avoirs-total", "clone_depth": 50 },
+  "agent": { "backend": "openhands", "launch": { "command": ["openhands", "acp"], "env": {}, "files": {} } },
+  "model": { "litellm_model": "anthropic/claude-sonnet-5", "base_url": "http://litellm.choregos-gateway:4000",
+    "api_format": "openai", "params": { "temperature": 0 } },
+  "gateway_key": "sk-choregos-run-01J8ZQK4C9R7M3N2P5T6V7W8X9",
+  "budget": { "usd": 12.0, "max_turns": 80, "max_minutes": 60 },
+  "allowed_paths": ["src/orders/**", "tests/orders/**"],
+  "context_pack_url": "s3://choregos/runs/01J8ZQK4C9R7M3N2P5T6V7W8X9/context.json",
+  "playbook": { "ref": "implement@sha256:3b1f0c", "prompt_url": "s3://choregos/runs/01J8ZQK4C9R7M3N2P5T6V7W8X9/prompt.md", "prompt": null },
+  "tools": { "mcp": {
+    "choregos": { "url": "http://localhost:7777/mcp" },
+    "memory": { "url": "http://ecphoria.choregos-memory:8432/mcp" } } },
+  "permissions": {
+    "write_paths": ["src/orders/**", "tests/orders/**"],
+    "deny_commands": ["kubectl", "terraform apply", "git push --force"],
+    "allow_domains": ["github.com", "pypi.org"],
+    "dod_iterations": 3, "max_findings": 5 },
+  "callbacks": { "api_url": "https://api.choregos.acme.dev/internal", "run_token": "eyJhbGciOiJFUzI1NiJ9.e30.sig" }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/inbound-event.schema.json",
+  "title": "InboundEvent",
+  "description": "Événement externe normalisé par un adaptateur (docs/plan/01 §1.7).",
+  "type": "object",
+  "required": ["type", "source", "delivery_id", "ts"],
+  "additionalProperties": false,
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "tracker.item.created", "tracker.item.updated", "tracker.item.moved",
+        "tracker.item.commented", "tracker.item.labeled", "tracker.item.closed",
+        "scm.pr.opened", "scm.pr.synchronized", "scm.pr.review_submitted",
+        "scm.pr.merged", "scm.pr.closed", "scm.check.completed",
+        "ci.run.started", "ci.run.succeeded", "ci.run.failed",
+        "cd.app.synced", "cd.app.degraded", "cd.rollout.completed", "cd.rollout.aborted",
+        "alert.fired", "alert.resolved",
+        "human.decision"
+      ]
+    },
+    "source": { "type": "string", "description": "github, jira, gitlab, tekton, argocd, alertmanager, slack, web, cli" },
+    "delivery_id": { "type": "string", "description": "Identifiant unique de livraison (dédup/rejeu)." },
+    "ts": { "type": "string", "format": "date-time" },
+    "project_slug": { "type": ["string", "null"] },
+    "work_item_key": { "type": ["string", "null"] },
+    "actor": { "type": ["string", "null"], "description": "Identité externe à l'origine de l'événement." },
+    "payload": { "type": "object", "additionalProperties": true, "default": {} }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/project.schema.json",
+  "title": "Project",
+  "description": "Configuration d'un projet Choregos (colonne `projects.config`).",
+  "type": "object",
+  "required": ["slug", "org", "repo"],
+  "additionalProperties": false,
+  "properties": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+    "org": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+    "display_name": { "type": "string" },
+    "template_ref": { "type": "string", "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "repo": {
+      "type": "object",
+      "required": ["url", "default_branch"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "default_branch": { "type": "string", "default": "main" },
+        "language": { "type": "string", "enum": ["python", "node", "go", "java", "dotnet", "rust", "other"] },
+        "clone_depth": { "type": "integer", "minimum": 1, "default": 50 },
+        "branch_prefix": { "type": "string", "default": "choregos/" },
+        "test_command": { "type": "string" },
+        "lint_command": { "type": "string" },
+        "typecheck_command": { "type": "string" }
+      }
+    },
+    "envs": { "type": "array", "items": { "type": "string" }, "default": ["dev", "staging", "prod"] },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_backend": { "type": "string", "default": "openhands" },
+        "allowed_backends": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profiles": {
+          "type": "object",
+          "description": "Surcharges projet : nom de profil → identifiant LiteLLM.",
+          "additionalProperties": { "$ref": "#/$defs/profile" }
+        },
+        "allow_unvalidated": { "type": "boolean", "default": false }
+      }
+    },
+    "gitops": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repo_url": { "type": "string", "format": "uri" },
+        "path_prefix": { "type": "string", "default": "apps" },
+        "apps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "cluster": { "type": "string", "description": "Référence de cluster (executor)." },
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slack_channel": { "type": "string" },
+        "emails": { "type": "array", "items": { "type": "string", "format": "email" } }
+      }
+    },
+    "labels": { "type": "object", "additionalProperties": { "type": "string" } }
+  },
+  "$defs": {
+    "profile": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["litellm_model"],
+          "additionalProperties": false,
+          "properties": {
+            "litellm_model": { "type": "string" },
+            "params": { "type": "object", "additionalProperties": true },
+            "max_turns_factor": { "type": "number", "exclusiveMinimum": 0, "default": 1 }
+          }
+        }
+      ]
+    }
+  }
+}

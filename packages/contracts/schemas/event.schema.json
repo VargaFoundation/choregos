@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/event.schema.json",
+  "title": "ChoregosEvent",
+  "description": "Événement interne au format CloudEvents 1.0 (docs/plan/01 §1.7).",
+  "type": "object",
+  "required": ["specversion", "id", "source", "type", "time"],
+  "additionalProperties": false,
+  "properties": {
+    "specversion": { "const": "1.0" },
+    "id": { "type": "string" },
+    "source": { "type": "string", "description": "/choregos/orchestrator, /choregos/api, /choregos/runner/<run_id>…" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "choregos.workitem.created", "choregos.workitem.state_changed", "choregos.workitem.closed",
+        "choregos.workitem.human_requested", "choregos.workitem.human_decided",
+        "choregos.run.queued", "choregos.run.started", "choregos.run.progress", "choregos.run.finished",
+        "choregos.finding.reported", "choregos.finding.created", "choregos.finding.duplicate",
+        "choregos.finding.dismissed",
+        "choregos.release.collected", "choregos.release.departed", "choregos.release.staged",
+        "choregos.release.approval_requested", "choregos.release.promoted", "choregos.release.verified",
+        "choregos.release.rolled_back", "choregos.release.frozen",
+        "choregos.cost.recorded", "choregos.cost.alert",
+        "choregos.project.provisioning.step", "choregos.project.provisioning.completed",
+        "choregos.project.provisioning.failed"
+      ]
+    },
+    "subject": { "type": ["string", "null"] },
+    "time": { "type": "string", "format": "date-time" },
+    "datacontenttype": { "type": "string", "default": "application/json" },
+    "project_slug": { "type": ["string", "null"] },
+    "data": { "type": "object", "additionalProperties": true, "default": {} }
+  }
+}
