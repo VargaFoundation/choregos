@@ -289,22 +289,31 @@ async def alertmanager_webhook(
     return WebhookAck(accepted=True, events=count)
 
 
-# ───────────────────────────── Jira / GitLab (stubs S13) ─────────────────────────────
+# ───────────────────────────── Jira / GitLab (S13-04) ─────────────────────────────
 
 
 @router.post(
     "/jira", response_model=WebhookAck, status_code=status.HTTP_202_ACCEPTED, operation_id="jiraWebhook"
 )
 async def jira_webhook(
-    request: Request, session: Db, x_choregos_secret: Annotated[str, Header()] = ""
+    request: Request,
+    session: Db,
+    x_choregos_secret: Annotated[str, Header()] = "",
+    x_atlassian_webhook_identifier: Annotated[str, Header()] = "",
 ) -> WebhookAck:
+    """Jira Cloud ne signe pas ses webhooks : le secret partagé est la seule barrière."""
     body = await request.body()
     if not verify_shared_secret(get_settings().generic_webhook_secret, x_choregos_secret):
         raise unauthorized("secret partagé invalide")
-    if await _already_seen(session, "jira", body_digest(body), "jira", body):
+    delivery = x_atlassian_webhook_identifier or body_digest(body)
+    if await _already_seen(session, "jira", delivery, "jira", body):
         return WebhookAck(accepted=True, duplicate=True)
-    logger.info("webhook Jira reçu (adaptateur S13 non activé)")
-    return WebhookAck(accepted=True, events=0)
+
+    from choregos_adapters.tracker.jira_events import parse_jira_event
+
+    events = parse_jira_event(delivery, json.loads(body or b"{}"))
+    delivered = await _dispatch(session, events)
+    return WebhookAck(accepted=True, events=delivered)
 
 
 @router.post(
@@ -315,11 +324,17 @@ async def gitlab_webhook(
     session: Db,
     x_gitlab_token: Annotated[str, Header()] = "",
     x_gitlab_event: Annotated[str, Header()] = "",
+    x_gitlab_event_uuid: Annotated[str, Header()] = "",
 ) -> WebhookAck:
     body = await request.body()
     if not verify_shared_secret(get_settings().generic_webhook_secret, x_gitlab_token):
         raise unauthorized("jeton GitLab invalide")
-    if await _already_seen(session, "gitlab", body_digest(body), x_gitlab_event, body):
+    delivery = x_gitlab_event_uuid or body_digest(body)
+    if await _already_seen(session, "gitlab", delivery, x_gitlab_event, body):
         return WebhookAck(accepted=True, duplicate=True)
-    logger.info("webhook GitLab reçu (adaptateur S13 non activé)", gitlab_event=x_gitlab_event)
-    return WebhookAck(accepted=True, events=0)
+
+    from choregos_adapters.tracker.gitlab_events import parse_gitlab_event
+
+    events = parse_gitlab_event(x_gitlab_event, delivery, json.loads(body or b"{}"))
+    delivered = await _dispatch(session, events)
+    return WebhookAck(accepted=True, events=delivered)

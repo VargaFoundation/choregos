@@ -92,11 +92,14 @@ def _register_builtins() -> None:
     from .executor.local_docker import LocalDockerExecutor
     from .executor.tekton import KubernetesClient, TektonExecutor
     from .gateway.litellm import LiteLlmGateway
+    from .http import RestClient
     from .memory.ecphoria import EcphoriaMemory
     from .memory.pgvector import PgVectorMemory
     from .notify.slack import SlackNotifier
     from .scm.github import GitHubScm
     from .tracker.github import GitHubTracker
+    from .tracker.gitlab import GitLabTracker
+    from .tracker.jira import JiraTracker
 
     register("tracker", "github-issues")(
         lambda cfg: GitHubTracker(
@@ -104,6 +107,31 @@ def _register_builtins() -> None:
             cfg["repo"],
             project_number=cfg.get("project_number"),
             org=cfg.get("org"),
+            webhook_secret=cfg.get("webhook_secret", ""),
+        )
+    )
+    register("tracker", "jira")(
+        lambda cfg: JiraTracker(
+            RestClient(
+                cfg["base_url"],
+                # Jira Cloud : e-mail + jeton d'API en Basic. Le jeton vient du coffre,
+                # jamais du dépôt (AGENTS.md : aucun secret en dur).
+                auth=(cfg["email"], cfg["api_token"]),
+                service="jira",
+            ),
+            cfg["project_key"],
+            webhook_secret=cfg.get("webhook_secret", ""),
+            field_names=cfg.get("field_names"),
+        )
+    )
+    register("tracker", "gitlab-issues")(
+        lambda cfg: GitLabTracker(
+            RestClient(
+                cfg.get("base_url", "https://gitlab.com"),
+                headers={"PRIVATE-TOKEN": cfg["token"]},
+                service="gitlab",
+            ),
+            cfg["project"],
             webhook_secret=cfg.get("webhook_secret", ""),
         )
     )

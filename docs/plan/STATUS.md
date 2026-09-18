@@ -105,11 +105,11 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-01 | S13 | ✅ | — | backend claude-code (hook de secours, modèles Claude uniquement) — conformité 7/7 |
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
 | S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
-| S13-04 | S13 | ⬜ | — | tracker Jira/GitLab : webhooks acceptés, adaptateur non écrit |
+| S13-04 | S13 | 🟡 | — | adaptateurs Jira et GitLab écrits et testés contre le protocole ; jamais joués contre une instance réelle |
 | S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 89 livrées, 10 partielles, 3 non commencées.
+**Total** : 89 livrées, 11 partielles, 2 non commencées.
 
 ## Ce qui tient debout aujourd'hui
 

@@ -351,3 +351,46 @@ async def test_platform_backends_and_executors(client: AsyncClient, admin: str) 
     assert updated.json()["enabled"] is False
     executors = (await client.get("/api/v1/platform/executors")).json()
     assert {e["kind"] for e in executors} >= {"tekton", "k8s_job"}
+
+
+async def test_webhook_jira_cree_le_ticket_et_demarre_le_workflow(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: Any
+) -> None:
+    """Un webhook Jira suit exactement le même chemin qu'un webhook GitHub (S13-04)."""
+    from choregos_api.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
+    payload = {
+        "webhookEvent": "jira:issue_updated",
+        "user": {"displayName": "Augustin"},
+        "issue": {"key": "BILLING-API-9", "fields": {"summary": "Avoirs", "labels": ["agent-ready"]}},
+        "changelog": {"items": [{"field": "labels", "fromString": "", "toString": "agent-ready"}]},
+    }
+    response = await client.post(
+        "/api/v1/webhooks/jira",
+        json=payload,
+        headers={"X-Choregos-Secret": "s3cret", "X-Atlassian-Webhook-Identifier": "d-1"},
+    )
+    assert response.status_code == 202
+    assert response.json()["accepted"] is True
+
+    rejeu = await client.post(
+        "/api/v1/webhooks/jira",
+        json=payload,
+        headers={"X-Choregos-Secret": "s3cret", "X-Atlassian-Webhook-Identifier": "d-1"},
+    )
+    assert rejeu.json()["duplicate"] is True, "une livraison rejouée ne compte qu'une fois"
+
+
+async def test_webhook_gitlab_refuse_un_jeton_invalide(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: Any
+) -> None:
+    from choregos_api.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
+    response = await client.post(
+        "/api/v1/webhooks/gitlab",
+        json={"object_kind": "issue"},
+        headers={"X-Gitlab-Token": "faux", "X-Gitlab-Event": "Issue Hook"},
+    )
+    assert response.status_code == 401
