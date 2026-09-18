@@ -533,6 +533,27 @@ class MemoryReimport(Dto):
     sources: list[str] = Field(default_factory=list)
 
 
+class MemoryAbGroup(Dto):
+    """Un des deux bras de l'A/B : les projets avec, ou sans, context pack."""
+
+    projects: list[str] = Field(default_factory=list)
+    tickets: int = 0
+    first_pass_merge_rate: float | None = None
+    cost_per_ticket_usd: float | None = None
+
+
+class MemoryAbReport(Dto):
+    """Preuve avant dépendance : la mémoire paie-t-elle ? (docs/plan/04, décision 4)"""
+
+    org: str
+    weeks: int = 4
+    since: datetime | None = None
+    with_memory: MemoryAbGroup = Field(default_factory=MemoryAbGroup)
+    without_memory: MemoryAbGroup = Field(default_factory=MemoryAbGroup)
+    verdict: str
+    detail: str = ""
+
+
 class CostRow(Dto):
     key: str
     cost_usd: float = 0.0

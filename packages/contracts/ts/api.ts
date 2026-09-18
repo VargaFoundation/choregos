@@ -570,6 +570,23 @@ export type CostReport = {
   };
 };
 
+export type MemoryAbGroup = {
+  projects?: Array<string>;
+  tickets?: number;
+  first_pass_merge_rate?: number;
+  cost_per_ticket_usd?: number;
+};
+
+export type MemoryAbReport = {
+  org: string;
+  weeks?: number;
+  since?: string;
+  with_memory?: MemoryAbGroup;
+  without_memory?: MemoryAbGroup;
+  verdict: string;
+  detail?: string;
+};
+
 export type DoraMetric = {
   value?: number;
   unit: string;
@@ -727,6 +744,7 @@ export interface Operations {
   reason: string;
 }; response: void };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
+  getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };

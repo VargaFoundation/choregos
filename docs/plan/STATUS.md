@@ -95,7 +95,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S10-03 | S10 | ✅ | — | `MemoryIngestion` : tickets, runs, déploiements, findings, upsert idempotent |
 | S10-04 | S10 | ✅ | — | context pack réel par rôle, budget de tokens, archivé avec le run |
 | S10-05 | S10 | ✅ | — | écriture gouvernée : `write_fact`, `propose_fact`, file `pending`, auto-accept |
-| S10-06 | S10 | 🟡 | — | ratio de faux positifs calculé et alerté ; rapport A/B hebdomadaire à générer |
+| S10-06 | S10 | ✅ | — | faux positifs alertés ; rapport A/B hebdomadaire (premier passage, coût/ticket) posté et exposé |
 | S11-* | S11 | ⬜ | — | dépôt `VargaFoundation/ecphoria` : hors de ce monorepo (E-01 → E-14) |
 | S12-01 | S12 | ✅ | — | 6 tickets de référence, dépôts jouets Python et Node, assertions vérifiées pour de vrai |
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 86 livrées, 13 partielles, 3 non commencées.
+**Total** : 87 livrées, 12 partielles, 3 non commencées.
 
 ## Ce qui tient debout aujourd'hui
 

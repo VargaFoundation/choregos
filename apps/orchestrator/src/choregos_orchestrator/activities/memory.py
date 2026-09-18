@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from choregos_api.db.models import Finding, Release, Run, WorkItem
-from choregos_core import Fact, Provenance, utcnow
+from choregos_core import Fact, Message, Provenance, utcnow
 from sqlalchemy import select
 from temporalio import activity
 
@@ -184,3 +184,30 @@ async def accept_pending_facts(payload: dict[str, Any]) -> dict[str, Any]:
                 await adapter.accept_pending(bundle.slug, memory.id)
                 accepted += 1
         return {"accepted": accepted, "threshold": threshold}
+
+
+@activity.defn(name="memory_ab_report")
+async def memory_ab_report(payload: dict[str, Any]) -> dict[str, Any]:
+    """Rapport A/B hebdomadaire : la mémoire paie-t-elle ? (docs/plan/04, décision 4)
+
+    Le calcul vit dans `choregos_api.services` — c'est l'API qui possède le modèle de
+    données, et le même rapport est servi par `GET /orgs/{org}/memory/ab-report`. Ici, on
+    l'exécute et, si on le demande, on le poste là où les humains le liront.
+    """
+    from choregos_api.services import memory_ab_comparison
+
+    async with db() as session:
+        report = await memory_ab_comparison(session, str(payload["org"]), int(payload.get("weeks", 4)))
+    projects = report["groups"]["with_memory"]["projects"] + report["groups"]["without_memory"]["projects"]
+    if payload.get("notify") and projects:
+        async with db() as session:
+            bundle = await project_bundle(session, projects[0])
+            await bundle.adapters.notify.send(
+                bundle.config.notify.slack_channel or "#choregos",
+                Message(
+                    title=f"Mémoire : rapport A/B sur {report['weeks']} semaines — {report['verdict']}",
+                    body=str(report["detail"]),
+                    severity="warning" if report["verdict"] == "la mémoire ne paie pas" else "info",
+                ),
+            )
+    return report

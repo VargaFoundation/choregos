@@ -8,9 +8,10 @@ from choregos_core.domain import Memory
 from fastapi import APIRouter, Query, status
 
 from ..audit import record
-from ..deps import Db, ProjectCtx
+from ..deps import Db, Me, ProjectCtx
+from ..errors import forbidden
 from ..rbac import Permission
-from ..schemas import MemoryDecision, MemoryDto, MemoryReimport
+from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryReimport
 from ..services import active_policy, policy_model
 from ..temporal import get_temporal
 
@@ -96,3 +97,33 @@ async def reimport(ctx: ProjectCtx, body: MemoryReimport, session: Db) -> dict[s
     )
     await record(session, ctx.principal, "memory.reimport", target_type="project", target_id=ctx.id)
     return {"status": "accepted"}
+
+
+@router.get("/orgs/{org}/memory/ab-report", response_model=MemoryAbReport, operation_id="getMemoryAbReport")
+async def ab_report(
+    org: str,
+    session: Db,
+    principal: Me,
+    weeks: Annotated[int, Query(ge=1, le=52)] = 4,
+) -> MemoryAbReport:
+    """Compare les projets avec et sans mémoire sur le premier passage et le coût par ticket.
+
+    Le même calcul que le rapport hebdomadaire envoyé par `MemoryIngestion` : tant qu'un
+    groupe a moins de dix tickets fermés sur la fenêtre, le verdict reste « échantillon
+    insuffisant » plutôt qu'une conclusion prise sur trois tickets.
+    """
+    if not principal.can(Permission.PROJECT_READ, org):
+        raise forbidden()
+    from ..services import memory_ab_comparison
+
+    raw = await memory_ab_comparison(session, org, weeks)
+    groups = raw.get("groups", {})
+    return MemoryAbReport(
+        org=org,
+        weeks=weeks,
+        since=raw.get("since"),
+        with_memory=MemoryAbGroup(**groups.get("with_memory", {})),
+        without_memory=MemoryAbGroup(**groups.get("without_memory", {})),
+        verdict=str(raw.get("verdict", "inconnu")),
+        detail=str(raw.get("detail", "")),
+    )

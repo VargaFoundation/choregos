@@ -25,6 +25,9 @@ class MemoryInput:
     interval_minutes: int = 15
     sources: list[str] | None = None
     max_cycles: int = 96
+    org: str = ""
+    ab_report_weeks: int = 4
+    last_report_week: int = 0
 
 
 @workflow.defn(name="MemoryIngestion", sandboxed=False)
@@ -35,6 +38,8 @@ class MemoryIngestion:
         self.cycles = 0
         self.ingested = 0
         self.stopped = False
+        self.last_report_week = 0
+        self.last_report: dict[str, Any] = {}
 
     @workflow.signal
     def reimport(self, payload: dict[str, Any]) -> None:
@@ -49,9 +54,19 @@ class MemoryIngestion:
     def stop(self, payload: dict[str, Any]) -> None:
         self.stopped = True
 
+    @workflow.signal
+    def ab_report_now(self, payload: dict[str, Any] | None = None) -> None:
+        """Force le rapport A/B au prochain cycle, sans attendre le changement de semaine."""
+        self.last_report_week = 0
+
     @workflow.query
     def status(self) -> dict[str, Any]:
-        return {"cycles": self.cycles, "ingested": self.ingested, "queued": len(self.events)}
+        return {
+            "cycles": self.cycles,
+            "ingested": self.ingested,
+            "queued": len(self.events),
+            "last_report": self.last_report,
+        }
 
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -81,6 +96,26 @@ class MemoryIngestion:
             )
             self.ingested += int(outcome.get("facts", 0))
             self.cycles += 1
+            await self._weekly_ab_report(params)
             if workflow.info().get_current_history_length() > 10_000:
-                workflow.continue_as_new(payload)
+                workflow.continue_as_new({**payload, "last_report_week": self.last_report_week})
         return {"cycles": self.cycles, "ingested": self.ingested}
+
+    async def _weekly_ab_report(self, params: MemoryInput) -> None:
+        """Une fois par semaine ISO : la mémoire paie-t-elle ? (docs/plan/04, décision 4)
+
+        `workflow.now()` est déterministe : le rapport part une seule fois par semaine,
+        même si le workflow est rejoué ou reprend après un `continue_as_new`.
+        """
+        if not params.org:
+            return
+        week = workflow.now().isocalendar().week
+        if week == (self.last_report_week or params.last_report_week):
+            return
+        self.last_report = await workflow.execute_activity(
+            memory_activities.memory_ab_report,
+            {"org": params.org, "weeks": params.ab_report_weeks, "notify": True},
+            start_to_close_timeout=timedelta(minutes=5),
+            retry_policy=RETRY,
+        )
+        self.last_report_week = week

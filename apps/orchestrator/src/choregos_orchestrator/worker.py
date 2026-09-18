@@ -41,7 +41,13 @@ QUEUE_ACTIVITY_PREFIX: dict[str, tuple[str, ...]] = {
         "triage_finding",
         "reconcile_tracker",
     ),
-    "memory": ("ingest_sources", "ingest_alert", "write_run_lesson", "accept_pending_facts"),
+    "memory": (
+        "ingest_sources",
+        "ingest_alert",
+        "write_run_lesson",
+        "accept_pending_facts",
+        "memory_ab_report",
+    ),
 }
 
 

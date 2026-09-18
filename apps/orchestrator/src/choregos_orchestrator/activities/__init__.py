@@ -49,6 +49,7 @@ ALL_ACTIVITIES = [
     memory.ingest_alert,
     memory.write_run_lesson,
     memory.accept_pending_facts,
+    memory.memory_ab_report,
     evals.list_fixtures,
     evals.run_eval_cell,
     evals.publish_matrix,

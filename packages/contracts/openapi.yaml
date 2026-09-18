@@ -448,6 +448,16 @@ paths:
       requestBody:
         content: { application/json: { schema: { type: object, properties: { sources: { type: array, items: { type: string } } } } } }
       responses: { "202": { description: Import planifié } }
+  /orgs/{org}/memory/ab-report:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [memory]
+      operationId: getMemoryAbReport
+      summary: Projets avec et sans mémoire, comparés sur le premier passage et le coût
+      parameters:
+        - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 52, default: 4 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAbReport" } } } }
   /projects/{id}/costs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1384,6 +1394,24 @@ components:
             cost_usd: { type: number }
             cost_eur: { type: number }
             budget_usd: { type: [number, "null"] }
+    MemoryAbGroup:
+      type: object
+      properties:
+        projects: { type: array, items: { type: string } }
+        tickets: { type: integer, default: 0 }
+        first_pass_merge_rate: { type: number, nullable: true }
+        cost_per_ticket_usd: { type: number, nullable: true }
+    MemoryAbReport:
+      type: object
+      required: [org, verdict]
+      properties:
+        org: { type: string }
+        weeks: { type: integer, default: 4 }
+        since: { type: string, format: date-time, nullable: true }
+        with_memory: { $ref: "#/components/schemas/MemoryAbGroup" }
+        without_memory: { $ref: "#/components/schemas/MemoryAbGroup" }
+        verdict: { type: string }
+        detail: { type: string, default: "" }
     DoraMetric:
       type: object
       required: [unit]
