@@ -1,0 +1,51 @@
+# Ticket de référence sur le dépôt jouet Node : la cellule est ignorée si Node manque.
+id: node-slug-longueur
+title: "Tronquer les slugs à 40 caractères sans couper un mot"
+repo: node-toy
+role: implement
+prompt: |
+  `slugify` doit rendre au plus 40 caractères, sans couper un mot en deux et sans
+  laisser de tiret en fin de chaîne. Ajoute les tests correspondants.
+allowed_paths:
+  - "src/**"
+  - "test/**"
+expected_cost_usd: 0.44
+expected_duration_s: 160
+assertions:
+  - { kind: file_matches, path: src/slug.js, pattern: "LONGUEUR_MAX", absent: false }
+  - { kind: command, run: "npm test --silent", requires: npm }
+scripted:
+  with_memory:
+    files:
+      src/slug.js: |
+        const LONGUEUR_MAX = 40;
+
+        /** Normalise un titre en identifiant d'URL, tronqué sans couper un mot. */
+        export function slugify(titre) {
+          const base = String(titre)
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          if (base.length <= LONGUEUR_MAX) return base;
+          const coupe = base.slice(0, LONGUEUR_MAX + 1);
+          const dernier = coupe.lastIndexOf('-');
+          return (dernier > 0 ? coupe.slice(0, dernier) : base.slice(0, LONGUEUR_MAX)).replace(/-+$/, '');
+        }
+      test/longueur.test.js: |
+        import assert from 'node:assert/strict';
+        import { test } from 'node:test';
+
+        import { slugify } from '../src/slug.js';
+
+        test('un titre court passe tel quel', () => {
+          assert.equal(slugify('Café Éclair'), 'cafe-eclair');
+        });
+
+        test('un titre long est tronqué sur un mot entier', () => {
+          const slug = slugify('Comment préparer un excellent café filtre à la maison en dix étapes');
+          assert.ok(slug.length <= 40, slug);
+          assert.ok(!slug.endsWith('-'), slug);
+          assert.ok('comment-preparer-un-excellent-cafe'.startsWith(slug) || slug.startsWith('comment-preparer'), slug);
+        });

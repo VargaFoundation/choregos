@@ -97,7 +97,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S10-05 | S10 | ✅ | — | écriture gouvernée : `write_fact`, `propose_fact`, file `pending`, auto-accept |
 | S10-06 | S10 | 🟡 | — | ratio de faux positifs calculé et alerté ; rapport A/B hebdomadaire à générer |
 | S11-* | S11 | ⬜ | — | dépôt `VargaFoundation/ecphoria` : hors de ce monorepo (E-01 → E-14) |
-| S12-01 | S12 | 🟡 | — | tickets de référence et dépôt jouet Python ; node et go à ajouter |
+| S12-01 | S12 | ✅ | — | 6 tickets de référence, dépôts jouets Python et Node, assertions vérifiées pour de vrai |
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
 | S12-03 | S12 | ✅ | — | évals de playbooks : une dégradation de prompt fait échouer la CI |
 | S12-04 | S12 | ✅ | — | 23 scénarios e2e M1–M5, sans cluster ; variantes kind en nocturne |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 83 livrées, 16 partielles, 3 non commencées.
+**Total** : 84 livrées, 15 partielles, 3 non commencées.
 
 ## Ce qui tient debout aujourd'hui
 

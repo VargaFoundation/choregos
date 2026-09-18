@@ -1,0 +1,88 @@
+# Ticket de référence : écrire une fonction dans un fichier neuf.
+# Ce que la cellule mesure vraiment : la convention « montants en centimes »
+# n'est écrite nulle part dans le dépôt — elle vit dans la mémoire du projet.
+# Sans mémoire, l'agent produit du flottant : l'assertion le voit et la case échoue.
+id: py-remise-volume
+title: "Remise de 10 % au-delà de 5 articles identiques"
+repo: python-toy
+role: implement
+prompt: |
+  Ajoute `remise_volume(ligne)` dans `src/panier/remise.py` : elle rend le montant
+  de la remise pour une ligne de panier, 10 % du total de la ligne dès 5 unités,
+  0 en dessous. Câble-la dans `total_ttc` et couvre-la par un test.
+allowed_paths:
+  - "src/panier/**"
+  - "tests/**"
+expected_cost_usd: 0.62
+expected_duration_s: 210
+assertions:
+  - { kind: file_exists, path: src/panier/remise.py }
+  - { kind: file_matches, path: src/panier/remise.py, pattern: "def remise_volume", absent: false }
+  - { kind: file_matches, path: src/panier/remise.py, pattern: "float", absent: true }
+  - { kind: command, run: "python -m pytest -q" }
+scripted:
+  with_memory:
+    files:
+      src/panier/remise.py: |
+        """Remises appliquées au panier. Les montants sont en centimes (convention projet)."""
+
+        from __future__ import annotations
+
+        from .panier import Ligne
+
+        SEUIL_VOLUME = 5
+        TAUX_VOLUME_POURCENT = 10
+
+
+        def remise_volume(ligne: Ligne) -> int:
+            """Remise en centimes pour une ligne, 10 % dès 5 unités."""
+            if ligne.quantite < SEUIL_VOLUME:
+                return 0
+            return ligne.total_cents() * TAUX_VOLUME_POURCENT // 100
+      tests/test_remise.py: |
+        """Tests de la remise volume."""
+
+        from __future__ import annotations
+
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+        from panier import Ligne  # noqa: E402
+        from panier.remise import remise_volume  # noqa: E402
+
+
+        def test_pas_de_remise_sous_le_seuil() -> None:
+            assert remise_volume(Ligne("café", 349, 4)) == 0
+
+
+        def test_remise_de_dix_pourcent_au_seuil() -> None:
+            assert remise_volume(Ligne("café", 300, 5)) == 150
+  without_memory:
+    files:
+      src/panier/remise.py: |
+        """Remises appliquées au panier."""
+
+        from __future__ import annotations
+
+        from .panier import Ligne
+
+
+        def remise_volume(ligne: Ligne) -> float:
+            """Remise pour une ligne, 10 % dès 5 unités."""
+            if ligne.quantite < 5:
+                return 0.0
+            return ligne.total_cents() * 0.10
+      tests/test_remise.py: |
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+        from panier import Ligne  # noqa: E402
+        from panier.remise import remise_volume  # noqa: E402
+
+
+        def test_remise() -> None:
+            assert remise_volume(Ligne("café", 300, 5)) == 150.0

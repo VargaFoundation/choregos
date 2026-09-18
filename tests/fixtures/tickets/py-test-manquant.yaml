@@ -1,0 +1,46 @@
+# Ticket de référence : rôle `verify` — écrire le test qui manque, sans toucher au code.
+id: py-test-manquant
+title: "Couvrir le panier vide et la quantité nulle"
+repo: python-toy
+role: verify
+prompt: |
+  Ajoute `tests/test_bords.py` couvrant le panier vide, une quantité nulle et une
+  ligne unique. N'écris que dans `tests/` : le code de production ne bouge pas.
+allowed_paths:
+  - "tests/**"
+expected_cost_usd: 0.18
+expected_duration_s: 95
+assertions:
+  - { kind: file_exists, path: tests/test_bords.py }
+  - { kind: file_unchanged, path: src/panier/panier.py }
+  - { kind: command, run: "python -m pytest -q" }
+scripted:
+  with_memory:
+    files:
+      tests/test_bords.py: |
+        """Cas de bord du panier."""
+
+        from __future__ import annotations
+
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+        from panier import Ligne, Panier, total_ttc  # noqa: E402
+
+
+        def test_quantite_nulle_ne_compte_pas() -> None:
+            panier = Panier()
+            panier.ajouter(Ligne("café", 349, 0))
+            assert panier.sous_total_cents() == 0
+
+
+        def test_ligne_unique() -> None:
+            panier = Panier()
+            panier.ajouter(Ligne("café", 100))
+            assert total_ttc(panier) == 120
+
+
+        def test_panier_vide_reste_a_zero() -> None:
+            assert total_ttc(Panier()) == 0
