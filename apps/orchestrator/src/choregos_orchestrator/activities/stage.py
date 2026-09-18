@@ -39,6 +39,7 @@ from choregos_core import ExecRef, ModelResolver, Spend, StageJobSpec, elapsed_s
 from temporalio import activity
 
 from ..config import get_settings
+from ..train_client import signal_findings
 from .base import db, load_work_item, project_bundle
 
 
@@ -403,7 +404,7 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         run = await session.get(Run, payload["run_id"])
         if run is None:
             return Spend().model_dump(mode="json")
-        if run.tokens and run.tokens.get("collected"):
+        if run.spend_collected:
             return dict(run.tokens)
         spend = Spend()
         if run.gateway_key_id:
@@ -417,8 +418,8 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
             "cost_usd": spend.cost_usd,
             "cost_eur": round(spend.cost_usd * settings.fx_usd_eur, 6),
             "runs": 1,
-            "collected": True,
         }
+        run.spend_collected = True
         run.ended_at = run.ended_at or utcnow()
         await record_cost(
             session,
@@ -490,4 +491,60 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
         item.documents = documents
         if result.artifacts.pr_url:
             item.pr_url = result.artifacts.pr_url
-        return {"recorded": True, "status": run.status}
+        recorded = await _persist_findings(session, run, item, result)
+        return {"recorded": True, "status": run.status, "findings": recorded}
+
+
+async def _persist_findings(session: Any, run: Run, item: Any, result: StageResult) -> list[str]:
+    """Les findings déclarés dans le résultat ne se perdent pas.
+
+    Le runner les poste normalement un par un pendant le run (outil MCP `report_finding`) ;
+    si l'API était indisponible à ce moment, le résultat les porte encore. On les enregistre
+    ici, sans doublon (même run, même titre), puis on réveille le triage.
+    """
+    from choregos_api.db.models import Finding as FindingRow
+    from sqlalchemy import select
+
+    if not result.findings:
+        return []
+    bundle = await project_bundle(session, run.project_id)
+    cap = bundle.engine.max_findings_per_run()
+    existing = (
+        (await session.execute(select(FindingRow).where(FindingRow.origin_run_id == run.id))).scalars().all()
+    )
+    known = {row.title for row in existing}
+    created: list[str] = []
+    for finding in result.findings:
+        if finding.title in known or len(existing) + len(created) >= cap:
+            continue
+        row = FindingRow(
+            project_id=run.project_id,
+            origin_work_item_id=item.id,
+            origin_run_id=run.id,
+            title=finding.title,
+            type=str(finding.type),
+            severity=str(finding.severity),
+            evidence=finding.evidence,
+            suggested_fix=finding.suggested_fix,
+            estimate=str(finding.estimate) if finding.estimate else None,
+            status="pending",
+        )
+        session.add(row)
+        await session.flush()
+        created.append(row.id)
+        await persist_event(
+            session,
+            EventType.FINDING_REPORTED,
+            project_id=run.project_id,
+            work_item_id=item.id,
+            project_slug=bundle.slug,
+            subject=row.id,
+            finding_id=row.id,
+            severity=row.severity,
+            title=row.title,
+        )
+    for finding_id in created:
+        await signal_findings(
+            bundle.slug, "finding", {"finding_id": finding_id, "project_id": run.project_id}
+        )
+    return created

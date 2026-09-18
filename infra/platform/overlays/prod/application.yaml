@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: choregos-platform-prod
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/VargaFoundation/choregos.git
+    path: charts/choregos
+    targetRevision: v1.0.0
+    helm:
+      valueFiles: [values.yaml, values/prod.yaml]
+  destination: { server: https://kubernetes.default.svc, namespace: choregos-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: false }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+  # En production, la synchronisation automatique est désactivée : c'est le release train
+  # de la plateforme qui promeut, après approbation d'un release captain (dogfooding).
+  syncWindows:
+    - kind: allow
+      schedule: "0 9-17 * * 1-4"
+      duration: 8h
+      applications: ["choregos-platform-prod"]
+      timeZone: Europe/Paris
+      manualSync: true

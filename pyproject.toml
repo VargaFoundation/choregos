@@ -80,6 +80,8 @@ ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "P
 # Le `timeout` explicite fait partie du contrat de ces fonctions (RPC, sous-processus).
 "packages/runner/src/choregos_runner/**" = ["ASYNC109"]
 "packages/adapters/src/choregos_adapters/**" = ["ASYNC109"]
+# Données de démonstration : le hasard n'a rien de cryptographique, et c'est voulu.
+"dev/scripts/seed.py" = ["S311", "E501"]
 
 [tool.ruff.format]
 quote-style = "double"

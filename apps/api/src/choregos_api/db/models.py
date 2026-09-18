@@ -192,6 +192,8 @@ class Run(Base, PkMixin, TimestampMixin):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tokens: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    # La dépense d'un run n'est lue qu'une fois au gateway : ce drapeau interdit le double comptage.
+    spend_collected: Mapped[bool] = mapped_column(Boolean, default=False)
     gateway_key_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     stage_input: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)

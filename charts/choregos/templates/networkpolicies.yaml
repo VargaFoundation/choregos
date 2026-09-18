@@ -1,0 +1,50 @@
+{{- if .Values.networkPolicies.enabled }}
+# Egress refusé par défaut dans le namespace de la plateforme ; on ouvre ce qui est nécessaire,
+# nommément (§6.6).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-default-deny-egress
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-allow-platform
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: ["Egress"]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-data } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-temporal } } }]
+      ports: [{ protocol: TCP, port: 7233 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-gateway } } }]
+      ports: [{ protocol: TCP, port: 4000 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: choregos-memory } } }]
+      ports: [{ protocol: TCP, port: 8432 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+      ports: [{ protocol: TCP, port: 4318 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-allow-ingress
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: choregos
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: gateway } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } }
+        - podSelector: {}
+{{- end }}

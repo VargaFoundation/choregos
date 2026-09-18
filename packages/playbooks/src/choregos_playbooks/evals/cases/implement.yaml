@@ -1,0 +1,20 @@
+role: implement
+description: >-
+  Le playbook d'implémentation doit interdire l'élargissement de périmètre, imposer les
+  preuves réelles, et rappeler que la plateforme revérifie.
+must_contain:
+  - "chemins autorisés"
+  - "report_finding"
+  - "result.json"
+  - "evidence"
+  - "Commits conventionnels"
+must_not_contain:
+  - "ignore les tests"
+rubric:
+  - critere: "interdit d'écrire hors du périmètre"
+    poids: 3
+  - critere: "impose des preuves vérifiables"
+    poids: 3
+  - critere: "distingue correction dans le périmètre et signalement hors périmètre"
+    poids: 2
+min_score: 0.85

@@ -1,0 +1,25 @@
+{
+  "title": "Choregos — Mémoire",
+  "uid": "choregos-memoire",
+  "tags": ["choregos"],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Latence du context pack (p95)",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(ecphoria_context_pack_seconds_bucket[5m])) by (le))" }],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Packs vides (circuit ouvert)",
+      "targets": [{ "expr": "sum(increase(choregos_context_pack_empty_total[1h]))" }],
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 }
+    },
+    {
+      "type": "table",
+      "title": "Faits en attente de validation",
+      "targets": [{ "expr": "choregos_memory_pending" }],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    }
+  ]
+}

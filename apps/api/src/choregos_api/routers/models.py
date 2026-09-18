@@ -58,12 +58,12 @@ async def get_models(ctx: ProjectCtx) -> ProjectModels:
 async def put_models(ctx: ProjectCtx, body: ProjectModels, session: Db) -> ProjectModels:
     """Refuse une combinaison backend × modèle non validée, sauf `allow_unvalidated`."""
     ctx.require(Permission.MODELS_WRITE)
+    from choregos_contracts import ModelProfile
+
     config = ProjectConfig.model_validate(ctx.project.config)
     config.models.profiles = {
-        name: profile.model_dump()  # type: ignore[misc]
-        for name, profile in body.profiles.items()
+        name: ModelProfile.model_validate(profile.model_dump()) for name, profile in body.profiles.items()
     }
-    config = ProjectConfig.model_validate(config.model_dump(mode="json"))
     config.models.allow_unvalidated = body.allow_unvalidated
 
     rows = (

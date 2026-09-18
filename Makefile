@@ -31,7 +31,7 @@ format:  ## Formate le code Python
 
 .PHONY: typecheck
 typecheck:  ## mypy --strict sur packages et apps
-	$(UV) run mypy packages/*/src apps/*/src tools
+	$(UV) run mypy packages/*/src apps/api/src apps/orchestrator/src tools
 
 .PHONY: test
 test:  ## Tests unitaires

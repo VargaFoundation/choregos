@@ -1,0 +1,48 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-pod-security
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: ["choregos-*", "proj-*"]
+      validate:
+        message: "les conteneurs Choregos tournent en non-root, sans privilèges"
+        pattern:
+          spec:
+            =(securityContext):
+              =(runAsNonRoot): true
+            containers:
+              - =(securityContext):
+                  =(allowPrivilegeEscalation): false
+                  =(privileged): false
+    - name: pas-de-hostpath
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: ["choregos-*", "proj-*"]
+      validate:
+        message: "hostPath est interdit : un runner ne touche pas le nœud"
+        pattern:
+          spec:
+            =(volumes):
+              - X(hostPath): "null"
+    - name: labels-obligatoires
+      match:
+        any:
+          - resources:
+              kinds: [Pod, PipelineRun, Job]
+              namespaces: ["proj-*"]
+      validate:
+        message: "tout objet d'un namespace projet porte le label `choregos/project`"
+        pattern:
+          metadata:
+            labels:
+              choregos/project: "?*"

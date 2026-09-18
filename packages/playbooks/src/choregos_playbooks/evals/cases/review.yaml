@@ -1,0 +1,15 @@
+role: review
+description: Le playbook de review doit produire un verdict structuré et des remarques situées.
+must_contain:
+  - "Sécurité"
+  - "Performance"
+  - "verdict"
+  - "fichier:ligne"
+must_not_contain:
+  - "félicite"
+rubric:
+  - critere: "classe les remarques par gravité"
+    poids: 2
+  - critere: "demande des remarques situées (fichier, ligne)"
+    poids: 2
+min_score: 0.8

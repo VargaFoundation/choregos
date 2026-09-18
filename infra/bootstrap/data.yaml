@@ -1,0 +1,49 @@
+# Les trois bases : choregos, temporal, litellm. CloudNativePG, sauvegardes Barman.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: choregos-pg
+  namespace: choregos-data
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.6
+  primaryUpdateStrategy: unsupervised
+  postgresql:
+    parameters:
+      max_connections: "300"
+      shared_buffers: 512MB
+    shared_preload_libraries: ["pg_stat_statements"]
+  bootstrap:
+    initdb:
+      database: choregos
+      owner: choregos
+      secret: { name: choregos-db }
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector;
+        - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+  storage: { size: 100Gi, storageClass: ssd }
+  walStorage: { size: 50Gi, storageClass: ssd }
+  monitoring: { enablePodMonitor: true }
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://choregos-backups/choregos-pg
+      s3Credentials:
+        accessKeyId: { name: choregos-backup, key: access-key-id }
+        secretAccessKey: { name: choregos-backup, key: secret-access-key }
+      wal: { compression: gzip, maxParallel: 4 }
+    retentionPolicy: "30d"
+  resources:
+    requests: { cpu: "1", memory: 4Gi }
+    limits: { cpu: "2", memory: 8Gi }
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: choregos-pg-nightly
+  namespace: choregos-data
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  cluster: { name: choregos-pg }

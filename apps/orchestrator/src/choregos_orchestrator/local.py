@@ -223,33 +223,33 @@ async def _run_stage(
 
 
 async def _emit_findings(project_id: str, work_item_id: str, run_id: str, result: StageResult) -> None:
-    """Les findings du résultat deviennent des tickets liés, comme en production."""
+    """Déclenche le triage des findings du run.
+
+    Les lignes sont déjà enregistrées par `record_run_outcome` (ou par le runner pendant
+    le run) ; ici on joue simplement le workflow `FindingsTriage`, qui les déduplique et
+    crée les tickets liés.
+    """
     if not result.findings:
         return
+    from sqlalchemy import select
+
     from choregos_api.db.models import Finding, Project
     from choregos_api.db.session import session_scope
 
-    created: list[str] = []
     async with session_scope() as session:
         project = await session.get(Project, project_id)
         slug = project.slug if project else project_id
-        for finding in result.findings:
-            row = Finding(
-                project_id=project_id,
-                origin_work_item_id=work_item_id,
-                origin_run_id=run_id,
-                title=finding.title,
-                type=str(finding.type),
-                severity=str(finding.severity),
-                evidence=finding.evidence,
-                suggested_fix=finding.suggested_fix,
-                estimate=str(finding.estimate) if finding.estimate else None,
-                status="pending",
+        pending = (
+            (
+                await session.execute(
+                    select(Finding).where(Finding.origin_run_id == run_id, Finding.status == "pending")
+                )
             )
-            session.add(row)
-            await session.flush()
-            created.append(row.id)
-    for finding_id in created:
+            .scalars()
+            .all()
+        )
+        finding_ids = [row.id for row in pending]
+    for finding_id in finding_ids:
         await finding_activities.triage_finding({"project_slug": slug, "finding_id": finding_id})
 
 

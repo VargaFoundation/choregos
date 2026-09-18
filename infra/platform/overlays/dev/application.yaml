@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: choregos-platform-dev
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/VargaFoundation/choregos.git
+    path: charts/choregos
+    targetRevision: HEAD
+    helm:
+      valueFiles: [values.yaml, values/dev.yaml]
+  destination: { server: https://kubernetes.default.svc, namespace: choregos-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]

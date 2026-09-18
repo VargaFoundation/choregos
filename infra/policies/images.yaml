@@ -1,0 +1,41 @@
+# Les images de la plateforme et des runners sont signées par la fondation et référencées
+# par digest. Une image non signée ne démarre pas — c'est un mécanisme, pas une consigne.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-verify-images
+  annotations:
+    policies.kyverno.io/description: >-
+      Vérifie la signature cosign des images Choregos et impose la référence par digest.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verifier-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: ["choregos-*", "proj-*"]
+      verifyImages:
+        - imageReferences: ["ghcr.io/vargafoundation/*"]
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/VargaFoundation/choregos/.github/workflows/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+          mutateDigest: true
+          required: true
+    - name: interdire-latest
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: ["choregos-*", "proj-*"]
+      validate:
+        message: "les images doivent être référencées par digest ou par version, jamais par `latest`"
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"

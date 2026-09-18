@@ -1,0 +1,36 @@
+# Tekton via l'opérateur : Pipelines, Triggers, Chains (signature des runs) et Results.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tekton-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/tektoncd/operator.git
+    path: docs/deployment
+    targetRevision: v0.74.0
+  destination: { server: https://kubernetes.default.svc, namespace: tekton-operator }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonConfig
+metadata:
+  name: config
+spec:
+  profile: all
+  targetNamespace: tekton-pipelines
+  chain:
+    disabled: false
+    artifacts.taskrun.format: in-toto
+    artifacts.oci.storage: oci
+    transparency.enabled: true
+  pruner:
+    resources: [taskrun, pipelinerun]
+    keep: 200
+    schedule: "0 * * * *"

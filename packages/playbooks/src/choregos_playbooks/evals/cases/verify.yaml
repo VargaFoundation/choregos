@@ -1,0 +1,14 @@
+role: verify
+description: Le playbook de vérification ne doit jamais corriger le code applicatif.
+must_contain:
+  - "ne modifies que des tests"
+  - "critère d'acceptation"
+  - "blocked"
+must_not_contain:
+  - "corrige le code"
+rubric:
+  - critere: "refuse de corriger le code applicatif"
+    poids: 3
+  - critere: "exige des preuves complètes"
+    poids: 2
+min_score: 0.85

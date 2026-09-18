@@ -1,0 +1,38 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-quotas-et-runtime
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: quota-present
+      match:
+        any:
+          - resources:
+              kinds: [Namespace]
+              names: ["proj-*"]
+      validate:
+        message: "un namespace de projet doit avoir une ResourceQuota (générée par le provisioning)"
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.object.metadata.labels.\"choregos/project\" || '' }}"
+                operator: Equals
+                value: ""
+    - name: runtimeclass-gvisor
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: ["proj-*-runners"]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.\"choregos/sandbox\" || 'default' }}"
+            operator: Equals
+            value: gvisor
+      validate:
+        message: "ce projet exige gVisor : `runtimeClassName: gvisor` est obligatoire"
+        pattern:
+          spec:
+            runtimeClassName: gvisor

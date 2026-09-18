@@ -1,0 +1,10 @@
+# Staging : données synthétiques, promotion automatique depuis `main`.
+global:
+  domain: staging.choregos.dev
+  environment: staging
+  fakes: false
+  logLevel: INFO
+choregos-api:
+  replicaCount: 2
+choregos-web:
+  replicaCount: 2

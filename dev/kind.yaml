@@ -1,0 +1,21 @@
+# Cluster de développement : un plan de contrôle, deux workers dont un « runners ».
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: choregos
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - { containerPort: 30080, hostPort: 8080, protocol: TCP }   # Gateway HTTP
+      - { containerPort: 30300, hostPort: 3000, protocol: TCP }   # front
+      - { containerPort: 30800, hostPort: 8000, protocol: TCP }   # API
+      - { containerPort: 30808, hostPort: 8088, protocol: TCP }   # Temporal UI
+  - role: worker
+    labels: { role: platform }
+  - role: worker
+    labels: { role: runners }

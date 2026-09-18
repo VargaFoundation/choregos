@@ -1,0 +1,24 @@
+# Développement local (kind) : une réplique de chaque chose, connecteurs simulés.
+global:
+  domain: choregos.local
+  environment: dev
+  fakes: true
+  logLevel: DEBUG
+  externalSecrets:
+    enabled: false
+choregos-api:
+  replicaCount: 1
+  autoscaling: { enabled: false }
+  podDisruptionBudget: { enabled: false }
+choregos-web:
+  replicaCount: 1
+choregos-orchestrator:
+  queues:
+    - name: orchestrator
+      replicas: 1
+      resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+monitoring:
+  serviceMonitor: false
+  alerts: false
+networkPolicies:
+  enabled: false

@@ -1,0 +1,87 @@
+{
+  "realm": "choregos",
+  "enabled": true,
+  "displayName": "Choregos (développement)",
+  "registrationAllowed": false,
+  "groups": [
+    {
+      "name": "product-owners"
+    },
+    {
+      "name": "release-captains"
+    },
+    {
+      "name": "developers"
+    },
+    {
+      "name": "org-admins"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "choregos",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "dev-secret",
+      "redirectUris": [
+        "http://localhost:8000/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "claim.name": "groups",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "augustin",
+      "enabled": true,
+      "email": "augustin@varga.dev",
+      "firstName": "Augustin",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "choregos",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/org-admins",
+        "/product-owners"
+      ]
+    },
+    {
+      "username": "marie",
+      "enabled": true,
+      "email": "marie@varga.dev",
+      "firstName": "Marie",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "choregos",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/release-captains"
+      ]
+    }
+  ]
+}

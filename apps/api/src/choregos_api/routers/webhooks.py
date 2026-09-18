@@ -72,7 +72,7 @@ async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
     for event in events:
         project = await _project_for(session, event.project_slug)
         if project is None:
-            logger.info("événement sans projet connu", type=str(event.type), slug=event.project_slug)
+            logger.info("événement sans projet connu", event_type=str(event.type), slug=event.project_slug)
             continue
         key = event.work_item_key
         if key is None:
@@ -320,5 +320,5 @@ async def gitlab_webhook(
         raise unauthorized("jeton GitLab invalide")
     if await _already_seen(session, "gitlab", body_digest(body), x_gitlab_event, body):
         return WebhookAck(accepted=True, duplicate=True)
-    logger.info("webhook GitLab reçu (adaptateur S13 non activé)", event=x_gitlab_event)
+    logger.info("webhook GitLab reçu (adaptateur S13 non activé)", gitlab_event=x_gitlab_event)
     return WebhookAck(accepted=True, events=0)

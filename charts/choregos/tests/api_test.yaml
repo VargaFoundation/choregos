@@ -1,0 +1,37 @@
+# helm unittest : ce que le chart doit garantir, quoi qu'il arrive.
+suite: API Choregos
+templates:
+  - charts/api/templates/deployment.yaml
+  - charts/api/templates/migrations-job.yaml
+tests:
+  - it: pose un contexte de sécurité non-root
+    template: charts/api/templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+
+  - it: expose des sondes de vie et de disponibilité
+    template: charts/api/templates/deployment.yaml
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.containers[0].readinessProbe
+      - isNotNull:
+          path: spec.template.spec.containers[0].livenessProbe
+
+  - it: ne met jamais un secret en clair dans l'environnement
+    template: charts/api/templates/deployment.yaml
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].env[?(@.name=="CHOREGOS_SESSION_SECRET")].value
+          pattern: ".+"
+
+  - it: exécute les migrations avant la mise à jour des pods
+    template: charts/api/templates/migrations-job.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: pre-install,pre-upgrade

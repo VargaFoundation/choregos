@@ -1,0 +1,119 @@
+# Valeurs par défaut de la plateforme. Chaque environnement surcharge ce qui le concerne
+# dans `choregos-infra/platform/overlays/<env>/values.yaml`.
+
+global:
+  domain: choregos.local
+  imageRegistry: ghcr.io/vargafoundation
+  imageTag: "1.0.0"
+  imagePullPolicy: IfNotPresent
+  # Les images sont référencées par digest en staging et en prod (politique Kyverno).
+  imageDigest: ""
+  environment: dev
+  fakes: false
+  logLevel: INFO
+  serviceAccount:
+    annotations: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    seccompProfile: { type: RuntimeDefault }
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: { drop: ["ALL"] }
+  database:
+    host: choregos-pg-rw.choregos-data.svc
+    port: 5432
+    name: choregos
+    user: choregos
+    secretRef: choregos-db
+  temporal:
+    address: temporal-frontend.choregos-temporal.svc:7233
+    namespace: default
+  gateway:
+    url: http://litellm.choregos-gateway.svc:4000
+  memory:
+    url: http://ecphoria.choregos-memory.svc:8432
+  objectStore:
+    url: s3://choregos
+  oidc:
+    issuer: https://keycloak.choregos.local/realms/choregos
+    clientId: choregos
+    secretRef: choregos-oidc
+  externalSecrets:
+    enabled: true
+    storeRef: choregos-cluster-store
+    refreshInterval: 1h
+
+choregos-api:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: choregos-api
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  migrations:
+    enabled: true
+  ingress:
+    enabled: true
+    hostnames: ["api.choregos.local", "hooks.choregos.local"]
+    gateway: choregos-gateway
+
+choregos-web:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: choregos-web
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  ingress:
+    enabled: true
+    hostnames: ["app.choregos.local"]
+    gateway: choregos-gateway
+
+choregos-orchestrator:
+  enabled: true
+  image:
+    repository: choregos-orchestrator
+  # Un déploiement par task queue : les appels externes lents n'étouffent pas la boucle de décision.
+  queues:
+    - name: orchestrator
+      replicas: 2
+      resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } }
+    - name: executor
+      replicas: 2
+      resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } }
+    - name: tracker
+      replicas: 2
+      resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+    - name: memory
+      replicas: 1
+      resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+  runner:
+    image: choregos-runner
+    tag: "1.0.0"
+    namespacePattern: "proj-{slug}-runners"
+    executor: tekton
+
+choregos-tools:
+  enabled: true
+  image:
+    repository: choregos-tools
+  # L'image du sidecar est publiée ici ; la Task Tekton la référence dans chaque projet.
+  publishTask: true
+
+monitoring:
+  serviceMonitor: true
+  dashboards: true
+  alerts: true
+
+networkPolicies:
+  enabled: true

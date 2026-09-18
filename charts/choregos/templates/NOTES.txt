@@ -1,0 +1,15 @@
+Choregos {{ .Chart.AppVersion }} est déployé dans le namespace {{ .Release.Namespace }}.
+
+  Front      https://app.{{ .Values.global.domain }}
+  API        https://api.{{ .Values.global.domain }}
+  Webhooks   https://hooks.{{ .Values.global.domain }}/api/v1/webhooks/github
+
+Vérifier que tout répond :
+
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/part-of=choregos
+  kubectl -n {{ .Release.Namespace }} logs deploy/choregos-api --tail=50
+
+{{- if .Values.global.fakes }}
+
+⚠ `global.fakes` est actif : les connecteurs sont simulés. À n'utiliser qu'en développement.
+{{- end }}

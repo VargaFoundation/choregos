@@ -74,7 +74,7 @@ async def get_release(id: str, session: Db, principal: Me) -> ReleaseDto:
 @router.get("/projects/{id}/trains/{env}", response_model=TrainStatusDto, operation_id="getTrainStatus")
 async def train_status(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db) -> TrainStatusDto:
     """État du train : lot en attente, verrou, prochain départ. Source : le workflow, sinon la base."""
-    live = await get_temporal().query(train_id(ctx.slug, env), "status")
+    live = await get_temporal().query(train_id(ctx.slug, env), "status_query")
     current = (
         await session.execute(
             select(Release)

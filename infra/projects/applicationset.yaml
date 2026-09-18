@@ -1,0 +1,33 @@
+# Un projet provisionné = un répertoire dans `projects/`. L'ApplicationSet fait le reste :
+# création, synchronisation, et `prune` propre à la suppression du répertoire.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: choregos-projects
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: https://github.com/VargaFoundation/choregos-infra.git
+        revision: HEAD
+        directories:
+          - path: projects/*
+  template:
+    metadata:
+      name: "choregos-project-{{ .path.basename }}"
+      labels:
+        choregos/project: "{{ .path.basename }}"
+      finalizers: [resources-finalizer.argocd.argoproj.io]
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/VargaFoundation/choregos-infra.git
+        targetRevision: HEAD
+        path: "{{ .path.path }}"
+      destination: { server: https://kubernetes.default.svc }
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]

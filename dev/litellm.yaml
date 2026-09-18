@@ -1,0 +1,32 @@
+# Gateway de développement : un fournisseur factice par défaut, un vrai modèle si
+# `LITELLM_REAL=1` et que les clés sont dans l'environnement.
+model_list:
+  - model_name: platform/standard
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_base: http://localhost:4010/v1
+      api_key: fake-key
+      mock_response: "réponse simulée du fournisseur de développement"
+  - model_name: platform/cheap
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_base: http://localhost:4010/v1
+      api_key: fake-key
+      mock_response: "réponse simulée"
+  - model_name: platform/embed
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
+
+router_settings:
+  num_retries: 1
+  timeout: 120
+
+litellm_settings:
+  drop_params: true
+  callbacks: []
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: true

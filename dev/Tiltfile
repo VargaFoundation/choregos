@@ -1,0 +1,74 @@
+# -*- mode: Python -*-
+# Rechargement à chaud de l'API, du front, des workers, du runner et du sidecar.
+# `make dev-up` monte le cluster kind puis lance `tilt up` avec ce fichier.
+
+load('ext://restart_process', 'docker_build_with_restart')
+
+allow_k8s_contexts('kind-choregos')
+
+NAMESPACE = 'choregos-system'
+
+k8s_yaml(namespace_yaml(NAMESPACE))
+k8s_yaml(helm(
+    '../charts/choregos',
+    name='choregos',
+    namespace=NAMESPACE,
+    values=['../charts/choregos/values.yaml', '../charts/choregos/values/dev.yaml'],
+))
+
+# ── images, reconstruites à chaque changement ──
+docker_build_with_restart(
+    'ghcr.io/vargafoundation/choregos-api',
+    context='..',
+    dockerfile='../docker/api.Dockerfile',
+    entrypoint=['uvicorn', 'choregos_api.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
+    live_update=[
+        sync('../apps/api/src', '/app/apps/api/src'),
+        sync('../packages', '/app/packages'),
+    ],
+)
+
+docker_build_with_restart(
+    'ghcr.io/vargafoundation/choregos-orchestrator',
+    context='..',
+    dockerfile='../docker/orchestrator.Dockerfile',
+    entrypoint=['python', '-m', 'choregos_orchestrator.worker'],
+    live_update=[
+        sync('../apps/orchestrator/src', '/app/apps/orchestrator/src'),
+        sync('../packages', '/app/packages'),
+    ],
+)
+
+docker_build(
+    'ghcr.io/vargafoundation/choregos-web',
+    context='..',
+    dockerfile='../docker/web.Dockerfile',
+    live_update=[sync('../apps/web/src', '/app/apps/web/src')],
+)
+
+docker_build('ghcr.io/vargafoundation/choregos-tools', context='..', dockerfile='../docker/tools.Dockerfile')
+docker_build('ghcr.io/vargafoundation/choregos-runner', context='..', dockerfile='../docker/runner.Dockerfile')
+
+# ── accès local ──
+k8s_resource('choregos-api', port_forwards=['8000:8000'], labels=['plateforme'])
+k8s_resource('choregos-web', port_forwards=['3000:3000'], labels=['plateforme'])
+k8s_resource('choregos-orchestrator-orchestrator', labels=['plateforme'])
+
+# ── commandes utiles depuis l'interface Tilt ──
+local_resource('seed', cmd='make -C .. dev-seed', auto_init=False, trigger_mode=TRIGGER_MODE_MANUAL,
+               labels=['outils'])
+local_resource('démo hors ligne', cmd='make -C .. demo', auto_init=False,
+               trigger_mode=TRIGGER_MODE_MANUAL, labels=['outils'])
+local_resource('tests', cmd='make -C .. test', auto_init=False, trigger_mode=TRIGGER_MODE_MANUAL,
+               labels=['outils'])
+
+
+def namespace_yaml(name):
+    return blob("""
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: %s
+  labels:
+    kubernetes.io/metadata.name: %s
+""" % (name, name))

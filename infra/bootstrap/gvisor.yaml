@@ -1,0 +1,45 @@
+# gVisor sur le pool `runners` : le shim est installé par un DaemonSet, la RuntimeClass
+# est déclarée pour que les PipelineRun des projets puissent l'exiger.
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gvisor
+handler: runsc
+scheduling:
+  nodeSelector:
+    role: runners
+  tolerations:
+    - key: role
+      operator: Equal
+      value: runners
+      effect: NoSchedule
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gvisor-installer
+  namespace: kube-system
+  labels: { app.kubernetes.io/part-of: choregos }
+spec:
+  selector:
+    matchLabels: { name: gvisor-installer }
+  template:
+    metadata:
+      labels: { name: gvisor-installer }
+    spec:
+      nodeSelector: { role: runners }
+      tolerations:
+        - { key: role, operator: Equal, value: runners, effect: NoSchedule }
+      hostPID: true
+      initContainers:
+        - name: install
+          image: ghcr.io/vargafoundation/gvisor-installer:1.0.0
+          securityContext: { privileged: true }
+          volumeMounts:
+            - { name: host, mountPath: /host }
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+      volumes:
+        - name: host
+          hostPath: { path: / }

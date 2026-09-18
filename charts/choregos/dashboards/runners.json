@@ -1,0 +1,25 @@
+{
+  "title": "Choregos — Runners",
+  "uid": "choregos-runners",
+  "tags": ["choregos"],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Runs par état",
+      "targets": [{ "expr": "sum(choregos_runs_total) by (status)" }],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Permissions refusées par run",
+      "targets": [{ "expr": "sum(rate(choregos_permission_denials_total[1h])) by (project)" }],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Itérations de la boucle DoD",
+      "targets": [{ "expr": "histogram_quantile(0.9, sum(rate(choregos_dod_iterations_bucket[6h])) by (le))" }],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    }
+  ]
+}
