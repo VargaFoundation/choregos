@@ -8,6 +8,8 @@ export type {
   ConnectorTestResult,
   CostReport,
   DiffSummary,
+  DoraMetric,
+  DoraReport,
   FindingPage,
   FindingRecord,
   GatewayModel,

@@ -570,6 +570,24 @@ export type CostReport = {
   };
 };
 
+export type DoraMetric = {
+  value?: number;
+  unit: string;
+  level?: "elite" | "high" | "medium" | "low" | "unknown";
+  sample?: number;
+};
+
+export type DoraReport = {
+  env?: string;
+  since: string;
+  until: string;
+  deployments?: number;
+  deployment_frequency: DoraMetric;
+  lead_time: DoraMetric;
+  change_failure_rate: DoraMetric;
+  time_to_restore: DoraMetric;
+};
+
 export type TemplateSummary = {
   name: string;
   version: string;
@@ -704,6 +722,7 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
+  exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
 }; response: void };
@@ -713,6 +732,7 @@ export interface Operations {
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
   getProjectCosts: { method: "GET"; path: "/projects/{id}/costs"; body: never; response: CostReport };
+  getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
   getProjectModels: { method: "GET"; path: "/projects/{id}/models"; body: never; response: ProjectModels };
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };

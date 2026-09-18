@@ -7,6 +7,7 @@
  */
 import type {
   CostReport,
+  DoraReport,
   FindingPage,
   MeDto,
   Memory,
@@ -393,6 +394,17 @@ export const costs: CostReport = {
   total: { cost_usd: 42.6, cost_eur: 39.2, budget_usd: 150 },
 };
 
+export const dora: DoraReport = {
+  env: "prod",
+  since: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
+  until: now.toISOString(),
+  deployments: 23,
+  deployment_frequency: { value: 0.77, unit: "par jour", level: "high", sample: 23 },
+  lead_time: { value: 9.4, unit: "heures (médiane)", level: "elite", sample: 23 },
+  change_failure_rate: { value: 0.087, unit: "part des mises en production", level: "high", sample: 23 },
+  time_to_restore: { value: 1.6, unit: "heures (médiane)", level: "high", sample: 2 },
+};
+
 export const workflow: WorkflowDef = {
   name: "default-simple",
   version: 1,
@@ -432,6 +444,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/trains\/prod$/, trains.prod],
     [/^\/projects\/[^/]+\/trains\/staging$/, trains.staging],
     [/^\/projects\/[^/]+\/costs$/, costs],
+    [/^\/projects\/[^/]+\/metrics\/dora$/, dora],
     [/^\/projects\/[^/]+\/workflow$/, workflow],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],

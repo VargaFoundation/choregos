@@ -556,6 +556,28 @@ class CostReport(Dto):
     total: CostTotal = Field(default_factory=CostTotal)
 
 
+class DoraMetric(Dto):
+    """Une des quatre mesures DORA, avec le palier (`elite`…`low`) et son échantillon."""
+
+    value: float | None = None
+    unit: str
+    level: str = "unknown"
+    sample: int = 0
+
+
+class DoraReport(Dto):
+    """Les quatre mesures DORA, calculées sur les déploiements réellement enregistrés."""
+
+    env: str = "prod"
+    since: datetime
+    until: datetime
+    deployments: int = 0
+    deployment_frequency: DoraMetric
+    lead_time: DoraMetric
+    change_failure_rate: DoraMetric
+    time_to_restore: DoraMetric
+
+
 class TemplateSummary(Dto):
     name: str
     version: str

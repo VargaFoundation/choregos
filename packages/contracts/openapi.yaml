@@ -459,6 +459,30 @@ paths:
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
+  /projects/{id}/costs.csv:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [costs]
+      operationId: exportProjectCostsCsv
+      summary: Le rapport de coûts en CSV (séparateur `;`, BOM UTF-8)
+      parameters:
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size], default: day } }
+        - { name: since, in: query, schema: { type: string, format: date } }
+        - { name: until, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Rapport de coûts en CSV, content: { text/csv: { schema: { type: string } } } }
+  /projects/{id}/metrics/dora:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [costs]
+      operationId: getProjectDora
+      summary: Les quatre mesures DORA, dérivées des déploiements enregistrés
+      parameters:
+        - { name: env, in: query, schema: { type: string, default: prod } }
+        - { name: since, in: query, schema: { type: string, format: date } }
+        - { name: until, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DoraReport" } } } }
   /orgs/{org}/costs:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1360,6 +1384,26 @@ components:
             cost_usd: { type: number }
             cost_eur: { type: number }
             budget_usd: { type: [number, "null"] }
+    DoraMetric:
+      type: object
+      required: [unit]
+      properties:
+        value: { type: number, nullable: true }
+        unit: { type: string }
+        level: { type: string, enum: [elite, high, medium, low, unknown], default: unknown }
+        sample: { type: integer, default: 0 }
+    DoraReport:
+      type: object
+      required: [since, until, deployment_frequency, lead_time, change_failure_rate, time_to_restore]
+      properties:
+        env: { type: string, default: prod }
+        since: { type: string, format: date-time }
+        until: { type: string, format: date-time }
+        deployments: { type: integer, default: 0 }
+        deployment_frequency: { $ref: "#/components/schemas/DoraMetric" }
+        lead_time: { $ref: "#/components/schemas/DoraMetric" }
+        change_failure_rate: { $ref: "#/components/schemas/DoraMetric" }
+        time_to_restore: { $ref: "#/components/schemas/DoraMetric" }
     TemplateSummary:
       type: object
       required: [name, version, display, is_published]

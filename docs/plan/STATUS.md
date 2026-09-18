@@ -58,7 +58,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S5-06 | S5 | ✅ | — | trains : lot, départ, gel avec motif obligatoire, approbation confirmée |
 | S5-07 | S5 | ✅ | — | findings et mémoire (recherche, file `pending`) |
 | S5-08 | S5 | ✅ | — | paramètres (connecteurs, politique, matrice) et administration (audit) |
-| S5-09 | S5 | 🟡 | — | vue d'ensemble avec coûts et qualité ; DORA et export CSV à compléter |
+| S5-09 | S5 | ✅ | — | vue d'ensemble : coûts, qualité, quatre mesures DORA, export CSV des coûts |
 | S5-10 | S5 | ✅ | — | 7 parcours Playwright en mode démo ; accessibilité de base |
 | S6-01 | S6 | ✅ | — | FastAPI, RFC 9457, structlog, SQLAlchemy async, Alembic, RLS PostgreSQL |
 | S6-02 | S6 | ✅ | — | OIDC, sessions signées, jetons d'API, RBAC 5 rôles, audit systématique |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | ⬜ | — | exécuteur ACA et template azure-devops-aca |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 84 livrées, 15 partielles, 3 non commencées.
+**Total** : 85 livrées, 14 partielles, 3 non commencées.
 
 ## Ce qui tient debout aujourd'hui
 

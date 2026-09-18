@@ -643,6 +643,8 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
 @activity.defn(name="signal_train")
 async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
     """Annonce au train de l'environnement qu'un ticket est prêt à embarquer."""
+    from choregos_core import utcnow
+
     from ..activities.base import db, load_work_item, project_bundle
     from ..train_client import signal_release_train
 
@@ -656,6 +658,7 @@ async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
             {
                 "work_item_key": item.tracker_key,
                 "title": item.title,
+                "merged_at": utcnow().isoformat(),
                 "sha": (item.documents or {}).get("merge_sha", ""),
                 "risk": item.risk,
                 "labels": [],

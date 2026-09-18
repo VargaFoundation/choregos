@@ -63,6 +63,22 @@ async def test_deux_merges_partent_dans_le_meme_lot(platform: Platform, worker: 
     env, changes, tag = platform.adapters.cd.promotions[0]
     assert env == "prod" and changes[0].app == "billing-api" and tag.startswith("R-")
 
+    # La ligne de déploiement est close : sans cela, les mesures de livraison ne sauraient
+    # pas distinguer une mise en production réussie d'une promotion restée en l'air.
+    from choregos_api.db.models import Deployment
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        rows = (await session.execute(select(Deployment))).scalars().all()
+        assert [row.status for row in rows] == ["succeeded"]
+        assert all(row.ended_at is not None for row in rows)
+
+    dora = (await platform.client.get(f"/api/v1/projects/{platform.project_id}/metrics/dora")).json()
+    assert dora["deployments"] == 1
+    assert dora["change_failure_rate"]["value"] == 0.0
+    assert dora["deployment_frequency"]["level"] != "unknown"
+
 
 async def test_canary_casse_declenche_rollback_et_gel(platform: Platform, worker: Any) -> None:
     await login(platform.client)
@@ -93,6 +109,11 @@ async def test_canary_casse_declenche_rollback_et_gel(platform: Platform, worker
     findings = (await platform.client.get(f"/api/v1/projects/{platform.project_id}/findings")).json()
     assert any(item["severity"] == "critical" for item in findings["items"]), "l'incident est tracé"
     assert any("Rollback" in message.title for _, message in platform.adapters.notify.sent)
+
+    dora = (await platform.client.get(f"/api/v1/projects/{platform.project_id}/metrics/dora")).json()
+    assert dora["deployments"] == 0, "un rollback n'est pas une mise en production"
+    assert dora["change_failure_rate"]["value"] == 1.0
+    assert dora["change_failure_rate"]["level"] == "low"
 
 
 async def test_gel_manuel_bloque_le_depart(platform: Platform, worker: Any) -> None:

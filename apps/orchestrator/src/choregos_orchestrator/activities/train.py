@@ -204,6 +204,29 @@ async def promote(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "promotion_url": ref.url, "revision": tag}
 
 
+async def _close_deployment(session: Any, release_id: str, status: str) -> None:
+    """Clôt la ligne de déploiement ouverte par `promote`.
+
+    Sans cette clôture, un déploiement resterait éternellement « promoting » : les
+    métriques de livraison ne sauraient pas distinguer une mise en production réussie
+    d'une qui a été annulée.
+    """
+    row = (
+        (
+            await session.execute(
+                select(Deployment)
+                .where(Deployment.release_id == release_id, Deployment.ended_at.is_(None))
+                .order_by(Deployment.started_at.desc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if row is not None:
+        row.status = status
+        row.ended_at = utcnow()
+
+
 @activity.defn(name="run_smoke")
 async def run_smoke(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
@@ -314,6 +337,7 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
         release.status = "done"
         release.ended_at = utcnow()
         release.approved_by = payload.get("approved_by") or release.approved_by
+        await _close_deployment(session, release.id, "succeeded")
         notes = _release_notes(release)
         release.notes = notes
         for item in release.items:
@@ -371,6 +395,7 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
             release.status = "rolled_back"
             release.ended_at = utcnow()
             release.verdict = {"go": False, "reason": payload.get("reason", "")}
+            await _close_deployment(session, release.id, "rolled_back")
             session.add(
                 Finding(
                     project_id=bundle.project.id,

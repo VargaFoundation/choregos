@@ -1,19 +1,22 @@
-"""Coûts : agrégats par jour, étape, modèle, backend, taille — et par organisation."""
+"""Coûts : agrégats par jour, étape, modèle, backend, taille, export CSV — et métriques DORA."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+import csv
+import io
+from datetime import UTC, date, datetime, timedelta
+from statistics import median
 from typing import Annotated, Any
 
-from choregos_core import utcnow
-from fastapi import APIRouter, Query
+from choregos_core import aware, utcnow
+from fastapi import APIRouter, Query, Response
 from sqlalchemy import func, select
 
-from ..db.models import CostLedger, Organization, Project
+from ..db.models import CostLedger, Deployment, Organization, Project, Release
 from ..deps import Db, Me, ProjectCtx
 from ..errors import forbidden, not_found
 from ..rbac import Permission
-from ..schemas import CostReport, CostRow, CostTotal
+from ..schemas import CostReport, CostRow, CostTotal, DoraMetric, DoraReport
 from ..services import active_policy, policy_model
 
 router = APIRouter(tags=["costs"])
@@ -128,3 +131,171 @@ async def org_costs(
         for row in report.rows:
             row.key = slugs.get(row.key, row.key)
     return report
+
+
+@router.get(
+    "/projects/{id}/costs.csv",
+    operation_id="exportProjectCostsCsv",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}, "description": "Rapport de coûts en CSV"}},
+)
+async def project_costs_csv(
+    ctx: ProjectCtx,
+    session: Db,
+    group_by: Annotated[str, Query(pattern="^(day|stage|model|backend|size)$")] = "day",
+    since: Annotated[date | None, Query()] = None,
+    until: Annotated[date | None, Query()] = None,
+) -> Response:
+    """Le même rapport, en CSV : de quoi le recoller dans un tableur ou une facturation."""
+    report = await project_costs(ctx, session, group_by=group_by, since=since, until=until)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";")
+    writer.writerow([group_by, "cout_usd", "cout_eur", "tokens_in", "tokens_out", "tokens_caches", "runs"])
+    for row in report.rows:
+        writer.writerow(
+            [
+                row.key,
+                f"{row.cost_usd:.6f}",
+                f"{row.cost_eur:.6f}",
+                row.tokens_in,
+                row.tokens_out,
+                row.tokens_cached,
+                row.runs,
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(["total", f"{report.total.cost_usd:.6f}", f"{report.total.cost_eur:.6f}"])
+    if report.total.budget_usd is not None:
+        writer.writerow(["budget_quotidien_usd", f"{report.total.budget_usd:.2f}"])
+    filename = f"couts-{ctx.slug}-{group_by}-{utcnow():%Y%m%d}.csv"
+    return Response(
+        # Excel francophone lit le point-virgule ; le BOM lui évite de casser les accents.
+        content="﻿" + buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ───────────────────────── métriques de livraison (DORA) ─────────────────────────
+
+FREQUENCY_LEVELS = ((1.0, "elite"), (1 / 7, "high"), (1 / 30, "medium"))
+LEAD_TIME_LEVELS = ((24.0, "elite"), (24.0 * 7, "high"), (24.0 * 30, "medium"))
+RESTORE_LEVELS = ((1.0, "elite"), (24.0, "high"), (24.0 * 7, "medium"))
+FAILURE_LEVELS = ((0.05, "elite"), (0.10, "high"), (0.15, "medium"))
+
+
+def _level(value: float | None, thresholds: tuple[tuple[float, str], ...], *, higher_is_better: bool) -> str:
+    if value is None:
+        return "unknown"
+    for limit, name in thresholds:
+        if (value >= limit) if higher_is_better else (value <= limit):
+            return name
+    return "low"
+
+
+def _hours(start: datetime | None, end: datetime | None) -> float | None:
+    """Écart en heures, robuste aux horodatages naïfs rendus par SQLite."""
+    if start is None or end is None:
+        return None
+    from choregos_core import elapsed_seconds
+
+    delta = elapsed_seconds(start, end) / 3600
+    return delta if delta >= 0 else None
+
+
+@router.get("/projects/{id}/metrics/dora", response_model=DoraReport, operation_id="getProjectDora")
+async def project_dora(
+    ctx: ProjectCtx,
+    session: Db,
+    env: Annotated[str, Query(pattern="^[a-z0-9-]{1,32}$")] = "prod",
+    since: Annotated[date | None, Query()] = None,
+    until: Annotated[date | None, Query()] = None,
+) -> DoraReport:
+    """Les quatre mesures DORA, dérivées des déploiements et des rollbacks enregistrés.
+
+    Rien n'est déclaré à la main : la fréquence vient des lignes `deployments` clôturées,
+    le délai de livraison de l'écart entre la fusion d'un ticket et la mise en production
+    du lot qui le portait, le taux d'échec des rollbacks, et le délai de rétablissement
+    de l'écart entre un rollback et le déploiement réussi qui l'a suivi.
+    """
+    # Les deux bornes sont conscientes du fuseau : SQLite rend des horodatages naïfs et
+    # les soustraire à une borne aware lèverait un TypeError en pleine requête.
+    start = datetime.combine(since, datetime.min.time(), tzinfo=UTC) if since else _default_since()
+    end = datetime.combine(until, datetime.max.time(), tzinfo=UTC) if until else utcnow()
+    rows = (
+        (
+            await session.execute(
+                select(Deployment, Release)
+                .join(Release, Deployment.release_id == Release.id)
+                .where(
+                    Release.project_id == ctx.id,
+                    Deployment.env == env,
+                    Deployment.started_at >= start,
+                    Deployment.started_at <= end,
+                )
+                .order_by(Deployment.started_at)
+            )
+        )
+        .tuples()
+        .all()
+    )
+    succeeded = [(d, r) for d, r in rows if d.status == "succeeded"]
+    failed = [(d, r) for d, r in rows if d.status == "rolled_back"]
+    finished = succeeded + failed
+
+    days = max(1.0, ((end - start).total_seconds() / 86400))
+    frequency = len(succeeded) / days
+
+    lead_times: list[float] = []
+    for deployment, release in succeeded:
+        for item in release.items or []:
+            merged_at = item.get("merged_at")
+            if not merged_at:
+                continue
+            hours = _hours(datetime.fromisoformat(str(merged_at)), deployment.ended_at)
+            if hours is not None:
+                lead_times.append(hours)
+
+    restores: list[float] = []
+    ordered = sorted(finished, key=lambda pair: aware(pair[0].started_at) or start)
+    for index, (deployment, _release) in enumerate(ordered):
+        if deployment.status != "rolled_back":
+            continue
+        following = next((d for d, _ in ordered[index + 1 :] if d.status == "succeeded"), None)
+        hours = _hours(deployment.ended_at, following.ended_at) if following else None
+        if hours is not None:
+            restores.append(hours)
+
+    failure_rate = (len(failed) / len(finished)) if finished else None
+    lead_p50 = median(lead_times) if lead_times else None
+    restore_p50 = median(restores) if restores else None
+    return DoraReport(
+        env=env,
+        since=start,
+        until=end,
+        deployments=len(succeeded),
+        deployment_frequency=DoraMetric(
+            value=round(frequency, 4),
+            unit="par jour",
+            level=_level(frequency, FREQUENCY_LEVELS, higher_is_better=True) if succeeded else "unknown",
+            sample=len(succeeded),
+        ),
+        lead_time=DoraMetric(
+            value=round(lead_p50, 2) if lead_p50 is not None else None,
+            unit="heures (médiane)",
+            level=_level(lead_p50, LEAD_TIME_LEVELS, higher_is_better=False),
+            sample=len(lead_times),
+        ),
+        change_failure_rate=DoraMetric(
+            value=round(failure_rate, 4) if failure_rate is not None else None,
+            unit="part des mises en production",
+            level=_level(failure_rate, FAILURE_LEVELS, higher_is_better=False),
+            sample=len(finished),
+        ),
+        time_to_restore=DoraMetric(
+            value=round(restore_p50, 2) if restore_p50 is not None else None,
+            unit="heures (médiane)",
+            level=_level(restore_p50, RESTORE_LEVELS, higher_is_better=False),
+            sample=len(restores),
+        ),
+    )

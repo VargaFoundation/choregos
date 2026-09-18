@@ -12,6 +12,7 @@ import type {
   ConnectorDto,
   ConnectorTestResult,
   CostReport,
+  DoraReport,
   FindingPage,
   MeDto,
   Memory,
@@ -127,6 +128,10 @@ export const api = {
     }),
 
   costs: (id: string, groupBy = "day") => request<CostReport>(`/projects/${id}/costs${query({ group_by: groupBy })}`),
+  dora: (id: string, env = "prod") => request<DoraReport>(`/projects/${id}/metrics/dora${query({ env })}`),
+  /** Lien de téléchargement direct : le navigateur l'ouvre, le CSV arrive avec sa session. */
+  costsCsvUrl: (id: string, groupBy = "day") =>
+    `${API_BASE}/projects/${id}/costs.csv${query({ group_by: groupBy })}`,
   modelMatrix: (id: string) => request<ModelMatrix>(`/projects/${id}/models/matrix`),
   audit: () => request<AuditPage>("/audit"),
 };
