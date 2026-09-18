@@ -78,3 +78,7 @@ class FakeExecutor:
 
     def result_for(self, run_id: str) -> StageResult | None:
         return self.results.get(run_id)
+
+    async def fetch_result(self, ref: ExecRef) -> StageResult | None:
+        """Équivalent du `result-url` Tekton : le résultat produit par le runner."""
+        return self.results.get(ref.run_id or "")

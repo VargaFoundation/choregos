@@ -1,0 +1,65 @@
+# Task d'exécution d'une étape agent (docs/plan/02 §2.3).
+# Le workspace est éphémère, le conteneur non-root, le token de run vient d'un Secret
+# créé pour ce run et supprimé après.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: choregos-agent-stage
+  labels:
+    app.kubernetes.io/part-of: choregos
+spec:
+  description: Exécute une étape d'agent Choregos et publie son StageResult.
+  params:
+    - { name: run-id, type: string }
+    - { name: api-url, type: string }
+    - { name: runner-image, type: string, default: "ghcr.io/vargafoundation/choregos-runner:1.0.0" }
+    - { name: tools-image, type: string, default: "ghcr.io/vargafoundation/choregos-tools:1.0.0" }
+  workspaces:
+    - name: source
+      description: Espace de travail éphémère du run (PVC volumeClaimTemplate)
+  results:
+    - { name: result-url, description: URL du StageResult publié }
+    - { name: status, description: statut final du run }
+  stepTemplate:
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: false
+      seccompProfile: { type: RuntimeDefault }
+      capabilities: { drop: [ALL] }
+    env:
+      - { name: CHOREGOS_RUN_ID, value: $(params.run-id) }
+      - { name: CHOREGOS_API_URL, value: $(params.api-url) }
+      - name: CHOREGOS_RUN_TOKEN
+        valueFrom:
+          secretKeyRef: { name: run-$(params.run-id), key: token }
+      - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.monitoring:4318" }
+      - { name: HOME, value: $(workspaces.source.path) }
+  steps:
+    - name: run
+      image: $(params.runner-image)
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        choregos-runner run \
+          --write-result-url "$(results.result-url.path)" \
+          --write-status "$(results.status.path)"
+      resources:
+        requests: { cpu: "1", memory: 2Gi }
+        limits: { cpu: "2", memory: 6Gi }
+      timeout: 2h
+  sidecars:
+    - name: choregos-tools
+      image: $(params.tools-image)
+      env:
+        - name: CHOREGOS_RUN_TOKEN
+          valueFrom:
+            secretKeyRef: { name: run-$(params.run-id), key: token }
+        - { name: CHOREGOS_API_URL, value: $(params.api-url) }
+        - { name: CHOREGOS_RUN_ID, value: $(params.run-id) }
+        - { name: CHOREGOS_TOOLS_PORT, value: "7777" }
+      readinessProbe:
+        httpGet: { path: /healthz, port: 7777 }
+        initialDelaySeconds: 2

@@ -1,0 +1,60 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: github-tekton-argo-k8s
+  version: 1.0.0
+  display: GitHub · Tekton · Argo CD · Kubernetes
+  description: >-
+    La stack jour 1 de Choregos : les tickets vivent dans GitHub Issues et Projects v2,
+    la CI et les runs d'agents tournent sur Tekton, le déploiement passe par Argo CD et
+    Argo Rollouts, la prod est protégée par le release train.
+requires:
+  connectors:
+    tracker: github-issues
+    scm: github
+    ci: tekton
+    cd: argocd
+    runtime: tekton
+  cluster_capabilities:
+    - tekton>=1.9
+    - argocd>=3.0
+    - argo-rollouts>=1.8
+    - gvisor?
+defaults:
+  workflow: template:default-simple@1
+  policy: preset:solo
+  models: platform-defaults
+  agent: openhands
+inputs:
+  - { name: repo, type: github-repo, required: true, description: "owner/name du dépôt applicatif" }
+  - { name: default_branch, type: string, default: main }
+  - { name: language, type: enum, values: [python, node, go, java, dotnet, other], default: python }
+  - { name: envs, type: list, default: [dev, staging, prod] }
+  - { name: cluster, type: cluster-ref, description: "cluster cible pour les runners et les déploiements" }
+  - { name: gitops_repo, type: string, description: "dépôt GitOps des environnements" }
+  - { name: project_number, type: int, description: "numéro du board Projects v2" }
+  - { name: slack_channel, type: string, default: "#choregos" }
+steps:
+  - github.install_app
+  - github.ensure_labels
+  - github.ensure_project_board: { fields: [Status, "Coût (€)", Taille, Risque, Run] }
+  - github.ensure_issue_template
+  - gitops.write_project_manifests: { path: "projects/{{slug}}/" }
+  - gitops.open_pr_or_commit
+  - argocd.wait_synced: { apps: ["choregos-project-{{slug}}"] }
+  - github.ensure_webhooks:
+      events: [issues, issue_comment, projects_v2_item, pull_request, pull_request_review, check_suite]
+  - repo.scaffold_pr:
+      files:
+        - AGENTS.md
+        - .choregos/workflow.yaml
+        - .choregos/policy.yaml
+        - tekton/pipeline.yaml
+        - deploy/kustomization.yaml
+        - .github/PULL_REQUEST_TEMPLATE.md
+        - CODEOWNERS
+  - memory.create_tenant
+  - memory.initial_import: { sources: [readme, docs, adr, "closed_issues:365d", "merged_prs:365d"] }
+  - gateway.create_team_and_budget
+  - notify.test_message
+scaffold: ./scaffold

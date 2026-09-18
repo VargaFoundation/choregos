@@ -26,6 +26,21 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def aware(value: datetime | None) -> datetime | None:
+    """Rend un horodatage conscient du fuseau : SQLite rend des `datetime` naïfs."""
+    if value is None:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def elapsed_seconds(start: datetime | None, end: datetime | None) -> float:
+    """Durée en secondes entre deux horodatages, robuste aux valeurs naïves ou absentes."""
+    start_aware, end_aware = aware(start), aware(end)
+    if start_aware is None or end_aware is None:
+        return 0.0
+    return max(0.0, (end_aware - start_aware).total_seconds())
+
+
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

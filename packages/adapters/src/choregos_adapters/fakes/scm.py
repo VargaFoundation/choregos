@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from typing import Any
 
 from choregos_contracts import InboundEvent, InboundEventType
 from choregos_core.domain import CheckRun, DiffFile, DiffSummary, PrRef, PrState, ReviewState
@@ -19,7 +20,7 @@ class FakeScm:
         self.tokens_minted: list[tuple[str, int]] = []
         self._next_number = 1
         self._diffs: dict[tuple[str, str, str], DiffSummary] = {}
-        self.check_runs: list[dict[str, str]] = []
+        self.check_runs: list[dict[str, Any]] = []
 
     # ───────────────────────── scripting ─────────────────────────
 
@@ -30,9 +31,11 @@ class FakeScm:
             files=[DiffFile(path=p, additions=a, deletions=d) for p, a, d in files],
         )
 
-    def set_checks(self, ref: PrRef, conclusion: str) -> None:
+    def set_checks(self, ref: PrRef, conclusion: str, *, scanners: bool = True) -> None:
+        """Pose les check-runs de la PR. Par défaut, le projet a aussi ses scanners."""
+        names = ["ci", *(["semgrep", "trivy", "gitleaks"] if scanners else [])]
         pr = self.prs[(ref.repo, ref.number)]
-        pr.checks = [CheckRun(name="ci", status="completed", conclusion=conclusion)]
+        pr.checks = [CheckRun(name=name, status="completed", conclusion=conclusion) for name in names]
 
     def submit_review(self, ref: PrRef, reviewer: str, state: str) -> None:
         pr = self.prs[(ref.repo, ref.number)]
@@ -80,9 +83,24 @@ class FakeScm:
     async def compare(self, repo: str, base: str, head: str) -> DiffSummary:
         return self._diffs.get((repo, base, head), DiffSummary(base=base, head=head))
 
-    async def create_check_run(self, repo: str, sha: str, name: str, conclusion: str, summary: str) -> None:
+    async def create_check_run(
+        self,
+        repo: str,
+        sha: str,
+        name: str,
+        conclusion: str,
+        summary: str,
+        annotations: list[str] | None = None,
+    ) -> None:
         self.check_runs.append(
-            {"repo": repo, "sha": sha, "name": name, "conclusion": conclusion, "summary": summary}
+            {
+                "repo": repo,
+                "sha": sha,
+                "name": name,
+                "conclusion": conclusion,
+                "summary": summary,
+                "annotations": list(annotations or []),
+            }
         )
 
     def parse_webhook(self, headers: Mapping[str, str], body: bytes) -> list[InboundEvent]:

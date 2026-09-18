@@ -6,6 +6,9 @@ requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = ["choregos-core", "choregos-adapters", "choregos-api", "temporalio>=1.8", "structlog>=24.4", "pydantic-settings>=2.6"]
 
+[project.scripts]
+choregos-orchestrator = "choregos_orchestrator.worker:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

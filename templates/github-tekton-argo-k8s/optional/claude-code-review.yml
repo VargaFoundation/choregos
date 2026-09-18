@@ -1,0 +1,16 @@
+# Optionnel, désactivé par défaut (voir README.md de ce dossier).
+name: claude-code-review
+on:
+  pull_request:
+    types: [opened, synchronize]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    if: ${{ false }} # activez explicitement si vous voulez une revue hors plateforme
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Revue
+        run: echo "La revue de référence passe par le workflow Choregos (rôle review)."

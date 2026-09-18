@@ -1,0 +1,42 @@
+# SLO par défaut : taux de 5xx, latence p95, erreurs métier. Paramétrable par projet.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: slo-default
+spec:
+  args:
+    - { name: service }
+    - { name: error-rate-max, value: "0.01" }
+    - { name: latency-p95-max, value: "0.8" }
+  metrics:
+    - name: error-rate
+      interval: 1m
+      count: 5
+      successCondition: result[0] <= {{args.error-rate-max}}
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring:9090
+          query: |
+            sum(rate(http_requests_total{service="{{args.service}}",status=~"5.."}[2m]))
+            / clamp_min(sum(rate(http_requests_total{service="{{args.service}}"}[2m])), 0.001)
+    - name: latency-p95
+      interval: 1m
+      count: 5
+      successCondition: result[0] <= {{args.latency-p95-max}}
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring:9090
+          query: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{service="{{args.service}}"}[2m])) by (le))
+    - name: business-errors
+      interval: 1m
+      count: 5
+      successCondition: result[0] <= 5
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring:9090
+          query: sum(increase(business_errors_total{service="{{args.service}}"}[2m]))

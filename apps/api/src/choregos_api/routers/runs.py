@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Annotated, Any
 
 from choregos_core import matches_any
@@ -109,7 +110,8 @@ async def diff(id: str, session: Db, principal: Me) -> DiffSummaryDto:
     run, _project = await _run(session, id, principal)
     result = run.result or {}
     reports: dict[str, Any] = (result.get("artifacts") or {}).get("reports", {})
-    files_raw = reports.get("diff_files") or []
+    raw = reports.get("diff_files")
+    files_raw: list[dict[str, Any]] = json.loads(raw) if isinstance(raw, str) else (raw or [])
     allowed = list(run.allowed_paths or [])
     files = [
         DiffFileDto(

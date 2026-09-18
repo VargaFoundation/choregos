@@ -50,11 +50,13 @@ class FakeGateway:
         self.keys: dict[str, VirtualKey] = {}
         self.spends: dict[str, Spend] = {}
         self.revoked: list[str] = []
+        self._minted = 0
 
     async def mint_key(
         self, metadata: dict[str, Any], budget_usd: float, ttl_s: int, models: list[str]
     ) -> VirtualKey:
-        key_id = f"key-{len(self.keys) + 1}"
+        self._minted += 1
+        key_id = f"key-{self._minted}"
         key = VirtualKey(
             key=f"sk-fake-{key_id}",
             key_id=key_id,

@@ -218,8 +218,15 @@ def _review_approved(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 
 @gate("scans_ok", asynchronous=True)
 def _scans_ok(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    required = list(params.get("scanners", ["semgrep", "trivy", "gitleaks"]))
+    required = list(params.get("scanners") or sorted(ctx.scans) or ["semgrep", "trivy", "gitleaks"])
     if not ctx.scans:
+        if ctx.ci_status in {"success", "failure", "neutral"}:
+            return GateOutcome(
+                "scans_ok",
+                False,
+                detail="aucun scan de sécurité déclaré sur la PR : ajoutez semgrep/trivy/gitleaks "
+                "à la CI, ou retirez la gate `scans_ok` du workflow",
+            )
         return GateOutcome("scans_ok", False, pending=True, detail="scans en attente")
     failed = [name for name in required if ctx.scans.get(name, "pending") not in {"ok", "passed", "skipped"}]
     pending = [name for name in required if ctx.scans.get(name) is None]

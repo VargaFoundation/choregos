@@ -39,6 +39,8 @@ from .domain import (
     VirtualKey,
     Window,
     WorkItemData,
+    aware,
+    elapsed_seconds,
     utcnow,
 )
 from .dsl import (
@@ -129,8 +131,10 @@ __all__ = [
     "Window",
     "WorkItemData",
     "WorkflowEngine",
+    "aware",
     "checksum",
     "dump_workflow",
+    "elapsed_seconds",
     "engine_for",
     "estimate_tokens",
     "evaluate",

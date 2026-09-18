@@ -1,0 +1,37 @@
+# Déploiement canary piloté par une AnalysisTemplate : le train abandonne
+# automatiquement si les SLO se dégradent.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: "{{ app }}"
+spec:
+  replicas: 3
+  strategy:
+    canary:
+      analysis:
+        templates: [{ templateName: slo-default }]
+        startingStep: 1
+        args:
+          - { name: service, value: "{{ app }}" }
+      steps:
+        - setWeight: 10
+        - pause: { duration: 10m }
+        - setWeight: 50
+        - pause: { duration: 15m }
+        - setWeight: 100
+  selector:
+    matchLabels: { app: "{{ app }}" }
+  template:
+    metadata:
+      labels: { app: "{{ app }}" }
+    spec:
+      containers:
+        - name: app
+          image: "{{ image }}"
+          ports: [{ containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }

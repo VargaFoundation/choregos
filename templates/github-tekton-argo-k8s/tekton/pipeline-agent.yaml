@@ -1,0 +1,34 @@
+# Pipeline d'une étape agent : clone puis exécution. Chains signe le PipelineRun,
+# ce qui rend la provenance des commits d'agent vérifiable.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: choregos-agent
+spec:
+  params:
+    - { name: run-id, type: string }
+    - { name: api-url, type: string }
+    - { name: repo-url, type: string }
+    - { name: revision, type: string, default: main }
+    - { name: runner-image, type: string, default: "ghcr.io/vargafoundation/choregos-runner:1.0.0" }
+  workspaces:
+    - name: source
+  results:
+    - { name: result-url, value: $(tasks.agent-stage.results.result-url) }
+    - { name: status, value: $(tasks.agent-stage.results.status) }
+  tasks:
+    - name: clone
+      taskRef: { name: git-clone }
+      workspaces: [{ name: output, workspace: source }]
+      params:
+        - { name: url, value: $(params.repo-url) }
+        - { name: revision, value: $(params.revision) }
+        - { name: depth, value: "50" }
+    - name: agent-stage
+      runAfter: [clone]
+      taskRef: { name: choregos-agent-stage }
+      workspaces: [{ name: source, workspace: source }]
+      params:
+        - { name: run-id, value: $(params.run-id) }
+        - { name: api-url, value: $(params.api-url) }
+        - { name: runner-image, value: $(params.runner-image) }

@@ -1,0 +1,18 @@
+# Smoke tests joués juste après une promotion, avant le soak.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: choregos-smoke
+spec:
+  params:
+    - { name: base-url, type: string }
+    - { name: env, type: string }
+  steps:
+    - name: smoke
+      image: ghcr.io/vargafoundation/choregos-runner:1.0.0
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        echo "smoke $(params.env) sur $(params.base-url)"
+        curl -fsS --max-time 10 "$(params.base-url)/healthz" > /dev/null
+        curl -fsS --max-time 10 "$(params.base-url)/readyz" > /dev/null

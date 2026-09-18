@@ -1,0 +1,18 @@
+# CI du projet, déclenchée par les Triggers installés dans `proj-{{ project.slug }}-ci`.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: {{ project.slug }}-ci-
+spec:
+  pipelineRef: { name: choregos-ci }
+  params:
+    - { name: repo-url, value: "{{ project.repo.url }}" }
+    - { name: revision, value: "{{ project.repo.default_branch }}" }
+    - { name: language, value: "{{ project.repo.language or 'python' }}" }
+    - { name: image, value: "ghcr.io/{{ inputs.repo }}:latest" }
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 5Gi } }

@@ -1,0 +1,78 @@
+# CI du projet : build, test, lint, scans, image signée. Le résultat repart en
+# CloudEvents vers l'API Choregos, qui le transforme en InboundEvent.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: choregos-ci
+spec:
+  params:
+    - { name: repo-url, type: string }
+    - { name: revision, type: string }
+    - { name: image, type: string }
+    - { name: language, type: string, default: python }
+  workspaces:
+    - name: source
+    - name: dockerconfig
+      optional: true
+  results:
+    - { name: image-digest, value: $(tasks.build.results.IMAGE_DIGEST) }
+  tasks:
+    - name: clone
+      taskRef: { name: git-clone }
+      workspaces: [{ name: output, workspace: source }]
+      params:
+        - { name: url, value: $(params.repo-url) }
+        - { name: revision, value: $(params.revision) }
+    - name: test
+      runAfter: [clone]
+      workspaces: [{ name: source, workspace: source }]
+      taskSpec:
+        workspaces: [{ name: source }]
+        steps:
+          - name: test
+            image: ghcr.io/vargafoundation/choregos-ci-$(params.language):1.0.0
+            workingDir: $(workspaces.source.path)
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              make test
+    - name: lint
+      runAfter: [clone]
+      workspaces: [{ name: source, workspace: source }]
+      taskSpec:
+        workspaces: [{ name: source }]
+        steps:
+          - name: lint
+            image: ghcr.io/vargafoundation/choregos-ci-$(params.language):1.0.0
+            workingDir: $(workspaces.source.path)
+            script: |
+              #!/usr/bin/env bash
+              set -euo pipefail
+              make lint
+              make typecheck
+    - name: scans
+      runAfter: [clone]
+      workspaces: [{ name: source, workspace: source }]
+      taskSpec:
+        workspaces: [{ name: source }]
+        steps:
+          - name: gitleaks
+            image: zricethezav/gitleaks:latest
+            workingDir: $(workspaces.source.path)
+            script: gitleaks detect --no-git --redact --exit-code 1
+          - name: semgrep
+            image: returntocorp/semgrep:latest
+            workingDir: $(workspaces.source.path)
+            script: semgrep ci --config auto --error
+          - name: trivy
+            image: aquasec/trivy:latest
+            workingDir: $(workspaces.source.path)
+            script: trivy fs --exit-code 1 --severity HIGH,CRITICAL .
+    - name: build
+      runAfter: [test, lint, scans]
+      taskRef: { name: kaniko }
+      workspaces:
+        - { name: source, workspace: source }
+        - { name: dockerconfig, workspace: dockerconfig }
+      params:
+        - { name: IMAGE, value: $(params.image) }
