@@ -15,6 +15,15 @@ class Issue:
     line: int | None = None
     column: int | None = None
 
+    def to_dict(self) -> dict[str, str | int | None]:
+        return {
+            "code": self.code,
+            "message": self.message,
+            "path": self.path,
+            "line": self.line,
+            "column": self.column,
+        }
+
     def format(self) -> str:
         where = self.path or ""
         if self.line is not None:

@@ -1,0 +1,1 @@
+"""Adaptateurs notify."""

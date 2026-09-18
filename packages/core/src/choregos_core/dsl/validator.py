@@ -37,8 +37,8 @@ class ValidationReport:
     def as_dict(self) -> dict[str, Any]:
         return {
             "valid": self.valid,
-            "errors": [i.__dict__ for i in self.errors],
-            "warnings": [i.__dict__ for i in self.warnings],
+            "errors": [i.to_dict() for i in self.errors],
+            "warnings": [i.to_dict() for i in self.warnings],
         }
 
 

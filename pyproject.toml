@@ -29,6 +29,8 @@ dev = [
   "types-PyYAML>=6.0",
   "datamodel-code-generator>=0.26",
   "freezegun>=1.5",
+  "alembic>=1.20.0",
+  "types-jsonschema>=4.26.0.20260518",
 ]
 
 [tool.uv]
@@ -52,7 +54,7 @@ choregos-orchestrator = { workspace = true }
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-extend-exclude = [".venv", "packages/contracts/ts", "apps/web", "**/generated/**"]
+extend-exclude = [".venv", "packages/contracts/ts", "apps/web", "**/generated/**", "apps/api/migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ASYNC", "S", "RET", "PL", "RUF"]
@@ -63,6 +65,13 @@ ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "P
 "**/tests/**" = ["S", "PLR", "ASYNC"]
 "tests/**" = ["S", "PLR", "ASYNC"]
 "**/fakes/**" = ["S"]
+# Valeurs par défaut de développement, jamais des secrets réels.
+"apps/api/src/choregos_api/config.py" = ["S105"]
+"apps/api/src/choregos_api/security.py" = ["S105"]
+"apps/api/migrations/**" = ["E501", "W291", "I001"]
+# Singletons de moteur/session et de bus : un seul par processus, assumé.
+"apps/api/src/choregos_api/db/session.py" = ["PLW0603"]
+"apps/api/src/choregos_api/temporal.py" = ["PLW0603"]
 
 [tool.ruff.format]
 quote-style = "double"
