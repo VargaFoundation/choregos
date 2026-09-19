@@ -91,6 +91,17 @@ charts-test:  ## helm unittest
 	@helm plugin list 2>/dev/null | grep -q "^unittest" || helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2
 	helm unittest charts/choregos
 
+# ───────────────────────── images ─────────────────────────
+# `--target` n'est pas optionnel sur `api.Dockerfile` : sans lui, Docker construit la dernière
+# étape du fichier, qui est `worker`.
+.PHONY: images
+images:  ## Construit les cinq images de la plateforme en local (tag `:dev`)
+	docker build -f docker/api.Dockerfile    --target api    -t choregos-api:dev .
+	docker build -f docker/api.Dockerfile    --target worker -t choregos-orchestrator:dev .
+	docker build -f docker/tools.Dockerfile                  -t choregos-tools:dev .
+	docker build -f docker/web.Dockerfile                    -t choregos-web:dev .
+	docker build -f docker/runner.Dockerfile                 -t choregos-runner:dev .
+
 # ───────────────────────── dev ─────────────────────────
 .PHONY: dev-up
 dev-up:  ## Cluster kind + plateforme + Tilt

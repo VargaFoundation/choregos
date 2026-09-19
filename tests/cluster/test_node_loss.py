@@ -49,7 +49,7 @@ def node_names() -> set[str]:
 @pytest.fixture(scope="module", autouse=True)
 def stack() -> None:
     if subprocess.run(["docker", "image", "inspect", IMAGE], capture_output=True, check=False).returncode:
-        pytest.skip(f"image `{IMAGE}` absente — `docker build -f docker/api.Dockerfile`")
+        pytest.skip(f"image `{IMAGE}` absente — `docker build -f docker/api.Dockerfile --target api`")
     missing = {WORKER_NODE, API_NODE} - node_names()
     if missing:
         pytest.skip(f"nœuds absents du cluster : {sorted(missing)} — ce test veut `make cluster-up`")
