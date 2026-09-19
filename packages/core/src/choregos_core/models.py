@@ -76,6 +76,8 @@ class ResolvedModel:
     turns_factor: float = 1.0
     validated: bool = True
     warnings: list[str] = field(default_factory=list)
+    provider_model: str | None = None
+    """Le modèle réel derrière un alias `platform/*`, tel que le gateway le déclare."""
 
     def to_ref(self) -> ModelRef:
         return ModelRef(
@@ -83,6 +85,7 @@ class ResolvedModel:
             base_url=self.base_url,
             api_format=self.api_format,
             params=dict(self.params),
+            provider_model=self.provider_model,
         )
 
 
@@ -171,6 +174,7 @@ class ModelResolver:
         for gateway_model in self.gateway_models:
             if model in {gateway_model.model_name, gateway_model.litellm_model}:
                 effective = gateway_model.litellm_model  # un alias `platform/*` cache le vrai modèle
+                resolved.provider_model = effective
                 if not gateway_model.supports_tool_calling:
                     self._reject(
                         resolved, f"le modèle `{model}` ne gère pas le tool calling", allow_unvalidated

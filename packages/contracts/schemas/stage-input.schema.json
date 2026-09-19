@@ -95,7 +95,11 @@
         "litellm_model": { "type": "string" },
         "base_url": { "type": "string" },
         "api_format": { "type": "string", "enum": ["openai", "anthropic", "gemini"] },
-        "params": { "type": "object", "additionalProperties": true, "default": {} }
+        "params": { "type": "object", "additionalProperties": true, "default": {} },
+        "provider_model": {
+          "type": ["string", "null"],
+          "description": "Modèle réel derrière l'alias de plateforme : ce que vérifie un backend contraint."
+        }
       }
     },
     "gateway_key": { "type": "string", "description": "Clé virtuelle du run (budget = budget de l'étape)." },

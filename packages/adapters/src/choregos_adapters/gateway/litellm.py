@@ -11,9 +11,12 @@ from datetime import timedelta
 from typing import Any
 
 import httpx
+import structlog
 from choregos_core.domain import GatewayModel, Spend, VirtualKey, utcnow
 
 from ..errors import UpstreamError
+
+logger = structlog.get_logger("choregos.gateway.litellm")
 
 
 class LiteLlmGateway:
@@ -26,12 +29,17 @@ class LiteLlmGateway:
         *,
         team_id: str | None = None,
         internal_prices: dict[str, float] | None = None,
+        enterprise_tags: bool = False,
         timeout: float = 20.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.master_key = master_key
         self.team_id = team_id
+        # Les `tags` de clé sont une fonction LiteLLM **Enterprise** : envoyées à un proxy
+        # open-source, elles font échouer le mint en 403. L'attribution ne dépend pas d'elles —
+        # `metadata` porte déjà le projet et le run — donc elles restent optionnelles.
+        self.enterprise_tags = enterprise_tags
         # Prix internes (€/M tokens) des modèles locaux, pour rester comparable (§4.2).
         self.internal_prices = internal_prices or {}
         self._client = client or httpx.AsyncClient(timeout=timeout)
@@ -62,12 +70,16 @@ class LiteLlmGateway:
             "duration": f"{max(1, ttl_s // 60)}m",
             "models": models,
             "metadata": metadata,
-            "tags": [f"project:{metadata.get('project', '')}", f"run:{metadata.get('run_id', '')}"],
             "key_alias": f"run-{metadata.get('run_id', '')}"[:64],
         }
+        if self.enterprise_tags:
+            payload["tags"] = [
+                f"project:{metadata.get('project', '')}",
+                f"run:{metadata.get('run_id', '')}",
+            ]
         if self.team_id:
             payload["team_id"] = self.team_id
-        data = await self._request("POST", "/key/generate", json=payload)
+        data = await self._mint(payload)
         return VirtualKey(
             key=data["key"],
             key_id=data.get("token") or data.get("key_name") or data["key"][-12:],
@@ -76,6 +88,25 @@ class LiteLlmGateway:
             models=list(models),
             metadata=dict(metadata),
         )
+
+    async def _mint(self, payload: dict[str, Any]) -> Any:
+        """Mint une clé, en survivant à un alias déjà pris.
+
+        LiteLLM exige des `key_alias` uniques **à vie**. Or un `run_id` est déterministe : si
+        une tentative a minté sa clé puis échoué avant de l'enregistrer, la reprise du même run
+        se verrait refuser sa clé en 400 et le ticket resterait bloqué. L'alias n'est qu'un
+        confort d'exploitation — on repart sans lui plutôt que d'immobiliser un run.
+        """
+        try:
+            return await self._request("POST", "/key/generate", json=payload)
+        except UpstreamError as exc:
+            taken = exc.status_code == 400 and "alias" in str(exc).lower()
+            if not taken:
+                raise
+            logger.warning("alias de clé déjà pris, mint sans alias", alias=payload.get("key_alias"))
+            return await self._request(
+                "POST", "/key/generate", json={k: v for k, v in payload.items() if k != "key_alias"}
+            )
 
     async def spend(self, key_id: str) -> Spend:
         """Dépense réelle de la clé : c'est **la** source de vérité du coût d'un run."""

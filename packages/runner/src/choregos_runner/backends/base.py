@@ -109,12 +109,20 @@ class Backend:
         }
 
     def validate_model(self, model: ModelRef) -> None:
-        if self.model_constraint and not any(
-            token in model.litellm_model.lower() for token in self.model_constraint
-        ):
+        """Contrainte dure du backend, vérifiée sur le modèle **réel**.
+
+        Un alias de plateforme (`platform/standard`) ne dit rien de la famille du modèle : c'est
+        `provider_model`, rempli par le resolver depuis le catalogue du gateway, qui la porte. À
+        défaut, on retombe sur le nom appelé — un identifiant direct (`anthropic/claude-sonnet-5`)
+        se vérifie tel quel.
+        """
+        effective = (model.provider_model or model.litellm_model).lower()
+        if self.model_constraint and not any(token in effective for token in self.model_constraint):
             raise ValueError(
                 f"le backend `{self.name}` n'accepte que des modèles "
-                f"{' / '.join(self.model_constraint)} (reçu `{model.litellm_model}`)"
+                f"{' / '.join(self.model_constraint)} (reçu `{model.litellm_model}`"
+                + (f" → `{model.provider_model}`" if model.provider_model else "")
+                + ")"
             )
 
     @staticmethod

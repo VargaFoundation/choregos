@@ -72,6 +72,14 @@ class ModelRef(Strict):
     base_url: str
     api_format: ApiFormat = ApiFormat.OPENAI
     params: dict[str, Any] = Field(default_factory=dict)
+    provider_model: str | None = None
+    """Modèle réel derrière l'alias de plateforme, quand le gateway le connaît.
+
+    L'agent appelle `litellm_model` — c'est l'alias qui porte le routage et le budget. Mais un
+    backend contraint (claude-code n'accepte que des modèles Claude) doit vérifier sa contrainte
+    sur le **vrai** modèle : sans ce champ, `platform/standard` lui est refusé alors que le
+    resolver l'a validé, et la combinaison alias + backend contraint devient impossible.
+    """
 
 
 class Budget(Strict):

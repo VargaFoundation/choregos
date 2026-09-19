@@ -209,6 +209,7 @@ def _register_builtins() -> None:
             cfg.get("master_key", _env("CHOREGOS_GATEWAY_MASTER_KEY", "")),
             team_id=cfg.get("team_id"),
             internal_prices=cfg.get("internal_prices", {}),
+            enterprise_tags=cfg.get("enterprise_tags", False),
         )
     )
     register("notify", "slack")(

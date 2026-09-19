@@ -347,6 +347,8 @@ export type StageInput = {
     params?: {
       [key: string]: unknown;
     };
+    /** Modèle réel derrière l'alias de plateforme : ce que vérifie un backend contraint. */
+    provider_model?: string | null;
   };
   /** Clé virtuelle du run (budget = budget de l'étape). */
   gateway_key?: string;
