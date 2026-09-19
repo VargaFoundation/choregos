@@ -19,11 +19,24 @@ spec:
               kinds: [Pod]
               namespaces: ["choregos-*", "proj-*"]
       verifyImages:
-        - imageReferences: ["ghcr.io/vargafoundation/*"]
+        - imageReferences: ["ghcr.io/vargafoundation/choregos-*"]
           attestors:
             - entries:
                 - keyless:
                     subject: "https://github.com/VargaFoundation/choregos/.github/workflows/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+          mutateDigest: true
+          required: true
+        # Ecphoria est de la fondation mais pas de ce dépôt : ses images sont signées par les
+        # workflows de `VargaFoundation/ecphoria`. Avec le seul motif ci-dessus, le glob
+        # `ghcr.io/vargafoundation/*` attrapait `ghcr.io/vargafoundation/ecphoria` et exigeait
+        # une signature émise par un dépôt qui ne l'a jamais produite — la mémoire de la
+        # plateforme n'aurait pas démarré, et le message aurait parlé de signature manquante.
+        - imageReferences: ["ghcr.io/vargafoundation/ecphoria*"]
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/VargaFoundation/ecphoria/.github/workflows/*"
                     issuer: "https://token.actions.githubusercontent.com"
           mutateDigest: true
           required: true
