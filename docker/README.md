@@ -3,7 +3,7 @@
 | Image | Contenu | Particularité |
 | :-- | :-- | :-- |
 | `choregos-api` | API FastAPI + migrations Alembic | non-root, système de fichiers en lecture seule |
-| `choregos-orchestrator` | workers Temporal | même socle que l'API |
+| `choregos-orchestrator` | workers Temporal | cible `worker` de `api.Dockerfile` — même build, même commit |
 | `choregos-tools` | sidecar MCP | ne détient que le jeton du run |
 | `choregos-web` | front Next.js | build de production, CSP stricte |
 | `choregos-runner` | le workspace d'un agent | agents ACP épinglés, scanners, **shims de refus** |
@@ -11,9 +11,13 @@
 ## Construire localement
 
 ```bash
-docker build -f docker/api.Dockerfile   -t choregos-api:dev .
-docker build -f docker/runner.Dockerfile -t choregos-runner:dev .
+docker build -f docker/api.Dockerfile --target api    -t choregos-api:dev .
+docker build -f docker/api.Dockerfile --target worker -t choregos-orchestrator:dev .
+docker build -f docker/runner.Dockerfile              -t choregos-runner:dev .
 ```
+
+`--target` n'est pas optionnel sur `api.Dockerfile` : sans lui, Docker construit la dernière
+étape du fichier (`worker`).
 
 ## Ce que l'image du runner **ne contient pas**
 

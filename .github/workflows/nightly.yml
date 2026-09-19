@@ -57,7 +57,7 @@ jobs:
       - run: uv sync --frozen
       - name: image de l'API (la pile de plateforme en a besoin)
         run: |
-          docker build -f docker/api.Dockerfile -t choregos-api:dev .
+          docker build -f docker/api.Dockerfile --target api -t choregos-api:dev .
           kind load docker-image choregos-api:dev --name choregos
       - name: egress, restauration, manifests, plateforme, canary, perte de nœud
         env:

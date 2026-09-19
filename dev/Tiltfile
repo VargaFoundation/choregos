@@ -21,6 +21,9 @@ docker_build_with_restart(
     'ghcr.io/vargafoundation/choregos-api',
     context='..',
     dockerfile='../docker/api.Dockerfile',
+    # `target` explicite : sans lui, buildx construit la **dernière** étape du fichier, qui est
+    # `worker` — l'API partirait avec la commande d'un worker.
+    target='api',
     entrypoint=['uvicorn', 'choregos_api.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
     live_update=[
         sync('../apps/api/src', '/app/apps/api/src'),
@@ -31,7 +34,8 @@ docker_build_with_restart(
 docker_build_with_restart(
     'ghcr.io/vargafoundation/choregos-orchestrator',
     context='..',
-    dockerfile='../docker/orchestrator.Dockerfile',
+    dockerfile='../docker/api.Dockerfile',
+    target='worker',
     entrypoint=['python', '-m', 'choregos_orchestrator.worker'],
     live_update=[
         sync('../apps/orchestrator/src', '/app/apps/orchestrator/src'),
