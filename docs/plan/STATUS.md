@@ -96,7 +96,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S10-04 | S10 | ✅ | — | context pack réel par rôle, budget de tokens, archivé avec le run |
 | S10-05 | S10 | ✅ | — | écriture gouvernée : `write_fact`, `propose_fact`, file `pending`, auto-accept |
 | S10-06 | S10 | ✅ | — | faux positifs alertés ; rapport A/B hebdomadaire (premier passage, coût/ticket) posté et exposé |
-| S11-* | S11 | 🟡 | — | E-01 (triage), E-03, E-05, E-06, E-07 et E-08 livrés et poussés sur `main` amont, vérifiés depuis Choregos (10 tests live) ; E-02, E-04, E-09 à E-14 restent |
+| S11-* | S11 | ✅ | — | E-01 à E-14 livrés et poussés sur `main` amont : faits typés + gouvernance par tenant, deux éditions (`ecphoria:memory` / `:full`), sauvegardes planifiées à manifeste vérifié, outillage de release, revue sécurité, doc d'intégration, et banc au profil Choregos (`docs/benchmarks-choregos.md`). Le banc a trouvé deux défauts réels côté cluster, corrigés : un client ordinaire derrière un Service perdait (N-1)/N de ses écritures, et toute recherche était traitée comme une écriture |
 | S12-01 | S12 | ✅ | — | 6 tickets de référence, dépôts jouets Python et Node, assertions vérifiées pour de vrai |
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
 | S12-03 | S12 | ✅ | — | évals de playbooks : une dégradation de prompt fait échouer la CI |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | 🟡 | — | exécuteur ACA écrit et testé contre ARM ; template `github-aca` livré — `azure-devops-aca` complet attend Azure Boards/Pipelines |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 94 livrées, 8 partielles, 0 non commencée.
+**Total** : 95 livrées, 7 partielles, 0 non commencée.
 
 ## Ce qui tient debout aujourd'hui
 
@@ -137,5 +137,8 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 3. **Les runbooks restants** doivent être joués une fois en staging. Celui de restauration l'a
    été, et il était faux : c'est l'argument pour jouer les autres.
 4. **Le chaos au-delà du worker** : perte d'un nœud spot, coupure réseau, disque plein.
-5. **Ecphoria** : E-02, E-04 et E-09 à E-14 restent à faire dans `VargaFoundation/ecphoria`.
-   E-01, E-03, E-05 à E-08 sont livrés et poussés sur `main`.
+5. **Ecphoria** : E-01 à E-14 sont livrés et poussés sur `main` amont. Ce qui en ressort et qui
+   nous concerne : le banc au profil Choregos (20 000 faits, 200 000 événements, 50 lectures/s)
+   mesure la recherche à ~250 ms p50 / ~540 ms p95 sur une station de travail, au-dessus de la
+   cible de 300 ms p95 ; `retrieval_scan_cap` à 512 ramène p95 à 24 ms sans coût de rappel
+   mesurable à cette taille de corpus. À décider au provisionnement, pas en production.
