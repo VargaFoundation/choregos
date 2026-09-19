@@ -1,0 +1,50 @@
+# Ecphoria — la mémoire de la plateforme, vague 2 (après les opérateurs, avant les workloads).
+#
+# Le chart vit dans `VargaFoundation/ecphoria` (`deploy/helm/ecphoria`) : un StatefulSet à trois
+# réplicas Raft, un service headless pour la découverte des pairs, un PDB. Il a été rendu et
+# accepté par un serveur d'API réel — voir `docs/plan/STATUS.md`, S7-06.
+#
+# Sans Ecphoria, la plateforme fonctionne : `memory.pgvector` implémente la même interface et le
+# context pack se dégrade en pack vide (docs/plan/04). C'est pourquoi cette Application peut être
+# retirée sans rien casser d'autre.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecphoria
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: '2'
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/VargaFoundation/ecphoria.git
+    targetRevision: main
+    path: deploy/helm/ecphoria
+    helm:
+      values: |
+        replicaCount: 3
+        config:
+          gateway:
+            authEnabled: true
+            # Les clés viennent du coffre via External Secrets. Le chart accepte des entrées
+            # hachées (`sha256:<hex>@tenant:role`) : rien de déchiffrable ne transite par Argo.
+            apiKeys: []
+          embedding:
+            # La passerelle de la plateforme sert aussi les embeddings : un seul endroit où le
+            # coût est mesuré et où le débit est limité (docs/plan/04 §4.2).
+            provider: openai_compatible
+            openaiBaseUrl: http://litellm.choregos-gateway:4000/v1
+            model: platform/embed
+            dimension: 1536
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: choregos-memory
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true

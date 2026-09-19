@@ -73,7 +73,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S7-03 | S7 | ✅ | — | namespaces, NetworkPolicies, RBAC limité aux `proj-*-runners`, PodSecurity |
 | S7-04 | S7 | ✅ | — | restauration **jouée** sur cluster : sauvegarde Barman → cluster détruit → restauré → données relues ; `serverName` manquant corrigé dans le runbook |
 | S7-05 | S7 | 🟡 | — | API + workers + Temporal tournent sur kind depuis l'image du dépôt (4 tests) ; valeurs HA (3 nœuds, persistance) à régler au déploiement réel |
-| S7-06 | S7 | 🟡 | — | Ecphoria et egress décrits ; chart Ecphoria attendu du flux S11 |
+| S7-06 | S7 | ✅ | — | Application Argo `ecphoria` (vague 2) sur le chart du dépôt amont, valeurs vérifiées par `helm template` et acceptées par un serveur d'API ; embeddings routés par la passerelle (E-08) |
 | S7-07 | S7 | ✅ | — | ServiceMonitor, 5 alertes, 6 dashboards Grafana livrés |
 | S7-08 | S7 | 🟡 | — | overlays dev/staging/prod et fenêtres de synchronisation ; canary de la plateforme à câbler |
 | S7-09 | S7 | ✅ | — | Kyverno (signatures, digests, non-root, labels, quotas, RuntimeClass) + ApplicationSet |
@@ -96,7 +96,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S10-04 | S10 | ✅ | — | context pack réel par rôle, budget de tokens, archivé avec le run |
 | S10-05 | S10 | ✅ | — | écriture gouvernée : `write_fact`, `propose_fact`, file `pending`, auto-accept |
 | S10-06 | S10 | ✅ | — | faux positifs alertés ; rapport A/B hebdomadaire (premier passage, coût/ticket) posté et exposé |
-| S11-* | S11 | 🟡 | — | E-01 (triage des 19 PR), E-03/E-05/E-06/E-07 livrés dans `VargaFoundation/ecphoria` et vérifiés depuis Choregos (10 tests live) ; E-02, E-04, E-09 à E-14 restent |
+| S11-* | S11 | 🟡 | — | E-01 (triage), E-03, E-05, E-06, E-07 et E-08 livrés et poussés sur `main` amont, vérifiés depuis Choregos (10 tests live) ; E-02, E-04, E-09 à E-14 restent |
 | S12-01 | S12 | ✅ | — | 6 tickets de référence, dépôts jouets Python et Node, assertions vérifiées pour de vrai |
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
 | S12-03 | S12 | ✅ | — | évals de playbooks : une dégradation de prompt fait échouer la CI |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | 🟡 | — | exécuteur ACA écrit et testé contre ARM ; template `github-aca` livré — `azure-devops-aca` complet attend Azure Boards/Pipelines |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 93 livrées, 9 partielles, 0 non commencée.
+**Total** : 94 livrées, 8 partielles, 0 non commencée.
 
 ## Ce qui tient debout aujourd'hui
 
@@ -138,3 +138,4 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
    été, et il était faux : c'est l'argument pour jouer les autres.
 4. **Le chaos au-delà du worker** : perte d'un nœud spot, coupure réseau, disque plein.
 5. **Ecphoria** : E-02, E-04 et E-09 à E-14 restent à faire dans `VargaFoundation/ecphoria`.
+   E-01, E-03, E-05 à E-08 sont livrés et poussés sur `main`.
