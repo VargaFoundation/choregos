@@ -1,5 +1,5 @@
 # Front Next.js : build autonome (`output: standalone` non requis, on garde .next/).
-FROM node:22-bookworm-slim AS builder
+FROM node:25-bookworm-slim AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 WORKDIR /app
@@ -21,7 +21,7 @@ RUN pnpm build
 # virtuel `.pnpm` entier — vérifié, `esbuild@0.21.5` et `@playwright+test` y étaient encore, et
 # c'est `.pnpm` que Trivy lit. Une installation propre dans un arbre vide est la seule qui parte
 # des seules `dependencies`.
-FROM node:22-bookworm-slim AS deps-prod
+FROM node:25-bookworm-slim AS deps-prod
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 WORKDIR /app/apps/web
@@ -29,7 +29,7 @@ COPY apps/web/package.json apps/web/pnpm-lock.yaml* ./
 COPY packages/contracts/ts /app/packages/contracts/ts
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 # Pas de `useradd` ici : l'image `node` fournit déjà un utilisateur non-root `node` en
 # UID 1000, et créer un second compte sur le même UID fait sortir `useradd` en 4
