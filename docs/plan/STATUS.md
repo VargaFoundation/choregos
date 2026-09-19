@@ -71,13 +71,13 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S7-01 | S7 | ✅ | — | umbrella + 4 sous-charts, helm unittest, rendu des 3 environnements |
 | S7-02 | S7 | ✅ | — | app-of-apps par sync-waves : opérateurs, CNPG, Tekton, gVisor, monitoring |
 | S7-03 | S7 | ✅ | — | namespaces, NetworkPolicies, RBAC limité aux `proj-*-runners`, PodSecurity |
-| S7-04 | S7 | 🟡 | — | CNPG ×3 avec Barman et sauvegarde planifiée ; restauration testée à faire en staging |
-| S7-05 | S7 | 🟡 | — | Temporal déclaré dans les dépendances ; valeurs HA à régler au déploiement |
+| S7-04 | S7 | ✅ | — | restauration **jouée** sur cluster : sauvegarde Barman → cluster détruit → restauré → données relues ; `serverName` manquant corrigé dans le runbook |
+| S7-05 | S7 | 🟡 | — | API + workers + Temporal tournent sur kind depuis l'image du dépôt (4 tests) ; valeurs HA (3 nœuds, persistance) à régler au déploiement réel |
 | S7-06 | S7 | 🟡 | — | Ecphoria et egress décrits ; chart Ecphoria attendu du flux S11 |
 | S7-07 | S7 | ✅ | — | ServiceMonitor, 5 alertes, 6 dashboards Grafana livrés |
 | S7-08 | S7 | 🟡 | — | overlays dev/staging/prod et fenêtres de synchronisation ; canary de la plateforme à câbler |
 | S7-09 | S7 | ✅ | — | Kyverno (signatures, digests, non-root, labels, quotas, RuntimeClass) + ApplicationSet |
-| S7-10 | S7 | 🟡 | — | 8 runbooks écrits ; exécution en staging et tests de chaos à faire |
+| S7-10 | S7 | 🟡 | — | 9 runbooks ; celui de restauration Postgres **exécuté** (et corrigé) sur cluster ; les autres restent à jouer en staging |
 | S8-01 | S8 | ✅ | — | template `github-tekton-argo-k8s` : manifeste, Tekton, Argo, scaffolding Jinja |
 | S8-02 | S8 | ✅ | — | activités GitHub du provisioning, idempotentes |
 | S8-03 | S8 | ✅ | — | rendu des manifests GitOps du projet (namespaces, quotas, netpol, RBAC, Argo) |
@@ -101,7 +101,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
 | S12-03 | S12 | ✅ | — | évals de playbooks : une dégradation de prompt fait échouer la CI |
 | S12-04 | S12 | ✅ | — | 23 scénarios e2e M1–M5, sans cluster ; variantes kind en nocturne |
-| S12-05 | S12 | 🟡 | — | reprise sans double coût prouvée ; chaos (kill worker, nœud spot) à jouer sur kind |
+| S12-05 | S12 | 🟡 | — | reprise sans double coût prouvée ; worker tué et remplacé sur cluster sans casse ; perte d'un nœud spot à jouer |
 | S13-01 | S13 | ✅ | — | backend claude-code (hook de secours, modèles Claude uniquement) — conformité 7/7 |
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
 | S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
@@ -109,26 +109,32 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | 🟡 | — | exécuteur ACA écrit et testé contre ARM ; template `github-aca` livré — `azure-devops-aca` complet attend Azure Boards/Pipelines |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 90 livrées, 11 partielles, 1 non commencée.
+**Total** : 93 livrées, 9 partielles, 0 non commencée.
 
 ## Ce qui tient debout aujourd'hui
 
 - `make demo` : un ticket traverse la plateforme jusqu'à la production, sans cluster.
-- `make ci` : lint, typage strict sur 153 fichiers, 390 tests, contrats vérifiés, charts rendus.
+- `make ci` : lint, typage strict, 390 tests, contrats vérifiés, charts rendus.
 - Couverture 84 % sur `packages/core`, `packages/runner`, `apps/orchestrator` (seuil : 80 %).
-- Les jalons M1 à M5 ont chacun leurs scénarios e2e : 24 au vert, sans cluster.
+- 24 scénarios e2e M1–M5 au vert, sans cluster.
+- **Sur un vrai cluster** (kind + Calico) : l'egress d'un runner est bloqué pour de bon, la
+  sauvegarde Postgres se restaure avec ses données, les manifests générés sont acceptés par le
+  serveur d'API, et l'API + les workers tournent depuis l'image du dépôt — worker tué compris.
+- **Contre les vrais services** : GitLab (cycle complet sur gitlab.com), Ecphoria (context pack,
+  file de validation, upsert idempotent) et LiteLLM (clé de run, budget en plafond dur, coût
+  mesuré à la passerelle, format Anthropic).
 - Les 7 backends ACP passent les 7 contrôles de conformité ; les 2 templates passent la
-  conformité de template (connecteurs enregistrés, étapes implémentées, scaffold présent).
-- Trois trackers (GitHub, Jira, GitLab) et quatre exécuteurs (Tekton, Job K8s, Docker, ACA).
+  conformité de template.
 
 ## Ce qui manque pour dire « en production »
 
-1. Un vrai cluster : les scénarios sur kind (provisioning réel, Tekton, Argo, egress bloqué,
-   chaos) restent à jouer. Ils sont écrits et attendent la CI nocturne.
-2. Ecphoria (flux S11) vit dans son propre dépôt ; le repli pgvector couvre l'intervalle.
-3. Les runbooks doivent être exécutés une fois en staging — un runbook non joué est une hypothèse.
-4. Les adaptateurs Jira, GitLab et ACA sont écrits et testés **contre le protocole**
-   (transport HTTP simulé) ; aucun n'a encore parlé à une instance réelle. C'est la première
-   chose à faire au premier projet Jira, GitLab ou Azure.
-5. La compatibilité `/v1/messages` de LiteLLM (S4-05) se vérifie contre un vrai proxy :
-   le format d'API est choisi par backend, l'écho des en-têtes `anthropic-beta` reste à tester.
+1. **Jira n'a jamais répondu** : le token fourni est refusé (`AUTHENTICATED_FAILED`) sur
+   meltingcode.atlassian.net, y compris via `api.atlassian.com/ex/jira`. L'adaptateur reste
+   vérifié contre le protocole seulement. Un token valide suffit à lever ce point.
+2. **Le déploiement réel** : la pile de test sur kind est volontairement petite (un Temporal de
+   développement, un Postgres simple). Les valeurs HA — Temporal à trois nœuds, CNPG à trois
+   instances, Argo Rollouts — restent à régler sur un vrai environnement.
+3. **Les runbooks restants** doivent être joués une fois en staging. Celui de restauration l'a
+   été, et il était faux : c'est l'argument pour jouer les autres.
+4. **Le chaos au-delà du worker** : perte d'un nœud spot, coupure réseau, disque plein.
+5. **Ecphoria** : E-02, E-04 et E-09 à E-14 restent à faire dans `VargaFoundation/ecphoria`.
