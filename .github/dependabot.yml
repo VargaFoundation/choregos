@@ -1,0 +1,57 @@
+# Le plan demande Dependabot ou Renovate dès la création du dépôt
+# (`docs/plan/07-plan-parallelisation-conventions.md` §Bootstrap).
+#
+# Tout est groupé. L'expérience d'à côté, sur `VargaFoundation/ecphoria`, est nette : sans
+# groupes, dix-neuf PR ouvertes en un mois, dont plusieurs impossibles à fusionner seules —
+# trois bumps RustCrypto qui n'étaient qu'un seul changement, cinq actions qui n'étaient
+# qu'une migration de runtime. Une montée qui touche quatre paquets à la fois est **une**
+# décision, pas quatre.
+version: 2
+updates:
+  # Actions tierces de la CI : hygiène de chaîne d'approvisionnement.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Python : l'espace de travail uv à la racine (packages/*, apps/api, apps/orchestrator, tools).
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # Temporal, son SDK et les activités qui s'appuient dessus bougent ensemble.
+      temporal:
+        patterns: ["temporalio*"]
+      # La pile HTTP et la validation : httpx, pydantic et fastapi partagent des types.
+      web-stack:
+        patterns: ["fastapi*", "starlette*", "uvicorn*", "httpx*", "pydantic*"]
+      # Le reste, en mineur et correctif seulement. Les majeures restent seules, pour être lues.
+      python-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Front Next.js (pnpm).
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    groups:
+      next:
+        patterns: ["next", "react", "react-dom", "@types/react*", "eslint-config-next"]
+      web-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Images de base des cinq Dockerfiles. Une seule PR : elles partagent `python:3.12-slim`
+  # et `node:22`, et les décaler les unes des autres n'a aucun sens.
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]
