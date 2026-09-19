@@ -83,7 +83,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S8-03 | S8 | ✅ | — | rendu des manifests GitOps du projet (namespaces, quotas, netpol, RBAC, Argo) |
 | S8-04 | S8 | ✅ | — | mémoire, gateway et notification dans les étapes de provisioning |
 | S8-05 | S8 | ✅ | — | pipeline CI Tekton du template + Triggers + CloudEvents |
-| S8-06 | S8 | 🟡 | — | tests de template sur kind à écrire (nightly) |
+| S8-06 | S8 | 🟡 | — | conformité des templates sans cluster (connecteurs, étapes, scaffold) ; provisioning réel sur kind en nocturne |
 | S9-01 | S9 | ✅ | — | `ReleaseTrain` complet : fenêtres, cron, lots, express, gel, approbation |
 | S9-02 | S9 | ✅ | — | CdAdapter Argo : promotion par PR GitOps, santé, rollout, abandon, fenêtres |
 | S9-03 | S9 | ✅ | — | AnalysisTemplate SLO, soak, smoke ; canary cassé → rollback prouvé par test |
