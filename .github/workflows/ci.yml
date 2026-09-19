@@ -60,7 +60,7 @@ jobs:
       - name: lint
         run: uv run ruff check packages apps/api apps/orchestrator tools tests && uv run ruff format --check packages apps/api apps/orchestrator tools tests
       - name: typage
-        run: uv run mypy packages/*/src apps/*/src tools
+        run: uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools
       - name: tests et couverture
         run: uv run pytest --cov --cov-report=xml -q
       - uses: actions/upload-artifact@v4
@@ -105,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-        with: { version: v3.16.4 }
+        with: { version: v3.22.0 }
       - run: helm lint charts/choregos
       - name: rendu des trois environnements
         run: |
@@ -119,7 +119,11 @@ jobs:
           ./kubeconform -strict -ignore-missing-schemas -summary /tmp/prod.yaml
       - name: helm unittest
         run: |
-          helm plugin install https://github.com/helm-unittest/helm-unittest || true
+          # Version épinglée : le plugin suit Helm de près — `platformHooks` dans son
+          # plugin.yaml exige Helm ≥ 3.18, et sur une version plus ancienne l'installation
+          # échoue. Le `|| true` d'avant avalait cet échec et le transformait en
+          # « unknown command "unittest" » deux lignes plus bas.
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2
           helm unittest charts/choregos
 
   conformance-backends:
@@ -166,7 +170,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: scan Trivy (aucun CRITICAL toléré)
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
           exit-code: "1"

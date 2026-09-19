@@ -87,7 +87,9 @@ charts-lint:  ## helm lint + kubeconform (ignoré si helm absent)
 
 .PHONY: charts-test
 charts-test:  ## helm unittest
-	@command -v helm >/dev/null 2>&1 && helm unittest charts/choregos || echo "helm unittest absent"
+	@command -v helm >/dev/null 2>&1 || { echo "helm absent — installer Helm >= 3.18"; exit 1; }
+	@helm plugin list 2>/dev/null | grep -q "^unittest" || helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2
+	helm unittest charts/choregos
 
 # ───────────────────────── dev ─────────────────────────
 .PHONY: dev-up
