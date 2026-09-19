@@ -203,7 +203,12 @@ jobs:
 
   ci-ok:
     # Cible unique pour la protection de branche et la merge queue.
-    needs: [python, contracts, web, charts, conformance-backends]
+    #
+    # `images` en fait partie : sans lui, la porte était verte alors qu'aucune des cinq images
+    # de la plateforme ne se construisait — c'est exactement ce qui s'est passé au premier
+    # passage de cette CI. Trois minutes d'attente contre une branche `main` dont on ne peut
+    # rien déployer, le compte est vite fait.
+    needs: [python, contracts, web, charts, conformance-backends, images]
     if: always()
     runs-on: ubuntu-latest
     steps:
