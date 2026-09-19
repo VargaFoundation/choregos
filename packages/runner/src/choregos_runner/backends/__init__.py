@@ -40,7 +40,9 @@ def known_backends() -> list[str]:
     return sorted(BACKENDS)
 
 
-# Nom du backend → binaire installé dans l'image (les adaptateurs ACP ont leur propre nom).
+# Nom du backend → **clé de `versions.lock`**, qui n'est ni le nom du backend ni celui du
+# binaire : `claude-code` est épinglé sous `claude-agent-acp` et s'exécute en
+# `claude-code-acp`, `gemini-cli` est épinglé sous `gemini-cli` et s'exécute en `gemini`.
 BACKEND_BINARIES: dict[str, str] = {
     "openhands": "openhands",
     "claude-code": "claude-agent-acp",

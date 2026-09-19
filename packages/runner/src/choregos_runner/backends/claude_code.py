@@ -17,7 +17,11 @@ class ClaudeCodeBackend(Backend):
     model_constraint: ClassVar[tuple[str, ...]] = ("claude", "anthropic")
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
-        command = list(stage_input.agent.launch.command) or ["claude-agent-acp"]
+        # `@zed-industries/claude-code-acp` installe un binaire `claude-code-acp` — et rien
+        # d'autre. Le défaut nommait `claude-agent-acp`, qui est la clé de `versions.lock`,
+        # pas un exécutable : sans `agent.launch.command` explicite, le lancement échouait
+        # sur « command not found ».
+        command = list(stage_input.agent.launch.command) or ["claude-code-acp"]
         settings = {
             "permissions": {
                 "deny": [f"Bash({command})" for command in stage_input.permissions.deny_commands],

@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git gnupg jq ripgrep make build-essential tini unzip \
  && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
- && npm install -g pnpm@9 \
+ && npm install -g npm@latest pnpm@latest \
  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       -o /usr/share/keyrings/githubcli.gpg \
  && echo "deb [signed-by=/usr/share/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
@@ -37,30 +37,47 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # Scanners de sécurité, utilisés par la boucle DoD et la CI des projets.
-COPY --from=aquasec/trivy:0.58.1 /usr/local/bin/trivy /usr/local/bin/trivy
-COPY --from=zricethezav/gitleaks:v8.22.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
+COPY --from=aquasec/trivy:0.74.0 /usr/local/bin/trivy /usr/local/bin/trivy
+COPY --from=zricethezav/gitleaks:v8.30.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
 
 # Agents ACP, à versions épinglées (packages/runner/backends/versions.lock).
 COPY packages/runner/src/choregos_runner/backends/versions.lock /etc/choregos/versions.lock
 RUN set -eux; \
     version() { grep "^$1=" /etc/choregos/versions.lock | cut -d= -f2; }; \
-    npm install -g \
+    npm install -g --allow-scripts=opencode-ai,@github/keytar,node-pty \
       "@zed-industries/claude-code-acp@$(version claude-agent-acp)" \
       "@google/gemini-cli@$(version gemini-cli)" \
       "opencode-ai@$(version opencode)"; \
-    pip install --no-cache-dir "openhands-ai==$(version openhands)" || \
-      echo "⚠ OpenHands non installé dans cette image (voir la variante `full`)"
+    pip install --no-cache-dir "openhands-ai==$(version openhands)"
 
-# Ce que l'image prétend contenir, elle le contient. Le `|| echo` qui suivait le `npm install`
-# a laissé publier pendant des semaines une image runner sans `opencode` : la version épinglée
-# n'existait pas sur npm, l'installation sortait en erreur, le message d'avertissement partait
-# dans un log de build que personne ne lit, et l'image était signée comme les autres. Un agent
-# manquant doit casser la construction, pas la traverser.
+# Les dépendances transitives qu'OpenHands 0.59 épingle en deçà de ce que la porte Trivy
+# accepte. Elles sont montées après coup plutôt qu'en montant OpenHands lui-même : la 1.x a
+# retiré l'agent ACP en ligne de commande (`openhands acp`) au profit d'un serveur HTTP
+# (`agent-server`), ce qui n'est pas une montée d'épingle mais une réécriture du backend.
+# Voir docs/plan/BLOCKERS.md.
+RUN pip install --no-cache-dir \
+      "anyio>=4.14.2" \
+      "fastmcp>=3.2.0" \
+      "litellm>=1.84.0" \
+      "GitPython>=3.1.59"
+
+# Ce que l'image prétend contenir, elle le contient — et ce qu'elle contient démarre.
+#
+# Le `|| echo` qui suivait le `npm install` a laissé publier une image runner sans `opencode` :
+# la version épinglée n'existait pas sur npm, l'installation sortait en erreur, l'avertissement
+# partait dans un log de build que personne ne lit, et l'image était signée comme les autres.
+#
+# Et `command -v` ne suffit pas. `opencode-ai` 1.x installe un lanceur qui télécharge son vrai
+# binaire en postinstall, et npm 12 bloque les scripts de cycle de vie par défaut — une
+# nouveauté héritée en montant npm pour le CVE de son `tar`. Résultat : le fichier existe,
+# `command -v opencode` le trouve, et toute invocation répond « opencode-ai's postinstall
+# script was not run ». D'où `--allow-scripts` ci-dessus, et un contrôle qui **appelle** chaque
+# agent au lieu de constater sa présence.
 RUN set -eux; \
-    version() { grep "^$1=" /etc/choregos/versions.lock | cut -d= -f2; }; \
-    command -v claude-code-acp >/dev/null; \
-    command -v gemini >/dev/null; \
-    command -v opencode >/dev/null
+    timeout 30 claude-code-acp --version >/dev/null </dev/null; \
+    timeout 30 gemini --version >/dev/null; \
+    timeout 30 opencode --version >/dev/null; \
+    timeout 30 openhands --version >/dev/null
 
 # Shims : défense en profondeur. Aucun credential n'existe de toute façon, mais un agent
 # qui essaie doit être **refusé et tracé**, pas silencieusement ignoré.

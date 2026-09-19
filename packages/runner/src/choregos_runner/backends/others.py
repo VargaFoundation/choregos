@@ -47,7 +47,9 @@ class GeminiCliBackend(Backend):
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
-        command = list(stage_input.agent.launch.command) or ["gemini", "--experimental-acp"]
+        # `--acp` depuis gemini-cli 0.39 ; `--experimental-acp` est déprécié et affiche un
+        # avertissement dans le flux stdio que l'ACP utilise.
+        command = list(stage_input.agent.launch.command) or ["gemini", "--acp"]
         settings = {
             "selectedAuthType": "api-key",
             "model": stage_input.model.litellm_model,

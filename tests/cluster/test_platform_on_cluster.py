@@ -35,7 +35,7 @@ def _image_present() -> bool:
 @pytest.fixture(scope="module", autouse=True)
 def platform() -> None:
     if not _image_present():
-        pytest.skip(f"image `{IMAGE}` absente — `make images` ou `docker build -f docker/api.Dockerfile --target api`")
+        pytest.skip(f"image `{IMAGE}` absente — `make images`")
     _wait_namespace_gone()
     kubectl(
         "apply",

@@ -171,7 +171,7 @@ Sorties standardisées : code 0 (résultat posté, quel que soit `status`), 10 (
 | `openhands` (défaut) | `openhands acp` (ou `agent-server` + client ACP) ; skills `.openhands/skills/` ; `AGENTS.md` lu nativement | `LLM_MODEL=<litellm_model>`, `LLM_BASE_URL`, `LLM_API_KEY` | Sécurité : `LLMSecurityAnalyzer` activable par politique |
 | `claude-code` | `claude-agent-acp` (adaptateur Zed) ; `CLAUDE.md` → lien vers `AGENTS.md` ; `settings.json` projet avec hooks de secours | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL` | Modèle Claude uniquement (validation projet) |
 | `codex` | `codex-acp` ; `AGENTS.md` natif | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, modèle via config | |
-| `gemini-cli` | `gemini --experimental-acp` | `GOOGLE_GEMINI_BASE_URL` (via LiteLLM), clé | |
+| `gemini-cli` | `gemini --acp` (`--experimental-acp` déprécié depuis 0.39) | `GOOGLE_GEMINI_BASE_URL` (via LiteLLM), clé | |
 | `goose` | `goose acp` | provider `openai` pointé sur LiteLLM | |
 | `opencode` | `opencode acp` ou `opencode serve` + SDK | `opencode.json` provider `openai-compatible` → LiteLLM | API mouvante : suite de conformité obligatoire |
 | `copilot-cli` | `copilot --acp` | selon doc GitHub | Optionnel |
