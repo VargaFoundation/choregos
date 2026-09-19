@@ -15,3 +15,4 @@ c'est réglé*.
 | [purge-runs.md](purge-runs.md) | la base grossit, les transcripts s'accumulent |
 | [run-bloque.md](run-bloque.md) | un run reste `Pending` ou ne finit jamais |
 | [webhook-perdu.md](webhook-perdu.md) | un ticket `agent-ready` n'a pas démarré |
+| [aca-live.md](aca-live.md) | vérifier l'exécuteur Azure Container Apps contre un vrai abonnement |

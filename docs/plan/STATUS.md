@@ -106,7 +106,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
 | S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
 | S13-04 | S13 | 🟡 | — | GitLab **vérifié contre gitlab.com** (cycle complet sur un projet bac à sable) ; Jira écrit et testé contre le protocole, pas encore contre une instance |
-| S13-05 | S13 | 🟡 | — | exécuteur ACA écrit et testé contre ARM ; template `github-aca` livré — `azure-devops-aca` complet attend Azure Boards/Pipelines |
+| S13-05 | S13 | 🟡 | — | exécuteur ACA **vérifié contre un vrai abonnement Azure** (6 tests live : cycle complet, `start` rejoué sans double exécution, jeton absent d'ARM, annulation, 404, logs) — trois défauts trouvés et corrigés au passage ; template `github-aca` livré. `azure-devops-aca` complet attend une organisation Azure DevOps (Boards + Pipelines), qu'un abonnement ne fournit pas |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
 **Total** : 95 livrées, 7 partielles, 0 non commencée.
@@ -121,8 +121,9 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
   sauvegarde Postgres se restaure avec ses données, les manifests générés sont acceptés par le
   serveur d'API, et l'API + les workers tournent depuis l'image du dépôt — worker tué compris.
 - **Contre les vrais services** : GitLab (cycle complet sur gitlab.com), Ecphoria (context pack,
-  file de validation, upsert idempotent) et LiteLLM (clé de run, budget en plafond dur, coût
-  mesuré à la passerelle, format Anthropic).
+  file de validation, upsert idempotent), LiteLLM (clé de run, budget en plafond dur, coût
+  mesuré à la passerelle, format Anthropic) et **Azure Container Apps** (un job créé, déclenché,
+  observé jusqu'à son état terminal, annulé — sur un abonnement réel).
 - Les 7 backends ACP passent les 7 contrôles de conformité ; les 2 templates passent la
   conformité de template.
 

@@ -269,3 +269,78 @@ async def test_une_identite_incomplete_est_refusee_clairement() -> None:
     with pytest.raises(ConfigurationError) as error:
         await client.token()
     assert "tenant_id" in str(error.value)
+
+
+async def test_aucun_nom_de_tag_ne_porte_de_caractere_refuse_par_arm() -> None:
+    """La régression qui a coûté S13-05 : ARM refuse `< > % & \\ ? /` dans un *nom* de tag.
+
+    Nos étiquettes sont écrites à la mode Kubernetes (`choregos/run-id`) — exactement la forme
+    interdite. Le transport simulé ne valide pas les noms, donc les dix-huit tests d'à côté
+    passaient pendant qu'aucun job n'aurait pu être créé. Ce test refait la validation ici.
+    """
+    envoye: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path.endswith("/executions"):
+            return httpx.Response(200, json={"value": []})
+        if request.method == "GET":
+            return httpx.Response(404)
+        if request.method == "PUT":
+            envoye.update(jsonlib.loads(request.content))
+        return httpx.Response(200, json={})
+
+    aca = executor(handler)
+    job = spec()
+    # Des étiquettes d'appelant dans le style k8s : elles aussi doivent être traduites.
+    job.labels = {
+        "app.kubernetes.io/name": "choregos",
+        "choregos/stage": "implement",
+        "sans-souci": "ok",
+    }
+    await aca.start(job)
+
+    interdits = set("<>%&\\?/")
+    for nom in envoye.get("tags", {}):
+        assert not (set(nom) & interdits), f"nom de tag refusé par ARM : {nom!r}"
+
+    tags = envoye["tags"]
+    # La traduction garde le sens : un `/` devient `_`, le reste est intact.
+    assert tags["choregos_run-id"] == job.run_id
+    assert tags["choregos_project"] == job.project_slug
+    assert tags["app.kubernetes.io_name"] == "choregos"
+    assert tags["choregos_stage"] == "implement"
+    assert tags["sans-souci"] == "ok"
+
+
+async def test_les_ressources_de_l_etape_sont_honorees() -> None:
+    """Le même workflow doit demander les mêmes ressources quel que soit l'exécuteur.
+
+    `k8s_job` honore `spec.cpu`/`spec.memory` ; ACA les ignorait et imposait les siennes, donc une
+    étape qui demandait 2 vCPU en obtenait 1 selon le backend, sans rien dire.
+    """
+    envoye: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path.endswith("/executions"):
+            return httpx.Response(200, json={"value": []})
+        if request.method == "GET":
+            return httpx.Response(404)
+        if request.method == "PUT":
+            envoye.update(jsonlib.loads(request.content))
+        return httpx.Response(200, json={})
+
+    aca = executor(handler, cpu=0.5, memory="1Gi")
+    job = spec()
+    job.cpu = "2"
+    job.memory = "4Gi"
+    await aca.start(job)
+    resources = envoye["properties"]["template"]["containers"][0]["resources"]
+    assert resources == {"cpu": 2.0, "memory": "4Gi"}
+
+    # Une valeur illisible retombe sur celle de l'exécuteur : un run ne doit pas échouer pour ça.
+    envoye.clear()
+    aca2 = executor(handler, cpu=0.5, memory="1Gi")
+    bancal = spec("run-43")
+    bancal.cpu = "beaucoup"
+    await aca2.start(bancal)
+    assert envoye["properties"]["template"]["containers"][0]["resources"]["cpu"] == 0.5

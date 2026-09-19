@@ -177,7 +177,7 @@ class AcaExecutor:
                 {"name": "CHOREGOS_RUN_TOKEN", "secretRef": "run-token"},
                 *[{"name": key, "value": value} for key, value in spec.env.items()],
             ],
-            "resources": {"cpu": self.cpu, "memory": self.memory},
+            "resources": self._resources(spec),
         }
         configuration: dict[str, Any] = {
             "triggerType": "Manual",
@@ -190,11 +190,13 @@ class AcaExecutor:
             configuration["registries"] = [{"server": self.registry_server, "identity": self.identity_id}]
         definition: dict[str, Any] = {
             "location": self.location,
-            "tags": {
-                "choregos/run-id": spec.run_id,
-                "choregos/project": spec.project_slug,
-                **spec.labels,
-            },
+            "tags": _tags(
+                {
+                    "choregos/run-id": spec.run_id,
+                    "choregos/project": spec.project_slug,
+                    **spec.labels,
+                }
+            ),
             "properties": {
                 "environmentId": self.environment_id,
                 "configuration": configuration,
@@ -208,11 +210,35 @@ class AcaExecutor:
             }
         return definition
 
+    def _resources(self, spec: StageJobSpec) -> dict[str, Any]:
+        """Ressources de l'étape, avec les valeurs de l'exécuteur en repli.
+
+        L'exécuteur k8s honore `spec.cpu`/`spec.memory` ; celui-ci les ignorait et imposait les
+        siennes. Une étape qui demande 4 vCPU en obtenait 1 selon le backend, en silence — le même
+        workflow n'avait donc pas le même comportement d'un exécuteur à l'autre.
+
+        ACA veut un nombre pour le CPU et n'accepte que certaines combinaisons (mémoire = 2 × vCPU
+        en Gi). Une valeur illisible retombe sur celle de l'exécuteur plutôt que de faire échouer le
+        run ; une combinaison invalide est refusée par ARM, avec son message.
+        """
+        try:
+            cpu = float(spec.cpu) if spec.cpu else self.cpu
+        except ValueError:
+            cpu = self.cpu
+        return {"cpu": cpu, "memory": spec.memory or self.memory}
+
     async def _executions(self, name: str) -> list[dict[str, Any]]:
         payload = await self.client.request("GET", f"{self._path(name)}/executions")
         return list((payload or {}).get("value", []))
 
     async def status(self, ref: ExecRef) -> ExecStatus:
+        """État de l'exécution, traduit depuis celui d'ACA.
+
+        `ended_at` est **indicatif** : ARM rend un statut terminal sans `endTime` dans certains cas
+        (observé sur un run tué par son `replicaTimeout`). L'orchestrateur horodate lui-même la fin
+        d'un run, donc la durée rapportée ne dépend pas de ce champ — s'y fier ici donnerait des
+        étapes de zéro seconde dans le commentaire du ticket, ce qui est pire qu'un champ vide.
+        """
         executions = await self._executions(ref.name)
         if not executions:
             return ExecStatus(state="unknown", message="aucune exécution pour ce job")
@@ -261,6 +287,29 @@ class AcaExecutor:
         for table in (payload or {}).get("tables", []):
             for row in table.get("rows", []):
                 yield str(row[-1])
+
+
+# Azure refuse `< > % & \\ ? /` dans un **nom** de tag — sauf pour les préfixes réservés
+# `hidden` et `link`. Nos étiquettes sont écrites à la mode Kubernetes (`choregos/run-id`), qui est
+# exactement la forme interdite : sans cette traduction, ARM répond 400 et **aucun job n'est jamais
+# créé**. Les 18 tests contre transport simulé n'ont rien vu, parce qu'un transport simulé ne
+# valide pas les noms de tags ; un abonnement réel l'a dit au premier appel (S13-05).
+_TAG_RESERVED = "<>%&\\?/"
+
+
+def _tag_name(name: str) -> str:
+    """Nom de tag acceptable par ARM. `choregos/run-id` → `choregos_run-id`."""
+    return "".join("_" if c in _TAG_RESERVED else c for c in name)
+
+
+def _tags(tags: dict[str, str]) -> dict[str, str]:
+    """Traduit les noms, garde les valeurs.
+
+    Les valeurs, elles, acceptent tout : seul le *nom* est contraint. Une collision de noms après
+    traduction (`a/b` et `a_b`) garde la dernière — assez improbable pour ne pas mériter un
+    échec, et de toute façon visible dans le tag rendu.
+    """
+    return {_tag_name(key): value for key, value in tags.items()}
 
 
 def _parse_time(value: Any) -> Any:

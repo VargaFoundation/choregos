@@ -26,6 +26,23 @@ spec:
       values: |
         replicaCount: 3
         config:
+          memory:
+            cognition:
+              # Le banc au profil Choregos (20 000 faits, 200 000 événements, 50 lectures/s)
+              # mesure 540 ms p95 au défaut de 2048, et 24 ms à 512 — sans coût de rappel
+              # mesurable à cette taille de corpus (kb_eval : R@5 86,1 % contre 84,7 %).
+              # Le défaut amont est dimensionné pour un corpus dix fois plus gros : à remesurer
+              # avec `kb_eval` si le nôtre dépasse ~50 000 mémoires.
+              # Voir docs/benchmarks-choregos.md dans VargaFoundation/ecphoria.
+              retrievalScanCap: 512
+            governance:
+              tenants:
+                # `warn` d'abord : les écritures de Choregos portent déjà
+                # `provenance.source` et un `kind` typé, mais une seule contre-preuve suffit à
+                # bloquer un run. On regarde `ecphoria_fact_validation_failures_total` une
+                # semaine, puis on passe à `strict` et `requireProvenance: true`.
+                choregos:
+                  factValidation: warn
           gateway:
             authEnabled: true
             # Les clés viennent du coffre via External Secrets. Le chart accepte des entrées
