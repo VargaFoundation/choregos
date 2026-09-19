@@ -114,14 +114,21 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 ## Ce qui tient debout aujourd'hui
 
 - `make demo` : un ticket traverse la plateforme jusqu'à la production, sans cluster.
-- `make ci` : lint, typage strict, 229 tests, contrats vérifiés, charts rendus.
-- Les jalons M1 à M5 ont chacun leurs scénarios e2e, qui passent.
-- Les 7 backends ACP passent les 7 contrôles de conformité.
+- `make ci` : lint, typage strict sur 153 fichiers, 390 tests, contrats vérifiés, charts rendus.
+- Couverture 84 % sur `packages/core`, `packages/runner`, `apps/orchestrator` (seuil : 80 %).
+- Les jalons M1 à M5 ont chacun leurs scénarios e2e : 24 au vert, sans cluster.
+- Les 7 backends ACP passent les 7 contrôles de conformité ; les 2 templates passent la
+  conformité de template (connecteurs enregistrés, étapes implémentées, scaffold présent).
+- Trois trackers (GitHub, Jira, GitLab) et quatre exécuteurs (Tekton, Job K8s, Docker, ACA).
 
 ## Ce qui manque pour dire « en production »
 
-1. Un vrai cluster : les scénarios sur kind (provisioning réel, Tekton, Argo) restent à jouer.
+1. Un vrai cluster : les scénarios sur kind (provisioning réel, Tekton, Argo, egress bloqué,
+   chaos) restent à jouer. Ils sont écrits et attendent la CI nocturne.
 2. Ecphoria (flux S11) vit dans son propre dépôt ; le repli pgvector couvre l'intervalle.
 3. Les runbooks doivent être exécutés une fois en staging — un runbook non joué est une hypothèse.
-4. Jira/GitLab et l'exécuteur ACA (S13-04, S13-05) ne sont pas écrits : les webhooks
-   correspondants répondent honnêtement « adaptateur non activé ».
+4. Les adaptateurs Jira, GitLab et ACA sont écrits et testés **contre le protocole**
+   (transport HTTP simulé) ; aucun n'a encore parlé à une instance réelle. C'est la première
+   chose à faire au premier projet Jira, GitLab ou Azure.
+5. La compatibilité `/v1/messages` de LiteLLM (S4-05) se vérifie contre un vrai proxy :
+   le format d'API est choisi par backend, l'écho des en-têtes `anthropic-beta` reste à tester.

@@ -12,7 +12,7 @@ Licence : Apache 2.0. Plan d'exécution complet : [`docs/plan/00-index.md`](docs
 
 ## Principes
 
-1. **Le tracker est l'interface humaine.** GitHub Issues/Projects (Jira, GitLab ensuite) reste
+1. **Le tracker est l'interface humaine.** GitHub Issues/Projects, Jira ou GitLab reste
    l'endroit où l'on décide ; Choregos y écrit l'état, le coût et les preuves.
 2. **L'orchestrateur planifie, il n'appelle jamais un modèle.** Les workflows Temporal décident
    quelle étape lancer ; seuls les runners parlent aux agents.
