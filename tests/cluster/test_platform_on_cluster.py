@@ -180,8 +180,24 @@ def _service(name: str, port: int) -> dict:
     }
 
 
-def api(method: str, path: str, body: dict | None = None) -> dict:
-    """Appelle l'API depuis l'intérieur du cluster — pas de port-forward à orchestrer."""
+def api(method: str, path: str, body: dict | None = None, *, tries: int = 6) -> dict:
+    """Appelle l'API depuis l'intérieur du cluster — pas de port-forward à orchestrer.
+
+    Un `rollout status` terminé ne veut pas dire que le `Service` a ses endpoints : il y a
+    quelques secondes entre les deux, pendant lesquelles `curl` échoue avec un refus de
+    connexion. On réessaie plutôt que de transformer cette latence en échec de test.
+    """
+    for attempt in range(tries):
+        try:
+            return _api_once(method, path, body)
+        except AssertionError:
+            if attempt == tries - 1:
+                raise
+            time.sleep(5)
+    raise AssertionError("inatteignable")
+
+
+def _api_once(method: str, path: str, body: dict | None = None) -> dict:
     command = ["curl", "-s", "-X", method, f"http://api:8000{path}"]
     if body is not None:
         command += ["-H", "Content-Type: application/json", "-d", json.dumps(body)]
