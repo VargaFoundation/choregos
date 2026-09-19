@@ -121,6 +121,7 @@ testpaths = ["packages", "apps", "tests"]
 # d'évals dans une copie jetable, pas par la suite de la plateforme.
 norecursedirs = [
   "apps/web",
+  "tests/live",
   "node_modules",
   ".venv",
   "tests/e2e",
@@ -132,6 +133,7 @@ markers = [
   "e2e: scénario bout en bout",
   "conformance: suite de conformité backends/templates",
   "slow: test long",
+  "live: nécessite des identifiants réels (Jira, GitLab, Azure) — ignoré sans eux",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
 

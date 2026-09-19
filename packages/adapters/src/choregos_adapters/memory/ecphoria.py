@@ -142,7 +142,7 @@ class EcphoriaMemory:
             payload = await self._request(
                 "POST", "/api/v1/memories", project=project, timeout=self.write_timeout, json=body
             )
-        return str(payload.get("id", ""))
+        return _written_id(payload)
 
     async def propose_fact(self, project: str, fact: Fact, provenance: Provenance) -> str:
         payload = await self._request(
@@ -151,9 +151,9 @@ class EcphoriaMemory:
             project=project,
             timeout=self.write_timeout,
             params={"status": "pending"},
-            json={**_fact_body(fact), "provenance": provenance.model_dump(mode="json")},
+            json=_with_provenance(_fact_body(fact), provenance),
         )
-        return str(payload.get("id", ""))
+        return _written_id(payload)
 
     async def list_pending(self, project: str) -> list[Memory]:
         payload = await self._request("GET", "/api/v1/pending", project=project, timeout=self.write_timeout)
@@ -181,18 +181,22 @@ class EcphoriaMemory:
             "/api/v1/memories/batch",
             project=project,
             timeout=max(self.write_timeout, 10.0),
-            json={"items": [_ingest_body(event) for event in events]},
+            json={"memories": [_ingest_body(event) for event in events]},
         )
 
     async def search(self, project: str, query: str, k: int) -> list[Memory]:
         payload = await self._request(
             "POST",
-            "/api/v1/search",
+            "/api/v1/memories/search",
             project=project,
             timeout=max(self.read_timeout * 3, 1.0),
             json={"query": query, "k": k},
         )
-        return [_memory(entry) for entry in payload.get("results", [])]
+        # Un hit porte la mémoire et son score : `{"memory": {…}, "score": 0.42}`.
+        return [
+            _memory({**hit.get("memory", hit), "score": hit.get("score")})
+            for hit in payload.get("results", [])
+        ]
 
     async def create_tenant(self, project: str) -> None:
         await self._request(
@@ -211,27 +215,56 @@ class EcphoriaMemory:
         return {"ok": True, "status": payload}
 
 
+def _written_id(payload: dict[str, Any]) -> str:
+    """L'identifiant d'une écriture.
+
+    Ecphoria répond `{memory, outcome}` sur un ajout et `{id, …}` sur un upsert ou une
+    proposition : les deux formes désignent la même chose, on ne veut pas que l'appelant
+    ait à le savoir.
+    """
+    if payload.get("id"):
+        return str(payload["id"])
+    return str((payload.get("memory") or {}).get("id", ""))
+
+
 def _fact_body(fact: Fact) -> dict[str, Any]:
-    return {
-        "kind": str(fact.kind),
+    """Corps d'écriture Ecphoria.
+
+    `kind`, `paths` et `provenance` sont des notions Choregos : Ecphoria les porte dans
+    `metadata`, et c'est là que le context pack va les relire pour filtrer par type et par
+    chemin autorisé. Les envoyer à la racine revenait à les perdre en silence.
+    """
+    body: dict[str, Any] = {
         "subject": fact.subject,
         "content": fact.content,
-        "valid_from": fact.valid_from.isoformat() if fact.valid_from else None,
-        "valid_to": fact.valid_to.isoformat() if fact.valid_to else None,
-        "paths": fact.paths,
-        "provenance": fact.provenance.model_dump(mode="json") if fact.provenance else None,
+        "metadata": {
+            "kind": str(fact.kind),
+            "paths": list(fact.paths or []),
+            "provenance": fact.provenance.model_dump(mode="json") if fact.provenance else {},
+        },
     }
+    if fact.valid_from:
+        body["valid_from"] = fact.valid_from.isoformat()
+    return body
 
 
 def _ingest_body(event: dict[str, Any]) -> dict[str, Any]:
+    source = event.get("source", "choregos")
     return {
-        "external_id": event.get("external_id"),
-        "source": event.get("source", "choregos"),
-        "kind": event.get("kind", "other"),
         "subject": event.get("subject", ""),
         "content": event.get("content", ""),
-        "provenance": {"source": event.get("source", "choregos"), "ref": event.get("external_id")},
+        "metadata": {
+            "kind": event.get("kind", "other"),
+            "external_id": event.get("external_id"),
+            "source": source,
+            "provenance": {"source": source, "ref": event.get("external_id")},
+        },
     }
+
+
+def _with_provenance(body: dict[str, Any], provenance: Provenance) -> dict[str, Any]:
+    metadata = {**body.get("metadata", {}), "provenance": provenance.model_dump(mode="json")}
+    return {**body, "metadata": metadata}
 
 
 def _memory_item(payload: dict[str, Any]) -> MemoryItem:
@@ -248,13 +281,23 @@ def _memory_item(payload: dict[str, Any]) -> MemoryItem:
 
 
 def _memory(payload: dict[str, Any]) -> Memory:
+    """Mémoire Ecphoria → modèle Choregos.
+
+    Ecphoria range le type, les chemins et la provenance dans `metadata`, et nomme son cycle
+    de vie `state` (`active` / `pending` / `superseded` / `expired`). On traduit les deux.
+    """
+    metadata = payload.get("metadata") or {}
+    provenance = metadata.get("provenance") or payload.get("provenance") or {}
+    state = str(payload.get("state") or payload.get("status") or "active")
     return Memory(
         id=str(payload.get("id", "")),
-        kind=payload.get("kind", "other"),
-        subject=str(payload.get("subject", "")),
+        kind=metadata.get("kind") or payload.get("kind") or "other",
+        subject=str(payload.get("subject") or ""),
         content=str(payload.get("content", "")),
         score=payload.get("score"),
-        status=payload.get("status", "active"),
-        provenance=payload.get("provenance") or {},
-        proposed_by=(payload.get("provenance") or {}).get("run_id"),
+        status="rejected" if state == "expired" else state,
+        valid_from=payload.get("valid_from"),
+        valid_to=payload.get("valid_to"),
+        provenance=provenance,
+        proposed_by=provenance.get("run_id"),
     )
