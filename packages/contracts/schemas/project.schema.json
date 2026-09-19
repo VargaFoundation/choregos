@@ -31,7 +31,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "default_backend": { "type": "string", "default": "openhands" },
+        "default_backend": { "type": "string", "default": "claude-code" },
         "allowed_backends": { "type": "array", "items": { "type": "string" } }
       }
     },
