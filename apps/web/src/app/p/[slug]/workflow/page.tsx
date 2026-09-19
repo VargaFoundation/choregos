@@ -1,10 +1,22 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import { use, useEffect, useState } from "react";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { WorkflowValidation } from "@/lib/types";
+
+// Monaco et React Flow pèsent lourd : ils sont chargés à l'ouverture de cette page,
+// et d'elle seule. Le board et les runs n'en paient pas le prix.
+const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
+  ssr: false,
+  loading: () => <p className="text-sm text-ink-muted">éditeur en cours de chargement…</p>,
+});
+const WorkflowGraph = dynamic(
+  () => import("@/components/workflow-graph").then((m) => m.WorkflowGraph),
+  { ssr: false, loading: () => <p className="text-sm text-ink-muted">graphe en cours de rendu…</p> },
+);
 
 /**
  * Éditeur de workflow : YAML à gauche, graphe à droite. La validation est faite par
@@ -57,13 +69,12 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
           </Button>
         }
       >
-        <textarea
-          aria-label="Workflow YAML"
+        <YamlEditor
+          label="Workflow YAML"
           value={yaml}
-          onChange={(event) => setYaml(event.target.value)}
-          spellCheck={false}
-          rows={28}
-          className="w-full rounded border border-line bg-surface p-3 font-mono text-xs"
+          onChange={setYaml}
+          issues={report?.errors ?? []}
+          warnings={report?.warnings ?? []}
         />
         {message && <p className="mt-2 text-sm">{message}</p>}
       </Card>
@@ -87,7 +98,10 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
 
         <Card title="Graphe">
           {report?.graph ? (
-            <Graph graph={report.graph} />
+            <>
+              <WorkflowGraph graph={report.graph} />
+              <Lanes graph={report.graph} />
+            </>
           ) : (
             <Empty>le graphe apparaît dès que le workflow est valide</Empty>
           )}
@@ -97,7 +111,7 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
   );
 }
 
-function Graph({ graph }: { graph: NonNullable<WorkflowValidation["graph"]> }) {
+function Lanes({ graph }: { graph: NonNullable<WorkflowValidation["graph"]> }) {
   const lanes = ["agent", "human", "system", "train", "wait", "terminal"];
   const nodes = graph.nodes as Array<{ id: string; display: string; lane?: string; terminal?: boolean }>;
   const edges = graph.edges as Array<{
@@ -110,7 +124,8 @@ function Graph({ graph }: { graph: NonNullable<WorkflowValidation["graph"]> }) {
     gates?: string[];
   }>;
   return (
-    <div className="space-y-4">
+    <details className="mt-3 space-y-4">
+      <summary className="cursor-pointer text-xs text-ink-muted">détail par couloir</summary>
       {lanes.map((lane) => {
         const inLane = nodes.filter((node) => (node.lane ?? "system") === lane);
         if (inLane.length === 0) return null;
@@ -144,6 +159,6 @@ function Graph({ graph }: { graph: NonNullable<WorkflowValidation["graph"]> }) {
           ))}
         </ul>
       </div>
-    </div>
+    </details>
   );
 }

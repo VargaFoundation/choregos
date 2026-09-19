@@ -54,7 +54,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S5-02 | S5 | ✅ | — | projets et wizard de création avec validation par étape |
 | S5-03 | S5 | ✅ | — | board : colonnes = états du DSL, décisions en ligne |
 | S5-04 | S5 | ✅ | — | ticket (coût par étape, timeline) et run (journal virtualisé, diff, preuves) |
-| S5-05 | S5 | 🟡 | — | éditeur YAML + validation par l'API + graphe par couloirs ; Monaco et React Flow non intégrés |
+| S5-05 | S5 | ✅ | — | Monaco (erreurs de l'API dans la marge) + React Flow par couloirs, chargés à la demande |
 | S5-06 | S5 | ✅ | — | trains : lot, départ, gel avec motif obligatoire, approbation confirmée |
 | S5-07 | S5 | ✅ | — | findings et mémoire (recherche, file `pending`) |
 | S5-08 | S5 | ✅ | — | paramètres (connecteurs, politique, matrice) et administration (audit) |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | 🟡 | — | exécuteur ACA écrit et testé contre ARM ; template `github-aca` livré — `azure-devops-aca` complet attend Azure Boards/Pipelines |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 89 livrées, 12 partielles, 1 non commencée.
+**Total** : 90 livrées, 11 partielles, 1 non commencée.
 
 ## Ce qui tient debout aujourd'hui
 
