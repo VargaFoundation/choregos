@@ -47,9 +47,20 @@ RUN set -eux; \
     npm install -g \
       "@zed-industries/claude-code-acp@$(version claude-agent-acp)" \
       "@google/gemini-cli@$(version gemini-cli)" \
-      "opencode-ai@$(version opencode)" || echo "⚠ certains agents npm n'ont pas pu être installés"; \
+      "opencode-ai@$(version opencode)"; \
     pip install --no-cache-dir "openhands-ai==$(version openhands)" || \
       echo "⚠ OpenHands non installé dans cette image (voir la variante `full`)"
+
+# Ce que l'image prétend contenir, elle le contient. Le `|| echo` qui suivait le `npm install`
+# a laissé publier pendant des semaines une image runner sans `opencode` : la version épinglée
+# n'existait pas sur npm, l'installation sortait en erreur, le message d'avertissement partait
+# dans un log de build que personne ne lit, et l'image était signée comme les autres. Un agent
+# manquant doit casser la construction, pas la traverser.
+RUN set -eux; \
+    version() { grep "^$1=" /etc/choregos/versions.lock | cut -d= -f2; }; \
+    command -v claude-code-acp >/dev/null; \
+    command -v gemini >/dev/null; \
+    command -v opencode >/dev/null
 
 # Shims : défense en profondeur. Aucun credential n'existe de toute façon, mais un agent
 # qui essaie doit être **refusé et tracé**, pas silencieusement ignoré.

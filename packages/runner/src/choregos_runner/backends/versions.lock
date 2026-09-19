@@ -14,5 +14,10 @@ gemini-cli=0.12.0
 # renovate: datasource=github-releases depName=block/goose
 goose=1.9.0
 # renovate: datasource=github-releases depName=sst/opencode
-opencode=0.8.3
+# 0.8.3 n'a jamais existé sur npm : la ligne 0.8 de `opencode-ai` s'arrête à 0.8.0. Le premier
+# build de l'image dans une CI l'a dit (`npm error notarget`) ; personne ne l'avait entendu
+# parce que l'installation était suivie d'un `|| echo`. Corrigé à la version publiée la plus
+# proche de l'intention d'origine — les 1.x sont une autre génération, à faire passer par la
+# conformité (S2-11) avant de s'y engager.
+opencode=0.8.0
 copilot-cli=0.3.0

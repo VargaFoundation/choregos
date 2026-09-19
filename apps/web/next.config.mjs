@@ -1,12 +1,17 @@
-import type { NextConfig } from "next";
-
 /**
  * Le front ne parle qu'à l'API Choregos. En développement, `/api/v1` est relayé
  * vers l'API locale (ou vers le mock Prism) pour éviter toute configuration CORS.
+ *
+ * En `.mjs` et non en `.ts` : `next start` charge ce fichier au démarrage, et pour un `.ts`
+ * il lui faut le paquet `typescript`. L'image de production n'embarque que les
+ * `dependencies` — elle tentait donc d'installer TypeScript au lancement du conteneur, et
+ * échouait sur « Failed to load next.config.ts ». Le JSDoc ci-dessous garde le typage dans
+ * l'éditeur et au `tsc`.
  */
 const apiUrl = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
 
-const nextConfig: NextConfig = {
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: false,
