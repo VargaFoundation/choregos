@@ -1,0 +1,6 @@
+enabled: true
+image:
+  repository: choregos-tools
+  tag: ""
+  digest: ""
+publishTask: true

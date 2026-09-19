@@ -1,0 +1,24 @@
+enabled: true
+image:
+  repository: choregos-orchestrator
+  tag: ""
+  digest: ""
+queues:
+  - name: orchestrator
+    replicas: 2
+    resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } }
+  - name: executor
+    replicas: 2
+    resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } }
+  - name: tracker
+    replicas: 2
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+  - name: memory
+    replicas: 1
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+runner:
+  image: choregos-runner
+  tag: "1.0.0"
+  namespacePattern: "proj-{slug}-runners"
+  executor: tekton
+

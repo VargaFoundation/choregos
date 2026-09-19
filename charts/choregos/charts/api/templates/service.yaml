@@ -1,0 +1,45 @@
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: choregos-api
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: choregos-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: choregos-api
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+  annotations: {{- toYaml .Values.global.serviceAccount.annotations | nindent 4 }}
+automountServiceAccountToken: true
+---
+# L'API ne lit que l'état des PipelineRun des projets : elle ne crée rien dans le cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: choregos-api-read-runs
+rules:
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns", "taskruns"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: choregos-api-read-runs
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: choregos-api-read-runs }
+subjects:
+  - kind: ServiceAccount
+    name: choregos-api
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -1,0 +1,16 @@
+enabled: true
+replicaCount: 2
+image:
+  repository: choregos-web
+  tag: ""
+  digest: ""
+service:
+  port: 3000
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: 500m, memory: 512Mi }
+ingress:
+  enabled: true
+  hostnames: ["app.choregos.local"]
+  gateway: choregos-gateway
+  gatewayNamespace: gateway

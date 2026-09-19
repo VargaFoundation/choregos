@@ -1,0 +1,26 @@
+enabled: true
+replicaCount: 2
+image:
+  repository: choregos-api
+  tag: ""
+  digest: ""
+service:
+  port: 8000
+resources:
+  requests: { cpu: 200m, memory: 512Mi }
+  limits: { cpu: "1", memory: 1Gi }
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+migrations:
+  enabled: true
+ingress:
+  enabled: true
+  hostnames: ["api.choregos.local"]
+  gateway: choregos-gateway
+  gatewayNamespace: gateway
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

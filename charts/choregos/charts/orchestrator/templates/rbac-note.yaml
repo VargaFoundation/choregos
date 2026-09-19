@@ -1,0 +1,15 @@
+{{- if .Values.enabled }}
+# Les droits de l'orchestrateur sur les namespaces `proj-*-runners` sont **générés par le
+# provisioning** (un Role + RoleBinding par projet, écrits dans `choregos-infra/projects/<slug>/`).
+# Ici, on ne donne aucun droit cluster-wide : c'est volontaire.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: choregos-orchestrator-rbac-note
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+data:
+  README: |
+    L'orchestrateur n'a pas de ClusterRole. Chaque projet provisionné crée, dans son
+    namespace de runners, un Role autorisant la création de PipelineRun, Secret et
+    ConfigMap, lié au ServiceAccount `choregos-orchestrator` du namespace de la plateforme.
+{{- end }}

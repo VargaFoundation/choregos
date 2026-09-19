@@ -1,0 +1,109 @@
+{{- if .Values.enabled }}
+{{- $canary := .Values.global.canary | default dict }}
+{{- if $canary.enabled }}
+# Canary de la plateforme : Argo Rollouts remplace le Deployment. Le pod est le même — c'est la
+# façon d'y arriver qui change. Sans Rollouts installé, laisser `global.canary.enabled: false`.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+{{- end }}
+metadata:
+  name: choregos-api
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  {{- if $canary.enabled }}
+  strategy:
+    canary:
+      # Les paliers et leur durée viennent des valeurs : un environnement prudent allonge la
+      # pause, il ne réécrit pas le chart.
+      steps:
+        {{- range $canary.steps }}
+        - setWeight: {{ .weight }}
+        {{- if .pause }}
+        - pause: { duration: {{ .pause }} }
+        {{- else }}
+        - pause: {}
+        {{- end }}
+        {{- end }}
+      {{- with $canary.analysis }}
+      analysis:
+        templates:
+          - templateName: {{ . }}
+        startingStep: 1
+      {{- end }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-api
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: api
+      annotations:
+        # Une rotation de secret redéploie les pods : sinon la clé tourne sans effet.
+        checksum/config: {{ toJson .Values | sha256sum }}
+    spec:
+      serviceAccountName: choregos-api
+      securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            {{- include "choregos.commonEnv" . | nindent 12 }}
+            - name: CHOREGOS_OIDC_ISSUER
+              value: {{ .Values.global.oidc.issuer | quote }}
+            - name: CHOREGOS_OIDC_CLIENT_ID
+              value: {{ .Values.global.oidc.clientId | quote }}
+            - name: CHOREGOS_OIDC_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.oidc.secretRef }}, key: client-secret } }
+            - name: CHOREGOS_SESSION_SECRET
+              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: session-secret } }
+            - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: run-token-private-key } }
+            - name: CHOREGOS_RUN_TOKEN_PUBLIC_KEY
+              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: run-token-public-key } }
+            - name: CHOREGOS_GITHUB_WEBHOOK_SECRET
+              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: github-webhook-secret } }
+            - name: CHOREGOS_GITHUB_APP_ID
+              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: github-app-id } }
+            - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: github-app-private-key } }
+            - name: CHOREGOS_GATEWAY_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: choregos-gateway-secrets, key: master-key } }
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: choregos-api
+{{- end }}

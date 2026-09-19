@@ -1,0 +1,54 @@
+{{- if .Values.enabled }}
+{{- $root := . }}
+{{- range .Values.queues }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: choregos-orchestrator-{{ .name }}
+  labels: {{- include "choregos.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: orchestrator
+    choregos/queue: {{ .name }}
+spec:
+  replicas: {{ .replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-orchestrator
+      choregos/queue: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-orchestrator
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        choregos/queue: {{ .name }}
+    spec:
+      serviceAccountName: choregos-orchestrator
+      securityContext: {{- toYaml $root.Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "choregos.image" (dict "global" $root.Values.global "image" $root.Values.image) }}
+          imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
+          securityContext: {{- toYaml $root.Values.global.securityContext | nindent 12 }}
+          args: ["--queues", {{ .name | quote }}]
+          env:
+            {{- include "choregos.commonEnv" $root | nindent 12 }}
+            - name: CHOREGOS_RUNNER_IMAGE
+              value: {{ $root.Values.global.imageRegistry }}/{{ $root.Values.runner.image }}:{{ $root.Values.runner.tag }}
+            - name: CHOREGOS_RUNNER_NAMESPACE_PATTERN
+              value: {{ $root.Values.runner.namespacePattern | quote }}
+            - name: CHOREGOS_EXECUTOR_KIND
+              value: {{ $root.Values.runner.executor | quote }}
+            - name: CHOREGOS_GATEWAY_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: choregos-gateway-secrets, key: master-key } }
+          resources: {{- toYaml .resources | nindent 12 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+{{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: choregos-orchestrator
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+  annotations: {{- toYaml .Values.global.serviceAccount.annotations | nindent 4 }}
+{{- end }}

@@ -1,0 +1,31 @@
+{{- if and .Values.enabled .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: choregos-migrations-{{ .Release.Revision }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+  annotations:
+    # Les migrations passent **avant** les nouveaux pods (expand/contract, compatibles N-1).
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels: {{- include "choregos.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: choregos-api
+      securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrations
+          image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
+          command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+          env: {{- include "choregos.commonEnv" . | nindent 12 }}
+          securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+{{- end }}
