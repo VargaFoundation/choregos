@@ -10,6 +10,17 @@ global:
   imageDigest: ""
   environment: dev
   fakes: false
+  # Canary de la plateforme (S7-08). Désactivé par défaut : il exige Argo Rollouts dans le
+  # cluster, et un chart qui suppose un opérateur absent est un chart qui ne s'installe pas.
+  # Les environnements qui l'activent le font dans `values/staging.yaml` et `values/prod.yaml`.
+  canary:
+    enabled: false
+    steps:
+      - { weight: 10, pause: 5m }
+      - { weight: 50, pause: 10m }
+      - { weight: 100 }
+    # `AnalysisTemplate` qui décide d'abandonner : sans lui, le canary ne fait qu'attendre.
+    analysis: ""
   logLevel: INFO
   serviceAccount:
     annotations: {}
