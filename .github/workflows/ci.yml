@@ -17,6 +17,13 @@ permissions:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    # `dorny/paths-filter` demande à l'API la liste des fichiers de la PR. Le `GITHUB_TOKEN`
+    # d'une PR Dependabot est en lecture seule et ne porte que ce que le workflow déclare :
+    # sans `pull-requests: read`, l'action sort sur « Resource not accessible by integration »
+    # et aucun filtre n'est calculé.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       python: ${{ steps.filter.outputs.python }}
       web: ${{ steps.filter.outputs.web }}
@@ -208,7 +215,11 @@ jobs:
     # de la plateforme ne se construisait — c'est exactement ce qui s'est passé au premier
     # passage de cette CI. Trois minutes d'attente contre une branche `main` dont on ne peut
     # rien déployer, le compte est vite fait.
-    needs: [python, contracts, web, charts, conformance-backends, images]
+    #
+    # `changes` en fait partie aussi : quand le calcul des filtres échoue, tous les jobs qui en
+    # dépendent sont *sautés*, et une porte qui ne regarde que des jobs sautés est verte. Une PR
+    # Dependabot est passée comme ça, sans qu'une seule ligne n'ait été testée.
+    needs: [changes, python, contracts, web, charts, conformance-backends, images]
     if: always()
     runs-on: ubuntu-latest
     steps:
