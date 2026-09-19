@@ -59,6 +59,13 @@ CHOREGOS_FAKES=1 uv run choregos-orchestrator # workers Temporal
 pnpm -C apps/web dev                          # front sur :3000
 ```
 
+## Intégrer un projet
+
+Vous avez un dépôt et vous voulez que la plateforme le développe :
+**[docs/demarrer-un-projet.md](docs/demarrer-un-projet.md)**. Le guide va du `make demo`
+(le trajet complet en mémoire, sans rien installer) jusqu'au provisioning d'un vrai projet
+— GitHub App, board, GitOps, scaffolding — et au premier ticket `agent-ready`.
+
 ## Carte du dépôt
 
 | Chemin | Contenu |
