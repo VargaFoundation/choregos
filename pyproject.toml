@@ -122,6 +122,7 @@ testpaths = ["packages", "apps", "tests"]
 norecursedirs = [
   "apps/web",
   "tests/live",
+  "tests/cluster",
   "node_modules",
   ".venv",
   "tests/e2e",
@@ -134,6 +135,7 @@ markers = [
   "conformance: suite de conformité backends/templates",
   "slow: test long",
   "live: nécessite des identifiants réels (Jira, GitLab, Azure) — ignoré sans eux",
+  "cluster: nécessite un vrai cluster Kubernetes (CNI appliquant les NetworkPolicy)",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
 
