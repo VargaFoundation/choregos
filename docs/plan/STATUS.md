@@ -2,6 +2,14 @@
 
 État des stories du backlog (`08-backlog.yaml`), tenu par le flux intégrateur.
 
+Le dépôt vit sur `github.com/VargaFoundation/choregos` depuis le 2026-09-19. Le premier
+passage de la CI ailleurs que sur la station de travail a trouvé six choses qu'aucune
+exécution locale ne pouvait voir — une action GitHub référencée par un tag qui n'existe pas,
+un glob mypy qui attrapait du TypeScript, `helm unittest` qui ne s'était jamais exécuté (et
+dont les quatre tests étaient faux), l'image des workers qui partait du commit précédent,
+l'image web qui ne se construisait pas, et la porte `ci-ok` qui ne regardait pas les images.
+C'est la valeur d'un dépôt distant, mesurée en une heure.
+
 Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est dit) · ⬜ non commencée.
 
 | Story | Flux | État | PR | Notes |
