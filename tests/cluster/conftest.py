@@ -39,9 +39,7 @@ def context() -> str:
     return name
 
 
-def kubectl(
-    *args: str, input_text: str | None = None, check: bool = True, timeout_s: float = 180
-) -> str:
+def kubectl(*args: str, input_text: str | None = None, check: bool = True, timeout_s: float = 180) -> str:
     """`kubectl` sur le contexte du test. Rend la sortie ; lève si `check` et échec.
 
     `timeout_s` dépasse largement le `--timeout` passé à `kubectl wait` : le premier

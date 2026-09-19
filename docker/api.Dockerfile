@@ -16,13 +16,20 @@ COPY packages/playbooks/pyproject.toml packages/playbooks/
 COPY packages/cli/pyproject.toml packages/cli/
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
-RUN mkdir -p packages/{contracts,core,adapters,runner,tools-mcp,playbooks,cli}/src \
-             apps/{api,orchestrator}/src
+# `/bin/sh` n'étend pas les accolades : elles créaient un répertoire nommé littéralement
+# `packages/{contracts,core,…}`, que uv prenait ensuite pour un membre de l'espace de travail
+# sans `pyproject.toml`.
+RUN for p in contracts core adapters runner tools-mcp playbooks cli; do mkdir -p "packages/$p/src"; done \
+ && for a in api orchestrator; do mkdir -p "apps/$a/src"; done
 
 COPY packages packages
 COPY apps/api apps/api
 COPY apps/orchestrator apps/orchestrator
-RUN uv sync --frozen --no-dev --package choregos-api --package choregos-orchestrator
+# `uv sync` n'accepte qu'un seul `--package` : deux occurrences font échouer la construction
+# ("the argument '--package <PACKAGE>' cannot be used multiple times"). L'image sert aussi de
+# socle aux workers (docker/orchestrator.Dockerfile), donc elle doit porter les deux — on
+# synchronise l'espace de travail entier, qui les contient et rien de plus lourd.
+RUN uv sync --frozen --no-dev --all-packages
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH"

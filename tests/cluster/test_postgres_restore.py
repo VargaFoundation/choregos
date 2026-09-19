@@ -164,6 +164,10 @@ def _cluster_manifest(name: str, *, restore_from: str | None = None) -> str:
                 "barmanObjectStore": {
                     "destinationPath": f"s3://{BUCKET}/{restore_from}",
                     "endpointURL": "http://minio:9000",
+                    # Sans `serverName`, CNPG cherche la sauvegarde sous le nom du **nouveau**
+                    # cluster et répond « no target backup found ». C'est le nom du serveur
+                    # d'origine qu'il faut donner : le piège classique d'une restauration.
+                    "serverName": restore_from,
                     "s3Credentials": spec["backup"]["barmanObjectStore"]["s3Credentials"],
                     "wal": {"maxParallel": 2},
                 },

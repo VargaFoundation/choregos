@@ -39,6 +39,10 @@ spec:
     - name: choregos-pg
       barmanObjectStore:
         destinationPath: s3://choregos-backups/choregos-pg
+        # `serverName` est le nom du cluster **d'origine**. Sans lui, CNPG cherche la
+        # sauvegarde sous le nom du nouveau cluster et répond « no target backup found »,
+        # avec un magasin d'objets pourtant plein. Vérifié en restaurant pour de vrai.
+        serverName: choregos-pg
         s3Credentials:
           accessKeyId: { name: choregos-backup, key: access-key-id }
           secretAccessKey: { name: choregos-backup, key: secret-access-key }

@@ -23,9 +23,7 @@ SLUG = "manifests-test"
 
 
 def manifests(preset: str = "team") -> dict[str, str]:
-    config = ProjectConfig(
-        slug=SLUG, org="varga", repo=RepoConfig(url="https://github.com/varga/demo.git")
-    )
+    config = ProjectConfig(slug=SLUG, org="varga", repo=RepoConfig(url="https://github.com/varga/demo.git"))
     return render_project_manifests(SLUG, config, load_preset(preset))
 
 
@@ -45,9 +43,7 @@ def namespaces() -> None:
     """Les namespaces d'abord : le reste y vit, un dry-run serveur les exige existants."""
     kubectl("apply", "-f", "-", input_text=manifests()["namespaces.yaml"])
     yield
-    kubectl(
-        "delete", "ns", f"proj-{SLUG}-runners", f"proj-{SLUG}-ci", "--ignore-not-found", check=False
-    )
+    kubectl("delete", "ns", f"proj-{SLUG}-runners", f"proj-{SLUG}-ci", "--ignore-not-found", check=False)
 
 
 @pytest.mark.parametrize(
