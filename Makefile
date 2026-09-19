@@ -131,6 +131,28 @@ mock-api:  ## Sert l'API mockée depuis l'OpenAPI (Prism)
 e2e:  ## Scénarios bout en bout (kind requis)
 	$(UV) run pytest tests/e2e -m e2e -q
 
+.PHONY: cluster-up
+cluster-up:  ## Cluster kind dédié aux tests (Calico : les NetworkPolicy sont appliquées)
+	@command -v kind >/dev/null || { echo "✗ kind est requis (voir docs/dev.md)"; exit 1; }
+	kind create cluster --config dev/kind.yaml --wait 180s || true
+	kubectl --context kind-choregos apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
+	@echo "· attente du CNI…"
+	kubectl --context kind-choregos -n kube-system rollout status ds/calico-node --timeout=300s
+	@echo "✓ cluster prêt — CHOREGOS_CLUSTER_CONTEXT=kind-choregos make test-cluster"
+
+.PHONY: cluster-down
+cluster-down:  ## Détruit le cluster de test
+	kind delete cluster --name choregos
+
+.PHONY: test-cluster
+test-cluster:  ## Tests qui exigent un vrai cluster (S2-12, S7-04, S8-06)
+	CHOREGOS_CLUSTER_CONTEXT=$${CHOREGOS_CLUSTER_CONTEXT:-kind-choregos} \
+	  $(UV) run pytest tests/cluster -m cluster -q
+
+.PHONY: test-live
+test-live:  ## Tests contre les vrais services (identifiants dans l'environnement)
+	$(UV) run pytest tests/live -m live -q
+
 .PHONY: conformance
 conformance:  ## Suites de conformité (backends ACP, templates)
 	$(UV) run pytest tests/conformance -m conformance -q

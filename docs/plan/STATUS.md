@@ -36,7 +36,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S2-09 | S2 | ✅ | — | exécuteur Tekton : PipelineRun, Secret par run, result-url, annulation |
 | S2-10 | S2 | ✅ | — | exécuteurs Job Kubernetes et Docker local, même contrat |
 | S2-11 | S2 | ✅ | — | suite de conformité : 7 contrôles × 7 backends + rapport de désactivation |
-| S2-12 | S2 | 🟡 | — | manifests de sandbox écrits (netpol, gVisor, quotas) ; test d'egress bloqué à faire sur kind |
+| S2-12 | S2 | ✅ | — | egress bloqué **vérifié** sur kind + Calico (7 tests) : internet fermé, DNS ouvert, API interne joignable, port non listé fermé, pod privilégié refusé |
 | S3-01 | S3 | ✅ | — | App GitHub : JWT, jetons d'installation scopés, cache, backoff |
 | S3-02 | S3 | ✅ | — | tracker Issues + Projects v2 (GraphQL), option Status créée si absente |
 | S3-03 | S3 | ✅ | — | webhooks → InboundEvent, HMAC, dédup, commandes `/choregos …` |
@@ -48,7 +48,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S4-02 | S4 | ✅ | — | GatewayAdapter : mint (plafond dur), spend, revoke, list_models |
 | S4-03 | S4 | ✅ | — | `cost_ledger`, fx, agrégats par jour/étape/modèle/backend/taille |
 | S4-04 | S4 | ✅ | — | estimation médiane/p80 sur 90 jours, alerte de dépassement |
-| S4-05 | S4 | 🟡 | — | format Anthropic géré par backend ; test d'écho `/v1/messages` à ajouter |
+| S4-05 | S4 | ✅ | — | `/v1/messages` vérifié contre un vrai LiteLLM ; l'environnement remis à `claude-code` appelle pour de vrai (8 tests live) |
 | S4-06 | S4 | ✅ | — | profils plateforme/projet, validation, matrice opposable |
 | S5-01 | S5 | ✅ | — | socle Next.js 15 / React 19 / TS strict / Tailwind + composants transverses |
 | S5-02 | S5 | ✅ | — | projets et wizard de création avec validation par étape |
@@ -83,7 +83,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S8-03 | S8 | ✅ | — | rendu des manifests GitOps du projet (namespaces, quotas, netpol, RBAC, Argo) |
 | S8-04 | S8 | ✅ | — | mémoire, gateway et notification dans les étapes de provisioning |
 | S8-05 | S8 | ✅ | — | pipeline CI Tekton du template + Triggers + CloudEvents |
-| S8-06 | S8 | 🟡 | — | conformité des templates sans cluster (connecteurs, étapes, scaffold) ; provisioning réel sur kind en nocturne |
+| S8-06 | S8 | 🟡 | — | conformité hors cluster + manifests acceptés par un vrai serveur d'API (dry-run serveur) ; provisioning complet sur kind en nocturne |
 | S9-01 | S9 | ✅ | — | `ReleaseTrain` complet : fenêtres, cron, lots, express, gel, approbation |
 | S9-02 | S9 | ✅ | — | CdAdapter Argo : promotion par PR GitOps, santé, rollout, abandon, fenêtres |
 | S9-03 | S9 | ✅ | — | AnalysisTemplate SLO, soak, smoke ; canary cassé → rollback prouvé par test |
@@ -96,7 +96,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S10-04 | S10 | ✅ | — | context pack réel par rôle, budget de tokens, archivé avec le run |
 | S10-05 | S10 | ✅ | — | écriture gouvernée : `write_fact`, `propose_fact`, file `pending`, auto-accept |
 | S10-06 | S10 | ✅ | — | faux positifs alertés ; rapport A/B hebdomadaire (premier passage, coût/ticket) posté et exposé |
-| S11-* | S11 | ⬜ | — | dépôt `VargaFoundation/ecphoria` : hors de ce monorepo (E-01 → E-14) |
+| S11-* | S11 | 🟡 | — | E-01 (triage des 19 PR), E-03/E-05/E-06/E-07 livrés dans `VargaFoundation/ecphoria` et vérifiés depuis Choregos (10 tests live) ; E-02, E-04, E-09 à E-14 restent |
 | S12-01 | S12 | ✅ | — | 6 tickets de référence, dépôts jouets Python et Node, assertions vérifiées pour de vrai |
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
 | S12-03 | S12 | ✅ | — | évals de playbooks : une dégradation de prompt fait échouer la CI |
@@ -105,7 +105,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-01 | S13 | ✅ | — | backend claude-code (hook de secours, modèles Claude uniquement) — conformité 7/7 |
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
 | S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
-| S13-04 | S13 | 🟡 | — | adaptateurs Jira et GitLab écrits et testés contre le protocole ; jamais joués contre une instance réelle |
+| S13-04 | S13 | 🟡 | — | GitLab **vérifié contre gitlab.com** (cycle complet sur un projet bac à sable) ; Jira écrit et testé contre le protocole, pas encore contre une instance |
 | S13-05 | S13 | 🟡 | — | exécuteur ACA écrit et testé contre ARM ; template `github-aca` livré — `azure-devops-aca` complet attend Azure Boards/Pipelines |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 

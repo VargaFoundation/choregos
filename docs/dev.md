@@ -43,6 +43,49 @@ make dev-down    # tout détruire, volumes compris
 Tilt recharge à chaud l'API, le front, les workers, le runner et le sidecar. L'interface
 Tilt expose aussi trois boutons : *seed*, *démo hors ligne*, *tests*.
 
+## Tests qui touchent le vrai monde
+
+Deux familles, hors de la suite par défaut. Elles sont **ignorées** si ce dont elles ont
+besoin manque — un test qui ne s'exécute pas ne prouve rien, et le dire vaut mieux qu'un
+point vert qui n'a rien vérifié.
+
+### `tests/cluster` — ce qui n'est vrai que sur un vrai Kubernetes
+
+```bash
+make cluster-up                            # kind + Calico
+make test-cluster                          # S2-12 (egress), S7-04 (restauration), S8-06 (manifests)
+make cluster-down
+```
+
+Le CNI doit **appliquer** les NetworkPolicy. Ni kindnet ni Docker Desktop ne le font : ils
+acceptent la politique et laissent passer le trafic. C'est pour ça que `make cluster-up`
+installe Calico, et que le premier test de la suite vérifie ce point avant tous les autres.
+
+`CHOREGOS_CLUSTER_CONTEXT` choisit le contexte kube (défaut : `kind-choregos`).
+
+### `tests/live` — les adaptateurs face aux vrais services
+
+```bash
+CHOREGOS_LIVE_GITLAB_TOKEN=… CHOREGOS_LIVE_GITLAB_PROJECT=groupe/projet \
+CHOREGOS_LIVE_ECPHORIA_URL=http://127.0.0.1:8432 CHOREGOS_LIVE_ECPHORIA_TOKEN=… \
+CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:4000 CHOREGOS_LIVE_LITELLM_KEY=sk-… \
+make test-live
+```
+
+Aucun identifiant n'est dans le dépôt. Ces tests écrivent pour de vrai : donnez-leur un
+projet bac à sable, pas un projet qui compte.
+
+Pour LiteLLM, un proxy local suffit :
+
+```bash
+docker run -d --name litellm -p 4000:4000 -v $(pwd)/dev/litellm.yaml:/app/config.yaml:ro \
+  -e LITELLM_MASTER_KEY=sk-choregos-dev -e DATABASE_URL=postgresql://… \
+  ghcr.io/berriai/litellm:main-stable --config /app/config.yaml --port 4000
+```
+
+La base est obligatoire : sans elle, LiteLLM ne peut pas créer de clé virtuelle, donc aucun
+run ne démarre.
+
 ## Le front sans l'API
 
 ```bash
@@ -80,3 +123,11 @@ choregos runs diff <run-id>      # diff annoté : ce qui est hors périmètre es
   coûts affichés sont simulés. C'est très bien pour développer, jamais pour juger un modèle.
 - **Les migrations sont compatibles N-1** : revenir en arrière est sûr, mais un `downgrade`
   d'une migration qui supprime une colonne perd des données.
+- **`make dev-up` publie des ports** (3000, 8000, 8080, 8088). Si l'un est déjà pris sur la
+  machine, kind échoue à la création avec `Bind for 0.0.0.0:3000 failed`. Libérez le port ou
+  éditez les `hostPort` de `dev/kind.yaml`.
+- **Une NetworkPolicy acceptée n'est pas une NetworkPolicy appliquée.** Sur un cluster sans
+  CNI qui les fait respecter, le bac à sable des runners ne retient rien — et rien ne le
+  signale. `tests/cluster` commence par vérifier ce point.
+- **LiteLLM open-source refuse les `tags` de clé** (fonction Enterprise) et exige des
+  `key_alias` uniques à vie. Les deux sont gérés par l'adaptateur ; ne les remettez pas.

@@ -39,11 +39,18 @@ def context() -> str:
     return name
 
 
-def kubectl(*args: str, input_text: str | None = None, check: bool = True) -> str:
-    """`kubectl` sur le contexte du test. Rend la sortie ; lève si `check` et échec."""
+def kubectl(
+    *args: str, input_text: str | None = None, check: bool = True, timeout_s: float = 180
+) -> str:
+    """`kubectl` sur le contexte du test. Rend la sortie ; lève si `check` et échec.
+
+    `timeout_s` dépasse largement le `--timeout` passé à `kubectl wait` : le premier
+    démarrage tire des images, et un timeout de processus plus court que l'attente demandée
+    transforme une lenteur en échec de test.
+    """
     command = ["kubectl", "--context", context(), *args]
     result = subprocess.run(
-        command, capture_output=True, text=True, input=input_text, timeout=180, check=False
+        command, capture_output=True, text=True, input=input_text, timeout=timeout_s, check=False
     )
     if check and result.returncode != 0:
         raise AssertionError(f"{' '.join(command)} → {result.returncode}\n{result.stderr[:800]}")

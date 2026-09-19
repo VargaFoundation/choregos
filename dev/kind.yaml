@@ -2,6 +2,11 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: choregos
+networking:
+  # kindnet n'applique pas les NetworkPolicy : sans CNI qui les fait respecter, le bac à
+  # sable des runners est une intention. Calico est installé par `make cluster-up`.
+  disableDefaultCNI: true
+  podSubnet: 192.168.0.0/16
 nodes:
   - role: control-plane
     kubeadmConfigPatches:
