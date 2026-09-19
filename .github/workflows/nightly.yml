@@ -21,12 +21,53 @@ jobs:
         with:
           config: dev/kind.yaml
           cluster_name: choregos
+      - name: CNI qui applique les NetworkPolicy
+        # `dev/kind.yaml` désactive le CNI par défaut : kindnet accepte les politiques et
+        # laisse passer le trafic, ce qui rendrait vert un bac à sable qui ne retient rien.
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
+          kubectl -n kube-system rollout status ds/calico-node --timeout=300s
       - run: uv sync --frozen
       - name: scénarios de jalon sur kind
         run: uv run pytest tests/e2e -m e2e -q
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: e2e-report, path: tests/e2e/report, if-no-files-found: ignore }
+
+  cluster:
+    name: Ce qui n'est vrai que sur un vrai cluster
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: helm/kind-action@v1
+        with:
+          config: dev/kind.yaml
+          cluster_name: choregos
+      - name: Calico, CloudNativePG, Argo Rollouts
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
+          kubectl -n kube-system rollout status ds/calico-node --timeout=300s
+          kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.1.yaml
+          kubectl -n cnpg-system rollout status deploy/cnpg-controller-manager --timeout=300s
+          kubectl create namespace argo-rollouts --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/download/v1.7.2/install.yaml
+          kubectl -n argo-rollouts rollout status deploy/argo-rollouts --timeout=300s
+      - run: uv sync --frozen
+      - name: image de l'API (la pile de plateforme en a besoin)
+        run: |
+          docker build -f docker/api.Dockerfile -t choregos-api:dev .
+          kind load docker-image choregos-api:dev --name choregos
+      - name: egress, restauration, manifests, plateforme, canary
+        env:
+          CHOREGOS_CLUSTER_CONTEXT: kind-choregos
+        run: uv run pytest tests/cluster -m cluster -q
+      - name: état du cluster en cas d'échec
+        if: failure()
+        run: |
+          kubectl get pods -A
+          kubectl get events -A --sort-by=.lastTimestamp | tail -40
 
   conformance:
     runs-on: ubuntu-latest
@@ -81,7 +122,7 @@ jobs:
           exit-code: "0"
 
   alerte:
-    needs: [e2e, conformance, evals, replay]
+    needs: [e2e, cluster, conformance, evals, replay]
     if: failure()
     runs-on: ubuntu-latest
     steps:
