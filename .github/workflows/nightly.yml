@@ -59,7 +59,7 @@ jobs:
         run: |
           docker build -f docker/api.Dockerfile -t choregos-api:dev .
           kind load docker-image choregos-api:dev --name choregos
-      - name: egress, restauration, manifests, plateforme, canary
+      - name: egress, restauration, manifests, plateforme, canary, perte de nœud
         env:
           CHOREGOS_CLUSTER_CONTEXT: kind-choregos
         run: uv run pytest tests/cluster -m cluster -q

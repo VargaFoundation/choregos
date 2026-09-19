@@ -22,3 +22,8 @@ runner:
   namespacePattern: "proj-{slug}-runners"
   executor: tekton
 
+# Secondes pendant lesquelles un worker reste accroché à un nœud devenu injoignable avant d'être
+# évincé. Le défaut de Kubernetes est 300 : mesuré sur cluster, cela fait 359 s d'immobilité après
+# la perte d'un nœud, contre 74 s ici. Un worker est remplaçable et Temporal reprend son travail.
+# `0` rend le comportement par défaut de Kubernetes.
+unreachableTolerationSeconds: 20

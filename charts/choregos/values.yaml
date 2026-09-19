@@ -94,6 +94,9 @@ choregos-orchestrator:
   enabled: true
   image:
     repository: choregos-orchestrator
+  # Après la perte d'un nœud, un worker attend ce délai avant d'être évincé (défaut Kubernetes :
+  # 300 s, soit ~6 minutes d'immobilité — voir `tests/cluster/test_node_loss.py`).
+  unreachableTolerationSeconds: 20
   # Un déploiement par task queue : les appels externes lents n'étouffent pas la boucle de décision.
   queues:
     - name: orchestrator

@@ -101,7 +101,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
 | S12-03 | S12 | ✅ | — | évals de playbooks : une dégradation de prompt fait échouer la CI |
 | S12-04 | S12 | ✅ | — | 23 scénarios e2e M1–M5, sans cluster ; variantes kind en nocturne |
-| S12-05 | S12 | 🟡 | — | reprise sans double coût prouvée ; worker tué et remplacé sur cluster sans casse ; perte d'un nœud spot à jouer |
+| S12-05 | S12 | ✅ | — | reprise sans double coût prouvée ; worker tué et remplacé sur cluster ; **perte d'un nœud jouée sur cluster** (`tests/cluster/test_node_loss.py`) : 359 s d'immobilité avec les défauts Kubernetes, 74 s avec les tolérances désormais dans le chart. Reste non couvert : le préavis d'éviction spot, que la plateforme n'écoute pas (`docs/runbooks/perte-de-noeud.md`) |
 | S13-01 | S13 | ✅ | — | backend claude-code (hook de secours, modèles Claude uniquement) — conformité 7/7 |
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
 | S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
@@ -109,7 +109,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-05 | S13 | 🟡 | — | exécuteur ACA **vérifié contre un vrai abonnement Azure** (6 tests live : cycle complet, `start` rejoué sans double exécution, jeton absent d'ARM, annulation, 404, logs) — trois défauts trouvés et corrigés au passage ; template `github-aca` livré. `azure-devops-aca` complet attend une organisation Azure DevOps (Boards + Pipelines), qu'un abonnement ne fournit pas |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 95 livrées, 7 partielles, 0 non commencée.
+**Total** : 96 livrées, 6 partielles, 0 non commencée.
 
 ## Ce qui tient debout aujourd'hui
 
@@ -137,7 +137,9 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
    instances, Argo Rollouts — restent à régler sur un vrai environnement.
 3. **Les runbooks restants** doivent être joués une fois en staging. Celui de restauration l'a
    été, et il était faux : c'est l'argument pour jouer les autres.
-4. **Le chaos au-delà du worker** : perte d'un nœud spot, coupure réseau, disque plein.
+4. **Le chaos au-delà du nœud** : coupure réseau, disque plein. La perte d'un nœud est jouée
+   (`tests/cluster/test_node_loss.py`) ; ce qui reste est le préavis d'éviction spot, que la
+   plateforme subit au lieu de l'écouter.
 5. **Ecphoria** : E-01 à E-14 sont livrés et poussés sur `main` amont. Ce qui en ressort et qui
    nous concerne : le banc au profil Choregos (20 000 faits, 200 000 événements, 50 lectures/s)
    mesure la recherche à ~250 ms p50 / ~540 ms p95 sur une station de travail, au-dessus de la

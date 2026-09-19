@@ -23,6 +23,25 @@ spec:
         choregos/queue: {{ .name }}
     spec:
       serviceAccountName: choregos-orchestrator
+      # Un nœud qui disparaît (éviction spot, panne matérielle) n'est remarqué qu'au bout d'une
+      # cinquantaine de secondes, et le défaut de Kubernetes laisse ensuite la pod **cinq minutes**
+      # accrochée à ce nœud mort avant de l'évincer. Mesuré sur cluster : 359 s d'immobilité avec
+      # les défauts, 74 s avec ces tolérances (`tests/cluster/test_node_loss.py`).
+      #
+      # Un worker est remplaçable et son travail est repris par Temporal : rien ne justifie de
+      # l'attendre cinq minutes. Réglable par `choregos-orchestrator.unreachableTolerationSeconds` ; mettre
+      # `0` rend le comportement par défaut de Kubernetes.
+      {{- if gt (int $root.Values.unreachableTolerationSeconds) 0 }}
+      tolerations:
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: {{ $root.Values.unreachableTolerationSeconds }}
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: {{ $root.Values.unreachableTolerationSeconds }}
+      {{- end }}
       securityContext: {{- toYaml $root.Values.global.podSecurityContext | nindent 8 }}
       containers:
         - name: worker
