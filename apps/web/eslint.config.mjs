@@ -1,12 +1,17 @@
-import { FlatCompat } from "@eslint/eslintrc";
-
-const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
+// Config plate native, sans `FlatCompat`.
+//
+// `eslint-config-next` 16 exporte directement des tableaux de config plate ; il n'a plus la
+// forme eslintrc que `FlatCompat` sait charger, et l'essayer quand même échoue loin de la
+// cause, sur un « Converting circular structure to JSON » au fond d'`@eslint/eslintrc`.
+import coreWebVitals from "eslint-config-next/core-web-vitals";
+import typescript from "eslint-config-next/typescript";
 
 const config = [
   // `next-env.d.ts` est écrit par Next à chaque build et porte l'avertissement
   // « should not be edited » : le linter n'a rien à y dire.
   { ignores: [".next/**", "node_modules/**", "coverage/**", "playwright-report/**", "next-env.d.ts"] },
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...coreWebVitals,
+  ...typescript,
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",

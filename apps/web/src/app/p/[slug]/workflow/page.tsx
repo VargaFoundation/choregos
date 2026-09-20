@@ -30,9 +30,16 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (current.data?.yaml) setYaml(current.data.yaml);
-  }, [current.data?.yaml]);
+  // Amorçage de l'éditeur depuis le serveur, ajusté pendant le rendu plutôt que dans un effet.
+  // Poser l'état dans un effet déclenche un rendu en cascade — l'éditeur s'affiche vide puis
+  // se remplit — et c'est ce que `react-hooks/set-state-in-effect` signale. Le motif ci-dessous
+  // est celui que React documente pour « ajuster un état quand une prop change » : on garde la
+  // valeur serveur déjà reprise, et on ne la reprend qu'une fois.
+  const [seeded, setSeeded] = useState<string | null>(null);
+  if (current.data?.yaml && current.data.yaml !== seeded) {
+    setSeeded(current.data.yaml);
+    setYaml(current.data.yaml);
+  }
 
   useEffect(() => {
     if (!yaml) return;

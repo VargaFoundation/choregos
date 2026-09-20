@@ -23,7 +23,11 @@ export function useEventStream<T>({
   mockEvents,
 }: StreamOptions<T>): { events: T[]; connected: boolean; error: string | null } {
   const [events, setEvents] = useState<T[]>(initial);
-  const [connected, setConnected] = useState(false);
+  // En mode démo il n'y a pas de connexion à ouvrir : l'état est dérivé, pas posé. Le poser
+  // dans l'effet déclenchait un rendu en cascade, ce que `react-hooks/set-state-in-effect`
+  // signale à juste titre.
+  const [liveConnected, setConnected] = useState(false);
+  const connected = IS_MOCK ? enabled : liveConnected;
   const [error, setError] = useState<string | null>(null);
   const seen = useRef(new Set<string>());
 
@@ -31,7 +35,6 @@ export function useEventStream<T>({
     if (!enabled) return;
     if (IS_MOCK) {
       // En mode démo, les événements arrivent au fil de l'eau pour montrer le direct.
-      setConnected(true);
       let index = 0;
       const timer = setInterval(() => {
         const next = mockEvents?.[index];
