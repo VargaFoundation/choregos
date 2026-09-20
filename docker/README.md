@@ -25,6 +25,17 @@ Aucun credential, aucun `kubeconfig`, aucun jeton cloud. `kubectl`, `terraform`,
 `gcloud`, `aws`, `docker` et `helm` existent, mais renvoient un refus explicite et le
 journalisent dans le run. Le jeton Git est minté par run, injecté en mémoire, jamais écrit.
 
+## Images de base : la règle
+
+Les bases suivent les lignes **LTS** : `python:3.12-slim-bookworm` et `node:22-bookworm-slim`
+aujourd'hui. Une version impaire de Node (23, 25, …) est *Current* — maintenue quelques mois,
+jamais promue — et n'a rien à faire dans une image de production. Dependabot proposera quand
+même ces montées, c'est son travail ; la règle est ici pour qu'elles soient jugées sur un
+critère et non sur l'humeur du jour.
+
+Node 25 a en prime retiré corepack, dont `web.Dockerfile` se sert pour activer pnpm : une
+montée de base peut coûter une réécriture, pas seulement une ligne.
+
 ## Signature et provenance
 
 Les images publiées sur `main` sont signées avec cosign (keyless, OIDC GitHub) et
