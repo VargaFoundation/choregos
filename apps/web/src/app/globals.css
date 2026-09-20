@@ -1,6 +1,25 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind 4 : un seul import remplace les trois directives `@tailwind`. */
+@import "tailwindcss";
+
+/* La config reste en TypeScript plutôt qu'en `@theme` CSS : elle est courte, typée, et la
+   palette est déjà pilotée par des variables CSS définies plus bas. `@config` est le pont
+   officiel de la v4 vers une config v3. */
+@config "../../tailwind.config.ts";
+
+/* Tailwind 4 a changé deux défauts de son reset que l'on ne veut pas subir ici :
+   un `<button>` reçoit `cursor: default` au lieu de `pointer`, et le placeholder passe
+   de `gray-400` à la couleur du texte à 50 %. Les deux se voient sur un tableau de bord
+   rempli de boutons et de champs. Ce sont les correctifs que le guide de migration donne. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--ink-muted) / 1);
+  }
+}
 
 /* Thème clair et sombre : deux palettes, une seule feuille de style. */
 :root {
