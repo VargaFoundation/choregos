@@ -20,7 +20,12 @@ spec:
   project: default
   source:
     repoURL: https://github.com/VargaFoundation/ecphoria.git
-    targetRevision: main
+    # Un tag, pas `main` : toutes les autres applications de ce répertoire pointent une
+    # version (`0.23.0`, `3.3.4`, …), et la ClusterPolicy `choregos-verify-images` refuse
+    # par ailleurs les références d'images mouvantes. Suivre `main` faisait exactement ce
+    # qu'on interdit ailleurs — un déploiement qui change sans qu'on ait rien décidé.
+    # Le chart prend l'image de son `appVersion`, donc ce tag fixe les deux.
+    targetRevision: v0.2.0
     path: deploy/helm/ecphoria
     helm:
       values: |
