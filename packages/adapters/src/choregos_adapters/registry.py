@@ -43,6 +43,15 @@ def fakes_enabled() -> bool:
     return os.environ.get("CHOREGOS_FAKES", "") in {"1", "true", "yes"}
 
 
+def default_executor_kind() -> str:
+    """L'exécuteur d'un projet qui n'en déclare pas : celui du déploiement.
+
+    `CHOREGOS_EXECUTOR_KIND` était posé par le chart et lu nulle part — chaque projet
+    retombait sur Tekton, y compris là où Tekton n'existe pas (un locataire qui ne peut
+    lancer que des Jobs dans son namespace)."""
+    return os.environ.get("CHOREGOS_EXECUTOR_KIND", "") or "tekton"
+
+
 def available(kind: ConnectorKind | str) -> list[str]:
     return sorted(type_name for (k, type_name) in _REGISTRY if k == str(kind))
 
@@ -113,7 +122,7 @@ class AdapterSet:
             scm=get("scm", "github"),
             ci=get("ci", "tekton"),
             cd=get("cd", "argocd"),
-            executor=get("runtime", "tekton"),
+            executor=get("runtime", default_executor_kind()),
             memory=get("memory", "ecphoria"),
             gateway=get("gateway", "litellm"),
             notify=get("notify", "slack"),

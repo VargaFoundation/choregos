@@ -57,6 +57,10 @@ spec:
               value: {{ $root.Values.runner.namespacePattern | quote }}
             - name: CHOREGOS_EXECUTOR_KIND
               value: {{ $root.Values.runner.executor | quote }}
+            - name: CHOREGOS_RUNNER_CPU_LIMIT
+              value: {{ $root.Values.runner.limits.cpu | quote }}
+            - name: CHOREGOS_RUNNER_MEMORY_LIMIT
+              value: {{ $root.Values.runner.limits.memory | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: choregos-gateway-secrets, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}

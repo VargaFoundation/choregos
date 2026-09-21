@@ -28,10 +28,16 @@ class KubernetesJobExecutor:
         *,
         service_account: str = "choregos-runner",
         ttl_seconds: int = 3600,
+        cpu_limit: str = "2",
+        memory_limit: str = "6Gi",
     ) -> None:
         self.client = client or KubernetesClient()
         self.service_account = service_account
         self.ttl_seconds = ttl_seconds
+        # Réglables : un namespace sous LimitRange refuse le pod entier au-delà de son
+        # plafond par conteneur (4 Gi chez un locataire Diametral), sans dire pourquoi au Job.
+        self.cpu_limit = cpu_limit
+        self.memory_limit = memory_limit
 
     def _name(self, run_id: str) -> str:
         return f"run-{run_id}"[:63].lower()
@@ -89,7 +95,7 @@ class KubernetesJobExecutor:
                     ],
                     "resources": {
                         "requests": {"cpu": spec.cpu, "memory": spec.memory},
-                        "limits": {"cpu": "2", "memory": "6Gi"},
+                        "limits": {"cpu": self.cpu_limit, "memory": self.memory_limit},
                     },
                     "securityContext": {
                         "allowPrivilegeEscalation": False,

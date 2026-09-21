@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from choregos_adapters.executor.k8s_job import RUNNER_POD_LABELS, KubernetesJobExecutor
+from choregos_adapters.registry import default_executor_kind
 from choregos_core.domain import StageJobSpec
 
 
@@ -46,3 +48,20 @@ async def test_le_pod_runner_ne_monte_aucun_jeton_kubernetes() -> None:
     pod = job["spec"]["template"]["spec"]
     assert pod["automountServiceAccountToken"] is False
     assert pod["serviceAccountName"] == "choregos-runner"
+
+
+async def test_les_limites_du_pod_runner_suivent_la_configuration() -> None:
+    """Sous un LimitRange à 4 Gi par conteneur, un plafond de 6 Gi fait refuser le pod."""
+    client = _RecordingClient()
+    executor = KubernetesJobExecutor(client=client, cpu_limit="1500m", memory_limit="4Gi")  # type: ignore[arg-type]
+    await executor.start(_spec())
+    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
+    limits = job["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]
+    assert limits == {"cpu": "1500m", "memory": "4Gi"}
+
+
+def test_un_projet_sans_runtime_prend_l_executeur_du_deploiement(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    assert default_executor_kind() == "k8s_job"
+    monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND")
+    assert default_executor_kind() == "tekton"

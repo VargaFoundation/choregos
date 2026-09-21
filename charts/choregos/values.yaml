@@ -130,6 +130,11 @@ choregos-orchestrator:
     tag: "1.0.0"
     namespacePattern: "proj-{slug}-runners"
     executor: tekton
+    # Plafond de chaque pod runner (exécuteur `k8s_job`). À garder sous le LimitRange du
+    # namespace : au-delà, le pod est refusé et le Job attend sans message.
+    limits:
+      cpu: "2"
+      memory: 6Gi
 
 choregos-tools:
   enabled: true

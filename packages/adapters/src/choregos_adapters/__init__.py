@@ -6,6 +6,7 @@ la décision est dans `packages/core`, l'orchestration dans `apps/orchestrator`.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .base import (
@@ -172,6 +173,8 @@ def _register_builtins() -> None:
         lambda cfg: KubernetesJobExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
             service_account=cfg.get("service_account", "choregos-runner"),
+            cpu_limit=cfg.get("cpu_limit", os.environ.get("CHOREGOS_RUNNER_CPU_LIMIT", "") or "2"),
+            memory_limit=cfg.get("memory_limit", os.environ.get("CHOREGOS_RUNNER_MEMORY_LIMIT", "") or "6Gi"),
         )
     )
     register("runtime", "aca")(
