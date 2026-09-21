@@ -53,6 +53,12 @@ spec:
         checksum/config: {{ toJson .Values | sha256sum }}
     spec:
       serviceAccountName: choregos-api
+      {{- with .Values.hostAliases }}
+      # Un fournisseur OIDC dont le nom ne résout pas depuis le cluster (split-horizon) :
+      # épinglé ici plutôt que résolu — une politique réseau par FQDN ne verrait jamais
+      # ce trafic, elle ne voit que ce qui passe par le DNS.
+      hostAliases: {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
       containers:
         - name: api

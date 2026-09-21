@@ -72,6 +72,8 @@ global:
 
 choregos-api:
   enabled: true
+  # Ex. : [{ip: "172.16.3.2", hostnames: ["sso.shared.diametral.com"]}]
+  hostAliases: []
   replicaCount: 2
   image:
     repository: choregos-api
