@@ -46,9 +46,21 @@ app.kubernetes.io/part-of: choregos
   value: {{ .Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain) | quote }}
 - name: CHOREGOS_API_URL
   value: {{ .Values.global.apiUrl | default (printf "https://api.%s" .Values.global.domain) | quote }}
+{{- with .Values.global.database.passwordSecret }}
+{{- /* Le mot de passe vient d'un secret posé par un opérateur (Zalando : clé `password`),
+       l'URL est composée ici — Kubernetes développe `$(VAR)` d'une variable déclarée avant. */}}
+- name: CHOREGOS_DATABASE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: password
+- name: CHOREGOS_DATABASE_URL
+  value: {{ printf "postgresql+asyncpg://%s:$(CHOREGOS_DATABASE_PASSWORD)@%s:%v/%s" $.Values.global.database.user $.Values.global.database.host $.Values.global.database.port $.Values.global.database.name | quote }}
+{{- else }}
 - name: CHOREGOS_DATABASE_URL
   valueFrom:
     secretKeyRef:
       name: {{ .Values.global.database.secretRef }}
       key: url
+{{- end }}
 {{- end -}}

@@ -113,3 +113,23 @@ tests:
           content:
             name: CHOREGOS_API_URL
             value: http://choregos-api.internal.dev.diametral.com
+
+  - it: l'URL de la base se compose depuis le secret de l'opérateur Zalando
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.database.passwordSecret: choregos.choregos-pg.credentials.postgresql.acid.zalan.do
+      global.database.host: choregos-pg
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DATABASE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: choregos.choregos-pg.credentials.postgresql.acid.zalan.do
+                key: password
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DATABASE_URL
+            value: postgresql+asyncpg://choregos:$(CHOREGOS_DATABASE_PASSWORD)@choregos-pg:5432/choregos

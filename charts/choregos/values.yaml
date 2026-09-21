@@ -43,6 +43,9 @@ global:
     name: choregos
     user: choregos
     secretRef: choregos-db
+    # À la place de `secretRef` (clé `url`) : le secret d'un opérateur qui ne porte que le
+    # mot de passe (Zalando : `<user>.<cluster>.credentials.postgresql.acid.zalan.do`).
+    passwordSecret: ""
   temporal:
     address: temporal-frontend.choregos-temporal.svc:7233
     namespace: default
