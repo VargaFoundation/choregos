@@ -40,30 +40,30 @@ export function DecisionBar({
       {kind === "question" ? (
         <>
           <input
-            aria-label="Réponse"
+            aria-label="réponse"
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="Votre réponse…"
+            placeholder="votre réponse…"
             className="min-w-64 flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
           />
           <Button tone="primary" disabled={busy || !answer} onClick={() => send("answer")}>
-            Répondre
+            répondre
           </Button>
         </>
       ) : (
         <>
           <Button tone="primary" disabled={busy} onClick={() => send("approve")}>
-            Approuver
+            approuver
           </Button>
           <input
-            aria-label="Motif du renvoi"
+            aria-label="motif du renvoi"
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="Motif (si renvoi)"
+            placeholder="motif (si renvoi)"
             className="min-w-48 rounded border border-line bg-surface px-2 py-1.5 text-sm"
           />
           <Button tone="danger" disabled={busy} onClick={() => send("reject")}>
-            Renvoyer
+            renvoyer
           </Button>
         </>
       )}

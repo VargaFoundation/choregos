@@ -69,15 +69,15 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card
-        title="Définition (YAML)"
+        title="définition (YAML)"
         action={
           <Button tone="primary" onClick={save} disabled={saving || report?.valid === false}>
-            Enregistrer
+            enregistrer
           </Button>
         }
       >
         <YamlEditor
-          label="Workflow YAML"
+          label="workflow YAML"
           value={yaml}
           onChange={setYaml}
           issues={report?.errors ?? []}
@@ -87,7 +87,7 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
       </Card>
 
       <div className="space-y-4">
-        <Card title="Validation">
+        <Card title="validation">
           {!report && <Empty>validation en cours…</Empty>}
           {report?.valid && <p className="text-sm text-ok">✓ workflow valide</p>}
           {report?.errors?.map((issue, index) => (
@@ -97,13 +97,13 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
             </ErrorNote>
           ))}
           {report?.warnings?.map((issue, index) => (
-            <p key={index} className="mt-2 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
+            <p key={index} className="mt-2 rounded border border-line border-l-2 border-l-warn bg-surface px-3 py-2 text-sm text-warn">
               {issue.message}
             </p>
           ))}
         </Card>
 
-        <Card title="Graphe">
+        <Card title="graphe">
           {report?.graph ? (
             <>
               <WorkflowGraph graph={report.graph} />

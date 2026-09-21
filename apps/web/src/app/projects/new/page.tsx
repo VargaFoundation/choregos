@@ -1,11 +1,13 @@
 "use client";
 
+import { cn } from "@/lib/cn";
+import { Heading, Numeral } from "@varga/design-system";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Card, ErrorNote } from "@/components/ui";
 import { api, DEFAULT_ORG } from "@/lib/api";
 
-const STEPS = ["Template", "Dépôt", "Connecteurs", "Récapitulatif"];
+const STEPS = ["template", "dépôt", "connecteurs", "récapitulatif"];
 
 /** Wizard de création : template → dépôt → connecteurs → récapitulatif → provisioning. */
 export default function NewProjectPage() {
@@ -60,18 +62,27 @@ export default function NewProjectPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-lg font-semibold">Nouveau projet</h1>
-      <ol className="flex gap-2 text-xs">
+      <Heading as="h1" size="xl">
+        nouveau projet
+      </Heading>
+      {/* Les étapes avec le carré numéroté de la fondation : plein pour l'étape courante et
+          celles franchies, au filet pour celles qui restent. */}
+      <ol className="grid grid-cols-4 border border-line">
         {STEPS.map((label, index) => (
           <li
             key={label}
-            className={
-              index === step
-                ? "rounded bg-agent/15 px-2 py-1 text-agent"
-                : "rounded bg-surface-muted px-2 py-1 text-ink-muted"
-            }
+            aria-current={index === step ? "step" : undefined}
+            className={cn(
+              "flex items-center gap-3 p-3 text-xs",
+              index > 0 && "border-l border-line",
+              index === step ? "text-ink" : "text-ink-muted",
+            )}
           >
-            {index + 1}. {label}
+            <Numeral
+              value={index + 1}
+              className={cn("size-7", index > step && "border border-line-strong bg-surface text-ink-muted")}
+            />
+            <span className={cn(index === step && "font-bold")}>{label}</span>
           </li>
         ))}
       </ol>
@@ -79,7 +90,7 @@ export default function NewProjectPage() {
       <Card>
         {step === 0 && (
           <label className="block space-y-1 text-sm">
-            <span>Template de stack</span>
+            <span>template de stack</span>
             <select
               value={form.template}
               onChange={(event) => set("template", event.target.value)}
@@ -95,13 +106,13 @@ export default function NewProjectPage() {
 
         {step === 1 && (
           <div className="space-y-3 text-sm">
-            <Field label="Identifiant (slug)" value={form.slug} onChange={(value) => set("slug", value)} placeholder="billing-api" />
+            <Field label="identifiant (slug)" value={form.slug} onChange={(value) => set("slug", value)} placeholder="billing-api" />
             {!slugValid && form.slug && <ErrorNote>minuscules, chiffres et tirets uniquement</ErrorNote>}
-            <Field label="Nom affiché" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
-            <Field label="Dépôt" value={form.repo} onChange={(value) => set("repo", value)} placeholder="varga/billing-api" />
+            <Field label="nom affiché" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
+            <Field label="dépôt" value={form.repo} onChange={(value) => set("repo", value)} placeholder="varga/billing-api" />
             {!repoValid && form.repo && <ErrorNote>attendu : `owner/repo` ou une URL https</ErrorNote>}
             <label className="block space-y-1">
-              <span>Langage principal</span>
+              <span>langage principal</span>
               <select
                 value={form.language}
                 onChange={(event) => set("language", event.target.value)}
@@ -120,12 +131,12 @@ export default function NewProjectPage() {
         {step === 2 && (
           <div className="space-y-3 text-sm">
             <Field
-              label="Dépôt GitOps (environnements)"
+              label="dépôt GitOps (environnements)"
               value={form.gitops}
               onChange={(value) => set("gitops", value)}
               placeholder="https://github.com/varga/billing-api-gitops.git"
             />
-            <Field label="Canal Slack" value={form.channel} onChange={(value) => set("channel", value)} placeholder="#choregos" />
+            <Field label="canal Slack" value={form.channel} onChange={(value) => set("channel", value)} placeholder="#choregos" />
             <p className="text-xs text-ink-muted">
               Les secrets ne sont pas saisis ici : ils viennent d&apos;External Secrets, référencés par le connecteur.
             </p>
@@ -147,7 +158,7 @@ export default function NewProjectPage() {
 
         <div className="mt-4 flex justify-between">
           <Button onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}>
-            Précédent
+            précédent
           </Button>
           {step < STEPS.length - 1 ? (
             <Button
@@ -155,11 +166,11 @@ export default function NewProjectPage() {
               onClick={() => setStep((current) => current + 1)}
               disabled={step === 1 && (!slugValid || !repoValid)}
             >
-              Suivant
+              suivant
             </Button>
           ) : (
             <Button tone="primary" onClick={create} disabled={busy || !slugValid || !repoValid}>
-              Créer et provisionner
+              créer et provisionner
             </Button>
           )}
         </div>

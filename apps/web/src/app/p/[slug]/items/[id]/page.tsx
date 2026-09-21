@@ -1,5 +1,6 @@
 "use client";
 
+import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
@@ -28,7 +29,9 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">{data.title}</h1>
+          <Heading as="h2" size="lg">
+            {data.title}
+          </Heading>
           <p className="font-mono text-xs text-ink-muted">
             {data.tracker_key} · workflow {data.workflow_name} v{data.workflow_version}
           </p>
@@ -40,13 +43,13 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
             {data.paused ? "Reprendre" : "Mettre en pause"}
           </Button>
           <Button tone="danger" onClick={() => control("stop")}>
-            Arrêter
+            arrêter
           </Button>
         </div>
       </div>
 
       {data.pending_request && (
-        <Card title="Décision attendue">
+        <Card title="décision attendue">
           <p className="mb-2 text-sm">
             {String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary ?? "")}
           </p>
@@ -59,15 +62,15 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Coût par étape" className="lg:col-span-2">
+        <Card title="coût par étape" className="lg:col-span-2">
           <table>
             <thead>
               <tr>
-                <th>Étape</th>
-                <th>Backend · modèle</th>
-                <th className="text-right">Tokens</th>
-                <th className="text-right">Coût</th>
-                <th>Résultat</th>
+                <th>étape</th>
+                <th>backend · modèle</th>
+                <th className="text-right">tokens</th>
+                <th className="text-right">coût</th>
+                <th>résultat</th>
               </tr>
             </thead>
             <tbody>
@@ -103,7 +106,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           </p>
         </Card>
 
-        <Card title="Timeline">
+        <Card title="timeline">
           <ol className="space-y-3">
             {(timeline.data ?? []).map((entry, index) => (
               <li key={`${entry.ts}-${index}`} className="border-l-2 border-line pl-3">
@@ -124,7 +127,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       </div>
 
       {data.pr_url && (
-        <Card title="Pull request">
+        <Card title="pull request">
           <a href={data.pr_url} target="_blank" rel="noreferrer" className="text-sm">
             {data.pr_url}
           </a>

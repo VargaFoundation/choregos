@@ -1,5 +1,6 @@
 "use client";
 
+import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
@@ -23,7 +24,9 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Board</h1>
+        <Heading as="h2" size="md">
+          board
+        </Heading>
         <span className="text-sm text-ink-muted">
           workflow {workflow.data?.name ?? "—"} v{workflow.data?.version ?? "?"}
         </span>
@@ -52,7 +55,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                   </p>
                 )}
                 {item.pending_request && (
-                  <div className="mt-2 space-y-2 rounded border border-warn/30 bg-warn/10 p-2">
+                  <div className="mt-2 space-y-2 border border-line border-l-2 border-l-warn bg-surface p-2">
                     <p className="text-xs text-warn">
                       {String(item.pending_request.payload?.summary ?? item.pending_request.kind)} ·{" "}
                       {relative(item.pending_request.requested_at)}
@@ -76,13 +79,14 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
 interface Column {
   state: string;
   display: string;
-  kind: string;
+  /** Absent quand le workflow ne le dit pas : le badge le déduit alors du nom de l'état. */
+  kind?: string;
   items: WorkItemDto[];
 }
 
 /** Colonnes = états déclarés dans le workflow, dans l'ordre du YAML ; le reste suit. */
 function columnsFrom(yaml: string | undefined, items: WorkItemDto[]): Column[] {
-  const declared: Array<{ state: string; display: string; kind: string }> = [];
+  const declared: Array<{ state: string; display: string; kind?: string }> = [];
   if (yaml) {
     const lines = yaml.split("\n");
     let inStates = false;
@@ -96,11 +100,13 @@ function columnsFrom(yaml: string | undefined, items: WorkItemDto[]): Column[] {
       if (match) {
         const [, state, rest] = match;
         const display = /display:\s*([^,}]+)/.exec(rest ?? "")?.[1]?.trim() ?? state ?? "";
+        // Ce que le YAML dit explicitement ; sinon rien, et le badge déduit le genre du nom de
+        // l'état plutôt que de peindre tout en « travail d'agent ».
         const kind = /terminal:\s*true/.test(rest ?? "")
           ? "terminal"
           : /kind:\s*wait/.test(rest ?? "")
             ? "wait"
-            : "work";
+            : undefined;
         declared.push({ state: state ?? "", display, kind });
       }
     }
@@ -115,7 +121,7 @@ function columnsFrom(yaml: string | undefined, items: WorkItemDto[]): Column[] {
   }));
   for (const [state, stateItems] of byState) {
     if (!columns.some((column) => column.state === state)) {
-      columns.push({ state, display: stateItems[0]?.state_display ?? state, kind: "work", items: stateItems });
+      columns.push({ state, display: stateItems[0]?.state_display ?? state, items: stateItems });
     }
   }
   return columns.filter((column) => column.items.length > 0 || declared.length <= 12);

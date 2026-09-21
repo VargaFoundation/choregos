@@ -1,5 +1,6 @@
 "use client";
 
+import { Heading } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { use } from "react";
 import { LiveLog } from "@/components/live-log";
@@ -31,9 +32,9 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">
+          <Heading as="h2" size="lg">
             Run {run.data.stage_role} · tentative {run.data.attempt}
-          </h1>
+          </Heading>
           <p className="font-mono text-xs text-ink-muted">
             {run.data.backend} · {run.data.model} · exécuteur {run.data.executor_kind ?? "—"}
           </p>
@@ -55,18 +56,18 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       </div>
 
       <div className="grid gap-4 lg:grid-cols-4">
-        <Card title="Coût">
+        <Card title="coût">
           <p className="text-2xl">{usd(run.data.cost_usd)}</p>
           <p className="text-xs text-ink-muted">
             {tokens(run.data.tokens?.tokens_in)} entrants · {tokens(run.data.tokens?.tokens_out)} sortants ·{" "}
             {tokens(run.data.tokens?.tokens_cached)} en cache
           </p>
         </Card>
-        <Card title="Durée">
+        <Card title="durée">
           <p className="text-2xl">{duration(run.data.tokens?.duration_s)}</p>
           <p className="text-xs text-ink-muted">{run.data.result?.diagnostics?.turns ?? 0} tours d&apos;agent</p>
         </Card>
-        <Card title="Preuves">
+        <Card title="preuves">
           <ul className="space-y-1 text-sm">
             <li>tests : {evidence?.tests_passed ? `✓ ${evidence.tests_run ?? 0}` : "✗"}</li>
             <li>lint : {evidence?.lint ?? "—"}</li>
@@ -74,7 +75,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
             <li>couverture : {evidence?.coverage_delta != null ? `${evidence.coverage_delta > 0 ? "+" : ""}${evidence.coverage_delta}` : "—"}</li>
           </ul>
         </Card>
-        <Card title="Périmètre">
+        <Card title="périmètre">
           <ul className="space-y-1 font-mono text-xs text-ink-muted">
             {(run.data.allowed_paths ?? []).map((path) => (
               <li key={path}>{path}</li>
@@ -87,7 +88,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       </div>
 
       <Card
-        title="Journal ACP"
+        title="journal ACP"
         action={
           <span className="text-xs text-ink-muted">
             {live.connected ? "● en direct" : live.error ? live.error : "flux fermé"}
@@ -97,17 +98,17 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
         <LiveLog events={events} />
       </Card>
 
-      <Card title="Diff">
+      <Card title="diff">
         {(diff.data?.files ?? []).length === 0 ? (
           <Empty>aucun fichier modifié</Empty>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>Fichier</th>
+                <th>fichier</th>
                 <th className="text-right">+</th>
                 <th className="text-right">-</th>
-                <th>Périmètre</th>
+                <th>périmètre</th>
               </tr>
             </thead>
             <tbody>

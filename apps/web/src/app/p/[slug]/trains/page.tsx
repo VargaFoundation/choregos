@@ -1,5 +1,6 @@
 "use client";
 
+import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
@@ -12,7 +13,9 @@ export default function TrainsPage({ params }: { params: Promise<{ slug: string 
   const { slug } = use(params);
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold">Release trains</h1>
+      <Heading as="h2" size="md">
+        release trains
+      </Heading>
       {ENVS.map((env) => (
         <TrainCard key={env} slug={slug} env={env} />
       ))}
@@ -56,7 +59,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
-            Lot en attente : <strong>{data.batch_size}</strong> ticket(s)
+            lot en attente : <strong>{data.batch_size}</strong> ticket(s)
             {data.next_departure && <span className="text-ink-muted"> · départ {relative(data.next_departure)}</span>}
             {!data.window_open && <span className="text-warn"> · hors fenêtre</span>}
           </p>
@@ -66,21 +69,21 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
           {data.frozen && <ErrorNote>Train gelé : {data.freeze_reason ?? "sans motif"}</ErrorNote>}
           <div className="flex flex-wrap items-center gap-2">
             <Button tone="primary" onClick={() => act("depart")} disabled={data.frozen || data.batch_size === 0}>
-              Faire partir maintenant
+              faire partir maintenant
             </Button>
             {data.frozen ? (
-              <Button onClick={() => act("unfreeze")}>Dégeler</Button>
+              <Button onClick={() => act("unfreeze")}>dégeler</Button>
             ) : (
               <>
                 <input
-                  aria-label="Motif du gel"
+                  aria-label="motif du gel"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                   placeholder="motif du gel (obligatoire)"
                   className="min-w-56 rounded border border-line bg-surface px-2 py-1.5 text-sm"
                 />
                 <Button tone="danger" onClick={() => act("freeze")}>
-                  Geler
+                  geler
                 </Button>
               </>
             )}
@@ -96,16 +99,16 @@ function History({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
   const releases = useQuery({ queryKey: ["releases", slug], queryFn: () => api.releases(slug) });
   return (
-    <Card title="Historique des lots">
+    <Card title="historique des lots">
       <table>
         <thead>
           <tr>
-            <th>Lot</th>
-            <th>Env</th>
-            <th>État</th>
-            <th>Tickets</th>
-            <th>Quand</th>
-            <th>Verdict</th>
+            <th>lot</th>
+            <th>env</th>
+            <th>état</th>
+            <th>tickets</th>
+            <th>quand</th>
+            <th>verdict</th>
             <th />
           </tr>
         </thead>
@@ -134,7 +137,7 @@ function History({ slug }: { slug: string }) {
                       queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                     }}
                   >
-                    Approuver
+                    approuver
                   </Button>
                 )}
               </td>

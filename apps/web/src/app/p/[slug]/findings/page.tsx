@@ -35,10 +35,10 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
 
   return (
     <Card
-      title="Findings"
+      title="findings"
       action={
         <select
-          aria-label="Filtrer par état"
+          aria-label="filtrer par état"
           value={status}
           onChange={(event) => setStatus(event.target.value)}
           className="rounded border border-line bg-surface px-2 py-1 text-sm"
@@ -55,13 +55,13 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
       <table>
         <thead>
           <tr>
-            <th>Sévérité</th>
-            <th>Type</th>
-            <th>Titre</th>
-            <th>Preuve</th>
-            <th>Origine</th>
-            <th>État</th>
-            <th>Actions</th>
+            <th>sévérité</th>
+            <th>type</th>
+            <th>titre</th>
+            <th>preuve</th>
+            <th>origine</th>
+            <th>état</th>
+            <th>actions</th>
           </tr>
         </thead>
         <tbody>
@@ -89,7 +89,7 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
               <td className="space-x-1 whitespace-nowrap">
                 {finding.status === "pending" && (
                   <Button tone="primary" onClick={() => act(finding.id, "create_ticket")}>
-                    Créer le ticket
+                    créer le ticket
                   </Button>
                 )}
                 {finding.status === "created" && (
@@ -97,9 +97,9 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
                     Rendre agent-ready
                   </Button>
                 )}
-                <Button onClick={() => act(finding.id, "mark_duplicate")}>Doublon</Button>
+                <Button onClick={() => act(finding.id, "mark_duplicate")}>doublon</Button>
                 <Button tone="danger" onClick={() => act(finding.id, "dismiss")}>
-                  Ignorer
+                  ignorer
                 </Button>
               </td>
             </tr>

@@ -32,16 +32,16 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="Connecteurs">
+      <Card title="connecteurs">
         {message && <p className="mb-2 text-sm text-ok">{message}</p>}
         {error && <ErrorNote>{error}</ErrorNote>}
         <table>
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Implémentation</th>
-              <th>État</th>
-              <th>Dernier test</th>
+              <th>type</th>
+              <th>implémentation</th>
+              <th>état</th>
+              <th>dernier test</th>
               <th />
             </tr>
           </thead>
@@ -59,7 +59,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                 </td>
                 <td className="text-xs text-ink-muted">{shortDate(connector.last_check_at)}</td>
                 <td>
-                  <Button onClick={() => test(connector.kind)}>Tester</Button>
+                  <Button onClick={() => test(connector.kind)}>tester</Button>
                 </td>
               </tr>
             ))}
@@ -68,25 +68,25 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         {connectors.data?.length === 0 && <Empty>aucun connecteur configuré</Empty>}
       </Card>
 
-      <Card title="Politique">
+      <Card title="politique">
         <pre className="max-h-96 overflow-auto rounded border border-line bg-surface-muted p-3 font-mono text-xs">
           {policy.data?.yaml ?? "—"}
         </pre>
       </Card>
 
-      <Card title="Matrice backend × modèle" className="lg:col-span-2">
+      <Card title="matrice backend × modèle" className="lg:col-span-2">
         <p className="mb-2 text-sm text-ink-muted">
           Publiée par les évals nocturnes : une combinaison non validée est refusée à l&apos;enregistrement.
         </p>
         <table>
           <thead>
             <tr>
-              <th>Backend</th>
-              <th>Modèle</th>
-              <th>Validé</th>
-              <th className="text-right">Réussite</th>
-              <th className="text-right">Coût médian</th>
-              <th>Mémoire</th>
+              <th>backend</th>
+              <th>modèle</th>
+              <th>validé</th>
+              <th className="text-right">réussite</th>
+              <th className="text-right">coût médian</th>
+              <th>mémoire</th>
             </tr>
           </thead>
           <tbody>
