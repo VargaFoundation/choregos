@@ -43,9 +43,9 @@ app.kubernetes.io/part-of: choregos
 - name: CHOREGOS_OBJECT_STORE_URL
   value: {{ .Values.global.objectStore.url | quote }}
 - name: CHOREGOS_PUBLIC_URL
-  value: https://app.{{ .Values.global.domain }}
+  value: {{ .Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain) | quote }}
 - name: CHOREGOS_API_URL
-  value: https://api.{{ .Values.global.domain }}
+  value: {{ .Values.global.apiUrl | default (printf "https://api.%s" .Values.global.domain) | quote }}
 - name: CHOREGOS_DATABASE_URL
   valueFrom:
     secretKeyRef:

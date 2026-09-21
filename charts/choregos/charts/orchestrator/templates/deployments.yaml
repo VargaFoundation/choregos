@@ -70,4 +70,16 @@ metadata:
   name: choregos-orchestrator
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations: {{- toYaml .Values.global.serviceAccount.annotations | nindent 4 }}
+{{- if eq .Values.runner.executor "k8s_job" }}
+---
+# L'exécuteur `k8s_job` lance les runners dans CE namespace sous ce compte : sans lui,
+# la création du pod échoue. Aucun droit, aucun jeton monté — un agent n'a rien à
+# demander à l'API Kubernetes. (Avec Tekton, le provisioning le crée par projet.)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: choregos-runner
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}
 {{- end }}

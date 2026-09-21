@@ -16,6 +16,7 @@ from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
 from .tekton import CORE_API, KubernetesClient, _parse_time
 
 BATCH_API = "/apis/batch/v1"
+RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernetes.io/component": "runner"}
 
 
 class KubernetesJobExecutor:
@@ -119,7 +120,9 @@ class KubernetesJobExecutor:
                 "ttlSecondsAfterFinished": self.ttl_seconds,
                 "activeDeadlineSeconds": spec.timeout_minutes * 60,
                 "template": {
-                    "metadata": {"labels": {"choregos/run-id": spec.run_id}},
+                    # Un label STABLE en plus de l'identifiant du run : les politiques réseau
+                    # (Cilium, NetworkPolicy) sélectionnent les runners par famille, pas un à un.
+                    "metadata": {"labels": {"choregos/run-id": spec.run_id, **RUNNER_POD_LABELS}},
                     "spec": pod_spec,
                 },
             },

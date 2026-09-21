@@ -6,7 +6,9 @@ suite: mode locataire
 templates:
   - charts/choregos-api/templates/service.yaml
   - charts/choregos-api/templates/httproute.yaml
+  - charts/choregos-api/templates/deployment.yaml
   - charts/choregos-web/templates/deployment.yaml
+  - charts/choregos-orchestrator/templates/deployments.yaml
 tests:
   - it: par défaut, l'API lit les PipelineRun par un ClusterRole
     template: charts/choregos-api/templates/service.yaml
@@ -68,3 +70,46 @@ tests:
           kind: HTTPRoute
           apiVersion: gateway.networking.k8s.io/v1
         not: true
+
+  - it: avec l'exécuteur k8s_job, le compte des runners existe et ne monte aucun jeton
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    set:
+      choregos-orchestrator.runner.executor: k8s_job
+    asserts:
+      - containsDocument:
+          kind: ServiceAccount
+          apiVersion: v1
+          name: choregos-runner
+          any: true
+      - equal:
+          path: automountServiceAccountToken
+          value: false
+        documentSelector:
+          path: metadata.name
+          value: choregos-runner
+
+  - it: avec Tekton, pas de compte runner dans le namespace de la plateforme
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    asserts:
+      - containsDocument:
+          kind: ServiceAccount
+          apiVersion: v1
+          name: choregos-runner
+        not: true
+
+  - it: les URL publiques se surchargent pour un ingress HTTP interne
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.publicUrl: http://choregos.internal.dev.diametral.com
+      global.apiUrl: http://choregos-api.internal.dev.diametral.com
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_PUBLIC_URL
+            value: http://choregos.internal.dev.diametral.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_API_URL
+            value: http://choregos-api.internal.dev.diametral.com

@@ -3,6 +3,10 @@
 
 global:
   domain: choregos.local
+  # Surcharges quand les hôtes ne suivent pas `app.<domain>` / `api.<domain>` en HTTPS
+  # (ex. un ingress HTTP interne derrière un VPN). Vides : dérivés de `domain`.
+  publicUrl: ""
+  apiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
   imageTag: "1.0.0"
   imagePullPolicy: IfNotPresent
