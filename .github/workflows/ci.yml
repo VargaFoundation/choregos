@@ -95,8 +95,11 @@ jobs:
       run: { working-directory: apps/web }
     steps:
       - uses: actions/checkout@v7
+      # Sans `version` : l'action lit `packageManager` dans `apps/web/package.json`. Une
+      # version écrite ici aussi finit par diverger — c'est ce qui laissait la CI en pnpm 9
+      # alors que le dépôt était passé à 12.
       - uses: pnpm/action-setup@v6
-        with: { version: 9 }
+        with: { package_json_file: apps/web/package.json }
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: pnpm, cache-dependency-path: apps/web/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile

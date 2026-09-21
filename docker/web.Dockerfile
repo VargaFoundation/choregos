@@ -3,7 +3,7 @@ FROM node:22-bookworm-slim AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 WORKDIR /app
-COPY apps/web/package.json apps/web/pnpm-lock.yaml* ./apps/web/
+COPY apps/web/package.json apps/web/pnpm-lock.yaml* apps/web/pnpm-workspace.yaml ./apps/web/
 COPY packages/contracts/ts ./packages/contracts/ts
 WORKDIR /app/apps/web
 RUN pnpm install --frozen-lockfile || pnpm install
@@ -25,7 +25,7 @@ FROM node:22-bookworm-slim AS deps-prod
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 WORKDIR /app/apps/web
-COPY apps/web/package.json apps/web/pnpm-lock.yaml* ./
+COPY apps/web/package.json apps/web/pnpm-lock.yaml* apps/web/pnpm-workspace.yaml ./
 COPY packages/contracts/ts /app/packages/contracts/ts
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 

@@ -25,6 +25,20 @@ def context() -> str:
     name = os.environ.get("CHOREGOS_CLUSTER_CONTEXT", "")
     if not name:
         pytest.skip("test cluster ignoré — CHOREGOS_CLUSTER_CONTEXT n'est pas défini")
+    # Ces tests arrêtent des nœuds, créent et détruisent des namespaces, installent des
+    # opérateurs et coupent le réseau. Sur un cluster jetable, c'est leur travail ; sur un
+    # cluster partagé, c'est un incident. Le contexte d'un poste de développement en compte
+    # souvent un de chaque — `dev` et `prod` à côté de `kind-choregos` — et une variable mal
+    # recopiée suffit. On exige donc un cluster kind, sauf dérogation écrite noir sur blanc.
+    if (
+        not name.startswith("kind-")
+        and os.environ.get("CHOREGOS_CLUSTER_ALLOW_NON_KIND") != "je-sais-ce-que-je-fais"
+    ):
+        pytest.skip(
+            f"test cluster refusé sur `{name}` : ce n'est pas un cluster kind. Ces tests sont "
+            "destructifs (arrêt de nœud, coupure réseau, restauration de base). Pour un cluster "
+            "jetable qui n'est pas kind : CHOREGOS_CLUSTER_ALLOW_NON_KIND=je-sais-ce-que-je-fais"
+        )
     if shutil.which("kubectl") is None:
         pytest.skip("test cluster ignoré — kubectl absent")
     probe = subprocess.run(
