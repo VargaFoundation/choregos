@@ -52,6 +52,10 @@ global:
     issuer: https://keycloak.choregos.local/realms/choregos
     clientId: choregos
     secretRef: choregos-oidc
+  # `false` pour un locataire qui n'a droit à aucune ressource cluster-scoped (AppProject
+  # `clusterResourceWhitelist: []`) : le ClusterRole de lecture des PipelineRun n'est pas rendu.
+  rbac:
+    clusterScoped: true
   externalSecrets:
     enabled: true
     storeRef: choregos-cluster-store
@@ -74,6 +78,10 @@ choregos-api:
     enabled: true
   ingress:
     enabled: true
+    # `httproute` (Gateway API) ou `ingress` (networking.k8s.io) quand le cluster n'a pas
+    # de Gateway API — `className` ne sert qu'à `ingress`.
+    kind: httproute
+    className: ""
     hostnames: ["api.choregos.local", "hooks.choregos.local"]
     gateway: choregos-gateway
 
@@ -87,6 +95,8 @@ choregos-web:
     limits: { cpu: 500m, memory: 512Mi }
   ingress:
     enabled: true
+    kind: httproute
+    className: ""
     hostnames: ["app.choregos.local"]
     gateway: choregos-gateway
 

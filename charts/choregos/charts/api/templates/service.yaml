@@ -22,8 +22,11 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations: {{- toYaml .Values.global.serviceAccount.annotations | nindent 4 }}
 automountServiceAccountToken: true
+{{- if .Values.global.rbac.clusterScoped }}
 ---
 # L'API ne lit que l'état des PipelineRun des projets : elle ne crée rien dans le cluster.
+# Un locataire sans droit cluster-scoped (`global.rbac.clusterScoped: false`) s'en passe :
+# l'état des runs lui parvient alors par les événements de l'exécuteur, pas par l'API Tekton.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -42,4 +45,5 @@ subjects:
   - kind: ServiceAccount
     name: choregos-api
     namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- end }}

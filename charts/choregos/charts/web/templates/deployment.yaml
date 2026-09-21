@@ -57,6 +57,27 @@ spec:
     app.kubernetes.io/instance: {{ .Release.Name }}
 {{- if .Values.ingress.enabled }}
 ---
+{{- if eq (.Values.ingress.kind | default "httproute") "ingress" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: choregos-web
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hostnames }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: choregos-web, port: { number: {{ $.Values.service.port }} } }
+    {{- end }}
+{{- else }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -74,5 +95,6 @@ spec:
     - backendRefs:
         - name: choregos-web
           port: {{ .Values.service.port }}
+{{- end }}
 {{- end }}
 {{- end }}

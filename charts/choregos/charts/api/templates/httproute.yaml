@@ -1,4 +1,27 @@
 {{- if and .Values.enabled .Values.ingress.enabled }}
+{{- if eq (.Values.ingress.kind | default "httproute") "ingress" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: choregos-api
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hostnames }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          {{- range list "/api" "/healthz" "/readyz" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service: { name: choregos-api, port: { number: {{ $.Values.service.port }} } }
+          {{- end }}
+    {{- end }}
+{{- else }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -20,4 +43,5 @@ spec:
       backendRefs:
         - name: choregos-api
           port: {{ .Values.service.port }}
+{{- end }}
 {{- end }}

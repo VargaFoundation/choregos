@@ -1,0 +1,70 @@
+# Mode locataire : un AppProject qui refuse tout objet cluster-scoped (Diametral :
+# `clusterResourceWhitelist: []`) refuse la synchro **entière** au premier ClusterRole rendu.
+# Ces tests gardent la frontière des deux côtés : rien de cluster-scoped quand on le coupe,
+# et le défaut inchangé pour les autres.
+suite: mode locataire
+templates:
+  - charts/choregos-api/templates/service.yaml
+  - charts/choregos-api/templates/httproute.yaml
+  - charts/choregos-web/templates/deployment.yaml
+tests:
+  - it: par défaut, l'API lit les PipelineRun par un ClusterRole
+    template: charts/choregos-api/templates/service.yaml
+    asserts:
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+          any: true
+      - containsDocument:
+          kind: ClusterRoleBinding
+          apiVersion: rbac.authorization.k8s.io/v1
+          any: true
+
+  - it: sans droit cluster-scoped, ni ClusterRole ni ClusterRoleBinding
+    template: charts/choregos-api/templates/service.yaml
+    set:
+      global.rbac.clusterScoped: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+        not: true
+      - containsDocument:
+          kind: ClusterRoleBinding
+          apiVersion: rbac.authorization.k8s.io/v1
+        not: true
+
+  - it: sans Gateway API, l'API sort par un Ingress qui garde ses trois préfixes
+    template: charts/choregos-api/templates/httproute.yaml
+    set:
+      choregos-api.ingress.kind: ingress
+      choregos-api.ingress.className: traefik
+      choregos-api.ingress.hostnames: ["choregos-api.internal.dev.diametral.com"]
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.ingressClassName
+          value: traefik
+      - equal:
+          path: spec.rules[0].host
+          value: choregos-api.internal.dev.diametral.com
+      - lengthEqual:
+          path: spec.rules[0].http.paths
+          count: 3
+
+  - it: sans Gateway API, le front sort par un Ingress
+    template: charts/choregos-web/templates/deployment.yaml
+    set:
+      choregos-web.ingress.kind: ingress
+    asserts:
+      - containsDocument:
+          kind: Ingress
+          apiVersion: networking.k8s.io/v1
+          any: true
+      - containsDocument:
+          kind: HTTPRoute
+          apiVersion: gateway.networking.k8s.io/v1
+        not: true
