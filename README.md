@@ -4,7 +4,7 @@
 
 **Choregos** est la plateforme de delivery agentique de la [Varga Foundation](https://github.com/VargaFoundation) :
 un ticket entre, une mise en production maîtrisée sort. Elle dirige un chœur d'agents de code
-(OpenHands, Claude Code, Codex, Gemini CLI, Goose, OpenCode…) derrière un protocole unique (ACP),
+(Claude Code, Codex, Gemini CLI, Goose, OpenCode…) derrière un protocole unique (ACP),
 leur donne un workspace jetable, un modèle, un budget et une partition (le *workflow*), puis
 sérialise les déploiements derrière un *release train*.
 

@@ -342,8 +342,9 @@ async def test_templates_listing_from_disk(client: AsyncClient, admin: str) -> N
 
 async def test_platform_backends_and_executors(client: AsyncClient, admin: str) -> None:
     backends = (await client.get("/api/v1/platform/backends")).json()
-    assert {b["name"] for b in backends} >= {"openhands", "claude-code"}
-    assert next(b for b in backends if b["name"] == "openhands")["enabled"] is True
+    assert {b["name"] for b in backends} >= {"codex", "claude-code"}
+    assert next(b for b in backends if b["name"] == "claude-code")["enabled"] is True
+    assert "openhands" not in {b["name"] for b in backends}
     updated = await client.put(
         "/api/v1/platform/backends",
         json={"name": "codex", "enabled": False, "disabled_reason": "conformité rouge"},

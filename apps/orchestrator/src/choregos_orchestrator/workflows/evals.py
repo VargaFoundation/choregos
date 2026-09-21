@@ -18,7 +18,7 @@ RETRY = RetryPolicy(maximum_attempts=2, initial_interval=timedelta(seconds=5))
 @dataclass
 class EvalInput:
     project_slug: str
-    backends: list[str] = field(default_factory=lambda: ["openhands"])
+    backends: list[str] = field(default_factory=lambda: ["claude-code"])
     models: list[str] = field(default_factory=lambda: ["platform/standard"])
     with_memory: list[bool] = field(default_factory=lambda: [True, False])
     fixtures: list[str] = field(default_factory=list)

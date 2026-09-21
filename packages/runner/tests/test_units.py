@@ -357,7 +357,7 @@ def _minimal_stage_input(path: Path) -> Any:
         work_item=WorkItemRef(key="varga/demo#1", title="Titre"),
         transition=TransitionRef(id="t", role="implement", **{"from": "ready"}, to="in_progress"),
         repo=RepoRef(url=str(path), base_branch="main", work_branch="choregos/1"),
-        agent=AgentRef(backend="openhands"),
+        agent=AgentRef(backend="codex"),
         model=ModelRef(
             litellm_model="platform/standard", base_url="http://litellm:4000", api_format="openai"
         ),
@@ -381,3 +381,14 @@ async def _git_workspace(path: Path) -> Workspace:
     await workspace.git("add", "-A")
     await workspace.git("commit", "-m", "init")
     return workspace
+
+
+def test_un_backend_retire_est_refuse_avec_sa_raison() -> None:
+    """« openhands » n'est pas une faute de frappe : on dit pourquoi il n'est plus là."""
+    from choregos_runner.backends import get_backend
+
+    with pytest.raises(KeyError) as error:
+        get_backend("openhands")
+    message = str(error.value)
+    assert "retiré" in message and "ACP" in message
+    assert "claude-code" in message, "le message indique le remplaçant"

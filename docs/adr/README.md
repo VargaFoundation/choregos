@@ -16,3 +16,4 @@ Une décision structurante s'écrit ici avant d'être codée, et se relit quand 
 | [0008](0008-idempotence-et-run-id.md) | Identifiants déterministes et idempotence partout | acceptée |
 | [0009](0009-gitops-seule-source-de-verite.md) | Le cluster ne se modifie que par Git | acceptée |
 | [0010](0010-les-gates-sont-des-mecanismes.md) | Une garantie est un mécanisme, jamais un prompt | acceptée |
+| [0011](0011-retrait-d-openhands.md) | Retrait d'OpenHands : aucun agent ACP en ligne de commande | acceptée |

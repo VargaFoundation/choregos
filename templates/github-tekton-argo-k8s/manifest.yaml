@@ -24,11 +24,8 @@ defaults:
   workflow: template:default-simple@1
   policy: preset:solo
   models: platform-defaults
-  # `claude-code` et non `openhands` : le pont ACP de Zed (`claude-code-acp`) est installé
-  # dans l'image du runner et démarre, tandis qu'`openhands acp` n'existe pas — ni en 0.59
-  # (deux sous-commandes, `serve` et `cli`) ni en 1.x (plus de binaire du tout). Un projet
-  # provisionné avec le défaut précédent échouait à son premier run. Voir
-  # `docs/plan/BLOCKERS.md`, ligne S2-04.
+  # `claude-code` : OpenHands a été retiré, faute d'agent ACP en ligne de commande
+  # (docs/adr/0011-retrait-d-openhands.md).
   agent: claude-code
 inputs:
   - { name: repo, type: github-repo, required: true, description: "owner/name du dépôt applicatif" }

@@ -5,17 +5,11 @@
 # Les autres sont épinglées à la main tant que leur source amont n'est pas confirmée :
 # mieux vaut un suivi manquant qu'un dépôt inventé sur lequel Renovate ouvrirait des PR
 # fausses.
-# Les quatre agents ci-dessous sont ceux que `docker/runner.Dockerfile` installe vraiment ;
-# les autres lignes décrivent des backends supportés dont l'image ne porte pas le binaire.
-# Trivy a refusé l'image sur cinq CRITICAL venus de ces épingles, dont une exécution de code
-# à distance dans `@google/gemini-cli` (GHSA-wpqr-6v78-jr5g), corrigée en 0.39.1. Toutes sont
-# montées à la version publiée du jour ; la conformité ACP (S2-11) les juge en nocturne.
-# OpenHands reste en 0.59 : la 1.x a retiré `openhands acp` (agent ACP sur stdio) au profit
-# d'un `agent-server` HTTP — le backend `openhands.py` serait à réécrire, ce n'est pas une
-# montée d'épingle. Les dépendances transitives que Trivy refuse sont montées séparément dans
-# le Dockerfile. Voir docs/plan/BLOCKERS.md.
-# renovate: datasource=github-releases depName=All-Hands-AI/OpenHands
-openhands=0.59.0
+#
+# L'image installe trois de ces agents — `claude-agent-acp`, `gemini-cli`, `opencode` — et
+# appelle chacun à la construction. Les autres lignes décrivent des backends supportés dont
+# l'image ne porte pas le binaire.
+# OpenHands a été retiré le 2026-09-21 (docs/adr/0011-retrait-d-openhands.md).
 claude-agent-acp=0.16.2
 codex-acp=0.4.2
 # renovate: datasource=github-releases depName=google-gemini/gemini-cli

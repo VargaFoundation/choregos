@@ -27,7 +27,7 @@ class RepoConfig(Strict):
 
 
 class AgentConfig(Strict):
-    default_backend: str = "openhands"
+    default_backend: str = "claude-code"
     allowed_backends: list[str] = Field(default_factory=list)
 
 

@@ -59,7 +59,7 @@ async def test_une_cellule_avec_memoire_valide_les_tickets(setup: Fixture) -> No
     cell = await evals.run_eval_cell(
         {
             "project_slug": setup.project_slug,
-            "backend": "openhands",
+            "backend": "codex",
             "model": "platform/standard",
             "with_memory": True,
             "fixtures": [p.stem for p in TICKETS],
@@ -78,7 +78,7 @@ async def test_sans_memoire_la_convention_projet_est_perdue(setup: Fixture) -> N
     cell = await evals.run_eval_cell(
         {
             "project_slug": setup.project_slug,
-            "backend": "openhands",
+            "backend": "codex",
             "model": "platform/standard",
             "with_memory": False,
             "fixtures": ["py-remise-volume"],
@@ -128,7 +128,7 @@ async def test_le_depot_jouet_n_est_jamais_modifie_sur_place(setup: Fixture) -> 
     await evals.run_eval_cell(
         {
             "project_slug": setup.project_slug,
-            "backend": "openhands",
+            "backend": "codex",
             "model": "platform/standard",
             "with_memory": True,
             "fixtures": ["py-bug-arrondi"],

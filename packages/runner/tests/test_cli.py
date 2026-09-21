@@ -15,7 +15,8 @@ cli = CliRunner()
 def test_la_liste_des_backends_affiche_les_versions_epinglees() -> None:
     result = cli.invoke(app, ["backends"])
     assert result.exit_code == 0
-    assert "claude-code" in result.stdout and "openhands" in result.stdout
+    assert "claude-code" in result.stdout and "gemini-cli" in result.stdout
+    assert "openhands" not in result.stdout, "un backend retiré ne se propose plus"
 
 
 def test_validate_accepte_un_resultat_conforme(tmp_path: Path) -> None:

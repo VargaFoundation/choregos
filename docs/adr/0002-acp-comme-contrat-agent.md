@@ -1,6 +1,6 @@
 # ADR-0002 — ACP comme contrat d'agent, OpenHands par défaut
 
-- **État** : acceptée
+- **État** : acceptée — le choix d'OpenHands par défaut est **remplacé** par l'[ADR 0011](0011-retrait-d-openhands.md) (défaut : `claude-code`)
 - **Concerne** : S2, S13
 
 ## Contexte

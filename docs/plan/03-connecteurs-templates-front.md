@@ -32,7 +32,7 @@ defaults:
   workflow: template:default-simple@1
   policy: preset:solo
   models: platform-defaults
-  agent: openhands
+  agent: claude-code         # OpenHands retiré, ADR 0011
 inputs:                      # questions du wizard
   - { name: repo, type: github-repo, required: true }
   - { name: default_branch, type: string, default: main }

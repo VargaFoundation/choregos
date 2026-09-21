@@ -6,7 +6,6 @@ from pathlib import Path
 
 from .base import Backend, LaunchPlan
 from .claude_code import ClaudeCodeBackend
-from .openhands import OpenHandsBackend
 from .others import (
     CodexBackend,
     CopilotCliBackend,
@@ -16,7 +15,6 @@ from .others import (
 )
 
 BACKENDS: dict[str, type[Backend]] = {
-    OpenHandsBackend.name: OpenHandsBackend,
     ClaudeCodeBackend.name: ClaudeCodeBackend,
     CodexBackend.name: CodexBackend,
     GeminiCliBackend.name: GeminiCliBackend,
@@ -25,11 +23,23 @@ BACKENDS: dict[str, type[Backend]] = {
     CopilotCliBackend.name: CopilotCliBackend,
 }
 
+# Backends retirés : un nom qu'on reconnaît, pour refuser avec la raison plutôt qu'avec un
+# « backend inconnu » qui laisserait croire à une faute de frappe.
+RETIRED: dict[str, str] = {
+    "openhands": (
+        "retiré le 2026-09-21 : OpenHands n'expose aucun agent ACP en ligne de commande — ni en 0.59 "
+        "(`serve` et `cli` seulement), ni en 1.x (plus de binaire, un serveur HTTP `agent-server`). "
+        "Voir docs/adr/0011-retrait-d-openhands.md ; le défaut est désormais `claude-code`."
+    ),
+}
+
 VERSIONS_LOCK = Path(__file__).parent / "versions.lock"
 
 
 def get_backend(name: str) -> Backend:
     """Instancie un backend par son nom ; une erreur explicite si le nom est inconnu."""
+    if name in RETIRED:
+        raise KeyError(f"backend {name} {RETIRED[name]}")
     backend_class = BACKENDS.get(name)
     if backend_class is None:
         raise KeyError(f"backend inconnu : {name} (connus : {', '.join(sorted(BACKENDS))})")
@@ -44,7 +54,6 @@ def known_backends() -> list[str]:
 # binaire : `claude-code` est épinglé sous `claude-agent-acp` et s'exécute en
 # `claude-code-acp`, `gemini-cli` est épinglé sous `gemini-cli` et s'exécute en `gemini`.
 BACKEND_BINARIES: dict[str, str] = {
-    "openhands": "openhands",
     "claude-code": "claude-agent-acp",
     "codex": "codex-acp",
     "gemini-cli": "gemini-cli",

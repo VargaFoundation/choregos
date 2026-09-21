@@ -84,7 +84,7 @@ def stage_input(toy_repo: Path, tmp_path: Path) -> StageInput:
         ),
         transition=TransitionRef(id="t-implement", role="implement", **{"from": "ready"}, to="in_progress"),
         repo=RepoRef(url=str(toy_repo), base_branch="main", work_branch="choregos/1-total", clone_depth=10),
-        agent=AgentRef(backend="openhands", launch=LaunchSpec(command=[sys.executable, str(FAKE_AGENT)])),
+        agent=AgentRef(backend="codex", launch=LaunchSpec(command=[sys.executable, str(FAKE_AGENT)])),
         model=ModelRef(
             litellm_model="platform/standard", base_url="http://litellm:4000", api_format="openai"
         ),

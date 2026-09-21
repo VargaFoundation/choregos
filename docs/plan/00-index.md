@@ -30,7 +30,7 @@ Décision de travail : **Choregos**. Vocabulaire optionnel pour la communication
 | # | Décision | Valeur |
 | :-- | :-- | :-- |
 | D1 | Licence | Apache 2.0 (alignée Argus et Ecphoria) |
-| D2 | Contrat agent | ACP (Agent Client Protocol) ; agent par défaut OpenHands ; Claude Code, Codex, Gemini CLI, Goose, OpenCode, Copilot CLI en backends optionnels |
+| D2 | Contrat agent | ACP (Agent Client Protocol) ; agent par défaut OpenHands (remplacé par Claude Code, [ADR 0011](../adr/0011-retrait-d-openhands.md)) ; Claude Code, Codex, Gemini CLI, Goose, OpenCode, Copilot CLI en backends optionnels |
 | D3 | Moteur d'orchestration | Temporal (self-hosted via Helm + CloudNativePG ; Temporal Cloud possible sans changer le code) |
 | D4 | Langages | Python 3.12 (`uv`, FastAPI, Temporal SDK, pydantic v2) pour API, orchestrateur, runner, adaptateurs, CLI ; TypeScript (Next.js 15, React 19) pour le front ; Rust pour Ecphoria (existant) |
 | D5 | Exécuteur jour 1 | Tekton Pipelines sur Kubernetes ; `Executor` abstrait, Job K8s en repli |

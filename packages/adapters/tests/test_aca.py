@@ -41,7 +41,7 @@ def spec(run_id: str = "run-42") -> StageJobSpec:
         api_url="https://api.choregos.dev/api/v1/internal",
         run_token="jeton-du-run",
         timeout_minutes=90,
-        env={"CHOREGOS_BACKEND": "openhands"},
+        env={"CHOREGOS_BACKEND": "claude-code"},
         labels={"choregos/env": "prod"},
     )
 
