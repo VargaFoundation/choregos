@@ -1,5 +1,6 @@
 "use client";
 
+import { Heading } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { Card, Empty, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -12,9 +13,11 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold">Administration</h1>
+      <Heading as="h1" size="xl">
+        administration
+      </Heading>
 
-      <Card title="Session">
+      <Card title="session">
         <p className="text-sm">
           {me.data?.display_name} — {me.data?.email}
         </p>
@@ -28,14 +31,14 @@ export default function AdminPage() {
         </ul>
       </Card>
 
-      <Card title="Journal d'audit">
+      <Card title="journal d'audit">
         <table>
           <thead>
             <tr>
-              <th>Quand</th>
-              <th>Acteur</th>
-              <th>Action</th>
-              <th>Cible</th>
+              <th>quand</th>
+              <th>acteur</th>
+              <th>action</th>
+              <th>cible</th>
             </tr>
           </thead>
           <tbody>

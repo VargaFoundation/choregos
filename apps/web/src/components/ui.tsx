@@ -1,39 +1,65 @@
-/** Composants transverses : badges d'état, coût, acteur, barre de décision, journal. */
+/**
+ * Composants transverses de Choregos, posés sur le design system de la Varga Foundation.
+ *
+ * Les noms et les signatures restent ceux que les pages utilisent déjà ; seul le rendu passe
+ * par `@varga/design-system`. Ce qui est propre à Choregos — l'état d'un ticket, le coût d'un
+ * run, l'acteur d'une étape — se traduit dans la grammaire de la fondation : une puce carrée
+ * et un libellé, le turquoise pour ce qui agit seul.
+ */
 "use client";
 
 import type { ReactNode } from "react";
+import {
+  Alert,
+  Badge,
+  Button as VargaButton,
+  Card as VargaCard,
+  Dot,
+  Empty as VargaEmpty,
+  type Tone,
+} from "@varga/design-system";
 import { cn } from "@/lib/cn";
 import { eur, tokens } from "@/lib/format";
 
-const WORK_TONE = "bg-agent/15 text-agent border-agent/30";
-
-const STATE_TONES: Record<string, string> = {
-  wait: "bg-warn/15 text-warn border-warn/30",
-  work: WORK_TONE,
-  terminal: "bg-ok/15 text-ok border-ok/30",
-  blocked: "bg-danger/15 text-danger border-danger/30",
+/** Le genre d'un état du workflow, tel que le DSL le déclare. */
+const STATE_TONES: Record<string, Tone> = {
+  // Un agent travaille : la seule couleur qui dise « ça tourne sans vous ».
+  work: "accent",
+  // On attend quelqu'un : le noir de l'humain.
+  wait: "ink",
+  terminal: "ok",
+  blocked: "danger",
 };
+
+/**
+ * Le genre d'un état quand l'appelant ne le connaît pas — un ticket porte le *nom* de son état,
+ * pas son genre, qui vit dans le workflow. Les templates nomment leurs états de façon régulière
+ * (`awaiting_*`, `deployed_*`, `*_blocked`) : c'est cette régularité qu'on lit. Un appelant qui
+ * a le workflow sous la main (le board) passe `kind` et court-circuite la déduction.
+ */
+function inferKind(state: string): string {
+  const s = state.toLowerCase();
+  if (/(blocked|failed|rejected|error)/.test(s)) return "blocked";
+  if (/(deployed|merged|done|closed|released|resolved)/.test(s)) return "terminal";
+  if (/(awaiting|needs_human|approval|review|pending|draft|open)/.test(s)) return "wait";
+  return "work";
+}
 
 export function StateBadge({
   state,
   display,
-  kind = "work",
+  kind,
 }: {
   state: string;
   display?: string | null;
   kind?: string;
 }) {
-  const tone = state.includes("needs_human") || state.includes("blocked") ? "blocked" : kind;
+  const resolved = kind ?? inferKind(state);
+  const tone = state.includes("needs_human") || state.includes("blocked") ? "danger" : (STATE_TONES[resolved] ?? "accent");
   return (
-    <span
-      title={state}
-      className={cn(
-        "inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium",
-        STATE_TONES[tone] ?? WORK_TONE,
-      )}
-    >
+    <Badge tone={tone} title={state}>
       {display ?? state}
-    </span>
+    </Badge>
   );
 }
 
@@ -54,40 +80,40 @@ export function CostChip({
   return (
     <span
       title={title}
-      className={cn(
-        "inline-flex items-center gap-1 rounded bg-surface-muted px-2 py-0.5 font-mono text-xs",
-        over ? "text-danger" : "text-ink-muted",
-      )}
+      className={cn("inline-flex items-baseline gap-1 text-xs tabular-nums", over ? "text-danger" : "text-ink")}
     >
       {eur(costEur)}
-      {budgetEur != null && <span className="text-ink-muted/60">/ {eur(budgetEur)}</span>}
+      {budgetEur != null && <span className="text-ink-muted">/ {eur(budgetEur)}</span>}
     </span>
   );
 }
 
-interface ActorGlyph {
-  glyph: string;
-  label: string;
-  className: string;
-}
-
-const SYSTEM_GLYPH: ActorGlyph = { glyph: "▣", label: "système", className: "text-system" };
-
-const ACTOR_GLYPH: Record<string, ActorGlyph> = {
-  agent: { glyph: "◆", label: "agent", className: "text-agent" },
-  user: { glyph: "●", label: "humain", className: "text-human" },
-  human: { glyph: "●", label: "humain", className: "text-human" },
-  system: SYSTEM_GLYPH,
-  train: { glyph: "▶", label: "release train", className: "text-system" },
+const ACTORS: Record<string, { tone: Tone; label: string }> = {
+  agent: { tone: "accent", label: "agent" },
+  user: { tone: "ink", label: "humain" },
+  human: { tone: "ink", label: "humain" },
+  system: { tone: "neutral", label: "système" },
+  train: { tone: "neutral", label: "release train" },
 };
 
+/**
+ * L'acteur d'une étape : une puce carrée dans sa couleur, et son nom. La couleur ne suffit pas
+ * — un lecteur d'écran ne la voit pas, et un daltonien confond le turquoise et le gris : le
+ * type d'acteur est toujours énoncé en toutes lettres.
+ */
 export function ActorIcon({ kind, name }: { kind: string; name?: string | null }) {
-  const actor = ACTOR_GLYPH[kind] ?? SYSTEM_GLYPH;
+  const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "système" };
   return (
-    <span className={cn("inline-flex items-center gap-1 text-xs", actor.className)} title={actor.label}>
-      <span aria-hidden>{actor.glyph}</span>
-      <span className="sr-only">{actor.label}</span>
-      {name && <span className="text-ink-muted">{name}</span>}
+    <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted" title={actor.label}>
+      <Dot tone={actor.tone} size={6} />
+      {name ? (
+        <>
+          <span className="sr-only">{actor.label}</span>
+          <span>{name}</span>
+        </>
+      ) : (
+        <span className="text-ink">{actor.label}</span>
+      )}
     </span>
   );
 }
@@ -104,17 +130,18 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-lg border border-line bg-surface p-4", className)}>
-      {(title || action) && (
-        <header className="mb-3 flex items-center justify-between gap-2">
-          {typeof title === "string" ? <h2 className="text-sm font-semibold">{title}</h2> : title}
-          {action}
-        </header>
-      )}
+    <VargaCard title={title} action={action} className={className}>
       {children}
-    </section>
+    </VargaCard>
   );
 }
+
+const TONE_TO_VARIANT = {
+  default: "secondary",
+  primary: "primary",
+  accent: "accent",
+  danger: "danger",
+} as const;
 
 export function Button({
   children,
@@ -123,43 +150,42 @@ export function Button({
   disabled,
   type = "button",
   title,
+  size = "md",
 }: {
   children: ReactNode;
   onClick?: () => void;
-  tone?: "default" | "primary" | "danger";
+  /**
+   * `primary` : la décision d'un humain (approuver) — noir, une par vue.
+   * `accent` : ce qui déclenche une machine (lancer, provisionner) — turquoise.
+   */
+  tone?: keyof typeof TONE_TO_VARIANT;
   disabled?: boolean;
   type?: "button" | "submit";
   title?: string;
+  size?: "sm" | "md";
 }) {
-  const tones = {
-    default: "border-line bg-surface hover:bg-surface-muted",
-    primary: "border-agent/40 bg-agent/10 text-agent hover:bg-agent/20",
-    danger: "border-danger/40 bg-danger/10 text-danger hover:bg-danger/20",
-  } as const;
   return (
-    <button
+    <VargaButton
       type={type}
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={cn(
-        "rounded border px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-40",
-        tones[tone],
-      )}
+      variant={TONE_TO_VARIANT[tone]}
+      size={size}
     >
       {children}
-    </button>
+    </VargaButton>
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <p className="rounded border border-dashed border-line px-4 py-8 text-center text-sm text-ink-muted">{children}</p>;
+export function Empty({ children, title, action }: { children: ReactNode; title?: ReactNode; action?: ReactNode }) {
+  return (
+    <VargaEmpty title={title} action={action}>
+      {children}
+    </VargaEmpty>
+  );
 }
 
 export function ErrorNote({ children }: { children: ReactNode }) {
-  return (
-    <p role="alert" className="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-      {children}
-    </p>
-  );
+  return <Alert tone="danger">{children}</Alert>;
 }

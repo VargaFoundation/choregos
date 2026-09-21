@@ -15,6 +15,8 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: false,
+  // Le design system est livré en TypeScript source : Next le transpile comme le reste.
+  transpilePackages: ["@varga/design-system"],
   experimental: { optimizePackageImports: ["@tanstack/react-query"] },
   async rewrites() {
     return [{ source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` }];

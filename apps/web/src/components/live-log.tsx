@@ -29,7 +29,7 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <input
-          aria-label="Filtrer le journal"
+          aria-label="filtrer le journal"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
           placeholder="filtrer (permission, dod, result…)"

@@ -31,7 +31,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="Recherche">
+      <Card title="recherche">
         <form
           className="mb-3 flex gap-2"
           onSubmit={(event) => {
@@ -40,14 +40,14 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
           }}
         >
           <input
-            aria-label="Rechercher dans la mémoire"
+            aria-label="rechercher dans la mémoire"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="arrondis, incident, convention de test…"
             className="flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
           />
           <Button type="submit" tone="primary">
-            Chercher
+            chercher
           </Button>
         </form>
         <ul className="space-y-3">
@@ -67,20 +67,20 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
         {submitted && results.data?.length === 0 && <Empty>aucun souvenir pour « {submitted} »</Empty>}
       </Card>
 
-      <Card title="Faits proposés par des agents">
+      <Card title="faits proposés par des agents">
         {error && <ErrorNote>{error}</ErrorNote>}
         <ul className="space-y-3">
           {(pending.data ?? []).filter((memory) => memory.id).map((memory) => (
-            <li key={memory.id} className="rounded border border-warn/30 bg-warn/5 p-3">
+            <li key={memory.id} className="rounded border border-line border-l-2 border-l-warn bg-surface p-3">
               <p className="font-mono text-xs">{memory.subject}</p>
               <p className="mt-1 text-sm">{memory.content}</p>
               <p className="mt-1 text-xs text-ink-muted">proposé par le run {memory.proposed_by ?? "—"}</p>
               <div className="mt-2 flex gap-2">
                 <Button tone="primary" onClick={() => decide(memory.id ?? "", "accept")}>
-                  Accepter
+                  accepter
                 </Button>
                 <Button tone="danger" onClick={() => decide(memory.id ?? "", "reject")}>
-                  Rejeter
+                  rejeter
                 </Button>
               </div>
             </li>
