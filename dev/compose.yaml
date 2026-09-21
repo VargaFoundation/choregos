@@ -66,7 +66,10 @@ services:
     volumes: ["miniodata:/data"]
 
   ecphoria:
-    image: ghcr.io/vargafoundation/ecphoria:memory
+    # `:memory` n'existe pas — le tag de l'édition mémoire est suffixé, pas nommé :
+    # `0.2.5-memory`, `0.2-memory`, `latest-memory`. Épinglé plutôt que `latest-memory`,
+    # pour que la pile de développement soit la même d'une machine à l'autre.
+    image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory
     environment:
       ECPHORIA_EMBEDDING__PROVIDER: openai_compatible
       ECPHORIA_EMBEDDING__BASE_URL: http://litellm:4000/v1
