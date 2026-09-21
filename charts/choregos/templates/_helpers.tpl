@@ -40,6 +40,13 @@ app.kubernetes.io/part-of: choregos
   value: {{ .Values.global.gateway.url | quote }}
 - name: CHOREGOS_MEMORY_URL
   value: {{ .Values.global.memory.url | quote }}
+{{- with .Values.global.memory.tokenSecret }}
+- name: CHOREGOS_MEMORY_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: token
+{{- end }}
 - name: CHOREGOS_OBJECT_STORE_URL
   value: {{ .Values.global.objectStore.url | quote }}
 - name: CHOREGOS_PUBLIC_URL

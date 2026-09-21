@@ -199,8 +199,10 @@ def _register_builtins() -> None:
     )
     register("memory", "ecphoria")(
         lambda cfg: EcphoriaMemory(
-            cfg.get("base_url", "http://ecphoria.choregos-memory:8432"),
-            token=cfg.get("token", ""),
+            # Comme la passerelle : l'URL et le jeton du déploiement, sauf surcharge par projet.
+            # `CHOREGOS_MEMORY_URL` était posé par le chart et ignoré ici.
+            cfg.get("base_url", _env("CHOREGOS_MEMORY_URL", "http://ecphoria.choregos-memory:8432")),
+            token=cfg.get("token", _env("CHOREGOS_MEMORY_TOKEN", "")),
             tenant=cfg.get("tenant"),
             read_timeout_ms=int(cfg.get("read_timeout_ms", 300)),
         )

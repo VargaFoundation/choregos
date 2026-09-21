@@ -65,3 +65,15 @@ def test_un_projet_sans_runtime_prend_l_executeur_du_deploiement(monkeypatch: py
     assert default_executor_kind() == "k8s_job"
     monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND")
     assert default_executor_kind() == "tekton"
+
+
+def test_la_memoire_prend_l_url_et_le_jeton_du_deploiement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CHOREGOS_MEMORY_URL` était posé par le chart et ignoré : chaque projet visait
+    `ecphoria.choregos-memory`, un service qui n'existe que dans une installation."""
+    from choregos_adapters import build
+
+    monkeypatch.setenv("CHOREGOS_MEMORY_URL", "http://ecphoria:8432")
+    monkeypatch.setenv("CHOREGOS_MEMORY_TOKEN", "cle")
+    memory = build("memory", "ecphoria", {})
+    assert memory.base_url == "http://ecphoria:8432"
+    assert memory.token == "cle"
