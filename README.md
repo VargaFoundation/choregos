@@ -69,7 +69,7 @@ CHOREGOS_PORT=8001 CHOREGOS_FAKES=1 uv run choregos-api
 ```
 
 `CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
-pour la pile, `CHOREGOS_PORT` pour l'API.
+pour la pile, `CHOREGOS_PORT` pour l'API, `PORT` pour le front (`PORT=3001 pnpm -C apps/web dev`).
 
 L'image d'Ecphoria vit sur GHCR sous `VargaFoundation`. Si le paquet est privé, il faut
 s'authentifier une fois avant le premier `up` :
