@@ -72,6 +72,7 @@ def test_la_memoire_prend_l_url_et_le_jeton_du_deploiement(monkeypatch: pytest.M
     `ecphoria.choregos-memory`, un service qui n'existe que dans une installation."""
     from choregos_adapters import build
 
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # la CI tourne en fakes
     monkeypatch.setenv("CHOREGOS_MEMORY_URL", "http://ecphoria:8432")
     monkeypatch.setenv("CHOREGOS_MEMORY_TOKEN", "cle")
     memory = build("memory", "ecphoria", {})
