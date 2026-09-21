@@ -173,8 +173,8 @@ importers:
         specifier: ^5.62.0
         version: 5.103.1(react@19.3.0)
       '@varga/design-system':
-        specifier: file:../../../varga-design-system
-        version: file:../../../varga-design-system(react@19.3.0)(tailwindcss@4.3.3)
+        specifier: github:VargaFoundation/design-system#v0.1.1
+        version: https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d(react@19.3.0)(tailwindcss@4.3.3)
       '@xyflow/react':
         specifier: 12.11.6
         version: 12.11.6(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1426,8 +1426,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@varga/design-system@file:../../../varga-design-system':
-    resolution: {directory: ../../../varga-design-system, type: directory}
+  '@varga/design-system@https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d':
+    resolution: {gitHosted: true, integrity: sha512-3hW24MR6Obl82RpbQGWFXx/0xkn2/IRJhIm9vCLU0copsSjbeN8Ja7yKgfbykorduqGfh3a/E6M9hULR5CT7OA==, tarball: https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d}
+    version: 0.1.1
     peerDependencies:
       react: '>=18'
       tailwindcss: '>=4'
@@ -4126,7 +4127,7 @@ snapshots:
   '@unrs/resolver-binding-win32-x64-msvc@1.12.2':
     optional: true
 
-  '@varga/design-system@file:../../../varga-design-system(react@19.3.0)(tailwindcss@4.3.3)':
+  '@varga/design-system@https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d(react@19.3.0)(tailwindcss@4.3.3)':
     dependencies:
       react: 19.3.0
       tailwind-merge: 3.7.0
