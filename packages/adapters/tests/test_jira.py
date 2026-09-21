@@ -116,6 +116,94 @@ async def test_un_statut_inatteignable_est_une_erreur_lisible() -> None:
     assert "In Progress" in str(error.value), "l'erreur dit ce qui était possible"
 
 
+def _jira_francais(appels: list[tuple[str, str, Any]]) -> Any:
+    """Les transitions telles que les rend un site Jira en français (relevé sur un vrai site)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        appels.append((request.method, request.url.path, request.content))
+        if request.url.path.endswith("/transitions") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "transitions": [
+                        {
+                            "id": "11",
+                            "name": "Backlog",
+                            "to": {"name": "Backlog", "statusCategory": {"key": "new"}},
+                        },
+                        {
+                            "id": "21",
+                            "name": "En cours",
+                            "to": {"name": "En cours", "statusCategory": {"key": "indeterminate"}},
+                        },
+                        {
+                            "id": "31",
+                            "name": "Terminé(e)",
+                            "to": {"name": "Terminé(e)", "statusCategory": {"key": "done"}},
+                        },
+                    ]
+                },
+            )
+        return httpx.Response(204)
+
+    return handler
+
+
+async def test_un_jira_en_francais_comprend_les_noms_anglais_des_templates() -> None:
+    """« In Progress » doit trouver « En cours » : Jira traduit les noms de statuts.
+
+    Le test live contre un vrai site francophone a échoué exactement là, avec
+    « disponibles : Backlog, Selected for Development, En cours, Terminé(e) ».
+    """
+    import json as jsonlib
+
+    appels: list[tuple[str, str, Any]] = []
+    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="In Progress"))
+    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
+    assert envoye == {"transition": {"id": "21"}}, "« In Progress » mène à « En cours » par sa catégorie"
+
+    appels.clear()
+    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="Done"))
+    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
+    assert envoye == {"transition": {"id": "31"}}
+
+
+async def test_le_nom_exact_l_emporte_sur_la_categorie() -> None:
+    import json as jsonlib
+
+    appels: list[tuple[str, str, Any]] = []
+    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="En cours"))
+    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
+    assert envoye == {"transition": {"id": "21"}}
+
+
+async def test_une_categorie_explicite_est_comprise() -> None:
+    import json as jsonlib
+
+    appels: list[tuple[str, str, Any]] = []
+    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="category:done"))
+    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
+    assert envoye == {"transition": {"id": "31"}}
+
+
+async def test_deux_statuts_de_meme_categorie_ne_se_departagent_pas_au_hasard() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "transitions": [
+                    {"id": "21", "to": {"name": "En cours", "statusCategory": {"key": "indeterminate"}}},
+                    {"id": "22", "to": {"name": "En revue", "statusCategory": {"key": "indeterminate"}}},
+                ]
+            },
+        )
+
+    with pytest.raises(ConfigurationError) as error:
+        await tracker(handler).set_state("BILL-42", TrackerStateMapping(status="In Progress"))
+    message = str(error.value)
+    assert "En cours" in message and "En revue" in message, "l'erreur nomme les deux candidats"
+
+
 async def test_le_commentaire_de_suivi_est_reecrit_et_non_duplique() -> None:
     from choregos_adapters.tracker.jira import STATUS_COMMENT_MARKER
 

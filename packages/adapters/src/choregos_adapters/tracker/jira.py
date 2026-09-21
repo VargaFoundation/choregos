@@ -25,6 +25,11 @@ STATUS_COMMENT_MARKER = "[choregos:status]"
 AGENT_READY_LABEL = "agent-ready"
 
 
+# Les trois catégories de statut de Jira ont des clés stables dans toutes les langues ; leurs
+# noms, eux, sont traduits. Voir `JiraTracker._transition`.
+_CANONICAL_CATEGORIES = {"to do": "new", "in progress": "indeterminate", "done": "done"}
+
+
 class JiraTracker:
     """Jira Cloud (REST v3). `project_key` est le préfixe des clés (`BILL-42`)."""
 
@@ -127,24 +132,67 @@ class JiraTracker:
             await self.client.request("PUT", f"/rest/api/3/issue/{key}", json={"fields": {"labels": keep}})
 
     async def _transition(self, key: str, status: str) -> None:
-        """Jira ne se laisse pas *écrire* un statut : il faut trouver la transition qui y mène."""
+        """Jira ne se laisse pas *écrire* un statut : il faut trouver la transition qui y mène.
+
+        Trois façons de désigner la cible, dans cet ordre :
+
+        1. le **nom exact** du statut d'arrivée ou de la transition — ce qu'un projet écrit
+           dans son propre `workflow.yaml` ;
+        2. une **catégorie** explicite, `category:new`, `category:indeterminate` ou
+           `category:done` — les trois clés que Jira garde identiques dans toutes les langues ;
+        3. un des trois **noms canoniques anglais** (`To Do`, `In Progress`, `Done`), traduit
+           vers sa catégorie.
+
+        Le troisième cas existe parce que Jira **traduit les noms de statuts** avec la langue du
+        site : sur une instance française, « In Progress » s'appelle « En cours » et
+        « Done » « Terminé(e) ». Les templates de Choregos écrivent les noms anglais ; sans ce
+        repli, aucun ticket ne bougeait sur un Jira francophone — c'est le test live contre
+        `meltingcode.atlassian.net` qui l'a montré. Le repli par catégorie ne s'applique que si
+        **une seule** transition y mène : deux statuts « en cours » (« En cours », « En revue »)
+        ne se départagent pas au hasard, ils lèvent une erreur qui les nomme.
+        """
         payload = await self.client.request("GET", f"/rest/api/3/issue/{key}/transitions")
+        transitions = payload.get("transitions", [])
         wanted = status.casefold()
-        for transition in payload.get("transitions", []):
+
+        for transition in transitions:
             target = ((transition.get("to") or {}).get("name") or "").casefold()
             if target == wanted or (transition.get("name") or "").casefold() == wanted:
-                await self.client.request(
-                    "POST",
-                    f"/rest/api/3/issue/{key}/transitions",
-                    json={"transition": {"id": transition["id"]}},
-                )
+                await self._apply(key, transition)
                 return
-        available = ", ".join(
-            (t.get("to") or {}).get("name", t.get("name", "?")) for t in payload.get("transitions", [])
+
+        category = (
+            wanted.removeprefix("category:")
+            if wanted.startswith("category:")
+            else _CANONICAL_CATEGORIES.get(wanted)
         )
+        if category:
+            matches = [
+                t
+                for t in transitions
+                if (((t.get("to") or {}).get("statusCategory") or {}).get("key")) == category
+            ]
+            if len(matches) == 1:
+                await self._apply(key, matches[0])
+                return
+            if len(matches) > 1:
+                noms = ", ".join((t.get("to") or {}).get("name", "?") for t in matches)
+                raise ConfigurationError(
+                    f"« {status} » désigne la catégorie `{category}`, et plusieurs statuts de {key} "
+                    f"y mènent ({noms}) : nommez celui que vous voulez dans `workflow.yaml`"
+                )
+
+        available = ", ".join((t.get("to") or {}).get("name", t.get("name", "?")) for t in transitions)
         raise ConfigurationError(
             f"aucune transition Jira ne mène à « {status} » depuis l'état courant de {key} "
             f"(disponibles : {available or 'aucune'})"
+        )
+
+    async def _apply(self, key: str, transition: dict[str, Any]) -> None:
+        await self.client.request(
+            "POST",
+            f"/rest/api/3/issue/{key}/transitions",
+            json={"transition": {"id": transition["id"]}},
         )
 
     async def upsert_status_comment(
