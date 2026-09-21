@@ -3,6 +3,10 @@
 
 global:
   domain: choregos.local
+  # Surcharges quand les hôtes ne suivent pas `app.<domain>` / `api.<domain>` en HTTPS
+  # (ex. un ingress HTTP interne derrière un VPN). Vides : dérivés de `domain`.
+  publicUrl: ""
+  apiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
   imageTag: "1.0.0"
   imagePullPolicy: IfNotPresent
@@ -39,6 +43,9 @@ global:
     name: choregos
     user: choregos
     secretRef: choregos-db
+    # À la place de `secretRef` (clé `url`) : le secret d'un opérateur qui ne porte que le
+    # mot de passe (Zalando : `<user>.<cluster>.credentials.postgresql.acid.zalan.do`).
+    passwordSecret: ""
   temporal:
     address: temporal-frontend.choregos-temporal.svc:7233
     namespace: default
@@ -46,12 +53,18 @@ global:
     url: http://litellm.choregos-gateway.svc:4000
   memory:
     url: http://ecphoria.choregos-memory.svc:8432
+    # Secret (clé `token`) d'une mémoire qui exige une clé d'API. Vide : aucun en-tête.
+    tokenSecret: ""
   objectStore:
     url: s3://choregos
   oidc:
     issuer: https://keycloak.choregos.local/realms/choregos
     clientId: choregos
     secretRef: choregos-oidc
+  # `false` pour un locataire qui n'a droit à aucune ressource cluster-scoped (AppProject
+  # `clusterResourceWhitelist: []`) : le ClusterRole de lecture des PipelineRun n'est pas rendu.
+  rbac:
+    clusterScoped: true
   externalSecrets:
     enabled: true
     storeRef: choregos-cluster-store
@@ -59,6 +72,8 @@ global:
 
 choregos-api:
   enabled: true
+  # Ex. : [{ip: "172.16.3.2", hostnames: ["sso.shared.diametral.com"]}]
+  hostAliases: []
   replicaCount: 2
   image:
     repository: choregos-api
@@ -74,6 +89,10 @@ choregos-api:
     enabled: true
   ingress:
     enabled: true
+    # `httproute` (Gateway API) ou `ingress` (networking.k8s.io) quand le cluster n'a pas
+    # de Gateway API — `className` ne sert qu'à `ingress`.
+    kind: httproute
+    className: ""
     hostnames: ["api.choregos.local", "hooks.choregos.local"]
     gateway: choregos-gateway
 
@@ -87,6 +106,8 @@ choregos-web:
     limits: { cpu: 500m, memory: 512Mi }
   ingress:
     enabled: true
+    kind: httproute
+    className: ""
     hostnames: ["app.choregos.local"]
     gateway: choregos-gateway
 
@@ -116,6 +137,11 @@ choregos-orchestrator:
     tag: "1.0.0"
     namespacePattern: "proj-{slug}-runners"
     executor: tekton
+    # Plafond de chaque pod runner (exécuteur `k8s_job`). À garder sous le LimitRange du
+    # namespace : au-delà, le pod est refusé et le Job attend sans message.
+    limits:
+      cpu: "2"
+      memory: 6Gi
 
 choregos-tools:
   enabled: true

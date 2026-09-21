@@ -1,0 +1,135 @@
+# Mode locataire : un AppProject qui refuse tout objet cluster-scoped (Diametral :
+# `clusterResourceWhitelist: []`) refuse la synchro **entière** au premier ClusterRole rendu.
+# Ces tests gardent la frontière des deux côtés : rien de cluster-scoped quand on le coupe,
+# et le défaut inchangé pour les autres.
+suite: mode locataire
+templates:
+  - charts/choregos-api/templates/service.yaml
+  - charts/choregos-api/templates/httproute.yaml
+  - charts/choregos-api/templates/deployment.yaml
+  - charts/choregos-web/templates/deployment.yaml
+  - charts/choregos-orchestrator/templates/deployments.yaml
+tests:
+  - it: par défaut, l'API lit les PipelineRun par un ClusterRole
+    template: charts/choregos-api/templates/service.yaml
+    asserts:
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+          any: true
+      - containsDocument:
+          kind: ClusterRoleBinding
+          apiVersion: rbac.authorization.k8s.io/v1
+          any: true
+
+  - it: sans droit cluster-scoped, ni ClusterRole ni ClusterRoleBinding
+    template: charts/choregos-api/templates/service.yaml
+    set:
+      global.rbac.clusterScoped: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+        not: true
+      - containsDocument:
+          kind: ClusterRoleBinding
+          apiVersion: rbac.authorization.k8s.io/v1
+        not: true
+
+  - it: sans Gateway API, l'API sort par un Ingress qui garde ses trois préfixes
+    template: charts/choregos-api/templates/httproute.yaml
+    set:
+      choregos-api.ingress.kind: ingress
+      choregos-api.ingress.className: traefik
+      choregos-api.ingress.hostnames: ["choregos-api.internal.dev.diametral.com"]
+    asserts:
+      - isKind:
+          of: Ingress
+      - equal:
+          path: spec.ingressClassName
+          value: traefik
+      - equal:
+          path: spec.rules[0].host
+          value: choregos-api.internal.dev.diametral.com
+      - lengthEqual:
+          path: spec.rules[0].http.paths
+          count: 3
+
+  - it: sans Gateway API, le front sort par un Ingress
+    template: charts/choregos-web/templates/deployment.yaml
+    set:
+      choregos-web.ingress.kind: ingress
+    asserts:
+      - containsDocument:
+          kind: Ingress
+          apiVersion: networking.k8s.io/v1
+          any: true
+      - containsDocument:
+          kind: HTTPRoute
+          apiVersion: gateway.networking.k8s.io/v1
+        not: true
+
+  - it: avec l'exécuteur k8s_job, le compte des runners existe et ne monte aucun jeton
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    set:
+      choregos-orchestrator.runner.executor: k8s_job
+    asserts:
+      - containsDocument:
+          kind: ServiceAccount
+          apiVersion: v1
+          name: choregos-runner
+          any: true
+      - equal:
+          path: automountServiceAccountToken
+          value: false
+        documentSelector:
+          path: metadata.name
+          value: choregos-runner
+
+  - it: avec Tekton, pas de compte runner dans le namespace de la plateforme
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    asserts:
+      - containsDocument:
+          kind: ServiceAccount
+          apiVersion: v1
+          name: choregos-runner
+        not: true
+
+  - it: les URL publiques se surchargent pour un ingress HTTP interne
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.publicUrl: http://choregos.internal.dev.diametral.com
+      global.apiUrl: http://choregos-api.internal.dev.diametral.com
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_PUBLIC_URL
+            value: http://choregos.internal.dev.diametral.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_API_URL
+            value: http://choregos-api.internal.dev.diametral.com
+
+  - it: l'URL de la base se compose depuis le secret de l'opérateur Zalando
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.database.passwordSecret: choregos.choregos-pg.credentials.postgresql.acid.zalan.do
+      global.database.host: choregos-pg
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DATABASE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: choregos.choregos-pg.credentials.postgresql.acid.zalan.do
+                key: password
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DATABASE_URL
+            value: postgresql+asyncpg://choregos:$(CHOREGOS_DATABASE_PASSWORD)@choregos-pg:5432/choregos

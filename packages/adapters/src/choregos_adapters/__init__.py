@@ -6,6 +6,7 @@ la décision est dans `packages/core`, l'orchestration dans `apps/orchestrator`.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .base import (
@@ -172,6 +173,8 @@ def _register_builtins() -> None:
         lambda cfg: KubernetesJobExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
             service_account=cfg.get("service_account", "choregos-runner"),
+            cpu_limit=cfg.get("cpu_limit", os.environ.get("CHOREGOS_RUNNER_CPU_LIMIT", "") or "2"),
+            memory_limit=cfg.get("memory_limit", os.environ.get("CHOREGOS_RUNNER_MEMORY_LIMIT", "") or "6Gi"),
         )
     )
     register("runtime", "aca")(
@@ -196,8 +199,10 @@ def _register_builtins() -> None:
     )
     register("memory", "ecphoria")(
         lambda cfg: EcphoriaMemory(
-            cfg.get("base_url", "http://ecphoria.choregos-memory:8432"),
-            token=cfg.get("token", ""),
+            # Comme la passerelle : l'URL et le jeton du déploiement, sauf surcharge par projet.
+            # `CHOREGOS_MEMORY_URL` était posé par le chart et ignoré ici.
+            cfg.get("base_url", _env("CHOREGOS_MEMORY_URL", "http://ecphoria.choregos-memory:8432")),
+            token=cfg.get("token", _env("CHOREGOS_MEMORY_TOKEN", "")),
             tenant=cfg.get("tenant"),
             read_timeout_ms=int(cfg.get("read_timeout_ms", 300)),
         )

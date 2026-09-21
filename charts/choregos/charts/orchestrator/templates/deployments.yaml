@@ -57,6 +57,10 @@ spec:
               value: {{ $root.Values.runner.namespacePattern | quote }}
             - name: CHOREGOS_EXECUTOR_KIND
               value: {{ $root.Values.runner.executor | quote }}
+            - name: CHOREGOS_RUNNER_CPU_LIMIT
+              value: {{ $root.Values.runner.limits.cpu | quote }}
+            - name: CHOREGOS_RUNNER_MEMORY_LIMIT
+              value: {{ $root.Values.runner.limits.memory | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: choregos-gateway-secrets, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}
@@ -70,4 +74,16 @@ metadata:
   name: choregos-orchestrator
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations: {{- toYaml .Values.global.serviceAccount.annotations | nindent 4 }}
+{{- if eq .Values.runner.executor "k8s_job" }}
+---
+# L'exécuteur `k8s_job` lance les runners dans CE namespace sous ce compte : sans lui,
+# la création du pod échoue. Aucun droit, aucun jeton monté — un agent n'a rien à
+# demander à l'API Kubernetes. (Avec Tekton, le provisioning le crée par projet.)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: choregos-runner
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- end }}
 {{- end }}
