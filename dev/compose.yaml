@@ -1,3 +1,14 @@
+# Pile de développement sans Kubernetes : Postgres, Temporal, LiteLLM, Keycloak, MinIO et
+# la mémoire Ecphoria.
+#
+# Les ports hôte sont surchargeables — une machine de développement a souvent déjà un
+# Postgres sur 5432 ou un Keycloak sur 8080, et le défaut faisait échouer `up` sur
+# « port is already allocated » sans dire lequel changer :
+#
+#   CHOREGOS_PORT_POSTGRES=15432 docker compose -f dev/compose.yaml up -d
+#
+# Variables : CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}.
+
 # Tout ce dont la plateforme a besoin, sans Kubernetes : `docker compose -f dev/compose.yaml up -d`.
 name: choregos
 
@@ -8,7 +19,7 @@ services:
       POSTGRES_USER: choregos
       POSTGRES_PASSWORD: choregos
       POSTGRES_DB: choregos
-    ports: ["5432:5432"]
+    ports: ["${CHOREGOS_PORT_POSTGRES:-5432}:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U choregos"]
       interval: 5s
@@ -25,8 +36,11 @@ services:
       POSTGRES_USER: choregos
       POSTGRES_PWD: choregos
       POSTGRES_SEEDS: postgres
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
-    ports: ["7233:7233"]
+      # `development-sql.yaml` n'existe pas dans `auto-setup:1.26.2` — son répertoire de
+      # configuration dynamique ne contient que `docker.yaml`. Temporal démarrait, ne
+      # trouvait pas le fichier, et sortait : « Unable to create dynamic config client ».
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
+    ports: ["${CHOREGOS_PORT_TEMPORAL:-7233}:7233"]
 
   temporal-ui:
     image: temporalio/ui:2.32.0
@@ -34,7 +48,7 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_CORS_ORIGINS: http://localhost:3000
-    ports: ["8088:8080"]
+    ports: ["${CHOREGOS_PORT_TEMPORAL_UI:-8088}:8080"]
 
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
@@ -45,7 +59,7 @@ services:
     volumes: ["./litellm.yaml:/app/config.yaml:ro"]
     depends_on:
       postgres: { condition: service_healthy }
-    ports: ["4000:4000"]
+    ports: ["${CHOREGOS_PORT_LITELLM:-4000}:4000"]
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -54,7 +68,7 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     volumes: ["./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro"]
-    ports: ["8080:8080"]
+    ports: ["${CHOREGOS_PORT_KEYCLOAK:-8080}:8080"]
 
   minio:
     image: minio/minio:latest
@@ -62,7 +76,7 @@ services:
     environment:
       MINIO_ROOT_USER: choregos
       MINIO_ROOT_PASSWORD: choregos123
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["${CHOREGOS_PORT_MINIO:-9000}:9000", "${CHOREGOS_PORT_MINIO_CONSOLE:-9001}:9001"]
     volumes: ["miniodata:/data"]
 
   ecphoria:
@@ -72,11 +86,27 @@ services:
     image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory
     environment:
       ECPHORIA_EMBEDDING__PROVIDER: openai_compatible
-      ECPHORIA_EMBEDDING__BASE_URL: http://litellm:4000/v1
+      # `OPENAI_BASE_URL`, pas `BASE_URL` : le champ s'appelle `openai_base_url`. Avec le
+      # mauvais nom, la variable était ignorée sans un mot et les embeddings partaient chez
+      # `api.openai.com` — hors de la passerelle où le coût est mesuré, et sans clé.
+      ECPHORIA_EMBEDDING__OPENAI_BASE_URL: http://litellm:4000/v1
       ECPHORIA_EMBEDDING__MODEL: platform/embed
-    ports: ["8432:8432"]
-    profiles: ["memory"]
+      # La mémoire n'écoute que sur le réseau de la pile de développement, et refuse de
+      # démarrer sans authentification sur une interface non-loopback — c'est voulu. Ici on
+      # assume, comme le message d'erreur le propose ; en cluster, le chart pose de vraies
+      # clés (`gateway.authEnabled`).
+      ECPHORIA_GATEWAY__ALLOW_INSECURE: "true"
+      # Sans volume, DuckDB ne peut pas ouvrir ses fichiers et la mémoire retombe en RAM à
+      # chaque démarrage — silencieusement, sur un `WARN` que personne ne lit.
+      ECPHORIA_MEMORY__EPISODIC__DB_PATH: /data/episodic.duckdb
+      ECPHORIA_MEMORY__STATE__DB_PATH: /data/state.db
+      ECPHORIA_MEMORY__COGNITION__DB_PATH: /data/cognition.duckdb
+    volumes: ["ecphoriadata:/data"]
+    ports: ["${CHOREGOS_PORT_ECPHORIA:-8432}:8432"]
+    # Pas de profil : le README annonce Ecphoria dans la pile, et une mémoire absente
+    # fait échouer le premier run de la plateforme sur une erreur de connexion.
 
 volumes:
   pgdata:
   miniodata:
+  ecphoriadata:
