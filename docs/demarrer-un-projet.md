@@ -147,10 +147,10 @@ choregos items reject  <item-id> --reason "…"
 ## Ce qui n'est pas encore éprouvé
 
 `docs/plan/BLOCKERS.md` tient la liste à jour, avec la cause et le contournement retenu
-pour chacun. Au moment d'écrire : le backend **OpenHands** n'a jamais été confronté à son
-vrai binaire (le défaut du projet reste donc à choisir parmi les autres backends), le
-connecteur **Jira** n'a jamais reçu de réponse d'une instance réelle, et les valeurs de
-haute disponibilité de la plateforme demandent un environnement de la taille de staging.
+pour chacun. Au moment d'écrire : les valeurs de haute disponibilité de la plateforme
+demandent un environnement de la taille de staging, et Azure DevOps (Boards, Pipelines)
+n'a pas d'organisation joignable. Le backend par défaut est `claude-code` ; OpenHands a été
+retiré ([ADR 0011](adr/0011-retrait-d-openhands.md)).
 
 ## Où aller ensuite
 

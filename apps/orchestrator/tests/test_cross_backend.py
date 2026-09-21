@@ -58,27 +58,27 @@ def _plan(setup: Fixture, role: str, backend: str | None = None) -> dict[str, An
 
 async def test_le_relecteur_n_est_pas_l_implementeur(setup: Fixture) -> None:
     await _set_cross_backend(setup.project_id, True)
-    await _implemented_by(setup, "openhands")
+    await _implemented_by(setup, "codex")
 
-    prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="openhands"))
+    prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="codex"))
 
     backend = prepared["stage_input"]["agent"]["backend"]
-    assert backend != "openhands", "la politique exige un autre relecteur"
+    assert backend != "codex", "la politique exige un autre relecteur"
     assert backend in {"claude-code", "codex", "gemini-cli", "goose", "opencode", "copilot-cli"}
 
 
 async def test_sans_la_politique_le_backend_demande_est_respecte(setup: Fixture) -> None:
     await _set_cross_backend(setup.project_id, False)
-    await _implemented_by(setup, "openhands")
+    await _implemented_by(setup, "codex")
 
-    prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="openhands"))
+    prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="codex"))
 
-    assert prepared["stage_input"]["agent"]["backend"] == "openhands"
+    assert prepared["stage_input"]["agent"]["backend"] == "codex"
 
 
 async def test_un_relecteur_deja_different_n_est_pas_change(setup: Fixture) -> None:
     await _set_cross_backend(setup.project_id, True)
-    await _implemented_by(setup, "openhands")
+    await _implemented_by(setup, "codex")
 
     prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="goose"))
 
@@ -88,11 +88,11 @@ async def test_un_relecteur_deja_different_n_est_pas_change(setup: Fixture) -> N
 async def test_les_autres_roles_ne_sont_pas_touches(setup: Fixture) -> None:
     """Seule la revue est croisée : l'implémentation garde le backend du projet."""
     await _set_cross_backend(setup.project_id, True)
-    await _implemented_by(setup, "openhands")
+    await _implemented_by(setup, "codex")
 
-    prepared = await stage_activities.prepare_stage(_plan(setup, "implement", backend="openhands"))
+    prepared = await stage_activities.prepare_stage(_plan(setup, "implement", backend="codex"))
 
-    assert prepared["stage_input"]["agent"]["backend"] == "openhands"
+    assert prepared["stage_input"]["agent"]["backend"] == "codex"
 
 
 async def test_un_seul_backend_autorise_degrade_sans_bloquer(setup: Fixture) -> None:
@@ -101,15 +101,15 @@ async def test_un_seul_backend_autorise_degrade_sans_bloquer(setup: Fixture) -> 
     from choregos_api.db.session import session_scope
 
     await _set_cross_backend(setup.project_id, True)
-    await _implemented_by(setup, "openhands")
+    await _implemented_by(setup, "codex")
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
         assert project is not None
         config = dict(project.config)
-        config["agent"] = {"default_backend": "openhands", "allowed_backends": ["openhands"]}
+        config["agent"] = {"default_backend": "codex", "allowed_backends": ["codex"]}
         project.config = config
 
-    prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="openhands"))
+    prepared = await stage_activities.prepare_stage(_plan(setup, "review", backend="codex"))
 
-    assert prepared["stage_input"]["agent"]["backend"] == "openhands"
+    assert prepared["stage_input"]["agent"]["backend"] == "codex"
     assert prepared["run_id"], "le ticket avance malgré la revue dégradée"

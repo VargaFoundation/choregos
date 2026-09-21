@@ -134,7 +134,7 @@ Migration : signal `control(migrate, workflow_def_id)` → l'interpréteur véri
 
 ## 2.2 Le runner (`packages/runner`) — client ACP headless
 
-Image `ghcr.io/vargafoundation/choregos-runner:<version>` : Debian slim + Python 3.12 + `git`, `gh`, `glab`, `jq`, `ripgrep`, outils de test usuels (node 22, pnpm, uv, go, java 21 en variantes d'image), scanners (Semgrep, Trivy, gitleaks), **agents ACP préinstallés** (OpenHands `agent-server`, `claude-agent-acp`, `codex-acp`, Gemini CLI, Goose, OpenCode) à versions épinglées dans `packages/runner/backends/versions.lock`.
+Image `ghcr.io/vargafoundation/choregos-runner:<version>` : Debian slim + Python 3.12 + `git`, `gh`, `glab`, `jq`, `ripgrep`, outils de test usuels (node 22, pnpm, uv, go, java 21 en variantes d'image), scanners (Semgrep, Trivy, gitleaks), **agents ACP préinstallés** (`claude-agent-acp`, `codex-acp`, Gemini CLI, Goose, OpenCode — OpenHands retiré, [ADR 0011](../adr/0011-retrait-d-openhands.md)) à versions épinglées dans `packages/runner/backends/versions.lock`.
 
 ### Algorithme
 
@@ -168,7 +168,7 @@ Sorties standardisées : code 0 (résultat posté, quel que soit `status`), 10 (
 
 | Backend | `launch_spec` | `model_env` | Notes |
 | :-- | :-- | :-- | :-- |
-| `openhands` (défaut) | `openhands acp` (ou `agent-server` + client ACP) ; skills `.openhands/skills/` ; `AGENTS.md` lu nativement | `LLM_MODEL=<litellm_model>`, `LLM_BASE_URL`, `LLM_API_KEY` | Sécurité : `LLMSecurityAnalyzer` activable par politique |
+| ~~`openhands`~~ **retiré** | aucun agent ACP en ligne de commande (0.59 : `serve`/`cli` ; 1.x : `agent-server` HTTP) — [ADR 0011](../adr/0011-retrait-d-openhands.md) ; le défaut est `claude-code` | — | — |
 | `claude-code` | `claude-agent-acp` (adaptateur Zed) ; `CLAUDE.md` → lien vers `AGENTS.md` ; `settings.json` projet avec hooks de secours | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL` | Modèle Claude uniquement (validation projet) |
 | `codex` | `codex-acp` ; `AGENTS.md` natif | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, modèle via config | |
 | `gemini-cli` | `gemini --acp` (`--experimental-acp` déprécié depuis 0.39) | `GOOGLE_GEMINI_BASE_URL` (via LiteLLM), clé | |

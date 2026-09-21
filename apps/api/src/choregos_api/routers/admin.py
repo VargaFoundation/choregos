@@ -37,7 +37,6 @@ from ..schemas import (
 router = APIRouter(tags=["admin"])
 
 KNOWN_BACKENDS = [
-    ("openhands", ["acp", "mcp", "agents_md", "structured_output"]),
     ("claude-code", ["acp", "mcp", "agents_md", "structured_output"]),
     ("codex", ["acp", "mcp", "agents_md"]),
     ("gemini-cli", ["acp", "mcp"]),
@@ -61,7 +60,7 @@ async def list_backends(session: Db, principal: Me) -> list[AgentBackendInfo]:
         out.append(
             AgentBackendInfo(
                 name=name,
-                enabled=row.enabled if row else name == "openhands",
+                enabled=row.enabled if row else name == "claude-code",
                 version=row.version if row else None,
                 capabilities=list(row.capabilities) if row and row.capabilities else capabilities,
                 conformance=ConformanceReport.model_validate(row.conformance)

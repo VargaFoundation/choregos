@@ -20,7 +20,7 @@ async def test_review_croisee_impose_un_backend_different(platform: Platform) ->
     engine = PolicyEngine(load_preset("team"))
     assert engine.cross_backend_review() is True
 
-    implement_backend = "openhands"
+    implement_backend = "codex"
     review_backend = "claude-code"
     assert implement_backend != review_backend
 
@@ -146,7 +146,7 @@ async def test_matrice_d_evals_publiee_et_opposable(platform: Platform) -> None:
             "project_slug": platform.project_slug,
             "results": [
                 {
-                    "backend": "openhands",
+                    "backend": "codex",
                     "model": "platform/standard",
                     "validated": True,
                     "success_rate": 0.86,
@@ -167,7 +167,7 @@ async def test_matrice_d_evals_publiee_et_opposable(platform: Platform) -> None:
     matrix = (await platform.client.get(f"/api/v1/projects/{platform.project_id}/models/matrix")).json()
     assert matrix["entries"], matrix
     validated = {(entry["backend"], entry["validated"]) for entry in matrix["entries"]}
-    assert ("openhands", True) in validated
+    assert ("codex", True) in validated
 
 
 async def test_changement_de_modele_sans_redeploiement(platform: Platform) -> None:
@@ -190,6 +190,6 @@ async def test_changement_de_modele_sans_redeploiement(platform: Platform) -> No
     project = (await platform.client.get(f"/api/v1/projects/{platform.project_id}")).json()
     config = ProjectConfig.model_validate(project["config"])
     resolver = ModelResolver(gateway_url="http://litellm:4000")
-    resolved = resolver.resolve("profile:by_size", project=config, size="XL", backend="openhands")
+    resolved = resolver.resolve("profile:by_size", project=config, size="XL", backend="codex")
     assert resolved.litellm_model == "anthropic/claude-opus-5"
     assert resolved.turns_factor == pytest.approx(2.25), "XL × facteur du profil"

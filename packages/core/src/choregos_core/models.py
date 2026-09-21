@@ -36,7 +36,6 @@ BY_SIZE_MAP: dict[str, tuple[str, float]] = {
 
 # Format d'API attendu par chaque backend ACP.
 BACKEND_API_FORMAT: dict[str, ApiFormat] = {
-    "openhands": ApiFormat.OPENAI,
     "claude-code": ApiFormat.ANTHROPIC,
     "codex": ApiFormat.OPENAI,
     "gemini-cli": ApiFormat.GEMINI,
@@ -54,7 +53,6 @@ BACKEND_MODEL_CONSTRAINTS: dict[str, tuple[str, ...]] = {
 # `choregos_runner.backends` en est la source ; on la redit ici parce que l'orchestrateur
 # et l'API doivent pouvoir choisir un backend sans dépendre du paquet runner.
 KNOWN_BACKEND_NAMES: tuple[str, ...] = (
-    "openhands",
     "claude-code",
     "codex",
     "gemini-cli",
@@ -112,7 +110,7 @@ class ModelResolver:
         *,
         project: ProjectConfig | None = None,
         size: Size | str | None = None,
-        backend: str = "openhands",
+        backend: str = "claude-code",
         allow_unvalidated: bool | None = None,
     ) -> ResolvedModel:
         """Résout `profile:x`, `profile:by_size` ou un identifiant LiteLLM direct."""
@@ -181,7 +179,15 @@ class ModelResolver:
                     )
                 break
         constraints = BACKEND_MODEL_CONSTRAINTS.get(backend)
-        if constraints and not any(token in effective.lower() for token in constraints):
+        if constraints and effective.startswith("platform/"):
+            # Un alias que le catalogue du gateway n'a pas résolu cache le vrai modèle : la
+            # contrainte ne peut pas être vérifiée ici. La refuser rendrait tout alias
+            # inutilisable avec ce backend ; on le signale, et le gateway reste seul juge.
+            resolved.warnings.append(
+                f"le backend `{backend}` n'accepte que des modèles {' / '.join(constraints)} ; "
+                f"`{model}` est un alias non résolu, la contrainte n'a pas pu être vérifiée"
+            )
+        elif constraints and not any(token in effective.lower() for token in constraints):
             self._reject(
                 resolved,
                 f"le backend `{backend}` n'accepte que des modèles {' / '.join(constraints)} "

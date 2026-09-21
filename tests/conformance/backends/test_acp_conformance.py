@@ -84,7 +84,7 @@ def stage_input(tmp_path: Path) -> StageInput:
         work_item=WorkItemRef(key="varga/conformance#1", title="créer hello.py et son test"),
         transition=TransitionRef(id="t-implement", role="implement", **{"from": "ready"}, to="in_progress"),
         repo=RepoRef(url=str(tmp_path), base_branch="main", work_branch="choregos/1"),
-        agent=AgentRef(backend="openhands", launch=LaunchSpec(command=[sys.executable, str(FAKE_AGENT)])),
+        agent=AgentRef(backend="claude-code", launch=LaunchSpec(command=[sys.executable, str(FAKE_AGENT)])),
         model=ModelRef(
             litellm_model="platform/standard", base_url="http://localhost:4000", api_format="openai"
         ),
@@ -190,15 +190,15 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
 
 
 async def test_default_backend_passes_all_checks(stage_input: StageInput, tmp_path: Path) -> None:
-    """OpenHands (agent par défaut) doit passer les sept vérifications."""
+    """Claude Code (agent par défaut) doit passer les sept vérifications."""
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    result = await run_suite("openhands", stage_input, workspace)
+    result = await run_suite("claude-code", stage_input, workspace)
     assert result.ok, result.failed
     assert set(result.passed) == set(CHECKS)
 
 
-@pytest.mark.parametrize("backend", [name for name in known_backends() if name != "openhands"])
+@pytest.mark.parametrize("backend", [name for name in known_backends() if name != "claude-code"])
 async def test_other_backends(backend: str, stage_input: StageInput, tmp_path: Path) -> None:
     """Les autres backends sont testés avec l'agent factice ; l'agent réel tourne la nuit."""
     workspace = tmp_path / backend

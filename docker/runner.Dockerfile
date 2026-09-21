@@ -47,19 +47,12 @@ RUN set -eux; \
     npm install -g --allow-scripts=opencode-ai,@github/keytar,node-pty \
       "@zed-industries/claude-code-acp@$(version claude-agent-acp)" \
       "@google/gemini-cli@$(version gemini-cli)" \
-      "opencode-ai@$(version opencode)"; \
-    pip install --no-cache-dir "openhands-ai==$(version openhands)"
+      "opencode-ai@$(version opencode)"
 
-# Les dépendances transitives qu'OpenHands 0.59 épingle en deçà de ce que la porte Trivy
-# accepte. Elles sont montées après coup plutôt qu'en montant OpenHands lui-même : la 1.x a
-# retiré l'agent ACP en ligne de commande (`openhands acp`) au profit d'un serveur HTTP
-# (`agent-server`), ce qui n'est pas une montée d'épingle mais une réécriture du backend.
-# Voir docs/plan/BLOCKERS.md.
-RUN pip install --no-cache-dir \
-      "anyio>=4.14.2" \
-      "fastmcp>=3.2.0" \
-      "litellm>=1.84.0" \
-      "GitPython>=3.1.59"
+# OpenHands n'est plus installé (docs/adr/0011-retrait-d-openhands.md). Il n'exposait aucun
+# agent ACP en ligne de commande, et il pesait le plus lourd de l'image : son arbre Python
+# portait quatre des quatorze CRITICAL trouvés par Trivy (`litellm`, `fastmcp`, `anyio`,
+# `GitPython`), et c'était lui qui rendait la construction arm64 interminable.
 
 # Ce que l'image prétend contenir, elle le contient — et ce qu'elle contient démarre.
 #
@@ -76,8 +69,7 @@ RUN pip install --no-cache-dir \
 RUN set -eux; \
     timeout 30 claude-code-acp --version >/dev/null </dev/null; \
     timeout 30 gemini --version >/dev/null; \
-    timeout 30 opencode --version >/dev/null; \
-    timeout 30 openhands --version >/dev/null
+    timeout 30 opencode --version >/dev/null
 
 # Shims : défense en profondeur. Aucun credential n'existe de toute façon, mais un agent
 # qui essaie doit être **refusé et tracé**, pas silencieusement ignoré.

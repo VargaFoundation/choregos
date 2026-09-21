@@ -77,8 +77,16 @@ def test_backend_constraint_is_not_bypassable() -> None:
         resolver().resolve("profile:aux", backend="claude-code", allow_unvalidated=True)
 
 
+def test_backend_constraint_on_unresolved_alias_warns() -> None:
+    """Sans catalogue du gateway, l'alias cache le modèle : on avertit, on ne refuse pas."""
+    blind = ModelResolver(gateway_url="http://litellm:4000")
+    resolved = blind.resolve("profile:standard", backend="claude-code")
+    assert resolved.validated
+    assert any("non résolu" in warning for warning in resolved.warnings)
+
+
 def test_unvalidated_matrix_combination() -> None:
-    r = resolver(validated_backends={"platform/strong": ["openhands"]})
+    r = resolver(validated_backends={"platform/strong": ["claude-code"]})
     with pytest.raises(ModelResolutionError, match="matrice d'évals"):
         r.resolve("profile:strong", backend="codex")
     permissive = r.resolve("profile:strong", backend="codex", allow_unvalidated=True)
@@ -87,7 +95,7 @@ def test_unvalidated_matrix_combination() -> None:
 
 
 def test_project_allow_unvalidated_flag() -> None:
-    r = resolver(validated_backends={"platform/strong": ["openhands"]})
+    r = resolver(validated_backends={"platform/strong": ["claude-code"]})
     cfg = project(allow_unvalidated=True)
     assert not r.resolve("profile:strong", backend="codex", project=cfg).validated
 
