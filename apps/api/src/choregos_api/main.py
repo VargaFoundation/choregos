@@ -137,7 +137,7 @@ def main() -> None:
     uvicorn.run(
         "choregos_api.main:app",
         host="0.0.0.0",  # noqa: S104 - conteneur
-        port=8000,
+        port=settings.port,
         reload=settings.env == "dev",
         log_config=None,
     )

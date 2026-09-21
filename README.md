@@ -59,6 +59,25 @@ CHOREGOS_FAKES=1 uv run choregos-orchestrator # workers Temporal
 pnpm -C apps/web dev                          # front sur :3000
 ```
 
+Si un port est déjà pris — un Postgres sur 5432, un Keycloak sur 8080 — chaque service
+accepte une surcharge plutôt que de vous faire éditer le compose :
+
+```bash
+CHOREGOS_PORT_POSTGRES=15432 CHOREGOS_PORT_KEYCLOAK=18080 \
+  docker compose -f dev/compose.yaml up -d
+CHOREGOS_PORT=8001 CHOREGOS_FAKES=1 uv run choregos-api
+```
+
+`CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
+pour la pile, `CHOREGOS_PORT` pour l'API.
+
+L'image d'Ecphoria vit sur GHCR sous `VargaFoundation`. Si le paquet est privé, il faut
+s'authentifier une fois avant le premier `up` :
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <utilisateur> --password-stdin
+```
+
 ## Intégrer un projet
 
 Vous avez un dépôt et vous voulez que la plateforme le développe :

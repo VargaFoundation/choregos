@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
 
     env: Literal["dev", "staging", "prod", "test"] = "dev"
+    # Port d'écoute. En conteneur, 8000 ; sur une machine de développement, 8000 est
+    # souvent déjà pris, et `choregos-api` sortait sur « Address already in use » sans
+    # qu'on puisse en changer autrement qu'en éditant le code.
+    port: int = 8000
     debug: bool = False
     fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
 
