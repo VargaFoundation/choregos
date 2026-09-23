@@ -392,3 +392,37 @@ def test_un_backend_retire_est_refuse_avec_sa_raison() -> None:
     message = str(error.value)
     assert "retiré" in message and "ACP" in message
     assert "claude-code" in message, "le message indique le remplaçant"
+
+
+async def test_git_accepte_le_workspace_meme_si_le_volume_appartient_a_root(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Le volume d'un pod appartient à root, l'agent tourne en 1000 : sans `safe.directory`,
+    git refuse le dépôt (« detected dubious ownership ») et conseille d'écrire une
+    configuration globale, ce qu'un conteneur éphémère ne peut pas faire."""
+    from choregos_runner.workspace import _git_env, run_command
+
+    env = _git_env(tmp_path)
+    assert env["GIT_CONFIG_KEY_0"] == "safe.directory"
+    assert env["GIT_CONFIG_VALUE_0"] == str(tmp_path)
+
+    resultat = await run_command(["git", "init", "-q"], cwd=tmp_path)
+    assert resultat.ok, resultat.stderr
+    lecture = await run_command(["git", "config", "--get-all", "safe.directory"], cwd=tmp_path)
+    assert str(tmp_path) in lecture.stdout
+
+
+def test_un_serveur_mcp_http_porte_ses_en_tetes(stage_input) -> None:  # type: ignore[no-untyped-def]
+    """Le schéma ACP exige `headers` pour un serveur HTTP. Sans lui, `session/new` est
+    refusé avec « Invalid params » et une arborescence d'erreurs où le champ manquant se
+    lit mal — l'agent ne démarre jamais."""
+    from choregos_contracts import McpServerRef, ToolsRef
+    from choregos_runner.backends.base import Backend
+
+    stage_input.tools = ToolsRef(
+        mcp={
+            "memoire": McpServerRef(url="http://memoire:8432/mcp", env={"Authorization": "Bearer x"}),
+            "outils": McpServerRef(command=["choregos-tools", "serve"], env={"A": "b"}),
+        }
+    )
+    par_nom = {s["name"]: s for s in Backend.mcp_servers(stage_input)}
+    assert par_nom["memoire"]["headers"] == [{"name": "Authorization", "value": "Bearer x"}]
+    assert par_nom["outils"]["env"] == [{"name": "A", "value": "b"}]

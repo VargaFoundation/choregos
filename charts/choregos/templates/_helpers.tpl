@@ -33,14 +33,14 @@ app.kubernetes.io/part-of: choregos
 - name: CHOREGOS_FAKES
   value: {{ .Values.global.fakes | quote }}
 - name: CHOREGOS_TEMPORAL_ADDRESS
-  value: {{ .Values.global.temporal.address | quote }}
+  value: {{ include "choregos.temporalAddress" . | quote }}
 - name: CHOREGOS_TEMPORAL_NAMESPACE
   value: {{ .Values.global.temporal.namespace | quote }}
 - name: CHOREGOS_GATEWAY_URL
-  value: {{ .Values.global.gateway.url | quote }}
+  value: {{ include "choregos.gatewayUrl" . | quote }}
 - name: CHOREGOS_MEMORY_URL
-  value: {{ .Values.global.memory.url | quote }}
-{{- with .Values.global.memory.tokenSecret }}
+  value: {{ include "choregos.memoryUrl" . | quote }}
+{{- with (include "choregos.memoryTokenSecret" .) }}
 - name: CHOREGOS_MEMORY_TOKEN
   valueFrom:
     secretKeyRef:
@@ -53,7 +53,7 @@ app.kubernetes.io/part-of: choregos
   value: {{ .Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain) | quote }}
 - name: CHOREGOS_API_URL
   value: {{ .Values.global.apiUrl | default (printf "https://api.%s" .Values.global.domain) | quote }}
-{{- with .Values.global.database.passwordSecret }}
+{{- with (include "choregos.databasePasswordSecret" .) }}
 {{- /* Le mot de passe vient d'un secret posé par un opérateur (Zalando : clé `password`),
        l'URL est composée ici — Kubernetes développe `$(VAR)` d'une variable déclarée avant. */}}
 - name: CHOREGOS_DATABASE_PASSWORD
@@ -62,7 +62,7 @@ app.kubernetes.io/part-of: choregos
       name: {{ . }}
       key: password
 - name: CHOREGOS_DATABASE_URL
-  value: {{ printf "postgresql+asyncpg://%s:$(CHOREGOS_DATABASE_PASSWORD)@%s:%v/%s" $.Values.global.database.user $.Values.global.database.host $.Values.global.database.port $.Values.global.database.name | quote }}
+  value: {{ printf "postgresql+asyncpg://%s:$(CHOREGOS_DATABASE_PASSWORD)@%s:%v/%s" $.Values.global.database.user (include "choregos.databaseHost" $) $.Values.global.database.port $.Values.global.database.name | quote }}
 {{- else }}
 - name: CHOREGOS_DATABASE_URL
   valueFrom:
@@ -70,4 +70,69 @@ app.kubernetes.io/part-of: choregos
       name: {{ .Values.global.database.secretRef }}
       key: url
 {{- end }}
+{{- end -}}
+
+{{/*
+Les dépendances : embarquées par ce chart, ou fournies par l'extérieur.
+
+`global.<dep>.embedded` est la condition du sous-chart ET ce que lisent ces helpers. Le
+drapeau vit sous `global` parce qu'un sous-chart ne voit QUE `global` du parent : posé
+ailleurs, `charts/litellm` ne saurait pas quel hôte de base employer, et le rendu serait
+juste — dans le chart parent seulement.
+*/}}
+{{- define "choregos.databaseHost" -}}
+{{- if .Values.global.database.embedded -}}
+{{ .Release.Name }}-postgresql
+{{- else -}}
+{{ .Values.global.database.host }}
+{{- end -}}
+{{- end -}}
+
+{{- define "choregos.databasePasswordSecret" -}}
+{{- if .Values.global.database.embedded -}}
+{{ .Release.Name }}-postgresql
+{{- else -}}
+{{ .Values.global.database.passwordSecret }}
+{{- end -}}
+{{- end -}}
+
+{{- define "choregos.temporalAddress" -}}
+{{- if .Values.global.temporal.embedded -}}
+{{ .Release.Name }}-temporal:7233
+{{- else -}}
+{{ .Values.global.temporal.address }}
+{{- end -}}
+{{- end -}}
+
+{{- define "choregos.gatewayUrl" -}}
+{{- if .Values.global.gateway.embedded -}}
+http://{{ .Release.Name }}-litellm:4000
+{{- else -}}
+{{ .Values.global.gateway.url }}
+{{- end -}}
+{{- end -}}
+
+{{- define "choregos.memoryUrl" -}}
+{{- if .Values.global.memory.embedded -}}
+http://{{ .Release.Name }}-ecphoria:8432
+{{- else -}}
+{{ .Values.global.memory.url }}
+{{- end -}}
+{{- end -}}
+
+{{/* Secrets : ceux qu'on fournit, ou ceux que le chart génère quand il embarque la dépendance. */}}
+{{- define "choregos.gatewaySecret" -}}
+{{- if .Values.global.gateway.secretRef -}}
+{{ .Values.global.gateway.secretRef }}
+{{- else -}}
+{{ .Release.Name }}-gateway
+{{- end -}}
+{{- end -}}
+
+{{- define "choregos.memoryTokenSecret" -}}
+{{- if .Values.global.memory.tokenSecret -}}
+{{ .Values.global.memory.tokenSecret }}
+{{- else if .Values.global.memory.embedded -}}
+{{ .Release.Name }}-memory
+{{- end -}}
 {{- end -}}

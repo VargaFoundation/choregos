@@ -1,0 +1,6 @@
+apiVersion: v2
+name: choregos-ecphoria
+description: Mémoire des agents (VargaFoundation/ecphoria, édition memory), instance unique.
+type: application
+version: 1.0.0
+appVersion: "0.2.5"

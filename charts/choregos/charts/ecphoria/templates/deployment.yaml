@@ -1,0 +1,92 @@
+{{- $name := printf "%s-ecphoria" .Release.Name }}
+{{- $secret := include "choregos.memoryTokenSecret" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # DuckDB : un seul écrivain.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-ecphoria
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-ecphoria
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: memory
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: ecphoria
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          env:
+            - { name: ECPHORIA_GATEWAY__LISTEN, value: "0.0.0.0:8432" }
+            # Ecphoria refuse d'écouter hors loopback sans authentification : c'est voulu.
+            - { name: ECPHORIA_GATEWAY__AUTH_ENABLED, value: "true" }
+            - name: ECPHORIA_GATEWAY__API_KEYS
+              valueFrom: { secretKeyRef: { name: {{ $secret }}, key: api-keys } }
+            - { name: ECPHORIA_EMBEDDING__PROVIDER, value: {{ .Values.embedding.provider | quote }} }
+            # `OPENAI_BASE_URL` et pas `BASE_URL` : le champ s'appelle `openai_base_url`, et
+            # le mauvais nom envoie les embeddings chez api.openai.com sans un mot.
+            {{- if eq .Values.embedding.provider "openai_compatible" }}
+            - { name: ECPHORIA_EMBEDDING__OPENAI_BASE_URL, value: "{{ include "choregos.gatewayUrl" . }}/v1" }
+            - { name: ECPHORIA_EMBEDDING__MODEL, value: {{ .Values.embedding.model | quote }} }
+            - name: ECPHORIA_EMBEDDING__OPENAI_API_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: master-key } }
+            {{- end }}
+            - { name: ECPHORIA_MEMORY__EPISODIC__DB_PATH, value: /data/episodic.duckdb }
+            - { name: ECPHORIA_MEMORY__STATE__DB_PATH, value: /data/state.db }
+            - { name: ECPHORIA_MEMORY__COGNITION__DB_PATH, value: /data/cognition.duckdb }
+          ports:
+            - { name: http, containerPort: 8432 }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ $name }} }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: choregos-ecphoria
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: http, port: 8432, targetPort: http }
+{{- if .Values.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources: { requests: { storage: {{ .Values.persistence.size }} } }
+{{- end }}

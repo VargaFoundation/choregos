@@ -1,0 +1,76 @@
+# Banc LOCAL mono-nœud (kind, k3d, Docker Desktop) : tout est embarqué, rien à fournir.
+#
+#   helm install choregos charts/choregos -f charts/choregos/values/local.yaml
+#
+# Ce que ça n'est pas : une installation de production. Un PostgreSQL à une instance sans
+# sauvegarde, un Temporal de développement sur SQLite, une passerelle à une réplique.
+global:
+  domain: choregos.localtest.me
+  publicUrl: http://choregos.localtest.me
+  apiUrl: http://choregos.localtest.me
+  environment: dev
+  database:
+    embedded: true
+  temporal:
+    embedded: true
+  gateway:
+    embedded: true
+    # Vide : le chart génère la clé maître et la garde d'une mise à jour à l'autre.
+    secretRef: ""
+  memory:
+    embedded: true
+  devSecrets: true
+  externalSecrets:
+    enabled: false
+  rbac:
+    # Un banc local n'a pas Tekton : rien à lire à l'échelle du cluster.
+    clusterScoped: false
+    # Personne d'autre ne pose ce droit ici : le chart le fait.
+    jobRunner: true
+
+choregos-api:
+  replicaCount: 1
+  migrations:
+    # La base est embarquée : elle n'existe pas avant l'installation. Les pods de l'API
+    # redémarrent quelques fois en attendant le schéma, puis se stabilisent.
+    hook: post-install,post-upgrade
+  autoscaling: { enabled: false }
+  podDisruptionBudget: { enabled: false }
+  ingress:
+    enabled: true
+    kind: ingress
+    className: nginx
+    hostnames: ["choregos.localtest.me"]
+
+choregos-web:
+  replicaCount: 1
+  ingress:
+    enabled: true
+    kind: ingress
+    className: nginx
+    hostnames: ["choregos.localtest.me"]
+
+choregos-orchestrator:
+  queues:
+    - { name: orchestrator, replicas: 1, resources: { requests: { cpu: 50m, memory: 256Mi }, limits: { cpu: "1", memory: 1Gi } } }
+    - { name: executor, replicas: 1, resources: { requests: { cpu: 50m, memory: 256Mi }, limits: { cpu: "1", memory: 1Gi } } }
+    - { name: tracker, replicas: 1, resources: { requests: { cpu: 50m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } } }
+    - { name: memory, replicas: 1, resources: { requests: { cpu: 50m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } } }
+  runner:
+    # Chaque étape d'agent est un Job de ce namespace.
+    executor: k8s_job
+    # Un seul namespace sur un banc : les agents tournent à côté de la plateforme.
+    namespacePattern: choregos
+    limits: { cpu: "2", memory: 4Gi }
+
+# Sidecar d'outils : une Task Tekton, donc sans objet sur un banc local.
+choregos-tools:
+  enabled: false
+
+# Sur un mono-nœud sans opérateur Prometheus ni Cilium, ces objets n'ont pas de lecteur.
+monitoring:
+  serviceMonitor: false
+  alerts: false
+  dashboards: false
+networkPolicies:
+  enabled: false

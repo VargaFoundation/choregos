@@ -78,3 +78,79 @@ def test_la_memoire_prend_l_url_et_le_jeton_du_deploiement(monkeypatch: pytest.M
     memory = build("memory", "ecphoria", {})
     assert memory.base_url == "http://ecphoria:8432"
     assert memory.token == "cle"
+
+
+async def test_les_secrets_d_agent_sont_montes_par_reference() -> None:
+    """Par `envFrom`, jamais recopiés : une valeur dans la spec du Job serait lisible par
+    quiconque peut lire un pod, et resterait dans l'historique de l'API."""
+    client = _RecordingClient()
+    executor = KubernetesJobExecutor(client=client, env_from_secrets=["agent-creds", "git-creds"])  # type: ignore[arg-type]
+    await executor.start(_spec())
+    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
+    container = job["spec"]["template"]["spec"]["containers"][0]
+    assert container["envFrom"] == [
+        {"secretRef": {"name": "agent-creds"}},
+        {"secretRef": {"name": "git-creds"}},
+    ]
+    assert not any("agent-creds" in str(entry.get("value", "")) for entry in container["env"])
+
+
+async def test_sans_secret_declare_le_pod_n_a_pas_d_envfrom() -> None:
+    client = _RecordingClient()
+    await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
+    assert "envFrom" not in job["spec"]["template"]["spec"]["containers"][0]
+
+
+async def test_la_passerelle_directe_rend_la_cle_fournie_et_ne_mesure_rien() -> None:
+    """Sans passerelle, il n'y a ni plafond ni coût : `spend()` rend zéro, qui veut dire
+    « non mesuré » — le tableau des coûts affichera 0, et c'est la contrepartie assumée."""
+    from choregos_adapters.gateway.direct import DirectGateway
+
+    gateway = DirectGateway(key="jeton-fourni", models=["anthropic/claude-sonnet-5"])
+    minted = await gateway.mint_key({"run": "r-1"}, budget_usd=1.0, ttl_s=60, models=["m"])
+    assert minted.key == "jeton-fourni"
+    assert (await gateway.spend(minted.key_id)).cost_usd == 0.0
+    assert [m.model_name for m in await gateway.list_models()] == ["anthropic/claude-sonnet-5"]
+
+
+def test_sans_cle_de_run_le_backend_ne_touche_pas_aux_variables_d_authentification() -> None:
+    """L'agent apporte alors ses propres identifiants (abonnement) : écrire une clé vide
+    les écraserait, et l'échec ressemblerait à un refus du fournisseur."""
+    from choregos_contracts import ModelRef
+    from choregos_runner.backends.base import Backend
+
+    model = ModelRef(litellm_model="anthropic/claude-sonnet-5", base_url="https://api.anthropic.com")
+    assert Backend.anthropic_env(model, None) == {"ANTHROPIC_MODEL": "anthropic/claude-sonnet-5"}
+    assert Backend.openai_env(model, None) == {"OPENAI_MODEL": "anthropic/claude-sonnet-5"}
+    avec = Backend.anthropic_env(model, "sk-run")
+    assert avec["ANTHROPIC_AUTH_TOKEN"] == "sk-run"
+
+
+async def test_la_passerelle_directe_donne_un_identifiant_de_cle_par_run() -> None:
+    """`key_id` porte un index unique en base : un identifiant constant ferait échouer le
+    deuxième run sur une violation de contrainte."""
+    from choregos_adapters.gateway.direct import DirectGateway
+
+    gateway = DirectGateway(key="jeton")
+    une = await gateway.mint_key({"run_id": "r-1"}, budget_usd=1, ttl_s=60, models=[])
+    deux = await gateway.mint_key({"run_id": "r-2"}, budget_usd=1, ttl_s=60, models=[])
+    sans = await gateway.mint_key({}, budget_usd=1, ttl_s=60, models=[])
+    assert une.key_id != deux.key_id
+    assert sans.key_id.startswith("direct:")
+
+
+async def test_un_run_rejoue_reecrit_son_jeton() -> None:
+    """Le nom du secret est déterministe : rejouer un run retombe dessus. Le laisser tel
+    quel ferait tourner l'agent avec un jeton périmé, et l'API répondrait « Signature
+    verification failed » — un message qui accuse la signature, pas le secret."""
+
+    class _AvecSecret(_RecordingClient):
+        async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+            await super().request(method, path, **kwargs)
+            return {"kind": "Secret"} if method == "GET" and "/secrets/" in path else None
+
+    client = _AvecSecret()
+    await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    ecritures = [(m, p) for m, p, _ in client.calls if m in {"PUT", "POST"} and "/secrets" in p]
+    assert ecritures and ecritures[0][0] == "PUT"

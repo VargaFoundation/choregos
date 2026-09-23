@@ -113,7 +113,11 @@ def _stack() -> str:
                 command=[
                     "sh",
                     "-c",
-                    "alembic -c apps/api/alembic.ini upgrade head 2>/dev/null || true; "
+                    # Sans `cd`, `script_location = migrations` (relatif) ne résout pas, et
+                    # le `|| true` d'avant transformait cet échec en démarrage silencieux :
+                    # le schéma venait alors de `create_all`, pas des migrations — donc ce
+                    # banc ne prouvait rien sur les migrations.
+                    "cd /app/apps/api && alembic -c alembic.ini upgrade head && cd /app && "
                     "uvicorn choregos_api.main:app --host 0.0.0.0 --port 8000",
                 ],
             ),

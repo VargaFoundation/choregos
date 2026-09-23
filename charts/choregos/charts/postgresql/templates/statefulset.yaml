@@ -1,0 +1,116 @@
+{{- /*
+Une instance, un volume, un mot de passe tiré au hasard à la première installation et
+**relu** aux suivantes (`lookup`) : sans ce relevé, chaque `helm upgrade` produirait un
+nouveau mot de passe, que PostgreSQL ignorerait — la base garde celui de son initdb — et
+l'application perdrait sa connexion sans qu'aucune ressource paraisse en échec.
+*/}}
+{{- $secretName := printf "%s-postgresql" .Release.Name }}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $secretName }}
+{{- $password := "" }}
+{{- if $existing }}
+{{- $password = index $existing.data "password" | b64dec }}
+{{- else }}
+{{- $password = randAlphaNum 32 }}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  username: {{ .Values.global.database.user | quote }}
+  password: {{ $password | quote }}
+  database: {{ .Values.global.database.name | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $secretName }}-init
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+data:
+  # Joué UNE SEULE FOIS, à l'initdb du volume. La passerelle LiteLLM garde ses clés
+  # virtuelles et leur consommation dans sa propre base : le schéma de Choregos ne
+  # contient que ce que Choregos écrit.
+  01-litellm.sql: |
+    CREATE DATABASE litellm OWNER {{ .Values.global.database.user }};
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $secretName }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: choregos-postgresql
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $secretName }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ $secretName }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-postgresql
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-postgresql
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: database
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          env:
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: {{ $secretName }}, key: username } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $secretName }}, key: password } }
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: {{ $secretName }}, key: database } }
+            # Le volume est monté sur /var/lib/postgresql/data : initdb refuse un répertoire
+            # non vide (`lost+found`), d'où le sous-répertoire.
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "{{ .Values.global.database.user }}"] }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d }
+      volumes:
+        - name: init
+          configMap: { name: {{ $secretName }}-init }
+      {{- if not .Values.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+      {{- end }}
+  {{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.persistence.size }} } }
+  {{- end }}

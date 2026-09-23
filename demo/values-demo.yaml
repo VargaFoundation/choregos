@@ -1,0 +1,32 @@
+# La démonstration : le banc local, plus ce qui lui est propre.
+#   helm upgrade --install choregos charts/choregos -n choregos \
+#     -f charts/choregos/values/local.yaml -f demo/values-demo.yaml
+global:
+  imageRegistry: local
+  imageTag: demo
+  imagePullPolicy: Never
+  # Les playbooks métier (sourcing, qualification) viennent du déploiement.
+  playbooks:
+    configMap: demo-playbooks
+  # Pas de passerelle LLM : les agents apportent leurs identifiants (abonnement),
+  # connecteur `gateway: direct` côté projet. Conséquence assumée : aucun coût mesuré.
+  gateway:
+    embedded: false
+    url: ""
+  memory:
+    embedded: true
+
+choregos-ecphoria:
+  embedding:
+    # Sans passerelle, pas d'embeddings : la mémoire garde les faits, la recherche
+    # sémantique retombe sur du lexical.
+    provider: none
+
+choregos-orchestrator:
+  runner:
+    env:
+      # Les agents parlent au dépôt du cluster, en clair : rien de secret ici.
+      GIT_TERMINAL_PROMPT: "0"
+    envFromSecrets:
+      # Créé à la main (voir demo/README.md) : il porte CLAUDE_CODE_OAUTH_TOKEN.
+      - agent-creds

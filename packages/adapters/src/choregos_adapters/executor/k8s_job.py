@@ -30,6 +30,7 @@ class KubernetesJobExecutor:
         ttl_seconds: int = 3600,
         cpu_limit: str = "2",
         memory_limit: str = "6Gi",
+        env_from_secrets: list[str] | None = None,
     ) -> None:
         self.client = client or KubernetesClient()
         self.service_account = service_account
@@ -38,6 +39,10 @@ class KubernetesJobExecutor:
         # plafond par conteneur (4 Gi chez un locataire Diametral), sans dire pourquoi au Job.
         self.cpu_limit = cpu_limit
         self.memory_limit = memory_limit
+        # Secrets injectés EN ENTIER dans le pod d'agent (`envFrom`) : identifiants git,
+        # jeton d'un backend. Par référence, jamais par valeur — une valeur recopiée ici
+        # se retrouverait dans la spec du Job, lisible par qui peut lire un pod.
+        self.env_from_secrets = list(env_from_secrets or [])
 
     def _name(self, run_id: str) -> str:
         return f"run-{run_id}"[:63].lower()
@@ -54,24 +59,39 @@ class KubernetesJobExecutor:
         return ExecRef(kind=self.kind, name=name, namespace=spec.namespace, run_id=spec.run_id)
 
     async def _ensure_secret(self, spec: StageJobSpec, name: str) -> None:
+        """Écrit le jeton du run, MÊME si un secret de ce nom existe déjà.
+
+        Le nom est déterministe (il vaut celui du Job), donc un run rejoué retombe sur le
+        secret d'avant. Le laisser tel quel faisait tourner l'agent avec un jeton périmé :
+        l'API répondait « Signature verification failed », et le message accuse la
+        signature — jamais le secret qu'on a cru inutile de réécrire.
+        """
         existing = await self.client.request("GET", f"{CORE_API}/namespaces/{spec.namespace}/secrets/{name}")
         if existing is not None:
+            await self.client.request(
+                "PUT",
+                f"{CORE_API}/namespaces/{spec.namespace}/secrets/{name}",
+                json=self._secret(spec, name),
+            )
             return
         await self.client.request(
             "POST",
             f"{CORE_API}/namespaces/{spec.namespace}/secrets",
-            json={
-                "apiVersion": "v1",
-                "kind": "Secret",
-                "metadata": {
-                    "name": name,
-                    "namespace": spec.namespace,
-                    "labels": {"choregos/run-id": spec.run_id},
-                },
-                "type": "Opaque",
-                "data": {"token": base64.b64encode(spec.run_token.encode()).decode()},
-            },
+            json=self._secret(spec, name),
         )
+
+    def _secret(self, spec: StageJobSpec, name: str) -> dict[str, Any]:
+        return {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+                "name": name,
+                "namespace": spec.namespace,
+                "labels": {"choregos/run-id": spec.run_id},
+            },
+            "type": "Opaque",
+            "data": {"token": base64.b64encode(spec.run_token.encode()).decode()},
+        }
 
     def _job(self, spec: StageJobSpec, name: str) -> dict[str, Any]:
         pod_spec: dict[str, Any] = {
@@ -102,6 +122,11 @@ class KubernetesJobExecutor:
                         "capabilities": {"drop": ["ALL"]},
                         "seccompProfile": {"type": "RuntimeDefault"},
                     },
+                    **(
+                        {"envFrom": [{"secretRef": {"name": name}} for name in self.env_from_secrets]}
+                        if self.env_from_secrets
+                        else {}
+                    ),
                     "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                 }
             ],

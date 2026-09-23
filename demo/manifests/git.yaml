@@ -1,0 +1,119 @@
+# Un serveur git DANS le cluster : la démo n'emprunte aucun identifiant à l'extérieur.
+#
+# `git http-backend` derrière un nginx-less lighttpd serait plus léger, mais l'image
+# `alpine/git` suffit : un dépôt nu, servi en HTTP par le démon git (port 9418 → ici 8080
+# via `git daemon`). Le démon git autorise la POUSSÉE anonyme quand on le lui demande —
+# c'est inacceptable sur un réseau, et parfaitement adapté à un banc jetable dont le
+# namespace est fermé par défaut.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-depot
+data:
+  # Le projet sur lequel les agents vont travailler : minuscule, mais réel — il a des
+  # tests, et c'est ce que la vérification lira.
+  init.sh: |
+    set -eu
+    # `alpine/git` n'embarque pas le démon : il vit dans un paquet à part.
+    command -v git-daemon >/dev/null 2>&1 || apk add --no-cache git-daemon >/dev/null
+    mkdir -p /srv/git && cd /srv/git
+    if [ ! -d app.git ]; then
+      mkdir -p /tmp/app && cd /tmp/app
+      git init -q -b main
+      git config user.email "demo@choregos.local"
+      git config user.name "Démo Choregos"
+      mkdir -p src tests
+      cat > README.md <<'EOT'
+    # panier — le projet de démonstration
+
+    Une bibliothèque minuscule : un panier, des articles, un total. Les tickets de la
+    démonstration portent sur elle.
+    EOT
+      cat > src/panier.py <<'EOT'
+    """Un panier d'achat minimal."""
+
+    from dataclasses import dataclass, field
+
+
+    @dataclass
+    class Article:
+        libelle: str
+        prix_ht: float
+        quantite: int = 1
+
+
+    @dataclass
+    class Panier:
+        articles: list[Article] = field(default_factory=list)
+
+        def ajouter(self, article: Article) -> None:
+            self.articles.append(article)
+
+        def total_ht(self) -> float:
+            return sum(a.prix_ht * a.quantite for a in self.articles)
+    EOT
+      cat > tests/test_panier.py <<'EOT'
+    from src.panier import Article, Panier
+
+
+    def test_total_ht_somme_les_articles():
+        panier = Panier()
+        panier.ajouter(Article("stylo", 1.5, 2))
+        panier.ajouter(Article("cahier", 3.0))
+        assert panier.total_ht() == 6.0
+    EOT
+      printf 'pytest\n' > requirements-dev.txt
+      git add -A && git commit -q -m "chore: le projet de démonstration"
+      cd /srv/git && git clone -q --bare /tmp/app app.git
+      cd app.git && git config http.receivepack true && git config daemon.receivepack true
+    fi
+    exec git daemon --verbose --export-all --enable=receive-pack --base-path=/srv/git --reuseaddr /srv/git
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: demo-git
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-git
+  labels: { app.kubernetes.io/name: demo-git }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app.kubernetes.io/name: demo-git } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: demo-git }
+    spec:
+      containers:
+        - name: git
+          image: alpine/git:latest
+          command: ["sh", "/init/init.sh"]
+          ports: [{ name: git, containerPort: 9418 }]
+          readinessProbe:
+            tcpSocket: { port: git }
+            initialDelaySeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          volumeMounts:
+            - { name: init, mountPath: /init }
+            - { name: data, mountPath: /srv/git }
+      volumes:
+        - name: init
+          configMap: { name: demo-depot }
+        - name: data
+          persistentVolumeClaim: { claimName: demo-git }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-git
+spec:
+  selector: { app.kubernetes.io/name: demo-git }
+  ports: [{ name: git, port: 9418, targetPort: git }]

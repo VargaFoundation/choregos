@@ -1,0 +1,13 @@
+image:
+  repository: temporalio/temporal
+  tag: "1.9.1"
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+# L'interface Temporal, servie par le même binaire. Sans Ingress : `kubectl port-forward`.
+ui:
+  enabled: true
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: "1", memory: 1Gi }

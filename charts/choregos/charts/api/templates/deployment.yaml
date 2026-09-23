@@ -77,19 +77,19 @@ spec:
             - name: CHOREGOS_OIDC_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: {{ .Values.global.oidc.secretRef }}, key: client-secret } }
             - name: CHOREGOS_SESSION_SECRET
-              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: session-secret } }
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: session-secret } }
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
-              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: run-token-private-key } }
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-private-key } }
             - name: CHOREGOS_RUN_TOKEN_PUBLIC_KEY
-              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: run-token-public-key } }
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-public-key } }
             - name: CHOREGOS_GITHUB_WEBHOOK_SECRET
-              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: github-webhook-secret } }
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-webhook-secret } }
             - name: CHOREGOS_GITHUB_APP_ID
-              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: github-app-id } }
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-id } }
             - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
-              valueFrom: { secretKeyRef: { name: choregos-api-secrets, key: github-app-private-key } }
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-private-key } }
             - name: CHOREGOS_GATEWAY_MASTER_KEY
-              valueFrom: { secretKeyRef: { name: choregos-gateway-secrets, key: master-key } }
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: master-key } }
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             initialDelaySeconds: 5

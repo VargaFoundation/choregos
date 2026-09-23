@@ -25,3 +25,22 @@ dependencies:
   - name: choregos-tools
     version: 1.0.0
     repository: file://charts/tools
+  # Les dépendances de la plateforme. Éteintes par défaut : une installation sérieuse les
+  # prend à l'extérieur (opérateur PostgreSQL, Temporal de production, passerelle partagée).
+  # Allumées, elles suffisent à un banc mono-nœud — c'est la démo `values/local.yaml`.
+  - name: choregos-postgresql
+    version: 1.0.0
+    repository: file://charts/postgresql
+    condition: global.database.embedded
+  - name: choregos-temporal
+    version: 1.0.0
+    repository: file://charts/temporal
+    condition: global.temporal.embedded
+  - name: choregos-litellm
+    version: 1.0.0
+    repository: file://charts/litellm
+    condition: global.gateway.embedded
+  - name: choregos-ecphoria
+    version: 1.0.0
+    repository: file://charts/ecphoria
+    condition: global.memory.embedded

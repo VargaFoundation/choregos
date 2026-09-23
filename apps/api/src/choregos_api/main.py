@@ -42,8 +42,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
     logger.info("démarrage de l'API", env=settings.env, fakes=settings.fakes)
-    if settings.env in {"dev", "test"} or settings.is_sqlite:
-        await create_all()  # en staging/prod, c'est Alembic qui pose le schéma
+    if settings.is_sqlite:
+        # SQLite seul : une base de fichier ou de mémoire, jetée avec le processus, qu'aucune
+        # migration ne suit. Partout ailleurs le schéma vient d'Alembic — y compris en `dev`.
+        # Le contraire créait les tables au démarrage de l'API, et la migration suivante
+        # tombait sur « relation "agent_backends" already exists » : le déploiement échouait
+        # en accusant les migrations, alors que c'est l'API qui avait pris leur place.
+        await create_all()
     yield
     await dispose_engine()
     logger.info("arrêt de l'API")

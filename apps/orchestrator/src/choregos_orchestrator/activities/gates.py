@@ -81,6 +81,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             review_state=review_state,
             scans=scans,
             flags=list(payload.get("flags", [])),
+            expected_outputs=list(payload.get("expected_outputs", [])),
             required_flag=payload.get("required_flag"),
         )
         outcomes: list[GateOutcome] = []

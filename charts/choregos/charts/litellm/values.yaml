@@ -1,0 +1,30 @@
+image:
+  # `litellm-database` : la variante qui sait tenir des clés virtuelles (donc une base).
+  repository: ghcr.io/berriai/litellm-database
+  tag: "v1.95.0"
+# Les alias que Choregos demande (`profile:*` → `platform/*`), et ce qu'ils deviennent en
+# amont. Deux formes possibles :
+#   - amont = une autre passerelle (Diametral) : api_base + clé virtuelle ;
+#   - amont = un fournisseur : model `openai/gpt-…` ou `anthropic/claude-…` + sa clé.
+# `upstream.apiKeySecret` nomme le secret (clé `api-key`) injecté sous $UPSTREAM_API_KEY.
+upstream:
+  apiKeySecret: ""
+  apiBase: ""
+models:
+  - alias: platform/standard
+    model: openai/gpt-5.5
+  - alias: platform/strong
+    model: openai/gpt-5.5
+  - alias: platform/cheap
+    model: openai/gpt-5.4-mini
+  - alias: platform/aux
+    model: openai/gpt-5.4-mini
+  - alias: platform/embed
+    model: openai/text-embedding-3-small
+    mode: embedding
+database:
+  # Base dédiée sur le même serveur (créée à l'initdb par le sous-chart postgresql).
+  name: litellm
+resources:
+  requests: { cpu: 200m, memory: 512Mi }
+  limits: { cpu: "1", memory: 2Gi }

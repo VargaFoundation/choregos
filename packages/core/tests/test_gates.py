@@ -141,3 +141,26 @@ def test_matches_any_globs() -> None:
     assert matches_any("src/orders", ["src/orders/**"])
     assert matches_any("src/a.py", ["src/*.py"])
     assert not matches_any("tests/a.py", ["src/**"])
+
+
+def test_outputs_present_est_la_gate_des_metiers_sans_tests() -> None:
+    """Un workflow hors logiciel n'a ni tests ni diff : sa garantie mécanique est que
+    l'étape a bien produit ce que la transition déclare."""
+    from choregos_contracts import StageResult, StageStatus
+
+    done = StageResult(
+        schema="choregos/StageResult/v1",
+        status=StageStatus.DONE,
+        summary="trois candidats",
+        outputs={"shortlist": "3 profils", "notes": "entretiens planifiés"},
+    )
+    ctx = GateContext(result=done, expected_outputs=["shortlist", "notes"])
+    assert evaluate("outputs_present", ctx).passed
+
+    manquant = GateContext(result=done, expected_outputs=["shortlist", "rapport"])
+    verdict = evaluate("outputs_present", manquant)
+    assert not verdict.passed
+    assert "rapport" in verdict.detail
+
+    assert evaluate("outputs_present", GateContext()).passed, "aucune sortie déclarée : rien à exiger"
+    assert not evaluate("outputs_present", GateContext(expected_outputs=["x"])).passed

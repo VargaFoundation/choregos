@@ -22,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, Json, PkMixin, TimestampMixin
+from .base import Base, Json, PkMixin, TimestampMixin, uuid7
 
 
 class Organization(Base, PkMixin, TimestampMixin):
@@ -177,6 +177,12 @@ class Run(Base, PkMixin, TimestampMixin):
     __tablename__ = "runs"
     __table_args__ = (Index("ix_runs_project_status", "project_id", "status"),)
 
+    # L'identifiant d'un run N'EST PAS un UUID : il est déterministe et lisible,
+    # `<ticket>-<transition>-<tentative>` (activities/stage.py), et c'est lui qui rend
+    # l'étape rejouable sans créer un second run. Les 36 caractères hérités de `PkMixin`
+    # ne suffisent pas — PostgreSQL répond « value too long for type character
+    # varying(36) », là où SQLite, qui n'applique pas les longueurs, ne dit rien.
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=uuid7)
     work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     transition_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -417,7 +423,9 @@ class GatewayKeyRow(Base, PkMixin, TimestampMixin):
     __tablename__ = "gateway_keys"
 
     key_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    # Même longueur que `runs.id` : cette colonne le recopie sans clé étrangère (la clé
+    # survit au run qu'elle plafonnait).
+    run_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
     )

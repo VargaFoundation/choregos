@@ -30,6 +30,26 @@ GIT_ENV = {
 }
 
 
+def _git_env(workspace: Path) -> dict[str, str]:
+    """L'environnement git d'un run, workspace compris.
+
+    `safe.directory` : le volume du pod appartient à root, l'agent tourne en 1000, et git
+    refuse alors le dépôt — « detected dubious ownership », suivi d'un conseil (`git config
+    --global --add safe.directory`) qu'un conteneur éphémère n'a nulle part où écrire. La
+    garde de git protège contre un dépôt POSÉ PAR QUELQU'UN D'AUTRE sur une machine
+    partagée ; ici le workspace est créé pour ce run et détruit avec lui.
+
+    Par variables plutôt que par fichier : rien n'est écrit sur disque, et `GIT_CONFIG_*`
+    fonctionne même sans répertoire personnel inscriptible.
+    """
+    return {
+        **GIT_ENV,
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": str(workspace),
+    }
+
+
 class WorkspaceError(RuntimeError):
     """Le workspace n'a pas pu être préparé (clone, branche)."""
 
@@ -57,7 +77,8 @@ async def run_command(
     timeout: float = 900.0,
 ) -> CommandResult:
     """Exécute une commande, capture tout, ne lève jamais sur un code non nul."""
-    merged = {**os.environ, **GIT_ENV, **(env or {})}
+    # `cwd` est le workspace du run : c'est lui que git doit considérer comme sûr.
+    merged = {**os.environ, **_git_env(Path(cwd)), **(env or {})}
     if isinstance(command, str):
         process = await asyncio.create_subprocess_shell(
             command,

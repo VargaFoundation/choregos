@@ -1,0 +1,30 @@
+# Pose les projets, leurs workflows et leurs tickets, puis démarre chaque ticket.
+# Rejouable : ce qui existe est mis à jour, jamais dupliqué.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-seed
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: local/choregos-api:demo
+          imagePullPolicy: Never
+          workingDir: /app
+          command: ["python", "/demo/seed.py", "--demarrer"]
+          env:
+            - { name: CHOREGOS_ENV, value: dev }
+            - { name: CHOREGOS_TEMPORAL_ADDRESS, value: "choregos-temporal:7233" }
+            - name: CHOREGOS_DATABASE_PASSWORD
+              valueFrom: { secretKeyRef: { name: choregos-postgresql, key: password } }
+            - name: CHOREGOS_DATABASE_URL
+              value: postgresql+asyncpg://choregos:$(CHOREGOS_DATABASE_PASSWORD)@choregos-postgresql:5432/choregos
+          volumeMounts:
+            - { name: demo, mountPath: /demo }
+      volumes:
+        - name: demo
+          configMap: { name: demo-seed }

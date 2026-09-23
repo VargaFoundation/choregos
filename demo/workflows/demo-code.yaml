@@ -1,0 +1,57 @@
+# Workflow de la DÉMO logicielle : le plus court chemin qui prouve quelque chose.
+#
+# Trois états de travail, deux agents, aucun humain — un banc doit tourner sans qu'on
+# l'attende. Le workflow par défaut de la plateforme (`default-simple`) fait relire le
+# cadrage par un humain et passe par une PR ; ici on s'arrête à la branche poussée, parce
+# que la démo tourne sur un git local et que la revue n'ajouterait rien à la preuve.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: demo-code
+  version: 1
+  description: Ticket → implémentation → vérification → branche poussée.
+actors:
+  dev: { type: agent, role: implement, model: "profile:standard", max_turns: 40, max_minutes: 20 }
+  checker: { type: agent, role: verify, model: "profile:standard", max_turns: 20, max_minutes: 10 }
+states:
+  inbox: { display: À faire, kind: wait }
+  in_progress: { display: En cours }
+  verifying: { display: Vérification }
+  done: { display: Terminé, terminal: true }
+  needs_human: { display: Intervention humaine, kind: wait }
+  abandoned: { display: Abandonné, terminal: true }
+transitions:
+  - id: t-implement
+    from: inbox
+    to: in_progress
+    by: dev
+    outputs: [branch, commits]
+    # Les garanties restent des mécanismes : le périmètre est vérifié sur le diff, la
+    # taille est bornée, et aucun secret ne passe — même sur un banc.
+    gates: [scope_respected, { name: diff_size_max, params: { files: 20 } }, no_secrets]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-verify
+    from: in_progress
+    to: verifying
+    by: checker
+    gates: [evidence_present]
+    on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
+  - id: t-done
+    from: verifying
+    to: done
+    by: checker
+    gates: [evidence_present]
+    on_fail: { to: in_progress, max_attempts: 1, escalate_to: needs_human }
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: dev
+    timeout_hours: 24
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

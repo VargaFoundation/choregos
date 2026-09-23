@@ -319,6 +319,9 @@ class WorkflowInterpreter:
                 "project_id": params.project_id,
                 "work_item_id": params.work_item_id,
                 "run_id": run_id,
+                # Ce que la transition déclare produire : la gate générique `outputs_present`
+                # s'en sert quand elle n'a pas de liste explicite.
+                "expected_outputs": list(transition.outputs),
                 "gates": [{"name": g.name, "params": g.params} for g in transition.gates],
             },
             start_to_close_timeout=timedelta(minutes=3),
@@ -360,6 +363,7 @@ class WorkflowInterpreter:
                     "project_id": params.project_id,
                     "work_item_id": params.work_item_id,
                     "run_id": run_id,
+                    "expected_outputs": list(transition.outputs),
                     "gates": [
                         {"name": g.name, "params": g.params} for g in transition.gates if g.name in names
                     ],

@@ -6,7 +6,13 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations:
     # Les migrations passent **avant** les nouveaux pods (expand/contract, compatibles N-1).
-    "helm.sh/hook": pre-install,pre-upgrade
+    #
+    # `post-install` existe pour un cas précis : quand le chart embarque lui-même la base.
+    # Un hook `pre-install` s'exécute avant TOUT le reste de la version — y compris le
+    # compte de service, les secrets et le PostgreSQL embarqué. Le Job est alors créé,
+    # le contrôleur répond « serviceaccount choregos-api not found », et l'installation
+    # échoue sur un « timed out waiting for the condition » qui n'accuse rien.
+    "helm.sh/hook": {{ .Values.migrations.hook }}
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
@@ -19,10 +25,38 @@ spec:
       restartPolicy: Never
       serviceAccountName: choregos-api
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      initContainers:
+        # La base peut n'être pas encore là — elle démarre dans la même version quand le
+        # chart l'embarque, et une image met le temps qu'elle met à se télécharger. Sans
+        # cette attente, le Job épuise son `backoffLimit` sur un « connection refused » et
+        # l'installation échoue en accusant les migrations.
+        - name: attendre-la-base
+          image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
+          command:
+            - python
+            - -c
+            - |
+              import socket, sys, time
+              host, port = "{{ include "choregos.databaseHost" . }}", {{ .Values.global.database.port }}
+              deadline = time.time() + {{ .Values.migrations.waitForDatabaseSeconds }}
+              while time.time() < deadline:
+                  try:
+                      socket.create_connection((host, port), timeout=3).close()
+                      sys.exit(0)
+                  except OSError as exc:
+                      print(f"base indisponible ({exc}) — nouvelle tentative", flush=True)
+                      time.sleep(3)
+              sys.exit(f"base {host}:{port} toujours injoignable")
+          securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
       containers:
         - name: migrations
           image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
-          command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+          # `script_location = migrations` est RELATIF dans alembic.ini : sans le bon
+          # répertoire de travail, alembic répond « No 'script_location' key found in
+          # configuration » — un message qui accuse le fichier, pas le chemin.
+          workingDir: /app/apps/api
+          command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
           env: {{- include "choregos.commonEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
           resources:

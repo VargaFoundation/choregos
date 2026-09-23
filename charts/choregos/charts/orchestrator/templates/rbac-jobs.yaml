@@ -1,0 +1,45 @@
+{{- if and .Values.enabled .Values.global.rbac.jobRunner }}
+{{- /*
+Le droit, pour l'orchestrateur, de lancer ses agents dans SON namespace — et rien d'autre.
+
+Éteint par défaut, et ce n'est pas de la prudence décorative : sur une plateforme mutualisée,
+ce Role est posé par l'équipe plateforme (chez Diametral, `tenant-base`), parce qu'un
+locataire qui écrit son propre RBAC n'a pas de plafond qu'un relecteur puisse voir. Sur un
+banc local, personne ne le pose — d'où cette option, qui rend le chart autonome là où il a le
+droit de l'être.
+
+`get` sur `secrets` vaut pour TOUS les secrets du namespace : Kubernetes ne sait pas
+restreindre un `create` par nom, et l'exécuteur relit le secret de jeton qu'il vient d'écrire.
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: choregos-orchestrator-jobs
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: choregos-orchestrator-jobs
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: choregos-orchestrator-jobs
+subjects:
+  - kind: ServiceAccount
+    name: choregos-orchestrator
+{{- end }}
