@@ -56,6 +56,11 @@ def stack() -> None:
     kubectl("delete", "ns", NS, "--ignore-not-found", "--wait=false", check=False)
 
 
+# Images du magasin d'objets, prises sur quay.io et figées (cf. `_minio`).
+MINIO = "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
+MC = "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+
+
 def _minio() -> str:
     """MinIO mono-pod : le magasin d'objets que Barman utilisera."""
     return yaml.safe_dump_all(
@@ -68,7 +73,11 @@ def _minio() -> str:
                     "containers": [
                         {
                             "name": "minio",
-                            "image": "minio/minio:latest",
+                            # quay.io, pas Docker Hub : `docker.io/minio/minio` répond
+                            # « insufficient_scope » à un tirage anonyme, ce qui rendait ce
+                            # test rouge toutes les nuits. Version figée pour la même raison
+                            # qu'ailleurs : une nuit ne doit pas changer d'image toute seule.
+                            "image": MINIO,
                             "args": ["server", "/data"],
                             "imagePullPolicy": "IfNotPresent",
                             "env": [
@@ -119,7 +128,7 @@ def _create_bucket() -> None:
         "--rm",
         "-i",
         "--restart=Never",
-        "--image=quay.io/minio/mc:latest",
+        f"--image={MC}",
         "--command",
         "--",
         "sh",
