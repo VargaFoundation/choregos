@@ -78,6 +78,13 @@ s'authentifier une fois avant le premier `up` :
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u <utilisateur> --password-stdin
 ```
 
+## Une démonstration avec de vrais agents
+
+`make demo` tourne en mémoire. Pour voir la plateforme travailler **pour de vrai** — un cluster
+kind mono-nœud, des agents qui écrivent du code et poussent des branches — tout est dans
+**[demo/README.md](demo/README.md)** : un projet de code et un projet RH, le second sur le même
+moteur sans une ligne de code changée. Le README dit aussi ce que ce banc ne prouve pas.
+
 ## Intégrer un projet
 
 Vous avez un dépôt et vous voulez que la plateforme le développe :
@@ -102,6 +109,7 @@ Vous avez un dépôt et vous voulez que la plateforme le développe :
 | `charts/choregos` | Helm umbrella de la plateforme |
 | `templates/` | Templates de stack (provisioning d'un projet) |
 | `dev/` | kind, Tilt, docker compose, seed |
+| `demo/` | banc mono-nœud : deux workflows (code et RH), playbooks, git dans le cluster |
 | `tests/` | e2e (kind) et conformance (backends ACP, templates) |
 
 ## Contribuer

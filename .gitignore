@@ -37,3 +37,8 @@ charts/**/Chart.lock
 apps/web/.next/
 apps/web/playwright-report/
 apps/web/test-results/
+
+# Base SQLite de développement : `make dev` la recrée, elle n'a rien à faire ici.
+choregos.db
+choregos.db-shm
+choregos.db-wal
