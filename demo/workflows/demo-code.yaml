@@ -28,9 +28,13 @@ transitions:
     to: in_progress
     by: dev
     outputs: [branch, commits]
-    # Les garanties restent des mécanismes : le périmètre est vérifié sur le diff, la
-    # taille est bornée, et aucun secret ne passe — même sur un banc.
-    gates: [scope_respected, { name: diff_size_max, params: { files: 20 } }, no_secrets]
+    # Les garanties qui LISENT LE DIFF (`scope_respected`, `diff_size_max`, `no_secrets`)
+    # ne figurent pas ici, et c'est délibéré : sur ce banc le connecteur SCM est un
+    # `fake`, il ne sait pas comparer deux branches, et depuis ce changement une garantie
+    # qui ne peut pas être évaluée REFUSE au lieu de passer à vide. Les déclarer ici
+    # ferait échouer chaque étape pour une bonne raison, et la démonstration ne montrerait
+    # plus rien. Sur un vrai dépôt (GitHub), elles se remettent et c'est tout l'intérêt.
+    gates: [outputs_present]
     on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
   - id: t-verify
     from: in_progress

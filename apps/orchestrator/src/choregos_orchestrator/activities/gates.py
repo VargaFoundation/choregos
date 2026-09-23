@@ -82,6 +82,8 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             scans=scans,
             flags=list(payload.get("flags", [])),
             expected_outputs=list(payload.get("expected_outputs", [])),
+            # `needs_diff` dit qu'une garantie en dépend ; `diff` dit si on l'a obtenu.
+            diff_available=(diff is not None) if needs_diff else True,
             required_flag=payload.get("required_flag"),
         )
         outcomes: list[GateOutcome] = []

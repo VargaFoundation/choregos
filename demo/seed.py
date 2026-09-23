@@ -268,17 +268,23 @@ async def demarrer() -> None:
                 print(f"  {item.tracker_key} déjà démarré")
                 continue
             workflow_id = interpreter_id(projet.slug, item.tracker_key)
-            await get_temporal().start_interpreter(
-                workflow_id,
-                {
-                    "project_id": projet.id,
-                    "project_slug": projet.slug,
-                    "work_item_id": item.id,
-                    "tracker_key": item.tracker_key,
-                },
-            )
+            charge = {
+                "project_id": projet.id,
+                "project_slug": projet.slug,
+                "work_item_id": item.id,
+                "tracker_key": item.tracker_key,
+            }
+            try:
+                await get_temporal().start_interpreter(workflow_id, charge)
+                print(f"  {item.tracker_key} démarré ({workflow_id})")
+            except Exception as exc:
+                # Un workflow de ce nom tourne déjà : un ticket n'a qu'un interpréteur, et
+                # c'est la garantie qu'on ne le traite pas deux fois. Le script est rejouable,
+                # il ne doit pas s'arrêter là-dessus.
+                if "already started" not in str(exc).lower():
+                    raise
+                print(f"  {item.tracker_key} : un interpréteur tourne déjà")
             item.temporal_wf_id = workflow_id
-            print(f"  {item.tracker_key} démarré ({workflow_id})")
 
 
 if __name__ == "__main__":

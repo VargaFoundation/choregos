@@ -65,6 +65,29 @@ Le Job démarre aussi chaque ticket (`--demarrer`), c'est-à-dire l'équivalent 
 `mark_agent_ready` dans l'API : un workflow Temporal par ticket, qui lit l'état, choisit la
 transition et lance l'agent.
 
+## Ce que ce banc ne prouve pas
+
+Le connecteur SCM est un `fake` : il ne sait pas comparer deux branches. Les garanties qui
+lisent le diff — périmètre respecté, taille du diff, absence de secrets — **refusent donc
+de se prononcer** plutôt que de passer à vide, et le workflow de démonstration ne les
+déclare pas. Sur un vrai dépôt (GitHub), elles se remettent : c'est une limite du banc,
+pas du moteur. Le reste est réel, y compris la vérification des preuves d'exécution.
+
+## Rejouer la démonstration
+
+Un ticket n'a **qu'un** interpréteur : Temporal refuse de redémarrer un workflow déjà
+terminé sous le même identifiant (`ALLOW_DUPLICATE_FAILED_ONLY`). C'est voulu — c'est ce
+qui empêche de traiter deux fois le même ticket. Pour rejouer la démonstration, il faut
+donc de **nouveaux tickets** : changer les clés dans `seed.py` (`DEMO-4`, `DEMO-5`…), ou
+repartir d'un cluster neuf.
+
+Remettre le dépôt de démonstration à zéro entre deux essais :
+
+```bash
+kubectl -n choregos exec deploy/demo-git -- sh -c \
+  'cd /srv/git/app.git && for b in $(git for-each-ref --format="%(refname:short)" refs/heads | grep choregos/); do git branch -D $b; done'
+```
+
 ## Regarder
 
 ```bash

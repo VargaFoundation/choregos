@@ -164,3 +164,17 @@ def test_outputs_present_est_la_gate_des_metiers_sans_tests() -> None:
 
     assert evaluate("outputs_present", GateContext()).passed, "aucune sortie déclarée : rien à exiger"
     assert not evaluate("outputs_present", GateContext(expected_outputs=["x"])).passed
+
+
+def test_une_garantie_sans_diff_ne_se_prononce_pas() -> None:
+    """Sans diff — connecteur SCM incapable de comparer, dépôt injoignable — `scope_respected`
+    déclarerait le périmètre respecté et `no_secrets` l'absence de secrets, faute d'avoir
+    regardé quoi que ce soit. Une garantie qu'on ne peut pas évaluer n'est pas une garantie."""
+    aveugle = GateContext(diff_available=False, allowed_paths=["src/**"])
+    for nom in ("scope_respected", "diff_size_max", "no_secrets"):
+        verdict = evaluate(nom, aveugle, {"files": 10})
+        assert not verdict.passed, nom
+        assert "diff indisponible" in verdict.detail
+
+    # Avec un diff, rien ne change pour les cas déjà couverts.
+    assert evaluate("no_secrets", GateContext()).passed
