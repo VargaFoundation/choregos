@@ -578,4 +578,46 @@ def test_un_agent_muet_est_nomme_comme_tel() -> None:
     assert _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=0))
     assert not _agent_muet(PromptOutcome(turns=1, messages=7, tool_calls=0)), "il a parlé"
     assert not _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=3)), "il a agi"
-    assert not _agent_muet(PromptOutcome(messages=0, tool_calls=0, errors=["boum"])), "une erreur se dit"
+    # Une erreur ne rend pas l'agent bavard : elle est REPRISE dans le diagnostic.
+    assert _agent_muet(PromptOutcome(messages=0, tool_calls=0, errors=["boum"]))
+
+
+async def test_le_diff_se_mesure_sur_un_historique_superficiel(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Un runner cloue son dépôt à `--depth` : `base...HEAD` n'y trouve pas toujours de base
+    de fusion, la commande échoue, la sortie est vide — et le run conclut que rien n'a
+    changé. Le périmètre ne voit alors plus rien, et les preuves annoncent zéro fichier."""
+    import subprocess
+
+    from choregos_runner.workspace import Workspace
+
+    amont = tmp_path / "amont"
+    amont.mkdir()
+
+    def git(*args: str, cwd) -> None:  # type: ignore[no-untyped-def]
+        subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+    git("init", "-q", "-b", "main", cwd=amont)
+    git("config", "user.email", "a@b", cwd=amont)
+    git("config", "user.name", "t", cwd=amont)
+    for n in range(4):
+        (amont / "a.py").write_text(f"x = {n}\n")
+        git("add", "-A", cwd=amont)
+        git("commit", "-q", "-m", f"c{n}", cwd=amont)
+
+    local = tmp_path / "local"
+    local.mkdir()
+    git("init", "-q", "-b", "main", cwd=local)
+    git("remote", "add", "origin", str(amont), cwd=local)
+    git("fetch", "-q", "--depth", "1", "origin", "main", cwd=local)
+    git("checkout", "-q", "-B", "travail", "FETCH_HEAD", cwd=local)
+    git("config", "user.email", "a@b", cwd=local)
+    git("config", "user.name", "t", cwd=local)
+
+    espace = Workspace(local)
+    base = await espace.base_sha("main")
+    (local / "b.py").write_text("y = 1\n")
+    git("add", "-A", cwd=local)
+    git("commit", "-q", "-m", "travail de l'agent", cwd=local)
+
+    assert await espace.changed_files(base) == ["b.py"]
+    assert await espace.diff_stats(base) == (1, 0)

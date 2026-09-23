@@ -205,15 +205,29 @@ class Workspace:
         return self.path / ".choregos" / "result.json"
 
     async def base_sha(self, base_branch: str) -> str:
-        result = await self.git("rev-parse", f"origin/{base_branch}")
-        if result.ok:
-            return result.stdout.strip()
-        fallback = await self.git("rev-parse", base_branch)
-        return fallback.stdout.strip() if fallback.ok else base_branch
+        """La référence à laquelle on comparera tout le travail du run.
+
+        Rendre le NOM de la branche quand rien ne résout était le pire des replis : la
+        comparaison suivante échoue en silence, `changed_files` rend une liste vide, et
+        tout paraît en ordre — périmètre respecté, diff de zéro fichier — alors qu'on ne
+        mesure plus rien. Mieux vaut refuser de démarrer.
+        """
+        for reference in (f"origin/{base_branch}", base_branch, "FETCH_HEAD"):
+            resolved = await self.git("rev-parse", "--verify", "--quiet", f"{reference}^{{commit}}")
+            if resolved.ok and resolved.stdout.strip():
+                return resolved.stdout.strip()
+        raise WorkspaceError(
+            f"base introuvable : ni origin/{base_branch}, ni {base_branch}, ni FETCH_HEAD "
+            "ne désignent un commit — sans elle, aucun diff n'est mesurable"
+        )
 
     async def changed_files(self, base: str) -> list[str]:
         """Fichiers modifiés depuis la base, y compris ceux qui ne sont pas encore indexés."""
-        tracked = await self.git("diff", "--name-only", f"{base}...HEAD")
+        # `base HEAD` et pas `base...HEAD` : la seconde forme exige une base de fusion, que
+        # l'historique SUPERFICIEL d'un runner (`fetch --depth`) ne permet pas toujours de
+        # calculer. La commande échoue alors, la sortie est vide, et le run conclut que
+        # rien n'a changé — le périmètre ne voit plus rien et les preuves annoncent zéro.
+        tracked = await self.git("diff", "--name-only", base, "HEAD")
         working = await self.git("status", "--porcelain")
         files = {line.strip() for line in tracked.stdout.splitlines() if line.strip()}
         for line in working.stdout.splitlines():
@@ -222,7 +236,7 @@ class Workspace:
         return sorted(files)
 
     async def diff_stats(self, base: str) -> tuple[int, int]:
-        result = await self.git("diff", "--numstat", base)
+        result = await self.git("diff", "--numstat", base, "HEAD")
         additions = deletions = 0
         for line in result.stdout.splitlines():
             parts = line.split("\t")
