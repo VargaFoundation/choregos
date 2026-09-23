@@ -45,6 +45,9 @@ class AgentProtocolError(RuntimeError):
 class PromptOutcome:
     stop_reason: str = "end_turn"
     turns: int = 0
+    #: Fragments de texte reçus de l'agent. Zéro message ET zéro outil = le modèle n'a pas
+    #: répondu : ce n'est pas un agent distrait, c'est un accès qui ne marche pas.
+    messages: int = 0
     tool_calls: int = 0
     permission_denials: int = 0
     cancelled: bool = False
@@ -340,6 +343,8 @@ class AcpClient:
         kind = str(update.get("sessionUpdate", update.get("type", "")))
         if kind in {"tool_call", "tool_call_update"} and update.get("status") != "in_progress":
             self.outcome.tool_calls += 1
+        if kind in {"agent_message_chunk", "agent_thought_chunk"}:
+            self.outcome.messages += 1
         if self.on_update is not None:
             await self.on_update(params)
 

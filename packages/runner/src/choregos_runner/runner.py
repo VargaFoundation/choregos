@@ -214,7 +214,19 @@ class Runner:
                     result_repairs=repairs,
                 )
                 if agent_result is None:
-                    invalid = fallback_result("invalid_result", load.error or "résultat illisible")
+                    # Deux échecs qui se ressemblent et ne se soignent pas pareil : un agent
+                    # qui a travaillé mais n'a pas écrit son résultat, et un agent dont le
+                    # tour revient VIDE — clé refusée, quota atteint, fournisseur en panne.
+                    # Le second accusé d'un oubli envoie l'enquête du mauvais côté.
+                    if _agent_muet(agent.outcome) and not workspace.result_path().exists():
+                        raison = "agent_silencieux"
+                        detail = (
+                            "l'agent n'a produit ni texte ni appel d'outil : vérifier l'accès "
+                            f"au modèle (fin de tour : {agent.outcome.stop_reason})"
+                        )
+                    else:
+                        raison, detail = "invalid_result", (load.error or "résultat illisible")
+                    invalid = fallback_result(raison, detail)
                     final = complete_result(
                         invalid,
                         measured=report.evidence(),
@@ -222,7 +234,7 @@ class Runner:
                         diagnostics=diagnostics,
                     )
                     await self._publish(client, journal, workspace, stage_input, final, base)
-                    return RunOutcome(Exit.INVALID_RESULT, final, detail=load.error or "")
+                    return RunOutcome(Exit.INVALID_RESULT, final, detail=detail)
         except AgentUnreachableError as exc:
             await journal.record("agent.unreachable", {"error": str(exc)[:500]})
             await journal.flush()
@@ -304,6 +316,19 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
     scope = stage_input.work_item.key.rsplit("#", 1)[-1]
     summary = result.summary.strip().splitlines()[0][:100] if result.summary else "étape Choregos"
     return f"{prefix}({scope}): {summary}"
+
+
+def _agent_muet(outcome: Any) -> bool:
+    """Ni un mot, ni un outil : le modèle n'a pas répondu.
+
+    Un agent qui a parlé sans écrire son résultat est un agent distrait — on le lui
+    rappelle. Un agent dont le tour revient VIDE n'a rien à se faire rappeler : sa clé est
+    refusée, son quota est atteint, ou son fournisseur est en panne.
+
+    L'appelant y ajoute l'absence de tout fichier de résultat : un agent qui en a écrit un,
+    même illisible, a agi — le lui rappeler a du sens.
+    """
+    return outcome.messages == 0 and outcome.tool_calls == 0 and not outcome.errors
 
 
 def _agent_exit(stop_reason: str, cancelled: bool) -> str:

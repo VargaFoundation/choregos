@@ -566,3 +566,16 @@ def test_le_bruit_d_execution_n_entre_pas_dans_le_commit_du_run(tmp_path) -> Non
     ).stdout
     assert "src.py" in vus
     assert "__pycache__" not in vus
+
+
+def test_un_agent_muet_est_nomme_comme_tel() -> None:
+    """Quand le modèle ne répond pas — clé refusée, quota atteint, fournisseur en panne —
+    l'agent ne dit rien et ne fait rien. Réclamer `result.json` accuserait alors l'agent
+    d'un oubli, et l'enquête partirait du mauvais côté."""
+    from choregos_runner.acp.client import PromptOutcome
+    from choregos_runner.runner import _agent_muet
+
+    assert _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=0))
+    assert not _agent_muet(PromptOutcome(turns=1, messages=7, tool_calls=0)), "il a parlé"
+    assert not _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=3)), "il a agi"
+    assert not _agent_muet(PromptOutcome(messages=0, tool_calls=0, errors=["boum"])), "une erreur se dit"
