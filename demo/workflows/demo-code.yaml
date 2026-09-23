@@ -27,14 +27,18 @@ transitions:
     from: inbox
     to: in_progress
     by: dev
-    outputs: [branch, commits]
+    # Pas d'`outputs:` : une branche et des commits sont des ARTEFACTS, que le runner
+    # remplit lui-même. Les déclarer ici faisait échouer `outputs_present` à chaque
+    # première tentative — l'agent n'a aucune raison de les recopier dans ses sorties.
     # Les garanties qui LISENT LE DIFF (`scope_respected`, `diff_size_max`, `no_secrets`)
     # ne figurent pas ici, et c'est délibéré : sur ce banc le connecteur SCM est un
     # `fake`, il ne sait pas comparer deux branches, et depuis ce changement une garantie
     # qui ne peut pas être évaluée REFUSE au lieu de passer à vide. Les déclarer ici
     # ferait échouer chaque étape pour une bonne raison, et la démonstration ne montrerait
     # plus rien. Sur un vrai dépôt (GitHub), elles se remettent et c'est tout l'intérêt.
-    gates: [outputs_present]
+    # `evidence_present` : les tests ont tourné et ils passent. C'est la garantie qui a un
+    # sens ici, et elle ne dépend pas du connecteur SCM.
+    gates: [evidence_present]
     on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
   - id: t-verify
     from: in_progress
