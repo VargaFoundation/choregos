@@ -48,24 +48,59 @@ spec:
           image: {{ include "choregos.image" (dict "global" $root.Values.global "image" $root.Values.image) }}
           imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
           securityContext: {{- toYaml $root.Values.global.securityContext | nindent 12 }}
+          # La commande ENTIÈRE, pas seulement ses arguments : le point d'entrée de l'image
+          # est `tini`, et son `CMD` porte déjà `python -m …`. N'envoyer que `--queues x`
+          # remplaçait ce CMD, et tini tentait d'exécuter « --queues » — « exec --queues
+          # failed: No such file or directory », un message qui n'accuse pas le chart.
+          command: ["python", "-m", "choregos_orchestrator.worker"]
           args: ["--queues", {{ .name | quote }}]
           env:
             {{- include "choregos.commonEnv" $root | nindent 12 }}
             - name: CHOREGOS_RUNNER_IMAGE
-              value: {{ $root.Values.global.imageRegistry }}/{{ $root.Values.runner.image }}:{{ $root.Values.runner.tag }}
+              # Le tag du runner suit celui du déploiement quand on ne le fixe pas : figé,
+              # il désignait `1.0.0` dans une installation 0.1.0 — une image absente, et un
+              # pod d'agent en ErrImagePull que rien d'autre n'explique.
+              value: {{ $root.Values.global.imageRegistry }}/{{ $root.Values.runner.image }}:{{ $root.Values.runner.tag | default $root.Values.global.imageTag }}
             - name: CHOREGOS_RUNNER_NAMESPACE_PATTERN
               value: {{ $root.Values.runner.namespacePattern | quote }}
             - name: CHOREGOS_EXECUTOR_KIND
               value: {{ $root.Values.runner.executor | quote }}
+            {{- with $root.Values.global.playbooks.configMap }}
+            - name: CHOREGOS_PLAYBOOKS_DIR
+              value: {{ $root.Values.global.playbooks.mountPath | quote }}
+            {{- end }}
+            # La clé qui SIGNE les jetons de run. L'orchestrateur émet, l'API vérifie :
+            # sans cette variable il signait avec une paire éphémère, et l'agent recevait
+            # « Signature verification failed » — un message qui accuse le jeton.
+            - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: run-token-private-key }
+            # Le service interne de l'API : c'est ce que les agents rappellent, jamais
+            # l'URL publique, qu'un pod ne sait pas résoudre.
+            - name: CHOREGOS_INTERNAL_API_URL
+              value: {{ $root.Values.global.internalApiUrl | default "http://choregos-api:8000" | quote }}
+            - name: CHOREGOS_RUNNER_ENV
+              value: {{ toJson $root.Values.runner.env | quote }}
+            - name: CHOREGOS_RUNNER_ENV_SECRETS
+              value: {{ join "," $root.Values.runner.envFromSecrets | quote }}
             - name: CHOREGOS_RUNNER_CPU_LIMIT
               value: {{ $root.Values.runner.limits.cpu | quote }}
             - name: CHOREGOS_RUNNER_MEMORY_LIMIT
               value: {{ $root.Values.runner.limits.memory | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
-              valueFrom: { secretKeyRef: { name: choregos-gateway-secrets, key: master-key } }
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}
-          volumeMounts: [{ name: tmp, mountPath: /tmp }]
-      volumes: [{ name: tmp, emptyDir: {} }]
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            {{- with $root.Values.global.playbooks.configMap }}
+            - { name: playbooks, mountPath: {{ $root.Values.global.playbooks.mountPath }}, readOnly: true }
+            {{- end }}
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        {{- with $root.Values.global.playbooks.configMap }}
+        - name: playbooks
+          configMap: { name: {{ . }} }
+        {{- end }}
 {{- end }}
 ---
 apiVersion: v1

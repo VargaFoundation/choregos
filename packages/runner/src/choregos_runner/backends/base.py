@@ -63,7 +63,19 @@ class Backend:
         servers: list[dict[str, Any]] = []
         for name, server in stage_input.tools.mcp.items():
             if server.url:
-                servers.append({"name": name, "type": "http", "url": server.url})
+                # `headers` est EXIGÉ par le schéma ACP pour un serveur HTTP, même vide :
+                # l'omettre faisait refuser `session/new` avec « Invalid params » et une
+                # arborescence d'erreurs zod où le champ manquant est difficile à lire.
+                # Un serveur MCP HTTP porte son authentification par en-têtes ; ici, ce qui
+                # est déclaré dans `env` en tient lieu.
+                servers.append(
+                    {
+                        "name": name,
+                        "type": "http",
+                        "url": server.url,
+                        "headers": [{"name": k, "value": v} for k, v in server.env.items()],
+                    }
+                )
             elif server.command:
                 servers.append(
                     {
@@ -93,18 +105,28 @@ class Backend:
 
     @staticmethod
     def openai_env(model: ModelRef, key: str | None) -> dict[str, str]:
+        if not key:
+            # Aucune clé de run : le déploiement n'a pas de passerelle et l'agent apporte
+            # ses propres identifiants (abonnement, clé fournisseur posée dans le pod).
+            # Écrire ici une clé vide les ÉCRASERAIT — le backend parlerait au bon modèle
+            # sans pouvoir s'authentifier, et l'erreur dirait « 401 », pas « clé effacée ».
+            return {"OPENAI_MODEL": model.litellm_model}
         return {
             "OPENAI_BASE_URL": model.base_url,
-            "OPENAI_API_KEY": key or "",
+            "OPENAI_API_KEY": key,
             "OPENAI_MODEL": model.litellm_model,
         }
 
     @staticmethod
     def anthropic_env(model: ModelRef, key: str | None) -> dict[str, str]:
+        if not key:
+            # Même raison que `openai_env` : sans clé de run, on ne touche pas aux variables
+            # d'authentification du pod.
+            return {"ANTHROPIC_MODEL": model.litellm_model}
         return {
             "ANTHROPIC_BASE_URL": model.base_url,
-            "ANTHROPIC_AUTH_TOKEN": key or "",
-            "ANTHROPIC_API_KEY": key or "",
+            "ANTHROPIC_AUTH_TOKEN": key,
+            "ANTHROPIC_API_KEY": key,
             "ANTHROPIC_MODEL": model.litellm_model,
         }
 

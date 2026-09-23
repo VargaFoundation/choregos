@@ -84,6 +84,11 @@ RUN useradd --uid 1000 --create-home --home-dir /workspace --shell /bin/bash cho
 
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
+# Le runner doit DÉMARRER dans cette image. `uv sync --package choregos-runner` n'installe
+# que ce que ce paquet déclare, quand l'environnement de développement en a bien plus : une
+# dépendance oubliée ne se voyait qu'au premier agent lancé en cluster, sur un
+# `ModuleNotFoundError` (arrivé avec `pydantic-settings`). Ici, la construction échoue.
+RUN /app/.venv/bin/choregos-runner --help >/dev/null
 WORKDIR /workspace
 USER 1000
 ENTRYPOINT ["/usr/bin/tini", "--", "choregos-runner"]

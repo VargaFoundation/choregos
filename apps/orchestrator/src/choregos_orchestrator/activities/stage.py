@@ -204,7 +204,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 dod_iterations=engine.dod_iterations(),
                 max_findings=engine.max_findings_per_run(),
             ),
-            callbacks=Callbacks(api_url=f"{settings.api_url}/api/v1/internal", run_token=token),
+            callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=token),
         )
 
         payload = stage_input.model_dump(mode="json", by_alias=True)
@@ -238,6 +238,11 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             model=resolved.litellm_model,
         )
         return {"run_id": run_id, "stage_input": payload, "reused": False}
+
+
+def _runner_namespace(settings: Any, slug: str) -> str:
+    """Où vivent les pods d'agent d'un projet. Une seule règle, lue partout."""
+    return str(settings.runner_namespace_pattern).format(slug=slug)
 
 
 def _run_id(plan: StagePlan) -> str:
@@ -301,13 +306,14 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
-            namespace=settings.runner_namespace_pattern.format(slug=bundle.slug),
+            namespace=_runner_namespace(settings, bundle.slug),
             runner_image=settings.runner_image,
             api_url=stage_input.callbacks.api_url,
             run_token=stage_input.callbacks.run_token,
             stage_input=stage_input,
             timeout_minutes=stage_input.budget.max_minutes + 10,
             runtime_class="gvisor" if bundle.policy.sandbox.runtime == "gvisor" else None,
+            env=dict(settings.runner_env),
             labels={
                 "choregos/project": bundle.slug,
                 "choregos/run-id": stage_input.run_id,
@@ -350,7 +356,10 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
             ref = ExecRef(
                 kind=(run.executor_kind if run and run.executor_kind else "fake"),
                 name=(run.executor_ref if run and run.executor_ref else run_id),
-                namespace=None,
+                # Le MÊME namespace qu'au démarrage : sans lui, l'exécuteur Kubernetes
+                # interrogeait `/namespaces/None/jobs/…` et recevait un 403 dont le message
+                # parle de droits, jamais du namespace manquant.
+                namespace=_runner_namespace(settings, bundle.slug),
                 run_id=run_id,
             )
             status = await bundle.adapters.executor.status(ref)
@@ -405,7 +414,12 @@ async def cancel_run(payload: dict[str, Any]) -> None:
         run = await session.get(Run, payload["run_id"])
         if run is None:
             return
-        ref = ExecRef(kind=run.executor_kind or "fake", name=run.executor_ref or run.id, run_id=run.id)
+        ref = ExecRef(
+            kind=run.executor_kind or "fake",
+            name=run.executor_ref or run.id,
+            namespace=_runner_namespace(get_settings(), bundle.slug),
+            run_id=run.id,
+        )
         await bundle.adapters.executor.cancel(ref)
         run.status = "cancelled"
         run.ended_at = utcnow()

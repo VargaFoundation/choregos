@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from choregos_contracts import ContextPack, StageInput
 
@@ -28,6 +29,26 @@ GIT_ENV = {
     "GIT_ASKPASS": "/bin/true",
     "GIT_CONFIG_NOSYSTEM": "1",
 }
+
+
+def _git_env(workspace: Path) -> dict[str, str]:
+    """L'environnement git d'un run, workspace compris.
+
+    `safe.directory` : le volume du pod appartient à root, l'agent tourne en 1000, et git
+    refuse alors le dépôt — « detected dubious ownership », suivi d'un conseil (`git config
+    --global --add safe.directory`) qu'un conteneur éphémère n'a nulle part où écrire. La
+    garde de git protège contre un dépôt POSÉ PAR QUELQU'UN D'AUTRE sur une machine
+    partagée ; ici le workspace est créé pour ce run et détruit avec lui.
+
+    Par variables plutôt que par fichier : rien n'est écrit sur disque, et `GIT_CONFIG_*`
+    fonctionne même sans répertoire personnel inscriptible.
+    """
+    return {
+        **GIT_ENV,
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": str(workspace),
+    }
 
 
 class WorkspaceError(RuntimeError):
@@ -57,7 +78,8 @@ async def run_command(
     timeout: float = 900.0,
 ) -> CommandResult:
     """Exécute une commande, capture tout, ne lève jamais sur un code non nul."""
-    merged = {**os.environ, **GIT_ENV, **(env or {})}
+    # `cwd` est le workspace du run : c'est lui que git doit considérer comme sûr.
+    merged = {**os.environ, **_git_env(Path(cwd)), **(env or {})}
     if isinstance(command, str):
         process = await asyncio.create_subprocess_shell(
             command,
@@ -141,8 +163,23 @@ class Workspace:
         """Les fichiers du runner ne doivent jamais apparaître dans un commit d'agent."""
         self.exclude(list(RUNNER_FILES))
 
+    #: Bruit d'exécution : produit par les tests que l'agent lance, jamais par le ticket.
+    #: Sans ces motifs, `__pycache__/` et consorts entraient dans le commit du run — le
+    #: diff d'une étape devenait illisible, et les gardes de taille comptaient des fichiers
+    #: que personne n'a écrits. Un dépôt qui les ignore déjà n'y perd rien.
+    BRUIT: ClassVar[tuple[str, ...]] = (
+        "__pycache__/",
+        "*.py[cod]",
+        ".pytest_cache/",
+        ".ruff_cache/",
+        ".mypy_cache/",
+        "node_modules/",
+        ".venv/",
+    )
+
     def exclude(self, paths: list[str]) -> None:
         """Ajoute des chemins à `.git/info/exclude` (configuration de backend, journal…)."""
+        paths = [*paths, *self.BRUIT]
         if not paths:
             return
         exclude = self.path / ".git" / "info" / "exclude"
@@ -168,15 +205,29 @@ class Workspace:
         return self.path / ".choregos" / "result.json"
 
     async def base_sha(self, base_branch: str) -> str:
-        result = await self.git("rev-parse", f"origin/{base_branch}")
-        if result.ok:
-            return result.stdout.strip()
-        fallback = await self.git("rev-parse", base_branch)
-        return fallback.stdout.strip() if fallback.ok else base_branch
+        """La référence à laquelle on comparera tout le travail du run.
+
+        Rendre le NOM de la branche quand rien ne résout était le pire des replis : la
+        comparaison suivante échoue en silence, `changed_files` rend une liste vide, et
+        tout paraît en ordre — périmètre respecté, diff de zéro fichier — alors qu'on ne
+        mesure plus rien. Mieux vaut refuser de démarrer.
+        """
+        for reference in (f"origin/{base_branch}", base_branch, "FETCH_HEAD"):
+            resolved = await self.git("rev-parse", "--verify", "--quiet", f"{reference}^{{commit}}")
+            if resolved.ok and resolved.stdout.strip():
+                return resolved.stdout.strip()
+        raise WorkspaceError(
+            f"base introuvable : ni origin/{base_branch}, ni {base_branch}, ni FETCH_HEAD "
+            "ne désignent un commit — sans elle, aucun diff n'est mesurable"
+        )
 
     async def changed_files(self, base: str) -> list[str]:
         """Fichiers modifiés depuis la base, y compris ceux qui ne sont pas encore indexés."""
-        tracked = await self.git("diff", "--name-only", f"{base}...HEAD")
+        # `base HEAD` et pas `base...HEAD` : la seconde forme exige une base de fusion, que
+        # l'historique SUPERFICIEL d'un runner (`fetch --depth`) ne permet pas toujours de
+        # calculer. La commande échoue alors, la sortie est vide, et le run conclut que
+        # rien n'a changé — le périmètre ne voit plus rien et les preuves annoncent zéro.
+        tracked = await self.git("diff", "--name-only", base, "HEAD")
         working = await self.git("status", "--porcelain")
         files = {line.strip() for line in tracked.stdout.splitlines() if line.strip()}
         for line in working.stdout.splitlines():
@@ -185,7 +236,7 @@ class Workspace:
         return sorted(files)
 
     async def diff_stats(self, base: str) -> tuple[int, int]:
-        result = await self.git("diff", "--numstat", base)
+        result = await self.git("diff", "--numstat", base, "HEAD")
         additions = deletions = 0
         for line in result.stdout.splitlines():
             parts = line.split("\t")
@@ -291,7 +342,17 @@ def _context_markdown(context: ContextPack | None) -> str:
 
 def workspace_env(stage_input: StageInput, extra: dict[str, Any] | None = None) -> dict[str, str]:
     """Variables d'environnement communes à tous les backends."""
+    # Créé ici : un `HOME` qui n'existe pas ferait échouer l'agent au premier fichier d'état.
+    # Le chemin est fixe et porte le run : dans un pod jetable, il n'y a personne d'autre
+    # pour le préempter, et un nom aléatoire empêcherait de rejouer le même run.
+    home = Path(tempfile.gettempdir()) / f"choregos-{stage_input.run_id}"
+    home.mkdir(parents=True, exist_ok=True)
     env = {
+        # Le dépôt n'est pas le répertoire personnel de l'agent. Sans cette ligne, un agent
+        # qui écrit son état sous `$HOME` le pose DANS le workspace — ses transcriptions se
+        # retrouvaient commitées sur la branche du ticket, et le diff du run devenait
+        # illisible. Le répertoire est propre à ce run et disparaît avec le pod.
+        "HOME": str(home),
         "CHOREGOS_RUN_ID": stage_input.run_id,
         "CHOREGOS_PROJECT": stage_input.project.slug,
         "CHOREGOS_WORK_ITEM": stage_input.work_item.key,

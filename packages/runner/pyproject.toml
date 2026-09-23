@@ -4,7 +4,19 @@ version = "0.1.0"
 description = "Runner Choregos : client ACP headless, guardrails, boucle DoD"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["choregos-core", "choregos-adapters", "httpx>=0.27", "typer>=0.15", "structlog>=24.4", "PyYAML>=6.0"]
+dependencies = [
+    "choregos-core",
+    "choregos-adapters",
+    "httpx>=0.27",
+    "typer>=0.15",
+    "structlog>=24.4",
+    "PyYAML>=6.0",
+    # `config.py` l'importe. Non déclarée, elle arrivait quand même dans l'environnement de
+    # développement (un autre paquet de l'espace de travail la tire) : le manque n'existait
+    # que dans l'image du runner, où `uv sync --package choregos-runner` n'installe QUE ce
+    # que ce paquet déclare. L'agent mourait alors sur `ModuleNotFoundError`.
+    "pydantic-settings>=2.6",
+]
 
 [project.scripts]
 choregos-runner = "choregos_runner.cli:main"

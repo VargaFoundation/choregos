@@ -392,3 +392,232 @@ def test_un_backend_retire_est_refuse_avec_sa_raison() -> None:
     message = str(error.value)
     assert "retiré" in message and "ACP" in message
     assert "claude-code" in message, "le message indique le remplaçant"
+
+
+async def test_git_accepte_le_workspace_meme_si_le_volume_appartient_a_root(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Le volume d'un pod appartient à root, l'agent tourne en 1000 : sans `safe.directory`,
+    git refuse le dépôt (« detected dubious ownership ») et conseille d'écrire une
+    configuration globale, ce qu'un conteneur éphémère ne peut pas faire."""
+    from choregos_runner.workspace import _git_env, run_command
+
+    env = _git_env(tmp_path)
+    assert env["GIT_CONFIG_KEY_0"] == "safe.directory"
+    assert env["GIT_CONFIG_VALUE_0"] == str(tmp_path)
+
+    resultat = await run_command(["git", "init", "-q"], cwd=tmp_path)
+    assert resultat.ok, resultat.stderr
+    lecture = await run_command(["git", "config", "--get-all", "safe.directory"], cwd=tmp_path)
+    assert str(tmp_path) in lecture.stdout
+
+
+def test_un_serveur_mcp_http_porte_ses_en_tetes(stage_input) -> None:  # type: ignore[no-untyped-def]
+    """Le schéma ACP exige `headers` pour un serveur HTTP. Sans lui, `session/new` est
+    refusé avec « Invalid params » et une arborescence d'erreurs où le champ manquant se
+    lit mal — l'agent ne démarre jamais."""
+    from choregos_contracts import McpServerRef, ToolsRef
+    from choregos_runner.backends.base import Backend
+
+    stage_input.tools = ToolsRef(
+        mcp={
+            "memoire": McpServerRef(url="http://memoire:8432/mcp", env={"Authorization": "Bearer x"}),
+            "outils": McpServerRef(command=["choregos-tools", "serve"], env={"A": "b"}),
+        }
+    )
+    par_nom = {s["name"]: s for s in Backend.mcp_servers(stage_input)}
+    assert par_nom["memoire"]["headers"] == [{"name": "Authorization", "value": "Bearer x"}]
+    assert par_nom["outils"]["env"] == [{"name": "A", "value": "b"}]
+
+
+def test_le_depot_n_est_pas_le_repertoire_personnel_de_l_agent(stage_input) -> None:  # type: ignore[no-untyped-def]
+    """Un agent qui écrit son état sous `$HOME` le posait DANS le workspace : ses
+    transcriptions finissaient commitées sur la branche du ticket, et le diff du run
+    devenait illisible."""
+    from pathlib import Path
+
+    from choregos_runner.workspace import workspace_env
+
+    env = workspace_env(stage_input)
+    home = Path(env["HOME"])
+    assert home.is_dir()
+    assert not str(home).startswith(str(stage_input.repo.url))
+    assert stage_input.run_id in str(home)
+
+
+async def test_le_runner_sert_vraiment_les_fichiers_qu_il_annonce(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Les deux mensonges coûtent cher, et on les a payés : annoncer `fs` puis refuser
+    l'appel envoie l'agent tout refaire en `bash` ; annoncer `false` désactive ses outils
+    d'édition et il n'écrit plus rien."""
+    from choregos_runner.acp.client import AcpClient
+    from choregos_runner.acp.protocol import FS_READ_TEXT_FILE, FS_WRITE_TEXT_FILE, Request, Response
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("un\ndeux\ntrois\n", encoding="utf-8")
+
+    client = AcpClient(["faux"], cwd=str(tmp_path))
+    rendus: list[Response] = []
+
+    async def capter(response: Response) -> None:
+        rendus.append(response)
+
+    client.respond = capter  # type: ignore[method-assign]
+
+    lecture = Request(id=1, method=FS_READ_TEXT_FILE, params={"path": "src/a.py", "line": 2, "limit": 1})
+    await client._handle_request(lecture)
+    assert rendus[-1].result == {"content": "deux\n"}
+
+    await client._handle_request(
+        Request(id=2, method=FS_WRITE_TEXT_FILE, params={"path": "src/b.py", "content": "print()\n"})
+    )
+    assert (tmp_path / "src" / "b.py").read_text() == "print()\n"
+
+    # La frontière est le workspace : ce qui en sort est refusé, pas corrigé.
+    await client._handle_request(Request(id=3, method=FS_READ_TEXT_FILE, params={"path": "../../etc/passwd"}))
+    assert rendus[-1].error is not None
+
+
+def test_le_hook_de_perimetre_laisse_ecrire_le_resultat(tmp_path, stage_input) -> None:  # type: ignore[no-untyped-def]
+    """Le contrat EXIGE `.choregos/result.json`, et le périmètre du ticket ne le couvre
+    jamais. Un hook qui le refuse place l'agent devant une contradiction : il l'a écrite
+    dans sa transcription, puis a abandonné l'étape."""
+    import json
+    import subprocess
+
+    from choregos_runner.backends.claude_code import ClaudeCodeBackend
+
+    espace = tmp_path / "ws"
+    (espace / ".choregos").mkdir(parents=True)
+    (espace / ".choregos" / "allowed_paths.txt").write_text("src/**\ntests/**\n")
+    hook = espace / "hook.sh"
+    plan = ClaudeCodeBackend().launch_plan(stage_input, espace)
+    hook.write_text(plan.files[".choregos/hooks/check_scope.sh"])
+    hook.chmod(0o755)
+
+    def verdict(chemin: str) -> int:
+        entree = json.dumps({"tool_input": {"file_path": f"{espace}/{chemin}"}})
+        rendu = subprocess.run(
+            [str(hook)], input=entree, capture_output=True, text=True, cwd=espace, check=False
+        )
+        return rendu.returncode
+
+    assert verdict(".choregos/result.json") == 0, "le résultat de l'étape doit pouvoir s'écrire"
+    assert verdict("src/panier.py") == 0
+    assert verdict("infra/secrets.yaml") == 2, "hors périmètre : toujours refusé"
+
+
+async def test_la_reponse_de_permission_reprend_un_identifiant_propose(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """ACP laisse l'agent NOMMER ses options. Répondre `allow_once` quand il propose
+    `allow` revient à ne rien choisir : l'agent lit un refus, et sa transcription dit
+    « refusées par l'utilisateur » pendant que notre journal dit « autorisé »."""
+    from choregos_runner.acp.client import AcpClient
+    from choregos_runner.acp.protocol import SESSION_REQUEST_PERMISSION, Request, Response
+
+    options = [
+        {"kind": "allow_always", "optionId": "allow_always", "name": "Always Allow"},
+        {"kind": "allow_once", "optionId": "allow", "name": "Allow"},
+        {"kind": "reject_once", "optionId": "reject", "name": "Reject"},
+    ]
+    rendus: list[Response] = []
+
+    async def capter(response: Response) -> None:
+        rendus.append(response)
+
+    async def toujours_oui(_: dict) -> tuple[bool, str]:  # type: ignore[type-arg]
+        return True, "autorisé"
+
+    async def toujours_non(_: dict) -> tuple[bool, str]:  # type: ignore[type-arg]
+        return False, "refusé"
+
+    client = AcpClient(["faux"], cwd=str(tmp_path), on_permission=toujours_oui)
+    client.respond = capter  # type: ignore[method-assign]
+    demande = Request(id=1, method=SESSION_REQUEST_PERMISSION, params={"options": options})
+    await client._handle_request(demande)
+    assert rendus[-1].result == {"outcome": {"outcome": "selected", "optionId": "allow"}}
+
+    client.on_permission = toujours_non  # type: ignore[assignment]
+    refus = Request(id=2, method=SESSION_REQUEST_PERMISSION, params={"options": options})
+    await client._handle_request(refus)
+    assert (rendus[-1].result or {})["outcome"]["optionId"] == "reject"
+
+
+def test_le_bruit_d_execution_n_entre_pas_dans_le_commit_du_run(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Les tests que l'agent lance produisent des caches. Commités, ils rendaient le diff
+    d'une étape illisible et faisaient compter aux gardes de taille des fichiers que
+    personne n'a écrits."""
+    import subprocess
+
+    from choregos_runner.workspace import Workspace
+
+    depot = tmp_path / "ws"
+    depot.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=depot, check=True)
+    espace = Workspace(depot)
+    espace.exclude([".mcp.json"])
+
+    (depot / "__pycache__").mkdir()
+    (depot / "__pycache__" / "panier.cpython-312.pyc").write_bytes(b"\x00")
+    (depot / "src.py").write_text("x = 1\n")
+
+    vus = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=depot,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert "src.py" in vus
+    assert "__pycache__" not in vus
+
+
+def test_un_agent_muet_est_nomme_comme_tel() -> None:
+    """Quand le modèle ne répond pas — clé refusée, quota atteint, fournisseur en panne —
+    l'agent ne dit rien et ne fait rien. Réclamer `result.json` accuserait alors l'agent
+    d'un oubli, et l'enquête partirait du mauvais côté."""
+    from choregos_runner.acp.client import PromptOutcome
+    from choregos_runner.runner import _agent_muet
+
+    assert _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=0))
+    assert not _agent_muet(PromptOutcome(turns=1, messages=7, tool_calls=0)), "il a parlé"
+    assert not _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=3)), "il a agi"
+    # Une erreur ne rend pas l'agent bavard : elle est REPRISE dans le diagnostic.
+    assert _agent_muet(PromptOutcome(messages=0, tool_calls=0, errors=["boum"]))
+
+
+async def test_le_diff_se_mesure_sur_un_historique_superficiel(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Un runner cloue son dépôt à `--depth` : `base...HEAD` n'y trouve pas toujours de base
+    de fusion, la commande échoue, la sortie est vide — et le run conclut que rien n'a
+    changé. Le périmètre ne voit alors plus rien, et les preuves annoncent zéro fichier."""
+    import subprocess
+
+    from choregos_runner.workspace import Workspace
+
+    amont = tmp_path / "amont"
+    amont.mkdir()
+
+    def git(*args: str, cwd) -> None:  # type: ignore[no-untyped-def]
+        subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+    git("init", "-q", "-b", "main", cwd=amont)
+    git("config", "user.email", "a@b", cwd=amont)
+    git("config", "user.name", "t", cwd=amont)
+    for n in range(4):
+        (amont / "a.py").write_text(f"x = {n}\n")
+        git("add", "-A", cwd=amont)
+        git("commit", "-q", "-m", f"c{n}", cwd=amont)
+
+    local = tmp_path / "local"
+    local.mkdir()
+    git("init", "-q", "-b", "main", cwd=local)
+    git("remote", "add", "origin", str(amont), cwd=local)
+    git("fetch", "-q", "--depth", "1", "origin", "main", cwd=local)
+    git("checkout", "-q", "-B", "travail", "FETCH_HEAD", cwd=local)
+    git("config", "user.email", "a@b", cwd=local)
+    git("config", "user.name", "t", cwd=local)
+
+    espace = Workspace(local)
+    base = await espace.base_sha("main")
+    (local / "b.py").write_text("y = 1\n")
+    git("add", "-A", cwd=local)
+    git("commit", "-q", "-m", "travail de l'agent", cwd=local)
+
+    assert await espace.changed_files(base) == ["b.py"]
+    assert await espace.diff_stats(base) == (1, 0)

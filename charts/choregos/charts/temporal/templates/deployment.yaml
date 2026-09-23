@@ -1,0 +1,99 @@
+{{- $name := printf "%s-temporal" .Release.Name }}
+{{- /*
+`server start-dev` : un seul processus, SQLite, aucune migration à jouer. C'est le Temporal
+du banc sur cluster de Choregos (tests/cluster) — assez pour dérouler des workflows réels,
+pas pour la production, où Temporal se déploie avec sa propre base et ses quatre services.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Un seul écrivain sur le fichier SQLite : jamais deux pods en même temps.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-temporal
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-temporal
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: temporal
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: temporal
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          args:
+            - server
+            - start-dev
+            - --ip
+            - 0.0.0.0
+            - --namespace
+            - {{ .Values.global.temporal.namespace | quote }}
+            - --db-filename
+            - /data/temporal.db
+            {{- if .Values.ui.enabled }}
+            - --ui-port
+            - "8233"
+            {{- else }}
+            - --headless
+            {{- end }}
+          ports:
+            - { name: grpc, containerPort: 7233 }
+            {{- if .Values.ui.enabled }}
+            - { name: ui, containerPort: 8233 }
+            {{- end }}
+          readinessProbe:
+            tcpSocket: { port: grpc }
+            periodSeconds: 5
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ $name }} }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: choregos-temporal
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: grpc, port: 7233, targetPort: grpc }
+    {{- if .Values.ui.enabled }}
+    - { name: ui, port: 8233, targetPort: ui }
+    {{- end }}
+{{- if .Values.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources: { requests: { storage: {{ .Values.persistence.size }} } }
+{{- end }}

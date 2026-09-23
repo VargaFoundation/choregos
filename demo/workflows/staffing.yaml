@@ -1,0 +1,69 @@
+# Workflow RH — la MÊME machine, sans une ligne de logiciel.
+#
+# Ce fichier n'existe que pour montrer une chose : états, transitions, acteurs, budgets,
+# garanties, mémoire et reprise après panne ne parlent pas de code. Ce qui, dans la
+# plateforme, parlait de code — les playbooks, la garantie `evidence_present`, les sorties
+# typées — est ici remplacé par son équivalent métier :
+#   · les playbooks viennent du déploiement (`CHOREGOS_PLAYBOOKS_DIR`), pas du paquet ;
+#   · la garantie est `outputs_present` : l'étape a produit ce que la transition déclare ;
+#   · les sorties portent des noms de métier (`profils`, `evaluation`).
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: staffing
+  version: 1
+  description: Besoin de staffing → sourcing → qualification → validation humaine → proposition.
+actors:
+  sourceur: { type: agent, role: custom, playbook: sourcing, model: "profile:standard", max_turns: 20, max_minutes: 10 }
+  evaluateur: { type: agent, role: custom, playbook: qualification, model: "profile:standard", max_turns: 20, max_minutes: 10 }
+  manager: { type: human, group: staffing-managers, sla_hours: 48 }
+states:
+  demande: { display: Besoin reçu, kind: wait }
+  sourcing: { display: Sourcing }
+  qualification: { display: Qualification }
+  a_valider: { display: À valider, kind: wait }
+  proposee: { display: Proposition envoyée, terminal: true }
+  needs_human: { display: Intervention humaine, kind: wait }
+  abandonnee: { display: Abandonnée, terminal: true }
+transitions:
+  - id: t-sourcing
+    from: demande
+    to: sourcing
+    by: sourceur
+    outputs: [profils]
+    gates: [outputs_present]
+    on_fail: { to: demande, max_attempts: 2, escalate_to: needs_human }
+  - id: t-qualification
+    from: sourcing
+    to: qualification
+    by: evaluateur
+    inputs: [profils]
+    outputs: [evaluation, recommandation]
+    gates: [outputs_present]
+    on_fail: { to: sourcing, max_attempts: 2, escalate_to: needs_human }
+  - id: t-revue
+    from: qualification
+    to: a_valider
+    by: evaluateur
+    outputs: [evaluation]
+    gates: [outputs_present]
+    on_fail: { to: qualification, max_attempts: 1, escalate_to: needs_human }
+  - id: t-valider
+    from: a_valider
+    to: proposee
+    by: manager
+    on_reject: sourcing
+    timeout_hours: 72
+  - id: t-abandon
+    from: needs_human
+    to: abandonnee
+    by: manager
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandonnee

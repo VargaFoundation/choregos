@@ -93,6 +93,7 @@ def _register_builtins() -> None:
     from .executor.k8s_job import KubernetesJobExecutor
     from .executor.local_docker import LocalDockerExecutor
     from .executor.tekton import KubernetesClient, TektonExecutor
+    from .gateway.direct import DirectGateway
     from .gateway.litellm import LiteLlmGateway
     from .http import RestClient
     from .memory.ecphoria import EcphoriaMemory
@@ -101,6 +102,7 @@ def _register_builtins() -> None:
     from .scm.github import GitHubScm
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
+    from .tracker.interne import InternalTracker
     from .tracker.jira import JiraTracker
 
     register("tracker", "github-issues")(
@@ -112,6 +114,7 @@ def _register_builtins() -> None:
             webhook_secret=cfg.get("webhook_secret", ""),
         )
     )
+    register("tracker", "internal")(lambda cfg: InternalTracker())
     register("tracker", "jira")(
         lambda cfg: JiraTracker(
             RestClient(
@@ -175,6 +178,8 @@ def _register_builtins() -> None:
             service_account=cfg.get("service_account", "choregos-runner"),
             cpu_limit=cfg.get("cpu_limit", os.environ.get("CHOREGOS_RUNNER_CPU_LIMIT", "") or "2"),
             memory_limit=cfg.get("memory_limit", os.environ.get("CHOREGOS_RUNNER_MEMORY_LIMIT", "") or "6Gi"),
+            env_from_secrets=cfg.get("env_from_secrets")
+            or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
         )
     )
     register("runtime", "aca")(
@@ -208,6 +213,12 @@ def _register_builtins() -> None:
         )
     )
     register("memory", "pgvector")(lambda cfg: PgVectorMemory())
+    register("gateway", "direct")(
+        lambda cfg: DirectGateway(
+            key=cfg.get("key", _env("CHOREGOS_GATEWAY_DIRECT_KEY", "")),
+            models=cfg.get("models", []),
+        )
+    )
     register("gateway", "litellm")(
         lambda cfg: LiteLlmGateway(
             cfg.get("base_url", _env("CHOREGOS_GATEWAY_URL", "http://litellm.choregos-gateway:4000")),

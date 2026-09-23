@@ -1,0 +1,76 @@
+# Workflow de la DÉMO logicielle : le plus court chemin qui prouve quelque chose.
+#
+# Trois états de travail, deux agents, aucun humain — un banc doit tourner sans qu'on
+# l'attende. Le workflow par défaut de la plateforme (`default-simple`) fait relire le
+# cadrage par un humain et passe par une PR ; ici on s'arrête à la branche poussée, parce
+# que la démo tourne sur un git local et que la revue n'ajouterait rien à la preuve.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: demo-code
+  version: 1
+  description: Ticket → implémentation → vérification → branche poussée.
+actors:
+  dev: { type: agent, role: implement, model: "profile:standard", max_turns: 40, max_minutes: 20 }
+  checker: { type: agent, role: verify, model: "profile:standard", max_turns: 20, max_minutes: 10 }
+  arbitre: { type: human, group: demo, sla_hours: 24 }
+  journal: { type: system }
+states:
+  inbox: { display: À faire, kind: wait }
+  in_progress: { display: En cours }
+  verifying: { display: Vérification }
+  done: { display: Terminé, terminal: true }
+  needs_human: { display: Intervention humaine, kind: wait }
+  abandoned: { display: Abandonné, terminal: true }
+transitions:
+  - id: t-implement
+    from: inbox
+    to: in_progress
+    by: dev
+    # Pas d'`outputs:` : une branche et des commits sont des ARTEFACTS, que le runner
+    # remplit lui-même. Les déclarer ici faisait échouer `outputs_present` à chaque
+    # première tentative — l'agent n'a aucune raison de les recopier dans ses sorties.
+    # Les garanties qui LISENT LE DIFF (`scope_respected`, `diff_size_max`, `no_secrets`)
+    # ne figurent pas ici, et c'est délibéré : sur ce banc le connecteur SCM est un
+    # `fake`, il ne sait pas comparer deux branches, et depuis ce changement une garantie
+    # qui ne peut pas être évaluée REFUSE au lieu de passer à vide. Les déclarer ici
+    # ferait échouer chaque étape pour une bonne raison, et la démonstration ne montrerait
+    # plus rien. Sur un vrai dépôt (GitHub), elles se remettent et c'est tout l'intérêt.
+    # `evidence_present` : les tests ont tourné et ils passent. C'est la garantie qui a un
+    # sens ici, et elle ne dépend pas du connecteur SCM.
+    gates: [evidence_present]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-verify
+    from: in_progress
+    to: verifying
+    by: checker
+    gates: [evidence_present]
+    on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
+  # Portée par le SYSTÈME : il n'y a plus rien à faire réfléchir. Lancer un troisième agent
+  # pour déplacer une carte coûte un run entier, et il échoue pour la seule raison qu'on ne
+  # lui a rien donné à produire. Les garanties, elles, restent : c'est la vérification de
+  # l'étape précédente qui est relue ici.
+  - id: t-done
+    from: verifying
+    to: done
+    by: journal
+    gates: [evidence_present]
+    on_fail: { to: in_progress, max_attempts: 1, escalate_to: needs_human }
+  # Portée par un HUMAIN, et c'est structurel : une transition qui sort de `needs_human`
+  # et qu'un agent porte est rejouée aussitôt, échoue de la même façon, et la plateforme
+  # relance un agent indéfiniment. L'escalade vers un humain n'a de sens que si la sortie
+  # attend vraiment quelqu'un. Sur ce banc, personne ne répond : le ticket reste visible
+  # en « intervention humaine », ce qui est exactement ce qu'on veut montrer.
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: arbitre
+    timeout_hours: 24
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

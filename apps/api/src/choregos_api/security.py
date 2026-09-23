@@ -54,10 +54,41 @@ def _dev_keypair() -> tuple[str, str]:
     return private_pem, public_pem
 
 
+def public_from_private(private_pem: str) -> str:
+    """La clé publique se DÉDUIT de la privée : il n'y a donc rien à tenir en double."""
+    key = serialization.load_pem_private_key(private_pem.encode(), password=None)
+    return (
+        key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        .decode()
+    )
+
+
 def run_token_keys(settings: Settings | None = None) -> tuple[str, str]:
+    """Les clés des jetons de run, et pourquoi la privée suffit.
+
+    Ces jetons sont émis par l'orchestrateur et vérifiés par l'API : les deux processus
+    doivent partager la MÊME paire. Exiger les deux moitiés comme avant laissait une
+    troisième possibilité — n'en fournir qu'une — où chaque processus repartait sur une
+    paire éphémère de son côté. Tout paraissait configuré, et l'agent recevait
+    « Signature verification failed », un message qui accuse le jeton, pas le déploiement.
+    """
     settings = settings or get_settings()
-    if settings.run_token_private_key and settings.run_token_public_key:
-        return settings.run_token_private_key, settings.run_token_public_key
+    if settings.run_token_private_key:
+        return settings.run_token_private_key, (
+            settings.run_token_public_key or public_from_private(settings.run_token_private_key)
+        )
+    if settings.run_token_public_key:
+        # Une publique seule ne permet pas de signer : il manque l'essentiel, et le dire
+        # vaut mieux que de vérifier des jetons qu'on ne saura jamais émettre.
+        raise RuntimeError(
+            "CHOREGOS_RUN_TOKEN_PUBLIC_KEY est fournie sans sa clé privée : "
+            "l'orchestrateur ne peut pas signer les jetons de run."
+        )
+    # Aucune clé : paire éphémère, valable tant qu'un SEUL processus émet et vérifie
+    # (développement, tests). En cluster, l'API et l'orchestrateur sont deux processus.
     return _dev_keypair()
 
 

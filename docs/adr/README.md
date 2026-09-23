@@ -17,3 +17,4 @@ Une décision structurante s'écrit ici avant d'être codée, et se relit quand 
 | [0009](0009-gitops-seule-source-de-verite.md) | Le cluster ne se modifie que par Git | acceptée |
 | [0010](0010-les-gates-sont-des-mecanismes.md) | Une garantie est un mécanisme, jamais un prompt | acceptée |
 | [0011](0011-retrait-d-openhands.md) | Retrait d'OpenHands : aucun agent ACP en ligne de commande | acceptée |
+| [0012](0012-le-moteur-n-est-pas-lie-au-logiciel.md) | Le moteur n'est pas lié au logiciel (playbooks, garantie générique, tracker interne) | acceptée |

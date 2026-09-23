@@ -1,0 +1,11 @@
+# Rendu seulement quand `global.database.embedded` vaut true (condition du chart parent).
+image:
+  repository: postgres
+  tag: "16-alpine"
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: ""
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: "1", memory: 1Gi }

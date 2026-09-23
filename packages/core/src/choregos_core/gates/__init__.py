@@ -39,6 +39,13 @@ class GateContext:
     flags: list[str] = field(default_factory=list)
     required_flag: str | None = None
     external_results: dict[str, bool] = field(default_factory=dict)
+    # Les sorties que la transition déclare (`outputs:`), lues par `outputs_present`.
+    expected_outputs: list[str] = field(default_factory=list)
+    #: Le diff a-t-il PU être obtenu ? Faux quand le connecteur SCM ne sait pas comparer
+    #: (fake, panne, dépôt injoignable). Une garantie qui repose sur le diff ne doit alors
+    #: pas se prononcer : sans diff, `scope_respected` déclarerait le périmètre respecté et
+    #: `no_secrets` l'absence de secrets, faute d'avoir regardé quoi que ce soit.
+    diff_available: bool = True
 
 
 @dataclass(slots=True, frozen=True)
@@ -103,8 +110,18 @@ def matches_any(path: str, patterns: list[str]) -> bool:
 # ───────────────────────────── gates synchrones ─────────────────────────────
 
 
+def _sans_diff(name: str) -> GateOutcome:
+    return GateOutcome(
+        name,
+        False,
+        detail="diff indisponible : cette garantie n'a pas pu être évaluée (connecteur SCM)",
+    )
+
+
 @gate("scope_respected")
 def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    if not ctx.diff_available:
+        return _sans_diff("scope_respected")
     allowed = params.get("paths") or ctx.allowed_paths
     if not allowed:
         return GateOutcome("scope_respected", True, detail="aucun périmètre déclaré")
@@ -140,8 +157,37 @@ def _evidence_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
+@gate("outputs_present")
+def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Les sorties déclarées de l'étape existent et ne sont pas vides.
+
+    La garantie générique du moteur : `evidence_present` parle de tests et de couverture,
+    donc de logiciel. Une étape qui produit une liste de candidats, un courrier ou un
+    dossier instruit n'a pas de tests — elle a des SORTIES, que la transition nomme
+    (`outputs:`) et que celle-ci vérifie. Sans elle, un workflow hors logiciel n'aurait
+    aucune garantie mécanique, et il faudrait croire l'agent sur parole.
+    """
+    required = [str(k) for k in (params.get("keys") or ctx.expected_outputs)]
+    if not required:
+        return GateOutcome("outputs_present", True, detail="aucune sortie déclarée")
+    if ctx.result is None:
+        return GateOutcome("outputs_present", False, detail="aucun résultat d'étape")
+    # `StageOutputs` tolère les champs supplémentaires (rôles custom) : c'est ce qui permet
+    # à un métier de nommer ses propres sorties sans toucher au contrat.
+    produced = ctx.result.outputs.model_dump(exclude_none=True)
+    missing = [key for key in required if not produced.get(key)]
+    return GateOutcome(
+        "outputs_present",
+        not missing,
+        detail="sorties présentes" if not missing else f"sorties manquantes : {', '.join(missing)}",
+        annotations=missing,
+    )
+
+
 @gate("diff_size_max")
 def _diff_size_max(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    if not ctx.diff_available:
+        return _sans_diff("diff_size_max")
     max_files = int(params.get("files", params.get("n", 60)))
     max_lines = int(params.get("lines", 100_000))
     files = len(ctx.changed_files)
@@ -175,6 +221,8 @@ def scan_secrets(text: str) -> list[str]:
 
 @gate("no_secrets")
 def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    if not ctx.diff_available:
+        return _sans_diff("no_secrets")
     found = ctx.secrets_found
     return GateOutcome(
         "no_secrets",

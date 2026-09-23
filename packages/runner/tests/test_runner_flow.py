@@ -254,3 +254,35 @@ async def test_idempotent_rerun_with_same_run_id(stage_input: StageInput, runner
     second, _client2 = await execute(stage_input, runner_settings, script)
     assert second.exit_code is Exit.OK
     assert second.result is not None
+
+
+async def test_le_travail_commite_par_l_agent_est_pousse_quand_meme(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """L'agent a git sous la main. Quand il commite lui-même, l'arbre est propre et le
+    runner n'a rien à commiter : ne pousser que sur SON commit laissait le travail dans un
+    pod qui disparaît, et l'étape suivante trouvait le dépôt inchangé."""
+    outcome, _ = await execute(
+        stage_input,
+        runner_settings,
+        {
+            "turns": [
+                {
+                    "writes": [{"path": "src/orders.py", "content": "def total(lines):\n    return 0\n"}],
+                    "commands": [
+                        "git add -A",
+                        "git -c user.email=a@b -c user.name=agent commit -q -m 'feat: fait par l agent'",
+                    ],
+                    "result": {
+                        "schema": "choregos/StageResult/v1",
+                        "status": "done",
+                        "summary": "travail commité par l'agent",
+                        "evidence": {"tests_passed": True, "tests_run": 1},
+                    },
+                }
+            ]
+        },
+    )
+    assert outcome.exit_code is Exit.OK
+    assert outcome.result is not None
+    assert outcome.result.artifacts.commits, "le commit de l'agent compte comme du travail"

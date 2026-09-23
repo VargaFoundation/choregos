@@ -1,0 +1,17 @@
+image:
+  repository: ghcr.io/vargafoundation/ecphoria
+  tag: "0.2.5-memory"
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: ""
+# Modèle d'embedding, demandé à la passerelle de Choregos (coût mesuré, aucune sortie directe).
+embedding:
+  # `none` quand le déploiement n'a pas de passerelle : la mémoire garde les faits, mais
+  # la recherche sémantique retombe sur du lexical. Mieux vaut le dire que de laisser des
+  # appels d'embedding échouer en silence à chaque écriture.
+  provider: openai_compatible
+  model: platform/embed
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: "1", memory: 2Gi }

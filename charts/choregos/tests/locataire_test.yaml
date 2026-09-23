@@ -133,3 +133,86 @@ tests:
           content:
             name: CHOREGOS_DATABASE_URL
             value: postgresql+asyncpg://choregos:$(CHOREGOS_DATABASE_PASSWORD)@choregos-pg:5432/choregos
+
+  - it: les dépendances embarquées se câblent toutes seules
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.database.embedded: true
+      global.temporal.embedded: true
+      global.gateway.embedded: true
+      global.memory.embedded: true
+      global.database.passwordSecret: ""
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_TEMPORAL_ADDRESS
+            value: RELEASE-NAME-temporal:7233
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_GATEWAY_URL
+            value: http://RELEASE-NAME-litellm:4000
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DATABASE_URL
+            value: postgresql+asyncpg://choregos:$(CHOREGOS_DATABASE_PASSWORD)@RELEASE-NAME-postgresql:5432/choregos
+
+  - it: sans dépendance embarquée, les adresses restent celles qu'on fournit
+    template: charts/choregos-api/templates/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_TEMPORAL_ADDRESS
+            value: temporal-frontend.choregos-temporal.svc:7233
+
+  - it: le worker reçoit une commande complète, pas seulement des arguments
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "choregos_orchestrator.worker"]
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value: ["--queues", "orchestrator"]
+
+  - it: l'image des agents suit la version du déploiement
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    documentIndex: 0
+    set:
+      global.imageTag: "9.9.9"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_RUNNER_IMAGE
+            value: ghcr.io/vargafoundation/choregos-runner:9.9.9
+
+  - it: les agents rappellent le service interne, jamais l'URL publique
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    documentIndex: 0
+    set:
+      global.publicUrl: https://choregos.example.com
+      global.apiUrl: https://choregos.example.com
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_INTERNAL_API_URL
+            value: http://choregos-api:8000
+
+  - it: l'orchestrateur reçoit la clé qui signe les jetons de run
+    template: charts/choregos-orchestrator/templates/deployments.yaml
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: choregos-api-secrets
+                key: run-token-private-key

@@ -23,6 +23,7 @@ from choregos_contracts import (
 )
 
 from .acp import AcpClient, AgentUnreachableError
+from .acp.client import PromptOutcome
 from .backends import get_backend
 from .client import InternalClient
 from .config import RunnerSettings, get_settings
@@ -214,7 +215,24 @@ class Runner:
                     result_repairs=repairs,
                 )
                 if agent_result is None:
-                    invalid = fallback_result("invalid_result", load.error or "résultat illisible")
+                    # Deux échecs qui se ressemblent et ne se soignent pas pareil : un agent
+                    # qui a travaillé mais n'a pas écrit son résultat, et un agent dont le
+                    # tour revient VIDE — clé refusée, quota atteint, fournisseur en panne.
+                    # Le second accusé d'un oubli envoie l'enquête du mauvais côté.
+                    if _agent_muet(agent.outcome) and not workspace.result_path().exists():
+                        raison = "agent_silencieux"
+                        # Ce que l'agent a écrit sur sa sortie d'erreur vaut mieux que toute
+                        # reformulation : c'est là que le fournisseur dit « quota atteint »
+                        # ou « clé refusée ».
+                        bruit = " | ".join(agent.outcome.errors[-2:] or agent.stderr_tail[-2:])
+                        detail = (
+                            "l'agent n'a produit ni texte ni appel d'outil : vérifier l'accès "
+                            f"au modèle (fin de tour : {agent.outcome.stop_reason})"
+                            + (f" — {bruit[:300]}" if bruit else "")
+                        )
+                    else:
+                        raison, detail = "invalid_result", (load.error or "résultat illisible")
+                    invalid = fallback_result(raison, detail)
                     final = complete_result(
                         invalid,
                         measured=report.evidence(),
@@ -222,7 +240,7 @@ class Runner:
                         diagnostics=diagnostics,
                     )
                     await self._publish(client, journal, workspace, stage_input, final, base)
-                    return RunOutcome(Exit.INVALID_RESULT, final, detail=load.error or "")
+                    return RunOutcome(Exit.INVALID_RESULT, final, detail=detail)
         except AgentUnreachableError as exc:
             await journal.record("agent.unreachable", {"error": str(exc)[:500]})
             await journal.flush()
@@ -272,9 +290,18 @@ class Runner:
         result.evidence.diff_lines = additions + deletions
         result.evidence.diff_files = len(await workspace.changed_files(base))
 
-        if sha and not self.settings.dry_run:
+        # On pousse dès qu'il y a QUELQUE CHOSE à pousser, pas seulement quand c'est nous
+        # qui avons commité. L'agent a git sous la main : quand il commite lui-même, l'arbre
+        # est propre, `commit()` ne rend rien, et le travail restait dans un pod qui
+        # disparaît — l'étape suivante trouvait alors le dépôt inchangé et concluait que
+        # rien n'avait été fait.
+        if (sha or commits) and not self.settings.dry_run:
             push = await workspace.push(stage_input.repo.work_branch)
             await journal.record("git.push", {"ok": push.ok, "output": push.output[-500:]})
+            if not push.ok:
+                # Une poussée ratée est la fin silencieuse la plus coûteuse : le résultat dit
+                # « fait », et l'étape suivante ne trouve rien.
+                result.summary = f"{result.summary} (poussée refusée : {push.output[-200:]})"
 
         await journal.record("run.result", {"status": str(result.status), "summary": result.summary})
         await journal.flush()
@@ -304,6 +331,19 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
     scope = stage_input.work_item.key.rsplit("#", 1)[-1]
     summary = result.summary.strip().splitlines()[0][:100] if result.summary else "étape Choregos"
     return f"{prefix}({scope}): {summary}"
+
+
+def _agent_muet(outcome: PromptOutcome) -> bool:
+    """Ni un mot, ni un outil : le modèle n'a pas répondu.
+
+    Un agent qui a parlé sans écrire son résultat est un agent distrait — on le lui
+    rappelle. Un agent dont le tour revient VIDE n'a rien à se faire rappeler : sa clé est
+    refusée, son quota est atteint, ou son fournisseur est en panne.
+
+    L'appelant y ajoute l'absence de tout fichier de résultat : un agent qui en a écrit un,
+    même illisible, a agi — le lui rappeler a du sens.
+    """
+    return outcome.messages == 0 and outcome.tool_calls == 0
 
 
 def _agent_exit(stop_reason: str, cancelled: bool) -> str:
