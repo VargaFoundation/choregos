@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from choregos_contracts import ContextPack, StageInput
 
@@ -162,8 +163,23 @@ class Workspace:
         """Les fichiers du runner ne doivent jamais apparaître dans un commit d'agent."""
         self.exclude(list(RUNNER_FILES))
 
+    #: Bruit d'exécution : produit par les tests que l'agent lance, jamais par le ticket.
+    #: Sans ces motifs, `__pycache__/` et consorts entraient dans le commit du run — le
+    #: diff d'une étape devenait illisible, et les gardes de taille comptaient des fichiers
+    #: que personne n'a écrits. Un dépôt qui les ignore déjà n'y perd rien.
+    BRUIT: ClassVar[tuple[str, ...]] = (
+        "__pycache__/",
+        "*.py[cod]",
+        ".pytest_cache/",
+        ".ruff_cache/",
+        ".mypy_cache/",
+        "node_modules/",
+        ".venv/",
+    )
+
     def exclude(self, paths: list[str]) -> None:
         """Ajoute des chemins à `.git/info/exclude` (configuration de backend, journal…)."""
+        paths = [*paths, *self.BRUIT]
         if not paths:
             return
         exclude = self.path / ".git" / "info" / "exclude"
@@ -312,7 +328,17 @@ def _context_markdown(context: ContextPack | None) -> str:
 
 def workspace_env(stage_input: StageInput, extra: dict[str, Any] | None = None) -> dict[str, str]:
     """Variables d'environnement communes à tous les backends."""
+    # Créé ici : un `HOME` qui n'existe pas ferait échouer l'agent au premier fichier d'état.
+    # Le chemin est fixe et porte le run : dans un pod jetable, il n'y a personne d'autre
+    # pour le préempter, et un nom aléatoire empêcherait de rejouer le même run.
+    home = Path(tempfile.gettempdir()) / f"choregos-{stage_input.run_id}"
+    home.mkdir(parents=True, exist_ok=True)
     env = {
+        # Le dépôt n'est pas le répertoire personnel de l'agent. Sans cette ligne, un agent
+        # qui écrit son état sous `$HOME` le pose DANS le workspace — ses transcriptions se
+        # retrouvaient commitées sur la branche du ticket, et le diff du run devenait
+        # illisible. Le répertoire est propre à ce run et disparaît avec le pod.
+        "HOME": str(home),
         "CHOREGOS_RUN_ID": stage_input.run_id,
         "CHOREGOS_PROJECT": stage_input.project.slug,
         "CHOREGOS_WORK_ITEM": stage_input.work_item.key,

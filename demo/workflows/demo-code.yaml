@@ -13,6 +13,8 @@ metadata:
 actors:
   dev: { type: agent, role: implement, model: "profile:standard", max_turns: 40, max_minutes: 20 }
   checker: { type: agent, role: verify, model: "profile:standard", max_turns: 20, max_minutes: 10 }
+  arbitre: { type: human, group: demo, sla_hours: 24 }
+  journal: { type: system }
 states:
   inbox: { display: À faire, kind: wait }
   in_progress: { display: En cours }
@@ -36,16 +38,25 @@ transitions:
     by: checker
     gates: [evidence_present]
     on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
+  # Portée par le SYSTÈME : il n'y a plus rien à faire réfléchir. Lancer un troisième agent
+  # pour déplacer une carte coûte un run entier, et il échoue pour la seule raison qu'on ne
+  # lui a rien donné à produire. Les garanties, elles, restent : c'est la vérification de
+  # l'étape précédente qui est relue ici.
   - id: t-done
     from: verifying
     to: done
-    by: checker
+    by: journal
     gates: [evidence_present]
     on_fail: { to: in_progress, max_attempts: 1, escalate_to: needs_human }
+  # Portée par un HUMAIN, et c'est structurel : une transition qui sort de `needs_human`
+  # et qu'un agent porte est rejouée aussitôt, échoue de la même façon, et la plateforme
+  # relance un agent indéfiniment. L'escalade vers un humain n'a de sens que si la sortie
+  # attend vraiment quelqu'un. Sur ce banc, personne ne répond : le ticket reste visible
+  # en « intervention humaine », ce qui est exactement ce qu'on veut montrer.
   - id: t-abandon
     from: needs_human
     to: abandoned
-    by: dev
+    by: arbitre
     timeout_hours: 24
 defaults:
   from_any_agent_state:

@@ -7,6 +7,7 @@ import contextlib
 import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .protocol import (
@@ -48,6 +49,31 @@ class PromptOutcome:
     permission_denials: int = 0
     cancelled: bool = False
     errors: list[str] = field(default_factory=list)
+
+
+def _option_id(params: dict[str, Any], allowed: bool) -> str:
+    """L'identifiant d'option à RENVOYER, choisi parmi ceux que l'agent propose.
+
+    ACP laisse l'agent nommer ses options : il annonce `{kind, optionId, name}`, et le
+    client répond avec un `optionId` DE CETTE LISTE. Nous renvoyions `allow_once`, un nom
+    que claude-code-acp n'offre pas — il propose `allow` (de genre `allow_once`). Notre
+    « oui » ne correspondait donc à rien, l'agent le lisait comme un refus, et il écrivait
+    dans sa transcription que ses écritures étaient « refusées par l'utilisateur » alors
+    que le journal de la plateforme, lui, disait « autorisé ». Deux versions de la même
+    étape, et aucune ne mentait.
+    """
+    # L'ordre compte : `once` d'abord. Une décision de garde-fou porte sur CET appel ;
+    # répondre « toujours » donnerait à l'agent un blanc-seing pour tous les suivants,
+    # que personne n'a accordé.
+    voulus = ("allow_once", "allow_always") if allowed else ("reject_once", "reject_always")
+    options = [o for o in (params.get("options") or []) if isinstance(o, dict)]
+    for genre in voulus:
+        for option in options:
+            if option.get("kind") == genre and option.get("optionId"):
+                return str(option["optionId"])
+    # Aucune option du genre attendu : on retombe sur le nom canonique du genre, qui est
+    # aussi l'identifiant employé par les agents qui ne renomment rien.
+    return voulus[0]
 
 
 class AcpClient:
@@ -124,6 +150,12 @@ class AcpClient:
             {
                 "protocolVersion": PROTOCOL_VERSION,
                 "acpVersion": ACP_VERSION,
+                # On annonce ce qu'on SERT, et on sert les deux méthodes fichier (plus bas).
+                # Les deux mensonges possibles coûtent cher, et on les a payés tous les deux :
+                # annoncer `fs` puis refuser l'appel envoie l'agent tout refaire en `bash`
+                # (« le système de fichiers n'est pas exposé », dit sa transcription) ;
+                # annoncer `false` fait désactiver ses outils d'édition, et il ne peut plus
+                # rien écrire du tout.
                 "clientCapabilities": client_capabilities
                 or {"fs": {"readTextFile": True, "writeTextFile": True}, "terminal": False},
                 "clientInfo": {"name": "choregos-runner", "version": "1.0.0"},
@@ -231,39 +263,77 @@ class AcpClient:
     async def _handle_request(self, request: Request) -> None:
         if request.method == SESSION_REQUEST_PERMISSION:
             allowed, reason = await self._decide(request.params)
+            choix = _option_id(request.params, allowed)
             if not allowed:
                 self.outcome.permission_denials += 1
                 await self.respond(
                     Response(
                         id=request.id,
-                        result={
-                            "outcome": {"outcome": "selected", "optionId": "reject_once"},
-                            "reason": reason,
-                        },
+                        result={"outcome": {"outcome": "selected", "optionId": choix}, "reason": reason},
                     )
                 )
                 return
             await self.respond(
-                Response(id=request.id, result={"outcome": {"outcome": "selected", "optionId": "allow_once"}})
+                Response(id=request.id, result={"outcome": {"outcome": "selected", "optionId": choix}})
             )
             return
         if request.method == SESSION_UPDATE:
             await self._on_update(request.params)
             await self.respond(Response(id=request.id, result={}))
             return
-        if request.method in {FS_READ_TEXT_FILE, FS_WRITE_TEXT_FILE}:
-            await self.respond(
-                error_response(
-                    request.id,
-                    PERMISSION_DENIED,
-                    "le runner n'expose pas le système de fichiers : l'agent écrit directement "
-                    "dans son workspace, sous contrôle du diff",
-                )
-            )
+        if request.method == FS_READ_TEXT_FILE:
+            await self._read_text_file(request)
+            return
+        if request.method == FS_WRITE_TEXT_FILE:
+            await self._write_text_file(request)
             return
         await self.respond(
             error_response(request.id, PERMISSION_DENIED, f"méthode non gérée : {request.method}")
         )
+
+    def _resolve(self, raw: Any) -> Path | None:
+        """Un chemin du workspace, ou rien.
+
+        Le workspace est la frontière : un chemin relatif s'y rattache, un chemin absolu
+        doit y tomber. Ce qui sort — `../../etc/passwd`, un lien qui remonte — n'est pas
+        une erreur de l'agent à corriger, c'est une demande à refuser.
+        """
+        if not isinstance(raw, str) or not raw:
+            return None
+        racine = Path(self.cwd).resolve()
+        cible = (racine / raw).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
+        return cible if cible == racine or racine in cible.parents else None
+
+    async def _read_text_file(self, request: Request) -> None:
+        params = request.params or {}
+        cible = self._resolve(params.get("path"))
+        if cible is None:
+            await self.respond(error_response(request.id, PERMISSION_DENIED, "chemin hors du workspace"))
+            return
+        try:
+            lignes = cible.read_text(encoding="utf-8").splitlines(keepends=True)
+        except OSError as exc:
+            await self.respond(error_response(request.id, PERMISSION_DENIED, f"lecture impossible : {exc}"))
+            return
+        # `line` est 1-indexé dans ACP ; `limit` borne le nombre de lignes rendues.
+        depart = max(int(params.get("line") or 1) - 1, 0)
+        limite = params.get("limit")
+        fin = depart + int(limite) if limite else len(lignes)
+        await self.respond(Response(id=request.id, result={"content": "".join(lignes[depart:fin])}))
+
+    async def _write_text_file(self, request: Request) -> None:
+        params = request.params or {}
+        cible = self._resolve(params.get("path"))
+        if cible is None:
+            await self.respond(error_response(request.id, PERMISSION_DENIED, "chemin hors du workspace"))
+            return
+        try:
+            cible.parent.mkdir(parents=True, exist_ok=True)
+            cible.write_text(str(params.get("content", "")), encoding="utf-8")
+        except OSError as exc:
+            await self.respond(error_response(request.id, PERMISSION_DENIED, f"écriture impossible : {exc}"))
+            return
+        await self.respond(Response(id=request.id, result={}))
 
     async def _on_update(self, params: dict[str, Any]) -> None:
         update = params.get("update", params)

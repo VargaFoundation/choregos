@@ -72,6 +72,15 @@ set -euo pipefail
 payload=$(cat)
 path=$(printf '%s' "$payload" | grep -o '"file_path"[^,]*' | head -1 | cut -d'"' -f4 || true)
 [ -z "${path:-}" ] && exit 0
+rel_precoce=${path#"$PWD/"}
+# `.choregos/**` appartient à la PLATEFORME, pas au périmètre du ticket : c'est là que
+# l'agent doit écrire son `result.json`, exigé par le contrat de sortie. Le refuser mettait
+# l'agent devant une contradiction — il l'a écrit noir sur blanc dans sa transcription :
+# « il y a une contradiction entre le périmètre autorisé et l'obligation d'écrire
+# result.json » — puis il abandonnait, et l'étape échouait sur un résultat absent.
+case "$rel_precoce" in
+  .choregos/*) exit 0 ;;
+esac
 allowed_file=".choregos/allowed_paths.txt"
 [ -f "$allowed_file" ] || exit 0
 rel=${path#"$PWD/"}

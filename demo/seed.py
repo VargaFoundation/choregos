@@ -19,11 +19,14 @@ RACINE = pathlib.Path(__file__).resolve().parent
 
 # Les agents apportent leurs identifiants (abonnement) : on nomme donc le modèle RÉEL, pas
 # un alias de passerelle. Le backend `claude-code` n'accepte que des modèles Claude.
+# Sans passerelle, l'agent parle DIRECTEMENT au fournisseur : le nom doit donc être
+# l'identifiant du modèle chez lui (`claude-sonnet-5`), pas la forme préfixée
+# `anthropic/claude-sonnet-5` que LiteLLM attend pour router.
 MODELES = {
-    "standard": "anthropic/claude-sonnet-5",
-    "strong": "anthropic/claude-sonnet-5",
-    "cheap": "anthropic/claude-haiku-4-5",
-    "by_size": "anthropic/claude-sonnet-5",
+    "standard": "claude-sonnet-5",
+    "strong": "claude-sonnet-5",
+    "cheap": "claude-haiku-4-5",
+    "by_size": "claude-sonnet-5",
 }
 
 
