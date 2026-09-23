@@ -113,7 +113,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S13-01 | S13 | ✅ | — | backend claude-code (hook de secours, modèles Claude uniquement) — conformité 7/7 |
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
 | S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
-| S13-04 | S13 | 🟡 | — | GitLab **vérifié contre gitlab.com** (cycle complet sur un projet bac à sable) ; Jira écrit et testé contre le protocole, pas encore contre une instance |
+| S13-04 | S13 | ✅ | — | GitLab **vérifié contre gitlab.com** (cycle complet sur un projet bac à sable) et Jira **vérifié contre un vrai site** (`tests/live/test_jira_live.py`, projet `CHOTEST`) : la confrontation a trouvé qu'un Jira francophone appelle « In Progress » « En cours » — aucun ticket ne bougeait |
 | S13-05 | S13 | 🟡 | — | exécuteur ACA **vérifié contre un vrai abonnement Azure** (6 tests live : cycle complet, `start` rejoué sans double exécution, jeton absent d'ARM, annulation, 404, logs) — trois défauts trouvés et corrigés au passage ; template `github-aca` livré. `azure-devops-aca` complet attend une organisation Azure DevOps (Boards + Pipelines), qu'un abonnement ne fournit pas |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
@@ -122,7 +122,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 ## Ce qui tient debout aujourd'hui
 
 - `make demo` : un ticket traverse la plateforme jusqu'à la production, sans cluster.
-- `make ci` : lint, typage strict, 390 tests, contrats vérifiés, charts rendus.
+- `make ci` : lint, typage strict, 421 tests, contrats vérifiés, charts rendus.
 - Couverture 84 % sur `packages/core`, `packages/runner`, `apps/orchestrator` (seuil : 80 %).
 - 24 scénarios e2e M1–M5 au vert, sans cluster.
 - **Sur un vrai cluster** (kind + Calico) : l'egress d'un runner est bloqué pour de bon, la
@@ -134,12 +134,23 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
   observé jusqu'à son état terminal, annulé — sur un abonnement réel).
 - Les 7 backends ACP passent les 7 contrôles de conformité ; les 2 templates passent la
   conformité de template.
+- **Une démonstration mono-nœud, avec de vrais agents** (2026-09-23, `demo/`) : trois tickets de
+  code traversent le workflow jusqu'à `done` — un agent implémente, un **second** vérifie et
+  ajoute des tests de cas limites, la garantie `evidence_present` porte sur des tests réellement
+  exécutés, et les branches sont poussées. Deux tickets RH suivent le **même moteur** sans une
+  ligne de code changée : faute de base de profils, les agents refusent d'inventer des candidats,
+  le ticket monte en `needs_human` et leurs findings deviennent des tickets.
+- Les dépendances (PostgreSQL, Temporal, LiteLLM, Ecphoria) s'embarquent ou se branchent en
+  externe, à la manière des charts Bitnami : `global.<dépendance>.embedded`. Défaut inchangé
+  (externe) ; `charts/choregos/values/local.yaml` monte un banc complet sans rien fournir.
 
 ## Ce qui manque pour dire « en production »
 
-1. **Jira n'a jamais répondu** : le token fourni est refusé (`AUTHENTICATED_FAILED`) sur
-   meltingcode.atlassian.net, y compris via `api.atlassian.com/ex/jira`. L'adaptateur reste
-   vérifié contre le protocole seulement. Un token valide suffit à lever ce point.
+1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
+   les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
+   au lieu de passer — c'est voulu depuis le 2026-09-23, une garantie aveugle valait pire que
+   rien. Un ticket ne peut pas être rejoué sous le même identifiant (Temporal refuse un id
+   terminé). Et le chemin RH n'a pas de base de profils : les agents bloquent, à raison.
 2. **Le déploiement réel** : la pile de test sur kind est volontairement petite (un Temporal de
    développement, un Postgres simple). Les valeurs HA — Temporal à trois nœuds, CNPG à trois
    instances, Argo Rollouts — restent à régler sur un vrai environnement.
@@ -153,3 +164,10 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
    mesure la recherche à ~250 ms p50 / ~540 ms p95 sur une station de travail, au-dessus de la
    cible de 300 ms p95 ; `retrieval_scan_cap` à 512 ramène p95 à 24 ms sans coût de rappel
    mesurable à cette taille de corpus. À décider au provisionnement, pas en production.
+
+6. **Le moteur n'est pas encore tout à fait générique** ([ADR 0012](../adr/0012-le-moteur-n-est-pas-lie-au-logiciel.md)) :
+   quatre mécanismes l'ont détaché du logiciel — playbooks apportés par le déploiement, garantie
+   `outputs_present`, `tracker: internal`, `gateway: direct`. Cinq attaches restent, écrites noir
+   sur blanc plutôt que découvertes : `repo` est obligatoire dans un projet, `StageOutputs` est
+   typé pour le développement, `Evidence` parle de tests, le rôle est une énumération fermée, et
+   la plupart des garanties livrées ne savent lire qu'un diff de code.
