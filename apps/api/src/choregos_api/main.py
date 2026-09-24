@@ -42,6 +42,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
     logger.info("démarrage de l'API", env=settings.env, fakes=settings.fakes)
+    if not settings.is_sqlite:
+        await _refuser_le_superutilisateur()
     if settings.is_sqlite:
         # SQLite seul : une base de fichier ou de mémoire, jetée avec le processus, qu'aucune
         # migration ne suit. Partout ailleurs le schéma vient d'Alembic — y compris en `dev`.
@@ -52,6 +54,28 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     await dispose_engine()
     logger.info("arrêt de l'API")
+
+
+async def _refuser_le_superutilisateur() -> None:
+    """Un superutilisateur PostgreSQL ignore la RLS : avec lui, l'isolation des organisations
+    n'existe pas, quoi que disent les politiques. On le dit au démarrage, fort — et on refuse
+    hors développement, parce qu'une plateforme multi-locataire sans isolation ment."""
+    from sqlalchemy import text
+
+    from .db.session import get_engine
+
+    async with get_engine().connect() as conn:
+        superuser = (
+            await conn.execute(text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user"))
+        ).scalar()
+    if superuser:
+        message = (
+            "l'API se connecte à PostgreSQL en SUPERUTILISATEUR : la RLS ne s'applique pas, "
+            "les organisations ne sont pas isolées. Utiliser un rôle applicatif sans SUPERUSER."
+        )
+        if get_settings().env in {"staging", "prod"}:
+            raise RuntimeError(message)
+        logger.error(message)
 
 
 def create_app() -> FastAPI:

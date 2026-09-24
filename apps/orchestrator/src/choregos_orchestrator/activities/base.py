@@ -43,7 +43,13 @@ class ProjectBundle:
 
 @asynccontextmanager
 async def db() -> AsyncIterator[AsyncSession]:
-    async with session_scope() as session:
+    """Une activité agit pour la plateforme : elle voit toutes les organisations.
+
+    C'est un choix dit, pas un oubli : la RLS est fail-closed, et une session qui ne se
+    nomme pas ne voit rien. L'orchestrateur reçoit des identifiants de projet (UUID) des
+    workflows, pas des slugs devinés.
+    """
+    async with session_scope(orgs="*") as session:
         yield session
 
 

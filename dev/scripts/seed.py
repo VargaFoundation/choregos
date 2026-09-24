@@ -59,7 +59,7 @@ async def main() -> int:
     await create_all()
     random.seed(7)
 
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:
         org = (
             await session.execute(select(Organization).where(Organization.slug == "varga"))
         ).scalar_one_or_none()

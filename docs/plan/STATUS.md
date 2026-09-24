@@ -202,8 +202,12 @@ les 492 tests ne disaient pas :
    `state` signé + redirection bornée, groupes `choregos:<org>:<groupe>` rattachés à LEUR
    organisation, rôles de projet indexés par `org/slug`, `resolve_project` qui refuse un slug
    ambigu, jetons d'API émis/expirés/révoqués par `/me/tokens`, et quatre recherches par slug
-   seul corrigées — `add_member`, webhooks, orchestrateur, train). Reste : RLS fail-closed
-   testée sur PostgreSQL (P0-3b), secrets du chart, limiteur, garde-fous du runner (P0-3c).
+   seul corrigées — `add_member`, webhooks, orchestrateur, train) ; P0-3b livré (RLS
+   **fail-closed** sur `app.current_orgs`, posée par le principal, `*` pour le jeton de run,
+   les webhooks vérifiés et l'orchestrateur ; INSERT d'un projet jugé sur `org_id` ; l'API
+   refuse un superutilisateur PostgreSQL en staging/prod et le PostgreSQL embarqué crée
+   `choregos_app` sans SUPERUSER ; **quatre tests sur un vrai PostgreSQL**, en CI par un
+   service). Reste : secrets du chart, limiteur, garde-fous du runner (P0-3c).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

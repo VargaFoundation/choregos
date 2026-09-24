@@ -252,6 +252,15 @@ Unprefixed groups (`developers`, `org-admins`) apply only when `global.oidc.defa
 names the organisation they belong to; otherwise they are ignored. Before 2026-09-24 a
 group granted its role on **every** organisation of the instance.
 
+**Row-level security is fail-closed.** Every request declares the organisations it may
+see (from the caller's memberships, or `*` for the platform's own processes), and a session
+that declares nothing sees nothing. Two consequences for the operator: the API **must not
+connect as a PostgreSQL superuser** — a superuser ignores row-level security, so the API
+refuses to start that way in `staging` and `prod` — and the embedded PostgreSQL therefore
+creates a non-superuser role (`global.database.appUser`, `choregos_app`) at initdb. For a
+volume created before 2026-09-24, create that role by hand and transfer ownership of the
+schema to it (`docs/dev.md` shows the statements).
+
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
 (`global.devLogin.enabled`, `global.devLogin.adminEmails`).

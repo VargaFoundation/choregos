@@ -32,6 +32,18 @@ data:
   # Joué UNE SEULE FOIS, à l'initdb du volume. La passerelle LiteLLM garde ses clés
   # virtuelles et leur consommation dans sa propre base : le schéma de Choregos ne
   # contient que ce que Choregos écrit.
+  # Le rôle avec lequel l'API se connecte : SANS SUPERUSER. Un superutilisateur ignore la
+  # RLS, et l'isolation des organisations n'existe alors pas, quoi que disent les politiques ;
+  # l'API le détecte au démarrage et refuse en staging/prod. `POSTGRES_USER` reste le rôle
+  # d'administration du conteneur. Même mot de passe : un seul secret sur un banc.
+  00-app-role.sh: |
+    #!/bin/sh
+    set -e
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+      CREATE ROLE {{ .Values.global.database.appUser }} LOGIN PASSWORD '$POSTGRES_PASSWORD' NOSUPERUSER;
+      ALTER DATABASE "$POSTGRES_DB" OWNER TO {{ .Values.global.database.appUser }};
+      ALTER SCHEMA public OWNER TO {{ .Values.global.database.appUser }};
+    EOSQL
   01-litellm.sql: |
     CREATE DATABASE litellm OWNER {{ .Values.global.database.user }};
 ---
