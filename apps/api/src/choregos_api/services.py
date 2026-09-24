@@ -454,6 +454,34 @@ async def record_cost(
 # ───────────────────────────── événements ─────────────────────────────
 
 
+DOCUMENTS_LOGICIELS = ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown")
+
+
+def ranger_les_sorties(item: WorkItem, outputs: Any, declarees: list[str] | None = None) -> dict[str, Any]:
+    """Range les sorties d'une étape dans `item.documents`, pour que l'étape SUIVANTE les lise.
+
+    Les quatre documents logiciels étaient rangés ; les sorties nommées par le métier
+    (`profils`, `evaluation`) ne l'étaient jamais — `outputs_present` les voyait dans le
+    résultat, puis elles disparaissaient. Sur le banc du 2026-09-24, la qualification RH
+    cherchait « les profils proposés à l'étape précédente » dans un workspace vide.
+    Une sortie déclarée par la transition (`outputs: [profils]`) est rangée sous son nom.
+    """
+    documents = dict(item.documents or {})
+    valeurs = (
+        outputs.model_dump(mode="json", exclude_none=True)
+        if hasattr(outputs, "model_dump")
+        else dict(outputs)
+    )
+    for champ in DOCUMENTS_LOGICIELS:
+        if valeurs.get(champ):
+            documents[champ] = valeurs[champ]
+    for nom in declarees or []:
+        if nom in valeurs and valeurs[nom] not in (None, "", [], {}):
+            documents[nom] = valeurs[nom]
+    item.documents = documents
+    return documents
+
+
 async def persist_event(
     session: AsyncSession,
     type_: EventType,

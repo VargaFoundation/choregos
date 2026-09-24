@@ -29,7 +29,7 @@ from ..schemas import (
     ScopeChangeDecision,
     ScopeChangeRequestIn,
 )
-from ..services import active_policy, persist_event, policy_model
+from ..services import active_policy, persist_event, policy_model, ranger_les_sorties
 from ..temporal import get_temporal, interpreter_id
 
 router = APIRouter(tags=["internal"], prefix="/internal")
@@ -115,12 +115,8 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
         item.risk = str(outputs.risk)
     if outputs.allowed_paths:
         item.allowed_paths = list(outputs.allowed_paths)
-    documents = dict(item.documents or {})
-    for field in ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown"):
-        value = getattr(outputs, field, None)
-        if value:
-            documents[field] = value
-    item.documents = documents
+    declarees = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
+    ranger_les_sorties(item, outputs, declarees)
 
     await persist_event(
         session,
