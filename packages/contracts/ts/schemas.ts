@@ -249,7 +249,7 @@ export type Project = {
   org: string;
   display_name?: string;
   template_ref?: string;
-  repo: {
+  repo?: {
     url: string;
     default_branch: string;
     language?: "python" | "node" | "go" | "java" | "dotnet" | "rust" | "other";
@@ -322,7 +322,7 @@ export type StageInput = {
     outputs?: Array<string>;
     inputs?: Array<string>;
   };
-  repo: {
+  repo?: {
     url: string;
     base_branch: string;
     work_branch: string;

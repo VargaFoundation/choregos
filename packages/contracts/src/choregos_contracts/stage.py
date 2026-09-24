@@ -127,7 +127,10 @@ class StageInput(Strict):
     project: ProjectRef
     work_item: WorkItemRef
     transition: TransitionRef
-    repo: RepoRef
+    #: Le dépôt sur lequel l'étape travaille. **Absent** pour un projet sans dépôt : le
+    #: runner prépare alors un répertoire vide, ne clone rien, ne pousse rien, et les
+    #: garanties qui lisent un diff refusent faute de matière (ADR 0012, limite n°1).
+    repo: RepoRef | None = None
     agent: AgentRef
     model: ModelRef
     gateway_key: str | None = None

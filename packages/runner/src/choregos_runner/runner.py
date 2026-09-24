@@ -78,6 +78,11 @@ class EventJournal:
         self.buffer.clear()
 
 
+#: L'objet « arbre vide » de git : la référence quand il n'y a pas d'historique d'avant.
+#: `git diff $ARBRE_VIDE..HEAD` rend donc tout le contenu comme ajouté.
+ARBRE_VIDE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
 class Runner:
     """Exécute une étape d'agent de bout en bout."""
 
@@ -123,7 +128,9 @@ class Runner:
             await journal.record("run.failed", {"phase": "clone", "error": str(exc)[:500]})
             await journal.flush()
             return RunOutcome(Exit.CLONE_FAILED, detail=str(exc))
-        base = await workspace.base_sha(stage_input.repo.base_branch)
+        # Sans dépôt, la référence est l'arbre vide de git : tout ce que l'agent écrit est
+        # donc « ajouté », ce qui est exactement la vérité pour un répertoire qui n'avait rien.
+        base = await workspace.base_sha(stage_input.repo.base_branch) if stage_input.repo else ARBRE_VIDE
 
         # 3. contexte
         context = None
@@ -236,7 +243,9 @@ class Runner:
                     final = complete_result(
                         invalid,
                         measured=report.evidence(),
-                        artifacts=Artifacts(branch=stage_input.repo.work_branch),
+                        artifacts=Artifacts(
+                            branch=stage_input.repo.work_branch if stage_input.repo else None
+                        ),
                         diagnostics=diagnostics,
                     )
                     await self._publish(client, journal, workspace, stage_input, final, base)
@@ -250,7 +259,7 @@ class Runner:
         final = complete_result(
             agent_result,
             measured=report.evidence(),
-            artifacts=Artifacts(branch=stage_input.repo.work_branch),
+            artifacts=Artifacts(branch=stage_input.repo.work_branch if stage_input.repo else None),
             diagnostics=diagnostics,
             scope_blocked=scope_result.remaining if scope_result else None,
         )
@@ -286,7 +295,8 @@ class Runner:
         commits = await workspace.commits_since(base)
         additions, deletions = await workspace.diff_stats(base)
         result.artifacts.commits = commits or result.artifacts.commits
-        result.artifacts.branch = stage_input.repo.work_branch
+        if stage_input.repo:
+            result.artifacts.branch = stage_input.repo.work_branch
         result.evidence.diff_lines = additions + deletions
         result.evidence.diff_files = len(await workspace.changed_files(base))
 
@@ -295,7 +305,7 @@ class Runner:
         # est propre, `commit()` ne rend rien, et le travail restait dans un pod qui
         # disparaît — l'étape suivante trouvait alors le dépôt inchangé et concluait que
         # rien n'avait été fait.
-        if (sha or commits) and not self.settings.dry_run:
+        if (sha or commits) and stage_input.repo and not self.settings.dry_run:
             push = await workspace.push(stage_input.repo.work_branch)
             await journal.record("git.push", {"ok": push.ok, "output": push.output[-500:]})
             if not push.ok:

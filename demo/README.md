@@ -6,7 +6,7 @@ et deux projets qui n'ont rien en commun :
 | Projet | Ce que fait l'agent | Ce que ça prouve |
 |---|---|---|
 | `panier` | Lit un ticket, écrit du code et son test dans un dépôt git, pousse une branche | La chaîne complète : ticket → agent → diff → garanties → état suivant |
-| `staffing` | Lit un besoin RH, propose des profils, les qualifie | Le moteur ne parle pas de logiciel : mêmes états, mêmes budgets, mêmes garanties, playbooks et sorties du métier |
+| `staffing` | Lit un besoin RH, propose des profils, les qualifie | Le moteur ne parle pas de logiciel : mêmes états, mêmes budgets, mêmes garanties, playbooks et sorties du métier. **Ce projet n'a aucun dépôt** — l'agent travaille dans un répertoire vide |
 
 Tout ce qui tourne ici est le vrai chemin de la plateforme. **Une seule chose est simulée** :
 le tracker (pas de GitHub ni de Jira sur un banc), donc les tickets sont posés en base par
