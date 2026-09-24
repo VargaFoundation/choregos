@@ -759,6 +759,8 @@ paths:
                         categories: { type: array, items: { type: string } }
                         price_eur: { type: number }
                         needs_credential: { type: boolean }
+                        source: { type: string, enum: [http, mcp] }
+                        groups: { type: array, items: { type: string } }
                         allowed: { type: boolean }
   /internal/runs/{id}/tools:
     parameters: [{ $ref: "#/components/parameters/Id" }]

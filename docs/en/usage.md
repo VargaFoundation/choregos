@@ -120,6 +120,38 @@ transitions:
 polite zero: finding nobody is said by failing the step. `demo/workflows/staffing.yaml` is a
 complete example that runs on the same deployment as the software one, with no code change.
 
+## 3 bis. Give agents tools they cannot misuse
+
+Agents get their platform tools over MCP on localhost — `report_finding`, `ask_human`,
+`request_scope_change` — and, if the deployment declares one, the **tool catalogue**: third
+party APIs and MCP servers the platform calls *for* them.
+
+What a project has to say, in its own configuration:
+
+```yaml
+tools: [verifier_adresse, rechercher_entreprise]   # what it uses; [] means none
+groups: [rh]                                      # what it is entitled to
+```
+
+Those two lines are not redundant. `tools` is **what this project uses** and its team can
+edit it. `groups` is **what the deployment opens to it**, and it is matched against the
+`groups` declared on each catalogue tool. A project that lists a tool reserved to a group it
+does not belong to simply does not get it — the listing is not the control.
+
+Three properties worth knowing before you wire an external provider:
+
+| | |
+| :-- | :-- |
+| The agent never holds a provider credential | The platform makes the call; the agent's egress stays closed |
+| Your run token never reaches the provider | It authenticates the agent *to Choregos*, nowhere else |
+| The agent chooses neither URL nor method | It names a catalogue tool; the rest is written in the catalogue |
+
+An unauthorised tool answers **404, not 403**: an agent has no business discovering the
+deployment's catalogue by guessing names.
+
+Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
+ledger under `kind: tool` — visible on the project overview and in the run's access record.
+
 ## 4. Write the policy
 
 ```yaml

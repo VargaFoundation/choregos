@@ -94,6 +94,8 @@ export const api = {
         categories?: string[];
         price_eur?: number;
         needs_credential?: boolean;
+        source?: string;
+        groups?: string[];
         allowed: boolean;
       }[];
     }>(`/projects/${id}/tools`),

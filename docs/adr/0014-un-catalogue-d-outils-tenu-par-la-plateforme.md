@@ -43,6 +43,30 @@ Le catalogue est donc à nous, et il repose entièrement sur des pièces qui exi
    d'agent, dont la liste blanche reste fermée. Un agent ne peut pas joindre le fournisseur
    directement même s'il le voulait.
 
+## Décision 2 — Un serveur MCP extérieur : sa clé, pas la nôtre
+
+Un outil du catalogue peut venir d'un **serveur MCP extérieur à l'organisation** (`mcp:` au
+lieu de `http:`). Trois règles, et chacune répond à une façon de se faire mal :
+
+1. **Le jeton du run ne sort jamais.** Il authentifie l'agent *auprès de nous* : le donner à
+   un service tiers reviendrait à lui confier de quoi écrire dans la plateforme — poster un
+   résultat, déposer un finding, étendre un périmètre. Le serveur distant reçoit
+   `credential_env`, une clé qui ne vaut que pour lui. Un test le vérifie en cherchant la
+   valeur du jeton dans l'en-tête **et** dans le corps de la requête sortante.
+2. **On n'expose qu'une partie d'un serveur, sous nos noms.** Le catalogue déclare le nom
+   distant (`mcp.tool`) séparément du nom exposé. Cette indirection permet de ne publier que
+   trois outils d'un serveur qui en offre soixante, et de les nommer dans le vocabulaire de
+   la maison. L'agent ne voit jamais l'URL ni le nom distant.
+3. **Chaque outil s'ouvre à des groupes.** `groups: [rh]` sur l'outil, `groups: [rh]` sur le
+   projet. **Deux verrous, et ils ne disent pas la même chose** : le déploiement dit QUI a le
+   droit, le projet dit ce dont IL se sert. Sans le premier, la liste du projet serait le
+   seul contrôle — et elle est modifiable par l'équipe du projet elle-même. Un outil sans
+   `groups` ne restreint rien : la restriction s'ajoute, elle n'est pas imposée.
+
+Ce que cela ne fait pas : le catalogue n'interroge pas le serveur distant pour découvrir ses
+outils. La liste est écrite, revue en PR, et ne change pas parce que le fournisseur a publié
+une nouveauté. Un annuaire qui se met à jour tout seul n'est pas un contrôle d'accès.
+
 ## Ce qui est délibérément absent
 
 - **L'URL n'est jamais choisie par l'agent.** Il remplit des gabarits `{{ champ }}` définis par

@@ -165,6 +165,14 @@
       },
       "default": []
     },
+    "groups": {
+      "description": "Groupes de l'organisation auxquels ce projet appartient. Ils décident de ce que le déploiement lui ouvre dans le catalogue d'outils.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
     "labels": {
       "type": "object",
       "additionalProperties": {

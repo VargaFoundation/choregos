@@ -785,6 +785,8 @@ export interface Operations {
     categories?: Array<string>;
     price_eur?: number;
     needs_credential?: boolean;
+    source?: "http" | "mcp";
+    groups?: Array<string>;
     allowed: boolean;
   }>;
 } };

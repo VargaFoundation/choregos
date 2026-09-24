@@ -115,7 +115,9 @@ async def get_project_tools(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
     """
     from ..catalogue import catalogue
 
-    autorises = {str(t) for t in ((ctx.project.config or {}).get("tools") or [])}
+    config = ctx.project.config or {}
+    autorises = {str(t) for t in (config.get("tools") or [])}
+    groupes = [str(g) for g in (config.get("groups") or [])]
     tout = "*" in autorises
     return {
         "tools": [
@@ -127,7 +129,12 @@ async def get_project_tools(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
                 "price_eur": outil.price_eur,
                 # La clé n'est jamais rendue : seulement le fait qu'il en faille une.
                 "needs_credential": outil.credential_env is not None,
-                "allowed": tout or outil.name in autorises,
+                # Un outil distant : la plateforme appelle le serveur MCP, et le jeton du
+                # run ne sort jamais. L'écran le dit, parce que c'est ce qu'on vient y
+                # vérifier.
+                "source": "mcp" if outil.mcp is not None else "http",
+                "groups": outil.groups,
+                "allowed": (tout or outil.name in autorises) and outil.ouvert_a(groupes),
             }
             for outil in catalogue().outils
         ],
