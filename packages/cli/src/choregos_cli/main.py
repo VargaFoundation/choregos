@@ -20,6 +20,10 @@ trains_app = typer.Typer(help="Release trains")
 findings_app = typer.Typer(help="Findings")
 workflow_app = typer.Typer(help="Workflows")
 dev_app = typer.Typer(help="Environnement de développement")
+orgs_app = typer.Typer(help="Organisations")
+tokens_app = typer.Typer(help="Jetons d'API")
+app.add_typer(orgs_app, name="orgs")
+app.add_typer(tokens_app, name="tokens")
 app.add_typer(projects_app, name="projects")
 app.add_typer(items_app, name="items")
 app.add_typer(runs_app, name="runs")
@@ -31,8 +35,19 @@ app.add_typer(dev_app, name="dev")
 console = Console()
 
 
+class _ClientLisible(Client):
+    """Le même client, mais une erreur de l'API devient une ligne rouge et un code de sortie 1."""
+
+    def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        try:
+            return super().request(method, path, **kwargs)
+        except ApiError as exc:
+            fail(str(exc))
+            return None  # `fail` lève ; pour le typage
+
+
 def client() -> Client:
-    return Client()
+    return _ClientLisible()
 
 
 def fail(message: str) -> None:
@@ -70,6 +85,55 @@ def whoami() -> None:
     console.print(table)
 
 
+# ───────────────────────────── organisations et jetons ─────────────────────────────
+
+
+@orgs_app.command("list")
+def orgs_list() -> None:
+    table = Table("organisation", "nom", "mon rôle")
+    for org in client().get("/orgs"):
+        table.add_row(org["slug"], org["name"], org.get("role") or "—")
+    console.print(table)
+
+
+@orgs_app.command("create")
+def orgs_create(slug: str, name: Annotated[str | None, typer.Option()] = None) -> None:
+    """Crée une organisation (demande d'être déjà admin d'une organisation)."""
+    org = client().post("/orgs", json={"slug": slug, "name": name or slug})
+    console.print(f"[green]✓[/green] organisation {org['slug']} créée, vous en êtes admin")
+
+
+@tokens_app.command("create")
+def tokens_create(
+    name: Annotated[str, typer.Option(prompt=True)],
+    expires_in_days: Annotated[int, typer.Option()] = 90,
+) -> None:
+    """Émet un jeton d'API pour l'appelant. Le clair n'est affiché qu'ICI, une fois."""
+    token = client().post("/me/tokens", json={"name": name, "expires_in_days": expires_in_days})
+    console.print(f"[green]✓[/green] jeton `{token['name']}` (expire {token.get('expires_at') or 'jamais'})")
+    console.print(token["token"])
+
+
+@tokens_app.command("list")
+def tokens_list() -> None:
+    table = Table("id", "nom", "créé", "expire", "dernier usage")
+    for token in client().get("/me/tokens"):
+        table.add_row(
+            token["id"],
+            token["name"],
+            token["created_at"],
+            token.get("expires_at") or "—",
+            token.get("last_used_at") or "—",
+        )
+    console.print(table)
+
+
+@tokens_app.command("revoke")
+def tokens_revoke(token_id: str) -> None:
+    client().delete(f"/me/tokens/{token_id}")
+    console.print(f"[green]✓[/green] jeton {token_id} révoqué")
+
+
 # ───────────────────────────── projets ─────────────────────────────
 
 
@@ -95,27 +159,33 @@ def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
 @projects_app.command("create")
 def projects_create(
     slug: str,
-    repo: Annotated[str, typer.Option(help="URL du dépôt applicatif")],
+    repo: Annotated[
+        str | None, typer.Option(help="URL du dépôt applicatif (facultatif : un métier sans code n'en a pas)")
+    ] = None,
     name: Annotated[str | None, typer.Option()] = None,
     template: Annotated[str | None, typer.Option("--template")] = None,
     org: Annotated[str | None, typer.Option()] = None,
     language: Annotated[str, typer.Option()] = "python",
+    tracker: Annotated[
+        str, typer.Option(help="`internal` : les demandes se posent dans Choregos")
+    ] = "internal",
 ) -> None:
-    """Crée un projet ; `--template` déclenche ensuite le provisioning."""
+    """Crée un projet ; `--template` déclenche ensuite le provisioning.
+
+    Sans `--repo`, le projet n'a pas de dépôt (ADR 0012) : l'agent travaille dans un
+    répertoire vide, et les demandes se posent avec `choregos items create`.
+    """
     api = client()
     organization = org or api.profile.org
-    payload = {
-        "slug": slug,
-        "name": name or slug,
-        "template_ref": template,
-        "config": {
-            "slug": slug,
-            "org": organization,
-            "repo": {"url": repo, "default_branch": "main", "language": language},
-        },
-    }
+    config: dict[str, Any] = {"slug": slug, "org": organization}
+    if repo:
+        config["repo"] = {"url": repo, "default_branch": "main", "language": language}
+    payload = {"slug": slug, "name": name or slug, "template_ref": template, "config": config}
     project = api.post(f"/orgs/{organization}/projects", json=payload)
     console.print(f"[green]✓[/green] projet {project['slug']} créé ({project['id']})")
+    if not repo:
+        api.put(f"/projects/{project['id']}/connectors/tracker", json={"type": tracker, "config": {}})
+        console.print(f"  tracker `{tracker}` : les demandes se posent avec `choregos items create {slug} …`")
     if template:
         status = api.post(f"/projects/{project['id']}/provision", json={})
         console.print(f"provisioning démarré : {status['status']}")
@@ -152,6 +222,25 @@ def items_list(project: str, state: Annotated[str | None, typer.Option()] = None
             item.get("pr_url") or "—",
         )
     console.print(table)
+
+
+@items_app.command("create")
+def items_create(
+    project: str,
+    title: Annotated[str, typer.Option(prompt=True)],
+    body: Annotated[str, typer.Option()] = "",
+    size: Annotated[str | None, typer.Option(help="S, M, L ou XL")] = None,
+    no_start: Annotated[bool, typer.Option("--no-start", help="poser sans démarrer l'interpréteur")] = False,
+) -> None:
+    """Pose une demande dans Choregos (projet à tracker interne) et démarre son interpréteur."""
+    item = client().post(
+        f"/projects/{project}/work-items",
+        json={"title": title, "body": body, "size": size, "start": not no_start},
+    )
+    console.print(
+        f"[green]✓[/green] {item['tracker_key']} créé — état `{item['state']}`"
+        + ("" if no_start else f", interpréteur {item.get('temporal_wf_id')}")
+    )
 
 
 @items_app.command("show")

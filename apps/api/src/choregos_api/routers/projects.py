@@ -16,6 +16,8 @@ from ..deps import Db, Me, Pagination, ProjectCtx
 from ..errors import conflict, forbidden, not_found
 from ..rbac import Permission
 from ..schemas import (
+    OrgCreate,
+    OrgDto,
     PageMeta,
     ProjectCreate,
     ProjectDto,
@@ -29,6 +31,39 @@ from ..services import ensure_defaults, persist_event, project_dto
 from ..temporal import get_temporal, provisioning_id
 
 router = APIRouter(tags=["projects"])
+
+
+@router.get("/orgs", response_model=list[OrgDto], operation_id="listOrgs")
+async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
+    """Les organisations de l'appelant, avec son rôle — ce que le front affiche dans son sélecteur."""
+    slugs = set(principal.org_roles) | {q.split("/", 1)[0] for q in principal.project_roles}
+    rows = (await session.execute(select(Organization).where(Organization.slug.in_(slugs)))).scalars()
+    return sorted(
+        (OrgDto(slug=o.slug, name=o.name, role=principal.org_roles.get(o.slug)) for o in rows),
+        key=lambda o: o.slug,
+    )
+
+
+@router.post("/orgs", response_model=OrgDto, status_code=status.HTTP_201_CREATED, operation_id="createOrg")
+async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
+    """Crée une organisation ; l'appelant en devient administrateur.
+
+    Réservé à qui administre déjà une organisation. La toute première vient de l'amorçage
+    (`CHOREGOS_BOOTSTRAP_ORG`) : avant le 2026-09-24, aucune route, aucune commande ni
+    aucun écran ne savait en créer une.
+    """
+    if not principal.is_platform_admin():
+        raise forbidden("créer une organisation demande le rôle org_admin sur une organisation")
+    if (
+        await session.execute(select(Organization).where(Organization.slug == body.slug))
+    ).scalar_one_or_none():
+        raise conflict(f"l'organisation `{body.slug}` existe déjà")
+    org = Organization(slug=body.slug, name=body.name)
+    session.add(org)
+    await session.flush()
+    session.add(Membership(user_id=principal.user_id, org_id=org.id, role=str(Role.ORG_ADMIN)))
+    await record(session, principal, "org.create", target_type="org", target_id=org.id, slug=body.slug)
+    return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN)
 
 
 async def _org(session: Any, slug: str) -> Organization:

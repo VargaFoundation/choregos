@@ -97,6 +97,13 @@ global:
     # Organisation à laquelle rattacher les groupes OIDC NON préfixés (`developers`,
     # `org-admins`…). Vide : seuls les groupes `choregos:<org>:<groupe>` donnent un rôle.
     defaultOrg: ""
+  # Amorçage d'une installation neuve : l'organisation créée au premier démarrage si elle
+  # manque, et les e-mails qui y reçoivent org_admin. Idempotent. Sans cela, aucune route
+  # ni aucun écran ne peut créer la première organisation.
+  bootstrap:
+    org: ""
+    orgName: ""
+    admins: ""
   # Connexion de développement (`/auth/login?as=<email>`), sans IdP. JAMAIS en production :
   # l'API la refuse d'elle-même en staging/prod. `adminEmails` : qui reçoit ORG_ADMIN.
   devLogin:

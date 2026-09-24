@@ -95,6 +95,25 @@ paths:
       tags: [session]
       operationId: authLogout
       responses: { "204": { description: Session fermée } }
+  /orgs:
+    get:
+      tags: [projects]
+      operationId: listOrgs
+      summary: Les organisations de l'appelant, avec son rôle
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Org" } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [projects]
+      operationId: createOrg
+      summary: Crée une organisation ; l'appelant en devient administrateur
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgCreate" } } }
+      responses:
+        "201": { description: Créée, content: { application/json: { schema: { $ref: "#/components/schemas/Org" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/projects:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -278,6 +297,17 @@ paths:
         - { name: q, in: query, schema: { type: string } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemPage" } } } }
+    post:
+      tags: [work-items]
+      operationId: createWorkItem
+      summary: Pose une demande dans Choregos (tracker interne seulement)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemCreate" } } }
+      responses:
+        "201": { description: Créée, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /work-items/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1235,6 +1265,28 @@ components:
               median_duration_s: { type: [number, "null"] }
               with_memory: { type: [boolean, "null"] }
               report_url: { type: [string, "null"] }
+    Org:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        role: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }] }
+    OrgCreate:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+    WorkItemCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        body: { type: string, default: "" }
+        size: { type: [string, "null"], enum: [S, M, L, XL, null] }
+        risk: { type: [string, "null"], enum: [low, medium, high, null] }
+        start: { type: boolean, default: true }
     ApiTokenCreate:
       type: object
       required: [name]
