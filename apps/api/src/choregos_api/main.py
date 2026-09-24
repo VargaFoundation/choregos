@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -15,6 +17,7 @@ from .config import get_settings
 from .db.session import create_all, dispose_engine
 from .errors import install_error_handlers
 from .logging import bind, clear, configure_logging, get_logger
+from .metriques import boucle_de_rafraichissement, exposer, requetes_http
 from .routers import (
     admin,
     auth,
@@ -44,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("démarrage de l'API", env=settings.env, fakes=settings.fakes)
     if not settings.is_sqlite:
         await _refuser_le_superutilisateur()
+    rafraichissement = asyncio.create_task(boucle_de_rafraichissement(settings.metrics_refresh_seconds))
     if settings.is_sqlite:
         # SQLite seul : une base de fichier ou de mémoire, jetée avec le processus, qu'aucune
         # migration ne suit. Partout ailleurs le schéma vient d'Alembic — y compris en `dev`.
@@ -52,6 +56,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # en accusant les migrations, alors que c'est l'API qui avait pris leur place.
         await create_all()
     yield
+    rafraichissement.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await rafraichissement
     await dispose_engine()
     logger.info("arrêt de l'API")
 
@@ -114,6 +121,8 @@ def create_app() -> FastAPI:
             raise
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         response.headers["X-Response-Time-Ms"] = str(duration_ms)
+        route = getattr(request.scope.get("route"), "path", request.url.path)
+        requetes_http.labels(request.method, route, str(response.status_code)).inc()
         if not request.url.path.startswith(("/healthz", "/readyz")):
             logger.info("requête", status=response.status_code, duration_ms=duration_ms)
         return response
@@ -136,6 +145,11 @@ def create_app() -> FastAPI:
         internal.router,
     ):
         app.include_router(router, prefix=API_PREFIX)
+
+    @app.get("/metrics", tags=["session"], operation_id="metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        """Les séries que les tableaux de bord et les alertes lisent (voir `metriques.py`)."""
+        return Response(content=exposer(), media_type="text/plain; version=0.0.4; charset=utf-8")
 
     @app.get("/healthz", tags=["session"], operation_id="healthz")
     async def healthz() -> dict[str, str]:
