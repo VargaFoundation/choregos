@@ -6,7 +6,10 @@
 # typées — est ici remplacé par son équivalent métier :
 #   · les playbooks viennent du déploiement (`CHOREGOS_PLAYBOOKS_DIR`), pas du paquet ;
 #   · la garantie est `outputs_present` : l'étape a produit ce que la transition déclare ;
-#   · les sorties portent des noms de métier (`profils`, `evaluation`).
+#   · les sorties portent des noms de métier (`profils`, `evaluation`) ;
+#   · les RÔLES aussi : `sourcing`, `qualification`. Avant le 2026-09-24 il fallait
+#     écrire `role: custom` + `playbook: sourcing`, et le board affichait « custom »
+#     partout (ADR 0012, limite n°4).
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -14,8 +17,8 @@ metadata:
   version: 1
   description: Besoin de staffing → sourcing → qualification → validation humaine → proposition.
 actors:
-  sourceur: { type: agent, role: custom, playbook: sourcing, model: "profile:standard", max_turns: 20, max_minutes: 10 }
-  evaluateur: { type: agent, role: custom, playbook: qualification, model: "profile:standard", max_turns: 20, max_minutes: 10 }
+  sourceur: { type: agent, role: sourcing, model: "profile:standard", max_turns: 20, max_minutes: 10 }
+  evaluateur: { type: agent, role: qualification, model: "profile:standard", max_turns: 20, max_minutes: 10 }
   manager: { type: human, group: staffing-managers, sla_hours: 48 }
 states:
   demande: { display: Besoin reçu, kind: wait }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from choregos_core import ValidationError, parse_workflow
 from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
@@ -242,3 +244,51 @@ def test_14_evidence_facts_sans_keys() -> None:
     )
     _wf, rapport = parse_workflow(wf_text(avec), strict=False)
     assert rapport.valid, [i.format() for i in rapport.errors]
+
+
+def test_15_un_role_metier_est_un_nom_de_plein_droit() -> None:
+    """Avant le 2026-09-24 il fallait écrire `role: custom` + `playbook: sourcing` : cela
+    fonctionnait, mais le board affichait « custom » pour toutes les étapes d'un métier et
+    les évals ne savaient pas de quoi il s'agissait (ADR 0012, limite n°4)."""
+    metier = BASE.replace("dev: {{ type: agent, role: implement }}", "dev: {{ type: agent, role: sourcing }}")
+    _wf, rapport = parse_workflow(metier.format(transitions=OK_TRANSITIONS), strict=False)
+    assert rapport.valid, [i.format() for i in rapport.errors]
+
+    # Sans playbook résolvable, un avertissement — pas une erreur : c'est au déploiement
+    # de l'apporter, et le validateur n'a pas à savoir ce qu'il montera.
+    codes = [i.code for i in rapport.warnings]
+    assert "role.playbook_introuvable" in codes, codes
+
+
+def test_16_un_role_du_paquet_n_avertit_pas(tmp_path: Path) -> None:
+    """Et le playbook du déploiement fait taire l'avertissement : avertir alors qu'il est
+    là serait un avertissement qu'on apprend à ignorer."""
+    import os
+
+    (tmp_path / "sourcing.md").write_text("Tu fais du sourcing.", encoding="utf-8")
+    ancien = os.environ.get("CHOREGOS_PLAYBOOKS_DIR")
+    os.environ["CHOREGOS_PLAYBOOKS_DIR"] = str(tmp_path)
+    try:
+        metier = BASE.replace(
+            "dev: {{ type: agent, role: implement }}", "dev: {{ type: agent, role: sourcing }}"
+        )
+        _wf, rapport = parse_workflow(metier.format(transitions=OK_TRANSITIONS), strict=False)
+    finally:
+        if ancien is None:
+            del os.environ["CHOREGOS_PLAYBOOKS_DIR"]
+        else:
+            os.environ["CHOREGOS_PLAYBOOKS_DIR"] = ancien
+    # Le fixture de base porte d'autres avertissements (pas d'état d'attente humaine) :
+    # ce qui compte ici est qu'il n'y en ait AUCUN sur le playbook.
+    assert "role.playbook_introuvable" not in [i.code for i in rapport.warnings], [
+        i.format() for i in rapport.warnings
+    ]
+
+
+def test_17_un_role_qui_n_est_pas_un_identifiant_est_refuse() -> None:
+    """Un rôle sert de NOM DE FICHIER pour le playbook : une espace ou une barre oblique
+    y ferait chercher ailleurs que prévu."""
+    mauvais = BASE.replace(
+        "dev: {{ type: agent, role: implement }}", 'dev: {{ type: agent, role: "../secrets" }}'
+    )
+    assert any(code.startswith("schema.") for code in _errors(mauvais.format(transitions=OK_TRANSITIONS)))

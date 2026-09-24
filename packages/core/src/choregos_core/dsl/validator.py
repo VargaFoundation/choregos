@@ -54,6 +54,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_prod_states(wf, report, source)
     _check_retries(wf, report, source)
     _check_gates_ont_de_la_matiere(wf, report, source)
+    _check_roles_connus(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -288,6 +289,37 @@ def _check_gates_ont_de_la_matiere(wf: Workflow, report: ValidationReport, sourc
                 "gate.sans_matiere",
                 f"garantie `{g.name}` sans {comment} : elle n'aurait rien à vérifier",
                 ["transitions", index, "gates", g_index],
+                source,
+            )
+
+
+def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """Un rôle que le paquet ne connaît pas exige un playbook apporté par le déploiement.
+
+    Ce n'est pas une erreur : c'est même le but — un métier nomme ses rôles. Mais le
+    playbook se résout PAR LE NOM DU RÔLE, et son absence ne se découvrirait qu'au premier
+    ticket, sur un `playbook inconnu` au milieu d'une étape. Un avertissement à l'écriture
+    coûte moins cher.
+    """
+    try:
+        from choregos_playbooks import playbook_path
+    except Exception:  # le validateur doit tourner sans le paquet de playbooks
+        return
+    for actor_id, actor in wf.actors.items():
+        if not isinstance(actor, AgentActor):
+            continue
+        role = str(actor.playbook or actor.role)
+        try:
+            # On tente la RÉSOLUTION, pas une comparaison à la liste du paquet : un rôle
+            # métier a son playbook dans le déploiement (`CHOREGOS_PLAYBOOKS_DIR`), et
+            # avertir alors qu'il est là serait un avertissement qu'on apprend à ignorer.
+            playbook_path(role)
+        except FileNotFoundError:
+            report.warn(
+                "role.playbook_introuvable",
+                f"aucun playbook pour le rôle `{role}` : le déploiement doit fournir "
+                f"`{role}.md` (CHOREGOS_PLAYBOOKS_DIR)",
+                ["actors", actor_id, "role"],
                 source,
             )
 
