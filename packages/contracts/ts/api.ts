@@ -791,6 +791,20 @@ export interface Operations {
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
+  getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
+  /** Événements du journal parcourus */
+  evenements: number;
+  /** Nombre total de demandes refusées */
+  refus: number;
+  cout_outils_eur?: number;
+  acces: Array<{
+    nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
+    cible: string;
+    demandes: number;
+    refus: number;
+    motifs?: Array<string>;
+  }>;
+} };
   getRunCiLogs: { method: "GET"; path: "/internal/runs/{id}/ci-logs"; body: never; response: {
   logs?: string;
   ref?: string;

@@ -116,12 +116,20 @@ class KubernetesJobExecutor:
         prochains = {j.get("metadata", {}).get("name") for j in suspendus[:places]}
         if ref.name not in prochains:
             return False
-        await self.client.request(
-            "PATCH",
-            f"{BATCH_API}/namespaces/{namespace}/jobs/{ref.name}",
-            json={"spec": {"suspend": False}},
-            headers={"Content-Type": "application/merge-patch+json"},
-        )
+        try:
+            await self.client.request(
+                "PATCH",
+                f"{BATCH_API}/namespaces/{namespace}/jobs/{ref.name}",
+                json={"spec": {"suspend": False}},
+                headers={"Content-Type": "application/merge-patch+json"},
+            )
+        except Exception:
+            # Une admission ratée n'est PAS la fin du run : il reste en file, et le relevé
+            # suivant réessaiera. Sans ce filet, un droit manquant (`patch` absent du Role)
+            # faisait échouer l'activité et mourir le workflow du ticket — trois tickets
+            # perdus sur le banc du 2026-09-24, dont un expiré sans avoir tourné.
+            # Le manque se voit quand même : le run reste « en attente d'une place ».
+            return False
         return True
 
     async def _ensure_secret(self, spec: StageJobSpec, name: str) -> None:

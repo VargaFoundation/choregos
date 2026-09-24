@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { Acces } from "@/components/acces";
 import { LiveLog } from "@/components/live-log";
 import { Preuves } from "@/components/preuves";
 import { ActorIcon, CostChip, StateBadge } from "@/components/ui";
@@ -62,5 +63,32 @@ describe("preuves d'une étape", () => {
   it("ne montre pas une grille de tirets quand il n'y a aucune preuve", () => {
     render(<Preuves evidence={{}} />);
     expect(screen.getByText(/aucune preuve consignée/)).toBeInTheDocument();
+  });
+});
+
+describe("fiche d'accès", () => {
+  it("met les refus devant, avec leur motif", () => {
+    // C'est ce qu'on vient chercher dans un audit : « denied » ne se lit pas,
+    // « fichier sensible » se lit.
+    render(
+      <Acces
+        acces={{
+          evenements: 220,
+          refus: 1,
+          acces: [
+            { nature: "write", cible: "/workspace/.env", demandes: 1, refus: 1, motifs: ["fichier sensible"] },
+            { nature: "read", cible: "/workspace/src/panier.py", demandes: 4, refus: 0 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getAllByText(/refus/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/fichier sensible/)).toBeInTheDocument();
+    expect(screen.getByText(/220 événements/)).toBeInTheDocument();
+  });
+
+  it("ne prétend rien quand il n'y a rien", () => {
+    render(<Acces />);
+    expect(screen.getByText(/aucun accès enregistré/)).toBeInTheDocument();
   });
 });

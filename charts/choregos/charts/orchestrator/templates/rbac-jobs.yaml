@@ -18,8 +18,12 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 rules:
   - apiGroups: ["batch"]
+    # `patch` sert à UNE chose : lever le `suspend` d'un Job mis en file d'attente. Sans
+    # lui, le plafond de simultanéité crée des Jobs que personne ne peut plus réveiller —
+    # l'API répond 403, l'activité échoue, et le workflow du ticket meurt. Vu sur le banc
+    # du 2026-09-24 : trois tickets perdus, dont un qui a expiré sans tourner une seconde.
     resources: ["jobs"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "create", "delete"]

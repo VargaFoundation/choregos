@@ -6,6 +6,7 @@ Tout ce qui parle au monde extérieur vit dans `packages/adapters`.
 
 from __future__ import annotations
 
+from .acces import Acces, RapportAcces, rapport_d_acces
 from .catalogue import Catalogue, OutilCatalogue, charger_catalogue, construire_requete
 from .domain import (
     Change,
@@ -92,6 +93,7 @@ __all__ = [
     "KNOWN_BACKEND_NAMES",
     "PRESET_NAMES",
     "TEMPLATE_NAMES",
+    "Acces",
     "ApprovalDecision",
     "Catalogue",
     "Change",
@@ -126,6 +128,7 @@ __all__ = [
     "PrState",
     "PromotionRef",
     "Provenance",
+    "RapportAcces",
     "ReleaseItem",
     "ReleaseRecord",
     "ResolvedModel",
@@ -159,6 +162,7 @@ __all__ = [
     "parse_workflow",
     "parse_workflow_file",
     "preset_yaml",
+    "rapport_d_acces",
     "scan_secrets",
     "template_yaml",
     "to_graph",

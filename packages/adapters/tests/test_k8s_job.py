@@ -239,3 +239,29 @@ async def test_sans_plafond_rien_ne_change() -> None:
     for i in range(5):
         await executeur.start(_spec_pour(f"r-{i}"))
     assert len(client.actifs()) == 5
+
+
+async def test_une_admission_refusee_ne_tue_pas_le_run() -> None:
+    """Le droit `patch` manquait dans le Role : l'API répondait 403, l'activité échouait,
+    et le workflow du ticket mourait. Trois tickets perdus sur le banc du 2026-09-24, dont
+    un qui a expiré sans avoir tourné une seconde. Une admission ratée doit laisser le run
+    en file, pas le tuer — le relevé suivant réessaiera."""
+
+    class _SansDroitDePatch(_ClusterClient):
+        async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+            if method == "PATCH":
+                raise RuntimeError('[kubernetes] PATCH … → 403 : cannot patch resource "jobs"')
+            return await super().request(method, path, **kwargs)
+
+    client = _SansDroitDePatch()
+    executeur = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
+    for i in range(2):
+        await executeur.start(_spec_pour(f"r-{i}"))
+    client.jobs["run-r-0"]["status"] = {"succeeded": 1}  # une place se libère
+
+    etat = await executeur.status(
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
+    )
+    assert etat.state == "pending", "le run reste en file"
+    assert "en attente d'une place" in etat.message
+    assert client.jobs["run-r-1"]["spec"]["suspend"], "toujours suspendu, mais vivant"

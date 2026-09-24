@@ -77,6 +77,13 @@ export const api = {
   provisionStatus: (id: string) => request<ProvisionStatus>(`/projects/${id}/provision`),
 
   connectors: (id: string) => request<ConnectorDto[]>(`/projects/${id}/connectors`),
+  runAccess: (id: string) =>
+    request<{
+      evenements: number;
+      refus: number;
+      cout_outils_eur?: number;
+      acces: { nature: string; cible: string; demandes: number; refus: number; motifs?: string[] }[];
+    }>(`/runs/${id}/access`),
   projectTools: (id: string) =>
     request<{
       allows_all: boolean;

@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
-from choregos_core import matches_any
+from choregos_core import matches_any, rapport_d_acces
 from fastapi import APIRouter, Header, Query, Request
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
-from ..db.models import Project, Run, RunEvent, WorkItem
+from ..db.models import CostLedger, Project, Run, RunEvent, WorkItem
 from ..deps import Db, Me, resolve_project
 from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
@@ -94,6 +94,43 @@ async def run_events(
             yield sse_format(live_event)
 
     return EventSourceResponse(stream())
+
+
+@router.get("/runs/{id}/access", operation_id="getRunAccess")
+async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
+    """Ce à quoi l'agent a touché : fichiers, commandes, réseau, outils — et les refus.
+
+    Rien de nouveau n'est collecté : c'est le journal du run, replié. Un journal que
+    personne ne lit n'est pas un audit, et deux agents produisent deux cents événements
+    en quelques minutes.
+
+    Les appels au catalogue d'outils sont ajoutés depuis le registre de coûts : ils portent
+    ce qu'ils ont coûté, et une dépense fait partie de ce à quoi on a touché.
+    """
+    run, _ = await _run(session, id, principal)
+    rows = (
+        (await session.execute(select(RunEvent).where(RunEvent.run_id == run.id).order_by(RunEvent.seq)))
+        .scalars()
+        .all()
+    )
+    appels = (
+        (
+            await session.execute(
+                select(CostLedger).where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    evenements: list[dict[str, Any]] = [{"type": r.type, "payload": r.payload} for r in rows]
+    evenements += [
+        {"type": "choregos.tool.called", "payload": {"tool": a.model, "provider": a.provider}} for a in appels
+    ]
+    rapport = rapport_d_acces(evenements)
+    return {
+        **rapport.to_dict(),
+        "cout_outils_eur": round(sum(a.cost_eur for a in appels), 4),
+    }
 
 
 @router.get("/runs/{id}/transcript", response_model=ArtifactRef, operation_id="getRunTranscript")
