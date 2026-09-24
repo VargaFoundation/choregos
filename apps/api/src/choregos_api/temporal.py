@@ -44,6 +44,19 @@ class TemporalGateway(Protocol):
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def cancel(self, workflow_id: str) -> None: ...
+    async def describe(self, workflow_id: str) -> WorkflowState | None: ...
+
+
+@dataclass
+class WorkflowState:
+    """Ce que Temporal sait d'un workflow : son statut, et pourquoi s'il est mort."""
+
+    status: str  # RUNNING, COMPLETED, FAILED, CANCELED, TERMINATED, TIMED_OUT, CONTINUED_AS_NEW
+    failure: str | None = None
+
+    @property
+    def dead(self) -> bool:
+        return self.status in {"FAILED", "TERMINATED", "TIMED_OUT"}
 
 
 @dataclass
@@ -54,10 +67,14 @@ class FakeTemporal:
     signals: list[tuple[str, str, Any]] = field(default_factory=list)
     queries: dict[str, Any] = field(default_factory=dict)
     cancelled: list[str] = field(default_factory=list)
+    described: dict[str, WorkflowState] = field(default_factory=dict)
 
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started.setdefault(workflow_id, payload)  # ID déterministe ⇒ démarrage idempotent
         return workflow_id
+
+    async def describe(self, workflow_id: str) -> WorkflowState | None:
+        return self.described.get(workflow_id)
 
     async def signal(self, workflow_id: str, name: str, payload: Any) -> None:
         self.signals.append((workflow_id, name, payload))
@@ -137,6 +154,41 @@ class RealTemporal:
     async def cancel(self, workflow_id: str) -> None:
         client = await self.client()
         await client.get_workflow_handle(workflow_id).cancel()
+
+    async def describe(self, workflow_id: str) -> WorkflowState | None:
+        """L'état du workflow vu de Temporal, ou rien si Temporal ne le connaît pas (ou plus).
+
+        Une lecture de ticket ne doit pas tomber parce que Temporal est lent ou absent :
+        deux secondes, puis on répond « inconnu », et la marque persistée sur le ticket
+        (`failure`) prend le relais.
+        """
+        from temporalio.service import RPCError
+
+        try:
+            client = await asyncio.wait_for(self.client(), timeout=2.0)
+            description = await asyncio.wait_for(client.get_workflow_handle(workflow_id).describe(), 2.0)
+        except (RPCError, TimeoutError, OSError):
+            return None
+        status = description.status.name if description.status is not None else "RUNNING"
+        failure = None
+        if status in {"FAILED", "TIMED_OUT", "TERMINATED"}:
+            try:
+                await client.get_workflow_handle(workflow_id).result()
+            except Exception as exc:  # c'est le message qu'on veut, pas l'exception
+                failure = _cause_lisible(exc)
+        return WorkflowState(status=status, failure=failure)
+
+
+def _cause_lisible(exc: BaseException) -> str:
+    """Le message de la cause la plus profonde.
+
+    « le projet n'a pas de dépôt », pas « Activity task failed ».
+    """
+    cause: BaseException = exc
+    while cause.__cause__ is not None:
+        cause = cause.__cause__
+    message = getattr(cause, "message", None) or str(cause)
+    return str(message)[:500]
 
 
 _gateway: TemporalGateway | None = None

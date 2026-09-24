@@ -225,3 +225,144 @@ async def _wait_state(handle: Any, state: str, *, after: str | None = None, time
     raise AssertionError(
         f"état `{state}` jamais atteint (courant : {(await handle.query('status'))['state']})"
     )
+
+
+# ───────────────────────── un ticket mort se voit (2026-09-24) ─────────────────────────
+
+
+def _worker_avec(temporal_env: Any, remplacements: dict[str, Any]) -> Any:
+    """Le worker complet, où quelques activités sont remplacées par leur doublure."""
+    from choregos_orchestrator.activities import ALL_ACTIVITIES
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+    from temporalio.worker import Worker
+
+    gardees = [a for a in [*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES] if a.__name__ not in remplacements]
+    return Worker(
+        temporal_env.client,
+        task_queue="test",
+        workflows=ALL_WORKFLOWS,
+        activities=[*gardees, *remplacements.values()],
+    )
+
+
+async def _ticket(setup: Fixture) -> Any:
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        session.expunge(item)
+        return item
+
+
+async def test_un_interpreteur_qui_meurt_le_dit(setup: Fixture, temporal_env: Any) -> None:
+    """Une activité en échec définitif tue le workflow — et le ticket porte la cause.
+
+    Banc du 2026-09-24 : deux tickets RH morts, l'un sur une activité, l'autre sur un
+    heartbeat, et rien en base ne le disait. Le workflow écrit désormais pourquoi il meurt.
+    """
+    from temporalio import activity
+    from temporalio.client import WorkflowFailureError
+    from temporalio.exceptions import ApplicationError
+
+    @activity.defn(name="await_run")
+    async def await_run_qui_meurt(payload: dict[str, Any]) -> dict[str, Any]:
+        raise ApplicationError("le projet n'a plus de dépôt", non_retryable=True)
+
+    async with _worker_avec(temporal_env, {"await_run": await_run_qui_meurt}):
+        handle = await start(temporal_env, setup)
+        with pytest.raises(WorkflowFailureError):
+            await handle.result()
+
+    item = await _ticket(setup)
+    assert item.failure is not None, "le ticket ne dit pas que son interpréteur est mort"
+    assert item.failure["message"] == "le projet n'a plus de dépôt"
+    assert item.failure["activity"] == "await_run"
+    assert item.failure["state"] == "inbox"  # l'état d'où l'étape partait
+
+    from choregos_api.db.models import Event
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        types = (
+            (await session.execute(select(Event.type).where(Event.work_item_id == setup.work_item_id)))
+            .scalars()
+            .all()
+        )
+    assert "choregos.workitem.workflow_failed" in types
+
+
+async def test_un_interpreteur_qui_redemarre_efface_la_marque(setup: Fixture, temporal_env: Any) -> None:
+    """La marque tombe au redémarrage : un ticket relancé n'est plus « mort »."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from temporalio import activity
+    from temporalio.exceptions import ApplicationError
+
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        item.failure = {"message": "mort une première fois", "at": "2026-09-24T15:04:00+00:00"}
+
+    @activity.defn(name="await_run")
+    async def await_run_qui_bloque(payload: dict[str, Any]) -> dict[str, Any]:
+        raise ApplicationError("on s'arrête ici", non_retryable=True)
+
+    async with _worker_avec(temporal_env, {"await_run": await_run_qui_bloque}):
+        handle = await start(temporal_env, setup)
+        with pytest.raises(Exception):  # noqa: B017 — la mort de ce workflow est voulue
+            await handle.result()
+    # `load_context` a effacé l'ancienne marque au démarrage ; la nouvelle mort a posé la sienne
+    item = await _ticket(setup)
+    assert item.failure is not None
+    assert item.failure["message"] == "on s'arrête ici"
+
+
+async def test_le_diff_non_collecte_ne_tue_pas_l_etape(setup: Fixture, temporal_env: Any) -> None:
+    """`collect_run_artifacts` sert l'affichage : son échec ne coûte pas le ticket (RH-1, 24/09)."""
+    from temporalio import activity
+    from temporalio.exceptions import ApplicationError
+
+    scripted(
+        setup.adapters,
+        stage_result("spec rédigée", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
+    )
+
+    @activity.defn(name="collect_run_artifacts")
+    async def collect_qui_echoue(payload: dict[str, Any]) -> dict[str, Any]:
+        raise ApplicationError("le projet n'a pas de dépôt", non_retryable=True)
+
+    async with _worker_avec(temporal_env, {"collect_run_artifacts": collect_qui_echoue}):
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "awaiting_spec_approval")
+
+    assert (await _ticket(setup)).failure is None
+
+
+async def test_await_run_est_rejoue_apres_une_panne_passagere(setup: Fixture, temporal_env: Any) -> None:
+    """Un worker qui redémarre pendant un run (heartbeat manqué) ne tue plus le ticket."""
+    from choregos_orchestrator.activities import stage as stage_activities
+    from temporalio import activity
+    from temporalio.exceptions import ApplicationError
+
+    scripted(
+        setup.adapters,
+        stage_result("spec rédigée", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
+    )
+    appels: list[int] = []
+
+    @activity.defn(name="await_run")
+    async def await_run_fragile(payload: dict[str, Any]) -> dict[str, Any]:
+        appels.append(1)
+        if len(appels) == 1:
+            raise ApplicationError("heartbeat manqué : le worker a redémarré")  # rejouable
+        return await stage_activities.await_run(payload)
+
+    async with _worker_avec(temporal_env, {"await_run": await_run_fragile}):
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "awaiting_spec_approval")
+
+    assert len(appels) >= 2
+    assert (await _ticket(setup)).failure is None

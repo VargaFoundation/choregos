@@ -102,6 +102,15 @@ images:  ## Construit les cinq images de la plateforme en local (tag `:dev`)
 	docker build -f docker/web.Dockerfile                    -t choregos-web:dev .
 	docker build -f docker/runner.Dockerfile                 -t choregos-runner:dev .
 
+# Archive les historiques de workflows d'un Temporal joignable (port-forward du banc) pour
+# que `tests/replay` les rejoue en CI. Sans historique, ce test SKIPPE — il l'a fait pendant
+# une semaine sans que personne le voie.
+TEMPORAL_ADDRESS ?= 127.0.0.1:7233
+REPLAY_IDS ?=
+.PHONY: replay-record
+replay-record:  ## Archive des historiques Temporal dans tests/replay/histories (REPLAY_IDS=… ou tous les interpréteurs)
+	$(UV) run python tools/replay_record.py --address $(TEMPORAL_ADDRESS) $(if $(REPLAY_IDS),$(REPLAY_IDS),--all-interpreters)
+
 # ───────────────────────── dev ─────────────────────────
 .PHONY: dev-up
 dev-up:  ## Cluster kind + plateforme + Tilt

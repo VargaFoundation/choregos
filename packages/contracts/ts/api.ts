@@ -287,6 +287,14 @@ export type ModelMatrix = {
   }>;
 };
 
+/** Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage. */
+export type WorkflowFailure = {
+  message: string;
+  activity?: string | null;
+  state?: string | null;
+  at?: string | null;
+};
+
 export type WorkItem = {
   id: string;
   project_slug: string;
@@ -301,6 +309,9 @@ export type WorkItem = {
   workflow_name?: string | null;
   workflow_version?: number | null;
   temporal_wf_id?: string | null;
+  /** Statut Temporal du workflow, si demandé et connu. FAILED, TERMINATED ou TIMED_OUT = le ticket est mort. */
+  workflow_status?: string | null;
+  failure?: WorkflowFailure | null;
   paused?: boolean;
   current_run?: RunSummary | null;
   pending_request?: HumanRequest | null;

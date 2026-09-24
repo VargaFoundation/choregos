@@ -48,6 +48,17 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </div>
       </div>
 
+      {(data.failure || (data.workflow_status && ["FAILED", "TERMINATED", "TIMED_OUT"].includes(data.workflow_status))) && (
+        <ErrorNote>
+          <strong>Ce ticket est mort.</strong> Son interpréteur s&apos;est arrêté
+          {data.workflow_status ? ` (${data.workflow_status})` : ""}
+          {data.failure?.activity ? ` dans ${data.failure.activity}` : ""} : il ne bougera plus tant qu&apos;on ne le
+          relance pas.
+          {data.failure?.message && <span className="mt-2 block font-mono text-xs">{data.failure.message}</span>}
+          {data.failure?.at && <span className="mt-1 block text-xs">{relative(data.failure.at)}</span>}
+        </ErrorNote>
+      )}
+
       {data.pending_request && (
         <Card title="décision attendue">
           <p className="mb-2 text-sm">
