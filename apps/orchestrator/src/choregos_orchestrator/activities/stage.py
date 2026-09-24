@@ -125,15 +125,28 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             ttl_s=(budget.max_minutes + 30) * 60,
             models=[resolved.litellm_model],
         )
-        session.add(
-            GatewayKeyRow(
-                key_id=key.key_id,
-                run_id=run_id,
-                project_id=bundle.project.id,
-                budget_usd=budget.usd,
-                expires_at=key.expires_at,
+        # Rejouable : une activité Temporal peut repasser ici sur le MÊME run, et la clé
+        # est déterministe. Un `INSERT` sec répondait alors « duplicate key value violates
+        # unique constraint "ix_gateway_keys_key_id" » — une erreur de base remontée telle
+        # quelle jusqu'au workflow, qui mourait. Vu sur le banc du 2026-09-24.
+        # AGENTS.md l'exige : toute activité est rejouable sans effet double.
+        existante = (
+            await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.key_id == key.key_id))
+        ).scalar_one_or_none()
+        if existante is None:
+            session.add(
+                GatewayKeyRow(
+                    key_id=key.key_id,
+                    run_id=run_id,
+                    project_id=bundle.project.id,
+                    budget_usd=budget.usd,
+                    expires_at=key.expires_at,
+                )
             )
-        )
+        else:
+            existante.run_id = run_id
+            existante.budget_usd = budget.usd
+            existante.expires_at = key.expires_at
 
         context_pack = await _context_pack(bundle, item, plan)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack)
