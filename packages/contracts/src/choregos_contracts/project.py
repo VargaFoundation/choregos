@@ -72,6 +72,13 @@ class ProjectConfig(Strict):
     gitops: GitopsConfig | None = None
     cluster: str | None = None
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
+    #: Les outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun, et
+    #: c'est le défaut : un catalogue déployé ne s'ouvre pas à tous les projets par
+    #: accident. `["*"]` ouvre tout le catalogue, ce qui se décide, pas se subit.
+    #:
+    #: C'était une entrée de `labels` — un fourre-tout d'étiquettes — le temps de vérifier
+    #: que le catalogue servait. Une liste d'autorisations n'est pas une étiquette.
+    tools: list[str] = Field(default_factory=list)
     labels: dict[str, str] = Field(default_factory=dict)
 
     @property

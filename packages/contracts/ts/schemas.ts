@@ -282,6 +282,8 @@ export type Project = {
     slack_channel?: string;
     emails?: Array<string>;
   };
+  /** Outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun. ['*'] ouvre tout le catalogue. */
+  tools?: Array<string>;
   labels?: {
     [key: string]: string;
   };

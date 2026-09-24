@@ -702,6 +702,35 @@ paths:
       responses:
         "201": { description: Finding enregistré, content: { application/json: { schema: { $ref: "#/components/schemas/FindingAck" } } } }
         "429": { description: Plafond de findings atteint, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /projects/{id}/tools:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [projects]
+      operationId: getProjectTools
+      summary: Le catalogue d'outils du déploiement, et ce que ce projet peut appeler.
+      responses:
+        "200":
+          description: Catalogue annoté
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tools, allows_all]
+                properties:
+                  allows_all: { type: boolean }
+                  tools:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, description, provider, allowed]
+                      properties:
+                        name: { type: string }
+                        description: { type: string }
+                        provider: { type: string }
+                        categories: { type: array, items: { type: string } }
+                        price_eur: { type: number }
+                        needs_credential: { type: boolean }
+                        allowed: { type: boolean }
   /internal/runs/{id}/tools:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:

@@ -137,7 +137,9 @@ Playbooks let a deployment replace **any** role prompt, including `implement`, w
 touching the platform — that is what makes the engine usable outside software.
 
 The tool catalogue declares third-party APIs the platform calls **on behalf of** an agent,
-with the provider key staying server-side. See [ADR 0014](../adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)
+with the provider key staying server-side. A project then declares which of them it may
+call, in its own configuration (`tools: [verifier_adresse]`, or `["*"]` for the whole
+catalogue); the default is none. See [ADR 0014](../adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
 ## Multi-tenant installations

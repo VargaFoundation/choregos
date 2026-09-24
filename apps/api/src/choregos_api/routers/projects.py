@@ -106,6 +106,35 @@ async def get_project(ctx: ProjectCtx, session: Db) -> ProjectDto:
     return await project_dto(session, ctx.project, ctx.org_slug)
 
 
+@router.get("/projects/{id}/tools", operation_id="getProjectTools")
+async def get_project_tools(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
+    """Le catalogue du déploiement, et ce que CE projet a le droit d'appeler.
+
+    Les deux ensembles, pas seulement le second : sans la liste complète, on ne peut ni
+    savoir ce qu'on pourrait autoriser, ni comprendre pourquoi un outil manque.
+    """
+    from ..catalogue import catalogue
+
+    autorises = {str(t) for t in ((ctx.project.config or {}).get("tools") or [])}
+    tout = "*" in autorises
+    return {
+        "tools": [
+            {
+                "name": outil.name,
+                "description": outil.description,
+                "provider": outil.provider,
+                "categories": outil.categories,
+                "price_eur": outil.price_eur,
+                # La clé n'est jamais rendue : seulement le fait qu'il en faille une.
+                "needs_credential": outil.credential_env is not None,
+                "allowed": tout or outil.name in autorises,
+            }
+            for outil in catalogue().outils
+        ],
+        "allows_all": tout,
+    }
+
+
 @router.patch("/projects/{id}", response_model=ProjectDto, operation_id="updateProject")
 async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> ProjectDto:
     ctx.require(Permission.PROJECT_WRITE)
