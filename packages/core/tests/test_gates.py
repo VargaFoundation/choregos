@@ -162,8 +162,52 @@ def test_outputs_present_est_la_gate_des_metiers_sans_tests() -> None:
     assert not verdict.passed
     assert "rapport" in verdict.detail
 
-    assert evaluate("outputs_present", GateContext()).passed, "aucune sortie déclarée : rien à exiger"
     assert not evaluate("outputs_present", GateContext(expected_outputs=["x"])).passed
+
+
+def test_une_garantie_sans_rien_a_verifier_refuse() -> None:
+    """Livrée le 2026-09-23, `outputs_present` PASSAIT quand la transition ne déclarait
+    aucune sortie — exactement le défaut qu'on venait de corriger sur les garanties de
+    diff. Une garantie demandée qui n'a rien regardé doit refuser ; la tolérer se dit."""
+    rien = GateContext()
+    verdict = evaluate("outputs_present", rien)
+    assert not verdict.passed
+    assert "aucune sortie déclarée" in verdict.detail
+    assert evaluate("outputs_present", rien, {"allow_empty": True}).passed
+
+    assert not evaluate("evidence_facts", GateContext()).passed
+
+
+def test_evidence_facts_lit_les_preuves_du_metier() -> None:
+    """`evidence_present` exige des tests, `outputs_present` croit ce que l'agent raconte.
+    Entre les deux : des faits nommés par le métier, et comparables."""
+    from choregos_contracts import Evidence, StageResult, StageStatus
+
+    def resultat(**faits: object) -> StageResult:
+        return StageResult(
+            schema="choregos/StageResult/v1",
+            status=StageStatus.DONE,
+            summary="dossier instruit",
+            evidence=Evidence(facts=dict(faits)),  # type: ignore[arg-type]
+        )
+
+    ok = GateContext(result=resultat(profils_retenus=3, piece_identite=True))
+    params = {"keys": ["profils_retenus", "piece_identite"], "min": {"profils_retenus": 1}}
+    assert evaluate("evidence_facts", ok, params).passed
+
+    absent = GateContext(result=resultat(piece_identite=True))
+    assert "profils_retenus" in evaluate("evidence_facts", absent, params).detail
+
+    zero = GateContext(result=resultat(profils_retenus=0, piece_identite=True))
+    verdict = evaluate("evidence_facts", zero, params)
+    assert not verdict.passed, "un zéro poli n'est pas un résultat"
+    assert "profils_retenus = 0 < 1" in verdict.detail
+
+    # Un booléen EST un entier en Python : sans garde, `false` passerait un `min: 0`.
+    faux = GateContext(result=resultat(profils_retenus=2, piece_identite=False))
+    assert not evaluate(
+        "evidence_facts", faux, {"keys": ["piece_identite"], "must_be_true": ["piece_identite"]}
+    ).passed
 
 
 def test_une_garantie_sans_diff_ne_se_prononce_pas() -> None:

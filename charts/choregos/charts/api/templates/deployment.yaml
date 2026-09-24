@@ -68,7 +68,17 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
+          {{- with .Values.global.toolCatalog.credentialsSecret }}
+          # Les clés des fournisseurs du catalogue. En bloc et PAR RÉFÉRENCE : une clé
+          # recopiée dans la spec du déploiement serait lisible par qui peut lire un pod.
+          envFrom:
+            - secretRef: { name: {{ . }} }
+          {{- end }}
           env:
+            {{- with .Values.global.toolCatalog.configMap }}
+            - name: CHOREGOS_TOOL_CATALOG
+              value: {{ printf "%s/%s" $.Values.global.toolCatalog.mountPath $.Values.global.toolCatalog.fileName | quote }}
+            {{- end }}
             {{- include "choregos.commonEnv" . | nindent 12 }}
             - name: CHOREGOS_OIDC_ISSUER
               value: {{ .Values.global.oidc.issuer | quote }}
@@ -102,9 +112,16 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- with .Values.global.toolCatalog.configMap }}
+            - { name: catalogue, mountPath: {{ $.Values.global.toolCatalog.mountPath }}, readOnly: true }
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- with .Values.global.toolCatalog.configMap }}
+        - name: catalogue
+          configMap: { name: {{ . }} }
+        {{- end }}
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname

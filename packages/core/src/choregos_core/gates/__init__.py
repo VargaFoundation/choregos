@@ -169,7 +169,19 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     """
     required = [str(k) for k in (params.get("keys") or ctx.expected_outputs)]
     if not required:
-        return GateOutcome("outputs_present", True, detail="aucune sortie déclarée")
+        # Symétrie avec `_sans_diff` : une garantie DEMANDÉE qui n'a rien à regarder ne
+        # passe pas, elle refuse. Livrée le 2026-09-23, celle-ci passait — le même défaut
+        # que celui qu'on venait de corriger sur les garanties de diff, à un jour près.
+        # `allow_empty: true` reste possible pour une transition dont les sorties sont
+        # facultatives, mais il faut alors l'écrire.
+        if params.get("allow_empty"):
+            return GateOutcome("outputs_present", True, detail="aucune sortie déclarée (toléré)")
+        return GateOutcome(
+            "outputs_present",
+            False,
+            detail="aucune sortie déclarée : la transition demande cette garantie sans dire "
+            "quoi produire (`outputs:`), ou `allow_empty: true` pour l'assumer",
+        )
     if ctx.result is None:
         return GateOutcome("outputs_present", False, detail="aucun résultat d'étape")
     # `StageOutputs` tolère les champs supplémentaires (rôles custom) : c'est ce qui permet
@@ -182,6 +194,63 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         detail="sorties présentes" if not missing else f"sorties manquantes : {', '.join(missing)}",
         annotations=missing,
     )
+
+
+@gate("evidence_facts")
+def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Les preuves que le métier a nommées sont là, et comparables si on le demande.
+
+    `evidence_present` exige des tests : c'est la preuve du logiciel. `outputs_present`
+    vérifie qu'une étape a produit ses sorties, mais une sortie est ce que l'agent
+    RACONTE. Entre les deux manquait ce qu'un dossier instruit peut offrir de mesurable :
+    des faits nommés — `profils_retenus: 3`, `piece_identite: true`, `delai_jours: 12` —
+    consignés dans `evidence.facts` et vérifiés ici.
+
+        gates:
+          - name: evidence_facts
+            params: { keys: [profils_retenus], min: { profils_retenus: 1 }, must_be_true: [besoin_complet] }
+
+    `min` refuse un zéro poli : un agent qui ne trouve personne doit le dire en échouant
+    son étape, pas en rendant une preuve vide qui passe.
+    """
+    required = [str(k) for k in (params.get("keys") or [])]
+    if not required:
+        if params.get("allow_empty"):
+            return GateOutcome("evidence_facts", True, detail="aucun fait exigé (toléré)")
+        return GateOutcome(
+            "evidence_facts", False, detail="aucun fait exigé : `keys:` manquant sur la garantie"
+        )
+    if ctx.result is None:
+        return GateOutcome("evidence_facts", False, detail="aucun résultat d'étape")
+    facts = ctx.result.evidence.facts or {}
+    manquants = [key for key in required if key not in facts]
+    if manquants:
+        return GateOutcome(
+            "evidence_facts",
+            False,
+            detail=f"faits manquants : {', '.join(manquants)}",
+            annotations=manquants,
+        )
+    # Un booléen est un entier en Python : `piece_identite: false` passerait un `min: 0`
+    # sans qu'on l'ait voulu. On ne compare donc que ce qui est un nombre pour de bon.
+    insuffisants = [
+        f"{key} = {facts[key]} < {seuil}"
+        for key, seuil in (params.get("min") or {}).items()
+        if key in facts
+        and isinstance(facts[key], int | float)
+        and not isinstance(facts[key], bool)
+        and float(facts[key]) < float(seuil)
+    ]
+    # `must_be_true` et pas `true` : en YAML, une clé `true:` est lue comme le BOOLÉEN
+    # `True`, et le workflow est refusé avec un message sur les types. Un nom de
+    # paramètre ne doit pas être un mot réservé du format qui le porte.
+    faux = [key for key in (params.get("must_be_true") or []) if facts.get(key) is not True]
+    if insuffisants or faux:
+        detail = " ; ".join(
+            filter(None, [", ".join(insuffisants), ("faux : " + ", ".join(faux)) if faux else ""])
+        )
+        return GateOutcome("evidence_facts", False, detail=detail, annotations=insuffisants + faux)
+    return GateOutcome("evidence_facts", True, detail=f"faits vérifiés : {', '.join(sorted(required))}")
 
 
 @gate("diff_size_max")

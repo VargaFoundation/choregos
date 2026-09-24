@@ -122,3 +122,65 @@ async def test_la_boucle_periodique_rattrape_puis_se_termine(
     assert outcome["stopped"] is True
     assert outcome["passes"] >= 1
     assert any(key.replace("/", "_").replace("#", "-") in wf for wf in fake_starts())
+
+
+async def test_un_ticket_tenu_par_la_plateforme_est_decouvert(setup: Fixture) -> None:
+    """Avec `tracker: internal`, il n'y a pas de dehors où lister des candidats.
+
+    Livré le 2026-09-23, ce connecteur rendait `[]` : un ticket créé par la plateforme —
+    un finding promu, une demande saisie dans le front — n'était jamais découvert et
+    restait dans son état initial pour toujours. Sur le banc du 2026-09-23, les deux
+    tickets issus des findings sont restés en `inbox` du début à la fin.
+    """
+    from choregos_adapters.tracker.interne import InternalTracker
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.base import cle_de_ticket_interne, project_bundle
+    from sqlalchemy import select
+
+    clear_fake_signals()
+    setup.adapters.tracker = InternalTracker()
+
+    async with session_scope() as session:
+        bundle = await project_bundle(session, setup.project_slug)
+        cle = await cle_de_ticket_interne(session, bundle)
+        assert cle.startswith("BILLING-API-"), cle
+        session.add(
+            WorkItem(
+                project_id=setup.project_id,
+                tracker_key=cle,
+                title="Base de profils candidats manquante",
+                state=bundle.workflow.initial_state,
+            )
+        )
+
+    result = await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
+    assert cle in result["started"], result
+
+    async with session_scope() as session:
+        row = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == cle))).scalar_one()
+        assert row.temporal_wf_id, "le ticket de la plateforme porte l'identifiant de son workflow"
+
+
+async def test_la_cle_interne_suit_le_projet_et_ne_se_repete_pas(setup: Fixture) -> None:
+    """La clé rendue était le TITRE du ticket : illisible sur un board, et en collision
+    avec `(project_id, tracker_key)` dès que deux findings se ressemblaient."""
+    from choregos_api.db.models import Connector, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.base import cle_de_ticket_interne, project_bundle
+
+    async with session_scope() as session:
+        bundle = await project_bundle(session, setup.project_slug)
+        premiere = await cle_de_ticket_interne(session, bundle)
+        session.add(WorkItem(project_id=setup.project_id, tracker_key=premiere, title="a", state="inbox"))
+        await session.flush()
+        assert await cle_de_ticket_interne(session, bundle) != premiere
+
+        # Le préfixe se configure : un métier veut `RH-7`, pas `STAFFING-7`.
+        session.add(
+            Connector(
+                project_id=setup.project_id, kind="tracker", type="internal", config={"key_prefix": "RH"}
+            )
+        )
+        await session.flush()
+        assert (await cle_de_ticket_interne(session, bundle)).startswith("RH-")

@@ -324,6 +324,10 @@ class CostLedger(Base, PkMixin):
     run_id: Mapped[str | None] = mapped_column(
         ForeignKey("runs.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # `model` ou `tool` : la même ligne porte ce qu'a coûté un appel de modèle et ce qu'a
+    # coûté un appel d'outil du catalogue. Sans cette colonne, les agrégats par modèle
+    # compteraient les outils comme des modèles.
+    kind: Mapped[str] = mapped_column(String(16), default="model", index=True)
     provider: Mapped[str] = mapped_column(String(64), default="")
     model: Mapped[str] = mapped_column(String(200), default="")
     backend: Mapped[str | None] = mapped_column(String(64), nullable=True)

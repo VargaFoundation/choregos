@@ -13,6 +13,9 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
   const { slug } = use(params);
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const costs = useQuery({ queryKey: ["costs", slug], queryFn: () => api.costs(slug, "day") });
+  // Par NATURE : un appel d'outil du catalogue coûte comme un modèle, et se fondait
+  // dans le même total. Une dépense qu'on ne voit pas est une dépense qu'on ne borne pas.
+  const parNature = useQuery({ queryKey: ["costs", slug, "kind"], queryFn: () => api.costs(slug, "kind") });
   const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.workItems(slug) });
   const dora = useQuery({ queryKey: ["dora", slug], queryFn: () => api.dora(slug) });
 
@@ -75,6 +78,18 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                 value={costs.data?.total.budget_usd ? eur(costs.data.total.budget_usd * 0.92) : "—"}
                 label="budget quotidien"
               />
+              {(parNature.data?.rows ?? [])
+                .filter((row) => row.key === "tool")
+                .map((row) => {
+                  const appels = row.runs ?? 0;
+                  return (
+                    <Stat
+                      key={row.key}
+                      value={eur(row.cost_eur)}
+                      label={`outils du catalogue · ${appels} appel${appels > 1 ? "s" : ""}`}
+                    />
+                  );
+                })}
             </div>
           </>
         )}

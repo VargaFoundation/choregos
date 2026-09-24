@@ -170,6 +170,15 @@ class PolicyEngine:
     def max_findings_per_run(self) -> int:
         return self.policy.findings.max_per_run
 
+    def max_tool_calls_per_run(self) -> int:
+        """Appels d'outils du catalogue par run. 0 = aucun plafond.
+
+        Le plafond n'est pas là pour brider l'agent mais pour borner la facture : un
+        outil du catalogue coûte à chaque appel, et une boucle qui s'emballe coûte
+        autant qu'elle tourne.
+        """
+        return self.policy.budgets.tool_calls_per_run or 0
+
     def dedupe_threshold(self) -> float:
         return self.policy.findings.dedupe_threshold
 

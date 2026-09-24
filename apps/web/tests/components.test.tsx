@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { LiveLog } from "@/components/live-log";
+import { Preuves } from "@/components/preuves";
 import { ActorIcon, CostChip, StateBadge } from "@/components/ui";
 import type { RunEventDto } from "@/lib/types";
 
@@ -39,5 +40,27 @@ describe("journal ACP", () => {
   it("met en évidence les permissions refusées", () => {
     const { container } = render(<LiveLog events={events.slice(0, 3)} />);
     expect(container.querySelector(".text-danger")).not.toBeNull();
+  });
+});
+
+describe("preuves d'une étape", () => {
+  it("affiche les faits nommés par le métier plutôt que des tests absents", () => {
+    // Un dossier instruit n'a ni tests ni couverture : afficher « tests : ✗ · lint : — »
+    // pour lui était faux, et la faute se voyait à l'écran avant de se voir au contrat.
+    render(<Preuves evidence={{ facts: { profils_retenus: 2, besoin_complet: true } }} />);
+    expect(screen.getByText(/profils retenus/)).toBeInTheDocument();
+    expect(screen.getByText(/✓/)).toBeInTheDocument();
+    expect(screen.queryByText(/tests/)).toBeNull();
+  });
+
+  it("garde les mesures du logiciel quand ce sont elles qui existent", () => {
+    render(<Preuves evidence={{ tests_run: 6, tests_passed: true, lint: "ok" }} />);
+    expect(screen.getByText(/tests : ✓ 6/)).toBeInTheDocument();
+    expect(screen.getByText(/lint : ok/)).toBeInTheDocument();
+  });
+
+  it("ne montre pas une grille de tirets quand il n'y a aucune preuve", () => {
+    render(<Preuves evidence={{}} />);
+    expect(screen.getByText(/aucune preuve consignée/)).toBeInTheDocument();
   });
 });

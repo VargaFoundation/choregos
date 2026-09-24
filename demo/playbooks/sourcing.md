@@ -20,6 +20,17 @@ profils tenus qu'une liste de trois qui se ressemblent.
 Dans `.choregos/result.json`, `outputs.profils` porte la liste (Markdown), et le `summary`
 tient en une phrase : combien de profils, et le point de vigilance principal.
 
+Renseigne aussi `evidence.facts` — ce sont les seules preuves que la plateforme sait vérifier
+toute seule, et elles se comptent :
+
+```json
+"evidence": { "facts": { "profils_retenus": 2, "criteres_couverts": 5, "besoin_complet": true } }
+```
+
+`profils_retenus` est le nombre de profils que tu as VRAIMENT rattachés au besoin. Zéro est une
+réponse acceptable — mais elle se dit en échouant l'étape (`status: "blocked"`), pas en rendant
+une liste vide : la garantie exige au moins un profil, et elle refusera.
+
 {{ output_contract }}
 
 ## Invariants

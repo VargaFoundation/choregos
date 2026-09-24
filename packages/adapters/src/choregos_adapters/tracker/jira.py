@@ -33,6 +33,8 @@ _CANONICAL_CATEGORIES = {"to do": "new", "in progress": "indeterminate", "done":
 class JiraTracker:
     """Jira Cloud (REST v3). `project_key` est le préfixe des clés (`BILL-42`)."""
 
+    owns_items = True
+
     def __init__(
         self,
         client: RestClient,

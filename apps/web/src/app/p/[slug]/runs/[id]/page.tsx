@@ -4,6 +4,7 @@ import { Heading } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { use } from "react";
 import { LiveLog } from "@/components/live-log";
+import { Preuves } from "@/components/preuves";
 import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
@@ -67,14 +68,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           <p className="text-2xl">{duration(run.data.tokens?.duration_s)}</p>
           <p className="text-xs text-ink-muted">{run.data.result?.diagnostics?.turns ?? 0} tours d&apos;agent</p>
         </Card>
-        <Card title="preuves">
-          <ul className="space-y-1 text-sm">
-            <li>tests : {evidence?.tests_passed ? `✓ ${evidence.tests_run ?? 0}` : "✗"}</li>
-            <li>lint : {evidence?.lint ?? "—"}</li>
-            <li>typage : {evidence?.typecheck ?? "—"}</li>
-            <li>couverture : {evidence?.coverage_delta != null ? `${evidence.coverage_delta > 0 ? "+" : ""}${evidence.coverage_delta}` : "—"}</li>
-          </ul>
-        </Card>
+        <Preuves evidence={evidence} />
         <Card title="périmètre">
           <ul className="space-y-1 font-mono text-xs text-ink-muted">
             {(run.data.allowed_paths ?? []).map((path) => (

@@ -79,6 +79,8 @@ mutation($fieldId: ID!, $name: String!, $color: ProjectV2SingleSelectFieldOption
 class GitHubTracker:
     """Issues + Projects v2. `repo` est `owner/name` ; `project_number` est le board."""
 
+    owns_items = True
+
     def __init__(
         self,
         client: GitHubClient,

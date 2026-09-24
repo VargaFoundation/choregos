@@ -53,6 +53,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_reachability(wf, report, source)
     _check_prod_states(wf, report, source)
     _check_retries(wf, report, source)
+    _check_gates_ont_de_la_matiere(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -258,6 +259,37 @@ def _check_retries(wf: Workflow, report: ValidationReport, source: Any) -> None:
                     ["transitions", index],
                     source,
                 )
+
+
+# Ce qu'une garantie a besoin de trouver sur la transition pour pouvoir se prononcer.
+# `outputs_present` sans `outputs:` ne regarde rien ; `evidence_facts` sans `keys:` non plus.
+GATES_A_MATIERE: dict[str, tuple[str, str]] = {
+    "outputs_present": ("outputs", "`outputs:` sur la transition"),
+    "evidence_facts": ("keys", "`keys:` en paramètre de la garantie"),
+}
+
+
+def _check_gates_ont_de_la_matiere(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """Une garantie demandée sans rien à vérifier est refusée à l'écriture.
+
+    Sinon elle se découvre en vol, et de la pire manière : le tableau de bord affiche une
+    garantie verte que personne n'a évaluée. Le moteur refuse aussi au moment de trancher,
+    mais un workflow faux doit échouer quand on l'écrit, pas quand un ticket le traverse.
+    """
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            besoin = GATES_A_MATIERE.get(g.name)
+            if besoin is None:
+                continue
+            champ, comment = besoin
+            if g.params.get("allow_empty") or g.params.get(champ) or (champ == "outputs" and t.outputs):
+                continue
+            report.error(
+                "gate.sans_matiere",
+                f"garantie `{g.name}` sans {comment} : elle n'aurait rien à vérifier",
+                ["transitions", index, "gates", g_index],
+                source,
+            )
 
 
 def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None:

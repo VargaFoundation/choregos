@@ -42,6 +42,11 @@ class KubernetesClient:
         headers = {"Accept": "application/json"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
+        # Les en-têtes de l'appelant s'AJOUTENT aux nôtres. Sans cette fusion, passer
+        # `headers=` levait `got multiple values for keyword argument 'headers'` —
+        # invisible en relecture, et fatal au premier PATCH, qui doit annoncer son
+        # `Content-Type: application/merge-patch+json` sous peine d'être refusé par l'API.
+        headers.update(kwargs.pop("headers", None) or {})
         response = await self._client.request(method, f"{self.base_url}{path}", headers=headers, **kwargs)
         if response.status_code == 404:
             return None
@@ -65,6 +70,7 @@ class TektonExecutor:
     """Crée et suit les `PipelineRun` d'étapes d'agent."""
 
     kind = ExecutorKind.TEKTON
+    capabilities: frozenset[str] = frozenset()
 
     def __init__(
         self,

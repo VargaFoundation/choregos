@@ -14,7 +14,7 @@ from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
-from .base import db, project_bundle
+from .base import cle_de_ticket_interne, db, project_bundle, tracker_possede_les_tickets
 
 TOKEN_RE = re.compile(r"[a-zà-ÿ0-9_]+")
 
@@ -104,9 +104,13 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
         labels = ["finding", "source:agent", f"type:{row.type}", f"severity:{row.severity}", "needs-triage"]
         if origin is not None:
             labels.append(f"origin:{origin.tracker_key.rsplit('#', 1)[-1]}")
-        key = await bundle.adapters.tracker.create_item(
-            NewItem(title=f"[{row.type}] {row.title}", body=body, labels=labels)
-        )
+        titre = f"[{row.type}] {row.title}"
+        if tracker_possede_les_tickets(bundle.adapters.tracker):
+            key = await bundle.adapters.tracker.create_item(NewItem(title=titre, body=body, labels=labels))
+        else:
+            # La plateforme tient le ticket : elle lui donne sa clé. Le connecteur interne
+            # rendait le titre, d'où des clés comme `[docs] Base de profils manquante`.
+            key = await cle_de_ticket_interne(session, bundle)
         created = WorkItem(
             project_id=bundle.project.id,
             tracker_key=key,

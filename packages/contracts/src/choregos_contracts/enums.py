@@ -177,6 +177,7 @@ class EventType(StrEnum):
     RELEASE_VERIFIED = "choregos.release.verified"
     RELEASE_ROLLED_BACK = "choregos.release.rolled_back"
     RELEASE_FROZEN = "choregos.release.frozen"
+    TOOL_CALLED = "choregos.tool.called"
     COST_RECORDED = "choregos.cost.recorded"
     COST_ALERT = "choregos.cost.alert"
     PROVISIONING_STEP = "choregos.project.provisioning.step"

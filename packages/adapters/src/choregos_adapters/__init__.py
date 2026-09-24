@@ -180,6 +180,8 @@ def _register_builtins() -> None:
             memory_limit=cfg.get("memory_limit", os.environ.get("CHOREGOS_RUNNER_MEMORY_LIMIT", "") or "6Gi"),
             env_from_secrets=cfg.get("env_from_secrets")
             or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
+            # Combien de runs tournent en même temps dans le namespace. 0 = sans plafond.
+            max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
         )
     )
     register("runtime", "aca")(

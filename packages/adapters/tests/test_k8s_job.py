@@ -7,7 +7,8 @@ from typing import Any
 import pytest
 from choregos_adapters.executor.k8s_job import RUNNER_POD_LABELS, KubernetesJobExecutor
 from choregos_adapters.registry import default_executor_kind
-from choregos_core.domain import StageJobSpec
+from choregos_contracts import ExecutorKind
+from choregos_core.domain import ExecRef, StageJobSpec
 
 
 class _RecordingClient:
@@ -154,3 +155,87 @@ async def test_un_run_rejoue_reecrit_son_jeton() -> None:
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     ecritures = [(m, p) for m, p, _ in client.calls if m in {"PUT", "POST"} and "/secrets" in p]
     assert ecritures and ecritures[0][0] == "PUT"
+
+
+class _ClusterClient:
+    """Un cluster de poche : il garde les Jobs créés et répond aux listes et aux patchs."""
+
+    def __init__(self) -> None:
+        self.jobs: dict[str, dict[str, Any]] = {}
+        self.horloge = 0
+
+    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        body = kwargs.get("json")
+        if method == "POST" and path.endswith("/jobs"):
+            self.horloge += 1
+            body["metadata"]["creationTimestamp"] = f"2026-09-24T10:00:{self.horloge:02d}Z"
+            body.setdefault("status", {})
+            self.jobs[body["metadata"]["name"]] = body
+            return body
+        if method == "GET" and path.endswith("/jobs"):
+            return {"items": list(self.jobs.values())}
+        if path.rsplit("/", 1)[-1] in self.jobs and "/jobs/" in path:
+            nom = path.rsplit("/", 1)[-1]
+            if method == "GET":
+                return self.jobs[nom]
+            if method == "PATCH":
+                assert kwargs["headers"]["Content-Type"] == "application/merge-patch+json"
+                self.jobs[nom]["spec"].update(body["spec"])
+                return self.jobs[nom]
+        return None
+
+    def actifs(self) -> list[str]:
+        return [n for n, j in self.jobs.items() if not j["spec"].get("suspend")]
+
+
+def _spec_pour(run_id: str) -> StageJobSpec:
+    spec = _spec()
+    return spec.model_copy(update={"run_id": run_id})
+
+
+async def test_au_dela_du_plafond_le_job_attend_sans_pod() -> None:
+    """Dix tickets qui démarrent ensemble font dix pods qui tirent la même image en même
+    temps, et un quota de namespace qui refuse le onzième sans rien expliquer. Un Job
+    `suspend: true` n'a AUCUN pod : il attend, visible, sans rien consommer."""
+    client = _ClusterClient()
+    executeur = KubernetesJobExecutor(client=client, max_active=2)  # type: ignore[arg-type]
+    for i in range(4):
+        await executeur.start(_spec_pour(f"r-{i}"))
+
+    assert client.actifs() == ["run-r-0", "run-r-1"], client.actifs()
+    assert all(client.jobs[f"run-r-{i}"]["spec"]["suspend"] for i in (2, 3))
+
+    etat = await executeur.status(
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-2", namespace="choregos", run_id="r-2")
+    )
+    assert etat.state == "pending"
+    assert "en attente d'une place" in etat.message
+
+
+async def test_la_file_avance_dans_l_ordre_d_arrivee() -> None:
+    """Sans ordre, le dernier posé passerait devant à chaque relevé et un run malchanceux
+    attendrait indéfiniment."""
+    client = _ClusterClient()
+    executeur = KubernetesJobExecutor(client=client, max_active=2)  # type: ignore[arg-type]
+    for i in range(4):
+        await executeur.start(_spec_pour(f"r-{i}"))
+
+    client.jobs["run-r-0"]["status"] = {"succeeded": 1}  # une place se libère
+
+    # Le dernier arrivé demande son état : il ne doit PAS passer devant le troisième.
+    dernier = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-3", namespace="choregos", run_id="r-3")
+    assert "en attente" in (await executeur.status(dernier)).message
+    assert client.jobs["run-r-3"]["spec"]["suspend"]
+
+    troisieme = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-2", namespace="choregos", run_id="r-2")
+    await executeur.status(troisieme)
+    assert not client.jobs["run-r-2"]["spec"].get("suspend"), "le plus ancien en attente passe"
+
+
+async def test_sans_plafond_rien_ne_change() -> None:
+    """Un déploiement qui ne demande rien ne change pas de régime du jour au lendemain."""
+    client = _ClusterClient()
+    executeur = KubernetesJobExecutor(client=client)  # type: ignore[arg-type]
+    for i in range(5):
+        await executeur.start(_spec_pour(f"r-{i}"))
+    assert len(client.actifs()) == 5

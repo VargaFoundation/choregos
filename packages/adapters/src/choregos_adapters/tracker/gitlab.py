@@ -31,6 +31,8 @@ METADATA_RE = re.compile(re.escape(METADATA_START) + r"(?P<json>.*?)" + re.escap
 class GitLabTracker:
     """GitLab Issues (API v4). `project` est le chemin complet (`groupe/sous-groupe/projet`)."""
 
+    owns_items = True
+
     def __init__(
         self,
         client: RestClient,

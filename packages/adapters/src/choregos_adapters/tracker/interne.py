@@ -24,7 +24,23 @@ from choregos_core.domain import NewItem, TrackerStateMapping, WorkItemData
 
 
 class InternalTracker:
-    """La base de Choregos est la source ; ce connecteur ne parle à personne."""
+    """La base de Choregos est la source ; ce connecteur ne parle à personne.
+
+    `owns_items = False` est le fait important, et il a une histoire. Livré le 2026-09-23
+    comme une suite de non-opérations, ce connecteur laissait deux trous que le banc a
+    montrés le lendemain :
+
+    - `create_item` rendait le TITRE comme clé de ticket. Les findings promus en tickets
+      portaient donc des clés du genre `[docs] Base de profils candidats manquante`.
+    - `list_candidates` rendant `[]`, la réconciliation ne découvrait jamais ces tickets :
+      créés, ils restaient en `inbox` **pour toujours**.
+
+    Les deux se soignent au même endroit, et pas ici : quand le tracker ne possède pas les
+    tickets, c'est la plateforme qui leur donne une clé et qui les découvre dans sa propre
+    base. Ce connecteur le DIT, l'orchestrateur en tient compte.
+    """
+
+    owns_items = False
 
     async def fetch_item(self, key: str) -> WorkItemData:
         # Le ticket vit dans la base de Choregos : l'orchestrateur l'a déjà en main, et ce
@@ -32,7 +48,9 @@ class InternalTracker:
         return WorkItemData(key=key, title=key)
 
     async def create_item(self, data: NewItem) -> str:
-        return data.title
+        # La clé est donnée par la plateforme (`owns_items = False`) : rendre le titre,
+        # comme on le faisait, fabriquait des clés de ticket illisibles et non uniques.
+        return ""
 
     async def set_state(self, key: str, state_mapping: TrackerStateMapping) -> None:
         return None

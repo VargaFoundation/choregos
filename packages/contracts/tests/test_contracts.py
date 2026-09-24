@@ -94,6 +94,72 @@ def test_example_matches_python_model(example: str, model: type) -> None:
     assert not missing, f"clés perdues par {model.__name__} : {missing}"
 
 
+def _modele_imbrique(annotation: Any) -> type | None:
+    """Le modèle Pydantic caché derrière `X | None`, `list[X]`, `dict[str, X]` — sinon None."""
+    import typing
+
+    from pydantic import BaseModel
+
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in typing.get_args(annotation):
+        trouve = _modele_imbrique(arg)
+        if trouve is not None:
+            return trouve
+    return None
+
+
+def _champs_du_schema(noeud: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Les propriétés d'un nœud objet, en suivant `anyOf`/`oneOf` (un champ nullable)."""
+    if "properties" in noeud:
+        return dict(noeud["properties"])
+    for combinaison in ("anyOf", "oneOf", "allOf"):
+        for branche in noeud.get(combinaison, []):
+            if isinstance(branche, dict) and "properties" in branche:
+                return dict(branche["properties"])
+    return {}
+
+
+def _comparer(chemin: str, noeud: dict[str, Any], model: type, ecarts: list[str]) -> None:
+    schema_champs = _champs_du_schema(noeud)
+    if not schema_champs:
+        return
+    modele_champs = {
+        (info.alias or nom): info
+        for nom, info in model.model_fields.items()  # type: ignore[attr-defined]
+    }
+    absents = set(modele_champs) - set(schema_champs)
+    en_trop = set(schema_champs) - set(modele_champs)
+    for nom in sorted(absents):
+        ecarts.append(f"{chemin}.{nom} : dans le modèle {model.__name__}, absent du schéma")
+    for nom in sorted(en_trop):
+        ecarts.append(f"{chemin}.{nom} : dans le schéma, absent du modèle {model.__name__}")
+    for nom in sorted(set(schema_champs) & set(modele_champs)):
+        sous_modele = _modele_imbrique(modele_champs[nom].annotation)
+        if sous_modele is not None:
+            _comparer(f"{chemin}.{nom}", schema_champs[nom], sous_modele, ecarts)
+
+
+@pytest.mark.parametrize(
+    ("schema_name", "model"),
+    [
+        ("stage-result.schema.json", StageResult),
+        ("stage-input.schema.json", StageInput),
+        ("finding.schema.json", Finding),
+        ("human-decision.schema.json", HumanDecision),
+    ],
+)
+def test_le_schema_et_le_modele_declarent_les_memes_champs(schema_name: str, model: type) -> None:
+    """Les exemples ne suffisent pas à empêcher la dérive : ils n'exercent que les champs
+    qu'ils portent. Un champ ajouté au modèle Python et oublié dans le schéma passait donc
+    tous les contrôles — arrivé le 2026-09-24 avec `Evidence.facts`, que le schéma rejetait
+    (`additionalProperties: false`) alors que le modèle l'acceptait. Ici on compare les
+    déclarations, pas un exemple."""
+    ecarts: list[str] = []
+    _comparer(schema_name.split(".", maxsplit=1)[0], contracts.load_schema(schema_name), model, ecarts)
+    assert not ecarts, "\n".join(ecarts)
+
+
 def test_openapi_is_coherent() -> None:
     spec = contracts.load_openapi()
     assert spec["openapi"].startswith("3.1")

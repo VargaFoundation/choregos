@@ -464,7 +464,7 @@ paths:
       tags: [costs]
       operationId: getProjectCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
@@ -476,7 +476,7 @@ paths:
       operationId: exportProjectCostsCsv
       summary: Le rapport de coûts en CSV (séparateur `;`, BOM UTF-8)
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
@@ -702,6 +702,56 @@ paths:
       responses:
         "201": { description: Finding enregistré, content: { application/json: { schema: { $ref: "#/components/schemas/FindingAck" } } } }
         "429": { description: Plafond de findings atteint, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /internal/runs/{id}/tools:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunTools
+      summary: Les outils du catalogue que CE run peut appeler, au format MCP.
+      responses:
+        "200":
+          description: Liste d'outils
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, description]
+                      properties:
+                        name: { type: string }
+                        description: { type: string }
+                        inputSchema: { type: object, additionalProperties: true }
+  /internal/runs/{id}/tools/{name}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - { name: name, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: callRunTool
+      summary: Appelle un outil du catalogue pour ce run. La clé du fournisseur reste côté plateforme.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        "200":
+          description: Réponse du fournisseur, telle quelle
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status_code, result]
+                properties:
+                  status_code: { type: integer }
+                  result: {}
+                  remaining: { type: integer, nullable: true }
+        "404": { description: Outil inconnu ou non autorisé au projet, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "429": { description: Plafond d'appels d'outils atteint, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/scope-change:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:

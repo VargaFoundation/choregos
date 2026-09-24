@@ -14,7 +14,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..markdown import STATUS_MARKER, StageLine, StatusComment, render_human_request
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, tracker_possede_les_tickets
 
 
 @activity.defn(name="mirror_state")
@@ -310,7 +310,26 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
     started: list[str] = []
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
-        candidates = await bundle.adapters.tracker.list_candidates(bundle.config)
+        if tracker_possede_les_tickets(bundle.adapters.tracker):
+            candidates = await bundle.adapters.tracker.list_candidates(bundle.config)
+        else:
+            # Pas de dehors : les candidats sont les tickets de la base qui n'ont pas fini.
+            # Sans cette branche, `list_candidates` rendait `[]` et un ticket créé par la
+            # plateforme — un finding promu, une demande saisie dans le front — n'était
+            # jamais découvert : il restait dans son état initial pour toujours.
+            candidates = list(
+                (
+                    await session.execute(
+                        select(WorkItem.tracker_key).where(
+                            WorkItem.project_id == bundle.project.id,
+                            WorkItem.closed_at.is_(None),
+                            WorkItem.paused.is_(False),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
         for key in candidates:
             item = (
                 await session.execute(

@@ -10,6 +10,9 @@ sérialise les déploiements derrière un *release train*.
 
 Licence : Apache 2.0. Plan d'exécution complet : [`docs/plan/00-index.md`](docs/plan/00-index.md).
 
+> **English documentation** — [docs/en](docs/en/README.md) : concepts, deployment and
+> usage. The reference documentation below is in French.
+
 ## Principes
 
 1. **Le tracker est l'interface humaine.** GitHub Issues/Projects, Jira ou GitLab reste
