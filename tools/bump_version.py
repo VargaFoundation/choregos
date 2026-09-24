@@ -41,7 +41,7 @@ def _fichiers() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
             umbrella,
             [
                 (re.compile(r"^(version: ).*$", re.M), r"\g<1>{v}"),
-                (re.compile(r'^(appVersion: ).*$', re.M), r'\g<1>"{v}"'),
+                (re.compile(r"^(appVersion: ).*$", re.M), r'\g<1>"{v}"'),
                 (re.compile(r"^(    version: ).*$", re.M), r"\g<1>{v}"),
             ],
         )
@@ -52,7 +52,7 @@ def _fichiers() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
                 chart,
                 [
                     (re.compile(r"^(version: ).*$", re.M), r"\g<1>{v}"),
-                    (re.compile(r'^(appVersion: ).*$', re.M), r'\g<1>"{v}"'),
+                    (re.compile(r"^(appVersion: ).*$", re.M), r'\g<1>"{v}"'),
                 ],
             )
         )
@@ -97,9 +97,7 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("version")
-    parser.add_argument(
-        "--check", action="store_true", help="ne rien écrire, échouer si un fichier diverge"
-    )
+    parser.add_argument("--check", action="store_true", help="ne rien écrire, échouer si un fichier diverge")
     args = parser.parse_args()
     if not SEMVER.match(args.version):
         parser.error(f"version semver attendue, reçu {args.version!r}")

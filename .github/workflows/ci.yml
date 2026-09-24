@@ -239,7 +239,7 @@ jobs:
       - name: gitleaks
         run: |
           docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.24.3 \
-            detect --source /repo --redact --exit-code 1 --no-banner
+            detect --source /repo --config /repo/.gitleaks.toml --redact --exit-code 1 --no-banner
 
   ci-ok:
     # Cible unique pour la protection de branche et la merge queue.
