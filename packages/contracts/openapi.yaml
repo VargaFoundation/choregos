@@ -1206,6 +1206,15 @@ components:
               median_duration_s: { type: [number, "null"] }
               with_memory: { type: [boolean, "null"] }
               report_url: { type: [string, "null"] }
+    WorkflowFailure:
+      type: object
+      description: Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage.
+      required: [message]
+      properties:
+        message: { type: string }
+        activity: { type: [string, "null"] }
+        state: { type: [string, "null"] }
+        at: { type: [string, "null"], format: date-time }
     WorkItem:
       type: object
       required: [id, project_slug, tracker_key, title, state, totals]
@@ -1223,6 +1232,11 @@ components:
         workflow_name: { type: [string, "null"] }
         workflow_version: { type: [integer, "null"] }
         temporal_wf_id: { type: [string, "null"] }
+        workflow_status:
+          type: [string, "null"]
+          description: Statut Temporal du workflow, si demandé et connu. FAILED, TERMINATED ou TIMED_OUT = le ticket est mort.
+        failure:
+          oneOf: [{ $ref: "#/components/schemas/WorkflowFailure" }, { type: "null" }]
         paused: { type: boolean, default: false }
         current_run: { oneOf: [{ $ref: "#/components/schemas/RunSummary" }, { type: "null" }] }
         pending_request: { oneOf: [{ $ref: "#/components/schemas/HumanRequest" }, { type: "null" }] }

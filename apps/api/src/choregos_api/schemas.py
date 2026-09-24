@@ -288,6 +288,15 @@ class HumanRequestDto(Dto):
     decision: dict[str, Any] | None = None
 
 
+class WorkflowFailure(Dto):
+    """Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage."""
+
+    message: str
+    activity: str | None = None
+    state: str | None = None
+    at: datetime | None = None
+
+
 class WorkItemDto(Dto):
     id: str
     project_slug: str
@@ -302,6 +311,12 @@ class WorkItemDto(Dto):
     workflow_name: str | None = None
     workflow_version: int | None = None
     temporal_wf_id: str | None = None
+    #: Statut Temporal du workflow (RUNNING, COMPLETED, FAILED…) quand on l'a demandé et que
+    #: Temporal a répondu ; sinon rien. Un ticket dans un état d'attente avec un workflow
+    #: FAILED n'attend pas : il est mort.
+    workflow_status: str | None = None
+    #: La marque posée par le workflow en mourant. Reste après que Temporal a oublié.
+    failure: WorkflowFailure | None = None
     paused: bool = False
     current_run: RunSummary | None = None
     pending_request: HumanRequestDto | None = None

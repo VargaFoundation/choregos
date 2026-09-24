@@ -74,7 +74,7 @@ async def get_work_item(id: str, session: Db, principal: Me) -> WorkItemDto:
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
-    return await work_item_dto(session, item, project)
+    return await work_item_dto(session, item, project, with_temporal=True)
 
 
 @router.get(

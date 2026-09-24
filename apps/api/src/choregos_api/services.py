@@ -46,6 +46,7 @@ from .schemas import (
     RunDto,
     RunSummary,
     Totals,
+    WorkflowFailure,
     WorkItemDto,
 )
 
@@ -290,7 +291,9 @@ def human_request_dto(row: HumanRequest) -> HumanRequestDto:
     )
 
 
-async def work_item_dto(session: AsyncSession, item: WorkItem, project: Project) -> WorkItemDto:
+async def work_item_dto(
+    session: AsyncSession, item: WorkItem, project: Project, *, with_temporal: bool = False
+) -> WorkItemDto:
     workflow_row = await session.get(WorkflowDef, item.workflow_def_id) if item.workflow_def_id else None
     workflow = workflow_model(workflow_row)
     state = workflow.states.get(item.state)
@@ -324,6 +327,8 @@ async def work_item_dto(session: AsyncSession, item: WorkItem, project: Project)
         workflow_name=workflow_row.name if workflow_row else workflow.metadata.name,
         workflow_version=workflow_row.version if workflow_row else workflow.metadata.version,
         temporal_wf_id=item.temporal_wf_id,
+        workflow_status=await _statut_temporal(item) if with_temporal else None,
+        failure=WorkflowFailure(**item.failure) if item.failure else None,
         paused=item.paused,
         current_run=run_summary(current) if current else None,
         pending_request=human_request_dto(pending) if pending else None,
@@ -333,6 +338,22 @@ async def work_item_dto(session: AsyncSession, item: WorkItem, project: Project)
         created_at=item.created_at,
         closed_at=item.closed_at,
     )
+
+
+async def _statut_temporal(item: WorkItem) -> str | None:
+    """Le statut du workflow du ticket, si Temporal le connaît.
+
+    Jamais une erreur : un ticket doit se lire sans Temporal.
+    """
+    if not item.temporal_wf_id:
+        return None
+    from .temporal import get_temporal
+
+    try:
+        state = await get_temporal().describe(item.temporal_wf_id)
+    except Exception:
+        return None
+    return state.status if state else None
 
 
 def release_dto(row: Release, project_slug: str) -> ReleaseDto:

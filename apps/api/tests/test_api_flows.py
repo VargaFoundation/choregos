@@ -473,3 +473,43 @@ async def test_la_fiche_d_acces_replie_le_journal(
     assert fiche["acces"][1]["demandes"] == 2, "deux lectures du même fichier, regroupées"
     # La prose de l'agent n'y entre pas : la fiche redeviendrait illisible.
     assert all("je lis le ticket" not in a["cible"] for a in fiche["acces"])
+
+
+async def test_un_ticket_dont_le_workflow_est_mort_le_dit(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """L'API lit l'état Temporal ET la marque posée par le workflow : un ticket mort ne se cache plus.
+
+    Banc du 2026-09-24 : deux workflows FAILED, deux tickets « en attente » à l'écran.
+    """
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.temporal import FakeTemporal, WorkflowState, get_temporal
+
+    async with session_scope() as session:
+        item = WorkItem(
+            project_id=project["id"],
+            tracker_key="varga/billing-api#404",
+            title="T",
+            state="ready",
+            temporal_wf_id="wi-billing-api-404",
+            failure={"message": "le projet n'a pas de dépôt", "activity": "collect_run_artifacts"},
+        )
+        session.add(item)
+        await session.flush()
+        item_id = item.id
+    fake = get_temporal()
+    assert isinstance(fake, FakeTemporal)
+    fake.described["wi-billing-api-404"] = WorkflowState(status="FAILED", failure="Activity task failed")
+
+    body = (await client.get(f"/api/v1/work-items/{item_id}")).json()
+    assert body["workflow_status"] == "FAILED"
+    assert body["failure"]["message"] == "le projet n'a pas de dépôt"
+    assert body["failure"]["activity"] == "collect_run_artifacts"
+
+    # La liste ne demande rien à Temporal (un appel par ticket serait trop cher) : le statut
+    # y est absent, mais la marque persistée, elle, y est.
+    liste = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
+    mort = next(i for i in liste["items"] if i["id"] == item_id)
+    assert mort["workflow_status"] is None
+    assert mort["failure"]["message"] == "le projet n'a pas de dépôt"

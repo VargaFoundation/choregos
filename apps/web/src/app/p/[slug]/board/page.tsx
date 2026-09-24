@@ -54,6 +54,11 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                     <span className="text-ink-muted">{item.current_run.status}</span>
                   </p>
                 )}
+                {item.failure && (
+                  <p className="mt-1 text-xs font-medium text-danger" title={item.failure.message}>
+                    mort · {item.failure.activity ?? "interpréteur"}
+                  </p>
+                )}
                 {item.pending_request && (
                   <div className="mt-2 space-y-2 border border-line border-l-2 border-l-warn bg-surface p-2">
                     <p className="text-xs text-warn">

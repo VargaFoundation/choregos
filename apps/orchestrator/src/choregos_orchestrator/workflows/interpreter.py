@@ -7,6 +7,8 @@ ce qui la rend testable sans Temporal et rejouable sans surprise.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -14,6 +16,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus, Workflow
@@ -31,6 +34,15 @@ DEFAULT_RETRY = RetryPolicy(
     maximum_attempts=5,
 )
 NO_RETRY = RetryPolicy(maximum_attempts=1)
+#: Pour une activité qui ne fait que SCRUTER (`await_run`) : idempotente, donc rejouable.
+#: Elle tournait sans retry, et un redémarrage du worker pendant un run — un `helm upgrade`,
+#: banc du 2026-09-24 — la faisait expirer sur son heartbeat et tuait le ticket.
+POLL_RETRY = RetryPolicy(
+    initial_interval=timedelta(seconds=5),
+    backoff_coefficient=2.0,
+    maximum_interval=timedelta(minutes=1),
+    maximum_attempts=20,
+)
 HISTORY_THRESHOLD = 20_000
 
 
@@ -129,6 +141,30 @@ class WorkflowInterpreter:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = InterpreterInput(**payload)
+        try:
+            return await self._run(params, payload)
+        except (asyncio.CancelledError, workflow.ContinueAsNewError):
+            raise
+        except Exception as exc:
+            # Le workflow meurt : le dire AVANT de mourir. Sans cette trace, le ticket reste
+            # dans son état d'origine et rien — ni écran, ni événement — ne distingue « il
+            # attend » de « il est mort ». Le banc du 2026-09-24 a perdu deux tickets ainsi.
+            with contextlib.suppress(Exception):
+                await workflow.execute_activity(
+                    record_workflow_failure,
+                    {
+                        "project_id": params.project_id,
+                        "work_item_id": params.work_item_id,
+                        "message": _message_de(exc),
+                        "activity": _activite_de(exc),
+                        "state": self.state,
+                    },
+                    start_to_close_timeout=timedelta(seconds=30),
+                    retry_policy=RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1)),
+                )
+            raise
+
+    async def _run(self, params: InterpreterInput, payload: dict[str, Any]) -> dict[str, Any]:
         self.attempts.update(params.attempts)
         self.cost_usd = params.cost_usd
 
@@ -253,8 +289,11 @@ class WorkflowInterpreter:
                 "timeout_minutes": int(budget["max_minutes"]) + 10,
             },
             start_to_close_timeout=timedelta(minutes=int(budget["max_minutes"]) + 20),
+            # Borne GLOBALE, toutes tentatives comprises : sans elle, vingt reprises d'une
+            # attente de deux heures feraient un ticket qui ne meurt jamais.
+            schedule_to_close_timeout=timedelta(minutes=int(budget["max_minutes"]) + 90),
             heartbeat_timeout=timedelta(minutes=5),
-            retry_policy=NO_RETRY,
+            retry_policy=POLL_RETRY,
         )
         result = StageResult.model_validate(awaited["result"])
 
@@ -271,12 +310,18 @@ class WorkflowInterpreter:
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )
-        await workflow.execute_activity(
-            scm_activities.collect_run_artifacts,
-            {"project_id": params.project_id, "work_item_id": params.work_item_id, "run_id": run_id},
-            start_to_close_timeout=timedelta(minutes=2),
-            retry_policy=NO_RETRY,
-        )
+        # Le diff du run est ce que le front AFFICHE — pas ce dont le ticket dépend. Un échec
+        # ici (SCM injoignable, projet sans dépôt sur une image en retard) ne doit pas tuer une
+        # étape qui vient de réussir : c'est arrivé à RH-1 le 2026-09-24.
+        try:
+            await workflow.execute_activity(
+                scm_activities.collect_run_artifacts,
+                {"project_id": params.project_id, "work_item_id": params.work_item_id, "run_id": run_id},
+                start_to_close_timeout=timedelta(minutes=2),
+                retry_policy=NO_RETRY,
+            )
+        except ActivityError as exc:
+            workflow.logger.warning("diff du run non collecté : %s", _message_de(exc))
         self.current_run = None
         self.last_run = run_id  # les transitions `system` évaluent leurs gates sur ce run
 
@@ -635,6 +680,9 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
+        # Un interpréteur qui (re)démarre n'est plus mort : la marque tombe ici, et nulle
+        # part ailleurs — c'est la seule activité que tout démarrage traverse.
+        item.failure = None
         return {
             "workflow": bundle.workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
             "state": item.state,
@@ -642,6 +690,58 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "tracker_key": item.tracker_key,
             "project_slug": bundle.slug,
         }
+
+
+@activity.defn(name="record_workflow_failure")
+async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
+    """Écrit sur le ticket que son interpréteur est mort, et publie l'événement.
+
+    C'est le workflow qui l'appelle en mourant. Ce n'est PAS un remplacement de l'état
+    Temporal — l'API le lit aussi — mais c'est ce qui reste quand Temporal a purgé
+    l'historique, et c'est ce que le front et la chronologie affichent.
+    """
+    from choregos_api.services import persist_event
+    from choregos_contracts import EventType
+    from choregos_core import utcnow
+
+    from ..activities.base import db, load_work_item, project_bundle
+
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_id"])
+        item = await load_work_item(session, payload["work_item_id"])
+        failure = {
+            "message": str(payload.get("message") or "interpréteur en échec"),
+            "activity": payload.get("activity"),
+            "state": payload.get("state") or item.state,
+            "at": utcnow().isoformat(),
+        }
+        item.failure = failure
+        await persist_event(
+            session,
+            EventType.WORKITEM_WORKFLOW_FAILED,
+            project_id=bundle.project.id,
+            work_item_id=item.id,
+            project_slug=bundle.slug,
+            subject=item.tracker_key,
+            **failure,
+        )
+        return failure
+
+
+def _message_de(exc: BaseException) -> str:
+    """Le message utile d'une erreur Temporal : celui de la cause, pas « Activity task failed »."""
+    cause: BaseException | None = exc
+    while cause is not None:
+        if isinstance(cause, ApplicationError) and cause.message:
+            return cause.message
+        if cause.__cause__ is None:
+            break
+        cause = cause.__cause__
+    return str(cause or exc)[:500]
+
+
+def _activite_de(exc: BaseException) -> str | None:
+    return exc.activity_type if isinstance(exc, ActivityError) else None
 
 
 @activity.defn(name="signal_train")

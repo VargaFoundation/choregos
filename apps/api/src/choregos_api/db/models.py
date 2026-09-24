@@ -164,6 +164,9 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     temporal_wf_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: Pourquoi l'interpréteur du ticket est mort (`{message, activity, at}`), ou rien.
+    #: Posé par le workflow lui-même en mourant, effacé quand il redémarre.
+    failure: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     allowed_paths: Mapped[list[str]] = mapped_column(Json, default=list)
     pr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -161,6 +161,10 @@ class EventType(StrEnum):
     WORKITEM_CLOSED = "choregos.workitem.closed"
     WORKITEM_HUMAN_REQUESTED = "choregos.workitem.human_requested"
     WORKITEM_HUMAN_DECIDED = "choregos.workitem.human_decided"
+    #: L'interpréteur du ticket est mort (activité en échec définitif, délai) : le ticket ne
+    #: bougera plus tant qu'on ne le redémarre pas. Vu sur le banc du 2026-09-24, où deux
+    #: tickets RH sont restés « en attente » sans qu'aucun écran ne dise qu'ils étaient morts.
+    WORKITEM_WORKFLOW_FAILED = "choregos.workitem.workflow_failed"
     RUN_QUEUED = "choregos.run.queued"
     RUN_STARTED = "choregos.run.started"
     RUN_PROGRESS = "choregos.run.progress"
