@@ -10,7 +10,12 @@ dont les quatre tests étaient faux), l'image des workers qui partait du commit 
 l'image web qui ne se construisait pas, et la porte `ci-ok` qui ne regardait pas les images.
 C'est la valeur d'un dépôt distant, mesurée en une heure.
 
-Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est dit) · ⬜ non commencée.
+Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est dit) · ❌ annoncée et fausse · ⬜ non commencée.
+
+**2026-09-24 — état des lieux.** Trois audits croisés avec le banc réel ont montré que plusieurs ✅
+de ce tableau étaient faux ; ils sont corrigés ci-dessous, et le détail est dans
+[STATE-OF-THE-PROJECT-2026-09-24.md](STATE-OF-THE-PROJECT-2026-09-24.md), avec le plan P0 → P3
+qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue en son absence.
 
 | Story | Flux | État | PR | Notes |
 |:--|:--|:--|:--|:--|
@@ -21,8 +26,8 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S0-05 | S0 | ✅ | — | policy engine (budgets, approbations, tentatives, périmètre) + 3 presets |
 | S0-06 | S0 | ✅ | — | 9 Protocol + fakes scriptables ; `CHOREGOS_FAKES=1` |
 | S0-07 | S0 | ✅ | — | kind, compose, Tiltfile, seed ; `make dev-up` / `dev-down` / `dev-seed` |
-| S0-08 | S0 | ✅ | — | ci.yml ciblé par chemins, nightly.yml, release.yml (cosign, SBOM, chart OCI) |
-| S0-09 | S0 | ✅ | — | 10 ADR, 9 runbooks, guide contributeur, dev.md, securite.md, SECURITY.md |
+| S0-08 | S0 | 🟡 | — | ci.yml ciblé par chemins, nightly.yml, release.yml (cosign, chart OCI). **Pas de SBOM** malgré ce que disait cette ligne et `SECURITY.md` ; pas de Trivy sur les images de release ; scan nocturne non bloquant (état des lieux du 2026-09-24, P1-2) |
+| S0-09 | S0 | 🟡 | — | 14 ADR, 11 runbooks, guide contributeur, dev.md, securite.md, SECURITY.md — en français ; l'anglais devient la référence le 2026-09-24 (P1-1). `SECURITY.md` promettait un SBOM et un blocage CRITICAL nocturne qui n'existent pas |
 | S1-01 | S1 | ✅ | — | worker multi-queues, répartition des activités, OTel via structlog |
 | S1-02 | S1 | ✅ | — | `WorkflowInterpreter` : boucle d'états, tentatives bornées, `continue_as_new` |
 | S1-03 | S1 | ✅ | — | activités de stage idempotentes (`run_id` déterministe), annulation, heartbeat |
@@ -30,7 +35,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S1-05 | S1 | ✅ | — | 11 gates, synchrones et asynchrones, avec test vert et test rouge chacune |
 | S1-06 | S1 | ✅ | — | miroir tracker : état, commentaire de suivi unique, champs du board |
 | S1-07 | S1 | ✅ | — | findings (signal + persistance depuis le résultat) et scope change auto/humain |
-| S1-08 | S1 | ✅ | — | migration de workflow, reprise, replay des historiques en CI |
+| S1-08 | S1 | 🟡 | — | migration de workflow, reprise. **Le replay des historiques ne tourne pas** : `tests/replay/histories/` est vide, le test paramétré skippe, et `make replay-record` n'existe pas (P0-2) |
 | S1-09 | S1 | ✅ | — | `ProjectProvisioning` : étapes du template, reprise, remédiation |
 | S1-10 | S1 | ✅ | — | démarrage depuis InboundEvent, ID déterministe : un seul workflow par ticket |
 | S2-01 | S2 | ✅ | — | CLI du runner, StageInput, workspace init+fetch, codes de sortie 0/10/20/30/40 |
@@ -58,7 +63,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S4-04 | S4 | ✅ | — | estimation médiane/p80 sur 90 jours, alerte de dépassement |
 | S4-05 | S4 | ✅ | — | `/v1/messages` vérifié contre un vrai LiteLLM ; l'environnement remis à `claude-code` appelle pour de vrai (8 tests live) |
 | S4-06 | S4 | ✅ | — | profils plateforme/projet, validation, matrice opposable |
-| S5-01 | S5 | ✅ | — | socle Next.js 15 / React 19 / TS strict / Tailwind + composants transverses |
+| S5-01 | S5 | 🟡 | — | socle Next.js / React 19 / TS strict / Tailwind + composants transverses. **Pas d'i18n** : `next-intl` est déclaré et jamais importé, l'interface est 100 % française (P0-5) |
 | S5-02 | S5 | ✅ | — | projets et wizard de création avec validation par étape |
 | S5-03 | S5 | ✅ | — | board : colonnes = états du DSL, décisions en ligne |
 | S5-04 | S5 | ✅ | — | ticket (coût par étape, timeline) et run (journal virtualisé, diff, preuves) |
@@ -82,7 +87,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S7-04 | S7 | ✅ | — | restauration **jouée** sur cluster : sauvegarde Barman → cluster détruit → restauré → données relues ; `serverName` manquant corrigé dans le runbook |
 | S7-05 | S7 | 🟡 | — | API + workers + Temporal tournent sur kind depuis l'image du dépôt (4 tests) ; valeurs HA (3 nœuds, persistance) à régler au déploiement réel |
 | S7-06 | S7 | ✅ | — | Application Argo `ecphoria` (vague 2) sur le chart du dépôt amont, valeurs vérifiées par `helm template` et acceptées par un serveur d'API ; embeddings routés par la passerelle (E-08) |
-| S7-07 | S7 | ✅ | — | ServiceMonitor, 5 alertes, 6 dashboards Grafana livrés |
+| S7-07 | S7 | ❌ | — | ServiceMonitor, alertes et 6 dashboards livrés — **mais aucune métrique n'est émise** : pas de `/metrics`, pas de `prometheus_client`, 16 séries `choregos_*` référencées et inexistantes. Un décor (P0-4) |
 | S7-08 | S7 | ✅ | — | l'API se déploie en `Rollout` quand `global.canary.enabled` ; vérifié sur cluster : la nouvelle version est retenue à 10 %, l'abandon restaure la stable |
 | S7-09 | S7 | ✅ | — | Kyverno (signatures, digests, non-root, labels, quotas, RuntimeClass) + ApplicationSet |
 | S7-10 | S7 | 🟡 | — | 9 runbooks ; celui de restauration Postgres **exécuté** (et corrigé) sur cluster ; les autres restent à jouer en staging |
@@ -103,7 +108,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S10-03 | S10 | ✅ | — | `MemoryIngestion` : tickets, runs, déploiements, findings, upsert idempotent |
 | S10-04 | S10 | ✅ | — | context pack réel par rôle, budget de tokens, archivé avec le run |
 | S10-05 | S10 | ✅ | — | écriture gouvernée : `write_fact`, `propose_fact`, file `pending`, auto-accept |
-| S10-06 | S10 | ✅ | — | faux positifs alertés ; rapport A/B hebdomadaire (premier passage, coût/ticket) posté et exposé |
+| S10-06 | S10 | 🟡 | — | faux positifs alertés ; rapport A/B hebdomadaire posté et exposé par l'API (`/orgs/{org}/memory/ab-report`) — **aucun écran ne l'affiche** (P0-5) |
 | S11-* | S11 | ✅ | — | E-01 à E-14 livrés et poussés sur `main` amont : faits typés + gouvernance par tenant, deux éditions (`ecphoria:memory` / `:full`), sauvegardes planifiées à manifeste vérifié, outillage de release, revue sécurité, doc d'intégration, et banc au profil Choregos (`docs/benchmarks-choregos.md`). Le banc a trouvé deux défauts réels côté cluster, corrigés : un client ordinaire derrière un Service perdait (N-1)/N de ses écritures, et toute recherche était traitée comme une écriture |
 | S12-01 | S12 | ✅ | — | 6 tickets de référence, dépôts jouets Python et Node, assertions vérifiées pour de vrai |
 | S12-02 | S12 | ✅ | — | `EvalMatrix` : cellules backend × modèle × mémoire, publication opposable |
@@ -112,7 +117,7 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 | S12-05 | S12 | ✅ | — | reprise sans double coût prouvée ; worker tué et remplacé sur cluster ; **perte d'un nœud jouée sur cluster** (`tests/cluster/test_node_loss.py`) : 359 s d'immobilité avec les défauts Kubernetes, 74 s avec les tolérances désormais dans le chart. Reste non couvert : le préavis d'éviction spot, que la plateforme n'écoute pas (`docs/runbooks/perte-de-noeud.md`) |
 | S13-01 | S13 | ✅ | — | backend claude-code (hook de secours, modèles Claude uniquement) — conformité 7/7 |
 | S13-02 | S13 | ✅ | — | codex, gemini-cli, goose, opencode, copilot-cli + versions.lock |
-| S13-03 | S13 | ✅ | — | `cross_backend` appliquée au choix du relecteur, mesure du gain exposée (`metrics/cross-backend`) |
+| S13-03 | S13 | 🟡 | — | `cross_backend` appliquée au choix du relecteur, mesure exposée par l'API (`metrics/cross-backend`) — **aucun écran ne l'affiche**, et le calcul est dupliqué entre l'API et l'orchestrateur (P0-5, P1-4) |
 | S13-04 | S13 | ✅ | — | GitLab **vérifié contre gitlab.com** (cycle complet sur un projet bac à sable) et Jira **vérifié contre un vrai site** (`tests/live/test_jira_live.py`, projet `CHOTEST`) : la confrontation a trouvé qu'un Jira francophone appelle « In Progress » « En cours » — aucun ticket ne bougeait |
 | S13-05 | S13 | 🟡 | — | exécuteur ACA **vérifié contre un vrai abonnement Azure** (6 tests live : cycle complet, `start` rejoué sans double exécution, jeton absent d'ARM, annulation, 404, logs) — trois défauts trouvés et corrigés au passage ; template `github-aca` livré. `azure-devops-aca` complet attend une organisation Azure DevOps (Boards + Pipelines), qu'un abonnement ne fournit pas |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
@@ -166,7 +171,31 @@ Les ADR 0012 à 0014 en portent les décisions.
 - **Une documentation anglaise** de déploiement et d'usage (`docs/en/`), dont les exemples YAML
   sont relus par le parseur du DSL et le modèle de politique — un test les garde.
 
+## Ce que le banc du 2026-09-24 a montré
+
+Deux tickets RH ont tourné l'après-midi avec de vrais agents. Ce que le cluster dit, et que
+les 492 tests ne disaient pas :
+
+1. **Les deux tickets sont morts sans que personne le voie.** RH-1 : workflow Temporal `FAILED`
+   sur `collect_run_artifacts` — la garde « pas de dépôt » existe dans le code mais **l'image
+   déployée ne l'avait pas**. RH-2 : `FAILED` sur heartbeat de `await_run` (`NO_RETRY`) parce
+   qu'un `helm upgrade` a redémarré le worker pendant le run : **mettre la plateforme à jour tue
+   les tickets en cours.** Et l'API ne lit jamais l'état Temporal : le ticket reste en `demande`,
+   sans événement ni écran (P0-2).
+2. **Le catalogue d'outils n'a toujours jamais atteint un agent** : non monté dans la démo,
+   image runner sans `outils_locaux.py`, 0 ligne `kind=tool` au registre (P0-1).
+3. **Le coût par run n'a jamais produit un chiffre non nul** — 12 lignes, tous à zéro, code
+   compris : la démo tourne en passerelle directe, rien ne compte (P0-1).
+4. **Le garde-fou d'écriture du runner ne s'applique pas à Claude Code** : son ACP n'envoie pas
+   `kind`, et `guardrails.py` retombe en « lecture : autorisé ». 91 décisions, 0 refus (P0-3).
+5. 5 `result.repair` sur 8 runs : le contrat `StageResult` n'est pas assez guidé (P1-6).
+
 ## Ce qui manque pour dire « en production »
+
+0. **Une installation neuve est inutilisable, et la sécurité multi-locataire est décorative**
+   (état des lieux, § A2–A4) : pas de création d'organisation, pas de jeton d'API, pas de premier
+   admin ; `dev_login_enabled=True` par défaut et jamais posé par le chart ; RLS jamais armée ;
+   mapping OIDC transverse aux orgs ; zéro métrique ; bus SSE en mémoire. C'est P0-3 à P0-5.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
