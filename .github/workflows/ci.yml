@@ -129,9 +129,9 @@ jobs:
       - uses: azure/setup-helm@v5
         with: { version: v3.22.0 }
       - run: helm lint charts/choregos
-      - name: rendu des trois environnements
+      - name: rendu des quatre environnements (local = les dépendances embarquées)
         run: |
-          for env in dev staging prod; do
+          for env in local dev staging prod; do
             helm template choregos charts/choregos -f charts/choregos/values/$env.yaml > /tmp/$env.yaml
           done
       - name: kubeconform
@@ -196,7 +196,8 @@ jobs:
         if: github.ref == 'refs/heads/main'
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          # L'identité qui pousse ne dépend pas de qui a déclenché le workflow.
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v7
         id: build
@@ -207,6 +208,10 @@ jobs:
           platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
+          # SBOM et provenance SLSA attachés à l'image (attestations BuildKit). SECURITY.md
+          # les promettait depuis le début ; aucun n'existait (état des lieux du 2026-09-24).
+          sbom: ${{ github.ref == 'refs/heads/main' }}
+          provenance: ${{ github.ref == 'refs/heads/main' && 'mode=max' || 'false' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: scan Trivy (aucun CRITICAL toléré)
@@ -223,6 +228,19 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: cosign sign --yes ghcr.io/vargafoundation/choregos-${{ matrix.image }}@${{ steps.build.outputs.digest }}
 
+  secrets:
+    # Un secret commité ne se rattrape pas : il est déjà dans l'historique. Deux fichiers
+    # avaient un `noqa S105` et deux bases SQLite étaient suivies par git — sans qu'un scan
+    # le voie (état des lieux du 2026-09-24).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.24.3 \
+            detect --source /repo --config /repo/.gitleaks.toml --redact --exit-code 1 --no-banner
+
   ci-ok:
     # Cible unique pour la protection de branche et la merge queue.
     #
@@ -234,7 +252,7 @@ jobs:
     # `changes` en fait partie aussi : quand le calcul des filtres échoue, tous les jobs qui en
     # dépendent sont *sautés*, et une porte qui ne regarde que des jobs sautés est verte. Une PR
     # Dependabot est passée comme ça, sans qu'une seule ligne n'ait été testée.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, secrets]
     if: always()
     runs-on: ubuntu-latest
     steps:

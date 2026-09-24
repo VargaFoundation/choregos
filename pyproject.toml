@@ -1,6 +1,6 @@
 [project]
 name = "choregos-workspace"
-version = "0.1.0"
+version = "0.3.0"
 description = "Choregos — plateforme de delivery agentique (Varga Foundation)"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -141,11 +141,15 @@ filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
 branch = true
-source = ["packages/core/src", "packages/runner/src", "apps/orchestrator/src"]
+source = ["packages/core/src", "packages/runner/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src"]
 omit = ["*/generated/*", "*/tests/*"]
 
 [tool.coverage.report]
-fail_under = 80
+# 80 % était mesuré sur core, runner et orchestrateur seulement : toute la surface HTTP et
+# tous les appels sortants (apps/api, packages/adapters) échappaient au seuil. Avec eux,
+# la couverture mesurée le 2026-09-24 est de 72 %. Le seuil suit la mesure — il monte
+# avec P1-3 (matrice RBAC, adaptateurs nus, jetons), pas avant.
+fail_under = 70
 show_missing = true
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
 

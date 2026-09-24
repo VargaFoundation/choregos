@@ -1,0 +1,17 @@
+# gitleaks : les règles par défaut, plus ce que ce dépôt contient VOLONTAIREMENT.
+#
+# Deux faux secrets vivent ici pour être détectés par la plateforme, pas par le scanner :
+# le motif AWS que le test de la garantie `no_secrets` doit attraper, et une clé d'exemple
+# dans un schéma de contrat. Les mettre en liste blanche par CHEMIN (et non par empreinte
+# de commit) : une empreinte saute au premier commit qui retouche le fichier.
+title = "choregos"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "faux secrets de test et d'exemple, documentés"
+paths = [
+  '''packages/core/tests/test_gates\.py''',
+  '''packages/contracts/schemas/examples/.*\.json''',
+]
