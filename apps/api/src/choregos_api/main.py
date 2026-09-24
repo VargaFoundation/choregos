@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import time
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
@@ -14,7 +17,9 @@ from fastapi.responses import JSONResponse
 from .config import get_settings
 from .db.session import create_all, dispose_engine
 from .errors import install_error_handlers
+from .events import RelaisPostgres
 from .logging import bind, clear, configure_logging, get_logger
+from .metriques import boucle_de_rafraichissement, exposer, requetes_http
 from .routers import (
     admin,
     auth,
@@ -44,6 +49,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("démarrage de l'API", env=settings.env, fakes=settings.fakes)
     if not settings.is_sqlite:
         await _refuser_le_superutilisateur()
+    rafraichissement = asyncio.create_task(boucle_de_rafraichissement(settings.metrics_refresh_seconds))
+    relais = None if settings.is_sqlite else RelaisPostgres(settings.database_url)
+    if relais is not None:
+        relais.demarrer()
     if settings.is_sqlite:
         # SQLite seul : une base de fichier ou de mémoire, jetée avec le processus, qu'aucune
         # migration ne suit. Partout ailleurs le schéma vient d'Alembic — y compris en `dev`.
@@ -52,6 +61,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # en accusant les migrations, alors que c'est l'API qui avait pris leur place.
         await create_all()
     yield
+    if relais is not None:
+        await relais.arreter()
+    rafraichissement.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await rafraichissement
     await dispose_engine()
     logger.info("arrêt de l'API")
 
@@ -106,7 +120,10 @@ def create_app() -> FastAPI:
     ) -> Response:
         start = time.perf_counter()
         clear()
-        bind(path=request.url.path, method=request.method)
+        # Un identifiant par requête, repris de l'entrée s'il y en a un (ingress, client),
+        # rendu en réponse : c'est ce qui relie un journal de l'API à un journal du front.
+        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
+        bind(path=request.url.path, method=request.method, request_id=request_id)
         try:
             response = await call_next(request)
         except Exception:
@@ -114,6 +131,9 @@ def create_app() -> FastAPI:
             raise
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         response.headers["X-Response-Time-Ms"] = str(duration_ms)
+        response.headers["X-Request-Id"] = request_id
+        route = getattr(request.scope.get("route"), "path", request.url.path)
+        requetes_http.labels(request.method, route, str(response.status_code)).inc()
         if not request.url.path.startswith(("/healthz", "/readyz")):
             logger.info("requête", status=response.status_code, duration_ms=duration_ms)
         return response
@@ -137,22 +157,44 @@ def create_app() -> FastAPI:
     ):
         app.include_router(router, prefix=API_PREFIX)
 
+    @app.get("/metrics", tags=["session"], operation_id="metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        """Les séries que les tableaux de bord et les alertes lisent (voir `metriques.py`)."""
+        return Response(content=exposer(), media_type="text/plain; version=0.0.4; charset=utf-8")
+
     @app.get("/healthz", tags=["session"], operation_id="healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.get("/readyz", tags=["session"], operation_id="readyz")
     async def readyz() -> Any:
-        """Prêt = la base répond. Sinon 503 : le pod ne prend pas de trafic."""
+        """Prêt = la base ET Temporal répondent. Sinon 503 : le pod ne prend pas de trafic.
+
+        Temporal ne l'était pas : un pod dont Temporal était injoignable restait dans le
+        service et rendait 500 sur chaque décision, chaque train, chaque webhook.
+        """
         from sqlalchemy import text
 
         from .db.session import get_engine
+        from .temporal import RealTemporal, get_temporal
 
         try:
             async with get_engine().connect() as conn:
                 await conn.execute(text("SELECT 1"))
         except Exception as exc:
-            return JSONResponse({"status": "not_ready", "detail": str(exc)[:200]}, status_code=503)
+            return JSONResponse(
+                {"status": "not_ready", "detail": f"base : {str(exc)[:200]}"}, status_code=503
+            )
+        temporal = get_temporal()
+        if isinstance(temporal, RealTemporal):
+            try:
+                client = await asyncio.wait_for(temporal.client(), timeout=2.0)
+                if not await asyncio.wait_for(client.service_client.check_health(), timeout=2.0):
+                    raise RuntimeError("check_health a répondu non")
+            except Exception as exc:
+                return JSONResponse(
+                    {"status": "not_ready", "detail": f"temporal : {str(exc)[:200]}"}, status_code=503
+                )
         return {"status": "ready"}
 
     return app

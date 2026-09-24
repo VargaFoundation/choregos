@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from choregos_contracts import EventType, Policy, ProjectConfig, Workflow
+from choregos_contracts import ChoregosEvent, EventType, Policy, ProjectConfig, Workflow
 from choregos_core import (
     PolicyEngine,
     checksum,
@@ -25,6 +25,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.models import (
+    Connector,
     CostLedger,
     Event,
     HumanRequest,
@@ -36,7 +37,7 @@ from .db.models import (
     WorkflowDef,
     WorkItem,
 )
-from .events import emit
+from .events import diffuser
 from .schemas import (
     CostEstimate,
     HumanRequestDto,
@@ -440,18 +441,61 @@ async def record_cost(
         ts=utcnow(),
     )
     session.add(entry)
-    emit(
-        EventType.COST_RECORDED,
-        subject=run_id,
-        cost_usd=cost_usd,
-        model=model,
-        tokens_in=tokens_in,
-        tokens_out=tokens_out,
+    await diffuser(
+        session,
+        ChoregosEvent.emit(
+            EventType.COST_RECORDED,
+            source="/choregos/api",
+            subject=run_id,
+            cost_usd=cost_usd,
+            model=model,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+        ),
     )
     return entry
 
 
 # ───────────────────────────── événements ─────────────────────────────
+
+
+async def cle_de_ticket_interne(session: AsyncSession, project: Project) -> str:
+    """Attribue `<PRÉFIXE>-<n>` quand la plateforme tient elle-même les tickets (`tracker: internal`).
+
+    Compter en base plutôt que tenir un compteur évite un deuxième endroit où l'état vit ;
+    la course entre deux créations simultanées est laissée à la contrainte d'unicité
+    `(project_id, tracker_key)`. Servait à l'orchestrateur (findings) ; sert aussi à l'API
+    depuis que `POST /projects/{id}/work-items` existe.
+    """
+    connecteur = (
+        await session.execute(
+            select(Connector).where(Connector.project_id == project.id, Connector.kind == "tracker")
+        )
+    ).scalar_one_or_none()
+    configure = (connecteur.config or {}).get("key_prefix") if connecteur else None
+    prefixe = str(configure or project.slug).upper()
+    existantes = (
+        (
+            await session.execute(
+                select(WorkItem.tracker_key).where(
+                    WorkItem.project_id == project.id, WorkItem.tracker_key.like(f"{prefixe}-%")
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    numeros = [int(suffixe) for cle in existantes if (suffixe := cle.rsplit("-", 1)[-1]).isdigit()]
+    return f"{prefixe}-{max(numeros, default=0) + 1}"
+
+
+async def le_tracker_est_interne(session: AsyncSession, project: Project) -> bool:
+    connecteur = (
+        await session.execute(
+            select(Connector).where(Connector.project_id == project.id, Connector.kind == "tracker")
+        )
+    ).scalar_one_or_none()
+    return connecteur is None or connecteur.type in {"internal", "fake"}
 
 
 DOCUMENTS_LOGICIELS = ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown")
@@ -502,7 +546,14 @@ async def persist_event(
         ts=utcnow(),
     )
     session.add(row)
-    emit(type_, subject=subject, project_slug=project_slug, **payload)
+    # `source` peut venir de l'appelant (« github », « jira ») : c'est la source CloudEvents,
+    # pas une donnée — l'ancien `emit()` la prenait de la même façon.
+    source = str(payload.get("source") or "/choregos/api")
+    donnees = {k: v for k, v in payload.items() if k != "source"}
+    await diffuser(
+        session,
+        ChoregosEvent.emit(type_, source=source, subject=subject, project_slug=project_slug, **donnees),
+    )
     return row
 
 

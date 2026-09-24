@@ -18,6 +18,7 @@ from .config import Settings, get_settings
 from .db.models import ApiToken, Membership, Organization, Project, User
 from .db.session import TOUT, get_sessionmaker, limiter_aux_organisations
 from .errors import forbidden, not_found, unauthorized
+from .logging import bind
 from .rbac import Permission, Principal
 from .security import RunClaims, hash_api_token, read_session, verify_run_token
 
@@ -174,6 +175,7 @@ async def project_context(id: str, session: Db, principal: Me) -> ProjectContext
     project, org_slug = await resolve_project(session, id)
     context = ProjectContext(project=project, org_slug=org_slug, principal=principal)
     context.require(Permission.PROJECT_READ)
+    bind(project=f"{org_slug}/{project.slug}")
     return context
 
 
@@ -194,6 +196,7 @@ async def run_claims(
         raise forbidden(f"jeton de run invalide : {exc}") from exc
     if claims.run_id != id:
         raise forbidden("ce jeton n'est pas celui de ce run")
+    bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
     # Un jeton de run est frappé par la plateforme pour UN run : la portée est déjà dans
     # le jeton (`claims.run_id`, vérifié par chaque route), pas dans une organisation.
     await limiter_aux_organisations(session, TOUT)

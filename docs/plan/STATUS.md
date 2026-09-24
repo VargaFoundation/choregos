@@ -87,7 +87,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S7-04 | S7 | ✅ | — | restauration **jouée** sur cluster : sauvegarde Barman → cluster détruit → restauré → données relues ; `serverName` manquant corrigé dans le runbook |
 | S7-05 | S7 | 🟡 | — | API + workers + Temporal tournent sur kind depuis l'image du dépôt (4 tests) ; valeurs HA (3 nœuds, persistance) à régler au déploiement réel |
 | S7-06 | S7 | ✅ | — | Application Argo `ecphoria` (vague 2) sur le chart du dépôt amont, valeurs vérifiées par `helm template` et acceptées par un serveur d'API ; embeddings routés par la passerelle (E-08) |
-| S7-07 | S7 | ❌ | — | ServiceMonitor, alertes et 6 dashboards livrés — **mais aucune métrique n'est émise** : pas de `/metrics`, pas de `prometheus_client`, 16 séries `choregos_*` référencées et inexistantes. Un décor (P0-4) |
+| S7-07 | S7 | 🟡 | — | `/metrics` sur l'API depuis le 2026-09-24 (soir) : quinze séries **calculées depuis la base** (runs, coûts, budgets, releases, délais, refus, mémoire, trains via Temporal) + `http_requests_total` ; un test interdit à un tableau de bord ou une alerte de citer une série absente ; deux panneaux sans mesure retirés (`webhook_to_signal`, `dod_iterations`). **Pas de traces** (P3-5) |
 | S7-08 | S7 | ✅ | — | l'API se déploie en `Rollout` quand `global.canary.enabled` ; vérifié sur cluster : la nouvelle version est retenue à 10 %, l'abandon restaure la stable |
 | S7-09 | S7 | ✅ | — | Kyverno (signatures, digests, non-root, labels, quotas, RuntimeClass) + ApplicationSet |
 | S7-10 | S7 | 🟡 | — | 9 runbooks ; celui de restauration Postgres **exécuté** (et corrigé) sur cluster ; les autres restent à jouer en staging |
@@ -222,6 +222,9 @@ les 492 tests ne disaient pas :
    PR suivante. Le catalogue a été **listé** par les agents (10 `GET /tools`) mais jamais
    **appelé** (0 `POST`) : l'outil est annoncé dans le playbook, pas exigé par un mécanisme
    — une garantie `tool_called` lisant le registre serait le mécanisme.
+   **P0-4a livré** : les métriques existent (voir S7-07). Reste P0-4b : bus d'événements
+   sur LISTEN/NOTIFY (le SSE est muet dès deux répliques), `/readyz` qui teste Temporal,
+   identifiant de requête et clés `project/work_item/run_id/stage` dans les journaux.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

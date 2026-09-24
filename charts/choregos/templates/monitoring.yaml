@@ -5,9 +5,12 @@ metadata:
   name: choregos
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
+  # L'API seule : c'est elle qui calcule les séries depuis la base (`metriques.py`). Le
+  # front, scruté aussi avant, répondait 404 toutes les trente secondes.
   selector:
     matchLabels:
       app.kubernetes.io/part-of: choregos
+      app.kubernetes.io/component: api
   endpoints:
     - port: http
       path: /metrics

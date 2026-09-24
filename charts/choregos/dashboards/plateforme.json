@@ -1,43 +1,71 @@
 {
   "title": "Choregos — Plateforme",
   "uid": "choregos-plateforme",
-  "tags": ["choregos"],
+  "tags": [
+    "choregos"
+  ],
   "timezone": "browser",
   "refresh": "1m",
   "panels": [
     {
       "type": "timeseries",
       "title": "Requêtes API par seconde",
-      "targets": [{ "expr": "sum(rate(http_requests_total{job=\"choregos-api\"}[5m])) by (status)" }],
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
-    },
-    {
-      "type": "timeseries",
-      "title": "Latence webhook → signal Temporal (p95)",
       "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(choregos_webhook_to_signal_seconds_bucket[5m])) by (le))" }
+        {
+          "expr": "sum(rate(http_requests_total{job=\"choregos-api\"}[5m])) by (status)"
+        }
       ],
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "type": "timeseries",
       "title": "Backlog des files Temporal",
-      "targets": [{ "expr": "sum(temporal_task_queue_backlog) by (task_queue)" }],
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      "targets": [
+        {
+          "expr": "sum(temporal_task_queue_backlog) by (task_queue)"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
     },
     {
       "type": "stat",
       "title": "Runs en cours",
-      "targets": [{ "expr": "sum(choregos_runs_active)" }],
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 }
+      "targets": [
+        {
+          "expr": "sum(choregos_runs_active)"
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 8
+      }
     },
     {
       "type": "stat",
       "title": "Démarrage d'un run (p95)",
       "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(choregos_run_start_seconds_bucket[30m])) by (le))" }
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(choregos_run_start_seconds_bucket[30m])) by (le))"
+        }
       ],
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 }
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 8
+      }
     }
   ]
 }

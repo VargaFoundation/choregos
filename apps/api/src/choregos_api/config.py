@@ -80,6 +80,8 @@ class Settings(BaseSettings):
     #: Requêtes par minute et par adresse sur les routes sans principal (`/auth/*`,
     #: `/webhooks/*`), par réplique. 0 désactive. Voir `limiteur.py`.
     rate_limit_per_minute: int = 600
+    #: Période de recalcul des métriques Prometheus depuis la base (voir `metriques.py`).
+    metrics_refresh_seconds: float = 15.0
     log_level: str = "INFO"
     log_json: bool = True
     fx_usd_eur: float = 0.92

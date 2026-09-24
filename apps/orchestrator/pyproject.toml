@@ -4,7 +4,15 @@ version = "0.1.0"
 description = "Orchestrateur Choregos : workers et workflows Temporal"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["choregos-core", "choregos-adapters", "choregos-api", "temporalio>=1.8", "structlog>=24.4", "pydantic-settings>=2.6"]
+dependencies = [
+    "choregos-core",
+    "choregos-adapters",
+    "choregos-api",
+    "temporalio>=1.8",
+    "structlog>=24.4",
+    "pydantic-settings>=2.6",
+    "prometheus-client>=0.21",
+]
 
 [project.scripts]
 choregos-orchestrator = "choregos_orchestrator.worker:main"
