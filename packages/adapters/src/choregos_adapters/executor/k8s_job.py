@@ -35,7 +35,7 @@ class KubernetesJobExecutor:
     # `queue` seulement : Kubernetes ne sait pas suspendre un Job DÉJÀ démarré sans
     # détruire son pod, donc ni `suspend` ni `snapshot` ici. Le dire plutôt que de le
     # laisser supposer, c'est ce qui permettra d'en brancher un autre sans rien casser.
-    capabilities = frozenset({"queue"})
+    capabilities = frozenset({"queue", "renew"})
 
     def __init__(
         self,
@@ -232,6 +232,29 @@ class KubernetesJobExecutor:
                 },
             },
         }
+
+    async def renew(self, ref: ExecRef, run_token: str) -> None:
+        """Remplace le jeton d'un run qui n'a pas encore démarré.
+
+        Un jeton est minté quand l'étape est préparée, et il vit `max_minutes + 15`. Avec
+        une file d'attente, ce compte à rebours court PENDANT l'attente : un run admis plus
+        tard démarre avec un jeton périmé et reçoit « Signature has expired » sur son
+        premier appel — vu sur le banc du 2026-09-24. Le secret porte le même nom que le
+        Job, donc le remplacer suffit : le pod le lira à son démarrage.
+        """
+        namespace = ref.namespace or ""
+        secret = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+                "name": ref.name,
+                "namespace": namespace,
+                "labels": {"choregos/run-id": ref.run_id},
+            },
+            "type": "Opaque",
+            "data": {"token": base64.b64encode(run_token.encode()).decode()},
+        }
+        await self.client.request("PUT", f"{CORE_API}/namespaces/{namespace}/secrets/{ref.name}", json=secret)
 
     async def status(self, ref: ExecRef) -> ExecStatus:
         payload = await self.client.request("GET", f"{BATCH_API}/namespaces/{ref.namespace}/jobs/{ref.name}")

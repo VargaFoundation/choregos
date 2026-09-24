@@ -21,7 +21,7 @@ pytestmark = pytest.mark.conformance
 #: La méthode que chaque capacité oblige à implémenter. `queue` n'en impose aucune : elle
 #: se joue dans `start` et `status`, et son comportement est vérifié par les tests de
 #: l'exécuteur concerné (plafond atteint, file dans l'ordre d'arrivée).
-METHODE_ATTENDUE = {"suspend": "suspend", "resume": "resume", "snapshot": "snapshot"}
+METHODE_ATTENDUE = {"renew": "renew", "suspend": "suspend", "resume": "resume", "snapshot": "snapshot"}
 
 # Construire un exécuteur hors cluster : sans `token`, le client Kubernetes va lire le
 # jeton du compte de service monté dans un pod, et ce fichier n'existe pas ici.
@@ -41,7 +41,7 @@ def _executeurs() -> list[str]:
 
 def test_le_vocabulaire_reste_ferme() -> None:
     """Une capacité inventée au fil de l'eau ne veut rien dire pour l'appelant."""
-    assert frozenset({"queue", "suspend", "resume", "snapshot"}) == CAPACITES_EXECUTEUR
+    assert frozenset({"queue", "renew", "suspend", "resume", "snapshot"}) == CAPACITES_EXECUTEUR
 
 
 @pytest.mark.parametrize("nom", _executeurs())

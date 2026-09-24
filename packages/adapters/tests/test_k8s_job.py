@@ -163,9 +163,11 @@ class _ClusterClient:
     def __init__(self) -> None:
         self.jobs: dict[str, dict[str, Any]] = {}
         self.horloge = 0
+        self.calls: list[tuple[str, str, Any]] = []
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         body = kwargs.get("json")
+        self.calls.append((method, path, body))
         if method == "POST" and path.endswith("/jobs"):
             self.horloge += 1
             body["metadata"]["creationTimestamp"] = f"2026-09-24T10:00:{self.horloge:02d}Z"
@@ -265,3 +267,24 @@ async def test_une_admission_refusee_ne_tue_pas_le_run() -> None:
     assert etat.state == "pending", "le run reste en file"
     assert "en attente d'une place" in etat.message
     assert client.jobs["run-r-1"]["spec"]["suspend"], "toujours suspendu, mais vivant"
+
+
+async def test_le_jeton_d_un_run_en_file_se_remplace() -> None:
+    """Un jeton est minté à la préparation et vit `max_minutes + 15`. Avec une file, ce
+    compte à rebours court PENDANT l'attente : un run admis plus tard démarrait avec un
+    jeton périmé et recevait « Signature has expired » sur son premier appel — vu sur le
+    banc du 2026-09-24. Le secret porte le nom du Job : le remplacer suffit."""
+    client = _ClusterClient()
+    executeur = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
+    await executeur.start(_spec_pour("r-0"))
+
+    ref = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-0", namespace="choregos", run_id="r-0")
+    await executeur.renew(ref, "jeton-tout-neuf")
+
+    secret = next(
+        body for method, path, body in client.calls if method == "PUT" and path.endswith("/secrets/run-r-0")
+    )
+    import base64
+
+    assert base64.b64decode(secret["data"]["token"]).decode() == "jeton-tout-neuf"
+    assert "renew" in KubernetesJobExecutor.capabilities

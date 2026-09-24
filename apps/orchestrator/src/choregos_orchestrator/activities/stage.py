@@ -12,7 +12,7 @@ from datetime import timedelta
 from hashlib import sha256
 from typing import Any
 
-from choregos_api.db.models import GatewayKeyRow, Run
+from choregos_api.db.models import GatewayKeyRow, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event, record_cost
@@ -386,6 +386,29 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 run_id=run_id,
             )
             status = await bundle.adapters.executor.status(ref)
+            # Tant qu'il attend, son jeton vieillit. Minté à la préparation pour
+            # `max_minutes + 15`, il expire PENDANT l'attente si la file est longue, et
+            # l'agent démarre pour recevoir « Signature has expired » — vu sur le banc du
+            # 2026-09-24. On le remplace à chaque relevé, tant que rien n'a démarré.
+            if (
+                run is not None
+                and run.status == "queued"
+                and status.state == "pending"
+                and "renew" in getattr(bundle.adapters.executor, "capabilities", frozenset())
+            ):
+                item_du_run = await session.get(WorkItem, run.work_item_id)
+                renew = getattr(bundle.adapters.executor, "renew", None)
+                if renew is not None and item_du_run is not None:
+                    await renew(
+                        ref,
+                        mint_run_token(
+                            run_id,
+                            project_slug=bundle.slug,
+                            work_item_key=item_du_run.tracker_key,
+                            # De quoi couvrir ce qu'il reste d'attente, plus l'étape.
+                            ttl_minutes=int(timeout_minutes) + 15,
+                        ),
+                    )
             # Le run attendait une place et vient de l'obtenir : sans cette bascule, il
             # resterait « en file » jusqu'à sa fin, alors qu'il tourne. C'est ici que ça
             # se voit, parce que c'est ici qu'on interroge l'exécuteur.
