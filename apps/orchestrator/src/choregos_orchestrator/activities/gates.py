@@ -35,13 +35,16 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         additions = deletions = 0
         secrets: list[str] = []
         needs_diff = any(g["name"] in {"scope_respected", "diff_size_max", "no_secrets"} for g in gates)
-        if needs_diff:
+        # Sans dépôt, il n'y a pas de diff — et pas d'erreur non plus : la garantie refusera
+        # d'elle-même (`diff_available`), ce qui est exactement ce qu'on veut qu'elle fasse.
+        depot = bundle.config.repo
+        if needs_diff and depot is not None:
             branch = (result.artifacts.branch if result else None) or bundle.config.branch_for(
                 item.tracker_key
             )
-            repo = _repo_slug(bundle.config.repo.url)
+            repo = _repo_slug(depot.url)
             try:
-                diff = await bundle.adapters.scm.compare(repo, bundle.config.repo.default_branch, branch)
+                diff = await bundle.adapters.scm.compare(repo, depot.default_branch, branch)
             except Exception:  # pas encore de branche : le diff est vide, pas une erreur
                 diff = None
             if diff is not None:
@@ -54,8 +57,8 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         ci_status = None
         review_state = None
         scans: dict[str, str] = {}
-        if any(is_async_gate(g["name"]) for g in gates) and item.pr_url:
-            repo = _repo_slug(bundle.config.repo.url)
+        if any(is_async_gate(g["name"]) for g in gates) and item.pr_url and depot is not None:
+            repo = _repo_slug(depot.url)
             number = int(item.pr_url.rsplit("/", 1)[-1]) if item.pr_url.rsplit("/", 1)[-1].isdigit() else 0
             if number:
                 try:
@@ -142,9 +145,13 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         allowed = list(item.allowed_paths or [])
-        if not allowed:
+        depot = bundle.config.repo
+        if not allowed or depot is None:
+            # Sans dépôt, il n'y a pas de fichiers à comparer : aucune violation à signaler.
+            # C'est bien une absence de matière, pas une absence de violation — et la
+            # garantie `scope_respected`, elle, refuse (`diff_available`).
             return []
-        repo = _repo_slug(bundle.config.repo.url)
+        repo = _repo_slug(depot.url)
         branch = bundle.config.branch_for(item.tracker_key)
-        diff = await bundle.adapters.scm.compare(repo, bundle.config.repo.default_branch, branch)
+        diff = await bundle.adapters.scm.compare(repo, depot.default_branch, branch)
         return [path for path in diff.paths() if not matches_any(path, allowed)]

@@ -147,15 +147,16 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             ttl_minutes=budget.max_minutes + 15,
         )
         documents = item.documents or {}
+        depot = bundle.config.repo
         stage_input = StageInput(
             run_id=run_id,
             attempt=plan.attempt,
             project=ProjectRef(
                 slug=bundle.slug,
                 org=bundle.org_slug,
-                test_command=bundle.config.repo.test_command,
-                lint_command=bundle.config.repo.lint_command,
-                typecheck_command=bundle.config.repo.typecheck_command,
+                test_command=depot.test_command if depot else "",
+                lint_command=depot.lint_command if depot else "",
+                typecheck_command=depot.typecheck_command if depot else "",
             ),
             work_item=WorkItemRef(
                 key=item.tracker_key,
@@ -178,12 +179,17 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 outputs=plan.outputs or [],
                 inputs=plan.inputs or [],
             ),
+            # Pas de dépôt, pas de `repo` : le runner prépare un répertoire vide au lieu de
+            # cloner. Un dépôt factice, comme on le faisait, faisait croire à un workspace
+            # qui n'existait pas et promettait une branche que personne ne relirait.
             repo=RepoRef(
-                url=bundle.config.repo.url,
-                base_branch=bundle.config.repo.default_branch,
+                url=depot.url,
+                base_branch=depot.default_branch,
                 work_branch=bundle.config.branch_for(item.tracker_key),
-                clone_depth=bundle.config.repo.clone_depth,
-            ),
+                clone_depth=depot.clone_depth,
+            )
+            if depot
+            else None,
             agent=AgentRef(backend=backend, launch=LaunchSpec()),
             model=resolved.to_ref(),
             gateway_key=key.key,

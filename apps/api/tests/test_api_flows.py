@@ -395,3 +395,25 @@ async def test_webhook_gitlab_refuse_un_jeton_invalide(
         headers={"X-Gitlab-Token": "faux", "X-Gitlab-Event": "Issue Hook"},
     )
     assert response.status_code == 401
+
+
+async def test_un_projet_sans_depot_se_cree(client: AsyncClient, admin: str) -> None:
+    """Limite n°1 de l'ADR 0012 : un métier qui instruit des dossiers n'a pas de dépôt,
+    et devait pourtant en déclarer un qui ne servait à rien."""
+    reponse = await client.post(
+        "/api/v1/orgs/varga/projects",
+        json={
+            "slug": "staffing",
+            "name": "Staffing",
+            "config": {"slug": "staffing", "org": "varga"},
+        },
+    )
+    assert reponse.status_code == 201, reponse.text
+    assert reponse.json()["config"].get("repo") is None
+
+    from choregos_contracts import ProjectConfig
+
+    config = ProjectConfig.model_validate(reponse.json()["config"])
+    assert not config.has_repo
+    with pytest.raises(ValueError, match="n'a pas de dépôt"):
+        _ = config.repo_url

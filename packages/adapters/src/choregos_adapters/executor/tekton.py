@@ -125,6 +125,7 @@ class TektonExecutor:
             await self.client.request("POST", f"{CORE_API}/namespaces/{spec.namespace}/secrets", json=secret)
 
     def _pipeline_run(self, spec: StageJobSpec, name: str) -> dict[str, Any]:
+        depot = spec.stage_input.repo if spec.stage_input else None
         pod_template: dict[str, Any] = {
             "securityContext": {"runAsNonRoot": True, "runAsUser": 1000, "fsGroup": 1000},
             "nodeSelector": {"role": "runners"},
@@ -152,13 +153,15 @@ class TektonExecutor:
                     {"name": "run-id", "value": spec.run_id},
                     {"name": "api-url", "value": spec.api_url},
                     {"name": "runner-image", "value": spec.runner_image},
+                    # Vide quand le projet n'a pas de dépôt : la tâche de clonage du
+                    # pipeline saute, et le runner prépare un répertoire vide lui-même.
                     {
                         "name": "repo-url",
-                        "value": (spec.stage_input.repo.url if spec.stage_input else ""),
+                        "value": (depot.url if depot else ""),
                     },
                     {
                         "name": "revision",
-                        "value": (spec.stage_input.repo.base_branch if spec.stage_input else "main"),
+                        "value": (depot.base_branch if depot else "main"),
                     },
                 ],
                 "workspaces": [

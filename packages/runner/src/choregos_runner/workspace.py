@@ -128,6 +128,20 @@ class Workspace:
         """
         repo = stage_input.repo
         self.path.mkdir(parents=True, exist_ok=True)
+        if repo is None:
+            # Projet sans dépôt (ADR 0012) : l'agent travaille dans un répertoire vide.
+            # On initialise quand même un git LOCAL, sans distant — c'est ce qui permet
+            # au reste du runner de mesurer ce qui a changé et d'exclure ses propres
+            # fichiers, sans rien cloner ni rien pousser.
+            if not (self.path / ".git").exists():
+                init = await self.git("init", "--initial-branch", "travail")
+                if not init.ok:
+                    raise WorkspaceError(f"git init impossible : {init.output}")
+            await self.git("config", "user.name", self.user_name)
+            await self.git("config", "user.email", self.user_email)
+            await self.git("config", "commit.gpgsign", "false")
+            self._exclude_runner_files()
+            return
         url = _with_token(repo.url, token)
         if not (self.path / ".git").exists():
             init = await self.git("init", "--initial-branch", repo.base_branch)

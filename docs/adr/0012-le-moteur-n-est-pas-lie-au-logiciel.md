@@ -36,15 +36,21 @@ même déploiement, l'un qui écrit du code et l'autre qui qualifie des profils.
 
 ## Ce qui reste lié au logiciel, et qu'il faut savoir avant de s'engager
 
-1. **`ProjectConfig.repo` est obligatoire.** Un projet RH déclare un dépôt qui ne sert à
-   rien. C'est le défaut le plus visible : il faudrait un projet « sans dépôt », où le
-   workspace de l'agent est un répertoire vide.
+1. ~~**`ProjectConfig.repo` est obligatoire.**~~ **Levée le 2026-09-24.** `repo` est
+   facultatif : sans lui, le runner prépare un répertoire vide suivi par un git **local**
+   (ce qui lui permet encore de mesurer ce que l'agent a écrit), ne clone rien, ne pousse
+   rien, et les garanties qui lisent un diff refusent faute de matière. Le projet RH de la
+   démonstration n'a plus de dépôt du tout — c'est la preuve, pas l'intention. Ce qui reste
+   vrai : une transition qui suppose un SCM (ouvrir une PR, lire des checks) échoue avec un
+   message qui nomme la cause, plutôt que de partir sur une URL vide.
 2. **`StageOutputs` porte des champs de développement** (`allowed_paths`, `spec_markdown`,
    `verdict`…). Le modèle tolère les champs supplémentaires, donc un métier nomme ses
    sorties librement — mais les siennes ne sont pas typées, et la garantie ne peut que
    vérifier leur présence, pas leur forme.
-3. **`Evidence` parle de tests, de lint et de couverture.** Un dossier instruit n'a rien de
-   tout cela. Il faudrait des preuves nommées par le métier, avec une garantie qui les lise.
+3. ~~**`Evidence` parle de tests, de lint et de couverture.**~~ **Levée le 2026-09-24.**
+   `Evidence.facts` porte des faits nommés par le métier, et la garantie `evidence_facts`
+   les lit — présence, seuil minimal, booléen vrai. Le front les affiche à la place des
+   mesures du logiciel quand ce sont elles qui existent.
 4. **Les rôles du DSL sont une énumération fermée** (`triage`, `implement`, `verify`…).
    Un rôle métier s'écrit `role: custom` + `playbook: sourcing` : cela fonctionne, mais le
    board affiche `custom`, et les évals ne savent pas de quoi il s'agit.
@@ -56,8 +62,9 @@ même déploiement, l'un qui écrit du code et l'autre qui qualifie des profils.
 
 Le cœur est **déclaré générique**, et les quatre mécanismes ci-dessus l'ont rendu utilisable
 tel quel pour un métier non logiciel. Les cinq limites sont écrites ici plutôt que
-découvertes par le premier qui essaiera. La prochaine marche, si un vrai besoin métier
-arrive : un projet **sans dépôt**, et des **preuves nommées par le métier**.
+découvertes par le premier qui essaiera. Les deux marches annoncées ici — un projet **sans dépôt** et des **preuves nommées par le
+métier** — ont été franchies les 2026-09-24 ; les trois limites restantes ne bloquent aucun
+métier, elles montrent où la plateforme a grandi.
 
 ## Conséquences
 

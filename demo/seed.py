@@ -97,9 +97,10 @@ PROJETS = {
         "config": {
             "slug": "staffing",
             "org": "demo",
-            # Un dépôt est exigé par le contrat de projet ; ce métier n'en a pas l'usage.
-            # C'est une limite relevée dans l'ADR sur la généricité, pas un choix.
-            "repo": {"url": "git://demo-git:9418/app.git", "default_branch": "main"},
+            # PAS DE DÉPÔT. Ce métier n'en a pas l'usage, et depuis le 2026-09-24 il n'est
+            # plus obligé d'en déclarer un (ADR 0012, limite n°1 — levée). L'agent travaille
+            # dans un répertoire vide : rien à cloner, rien à pousser, et les garanties qui
+            # lisent un diff refusent parce qu'elles n'ont rien à lire.
             "models": {"profiles": MODELES},
         },
         "connecteurs": {
