@@ -101,3 +101,11 @@ async def test_metrics_expose_les_series_depuis_la_base(client: AsyncClient, pro
     )
     assert 'choregos_project_daily_cost_usd{project="billing-api"} 0.5' in corps
     assert "http_requests_total{" in corps
+
+
+async def test_chaque_reponse_porte_un_identifiant_de_requete(client: AsyncClient) -> None:
+    """Le journal de l'API et celui du front se relient par cet identifiant."""
+    sans = await client.get("/healthz")
+    assert len(sans.headers["x-request-id"]) >= 12
+    avec = await client.get("/healthz", headers={"X-Request-Id": "req-du-front-42"})
+    assert avec.headers["x-request-id"] == "req-du-front-42"

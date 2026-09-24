@@ -13,7 +13,7 @@ from hashlib import sha256
 from typing import Any
 
 from choregos_api.db.models import GatewayKeyRow, Run, WorkItem
-from choregos_api.logging import get_logger
+from choregos_api.logging import bind, get_logger
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_contracts import (
@@ -91,6 +91,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, plan.project_id)
         item = await load_work_item(session, plan.work_item_id)
+        bind(project=bundle.slug, work_item=item.tracker_key, stage=plan.role)
         run_id = _run_id(plan)
 
         existing = await session.get(Run, run_id)

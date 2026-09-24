@@ -105,7 +105,7 @@ explicit_package_bases = true
 mypy_path = "packages/contracts/src:packages/core/src:packages/adapters/src:packages/runner/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:apps/api/src:apps/orchestrator/src"
 
 [[tool.mypy.overrides]]
-module = ["temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*"]
+module = ["temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

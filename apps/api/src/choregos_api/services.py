@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from choregos_contracts import EventType, Policy, ProjectConfig, Workflow
+from choregos_contracts import ChoregosEvent, EventType, Policy, ProjectConfig, Workflow
 from choregos_core import (
     PolicyEngine,
     checksum,
@@ -36,7 +36,7 @@ from .db.models import (
     WorkflowDef,
     WorkItem,
 )
-from .events import emit
+from .events import diffuser
 from .schemas import (
     CostEstimate,
     HumanRequestDto,
@@ -440,13 +440,17 @@ async def record_cost(
         ts=utcnow(),
     )
     session.add(entry)
-    emit(
-        EventType.COST_RECORDED,
-        subject=run_id,
-        cost_usd=cost_usd,
-        model=model,
-        tokens_in=tokens_in,
-        tokens_out=tokens_out,
+    await diffuser(
+        session,
+        ChoregosEvent.emit(
+            EventType.COST_RECORDED,
+            source="/choregos/api",
+            subject=run_id,
+            cost_usd=cost_usd,
+            model=model,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+        ),
     )
     return entry
 
@@ -502,7 +506,12 @@ async def persist_event(
         ts=utcnow(),
     )
     session.add(row)
-    emit(type_, subject=subject, project_slug=project_slug, **payload)
+    await diffuser(
+        session,
+        ChoregosEvent.emit(
+            type_, source="/choregos/api", subject=subject, project_slug=project_slug, **payload
+        ),
+    )
     return row
 
 
