@@ -71,3 +71,26 @@ def test_les_migrations_produisent_le_schema_des_modeles(tmp_path: pathlib.Path)
             "Générer la migration manquante :\n"
             "  cd apps/api && alembic revision --autogenerate -m '…'"
         )
+
+
+def test_les_migrations_redescendent_et_remontent(tmp_path: pathlib.Path) -> None:
+    """`downgrade base` puis `upgrade head` : aucune migration n'était jamais redescendue."""
+    fichier = tmp_path / "aller-retour.db"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{fichier}")
+    get_settings.cache_clear()
+    try:
+        config = _config(f"sqlite:///{fichier}")
+        command.upgrade(config, "head")
+        command.downgrade(config, "base")
+        moteur = create_engine(f"sqlite:///{fichier}")
+        with moteur.connect() as connexion:
+            tables = connexion.exec_driver_sql("select name from sqlite_master where type='table'").fetchall()
+        assert {t[0] for t in tables} <= {"alembic_version"}, "tout doit être redescendu"
+        command.upgrade(config, "head")
+        with moteur.connect() as connexion:
+            ecarts = compare_metadata(MigrationContext.configure(connexion), Base.metadata)
+        assert not [d for d in ecarts if not (isinstance(d, tuple) and str(d[0]).startswith("modify_"))]
+    finally:
+        monkeypatch.undo()
+        get_settings.cache_clear()
