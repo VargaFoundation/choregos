@@ -111,6 +111,50 @@ REPLAY_IDS ?=
 replay-record:  ## Archive des historiques Temporal dans tests/replay/histories (REPLAY_IDS=… ou tous les interpréteurs)
 	$(UV) run python tools/replay_record.py --address $(TEMPORAL_ADDRESS) $(if $(REPLAY_IDS),$(REPLAY_IDS),--all-interpreters)
 
+# ───────────────────────── démonstration (kind mono-nœud, vrais agents) ─────────────────────────
+# Le chart de la démonstration attend `local/choregos-*:demo` avec `imagePullPolicy: Never` :
+# les images doivent être construites ICI et chargées dans le nœud kind. Sans cette étape,
+# chaque pod reste en `ErrImageNeverPull` — et c'est ce qui arrivait à quiconque suivait le
+# README avant le 2026-09-24, qui ne la mentionnait pas.
+KIND_DEMO ?= choregos-demo
+DEMO_NS ?= choregos
+DEMO_IMAGES := local/choregos-api:demo local/choregos-orchestrator:demo local/choregos-runner:demo local/choregos-web:demo
+
+.PHONY: demo-images
+demo-images:  ## Construit les images de la démonstration et les charge dans le kind `choregos-demo`
+	docker build -f docker/api.Dockerfile    --target api    -t local/choregos-api:demo .
+	docker build -f docker/api.Dockerfile    --target worker -t local/choregos-orchestrator:demo .
+	docker build -f docker/runner.Dockerfile                 -t local/choregos-runner:demo .
+	docker build -f docker/web.Dockerfile                    -t local/choregos-web:demo .
+	kind load docker-image --name $(KIND_DEMO) $(DEMO_IMAGES)
+
+.PHONY: demo-up
+demo-up:  ## Cluster kind (si absent), namespace, dépôt git, ConfigMaps, chart
+	kind get clusters | grep -qx $(KIND_DEMO) || kind create cluster --config demo/kind.yaml
+	kubectl get ns $(DEMO_NS) >/dev/null 2>&1 || kubectl create ns $(DEMO_NS)
+	kubectl -n $(DEMO_NS) apply -k demo
+	helm upgrade --install choregos charts/choregos -n $(DEMO_NS) \
+	  -f charts/choregos/values/local.yaml -f demo/values-demo.yaml --wait --timeout 10m
+
+# `SERIE=b` suffixe les clés (`DEMO-1b`, `RH-1b`) : un ticket n'a qu'un interpréteur, rejouer
+# demande de nouveaux tickets. `GATEWAY=direct` pour un banc sans clé de fournisseur.
+SERIE ?=
+GATEWAY ?= litellm
+.PHONY: demo-seed
+demo-seed:  ## Pose (ou complète) les projets et les tickets, et démarre chaque ticket
+	kubectl -n $(DEMO_NS) apply -k demo
+	kubectl -n $(DEMO_NS) delete job demo-seed --ignore-not-found
+	sed -e 's/__SERIE__/$(SERIE)/' -e 's/__GATEWAY__/$(GATEWAY)/' demo/manifests/seed-job.yaml | kubectl -n $(DEMO_NS) apply -f -
+	kubectl -n $(DEMO_NS) wait --for=condition=complete job/demo-seed --timeout=180s
+	kubectl -n $(DEMO_NS) logs job/demo-seed
+
+.PHONY: demo-status
+demo-status:  ## Où en sont les tickets, les runs et le registre de coûts
+	@kubectl -n $(DEMO_NS) get pods -l choregos/run-id 2>/dev/null || true
+	@kubectl -n $(DEMO_NS) exec choregos-postgresql-0 -- sh -c 'psql -U "$${POSTGRES_USER:-choregos}" -d "$${POSTGRES_DB:-choregos}" \
+	  -c "select tracker_key, state from work_items order by 1" \
+	  -c "select kind, count(*), round(sum(cost_eur)::numeric, 4) as eur, sum(tokens_in) tin, sum(tokens_out) tout from cost_ledger group by 1"'
+
 # ───────────────────────── dev ─────────────────────────
 .PHONY: dev-up
 dev-up:  ## Cluster kind + plateforme + Tilt
