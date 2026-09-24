@@ -1,71 +1,82 @@
-# Contribuer à Choregos
+# Contributing to Choregos
 
-## En cinq minutes
+## In five minutes
 
 ```bash
 git clone https://github.com/VargaFoundation/choregos && cd choregos
 make setup          # uv sync + pnpm install
-make demo           # la chaîne complète, sans cluster : commence par là
-make ci             # ce qui bloque une PR
+make demo           # the whole chain, no cluster: start here
+make ci             # what blocks a PR
 ```
 
-`make demo` fait passer un ticket d'une issue à la production, avec des connecteurs
-simulés. Si vous ne devez lire qu'une chose pour comprendre la plateforme, lisez sa sortie.
+`make demo` takes a ticket from an issue to production, with simulated connectors. If you
+read one thing to understand the platform, read its output.
 
-## Organisation du dépôt
+## Repository layout
 
-Le plan d'exécution complet est dans [`plan/00-index.md`](plan/00-index.md). Il décrit
-l'architecture, les contrats, le backlog et les conventions. Les décisions structurantes
-sont dans [`adr/`](adr/). Ce qui se passe quand ça casse est dans [`runbooks/`](runbooks/).
+The full execution plan is in [`plan/00-index.md`](plan/00-index.md) (French). It describes
+the architecture, the contracts, the backlog and the conventions. Structural decisions are in
+[`adr/`](adr/). What happens when things break is in [`runbooks/`](runbooks/). The critical
+state of the project and the work plan that follows from it are in
+[`plan/STATE-OF-THE-PROJECT-2026-09-24.md`](plan/STATE-OF-THE-PROJECT-2026-09-24.md).
 
-## Le contrat avant le code
+## Languages
 
-`packages/contracts` est la source de vérité des interfaces. On ne le modifie pas au fil de
-l'eau : une PR taguée `contract-change`, relue par le flux intégrateur, et
-`make contracts` pour régénérer les types (à committer).
+The reference documentation (`docs/`, ADRs, runbooks) is in **English**; `docs/fr/` archives
+the French versions. The code, its comments, `docs/plan/` (STATUS, BLOCKERS) and commit
+messages are in French.
 
-Si un contrat vous manque : ouvrez l'issue, continuez avec un contournement local marqué
-`TODO(contract)`, et ne bloquez pas.
+## The contract before the code
 
-## Une story, une PR
+`packages/contracts` is the source of truth for interfaces. It is not modified casually: a PR
+tagged `contract-change`, reviewed by the integrator stream, and `make contracts` to
+regenerate the types (to be committed).
 
-- Une branche `stream/<Sx>/<story>`, une PR, un squash.
-- La description reprend le gabarit : story, changement, critères d'acceptation cochés,
-  preuves (commandes et résultats), contrats, findings déposés.
-- CI verte obligatoire. Pas de force-push sur `main`.
+If a contract is missing: open the issue, continue with a local workaround marked
+`TODO(contract)`, and do not block.
 
-## Ce que la CI vérifie
+## One story, one PR
 
-| Commande | Ce qu'elle garantit |
+- One branch, one PR, one squash.
+- The description follows the template: story, change, acceptance criteria ticked, proof
+  (commands and results), contracts, findings filed — and **what the change does not prove**.
+- Green CI is mandatory. No force-push on `main`.
+
+## What CI checks
+
+| Command | What it guarantees |
 | :-- | :-- |
-| `make lint` | ruff, format compris |
-| `make typecheck` | `mypy --strict` sur tout le Python |
-| `make test` | tests unitaires et d'intégration (fakes) |
-| `make contracts-check` | les types générés sont à jour |
-| `make charts-lint` | les charts rendent et valident |
-| `make web-ci` | lint, typage, tests et build du front |
+| `make lint` | ruff, formatting included |
+| `make typecheck` | `mypy --strict` on all Python |
+| `make test` | unit and integration tests (fakes); PostgreSQL tests when `CHOREGOS_TEST_DATABASE_URL` is set |
+| `make contracts-check` | generated types are current |
+| `make docs-cli` then a clean tree | `docs/cli.md` is current |
+| `make charts-lint` | charts render and validate, four environments including the embedded one |
+| `make web-ci` | lint, types, tests and build of the front |
+| gitleaks | no secret in the history (the documented fake ones are allowlisted by path) |
 
-Le nocturne ajoute : e2e sur kind, conformité de tous les backends ACP, évals de playbooks,
-replay des historiques Temporal, scan des dépendances.
+The nightly adds: e2e on kind, conformance of every ACP backend, playbook evals, replay of
+archived Temporal histories, a blocking dependency scan.
 
-## Écrire du code ici
+## Writing code here
 
-- **Python 3.12**, typage strict, `pydantic` v2, asynchrone côté I/O, `structlog` en JSON.
-- **Le cœur ne fait pas d'I/O** : `packages/core` est pur et testable sans service.
-- **Tout ce qui parle au monde** est un adaptateur, avec son `Protocol` et son fake.
-- **Idempotence** : toute activité Temporal et tout step de provisioning se rejouent sans
-  effet double (ADR-0008). Un test le prouve.
-- **Une garantie est un mécanisme** (ADR-0010) : si vous vous surprenez à écrire une
-  consigne dans un prompt pour garantir une propriété, cherchez le mécanisme.
-- **Secrets** : jamais en dur, jamais dans un workspace d'agent, jamais dans Git.
+- **Python 3.12**, strict typing, `pydantic` v2, async on the I/O side, `structlog` in JSON.
+- **The core does no I/O**: `packages/core` is pure and testable without a service.
+- **Everything that talks to the world** is an adapter, with its `Protocol` and its fake.
+- **Idempotence**: every Temporal activity and every provisioning step replays without a
+  double effect (ADR 0008). A test proves it.
+- **A guarantee is a mechanism** (ADR 0010): if you catch yourself writing an instruction in
+  a prompt to guarantee a property, look for the mechanism.
+- **Nothing is ✅ without a test that fails in its absence** — and for anything an agent
+  traverses, without the bench.
+- **Secrets**: never hard-coded, never in an agent workspace, never in Git.
 
-## Hors périmètre
+## Out of scope
 
-Vous découvrez un problème qui n'est pas dans votre story ? N'y touchez pas : ouvrez une
-issue `finding` avec l'origine, la preuve et une proposition. C'est exactement ce qu'on
-demande aux agents.
+You found a problem that is not in your story? Do not touch it: open a `finding` issue with
+the origin, the proof and a proposal. It is exactly what we ask of agents.
 
-## Le dépôt est son propre client
+## The repository is its own client
 
-Dès M1, `choregos` est un projet Choregos : les stories passent par la plateforme. Quand
-vous travaillez ici, vous travaillez aussi sur l'outil qui vous relit.
+Since M1, `choregos` is a Choregos project: stories go through the platform. When you work
+here, you also work on the tool that reviews you.

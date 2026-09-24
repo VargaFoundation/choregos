@@ -24,7 +24,7 @@ choregos projects list
 
 `--template <name>@<version>` on `create` also provisions the project: repository, board,
 GitOps manifests and scaffolding. Without it, the project is created empty and you attach
-its connectors yourself, from the UI (*Settings → Connectors*) or the API.
+its connectors yourself, from the UI (*Settings → connecteurs*: type and configuration, secrets referenced never typed) or the API (`PUT /projects/{id}/connectors/{kind}`).
 
 A project needs, at minimum: a **tracker** (where humans look), a **workflow** and a
 **policy**. Everything else has a default or can be added later.
@@ -103,7 +103,7 @@ playbooks, and use the gates that do not speak of code:
 
 ```yaml
 actors:
-  sourcer: { type: agent, role: custom, playbook: sourcing, model: "profile:standard" }
+  sourcer: { type: agent, role: sourcing, model: "profile:standard" }
 transitions:
   - id: t-sourcing
     from: request
@@ -209,10 +209,15 @@ or kind.
 
 ## Known limits, stated rather than discovered
 
-- With a **fake SCM**, the gates that read a diff (`scope_respected`, `diff_size_max`,
-  `no_secrets`) refuse rather than pass. That is deliberate.
-- A ticket cannot be replayed under the same id — Temporal refuses to restart a completed
-  workflow id. Replays use a fresh ticket key.
-- `ProjectConfig.repo` is still mandatory, so a project with no repository declares one it
-  does not use. See [ADR 0012](../adr/0012-le-moteur-n-est-pas-lie-au-logiciel.md) for the
-  full list of what is still shaped by software.
+- The engine is still shaped by software in two places (ADR 0012): `StageOutputs` is typed
+  for development — business outputs travel by name in `outputs`, are stored on the ticket
+  and handed to the next stage as `inputs`, but are not typed —, and most gates read a
+  diff. `outputs_present` and `evidence_facts` are the business-side gates.
+- The tool catalogue is listed to agents and callable, but nothing *requires* a call: a
+  playbook can announce a tool the agent ignores. A `tool_called` gate reading the ledger is
+  the mechanism to write (P1-6).
+- Human-in-the-loop is a state with a deadline and an escalation, and a decision bar in the
+  front; there is no checkpoint/resume of the agent's own context across the wait.
+- The single-node bench measures **no cost** unless the embedded gateway gets a provider
+  key: in *direct* mode the agent brings its own credentials and nothing is metered.
+- `docs/plan/BLOCKERS.md` (French) keeps the rest, with causes and workarounds.

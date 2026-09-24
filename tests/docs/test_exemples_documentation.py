@@ -19,7 +19,7 @@ import yaml
 from choregos_contracts import Policy
 from choregos_core import parse_workflow
 
-DOCS = sorted((Path(__file__).resolve().parents[2] / "docs" / "en").glob("*.md"))
+DOCS = sorted((Path(__file__).resolve().parents[2] / "docs").glob("*.md"))
 BLOC = re.compile(r"```yaml\n(.*?)```", re.S)
 
 
@@ -34,8 +34,8 @@ def _blocs() -> list[tuple[str, str, dict[str, Any]]]:
 
 
 def test_il_y_a_bien_des_exemples_a_verifier() -> None:
-    """Sans cette garde, renommer `docs/en` rendrait la suite verte et vide."""
-    assert _blocs(), "aucun exemple trouvé dans docs/en : le test ne vérifie plus rien"
+    """Sans cette garde, déplacer les pages de `docs/` rendrait la suite verte et vide."""
+    assert _blocs(), "aucun exemple trouvé dans docs/ : le test ne vérifie plus rien"
 
 
 @pytest.mark.parametrize(("nom", "bloc", "document"), _blocs(), ids=lambda v: v if isinstance(v, str) else "")
@@ -46,3 +46,20 @@ def test_un_exemple_de_la_documentation_est_valide(nom: str, bloc: str, document
     _workflow, rapport = parse_workflow(bloc, strict=False)
     assert rapport.valid, f"{nom} : " + " · ".join(i.format() for i in rapport.errors)
     assert not rapport.warnings, f"{nom} : " + " · ".join(i.format() for i in rapport.warnings)
+
+
+def test_la_reference_de_la_cli_est_a_jour() -> None:
+    """`docs/cli.md` est générée depuis la CLI : une commande ajoutée sans `make docs-cli` se voit ici."""
+    import os
+    import subprocess
+    import sys
+
+    racine = Path(__file__).resolve().parents[2]
+    resultat = subprocess.run(
+        [sys.executable, str(racine / "tools" / "gen_cli_reference.py"), "--check"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "COLUMNS": "100"},
+        check=False,
+    )
+    assert resultat.returncode == 0, resultat.stderr or resultat.stdout

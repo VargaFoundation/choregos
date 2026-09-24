@@ -1,8 +1,31 @@
-# Décisions d'architecture
+# Architecture decision records
 
-Une décision structurante s'écrit ici avant d'être codée, et se relit quand on se demande
-« pourquoi c'est comme ça ». Format : contexte, décision, conséquences, alternatives
-écartées. Une décision annulée n'est pas effacée : elle est marquée *remplacée par*.
+A structural decision is written here before it is coded, and re-read whenever someone
+asks "why is it like this?". Format: context, decision, consequences, alternatives
+discarded. A reversed decision is not erased: it is marked *superseded by*.
+
+> The records below are in French (written before 2026-09-24, when English became the
+> reference language). New records are written in English; the existing ones are
+> translated as they are touched. Each row carries an English one-line summary.
+
+| # | Decision (English summary) | Status |
+| --: | :-- | :-- |
+| 0001 | Contracts are frozen at M0 and versioned — `packages/contracts` is the single source of truth | accepted |
+| 0002 | ACP (Agent Client Protocol) as the agent contract; the OpenHands default was superseded by 0011 | accepted |
+| 0003 | Temporal, self-hosted, for durable orchestration — one workflow per ticket | accepted |
+| 0004 | Cost is counted at the LiteLLM gateway, never from the agent's claim; one capped virtual key per run | accepted |
+| 0005 | Every connector is a `Protocol` with a real and a scriptable fake implementation | accepted |
+| 0006 | Three independent production locks: merge queue, release train, declarative guardrails | accepted |
+| 0007 | Memory must earn its place before anything depends on it | accepted |
+| 0008 | Deterministic identifiers and idempotence everywhere | accepted |
+| 0009 | The cluster changes only through Git (GitOps as the only mutation path) | accepted |
+| 0010 | A guarantee is a mechanism, never a prompt — a gate that cannot see refuses | accepted |
+| 0011 | OpenHands removed: it exposes no CLI ACP agent; `claude-code` becomes the default | accepted |
+| 0012 | The engine is not tied to software: deployment playbooks, generic gates, internal tracker, optional repo, business evidence, open roles | accepted |
+| 0013 | Agent task density: an admission queue (suspended Jobs), executor capabilities — and what is taken from google/ax | accepted |
+| 0014 | A platform-held tool catalogue: HTTP and external MCP tools called *for* the agent, keys server-side, per-group access | accepted |
+
+## Index (French titles)
 
 | # | Décision | État |
 | --: | :-- | :-- |

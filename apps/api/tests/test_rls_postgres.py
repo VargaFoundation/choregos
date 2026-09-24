@@ -3,7 +3,7 @@
 Jamais exercée avant le 2026-09-24 : toute la suite tournait sur SQLite, où la politique
 n'existe pas, et la politique elle-même était fail-open. Ce test ne tourne que contre un
 vrai PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`) : la CI en lance un, en local
-`docs/dev.md` dit comment.
+`docs/development.md` dit comment.
 """
 
 from __future__ import annotations

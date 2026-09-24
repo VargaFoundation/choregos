@@ -10,7 +10,7 @@ sérialise les déploiements derrière un *release train*.
 
 Licence : Apache 2.0. Plan d'exécution complet : [`docs/plan/00-index.md`](docs/plan/00-index.md).
 
-> **English documentation** — [docs/en](docs/en/README.md) : concepts, deployment and
+> **Documentation** — [docs/README.md](docs/README.md) (English, the reference) : concepts, deployment and
 > usage. The reference documentation below is in French.
 
 ## Principes
@@ -91,7 +91,7 @@ moteur sans une ligne de code changée. Le README dit aussi ce que ce banc ne pr
 ## Intégrer un projet
 
 Vous avez un dépôt et vous voulez que la plateforme le développe :
-**[docs/demarrer-un-projet.md](docs/demarrer-un-projet.md)**. Le guide va du `make demo`
+**[docs/getting-started.md](docs/getting-started.md)** (English ; [version française](docs/fr/demarrer-un-projet.md)). Le guide va du `make demo`
 (le trajet complet en mémoire, sans rien installer) jusqu'au provisioning d'un vrai projet
 — GitHub App, board, GitOps, scaffolding — et au premier ticket `agent-ready`.
 

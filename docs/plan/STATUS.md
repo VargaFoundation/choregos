@@ -240,6 +240,14 @@ les 492 tests ne disaient pas :
    interne ; transcript et abandon de release ; fixtures hors du bundle de production ;
    `next-intl` retiré (l'anglais de l'interface = P1-1b). Reste : e2e Playwright contre
    l'API réelle (P1-3), a11y et budget de bundle (P2).
+   **P1-2 livré** (#34) : SBOM + provenance sur les images, Trivy sur l'image de release,
+   scan nocturne bloquant, gitleaks dans la porte, `tools/bump_version.py` (dépôt aligné sur
+   v0.3.0, la release refuse un tag divergent), wheels attachés, couverture avec `apps/api`
+   et `adapters` (seuil 70 % = 72 % mesurés). **P1-1a livré** : `docs/` est la référence,
+   en anglais (getting started, deployment, usage, concepts, development, security,
+   contributing, `cli.md` généré et testé) ; `docs/fr/` archive les guides français ; index
+   ADR et runbooks avec résumés anglais ; `CLAUDE.md` → `AGENTS.md`. Reste P1-1b/c : l'anglais
+   de l'interface, la traduction intégrale des 14 ADR et des 11 runbooks.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
