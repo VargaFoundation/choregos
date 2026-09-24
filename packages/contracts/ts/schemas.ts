@@ -501,7 +501,8 @@ export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSy
 
 export type WorkflowAgentActor = {
   type: "agent";
-  role: "triage" | "refine" | "plan" | "implement" | "verify" | "review" | "fix_ci" | "address_review" | "release_notes" | "verify_prod" | "custom";
+  /** Rôle de l'agent. Les rôles du paquet — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — gardent leur sens ; un métier nomme les siens (`sourcing`, `instruction_dossier`), et le playbook se résout par le nom du rôle. */
+  role: string;
   /** profile:<name>, profile:by_size, ou un identifiant LiteLLM direct. */
   model?: string;
   /** Backend ACP imposé (sinon défaut du projet). */

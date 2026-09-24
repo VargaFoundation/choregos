@@ -4,175 +4,390 @@
   "title": "Workflow",
   "description": "DSL de workflow Choregos : machine à états déclarative par projet (docs/plan/01 §1.4).",
   "type": "object",
-  "required": ["apiVersion", "kind", "metadata", "actors", "states", "transitions"],
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "actors",
+    "states",
+    "transitions"
+  ],
   "additionalProperties": false,
   "properties": {
-    "apiVersion": { "const": "choregos/v1" },
-    "kind": { "const": "Workflow" },
+    "apiVersion": {
+      "const": "choregos/v1"
+    },
+    "kind": {
+      "const": "Workflow"
+    },
     "metadata": {
       "type": "object",
-      "required": ["name", "version"],
+      "required": [
+        "name",
+        "version"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": { "$ref": "#/$defs/slug" },
-        "version": { "type": "integer", "minimum": 1 },
-        "description": { "type": "string" },
-        "extends": { "type": "string", "pattern": "^template:[a-z0-9-]+@[0-9]+$" }
+        "name": {
+          "$ref": "#/$defs/slug"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "extends": {
+          "type": "string",
+          "pattern": "^template:[a-z0-9-]+@[0-9]+$"
+        }
       }
     },
     "actors": {
       "type": "object",
       "minProperties": 1,
-      "propertyNames": { "$ref": "#/$defs/identifier" },
-      "additionalProperties": { "$ref": "#/$defs/actor" }
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/actor"
+      }
     },
     "states": {
       "type": "object",
       "minProperties": 1,
-      "propertyNames": { "$ref": "#/$defs/identifier" },
-      "additionalProperties": { "$ref": "#/$defs/state" }
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/state"
+      }
     },
     "transitions": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/transition" }
+      "items": {
+        "$ref": "#/$defs/transition"
+      }
     },
-    "defaults": { "$ref": "#/$defs/defaults" }
+    "defaults": {
+      "$ref": "#/$defs/defaults"
+    }
   },
   "$defs": {
-    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
-    "identifier": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$" },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+    },
     "actor": {
       "oneOf": [
-        { "$ref": "#/$defs/agentActor" },
-        { "$ref": "#/$defs/humanActor" },
-        { "$ref": "#/$defs/systemActor" }
+        {
+          "$ref": "#/$defs/agentActor"
+        },
+        {
+          "$ref": "#/$defs/humanActor"
+        },
+        {
+          "$ref": "#/$defs/systemActor"
+        }
       ]
     },
     "agentActor": {
       "type": "object",
-      "required": ["type", "role"],
+      "required": [
+        "type",
+        "role"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "agent" },
+        "type": {
+          "const": "agent"
+        },
         "role": {
           "type": "string",
-          "enum": ["triage", "refine", "plan", "implement", "verify", "review", "fix_ci",
-                   "address_review", "release_notes", "verify_prod", "custom"]
+          "pattern": "^[a-z][a-z0-9_]{1,31}$",
+          "description": "Rôle de l'agent. Les rôles du paquet — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — gardent leur sens ; un métier nomme les siens (`sourcing`, `instruction_dossier`), et le playbook se résout par le nom du rôle."
         },
         "model": {
           "type": "string",
           "description": "profile:<name>, profile:by_size, ou un identifiant LiteLLM direct.",
           "default": "profile:by_size"
         },
-        "backend": { "type": "string", "description": "Backend ACP imposé (sinon défaut du projet)." },
-        "fresh_context": { "type": "boolean", "default": false },
-        "max_turns": { "type": "integer", "minimum": 1, "maximum": 1000 },
-        "max_minutes": { "type": "integer", "minimum": 1, "maximum": 480 },
-        "playbook": { "type": "string", "description": "Nom du playbook (défaut : le rôle)." }
+        "backend": {
+          "type": "string",
+          "description": "Backend ACP imposé (sinon défaut du projet)."
+        },
+        "fresh_context": {
+          "type": "boolean",
+          "default": false
+        },
+        "max_turns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "max_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 480
+        },
+        "playbook": {
+          "type": "string",
+          "description": "Nom du playbook (défaut : le rôle)."
+        }
       }
     },
     "humanActor": {
       "type": "object",
-      "required": ["type", "group"],
+      "required": [
+        "type",
+        "group"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "human" },
-        "group": { "type": "string" },
-        "sla_hours": { "type": "integer", "minimum": 1 },
-        "escalate_to": { "type": "string" }
+        "type": {
+          "const": "human"
+        },
+        "group": {
+          "type": "string"
+        },
+        "sla_hours": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "escalate_to": {
+          "type": "string"
+        }
       }
     },
     "systemActor": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
-      "properties": { "type": { "const": "system" } }
+      "properties": {
+        "type": {
+          "const": "system"
+        }
+      }
     },
     "state": {
       "type": "object",
-      "required": ["display"],
+      "required": [
+        "display"
+      ],
       "additionalProperties": false,
       "properties": {
-        "display": { "type": "string", "minLength": 1 },
+        "display": {
+          "type": "string",
+          "minLength": 1
+        },
         "tracker": {
           "type": "object",
           "additionalProperties": false,
-          "properties": { "status": { "type": "string" }, "label": { "type": "string" } }
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            }
+          }
         },
-        "terminal": { "type": "boolean", "default": false },
-        "kind": { "type": "string", "enum": ["work", "wait", "terminal"], "default": "work" }
+        "terminal": {
+          "type": "boolean",
+          "default": false
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "work",
+            "wait",
+            "terminal"
+          ],
+          "default": "work"
+        }
       }
     },
     "transition": {
       "type": "object",
-      "required": ["from", "to"],
+      "required": [
+        "from",
+        "to"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "from": { "type": "string", "description": "identifiant d'état, ou *agent (tout état piloté par un agent)" },
-        "to": { "$ref": "#/$defs/identifier" },
-        "by": { "$ref": "#/$defs/identifier" },
-        "via": { "const": "release_train" },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "from": {
+          "type": "string",
+          "description": "identifiant d'état, ou *agent (tout état piloté par un agent)"
+        },
+        "to": {
+          "$ref": "#/$defs/identifier"
+        },
+        "by": {
+          "$ref": "#/$defs/identifier"
+        },
+        "via": {
+          "const": "release_train"
+        },
         "train": {
           "type": "object",
-          "required": ["env"],
+          "required": [
+            "env"
+          ],
           "additionalProperties": false,
           "properties": {
-            "env": { "type": "string" },
-            "approval": { "$ref": "#/$defs/identifier" },
-            "auto_sync": { "type": "boolean", "default": false }
+            "env": {
+              "type": "string"
+            },
+            "approval": {
+              "$ref": "#/$defs/identifier"
+            },
+            "auto_sync": {
+              "type": "boolean",
+              "default": false
+            }
           }
         },
-        "gates": { "type": "array", "items": { "$ref": "#/$defs/gateRef" } },
-        "outputs": { "type": "array", "items": { "type": "string" } },
-        "inputs": { "type": "array", "items": { "type": "string" } },
-        "on_fail": { "$ref": "#/$defs/retry" },
-        "on_reject": { "$ref": "#/$defs/identifier" },
-        "on_changes_requested": { "$ref": "#/$defs/retry" },
+        "gates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/gateRef"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "on_fail": {
+          "$ref": "#/$defs/retry"
+        },
+        "on_reject": {
+          "$ref": "#/$defs/identifier"
+        },
+        "on_changes_requested": {
+          "$ref": "#/$defs/retry"
+        },
         "review": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "agents": { "type": "array", "items": { "$ref": "#/$defs/identifier" } },
+            "agents": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/identifier"
+              }
+            },
             "humans": {
               "type": "object",
-              "required": ["group", "required"],
+              "required": [
+                "group",
+                "required"
+              ],
               "additionalProperties": false,
               "properties": {
-                "group": { "type": "string" },
-                "required": { "type": "string", "enum": ["always", "by_policy", "never"] }
+                "group": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "string",
+                  "enum": [
+                    "always",
+                    "by_policy",
+                    "never"
+                  ]
+                }
               }
             }
           }
         },
-        "timeout_hours": { "type": "integer", "minimum": 1 }
+        "timeout_hours": {
+          "type": "integer",
+          "minimum": 1
+        }
       },
       "oneOf": [
-        { "required": ["by"], "not": { "required": ["via"] } },
-        { "required": ["via", "train"], "not": { "required": ["by"] } }
+        {
+          "required": [
+            "by"
+          ],
+          "not": {
+            "required": [
+              "via"
+            ]
+          }
+        },
+        {
+          "required": [
+            "via",
+            "train"
+          ],
+          "not": {
+            "required": [
+              "by"
+            ]
+          }
+        }
       ]
     },
     "retry": {
       "type": "object",
-      "required": ["to", "max_attempts", "escalate_to"],
+      "required": [
+        "to",
+        "max_attempts",
+        "escalate_to"
+      ],
       "additionalProperties": false,
       "properties": {
-        "to": { "$ref": "#/$defs/identifier" },
-        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
-        "escalate_to": { "$ref": "#/$defs/identifier" }
+        "to": {
+          "$ref": "#/$defs/identifier"
+        },
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "escalate_to": {
+          "$ref": "#/$defs/identifier"
+        }
       }
     },
     "gateRef": {
       "oneOf": [
-        { "type": "string" },
+        {
+          "type": "string"
+        },
         {
           "type": "object",
-          "required": ["name"],
+          "required": [
+            "name"
+          ],
           "additionalProperties": false,
           "properties": {
-            "name": { "type": "string" },
-            "params": { "type": "object", "additionalProperties": true }
+            "name": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": true
+            }
           }
         }
       ]
@@ -185,17 +400,30 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "on_question": { "$ref": "#/$defs/identifier" },
-            "on_budget_exceeded": { "$ref": "#/$defs/identifier" },
-            "on_timeout": { "$ref": "#/$defs/identifier" }
+            "on_question": {
+              "$ref": "#/$defs/identifier"
+            },
+            "on_budget_exceeded": {
+              "$ref": "#/$defs/identifier"
+            },
+            "on_timeout": {
+              "$ref": "#/$defs/identifier"
+            }
           }
         },
         "needs_human": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "on_answer": { "type": "string", "enum": ["resume"] },
-            "on_abandon": { "$ref": "#/$defs/identifier" }
+            "on_answer": {
+              "type": "string",
+              "enum": [
+                "resume"
+              ]
+            },
+            "on_abandon": {
+              "$ref": "#/$defs/identifier"
+            }
           }
         }
       }

@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .enums import ActorType, StageRole, StateKind
+from .enums import ActorType, StateKind
 
 Identifier = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,62}$")]
 Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
@@ -27,9 +27,20 @@ class WorkflowMetadata(Strict):
     extends: str | None = Field(default=None, pattern=r"^template:[a-z0-9-]+@[0-9]+$")
 
 
+#: Un rôle d'agent. Les rôles du paquet (`StageRole`) gardent leur sens — la plateforme
+#: s'appuie sur `implement`, `review` et `verify` pour ses mesures et pour la revue croisée
+#: — mais **un métier nomme les siens** : `sourcing`, `qualification`, `instruction_dossier`.
+#:
+#: Avant le 2026-09-24 il fallait écrire `role: custom` + `playbook: sourcing` : cela
+#: fonctionnait, mais le board affichait « custom » pour toutes les étapes d'un métier, et
+#: les évals ne savaient pas de quoi il s'agissait (ADR 0012, limite n°4). Le playbook se
+#: résolvant déjà par nom de rôle, ouvrir l'énumération suffisait.
+Role = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{1,31}$")]
+
+
 class AgentActor(Strict):
     type: Literal[ActorType.AGENT] = ActorType.AGENT
-    role: StageRole
+    role: Role
     model: str = "profile:by_size"
     backend: str | None = None
     fresh_context: bool = False

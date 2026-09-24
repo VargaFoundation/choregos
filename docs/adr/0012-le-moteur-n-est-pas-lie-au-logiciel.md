@@ -51,9 +51,13 @@ même déploiement, l'un qui écrit du code et l'autre qui qualifie des profils.
    `Evidence.facts` porte des faits nommés par le métier, et la garantie `evidence_facts`
    les lit — présence, seuil minimal, booléen vrai. Le front les affiche à la place des
    mesures du logiciel quand ce sont elles qui existent.
-4. **Les rôles du DSL sont une énumération fermée** (`triage`, `implement`, `verify`…).
-   Un rôle métier s'écrit `role: custom` + `playbook: sourcing` : cela fonctionne, mais le
-   board affiche `custom`, et les évals ne savent pas de quoi il s'agit.
+4. ~~**Les rôles du DSL sont une énumération fermée.**~~ **Levée le 2026-09-24.** Un rôle
+   est un identifiant libre : `sourcing`, `qualification`, `instruction_dossier`. Les rôles
+   du paquet gardent leur sens — la plateforme s'appuie sur `implement`, `review` et
+   `verify` pour ses mesures et pour la revue croisée — et le playbook se résolvait déjà par
+   le nom du rôle, ce qui rendait l'ouverture presque gratuite. Le validateur **avertit**
+   (il n'interdit pas) quand aucun playbook ne se résout pour un rôle : c'est au déploiement
+   de l'apporter, et l'absence ne se découvrait sinon qu'au premier ticket.
 5. **Les gates du logiciel restent nombreuses** (`diff_size_max`, `ci_green`, `scans_ok`…).
    Elles ne gênent pas un autre métier, qui ne les déclare pas ; mais l'équilibre montre où
    la plateforme a grandi.
@@ -63,7 +67,7 @@ même déploiement, l'un qui écrit du code et l'autre qui qualifie des profils.
 Le cœur est **déclaré générique**, et les quatre mécanismes ci-dessus l'ont rendu utilisable
 tel quel pour un métier non logiciel. Les cinq limites sont écrites ici plutôt que
 découvertes par le premier qui essaiera. Les deux marches annoncées ici — un projet **sans dépôt** et des **preuves nommées par le
-métier** — ont été franchies les 2026-09-24 ; les trois limites restantes ne bloquent aucun
+métier** — ont été franchies les 2026-09-24 ; les deux limites restantes ne bloquent aucun
 métier, elles montrent où la plateforme a grandi.
 
 ## Conséquences
