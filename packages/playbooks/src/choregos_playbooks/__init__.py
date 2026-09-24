@@ -120,20 +120,31 @@ INVARIANTS = """- Écris `.choregos/result.json` conforme au contrat avant de te
 - Ne touche pas aux fichiers de configuration Choregos (`.choregos/**`).
 - Consulte `search_memory(query)` avant toute décision d'architecture."""
 
-OUTPUT_CONTRACT = """Écris `.choregos/result.json` :
+OUTPUT_CONTRACT = """Écris `.choregos/result.json` — exactement cette forme (le runner la valide contre
+`choregos/StageResult/v1` ; un résultat mal formé te sera renvoyé pour réparation, et
+l'outil `validate_result` te dit AVANT de finir si le tien passe) :
 
 ```json
 {
   "schema": "choregos/StageResult/v1",
   "status": "done | blocked | needs_human | failed",
   "summary": "une phrase qui dit ce qui a été fait",
-  "outputs": { },
-  "evidence": { "tests_passed": true, "tests_run": 0 },
-  "findings": [],
-  "scope_changes_requested": [],
-  "questions": []
+  "outputs": { "<nom de sortie déclaré par la transition>": "texte (Markdown)" },
+  "evidence": {
+    "tests_passed": true, "tests_run": 0,
+    "facts": { "<fait nommé par le playbook>": 3, "<autre>": true }
+  },
+  "findings": [
+    { "title": "…", "type": "bug | perf | security | tech-debt | docs | flaky-test | ux",
+      "severity": "low | medium | high | critical", "evidence": "chemin:ligne ou sortie" }
+  ],
+  "scope_changes_requested": [ { "paths": ["…"], "justification": "…" } ],
+  "questions": [ { "text": "la question, en une phrase", "options": ["…"] } ]
 }
-```"""
+```
+
+`questions`, `findings` et `scope_changes_requested` sont des listes d'OBJETS, jamais de
+chaînes. Une liste vide vaut `[]`."""
 
 __all__ = [
     "INVARIANTS",

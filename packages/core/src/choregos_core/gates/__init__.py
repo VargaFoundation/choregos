@@ -41,6 +41,9 @@ class GateContext:
     external_results: dict[str, bool] = field(default_factory=dict)
     # Les sorties que la transition déclare (`outputs:`), lues par `outputs_present`.
     expected_outputs: list[str] = field(default_factory=list)
+    #: Les outils du catalogue que ce run a APPELÉS (noms du catalogue), lus au registre
+    #: de coûts — jamais dans ce que l'agent raconte. `tool_called` s'en sert.
+    tool_calls: list[str] = field(default_factory=list)
     #: Le diff a-t-il PU être obtenu ? Faux quand le connecteur SCM ne sait pas comparer
     #: (fake, panne, dépôt injoignable). Une garantie qui repose sur le diff ne doit alors
     #: pas se prononcer : sans diff, `scope_respected` déclarerait le périmètre respecté et
@@ -193,6 +196,37 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         not missing,
         detail="sorties présentes" if not missing else f"sorties manquantes : {', '.join(missing)}",
         annotations=missing,
+    )
+
+
+@gate("tool_called")
+def _tool_called(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Les outils que la transition exige ont été appelés — au registre, pas dans le récit.
+
+    Sur le banc du 2026-09-24 le playbook de sourcing disait « vérifie le lieu avec
+    `verifier_adresse` avant toute chose », l'agent consignait `lieu_verifie: true`, et le
+    registre n'avait aucun appel : dix listages du catalogue, zéro appel. Un outil annoncé
+    dans un prompt n'est pas un outil employé. Cette garantie lit les appels que la
+    plateforme a elle-même comptés (ADR 0014) : on ne croit pas l'agent, on le mesure.
+    """
+    exiges = [str(t) for t in (params.get("tools") or [])]
+    if not exiges:
+        return GateOutcome(
+            "tool_called",
+            False,
+            detail="aucun outil exigé : la garantie demande `tools: [...]` pour avoir de quoi vérifier",
+        )
+    appeles = set(ctx.tool_calls)
+    manquants = [t for t in exiges if t not in appeles]
+    return GateOutcome(
+        "tool_called",
+        not manquants,
+        detail=(
+            f"outils appelés : {', '.join(exiges)}"
+            if not manquants
+            else f"outils exigés mais jamais appelés (au registre) : {', '.join(manquants)}"
+        ),
+        annotations=manquants,
     )
 
 

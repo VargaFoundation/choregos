@@ -152,6 +152,19 @@ deployment's catalogue by guessing names.
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
 
+**Announcing a tool is not using it.** On the 2026-09-24 bench the sourcing playbook said
+"verify the location with `verifier_adresse` before anything else", the agent recorded
+`lieu_verifie: true`, and the ledger held ten catalogue listings and zero calls. When a
+step *must* use a tool, say so with a gate, which reads what the platform counted:
+
+```yaml
+gates:
+  - { name: tool_called, params: { tools: [verifier_adresse] } }
+```
+
+Agents also get `validate_result`, which checks their `.choregos/result.json` against the
+contract *before* they finish — the same validator the runner applies afterwards.
+
 ## 4. Write the policy
 
 ```yaml

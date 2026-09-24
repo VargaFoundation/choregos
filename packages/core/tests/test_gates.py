@@ -222,3 +222,26 @@ def test_une_garantie_sans_diff_ne_se_prononce_pas() -> None:
 
     # Avec un diff, rien ne change pour les cas déjà couverts.
     assert evaluate("no_secrets", GateContext()).passed
+
+
+def test_tool_called_lit_le_registre_pas_le_recit() -> None:
+    """Banc du 2026-09-24 : dix listages du catalogue, zéro appel, et `lieu_verifie: true`
+    consigné quand même. La garantie regarde ce que la plateforme a compté."""
+    from choregos_contracts import StageResult, StageStatus
+
+    raconte = StageResult(
+        schema="choregos/StageResult/v1",
+        status=StageStatus.DONE,
+        summary="lieu vérifié",
+        evidence={"facts": {"lieu_verifie": True}},
+    )
+    sans_appel = GateContext(result=raconte, tool_calls=[])
+    verdict = evaluate("tool_called", sans_appel, {"tools": ["verifier_adresse"]})
+    assert not verdict.passed
+    assert "verifier_adresse" in verdict.detail and verdict.annotations == ["verifier_adresse"]
+
+    avec_appel = GateContext(result=raconte, tool_calls=["verifier_adresse", "autre"])
+    assert evaluate("tool_called", avec_appel, {"tools": ["verifier_adresse"]}).passed
+
+    # demandée sans rien exiger : elle refuse, comme les autres garanties sans matière
+    assert not evaluate("tool_called", avec_appel).passed

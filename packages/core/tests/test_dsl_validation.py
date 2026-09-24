@@ -292,3 +292,34 @@ def test_17_un_role_qui_n_est_pas_un_identifiant_est_refuse() -> None:
         "dev: {{ type: agent, role: implement }}", 'dev: {{ type: agent, role: "../secrets" }}'
     )
     assert any(code.startswith("schema.") for code in _errors(mauvais.format(transitions=OK_TRANSITIONS)))
+
+
+def test_tool_called_sans_outil_est_refusee_a_l_ecriture() -> None:
+    """Une garantie `tool_called` sans `tools:` n'aurait rien à vérifier : le DSL la refuse."""
+    from choregos_core.dsl.parser import parse_workflow
+
+    source = """
+apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: t, version: 1 }
+actors:
+  a: { type: agent, role: sourcing }
+states:
+  debut: { display: Début }
+  fin: { display: Fin, terminal: true }
+transitions:
+  - id: t1
+    from: debut
+    to: fin
+    by: a
+    gates:
+      - name: tool_called
+"""
+    _, rapport = parse_workflow(source, strict=False)
+    assert not rapport.valid
+    assert any(e.code == "gate.sans_matiere" and "tool_called" in e.message for e in rapport.errors)
+    ok = source.replace(
+        "      - name: tool_called", "      - { name: tool_called, params: { tools: [verifier_adresse] } }"
+    )
+    _, rapport = parse_workflow(ok, strict=False)
+    assert not [e for e in rapport.errors if e.code == "gate.sans_matiere"]

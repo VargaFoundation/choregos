@@ -267,6 +267,7 @@ def _check_retries(wf: Workflow, report: ValidationReport, source: Any) -> None:
 GATES_A_MATIERE: dict[str, tuple[str, str]] = {
     "outputs_present": ("outputs", "`outputs:` sur la transition"),
     "evidence_facts": ("keys", "`keys:` en paramètre de la garantie"),
+    "tool_called": ("tools", "`tools:` en paramètre de la garantie"),
 }
 
 
