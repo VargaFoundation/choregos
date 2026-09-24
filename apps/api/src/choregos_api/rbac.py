@@ -82,12 +82,18 @@ class Principal:
     display_name: str = ""
     kind: str = "user"
     org_roles: dict[str, Role] = field(default_factory=dict)
+    #: Indexés par `org/slug`, JAMAIS par slug seul : deux organisations peuvent avoir un
+    #: projet du même nom (`UniqueConstraint(org_id, slug)`), et un rôle sur `a/billing`
+    #: donnait le même rôle sur `b/billing` — franchissement de locataire, état des lieux
+    #: du 2026-09-24.
     project_roles: dict[str, Role] = field(default_factory=dict)
     groups: list[str] = field(default_factory=list)
 
     def role_for(self, org: str, project_slug: str | None = None) -> Role | None:
-        if project_slug and project_slug in self.project_roles:
-            return self.project_roles[project_slug]
+        if project_slug:
+            role = self.project_roles.get(f"{org}/{project_slug}")
+            if role is not None:
+                return role
         return self.org_roles.get(org)
 
     def permissions(self, org: str, project_slug: str | None = None) -> frozenset[Permission]:

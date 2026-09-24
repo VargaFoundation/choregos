@@ -213,11 +213,15 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
         await session.flush()
     project = None
     if body.project_slug:
+        # Dans CETTE organisation : un slug existe dans plusieurs, et chercher par slug seul
+        # rattachait le membre au premier venu — trouvé par le test de franchissement.
         project = (
-            await session.execute(select(Project).where(Project.slug == body.project_slug))
+            await session.execute(
+                select(Project).where(Project.slug == body.project_slug, Project.org_id == organization.id)
+            )
         ).scalar_one_or_none()
         if project is None:
-            raise not_found("Projet", body.project_slug)
+            raise not_found("Projet", f"{org}/{body.project_slug}")
     existing = (
         await session.execute(
             select(Membership).where(

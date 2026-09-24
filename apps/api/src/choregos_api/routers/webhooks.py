@@ -59,11 +59,33 @@ async def _already_seen(session: Any, source: str, delivery_id: str, event_type:
 
 
 async def _project_for(session: Any, slug_or_repo: str | None) -> Project | None:
+    """Le projet visé par un événement : par son dépôt d'abord, par son slug s'il est unique.
+
+    Deux organisations peuvent avoir un projet `billing-api` ; prendre « le premier » routait
+    l'événement d'un locataire vers l'autre. Le nom complet du dépôt (`owner/repo`) lève
+    l'ambiguïté ; sans lui, un slug présent deux fois ne route rien — et le dit.
+    """
     if not slug_or_repo:
         return None
     slug = slug_or_repo.rsplit("/", 1)[-1]
-    row = (await session.execute(select(Project).where(Project.slug == slug).limit(1))).scalar_one_or_none()
-    return row if isinstance(row, Project) else None
+    rows = [
+        r
+        for r in (await session.execute(select(Project).where(Project.slug == slug))).scalars()
+        if isinstance(r, Project)
+    ]
+    if len(rows) > 1 and "/" in slug_or_repo:
+        rows = [
+            r
+            for r in rows
+            if str((r.config or {}).get("repo", {}).get("url", ""))
+            .removesuffix(".git")
+            .endswith(slug_or_repo)
+        ]
+    if len(rows) != 1:
+        if rows:
+            logger.warning("événement ambigu entre plusieurs projets, non routé", slug=slug_or_repo)
+        return None
+    return rows[0]
 
 
 async def _dispatch(session: Any, events: list[InboundEvent]) -> int:

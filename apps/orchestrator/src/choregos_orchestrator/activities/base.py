@@ -51,6 +51,9 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     project = await session.get(Project, project_id)
     if project is None:
         rows = (await session.execute(select(Project).where(Project.slug == project_id))).scalars().all()
+        if len(rows) > 1:
+            # Un slug dans deux organisations : « le premier » serait celui d'un autre locataire.
+            raise ValueError(f"projet ambigu : {project_id} existe dans plusieurs organisations")
         project = rows[0] if rows else None
     if project is None:
         raise ValueError(f"projet inconnu : {project_id}")

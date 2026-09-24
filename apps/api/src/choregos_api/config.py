@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +33,21 @@ class Settings(BaseSettings):
     session_secret: str = "dev-session-secret-change-me"
     session_cookie: str = "choregos_session"
     session_max_age_s: int = 8 * 3600
-    dev_login_enabled: bool = True
+    #: Connexion de développement (`/auth/login?as=<email>`) : ÉTEINTE par défaut. Elle
+    #: était allumée par défaut et jamais posée par le chart : une installation de
+    #: production acceptait `?code=dev:admin@x` et rendait ORG_ADMIN sur toutes les
+    #: organisations (état des lieux du 2026-09-24). Le validateur ci-dessous la refuse
+    #: en staging et en prod quoi qu'on lui dise.
+    dev_login_enabled: bool = False
+    #: Les e-mails qui, en connexion de développement, reçoivent ORG_ADMIN. Les autres
+    #: sont `developers`. Avant : tout e-mail commençant par `admin` — une escalade par
+    #: convention de nommage.
+    dev_admin_emails: str = ""
+    #: Organisation à laquelle rattacher les groupes OIDC NON préfixés (`developers`,
+    #: `org-admins`…). Vide : ces groupes sont ignorés, seuls les groupes
+    #: `choregos:<org>:<groupe>` donnent un rôle. Avant : tout groupe donnait le rôle sur
+    #: TOUTES les organisations de l'instance.
+    oidc_default_org: str = ""
 
     # JWT de run (ES256) — clés PEM ; générées à la volée en dev
     run_token_private_key: str = ""
@@ -64,6 +78,19 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = True
     fx_usd_eur: float = 0.92
+
+    @model_validator(mode="after")
+    def _pas_de_porte_derobee_en_production(self) -> Settings:
+        if self.dev_login_enabled and self.env in {"staging", "prod"}:
+            raise ValueError(
+                "CHOREGOS_DEV_LOGIN_ENABLED=true en staging/prod : la connexion de développement "
+                "ouvre l'API à quiconque atteint /auth/callback. Refusé."
+            )
+        return self
+
+    @property
+    def dev_admins(self) -> set[str]:
+        return {e.strip().lower() for e in self.dev_admin_emails.split(",") if e.strip()}
 
     @property
     def cors_list(self) -> list[str]:

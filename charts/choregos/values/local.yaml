@@ -20,6 +20,11 @@ global:
   memory:
     embedded: true
   devSecrets: true
+  # Un banc sans IdP : `/auth/login?as=<email>`. Les deux admins nommés reçoivent ORG_ADMIN,
+  # n'importe quel autre e-mail est développeur.
+  devLogin:
+    enabled: true
+    adminEmails: "admin@varga.dev,admin@demo.dev"
   externalSecrets:
     enabled: false
   rbac:

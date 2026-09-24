@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import jwt
 from choregos_contracts import Role
+from choregos_core import utcnow
 from fastapi import Depends, Header, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +37,11 @@ Db = Annotated[AsyncSession, Depends(get_db)]
 Config = Annotated[Settings, Depends(get_settings)]
 
 
+def _aware(moment: datetime) -> datetime:
+    """SQLite rend des datetimes naïfs ; PostgreSQL des datetimes en UTC. On compare en UTC."""
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+
 async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
     rows = (
         await session.execute(
@@ -49,7 +56,7 @@ async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
     for membership, org_slug, project_slug in rows:
         role = Role(membership.role)
         if project_slug:
-            project_roles[project_slug] = role
+            project_roles[f"{org_slug}/{project_slug}"] = role
         else:
             org_roles[org_slug] = role
     return Principal(
@@ -76,9 +83,14 @@ async def current_principal(
         ).scalar_one_or_none()
         if token is None:
             raise unauthorized("jeton d'API inconnu ou révoqué")
+        # `expires_at` existait en base sans que personne ne le lise : un jeton expiré
+        # restait valable à vie (état des lieux du 2026-09-24).
+        if token.expires_at is not None and _aware(token.expires_at) <= utcnow():
+            raise unauthorized("jeton d'API expiré")
         user = await session.get(User, token.user_id)
         if user is None:
             raise unauthorized("jeton d'API orphelin")
+        token.last_used_at = utcnow()
         principal = await _principal_from_user(session, user)
         principal.kind = "user"
         return principal
@@ -119,17 +131,38 @@ class ProjectContext:
 
 
 async def resolve_project(session: AsyncSession, identifier: str) -> tuple[Project, str]:
-    """Accepte un UUID ou un slug (`org/slug` ou `slug`)."""
+    """Accepte un UUID, `org/slug` (ou `org:slug` dans un segment d'URL), ou un slug seul
+    s'il n'existe que dans UNE organisation.
+
+    Le slug seul jetait la partie `org/` et prenait le premier projet de ce nom, toutes
+    organisations confondues : un lecteur de `a/billing` pouvait tomber sur `b/billing`.
+    Un slug présent dans deux organisations est désormais ambigu, et le dit. La forme
+    `org:slug` existe parce qu'un `/` ne passe pas dans `/projects/{id}`.
+    """
     project = await session.get(Project, identifier)
-    if project is None:
-        slug = identifier.rsplit("/", maxsplit=1)[-1]
+    if project is not None:
+        org = await session.get(Organization, project.org_id)
+        return project, org.slug if org else ""
+    separateur = "/" if "/" in identifier else ":" if ":" in identifier else ""
+    if separateur:
+        org_slug, slug = identifier.split(separateur, 1)
         project = (
-            await session.execute(select(Project).where(Project.slug == slug).limit(1))
+            await session.execute(
+                select(Project)
+                .join(Organization, Project.org_id == Organization.id)
+                .where(Organization.slug == org_slug, Project.slug == slug)
+            )
         ).scalar_one_or_none()
-    if project is None:
+        if project is None:
+            raise not_found("Projet", identifier)
+        return project, org_slug
+    candidats = (await session.execute(select(Project).where(Project.slug == identifier))).scalars().all()
+    if not candidats:
         raise not_found("Projet", identifier)
-    org = await session.get(Organization, project.org_id)
-    return project, org.slug if org else ""
+    if len(candidats) > 1:
+        raise not_found("Projet", f"{identifier} (ambigu : préciser `org/{identifier}`)")
+    org = await session.get(Organization, candidats[0].org_id)
+    return candidats[0], org.slug if org else ""
 
 
 async def project_context(id: str, session: Db, principal: Me) -> ProjectContext:

@@ -287,6 +287,24 @@ export type ModelMatrix = {
   }>;
 };
 
+export type ApiTokenCreate = {
+  name: string;
+  expires_in_days?: number | null;
+};
+
+export type ApiToken = {
+  id: string;
+  name: string;
+  created_at: string;
+  expires_at?: string | null;
+  last_used_at?: string | null;
+};
+
+export type ApiTokenCreated = ApiToken & {
+  /** Le jeton en clair, rendu une seule fois. */
+  token: string;
+};
+
 /** Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage. */
 export type WorkflowFailure = {
   message: string;
@@ -768,6 +786,7 @@ export interface Operations {
   result: unknown;
   remaining?: number;
 } };
+  createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
@@ -860,6 +879,7 @@ export interface Operations {
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
+  listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
@@ -895,6 +915,7 @@ export interface Operations {
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
+  revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {

@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
+os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
 
 
 @pytest.fixture

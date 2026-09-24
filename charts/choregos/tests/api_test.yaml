@@ -75,3 +75,29 @@ tests:
           content:
             name: CHOREGOS_TOOL_CATALOG
             value: /etc/choregos/outils/catalogue.yaml
+
+  - it: n'active jamais la connexion de développement par défaut
+    template: charts/choregos-api/templates/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DEV_LOGIN_ENABLED
+            value: "false"
+
+  - it: active la connexion de développement seulement quand on le demande
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.devLogin.enabled: true
+      global.devLogin.adminEmails: "admin@varga.dev"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DEV_LOGIN_ENABLED
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_DEV_ADMIN_EMAILS
+            value: "admin@varga.dev"

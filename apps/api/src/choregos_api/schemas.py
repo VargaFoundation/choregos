@@ -35,6 +35,25 @@ class MeDto(Dto):
     memberships: list[MembershipDto] = Field(default_factory=list)
 
 
+class ApiTokenCreate(Dto):
+    name: str = Field(min_length=1, max_length=128)
+    #: Sans expiration si absent — mais dire « jamais » est un choix, pas un oubli.
+    expires_in_days: int | None = Field(default=90, ge=1, le=3650)
+
+
+class ApiTokenDto(Dto):
+    id: str
+    name: str
+    created_at: datetime
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
+
+
+class ApiTokenCreated(ApiTokenDto):
+    #: Le jeton en clair, rendu UNE fois. Il n'est jamais stocké.
+    token: str
+
+
 class MembershipUpsert(Dto):
     email: str
     role: Role

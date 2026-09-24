@@ -454,11 +454,15 @@ async def mark_release(payload: dict[str, Any]) -> dict[str, Any]:
 @activity.defn(name="train_stats")
 async def train_stats(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
-        project = (
-            await session.execute(select(Project).where(Project.slug == payload["project_slug"]))
-        ).scalar_one_or_none()
-        if project is None:
+        candidats = (
+            (await session.execute(select(Project).where(Project.slug == payload["project_slug"])))
+            .scalars()
+            .all()
+        )
+        if len(candidats) != 1:
+            # Aucun, ou un slug dans deux organisations : les statistiques ne devinent pas.
             return {}
+        project = candidats[0]
         count = (
             await session.execute(
                 select(func.count()).select_from(Release).where(Release.project_id == project.id)
