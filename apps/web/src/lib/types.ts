@@ -3,7 +3,21 @@
  * Le front ne redéfinit jamais un type de l'API : il en dépend.
  */
 export type {
+  AgentBackendInfo,
+  ApiToken,
+  ApiTokenCreate,
+  ApiTokenCreated,
+  ArtifactRef,
   AuditPage,
+  ConnectorType,
+  ExecutorInfo,
+  Membership,
+  MembershipUpsert,
+  Org,
+  OrgCreate,
+  ProjectModels,
+  TemplateSummary,
+  WorkItemCreate,
   Connector as ConnectorDto,
   ConnectorTestResult,
   CostReport,

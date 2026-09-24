@@ -448,6 +448,17 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const [route] = path.split("?");
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
+    [/^\/me\/tokens$/, []],
+    [/^\/orgs$/, [{ slug: "varga", name: "Varga Foundation", role: "org_admin" }]],
+    [/^\/orgs\/[^/]+\/members$/, me.memberships],
+    [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
+    [/^\/connectors\/types$/, []],
+    [/^\/platform\/models$/, []],
+    [/^\/platform\/backends$/, []],
+    [/^\/platform\/executors$/, []],
+    [/^\/projects\/[^/]+\/models$/, { profiles: {}, allow_unvalidated: false, inherited: {} }],
+    [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],
+    [/^\/projects\/[^/]+\/policy$/, { name: "solo", version: 1, yaml: "budgets:\n  per_ticket_usd: 25\n", is_active: true }],
     [/^\/orgs\/[^/]+\/projects$/, projects],
     [/^\/projects\/[^/]+$/, projects.items[0]],
     [/^\/projects\/[^/]+\/work-items$/, workItems],

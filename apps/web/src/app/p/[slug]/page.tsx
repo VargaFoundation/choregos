@@ -18,6 +18,15 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
   const parNature = useQuery({ queryKey: ["costs", slug, "kind"], queryFn: () => api.costs(slug, "kind") });
   const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.workItems(slug) });
   const dora = useQuery({ queryKey: ["dora", slug], queryFn: () => api.dora(slug) });
+  // Tant que le projet n'est pas actif, on suit son provisioning ici — l'assistant
+  // redirigeait vers cette page et rien n'y disait où en étaient les étapes.
+  const enCours = project.data?.status != null && project.data.status !== "active";
+  const provisioning = useQuery({
+    queryKey: ["provision", slug],
+    queryFn: () => api.provisionStatus(slug),
+    enabled: enCours,
+    refetchInterval: enCours ? 3_000 : false,
+  });
 
   if (project.error) return <ErrorNote>{(project.error as Error).message}</ErrorNote>;
   const stats = project.data?.stats;
@@ -27,6 +36,27 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="space-y-6">
+      {enCours && provisioning.data && (
+        <Card eyebrow="provisioning" title={`${provisioning.data.status} · ${provisioning.data.current_step ?? "—"}`}>
+          <ol className="space-y-1 text-sm">
+            {provisioning.data.steps.map((step) => (
+              <li key={step.name} className="flex items-start gap-2">
+                <StateBadge
+                  state={step.status}
+                  display={step.status}
+                  kind={step.status === "succeeded" ? "terminal" : step.status === "failed" ? "blocked" : "wait"}
+                />
+                <span>
+                  {step.name}
+                  {step.message && <span className="block text-xs text-ink-muted">{step.message}</span>}
+                  {step.remediation && <span className="block text-xs text-warn">{step.remediation}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+          {provisioning.data.steps.length === 0 && <Empty>en attente du premier pas…</Empty>}
+        </Card>
+      )}
       <div className="grid grid-cols-2 border border-line md:grid-cols-4">
         <div className="p-6">
           <Stat value={actifs} label="tickets actifs" tone={actifs > 0 ? "accent" : "ink"} />

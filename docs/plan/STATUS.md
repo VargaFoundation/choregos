@@ -63,7 +63,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S4-04 | S4 | ✅ | — | estimation médiane/p80 sur 90 jours, alerte de dépassement |
 | S4-05 | S4 | ✅ | — | `/v1/messages` vérifié contre un vrai LiteLLM ; l'environnement remis à `claude-code` appelle pour de vrai (8 tests live) |
 | S4-06 | S4 | ✅ | — | profils plateforme/projet, validation, matrice opposable |
-| S5-01 | S5 | 🟡 | — | socle Next.js / React 19 / TS strict / Tailwind + composants transverses. **Pas d'i18n** : `next-intl` est déclaré et jamais importé, l'interface est 100 % française (P0-5) |
+| S5-01 | S5 | 🟡 | — | socle Next.js / React 19 / TS strict / Tailwind + composants transverses. **Interface en français seulement** : `next-intl` a été retiré le 2026-09-24 (déclaré, jamais branché — pas de demi-état) ; l'anglais de l'interface est un chantier à part entière (P1-1b), pas une case cochée |
 | S5-02 | S5 | ✅ | — | projets et wizard de création avec validation par étape |
 | S5-03 | S5 | ✅ | — | board : colonnes = états du DSL, décisions en ligne |
 | S5-04 | S5 | ✅ | — | ticket (coût par étape, timeline) et run (journal virtualisé, diff, preuves) |
@@ -231,8 +231,15 @@ les 492 tests ne disaient pas :
    `GET/POST /orgs`, `POST /projects/{id}/work-items` sur tracker interne (clé frappée par la
    plateforme, interpréteur démarré), `choregos-admin tokens create` pour le premier jeton,
    CLI : `orgs`, `tokens`, `items create`, `projects create` sans `--repo`, et ses premiers
-   tests. Reste P0-5b : le front (login, sélecteur d'org, écran Garanties, connecteurs,
-   policy, membres, provisioning, transcript, i18n, mocks hors bundle, e2e contre l'API).
+   tests. **P0-5b livré** : les verdicts des garanties journalisés et affichés (#32) ; page de
+   connexion, déconnexion, redirection sur 401, session et **sélecteur d'organisation**
+   (projets adressés `org:slug`) ; assistant projet avec dépôt facultatif, templates depuis
+   l'API, choix du tracker ; paramètres **éditables** (connecteurs avec leurs types, politique
+   en YAML, profils de modèles) ; administration (membres, jetons d'API, backends,
+   exécuteurs) ; suivi du provisioning ; « nouvelle demande » sur le board d'un tracker
+   interne ; transcript et abandon de release ; fixtures hors du bundle de production ;
+   `next-intl` retiré (l'anglais de l'interface = P1-1b). Reste : e2e Playwright contre
+   l'API réelle (P1-3), a11y et budget de bundle (P2).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
