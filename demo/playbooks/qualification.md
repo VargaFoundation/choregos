@@ -20,6 +20,15 @@ N'invente ni expérience ni référence. Un doute se déclare comme un doute.
 `outputs.evaluation` (Markdown, une section par profil) et `outputs.recommandation` (le
 profil retenu et pourquoi). Sans ces deux sorties, la garantie `outputs_present` refuse l'étape.
 
+Et `evidence.facts`, qui se compte et se vérifie :
+
+```json
+"evidence": { "facts": { "profils_evalues": 2, "entretiens_a_prevoir": 1, "recommandation_tenue": true } }
+```
+
+`recommandation_tenue` vaut `true` seulement si tu peux nommer la raison du classement. Un
+classement que tu ne peux pas justifier vaut `false`, et la garantie refusera — c'est le but.
+
 {{ output_contract }}
 
 ## Invariants

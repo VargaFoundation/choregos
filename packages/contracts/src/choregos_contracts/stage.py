@@ -172,6 +172,18 @@ class Artifacts(Strict):
 
 
 class Evidence(Strict):
+    """Les preuves d'une étape. Les champs nommés parlent de logiciel ; `facts` non.
+
+    `Evidence` refuse les champs inconnus — une faute de frappe dans `tests_run` doit se
+    voir. Mais un dossier instruit, une présélection de profils ou un courrier n'ont ni
+    tests ni couverture, et jusqu'au 2026-09-24 n'avaient donc **aucun endroit** où
+    consigner quoi que ce soit : le contrat rejetait leurs preuves. `facts` est cet
+    endroit — un dictionnaire de valeurs simples, nommées par le métier, que la garantie
+    `evidence_facts` lit. Simples justement : un nombre, un booléen, une date ou un mot
+    se vérifient ; un objet libre redeviendrait de la prose.
+    """
+
+    facts: dict[str, str | int | float | bool] | None = None
     tests_passed: bool | None = None
     tests_run: int | None = None
     tests_failed: int | None = None

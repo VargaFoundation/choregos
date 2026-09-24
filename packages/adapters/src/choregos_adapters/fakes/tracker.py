@@ -13,6 +13,8 @@ from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItem
 class FakeTracker:
     """Tracker de test. `seed()` crée des tickets ; `move()` simule un déplacement de carte."""
 
+    owns_items = True
+
     def __init__(self, project_slug: str = "demo") -> None:
         self.project_slug = project_slug
         self.items: dict[str, WorkItemData] = {}

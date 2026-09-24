@@ -420,6 +420,10 @@ export type StageResult = {
     };
   };
   evidence?: {
+    /** Preuves nommées par le métier (evidence_facts). Valeurs simples : un nombre, un booléen, une date ou un mot se vérifient. */
+    facts?: {
+      [key: string]: string | number | number | boolean;
+    } | null;
     tests_passed?: boolean | null;
     tests_run?: number | null;
     tests_failed?: number | null;

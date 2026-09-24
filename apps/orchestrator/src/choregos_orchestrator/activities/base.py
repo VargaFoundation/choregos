@@ -86,6 +86,50 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     )
 
 
+def tracker_possede_les_tickets(adapter: object) -> bool:
+    """Le connecteur tient-il les tickets ailleurs ? Un connecteur muet est supposé oui.
+
+    Un adaptateur tiers, écrit avant que la question se pose, n'a pas cet attribut : le
+    supposer externe est le choix sûr, puisque c'est le cas de tous les connecteurs livrés
+    sauf `internal`.
+    """
+    return bool(getattr(adapter, "owns_items", True))
+
+
+async def cle_de_ticket_interne(session: AsyncSession, bundle: ProjectBundle) -> str:
+    """Attribue `<PRÉFIXE>-<n>` quand la plateforme tient elle-même les tickets.
+
+    Sans cela, la clé rendue par le connecteur interne était le TITRE du ticket — illisible
+    sur un board, et en collision avec la contrainte d'unicité `(project_id, tracker_key)`
+    dès que deux findings se ressemblaient.
+
+    La course entre deux créations simultanées est laissée à la contrainte d'unicité : elle
+    fait échouer l'insertion, Temporal rejoue l'activité, et le numéro suivant est pris.
+    Compter en base plutôt que tenir un compteur évite un deuxième endroit où l'état vit.
+    """
+    connecteur = (
+        await session.execute(
+            select(Connector).where(Connector.project_id == bundle.project.id, Connector.kind == "tracker")
+        )
+    ).scalar_one_or_none()
+    configure = (connecteur.config or {}).get("key_prefix") if connecteur else None
+    prefixe = str(configure or bundle.project.slug).upper()
+    existantes = (
+        (
+            await session.execute(
+                select(WorkItem.tracker_key).where(
+                    WorkItem.project_id == bundle.project.id,
+                    WorkItem.tracker_key.like(f"{prefixe}-%"),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    numeros = [int(suffixe) for cle in existantes if (suffixe := cle.rsplit("-", 1)[-1]).isdigit()]
+    return f"{prefixe}-{max(numeros, default=0) + 1}"
+
+
 async def load_work_item(session: AsyncSession, work_item_id: str) -> WorkItem:
     item = await session.get(WorkItem, work_item_id)
     if item is None:

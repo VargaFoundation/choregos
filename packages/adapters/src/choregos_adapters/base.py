@@ -41,7 +41,18 @@ from choregos_core.domain import (
 
 @runtime_checkable
 class TrackerAdapter(Protocol):
-    """Le tracker est l'interface humaine : Choregos y reflète l'état, le coût et les preuves."""
+    """Le tracker est l'interface humaine : Choregos y reflète l'état, le coût et les preuves.
+
+    `owns_items` dit **qui tient le ticket**. Chez GitHub ou Jira, le ticket existe dehors :
+    Choregos le relit, le reflète, et découvre par `list_candidates` ce qui lui est confié.
+    Avec le tracker interne, il n'y a pas de dehors — la base de Choregos EST le tracker.
+    Sans cette distinction, un ticket créé par la plateforme (un finding promu, une demande
+    saisie dans le front) n'était jamais découvert : `list_candidates` rendait une liste
+    vide, et le ticket restait en `inbox` pour toujours. Vu sur le banc du 2026-09-23.
+    """
+
+    #: Faux quand la base de Choregos est la source (cf. `tracker: internal`).
+    owns_items: bool
 
     async def fetch_item(self, key: str) -> WorkItemData: ...
     async def create_item(self, data: NewItem) -> str: ...

@@ -202,3 +202,43 @@ def test_error_message_carries_line_and_column() -> None:
     assert issue.line and issue.line > 0
     assert "transitions[0].to" in (issue.path or "")
     assert "ligne" in issue.format()
+
+
+def test_13_garantie_sans_matiere() -> None:
+    """`outputs_present` sans `outputs:` ne regarde rien. Le moteur refuse aussi au moment
+    de trancher, mais un workflow faux doit échouer quand on l'écrit : sinon il s'épingle
+    sur un ticket et la garantie ne se découvre qu'en vol, verte et vide."""
+    sans = (
+        "  - {id: t1, from: inbox, to: doing, by: dev, gates: [outputs_present], on_fail: "
+        + RETRY
+        + "}\n  - {id: t2, from: doing, to: done, by: ci}\n"
+    )
+    assert "gate.sans_matiere" in _errors(wf_text(sans))
+
+    avec = sans.replace("gates: [outputs_present]", "outputs: [profils], gates: [outputs_present]")
+    _wf, rapport = parse_workflow(wf_text(avec), strict=False)
+    assert rapport.valid, [i.format() for i in rapport.errors]
+
+    assume = sans.replace(
+        "gates: [outputs_present]",
+        "gates: [{name: outputs_present, params: {allow_empty: true}}]",
+    )
+    _wf2, rapport2 = parse_workflow(wf_text(assume), strict=False)
+    assert rapport2.valid, "on peut assumer l'absence de sorties, il faut l'écrire"
+
+
+def test_14_evidence_facts_sans_keys() -> None:
+    """Même règle pour la garantie des preuves métier : sans `keys:`, elle ne lit rien."""
+    sans = (
+        "  - {id: t1, from: inbox, to: doing, by: dev, gates: [evidence_facts], on_fail: "
+        + RETRY
+        + "}\n  - {id: t2, from: doing, to: done, by: ci}\n"
+    )
+    assert "gate.sans_matiere" in _errors(wf_text(sans))
+
+    avec = sans.replace(
+        "gates: [evidence_facts]",
+        "gates: [{name: evidence_facts, params: {keys: [profils_retenus]}}]",
+    )
+    _wf, rapport = parse_workflow(wf_text(avec), strict=False)
+    assert rapport.valid, [i.format() for i in rapport.errors]

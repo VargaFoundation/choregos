@@ -31,7 +31,12 @@ transitions:
     to: sourcing
     by: sourceur
     outputs: [profils]
-    gates: [outputs_present]
+    gates:
+      - name: outputs_present
+      # Une sortie est ce que l'agent RACONTE. `evidence_facts` vérifie ce qu'il a COMPTÉ,
+      # et `min` refuse le zéro poli : ne trouver personne se dit en échouant l'étape.
+      - name: evidence_facts
+        params: { keys: [profils_retenus, besoin_complet], min: { profils_retenus: 1 } }
     on_fail: { to: demande, max_attempts: 2, escalate_to: needs_human }
   - id: t-qualification
     from: sourcing
@@ -39,7 +44,10 @@ transitions:
     by: evaluateur
     inputs: [profils]
     outputs: [evaluation, recommandation]
-    gates: [outputs_present]
+    gates:
+      - name: outputs_present
+      - name: evidence_facts
+        params: { keys: [profils_evalues], min: { profils_evalues: 1 }, must_be_true: [recommandation_tenue] }
     on_fail: { to: sourcing, max_attempts: 2, escalate_to: needs_human }
   - id: t-revue
     from: qualification
