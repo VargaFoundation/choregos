@@ -99,6 +99,8 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             outcomes.append(evaluate(gate["name"], context, params))
 
         await _publish_check_runs(bundle, item, outcomes, result)
+        if run is not None:
+            await _journaliser(session, run, outcomes)
         return [
             {
                 "name": o.name,
@@ -109,6 +111,41 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             }
             for o in outcomes
         ]
+
+
+async def _journaliser(session: Any, run: Run, outcomes: list[GateOutcome]) -> None:
+    """Range chaque verdict dans le journal du run (`gate.outcome`).
+
+    Les verdicts n'étaient rendus qu'au workflow, qui décidait puis les oubliait : aucun
+    écran ne pouvait dire QUELLES garanties avaient tourné ni ce qu'elles avaient répondu —
+    la promesse centrale du produit était invisible (état des lieux du 2026-09-24). Le
+    journal du run est ce que la fiche affiche déjà ; les verdicts y prennent place.
+    """
+    from choregos_api.db.models import RunEvent
+    from choregos_core import utcnow
+    from sqlalchemy import func, select
+
+    dernier = (
+        await session.execute(select(func.max(RunEvent.seq)).where(RunEvent.run_id == run.id))
+    ).scalar()
+    seq = int(dernier or 0)
+    for outcome in outcomes:
+        seq += 1
+        session.add(
+            RunEvent(
+                run_id=run.id,
+                seq=seq,
+                type="gate.outcome",
+                payload={
+                    "name": outcome.name,
+                    "passed": outcome.passed,
+                    "pending": outcome.pending,
+                    "detail": outcome.detail,
+                    "annotations": list(outcome.annotations),
+                },
+                ts=utcnow(),
+            )
+        )
 
 
 async def _publish_check_runs(bundle: Any, item: Any, outcomes: list[GateOutcome], result: Any) -> None:

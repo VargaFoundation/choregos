@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { use } from "react";
 import { LiveLog } from "@/components/live-log";
 import { Acces } from "@/components/acces";
+import { Garanties } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
 import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -84,6 +85,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           </p>
         </Card>
       </div>
+
+      <Garanties events={events} />
 
       <Acces acces={acces.data} />
 
