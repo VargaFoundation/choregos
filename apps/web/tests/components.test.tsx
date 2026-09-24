@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Acces } from "@/components/acces";
+import { Garanties } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
 import { Preuves } from "@/components/preuves";
 import { ActorIcon, CostChip, StateBadge } from "@/components/ui";
@@ -90,5 +91,37 @@ describe("fiche d'accès", () => {
   it("ne prétend rien quand il n'y a rien", () => {
     render(<Acces />);
     expect(screen.getByText(/aucun accès enregistré/)).toBeInTheDocument();
+  });
+});
+
+describe("garanties", () => {
+  const events: RunEventDto[] = [
+    { seq: 1, type: "session/update", ts: "2026-09-24T10:00:00Z", payload: { text: "prose" } },
+    {
+      seq: 2,
+      type: "gate.outcome",
+      ts: "2026-09-24T10:01:00Z",
+      payload: { name: "scope_respected", passed: true, pending: false, detail: "dans le périmètre" },
+    },
+    {
+      seq: 3,
+      type: "gate.outcome",
+      ts: "2026-09-24T10:01:00Z",
+      payload: { name: "evidence_present", passed: false, pending: false, detail: "aucun test exécuté" },
+    },
+  ];
+
+  it("montre chaque garantie évaluée et son verdict, les refus d'abord", () => {
+    render(<Garanties events={events} />);
+    expect(screen.getByText("2 évaluée(s) · 1 refus")).toBeInTheDocument();
+    const items = screen.getAllByRole("listitem");
+    expect(items[0]?.textContent).toContain("evidence_present");
+    expect(items[0]?.textContent).toContain("aucun test exécuté");
+    expect(screen.getByLabelText("refusée")).toBeInTheDocument();
+  });
+
+  it("dit quand aucune garantie n'a été évaluée, plutôt qu'un ✓ à vide", () => {
+    render(<Garanties events={[events[0]!]} />);
+    expect(screen.getByText(/aucune garantie évaluée/)).toBeInTheDocument();
   });
 });

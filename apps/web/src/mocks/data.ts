@@ -242,6 +242,18 @@ function run(id: string, role: string, status: string, cost: number, summary: st
 
 export const runEvents: RunEventDto[] = [
   { seq: 1, type: "run.started", ts: iso(60), payload: { role: "implement" } },
+  {
+    seq: 0,
+    type: "gate.outcome",
+    ts: iso(30),
+    payload: { name: "scope_respected", passed: true, pending: false, detail: "2 fichiers, tous dans le périmètre" },
+  },
+  {
+    seq: 0,
+    type: "gate.outcome",
+    ts: iso(30),
+    payload: { name: "evidence_present", passed: false, pending: false, detail: "aucun test exécuté (tests_run absent)" },
+  },
   { seq: 2, type: "session/update", ts: iso(59), payload: { text: "Je lis src/orders/total.py" } },
   {
     seq: 3,

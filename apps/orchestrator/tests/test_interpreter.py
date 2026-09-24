@@ -366,3 +366,47 @@ async def test_await_run_est_rejoue_apres_une_panne_passagere(setup: Fixture, te
 
     assert len(appels) >= 2
     assert (await _ticket(setup)).failure is None
+
+
+async def test_les_verdicts_des_garanties_sont_dans_le_journal_du_run(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """Quelles garanties ont tourné, et ce qu'elles ont répondu : c'est dans le journal du run."""
+    from choregos_api.db.models import Run, RunEvent
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    scripted(
+        setup.adapters,
+        stage_result("spec rédigée", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
+        stage_result("implémenté", artifacts={"branch": "choregos/123", "commits": ["fix(orders): avoirs"]}),
+        stage_result("vérifié"),
+    )
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "awaiting_spec_approval")
+        await handle.signal(
+            "human_decision", {"approved": True, "decided_by": "augustin", "kind": "approval"}
+        )
+        # l'implémentation porte les garanties de périmètre et de preuves
+        await _wait_state(handle, "pr_open")
+
+    async with session_scope(orgs="*") as session:
+        runs = (
+            (await session.execute(select(Run).where(Run.work_item_id == setup.work_item_id))).scalars().all()
+        )
+        rows = (
+            (
+                await session.execute(
+                    select(RunEvent)
+                    .where(RunEvent.run_id.in_([r.id for r in runs]), RunEvent.type == "gate.outcome")
+                    .order_by(RunEvent.seq)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert rows, "aucun verdict journalisé"
+    noms = {r.payload["name"] for r in rows}
+    assert "scope_respected" in noms or "evidence_present" in noms, noms
+    assert all(isinstance(r.payload["passed"], bool) and "detail" in r.payload for r in rows)
