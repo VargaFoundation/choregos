@@ -112,7 +112,7 @@ choregos-orchestrator:
 
 `maxActive` is the knob that keeps a burst of tickets from becoming a burst of pods. It is a
 **soft** cap: two runs can admit themselves in the same window and exceed it by one. See
-[ADR 0013](../adr/0013-densite-des-taches-d-agent.md) for why there is no warm pool.
+[ADR 0013](adr/0013-densite-des-taches-d-agent.md) for why there is no warm pool.
 
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
@@ -186,7 +186,7 @@ outils:
 
 A project declares what it calls in its own configuration (`tools: [verifier_adresse]`, or
 `["*"]` for everything it is entitled to) and which groups it belongs to (`groups: [rh]`).
-Both default to empty, which means **no tools at all**. See [ADR 0014](../adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)
+Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
 ## Multi-tenant installations
@@ -309,7 +309,7 @@ connect as a PostgreSQL superuser** — a superuser ignores row-level security, 
 refuses to start that way in `staging` and `prod` — and the embedded PostgreSQL therefore
 creates a non-superuser role (`global.database.appUser`, `choregos_app`) at initdb. For a
 volume created before 2026-09-24, create that role by hand and transfer ownership of the
-schema to it (`docs/dev.md` shows the statements).
+schema to it (`docs/development.md` shows the statements).
 
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
