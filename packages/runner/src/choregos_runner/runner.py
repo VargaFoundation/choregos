@@ -30,6 +30,8 @@ from .config import RunnerSettings, get_settings
 from .dod import run_checks
 from .exits import Exit
 from .guardrails import GuardRails
+from .outils_locaux import arreter as arreter_outils
+from .outils_locaux import demarrer_si_absent
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .workspace import Workspace, workspace_env
@@ -120,6 +122,20 @@ class Runner:
         await journal.record(
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
         )
+
+        # Les outils de la plateforme sont servis en localhost. Avec Tekton c'est un
+        # sidecar ; avec `k8s_job` le pod n'a QU'UN conteneur, et personne n'écoutait —
+        # l'agent se retrouvait sans aucun outil tout en croyant en avoir, son StageInput
+        # lui promettant l'adresse. On la sert donc nous-mêmes quand elle est muette.
+        annonce = stage_input.tools.mcp.get("choregos")
+        outils = None
+        try:
+            outils = await demarrer_si_absent(
+                (annonce.url if annonce else "") or self.settings.tools_url, client
+            )
+            await journal.record("tools.local", {"demarre": outils is not None})
+        except Exception as exc:  # perdre ses outils ne doit pas empêcher l'étape
+            await journal.record("tools.local", {"demarre": False, "error": str(exc)[:300]})
 
         # 2. clone et branche
         try:
@@ -264,6 +280,7 @@ class Runner:
             scope_blocked=scope_result.remaining if scope_result else None,
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base)
+        await arreter_outils(outils)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     # ───────────────────────── étapes internes ─────────────────────────

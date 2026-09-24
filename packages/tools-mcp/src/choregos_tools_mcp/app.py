@@ -19,6 +19,12 @@ _state: dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    if "server" in _state:
+        # Déjà injecté : le runner sert ces outils lui-même quand aucun sidecar ne le fait
+        # (l'exécuteur `k8s_job` n'a qu'un conteneur). Il apporte alors SON client, déjà
+        # authentifié par le jeton du run — en créer un second serait une seconde identité.
+        yield
+        return
     client = InternalClient(
         os.environ.get("CHOREGOS_API_URL", "http://localhost:8000/api/v1/internal"),
         os.environ.get("CHOREGOS_RUN_ID", ""),
@@ -32,7 +38,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await client.aclose()
 
 
-def create_app() -> FastAPI:
+def create_app(server: McpServer | None = None) -> FastAPI:
+    """L'application du sidecar. `server` injecté : le runner la sert lui-même."""
+    if server is not None:
+        _state["server"] = server
     app = FastAPI(title="choregos-tools", version="1.0.0", lifespan=lifespan)
 
     @app.get("/healthz")

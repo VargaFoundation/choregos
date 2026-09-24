@@ -389,6 +389,7 @@ source = { editable = "packages/runner" }
 dependencies = [
     { name = "choregos-adapters" },
     { name = "choregos-core" },
+    { name = "choregos-tools-mcp" },
     { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
@@ -400,6 +401,7 @@ dependencies = [
 requires-dist = [
     { name = "choregos-adapters", editable = "packages/adapters" },
     { name = "choregos-core", editable = "packages/core" },
+    { name = "choregos-tools-mcp", editable = "packages/tools-mcp" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyyaml", specifier = ">=6.0" },
