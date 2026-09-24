@@ -196,6 +196,14 @@ les 492 tests ne disaient pas :
    (état des lieux, § A2–A4) : pas de création d'organisation, pas de jeton d'API, pas de premier
    admin ; `dev_login_enabled=True` par défaut et jamais posé par le chart ; RLS jamais armée ;
    mapping OIDC transverse aux orgs ; zéro métrique ; bus SSE en mémoire. C'est P0-3 à P0-5.
+   **Avancement (soir du 2026-09-24)** : P0-2 livré (#23 — `await_run` rejoue, un ticket mort
+   porte sa cause, l'API lit l'état Temporal) ; P0-3a livré (connexion de développement
+   éteinte par défaut et refusée en prod, escalade `admin*` retirée, discovery OIDC + PKCE +
+   `state` signé + redirection bornée, groupes `choregos:<org>:<groupe>` rattachés à LEUR
+   organisation, rôles de projet indexés par `org/slug`, `resolve_project` qui refuse un slug
+   ambigu, jetons d'API émis/expirés/révoqués par `/me/tokens`, et quatre recherches par slug
+   seul corrigées — `add_member`, webhooks, orchestrateur, train). Reste : RLS fail-closed
+   testée sur PostgreSQL (P0-3b), secrets du chart, limiteur, garde-fous du runner (P0-3c).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

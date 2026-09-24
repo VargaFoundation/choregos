@@ -86,6 +86,14 @@ spec:
               value: {{ .Values.global.oidc.clientId | quote }}
             - name: CHOREGOS_OIDC_CLIENT_SECRET
               valueFrom: { secretKeyRef: { name: {{ .Values.global.oidc.secretRef }}, key: client-secret } }
+            - name: CHOREGOS_OIDC_DEFAULT_ORG
+              value: {{ .Values.global.oidc.defaultOrg | default "" | quote }}
+            # Toujours posée, même à `false` : une valeur absente laisserait le défaut du
+            # code décider, et c'est précisément ce qui a ouvert l'API en production.
+            - name: CHOREGOS_DEV_LOGIN_ENABLED
+              value: {{ .Values.global.devLogin.enabled | default false | quote }}
+            - name: CHOREGOS_DEV_ADMIN_EMAILS
+              value: {{ .Values.global.devLogin.adminEmails | default "" | quote }}
             - name: CHOREGOS_SESSION_SECRET
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: session-secret } }
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY

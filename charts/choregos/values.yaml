@@ -88,6 +88,14 @@ global:
     issuer: https://keycloak.choregos.local/realms/choregos
     clientId: choregos
     secretRef: choregos-oidc
+    # Organisation à laquelle rattacher les groupes OIDC NON préfixés (`developers`,
+    # `org-admins`…). Vide : seuls les groupes `choregos:<org>:<groupe>` donnent un rôle.
+    defaultOrg: ""
+  # Connexion de développement (`/auth/login?as=<email>`), sans IdP. JAMAIS en production :
+  # l'API la refuse d'elle-même en staging/prod. `adminEmails` : qui reçoit ORG_ADMIN.
+  devLogin:
+    enabled: false
+    adminEmails: ""
   # `false` pour un locataire qui n'a droit à aucune ressource cluster-scoped (AppProject
   # `clusterResourceWhitelist: []`) : le ClusterRole de lecture des PipelineRun n'est pas rendu.
   rbac:

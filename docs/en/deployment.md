@@ -232,6 +232,33 @@ helm upgrade --install choregos charts/choregos -n choregos \
 `demo/README.md` has the rest: seeding two projects (one software, one HR), giving agents
 model access, and — just as important — what this bench does **not** prove.
 
+## Identity: what the OIDC provider must give us
+
+Any OIDC issuer works: the API reads `<issuer>/.well-known/openid-configuration` and uses
+PKCE (S256) with a signed, single-use `state`. Register a confidential client with the
+redirect URI `<api_url>/api/v1/auth/callback` and the scopes `openid profile email groups`.
+
+Roles come from **groups**, and a group names its organisation:
+
+| Group in the IdP | Role in Choregos |
+|---|---|
+| `choregos:<org>:org-admins` | `org_admin` on `<org>` |
+| `choregos:<org>:product-owners` | `project_owner` |
+| `choregos:<org>:release-captains` | `release_captain` |
+| `choregos:<org>:developers` | `developer` |
+| `choregos:<org>:viewers` | `viewer` |
+
+Unprefixed groups (`developers`, `org-admins`) apply only when `global.oidc.defaultOrg`
+names the organisation they belong to; otherwise they are ignored. Before 2026-09-24 a
+group granted its role on **every** organisation of the instance.
+
+**Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
+API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
+(`global.devLogin.enabled`, `global.devLogin.adminEmails`).
+
+**API tokens** for the CLI and CI are issued by the person who will use them:
+`POST /me/tokens` (or *Admin → Tokens*), shown once, expiring after 90 days by default.
+
 ## Verifying an installation
 
 ```bash

@@ -32,6 +32,12 @@ Comptes de développement (Keycloak, realm `choregos`) : `augustin` / `choregos`
 (propriétaire), `marie` / `choregos` (release captain). En local, `/auth/login?as=<email>`
 ouvre une session sans passer par l'IdP — uniquement quand `dev_login_enabled` est vrai.
 
+Depuis le 2026-09-24 cette porte est **fermée par défaut** et refusée en staging/prod :
+`CHOREGOS_DEV_LOGIN_ENABLED=true` l'ouvre (le chart le fait avec `global.devLogin.enabled`,
+`values/local.yaml` seulement), et `CHOREGOS_DEV_ADMIN_EMAILS` nomme les e-mails qui
+reçoivent `org_admin` — les autres sont `developer`. Un e-mail qui commence par `admin`
+n'est plus admin.
+
 ## Cluster de développement
 
 ```bash

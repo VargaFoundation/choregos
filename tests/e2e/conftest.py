@@ -16,6 +16,10 @@ import pytest
 
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 os.environ.setdefault("CHOREGOS_ENV", "test")
+# La connexion de développement est ÉTEINTE par défaut depuis le 2026-09-24 : un test
+# qui s'en sert doit le dire, et nommer qui est admin.
+os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
+os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
 
 
 class BridgedTemporal:

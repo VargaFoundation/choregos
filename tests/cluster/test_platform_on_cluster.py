@@ -66,6 +66,7 @@ def _stack() -> str:
         {"name": "CHOREGOS_FAKES", "value": "1"},
         {"name": "CHOREGOS_ENV", "value": "test"},
         {"name": "CHOREGOS_DEV_LOGIN_ENABLED", "value": "true"},
+        {"name": "CHOREGOS_DEV_ADMIN_EMAILS", "value": "admin@varga.dev"},
         {
             "name": "CHOREGOS_DATABASE_URL",
             "value": "postgresql+asyncpg://choregos:choregos@postgres:5432/choregos",

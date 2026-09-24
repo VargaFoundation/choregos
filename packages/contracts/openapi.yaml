@@ -39,6 +39,35 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/tokens:
+    get:
+      tags: [session]
+      operationId: listMyTokens
+      summary: Les jetons d'API de l'appelant (jamais leur valeur)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ApiToken" } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [session]
+      operationId: createMyToken
+      summary: Émet un jeton porteur ; le clair n'est rendu qu'une fois
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ApiTokenCreate" } } }
+      responses:
+        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/ApiTokenCreated" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/tokens/{id}:
+    delete:
+      tags: [session]
+      operationId: revokeMyToken
+      summary: Révoque un jeton de l'appelant
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Révoqué }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /auth/login:
     get:
       tags: [session]
@@ -1206,6 +1235,28 @@ components:
               median_duration_s: { type: [number, "null"] }
               with_memory: { type: [boolean, "null"] }
               report_url: { type: [string, "null"] }
+    ApiTokenCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        expires_in_days: { type: [integer, "null"], minimum: 1, maximum: 3650, default: 90 }
+    ApiToken:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+    ApiTokenCreated:
+      allOf:
+        - $ref: "#/components/schemas/ApiToken"
+        - type: object
+          required: [token]
+          properties:
+            token: { type: string, description: "Le jeton en clair, rendu une seule fois." }
     WorkflowFailure:
       type: object
       description: Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage.
