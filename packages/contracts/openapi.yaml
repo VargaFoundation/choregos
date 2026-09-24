@@ -464,7 +464,7 @@ paths:
       tags: [costs]
       operationId: getProjectCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
@@ -476,7 +476,7 @@ paths:
       operationId: exportProjectCostsCsv
       summary: Le rapport de coûts en CSV (séparateur `;`, BOM UTF-8)
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:

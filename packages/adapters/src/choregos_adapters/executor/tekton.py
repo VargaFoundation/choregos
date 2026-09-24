@@ -70,6 +70,7 @@ class TektonExecutor:
     """Crée et suit les `PipelineRun` d'étapes d'agent."""
 
     kind = ExecutorKind.TEKTON
+    capabilities: frozenset[str] = frozenset()
 
     def __init__(
         self,

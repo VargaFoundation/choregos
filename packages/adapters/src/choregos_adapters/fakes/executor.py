@@ -21,6 +21,7 @@ class FakeExecutor:
     """
 
     kind = ExecutorKind.FAKE
+    capabilities: frozenset[str] = frozenset()
 
     def __init__(self, handler: StageHandler | None = None) -> None:
         self.handler = handler

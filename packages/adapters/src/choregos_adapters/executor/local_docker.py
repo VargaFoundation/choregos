@@ -17,6 +17,7 @@ class LocalDockerExecutor:
     """Lance le runner dans un conteneur local, avec les mêmes variables qu'en cluster."""
 
     kind = ExecutorKind.LOCAL_DOCKER
+    capabilities: frozenset[str] = frozenset()
 
     def __init__(self, *, network: str = "choregos_default", docker: str = "docker") -> None:
         self.network = network

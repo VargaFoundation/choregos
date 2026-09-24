@@ -32,6 +32,10 @@ RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernete
 
 class KubernetesJobExecutor:
     kind = ExecutorKind.K8S_JOB
+    # `queue` seulement : Kubernetes ne sait pas suspendre un Job DÉJÀ démarré sans
+    # détruire son pod, donc ni `suspend` ni `snapshot` ici. Le dire plutôt que de le
+    # laisser supposer, c'est ce qui permettra d'en brancher un autre sans rien casser.
+    capabilities = frozenset({"queue"})
 
     def __init__(
         self,

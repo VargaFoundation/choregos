@@ -31,6 +31,10 @@ from ..services import active_policy, policy_model
 router = APIRouter(tags=["costs"])
 
 GROUPS: dict[str, Any] = {
+    # `kind` sépare ce qu'a coûté un MODÈLE de ce qu'a coûté un OUTIL du catalogue. Sans
+    # lui, une facture d'API tierce se fondait dans le coût des modèles et n'était donc
+    # visible nulle part — la seule dépense de la plateforme que personne ne regardait.
+    "kind": CostLedger.kind,
     "stage": CostLedger.stage_role,
     "model": CostLedger.model,
     "backend": CostLedger.backend,
@@ -95,7 +99,7 @@ async def _report(
 async def project_costs(
     ctx: ProjectCtx,
     session: Db,
-    group_by: Annotated[str, Query(pattern="^(day|stage|model|backend|size)$")] = "day",
+    group_by: Annotated[str, Query(pattern="^(day|stage|model|backend|size|kind)$")] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
 ) -> CostReport:
@@ -151,7 +155,7 @@ async def org_costs(
 async def project_costs_csv(
     ctx: ProjectCtx,
     session: Db,
-    group_by: Annotated[str, Query(pattern="^(day|stage|model|backend|size)$")] = "day",
+    group_by: Annotated[str, Query(pattern="^(day|stage|model|backend|size|kind)$")] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
 ) -> Response:

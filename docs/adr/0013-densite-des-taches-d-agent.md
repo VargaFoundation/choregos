@@ -77,6 +77,20 @@ regarder AX plus tard, pas ses primitives.
   Reste ouvert, honnêtement : aujourd'hui, un nœud perdu au milieu d'une étape nous la fait
   **rejouer entière**, et nous la repayons.
 
+## Décision 4 — La couture est posée maintenant, pas le jour où on en aura besoin
+
+Un exécuteur **annonce ce qu'il sait faire** (`capabilities`), pris dans un vocabulaire fermé :
+`queue`, `suspend`, `resume`, `snapshot`. Aujourd'hui, un seul exécuteur remplit une seule
+capacité — `k8s_job` sait mettre en file. C'est précisément pour cela qu'il faut le poser
+maintenant : le jour où un bac à sable à instantané arrive, l'orchestrateur **demandera** ce
+que le runtime sait faire au lieu de le supposer, et rien d'autre ne bougera.
+
+Une suite de conformité refuse qu'un exécuteur annonce une capacité qu'il n'implémente pas :
+une capacité annoncée et absente est pire qu'absente, parce que l'appelant s'y fie. Elle porte
+aussi un test qui dit un **état** plutôt qu'une règle — « aucun exécuteur ne sait encore
+prendre un instantané ». Le jour où il échoue, c'est le signal de relire cet ADR : le pool de
+runners tièdes redevient défendable, et la perte d'un nœud cesse de tout faire rejouer.
+
 ## Conséquences
 
 - `runner.maxActive` dans le chart, `CHOREGOS_RUNNER_MAX_ACTIVE` pour l'exécuteur `k8s_job`.

@@ -100,9 +100,31 @@ class CdAdapter(Protocol):
     async def set_sync_window(self, app: str, windows: list[Window]) -> None: ...
 
 
+#: Ce qu'un exécuteur peut savoir faire en plus de démarrer, observer et arrêter.
+#:
+#: Ce vocabulaire est la **couture** par laquelle un bac à sable plus capable entrera un
+#: jour — celui de Google (Agent Substrate, gVisor) ou un autre. Il est posé maintenant,
+#: alors qu'un seul exécuteur en remplit un seul, pour que ce jour-là rien d'autre ne
+#: bouge : l'orchestrateur demandera ce que le runtime sait faire au lieu de le supposer.
+#:
+#: - `queue`    : sait faire attendre un run SANS pod (plafond de simultanéité).
+#: - `suspend`  : sait arrêter un run EN COURS sans perdre son travail.
+#: - `resume`   : sait le reprendre là où il s'était arrêté.
+#: - `snapshot` : sait figer l'état du bac à sable et le restaurer à l'identique. C'est
+#:                la seule capacité qui rendrait acceptable un pool de runners tièdes
+#:                (ADR 0013), parce qu'elle permet de repartir d'un état PROPRE entre
+#:                deux runs plutôt que de faire confiance au ménage.
+CAPACITES_EXECUTEUR: frozenset[str] = frozenset({"queue", "suspend", "resume", "snapshot"})
+
+
 @runtime_checkable
 class Executor(Protocol):
     """Ce qui fait tourner un run : PipelineRun Tekton, Job K8s, conteneur local, ACA Job."""
+
+    #: Ce que CET exécuteur sait faire, pris dans `CAPACITES_EXECUTEUR`. Déclarer une
+    #: capacité qu'on n'implémente pas est refusé par la conformité : une capacité
+    #: annoncée et absente est pire qu'absente, l'appelant s'y fie.
+    capabilities: frozenset[str]
 
     async def start(self, spec: StageJobSpec) -> ExecRef: ...
     async def status(self, ref: ExecRef) -> ExecStatus: ...

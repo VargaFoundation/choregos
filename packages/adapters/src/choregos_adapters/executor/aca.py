@@ -113,6 +113,7 @@ class AcaExecutor:
     """Un job ACA par run, déclenché manuellement, nettoyé par le cycle de vie ACA."""
 
     kind = ExecutorKind.ACA
+    capabilities: frozenset[str] = frozenset()
 
     def __init__(
         self,
