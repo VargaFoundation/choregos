@@ -161,7 +161,9 @@ class Runner:
         plan = backend.launch_plan(stage_input, workspace.path)
         written = plan.materialize(workspace.path)
         workspace.exclude(written)
-        guards = GuardRails(stage_input.permissions, list(stage_input.allowed_paths))
+        guards = GuardRails(
+            stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
+        )
         env = {
             **plan.env,
             **backend.model_env(stage_input.model, stage_input.gateway_key),

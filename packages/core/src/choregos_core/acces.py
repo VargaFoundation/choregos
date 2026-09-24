@@ -58,6 +58,9 @@ class Acces:
 class RapportAcces:
     acces: list[Acces] = field(default_factory=list)
     evenements: int = 0
+    #: Décisions dont la nature a été DÉDUITE (l'agent n'avait pas dit `kind`). Un compte
+    #: rendu à « 0 refus » se lit autrement quand on sait que 23 natures ont été devinées.
+    deduites: int = 0
 
     @property
     def refuses(self) -> list[Acces]:
@@ -70,6 +73,7 @@ class RapportAcces:
         return {
             "evenements": self.evenements,
             "refus": sum(a.refus for a in self.acces),
+            "deduites": self.deduites,
             "acces": [a.to_dict() for a in self.acces],
         }
 
@@ -88,11 +92,13 @@ def rapport_d_acces(evenements: list[dict[str, Any]]) -> RapportAcces:
     """
     groupes: OrderedDict[tuple[str, str], Acces] = OrderedDict()
     compte = 0
+    deduites = 0
     for evenement in evenements:
         compte += 1
         type_ = str(evenement.get("type", ""))
         payload = evenement.get("payload") or {}
         if type_ == "session/request_permission":
+            deduites += 1 if payload.get("inferred") else 0
             nature = str(payload.get("kind") or "autre")
             cible = str(payload.get("target") or "")
             if not cible:
@@ -118,7 +124,7 @@ def rapport_d_acces(evenements: list[dict[str, Any]]) -> RapportAcces:
 
     # Les refus d'abord : c'est ce qu'on vient chercher. Puis par nombre de demandes.
     ordonne = sorted(groupes.values(), key=lambda a: (not a.refuse, -a.demandes, a.cible))
-    return RapportAcces(acces=ordonne, evenements=compte)
+    return RapportAcces(acces=ordonne, evenements=compte, deduites=deduites)
 
 
 __all__ = ["NATURES", "Acces", "RapportAcces", "rapport_d_acces"]

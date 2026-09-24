@@ -70,10 +70,15 @@ class Settings(BaseSettings):
     github_webhook_secret: str = ""
     github_app_id: str = ""
     github_app_private_key: str = ""
-    generic_webhook_secret: str = "dev-webhook-secret"
+    #: Secret partagé des webhooks non signés (ArgoCD, Alertmanager, Jira, GitLab). VIDE par
+    #: défaut : `verify_shared_secret` refuse alors tout, et c'est voulu — la valeur par
+    #: défaut d'avant était publiée dans ce dépôt, et le chart ne l'injectait pas.
+    generic_webhook_secret: str = ""
 
     # Divers
     cors_origins: str = "http://localhost:3000"
+    #: Requêtes par minute et par adresse sur les routes sans principal (`/auth/*`,
+    #: `/webhooks/*`), par réplique. 0 désactive. Voir `limiteur.py`.
     rate_limit_per_minute: int = 600
     log_level: str = "INFO"
     log_json: bool = True

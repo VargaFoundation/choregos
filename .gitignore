@@ -42,3 +42,7 @@ apps/web/test-results/
 choregos.db
 choregos.db-shm
 choregos.db-wal
+# Bases SQLite de seed/test : des artefacts binaires, jamais dans l'historique.
+.seed-test.db*
+*.db-shm
+*.db-wal

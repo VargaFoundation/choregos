@@ -96,6 +96,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     install_error_handlers(app)
+    from .limiteur import installer as installer_le_limiteur
+
+    installer_le_limiteur(app, settings.rate_limit_per_minute)
 
     @app.middleware("http")
     async def logging_middleware(

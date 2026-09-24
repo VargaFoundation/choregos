@@ -33,6 +33,24 @@ premier avis sous 10 jours.
 
 ## Nos engagements
 
-- Les images sont signées (cosign keyless) et accompagnées d'un SBOM.
-- Les dépendances sont scannées chaque nuit ; un CRITICAL bloque la publication.
+- Les images sont signées (cosign keyless) et vérifiées par digest à l'admission (Kyverno).
+- Un CRITICAL Trivy bloque la publication des images de `main`.
 - Les secrets tournent selon le calendrier de `docs/runbooks/rotation-secrets.md`.
+
+## Ce que nous ne garantissons PAS encore (et que nous disions garantir)
+
+Écrit le 2026-09-24, après un état des lieux qui a trouvé ce fichier plus optimiste que le
+dépôt :
+
+- **Pas de SBOM** avec les images, et **pas de scan des images de release** : prévu (P1-2 de
+  `docs/plan/STATE-OF-THE-PROJECT-2026-09-24.md`). Le scan nocturne des dépendances ne bloque
+  rien pour l'instant.
+- **L'isolation des organisations** (RLS PostgreSQL) est fail-closed et testée sur un vrai
+  PostgreSQL depuis le 2026-09-24 — elle ne l'était pas avant. Elle suppose que l'API ne se
+  connecte **pas en superutilisateur** (l'API refuse de démarrer ainsi en staging/prod).
+- **Les garde-fous du runner** (périmètre de chemins, commandes) sont *fail-open* par
+  construction : ce qu'ils ne savent pas classer est autorisé et journalisé. Le sandbox
+  (NetworkPolicy, non-root, pas de jeton de compte de service) et la vérification du diff
+  après coup sont les mécanismes durs ; les garde-fous sont un filet, pas un mur.
+- **La connexion de développement** (`/auth/login?as=`) est éteinte par défaut et refusée
+  en staging/prod. Une installation qui l'allume est ouverte à quiconque atteint l'API.
