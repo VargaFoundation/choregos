@@ -16,6 +16,12 @@ dependencies = [
     # que dans l'image du runner, où `uv sync --package choregos-runner` n'installe QUE ce
     # que ce paquet déclare. L'agent mourait alors sur `ModuleNotFoundError`.
     "pydantic-settings>=2.6",
+    # Le serveur d'outils de la plateforme (`report_finding`, `ask_human`, le catalogue).
+    # Il vivait dans un SIDECAR, ce qui n'existe qu'avec Tekton : avec l'exécuteur
+    # `k8s_job`, le pod d'agent n'a qu'un conteneur, personne n'écoutait sur le port
+    # annoncé, et l'agent se retrouvait SANS AUCUN outil — tout en croyant en avoir, le
+    # `StageInput` lui promettant une adresse morte. Vu sur le banc du 2026-09-24.
+    "choregos-tools-mcp",
 ]
 
 [project.scripts]

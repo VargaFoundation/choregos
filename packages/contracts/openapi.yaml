@@ -316,6 +316,35 @@ paths:
           content:
             application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RunEvent" } } }
             text/event-stream: { schema: { type: string } }
+  /runs/{id}/access:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [runs]
+      operationId: getRunAccess
+      summary: Ce à quoi l'agent a touché — fichiers, commandes, réseau, outils — et les refus.
+      responses:
+        "200":
+          description: Fiche d'accès du run
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [evenements, refus, acces]
+                properties:
+                  evenements: { type: integer, description: Événements du journal parcourus }
+                  refus: { type: integer, description: Nombre total de demandes refusées }
+                  cout_outils_eur: { type: number }
+                  acces:
+                    type: array
+                    items:
+                      type: object
+                      required: [nature, cible, demandes, refus]
+                      properties:
+                        nature: { type: string, enum: [read, write, execute, network, tool, autre] }
+                        cible: { type: string }
+                        demandes: { type: integer }
+                        refus: { type: integer }
+                        motifs: { type: array, items: { type: string } }
   /runs/{id}/transcript:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -730,6 +759,8 @@ paths:
                         categories: { type: array, items: { type: string } }
                         price_eur: { type: number }
                         needs_credential: { type: boolean }
+                        source: { type: string, enum: [http, mcp] }
+                        groups: { type: array, items: { type: string } }
                         allowed: { type: boolean }
   /internal/runs/{id}/tools:
     parameters: [{ $ref: "#/components/parameters/Id" }]

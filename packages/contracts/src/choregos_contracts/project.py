@@ -79,6 +79,11 @@ class ProjectConfig(Strict):
     #: C'était une entrée de `labels` — un fourre-tout d'étiquettes — le temps de vérifier
     #: que le catalogue servait. Une liste d'autorisations n'est pas une étiquette.
     tools: list[str] = Field(default_factory=list)
+    #: Les groupes de l'organisation auxquels ce projet appartient. Ils décident de ce que
+    #: le **déploiement** lui ouvre : un outil du catalogue marqué `groups: [rh]` n'est
+    #: obtenu que par un projet du groupe `rh`, même s'il le déclare dans `tools`.
+    #: Le projet choisit ce dont il se sert ; il ne choisit pas ce à quoi il a droit.
+    groups: list[str] = Field(default_factory=list)
     labels: dict[str, str] = Field(default_factory=dict)
 
     @property

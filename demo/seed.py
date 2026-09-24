@@ -239,7 +239,12 @@ async def main() -> int:
                         body_snapshot=corps,
                         state=spec["etat_initial"],
                         size=taille,
-                        allowed_paths=["src/**", "tests/**"],
+                        # Un périmètre de CHEMINS n'a de sens que là où il y a des
+                        # fichiers de projet. Le seed l'imposait à tous les tickets, RH
+                        # compris : l'agent RH, dans son répertoire vide, s'est arrêté sur
+                        # « src/ et tests/ inexistants » — et il avait raison de refuser
+                        # plutôt que d'écrire hors de ce qu'on lui avait déclaré.
+                        allowed_paths=["src/**", "tests/**"] if spec["config"].get("repo") else [],
                     )
                 )
                 print(f"  ticket {cle} créé")

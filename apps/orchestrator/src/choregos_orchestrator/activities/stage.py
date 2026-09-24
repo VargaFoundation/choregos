@@ -12,7 +12,7 @@ from datetime import timedelta
 from hashlib import sha256
 from typing import Any
 
-from choregos_api.db.models import GatewayKeyRow, Run
+from choregos_api.db.models import GatewayKeyRow, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event, record_cost
@@ -125,15 +125,28 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             ttl_s=(budget.max_minutes + 30) * 60,
             models=[resolved.litellm_model],
         )
-        session.add(
-            GatewayKeyRow(
-                key_id=key.key_id,
-                run_id=run_id,
-                project_id=bundle.project.id,
-                budget_usd=budget.usd,
-                expires_at=key.expires_at,
+        # Rejouable : une activité Temporal peut repasser ici sur le MÊME run, et la clé
+        # est déterministe. Un `INSERT` sec répondait alors « duplicate key value violates
+        # unique constraint "ix_gateway_keys_key_id" » — une erreur de base remontée telle
+        # quelle jusqu'au workflow, qui mourait. Vu sur le banc du 2026-09-24.
+        # AGENTS.md l'exige : toute activité est rejouable sans effet double.
+        existante = (
+            await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.key_id == key.key_id))
+        ).scalar_one_or_none()
+        if existante is None:
+            session.add(
+                GatewayKeyRow(
+                    key_id=key.key_id,
+                    run_id=run_id,
+                    project_id=bundle.project.id,
+                    budget_usd=budget.usd,
+                    expires_at=key.expires_at,
+                )
             )
-        )
+        else:
+            existante.run_id = run_id
+            existante.budget_usd = budget.usd
+            existante.expires_at = key.expires_at
 
         context_pack = await _context_pack(bundle, item, plan)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack)
@@ -386,6 +399,34 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 run_id=run_id,
             )
             status = await bundle.adapters.executor.status(ref)
+            # Tant qu'il attend, son jeton vieillit. Minté à la préparation pour
+            # `max_minutes + 15`, il expire PENDANT l'attente si la file est longue, et
+            # l'agent démarre pour recevoir « Signature has expired » — vu sur le banc du
+            # 2026-09-24. On le remplace à chaque relevé, tant que rien n'a démarré.
+            if (
+                run is not None
+                and run.status == "queued"
+                and status.state == "pending"
+                and "renew" in getattr(bundle.adapters.executor, "capabilities", frozenset())
+            ):
+                item_du_run = await session.get(WorkItem, run.work_item_id)
+                renew = getattr(bundle.adapters.executor, "renew", None)
+                if renew is not None and item_du_run is not None:
+                    # Un renouvellement raté ne tue pas le run : il peut encore démarrer à
+                    # temps, et s'il n'y arrive pas il échouera sur SON message à lui.
+                    # Un droit absent doit dégrader, pas détruire — c'est la deuxième fois
+                    # que cette leçon se paie (banc du 2026-09-24).
+                    with contextlib.suppress(Exception):
+                        await renew(
+                            ref,
+                            mint_run_token(
+                                run_id,
+                                project_slug=bundle.slug,
+                                work_item_key=item_du_run.tracker_key,
+                                # De quoi couvrir ce qu'il reste d'attente, plus l'étape.
+                                ttl_minutes=int(timeout_minutes) + 15,
+                            ),
+                        )
             # Le run attendait une place et vient de l'obtenir : sans cette bascule, il
             # resterait « en file » jusqu'à sa fin, alors qu'il tourne. C'est ici que ça
             # se voit, parce que c'est ici qu'on interroge l'exécuteur.

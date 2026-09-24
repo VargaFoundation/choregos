@@ -284,6 +284,8 @@ export type Project = {
   };
   /** Outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun. ['*'] ouvre tout le catalogue. */
   tools?: Array<string>;
+  /** Groupes de l'organisation auxquels ce projet appartient. Ils décident de ce que le déploiement lui ouvre dans le catalogue d'outils. */
+  groups?: Array<string>;
   labels?: {
     [key: string]: string;
   };

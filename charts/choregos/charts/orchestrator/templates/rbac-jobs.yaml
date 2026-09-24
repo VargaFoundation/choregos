@@ -18,11 +18,22 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 rules:
   - apiGroups: ["batch"]
+    # `patch` sert à UNE chose : lever le `suspend` d'un Job mis en file d'attente. Sans
+    # lui, le plafond de simultanéité crée des Jobs que personne ne peut plus réveiller —
+    # l'API répond 403, l'activité échoue, et le workflow du ticket meurt. Vu sur le banc
+    # du 2026-09-24 : trois tickets perdus, dont un qui a expiré sans tourner une seconde.
     resources: ["jobs"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create", "delete"]
+    # `update` sert à REMPLACER le jeton d'un run : celui d'un run rejoué (sinon l'agent
+    # tourne avec un jeton périmé) et celui d'un run qui attend en file (son jeton vieillit
+    # pendant l'attente). Sans ce verbe, l'API répond 403 et le ticket meurt — deux fois le
+    # même scénario que `patch` sur les Jobs, sur le banc du 2026-09-24.
+    #
+    # La règle qu'on en tire : tout verbe que l'exécuteur EMPLOIE doit figurer ici, et le
+    # test de chart le vérifie désormais plutôt que de compter sur la relecture.
+    verbs: ["get", "create", "update", "delete"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]

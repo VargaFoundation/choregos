@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import ChoregosError
 
@@ -59,6 +59,26 @@ class AppelHttp(Model):
     timeout_s: float = Field(default=20.0, gt=0, le=120)
 
 
+class AppelMcp(Model):
+    """Un outil servi par un serveur MCP **extérieur à l'organisation**.
+
+    LE JETON DU RUN NE SORT JAMAIS. Il authentifie l'agent auprès de NOUS, et rien d'autre :
+    le donner à un service distant reviendrait à lui confier de quoi écrire dans la
+    plateforme — poster un résultat, déposer un finding, demander une extension de
+    périmètre. Le serveur distant reçoit `credential_env`, une clé qui ne vaut que pour lui.
+
+    `tool` est le nom de l'outil CHEZ LUI ; le nom exposé à l'agent est celui du catalogue.
+    Cette indirection n'est pas cosmétique : elle permet de n'exposer qu'une partie des
+    outils d'un serveur, et de les renommer dans le vocabulaire de la maison.
+    """
+
+    url: str
+    #: L'outil tel que le serveur distant le nomme.
+    tool: str
+    headers: dict[str, str] = Field(default_factory=dict)
+    timeout_s: float = Field(default=30.0, gt=0, le=120)
+
+
 class OutilCatalogue(Model):
     """Un outil : ce que l'agent voit, et ce que la plateforme fait pour lui."""
 
@@ -67,13 +87,36 @@ class OutilCatalogue(Model):
     provider: str
     categories: list[str] = Field(default_factory=list)
     input_schema: dict[str, Any] = Field(default_factory=dict)
-    http: AppelHttp
+    #: Groupes de l'organisation autorisés à s'en servir. **Vide = aucune restriction de
+    #: groupe** — l'outil reste soumis à la déclaration du projet (`ProjectConfig.tools`).
+    #: Deux verrous, et ils ne disent pas la même chose : le déploiement dit QUI a le droit
+    #: (groupes), le projet dit ce dont IL se sert (liste d'outils). Un projet qui déclare
+    #: un outil réservé à un groupe dont il ne fait pas partie ne l'obtient pas.
+    groups: list[str] = Field(default_factory=list)
+    #: L'une OU l'autre : un appel HTTP direct, ou un outil d'un serveur MCP distant.
+    http: AppelHttp | None = None
+    mcp: AppelMcp | None = None
     #: Nom de la variable d'environnement qui porte la clé du fournisseur, côté plateforme.
     #: Jamais la clé elle-même : ce fichier est lu dans une PR.
     credential_env: str | None = None
     #: Ce qu'un appel coûte, en euros. Zéro pour une API gratuite — mais le compter quand
     #: même, parce qu'un quota gratuit s'épuise aussi.
     price_eur: float = Field(default=0.0, ge=0)
+
+    @model_validator(mode="after")
+    def _une_seule_source(self) -> OutilCatalogue:
+        """Un outil a UNE source : un appel HTTP, ou un outil MCP distant.
+
+        Aucune des deux et l'outil ne fait rien ; les deux et on ne saurait laquelle
+        employer. Le dire au chargement du catalogue vaut mieux qu'au premier appel.
+        """
+        if (self.http is None) == (self.mcp is None):
+            raise ValueError(f"l'outil {self.name} doit déclarer `http:` ou `mcp:`, et un seul")
+        return self
+
+    def ouvert_a(self, groupes: list[str]) -> bool:
+        """L'outil est-il ouvert à ces groupes ? Sans restriction déclarée, oui."""
+        return not self.groups or bool(set(self.groups) & set(groupes))
 
 
 class Catalogue(Model):
@@ -107,6 +150,8 @@ def construire_requete(outil: OutilCatalogue, arguments: dict[str, Any], cle: st
     La clé n'apparaît que dans les en-têtes rendus ici, jamais dans ce qui est journalisé
     ni dans ce qui repart vers l'agent.
     """
+    if outil.http is None:
+        raise ValueError(f"l'outil {outil.name} n'a pas de source HTTP")
     entetes = {
         nom: _remplir(valeur, {**arguments, "credential": cle or ""})
         for nom, valeur in outil.http.headers.items()
@@ -143,6 +188,7 @@ def charger_catalogue(texte: str) -> Catalogue:
 
 __all__ = [
     "AppelHttp",
+    "AppelMcp",
     "ArgumentRefuseError",
     "Catalogue",
     "OutilCatalogue",

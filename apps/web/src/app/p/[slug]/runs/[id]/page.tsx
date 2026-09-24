@@ -4,6 +4,7 @@ import { Heading } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { use } from "react";
 import { LiveLog } from "@/components/live-log";
+import { Acces } from "@/components/acces";
 import { Preuves } from "@/components/preuves";
 import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -17,6 +18,9 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const run = useQuery({ queryKey: ["run", id], queryFn: () => api.run(id) });
   const stored = useQuery({ queryKey: ["run-events", id], queryFn: () => api.runEvents(id) });
   const diff = useQuery({ queryKey: ["run-diff", id], queryFn: () => api.runDiff(id) });
+  // Ce à quoi l'agent a touché, replié depuis le journal : les 200 événements bruts
+  // d'un run ne se lisent pas, et un journal que personne ne lit n'est pas un audit.
+  const acces = useQuery({ queryKey: ["run-access", id], queryFn: () => api.runAccess(id) });
   const live = useEventStream<RunEventDto>({
     path: `/runs/${id}/events`,
     enabled: run.data?.status === "running",
@@ -80,6 +84,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           </p>
         </Card>
       </div>
+
+      <Acces acces={acces.data} />
 
       <Card
         title="journal ACP"

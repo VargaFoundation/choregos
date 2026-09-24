@@ -417,3 +417,59 @@ async def test_un_projet_sans_depot_se_cree(client: AsyncClient, admin: str) -> 
     assert not config.has_repo
     with pytest.raises(ValueError, match="n'a pas de dépôt"):
         _ = config.repo_url
+
+
+async def test_la_fiche_d_acces_replie_le_journal(
+    client: AsyncClient, project: dict[str, Any], admin: str
+) -> None:
+    """Deux agents produisent deux cents événements en quelques minutes : personne ne les
+    lit. La fiche répond à « à quoi a-t-il touché », et met les refus devant."""
+    from choregos_api.db.models import Run, RunEvent, WorkItem
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        item = WorkItem(project_id=project["id"], tracker_key="varga/x#7", title="T", state="ready")
+        session.add(item)
+        await session.flush()
+        run = Run(
+            id="run-acces-1",
+            work_item_id=item.id,
+            project_id=project["id"],
+            stage_role="implement",
+            status="succeeded",
+        )
+        session.add(run)
+        evenements = [
+            ("session/update", {"update": {"text": "je lis le ticket"}}),
+            (
+                "session/request_permission",
+                {"kind": "read", "target": "/workspace/src/a.py", "allowed": True, "reason": "ok"},
+            ),
+            (
+                "session/request_permission",
+                {"kind": "read", "target": "/workspace/src/a.py", "allowed": True, "reason": "ok"},
+            ),
+            (
+                "session/request_permission",
+                {
+                    "kind": "write",
+                    "target": "/workspace/.env",
+                    "allowed": False,
+                    "reason": "fichier sensible",
+                },
+            ),
+        ]
+        from choregos_core import utcnow
+
+        for seq, (type_, payload) in enumerate(evenements, start=1):
+            session.add(RunEvent(run_id=run.id, seq=seq, type=type_, payload=payload, ts=utcnow()))
+
+    reponse = await client.get("/api/v1/runs/run-acces-1/access")
+    assert reponse.status_code == 200, reponse.text
+    fiche = reponse.json()
+    assert fiche["evenements"] == 4 and fiche["refus"] == 1
+    assert fiche["acces"][0]["cible"] == "/workspace/.env", "le refus d'abord"
+    assert fiche["acces"][0]["motifs"] == ["fichier sensible"]
+    assert fiche["acces"][1]["demandes"] == 2, "deux lectures du même fichier, regroupées"
+    # La prose de l'agent n'y entre pas : la fiche redeviendrait illisible.
+    assert all("je lis le ticket" not in a["cible"] for a in fiche["acces"])

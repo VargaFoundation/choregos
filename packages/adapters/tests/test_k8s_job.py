@@ -163,9 +163,11 @@ class _ClusterClient:
     def __init__(self) -> None:
         self.jobs: dict[str, dict[str, Any]] = {}
         self.horloge = 0
+        self.calls: list[tuple[str, str, Any]] = []
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         body = kwargs.get("json")
+        self.calls.append((method, path, body))
         if method == "POST" and path.endswith("/jobs"):
             self.horloge += 1
             body["metadata"]["creationTimestamp"] = f"2026-09-24T10:00:{self.horloge:02d}Z"
@@ -239,3 +241,50 @@ async def test_sans_plafond_rien_ne_change() -> None:
     for i in range(5):
         await executeur.start(_spec_pour(f"r-{i}"))
     assert len(client.actifs()) == 5
+
+
+async def test_une_admission_refusee_ne_tue_pas_le_run() -> None:
+    """Le droit `patch` manquait dans le Role : l'API répondait 403, l'activité échouait,
+    et le workflow du ticket mourait. Trois tickets perdus sur le banc du 2026-09-24, dont
+    un qui a expiré sans avoir tourné une seconde. Une admission ratée doit laisser le run
+    en file, pas le tuer — le relevé suivant réessaiera."""
+
+    class _SansDroitDePatch(_ClusterClient):
+        async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+            if method == "PATCH":
+                raise RuntimeError('[kubernetes] PATCH … → 403 : cannot patch resource "jobs"')
+            return await super().request(method, path, **kwargs)
+
+    client = _SansDroitDePatch()
+    executeur = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
+    for i in range(2):
+        await executeur.start(_spec_pour(f"r-{i}"))
+    client.jobs["run-r-0"]["status"] = {"succeeded": 1}  # une place se libère
+
+    etat = await executeur.status(
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
+    )
+    assert etat.state == "pending", "le run reste en file"
+    assert "en attente d'une place" in etat.message
+    assert client.jobs["run-r-1"]["spec"]["suspend"], "toujours suspendu, mais vivant"
+
+
+async def test_le_jeton_d_un_run_en_file_se_remplace() -> None:
+    """Un jeton est minté à la préparation et vit `max_minutes + 15`. Avec une file, ce
+    compte à rebours court PENDANT l'attente : un run admis plus tard démarrait avec un
+    jeton périmé et recevait « Signature has expired » sur son premier appel — vu sur le
+    banc du 2026-09-24. Le secret porte le nom du Job : le remplacer suffit."""
+    client = _ClusterClient()
+    executeur = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
+    await executeur.start(_spec_pour("r-0"))
+
+    ref = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-0", namespace="choregos", run_id="r-0")
+    await executeur.renew(ref, "jeton-tout-neuf")
+
+    secret = next(
+        body for method, path, body in client.calls if method == "PUT" and path.endswith("/secrets/run-r-0")
+    )
+    import base64
+
+    assert base64.b64decode(secret["data"]["token"]).decode() == "jeton-tout-neuf"
+    assert "renew" in KubernetesJobExecutor.capabilities

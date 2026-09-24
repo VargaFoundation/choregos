@@ -97,6 +97,13 @@ async def collect_run_artifacts(payload: dict[str, Any]) -> dict[str, Any]:
         run = await session.get(Run, payload["run_id"])
         if run is None or not run.result:
             return {"files": 0}
+        if bundle.config.repo is None:
+            # Projet sans dépôt : il n'y a pas de diff à ranger, et ce n'est pas une
+            # erreur. Cette activité est appelée après CHAQUE étape d'agent, y compris
+            # celles d'un métier qui n'écrit aucun fichier de code — la faire échouer
+            # tuait le ticket juste après une étape réussie. Vu sur le banc du 2026-09-24 :
+            # le sourcing RH aboutissait, puis le workflow mourait sur « pas de dépôt ».
+            return {"files": 0}
         repo = _repo_slug(_depot(bundle).url)
         branch = bundle.config.branch_for(item.tracker_key)
         try:

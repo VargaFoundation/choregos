@@ -93,3 +93,21 @@ async def test_un_run_en_file_n_est_pas_dit_en_cours(setup: Fixture) -> None:
     async with session_scope() as session:
         run = await session.get(Run, run_id)
         assert run is not None and run.status == "running", "admis, donc en cours"
+
+
+async def test_preparer_deux_fois_la_meme_etape_ne_casse_pas(setup: Fixture) -> None:
+    """Une activité Temporal peut repasser sur le MÊME run, et la clé de passerelle est
+    déterministe. Un `INSERT` sec répondait « duplicate key value violates unique
+    constraint » — une erreur de base remontée jusqu'au workflow, qui mourait. Vu sur le
+    banc du 2026-09-24. AGENTS.md l'exige : rejouable sans effet double."""
+    from choregos_api.db.models import GatewayKeyRow
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    premier = await _run_prepare(setup)
+    second = await _run_prepare(setup)
+    assert premier["run_id"] == second["run_id"], "l'identifiant de run est déterministe"
+
+    async with session_scope() as session:
+        lignes = (await session.execute(select(GatewayKeyRow))).scalars().all()
+    assert len(lignes) == 1, "une seule clé, pas deux — ni une erreur de contrainte"

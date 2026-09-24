@@ -136,10 +136,57 @@ global:
 Playbooks let a deployment replace **any** role prompt, including `implement`, without
 touching the platform — that is what makes the engine usable outside software.
 
-The tool catalogue declares third-party APIs the platform calls **on behalf of** an agent,
-with the provider key staying server-side. A project then declares which of them it may
-call, in its own configuration (`tools: [verifier_adresse]`, or `["*"]` for the whole
-catalogue); the default is none. See [ADR 0014](../adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)
+The tool catalogue declares third-party capabilities the platform uses **on behalf of** an
+agent, with the provider credential staying server-side. Two kinds of entry:
+
+```yaml
+outils:
+  # A plain HTTP API.
+  - name: verifier_adresse
+    description: Normalises a French postal address.
+    provider: api-adresse-data-gouv
+    input_schema: { type: object, required: [adresse], properties: { adresse: { type: string } } }
+    http:
+      method: GET
+      url: https://api-adresse.data.gouv.fr/search/
+      query: { q: "{{ adresse }}", limit: "1" }
+    price_eur: 0.0
+
+  # A tool from an MCP server OUTSIDE your organisation.
+  - name: rechercher_entreprise          # the name YOUR agents see
+    description: Looks a company up at a third-party provider.
+    provider: annuaire-externe
+    groups: [rh]                          # only projects in this group may use it
+    input_schema: { type: object, required: [siren], properties: { siren: { type: string } } }
+    mcp:
+      url: https://mcp.provider.example/mcp
+      tool: company_lookup                # the name THEY use
+      headers: { Authorization: "Bearer {{ credential }}" }
+    credential_env: FOURNISSEUR_MCP_KEY   # the variable name, never the key
+    price_eur: 0.05
+```
+
+### The rules that make an external MCP server safe to add
+
+- **The run token never leaves the platform.** It authenticates the agent *to us*; handing it
+  to a third party would hand over the ability to write into the platform — post a result,
+  file a finding, widen a scope. The remote receives `credential_env`, a key that is only
+  good for it. A test asserts the run token appears in neither the headers nor the body of
+  the outgoing request.
+- **You expose a subset, under your own names.** The catalogue names the remote tool
+  (`mcp.tool`) separately from the name your agents see. Publish three tools of a server that
+  offers sixty; the agent never sees the URL nor the remote name.
+- **Each tool opens to groups.** `groups: [rh]` on the tool, `groups: [rh]` on the project.
+  **Two locks that say different things**: the deployment says *who is entitled*, the project
+  says *what it uses*. Without the first, the project's own list would be the only control —
+  and the project team can edit it. A tool with no `groups` restricts nothing.
+- **The list does not discover itself.** Choregos never asks the remote server what it
+  offers. The catalogue is written and reviewed in a pull request, and does not grow because
+  a provider shipped something new.
+
+A project declares what it calls in its own configuration (`tools: [verifier_adresse]`, or
+`["*"]` for everything it is entitled to) and which groups it belongs to (`groups: [rh]`).
+Both default to empty, which means **no tools at all**. See [ADR 0014](../adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
 ## Multi-tenant installations

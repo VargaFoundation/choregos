@@ -110,11 +110,14 @@ class CdAdapter(Protocol):
 #: - `queue`    : sait faire attendre un run SANS pod (plafond de simultanéité).
 #: - `suspend`  : sait arrêter un run EN COURS sans perdre son travail.
 #: - `resume`   : sait le reprendre là où il s'était arrêté.
+#: - `renew`    : sait remplacer le jeton d'un run QUI N'A PAS ENCORE DÉMARRÉ. Indispensable
+#:                dès qu'il y a une file : un jeton minté à la mise en file expire pendant
+#:                l'attente, et l'agent démarre pour recevoir « Signature has expired ».
 #: - `snapshot` : sait figer l'état du bac à sable et le restaurer à l'identique. C'est
 #:                la seule capacité qui rendrait acceptable un pool de runners tièdes
 #:                (ADR 0013), parce qu'elle permet de repartir d'un état PROPRE entre
 #:                deux runs plutôt que de faire confiance au ménage.
-CAPACITES_EXECUTEUR: frozenset[str] = frozenset({"queue", "suspend", "resume", "snapshot"})
+CAPACITES_EXECUTEUR: frozenset[str] = frozenset({"queue", "renew", "suspend", "resume", "snapshot"})
 
 
 @runtime_checkable

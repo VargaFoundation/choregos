@@ -71,6 +71,20 @@ What a step leaves behind, in the result: tests run and passed, lint, typing, co
 diff size — and `facts`, a flat map named by the business for work that has none of those.
 Evidence is what gates read and what the UI shows; it is not prose.
 
+## Tools
+
+An agent's own tools are whatever its backend ships. The **platform's** tools reach it over
+MCP on localhost: reporting a finding, asking a human, requesting a scope extension — and the
+**catalogue**, a short, deliberately chosen list of third-party APIs and MCP servers that the
+platform calls on the agent's behalf.
+
+The agent never holds a provider credential, never chooses a URL, and never sees the remote
+tool's real name. Your run token never reaches a third party. Each tool opens to groups, and
+a project both declares what it uses and belongs to the groups that entitle it.
+
+The list is written and reviewed like code. Choregos does not ask a remote server what it
+offers: an inventory that updates itself is not an access control.
+
 ## Findings and trains
 
 An agent that spots a problem **outside its scope** does not fix it: it reports a *finding*,

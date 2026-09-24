@@ -330,11 +330,16 @@ def _outils_autorises(project: Project) -> list[str]:
     return [str(t) for t in ((project.config or {}).get("tools") or [])]
 
 
+def _groupes_du_projet(project: Project) -> list[str]:
+    """Les groupes auxquels il appartient — ce que le déploiement lui ouvre."""
+    return [str(g) for g in ((project.config or {}).get("groups") or [])]
+
+
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
 async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     """Les outils que CE run peut appeler, au format MCP (`name`, `description`, `inputSchema`)."""
     _run, _item, project = await _run_and_item(session, id)
-    outils = outils_du_projet(_outils_autorises(project))
+    outils = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
     return {
         "tools": [
             {"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils
@@ -348,7 +353,14 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     run, item, project = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("résultat déjà posté pour ce run")
-    outil = next((o for o in outils_du_projet(_outils_autorises(project)) if o.name == name), None)
+    outil = next(
+        (
+            o
+            for o in outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
+            if o.name == name
+        ),
+        None,
+    )
     if outil is None:
         # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
         # le catalogue du déploiement en essayant des noms.

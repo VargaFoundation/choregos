@@ -82,6 +82,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
               <tr>
                 <th>outil</th>
                 <th>fournisseur</th>
+                <th>ouvert à</th>
                 <th>par appel</th>
                 <th>ce projet</th>
               </tr>
@@ -95,8 +96,12 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                   </td>
                   <td className="text-xs">
                     {tool.provider}
+                    {tool.source === "mcp" ? " · MCP distant" : ""}
                     {tool.needs_credential ? " · clé plateforme" : " · sans clé"}
                   </td>
+                  {/* Vide = aucune restriction de groupe. L'outil reste soumis à la
+                      déclaration du projet : deux verrous, pas un. */}
+                  <td className="text-xs">{(tool.groups ?? []).join(", ") || "tous"}</td>
                   <td className="text-xs">{eur(tool.price_eur ?? 0)}</td>
                   <td className="text-xs">{tool.allowed ? "autorisé" : "—"}</td>
                 </tr>
