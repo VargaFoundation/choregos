@@ -18,3 +18,5 @@ Une décision structurante s'écrit ici avant d'être codée, et se relit quand 
 | [0010](0010-les-gates-sont-des-mecanismes.md) | Une garantie est un mécanisme, jamais un prompt | acceptée |
 | [0011](0011-retrait-d-openhands.md) | Retrait d'OpenHands : aucun agent ACP en ligne de commande | acceptée |
 | [0012](0012-le-moteur-n-est-pas-lie-au-logiciel.md) | Le moteur n'est pas lié au logiciel (playbooks, garantie générique, tracker interne) | acceptée |
+| [0013](0013-densite-des-taches-d-agent.md) | La densité des tâches d'agent : file d'admission, capacités d'exécuteur | acceptée |
+| [0014](0014-un-catalogue-d-outils-tenu-par-la-plateforme.md) | Un catalogue d'outils tenu par la plateforme (HTTP et MCP extérieur, par groupes) | acceptée |
