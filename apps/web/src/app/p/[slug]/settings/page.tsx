@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
-import { shortDate } from "@/lib/format";
+import { eur, shortDate } from "@/lib/format";
 
 export default function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -12,6 +12,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
   const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   const policy = useQuery({ queryKey: ["policy", slug], queryFn: () => api.policy(slug) });
   const matrix = useQuery({ queryKey: ["matrix", slug], queryFn: () => api.modelMatrix(slug) });
+  const tools = useQuery({ queryKey: ["project-tools", slug], queryFn: () => api.projectTools(slug) });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +67,48 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
           </tbody>
         </table>
         {connectors.data?.length === 0 && <Empty>aucun connecteur configuré</Empty>}
+      </Card>
+
+      <Card title="outils du catalogue">
+        {/* Les deux ensembles, pas seulement ce qui est autorisé : sans la liste complète,
+            on ne peut ni savoir ce qu'on pourrait ouvrir, ni comprendre pourquoi un outil
+            manque à l'agent. La clé d'un fournisseur n'apparaît jamais — seulement le fait
+            qu'il en faille une. */}
+        {(tools.data?.tools ?? []).length === 0 ? (
+          <Empty>aucun outil déclaré par le déploiement.</Empty>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>outil</th>
+                <th>fournisseur</th>
+                <th>par appel</th>
+                <th>ce projet</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(tools.data?.tools ?? []).map((tool) => (
+                <tr key={tool.name}>
+                  <td>
+                    <span className="font-mono text-xs">{tool.name}</span>
+                    <p className="text-xs text-ink-muted">{tool.description}</p>
+                  </td>
+                  <td className="text-xs">
+                    {tool.provider}
+                    {tool.needs_credential ? " · clé plateforme" : " · sans clé"}
+                  </td>
+                  <td className="text-xs">{eur(tool.price_eur ?? 0)}</td>
+                  <td className="text-xs">{tool.allowed ? "autorisé" : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {tools.data?.allows_all && (
+          <p className="mt-2 text-xs text-ink-muted">
+            ce projet déclare <span className="font-mono">*</span> : tout le catalogue lui est ouvert.
+          </p>
+        )}
       </Card>
 
       <Card title="politique">

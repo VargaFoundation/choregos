@@ -35,7 +35,7 @@ global:
   # Catalogue d'outils : des API tierces que la PLATEFORME appelle pour un agent, clé
   # côté serveur. Un ConfigMap (le catalogue, lisible en PR) et un Secret (les clés des
   # fournisseurs, injecté dans l'API). Vide = aucun outil, et c'est le défaut.
-  # Un projet déclare ensuite ce qu'il a le droit d'appeler (`labels.tools`).
+  # Un projet déclare ensuite ce qu'il a le droit d'appeler (`tools` de sa configuration).
   toolCatalog:
     configMap: ""
     mountPath: /etc/choregos/outils

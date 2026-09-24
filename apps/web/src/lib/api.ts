@@ -77,6 +77,19 @@ export const api = {
   provisionStatus: (id: string) => request<ProvisionStatus>(`/projects/${id}/provision`),
 
   connectors: (id: string) => request<ConnectorDto[]>(`/projects/${id}/connectors`),
+  projectTools: (id: string) =>
+    request<{
+      allows_all: boolean;
+      tools: {
+        name: string;
+        description: string;
+        provider: string;
+        categories?: string[];
+        price_eur?: number;
+        needs_credential?: boolean;
+        allowed: boolean;
+      }[];
+    }>(`/projects/${id}/tools`),
   putConnector: (id: string, kind: string, body: unknown) =>
     request<ConnectorDto>(`/projects/${id}/connectors/${kind}`, { method: "PUT", body: JSON.stringify(body) }),
   testConnector: (id: string, kind: string) =>

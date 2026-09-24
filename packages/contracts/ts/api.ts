@@ -776,6 +776,18 @@ export interface Operations {
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
   getProjectDora: { method: "GET"; path: "/projects/{id}/metrics/dora"; body: never; response: DoraReport };
   getProjectModels: { method: "GET"; path: "/projects/{id}/models"; body: never; response: ProjectModels };
+  getProjectTools: { method: "GET"; path: "/projects/{id}/tools"; body: never; response: {
+  allows_all: boolean;
+  tools: Array<{
+    name: string;
+    description: string;
+    provider: string;
+    categories?: Array<string>;
+    price_eur?: number;
+    needs_credential?: boolean;
+    allowed: boolean;
+  }>;
+} };
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };

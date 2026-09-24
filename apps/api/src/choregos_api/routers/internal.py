@@ -326,10 +326,8 @@ async def get_ci_logs(
 
 
 def _outils_autorises(project: Project) -> list[str]:
-    """Ce que le projet déclare pouvoir appeler (`labels['tools']`, séparé par des virgules)."""
-    config = project.config or {}
-    declare = (config.get("labels") or {}).get("tools", "")
-    return [t.strip() for t in str(declare).split(",") if t.strip()]
+    """Ce que le projet déclare pouvoir appeler (`tools` de sa configuration)."""
+    return [str(t) for t in ((project.config or {}).get("tools") or [])]
 
 
 @router.get("/runs/{id}/tools", operation_id="getRunTools")

@@ -74,7 +74,7 @@ async def _run_avec_catalogue(
         row = await session.get(Project, project["id"])
         assert row is not None
         config = dict(row.config or {})
-        config["labels"] = {**(config.get("labels") or {}), "tools": outils}
+        config["tools"] = [t for t in outils.split(",") if t]
         row.config = config
         item = WorkItem(project_id=project["id"], tracker_key="varga/x#9", title="T", state="ready")
         session.add(item)
@@ -214,3 +214,20 @@ async def test_le_plafond_d_appels_borne_la_facture(
     assert (await appel()).json()["remaining"] == 0
     trop = await appel()
     assert trop.status_code == 429, trop.text
+
+
+async def test_l_ecran_des_parametres_voit_tout_le_catalogue(
+    client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, admin: str
+) -> None:
+    """Les DEUX ensembles : sans la liste complète, on ne peut ni savoir ce qu'on pourrait
+    ouvrir, ni comprendre pourquoi un outil manque à l'agent. Et jamais la clé."""
+    await _run_avec_catalogue(project, tmp_path, monkeypatch, outils="")
+
+    reponse = await client.get(f"/api/v1/projects/{project['id']}/tools")
+    assert reponse.status_code == 200, reponse.text
+    corps = reponse.json()
+    assert [t["name"] for t in corps["tools"]] == ["recherche_profils"]
+    assert corps["tools"][0]["allowed"] is False, "non déclaré par ce projet"
+    assert corps["tools"][0]["needs_credential"] is True
+    assert "ANNUAIRE_API_KEY" not in reponse.text and "cle-du-coffre" not in reponse.text
+    assert corps["allows_all"] is False

@@ -119,10 +119,15 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 
 **Total** : 96 livrées, 6 partielles, 0 non commencée.
 
+Depuis le 2026-09-23, le dépôt a reçu du matériel qui ne correspond à aucune story du backlog
+initial — il est venu de l'usage : dépendances embarquées en option, banc mono-nœud (`demo/`),
+catalogue d'outils, file d'admission des runs, capacités d'exécuteur, documentation anglaise.
+Les ADR 0012 à 0014 en portent les décisions.
+
 ## Ce qui tient debout aujourd'hui
 
 - `make demo` : un ticket traverse la plateforme jusqu'à la production, sans cluster.
-- `make ci` : lint, typage strict, 421 tests, contrats vérifiés, charts rendus.
+- `make ci` : lint, typage strict, 465 tests, contrats vérifiés, charts rendus.
 - Couverture 84 % sur `packages/core`, `packages/runner`, `apps/orchestrator` (seuil : 80 %).
 - 24 scénarios e2e M1–M5 au vert, sans cluster.
 - **Sur un vrai cluster** (kind + Calico) : l'egress d'un runner est bloqué pour de bon, la
@@ -143,6 +148,23 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
 - Les dépendances (PostgreSQL, Temporal, LiteLLM, Ecphoria) s'embarquent ou se branchent en
   externe, à la manière des charts Bitnami : `global.<dépendance>.embedded`. Défaut inchangé
   (externe) ; `charts/choregos/values/local.yaml` monte un banc complet sans rien fournir.
+- **Le moteur porte un métier sans dépôt ni tests** (2026-09-24, [ADR 0012](../adr/0012-le-moteur-n-est-pas-lie-au-logiciel.md)) :
+  `repo` est facultatif — l'agent travaille alors dans un répertoire vide, suivi par un git
+  local pour que son travail reste mesurable ; les preuves se nomment par le métier
+  (`Evidence.facts` + garantie `evidence_facts`, qui refuse un zéro poli) ; et les rôles sont
+  des noms de plein droit (`sourcing`, `qualification`) et non plus `custom`. Le projet RH de
+  la démonstration n'a plus aucun dépôt.
+- **Une pointe de tickets ne fait plus une pointe de pods** ([ADR 0013](../adr/0013-densite-des-taches-d-agent.md)) :
+  au-delà de `runner.maxActive`, le Job est créé suspendu — aucun pod, aucune image tirée — et
+  admis dans l'ordre d'arrivée. Un exécuteur déclare ses capacités (`queue`, `suspend`,
+  `resume`, `snapshot`) et la conformité refuse qu'il en annonce une qu'il n'implémente pas :
+  c'est la couture par laquelle un bac à sable à instantané entrera.
+- **Un catalogue d'outils tenu par la plateforme** ([ADR 0014](../adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)) :
+  des API tierces appelées POUR l'agent, clé côté serveur, plafonnées par run et inscrites au
+  registre de coûts. L'agent ne choisit ni l'URL ni la méthode, et n'a aucun identifiant de
+  fournisseur.
+- **Une documentation anglaise** de déploiement et d'usage (`docs/en/`), dont les exemples YAML
+  sont relus par le parseur du DSL et le modèle de politique — un test les garde.
 
 ## Ce qui manque pour dire « en production »
 
@@ -151,23 +173,28 @@ Légende : ✅ livrée et testée · 🟡 livrée partiellement (le reste est di
    au lieu de passer — c'est voulu depuis le 2026-09-23, une garantie aveugle valait pire que
    rien. Un ticket ne peut pas être rejoué sous le même identifiant (Temporal refuse un id
    terminé). Et le chemin RH n'a pas de base de profils : les agents bloquent, à raison.
-2. **Le déploiement réel** : la pile de test sur kind est volontairement petite (un Temporal de
+2. **Ce qu'aucun agent réel n'a encore traversé.** Depuis le banc du 2026-09-23, quatre choses
+   ont été livrées et ne sont vérifiées **que par des tests** : le catalogue d'outils, la file
+   d'admission des runs, le projet sans dépôt, et les rôles métier. Le banc précédent avait
+   trouvé dix-sept défauts qu'aucun test ne voyait ; il faut le rejouer avant d'annoncer que
+   ces quatre-là tiennent.
+3. **Le déploiement réel** : la pile de test sur kind est volontairement petite (un Temporal de
    développement, un Postgres simple). Les valeurs HA — Temporal à trois nœuds, CNPG à trois
    instances, Argo Rollouts — restent à régler sur un vrai environnement.
-3. **Les runbooks restants** doivent être joués une fois en staging. Celui de restauration l'a
+4. **Les runbooks restants** doivent être joués une fois en staging. Celui de restauration l'a
    été, et il était faux : c'est l'argument pour jouer les autres.
-4. **Le chaos au-delà du nœud** : coupure réseau, disque plein. La perte d'un nœud est jouée
+5. **Le chaos au-delà du nœud** : coupure réseau, disque plein. La perte d'un nœud est jouée
    (`tests/cluster/test_node_loss.py`) ; ce qui reste est le préavis d'éviction spot, que la
    plateforme subit au lieu de l'écouter.
-5. **Ecphoria** : E-01 à E-14 sont livrés et poussés sur `main` amont. Ce qui en ressort et qui
+6. **Ecphoria** : E-01 à E-14 sont livrés et poussés sur `main` amont. Ce qui en ressort et qui
    nous concerne : le banc au profil Choregos (20 000 faits, 200 000 événements, 50 lectures/s)
    mesure la recherche à ~250 ms p50 / ~540 ms p95 sur une station de travail, au-dessus de la
    cible de 300 ms p95 ; `retrieval_scan_cap` à 512 ramène p95 à 24 ms sans coût de rappel
    mesurable à cette taille de corpus. À décider au provisionnement, pas en production.
 
-6. **Le moteur n'est pas encore tout à fait générique** ([ADR 0012](../adr/0012-le-moteur-n-est-pas-lie-au-logiciel.md)) :
-   quatre mécanismes l'ont détaché du logiciel — playbooks apportés par le déploiement, garantie
-   `outputs_present`, `tracker: internal`, `gateway: direct`. Cinq attaches restent, écrites noir
-   sur blanc plutôt que découvertes : `repo` est obligatoire dans un projet, `StageOutputs` est
-   typé pour le développement, `Evidence` parle de tests, le rôle est une énumération fermée, et
-   la plupart des garanties livrées ne savent lire qu'un diff de code.
+7. **Le moteur, et ce qui le lie encore au logiciel** ([ADR 0012](../adr/0012-le-moteur-n-est-pas-lie-au-logiciel.md)) :
+   sur les cinq attaches écrites le 2026-09-23, **trois sont tombées** le lendemain — dépôt
+   facultatif, preuves nommées par le métier, rôles ouverts. Restent `StageOutputs`, typé pour
+   le développement et seulement vérifiable en présence, et le déséquilibre des garanties, dont
+   la plupart ne savent lire qu'un diff de code. Ni l'une ni l'autre ne bloque un métier ; elles
+   sont laissées écrites plutôt que corrigées par une abstraction dont personne n'a besoin.
