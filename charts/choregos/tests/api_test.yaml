@@ -43,3 +43,35 @@ tests:
       - equal:
           path: metadata.annotations["helm.sh/hook"]
           value: pre-install,pre-upgrade
+
+  - it: ne monte le catalogue d'outils que si le déploiement en déclare un
+    template: charts/choregos-api/templates/deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.volumes
+          content: { name: catalogue }
+      - notExists:
+          path: spec.template.spec.containers[0].envFrom
+
+  - it: monte le catalogue et ses clés quand il est déclaré
+    template: charts/choregos-api/templates/deployment.yaml
+    set:
+      global.toolCatalog.configMap: outils
+      global.toolCatalog.credentialsSecret: cles-fournisseurs
+    asserts:
+      # Le catalogue est lisible (un ConfigMap, relu en PR) ; les clés des fournisseurs
+      # ne le sont pas — elles arrivent par référence à un Secret, jamais dans la spec.
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: catalogue
+            configMap: { name: outils }
+      - contains:
+          path: spec.template.spec.containers[0].envFrom
+          content:
+            secretRef: { name: cles-fournisseurs }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CHOREGOS_TOOL_CATALOG
+            value: /etc/choregos/outils/catalogue.yaml

@@ -1,0 +1,44 @@
+# Catalogue d'outils de la démonstration.
+#
+# Un catalogue est une liste COURTE et CHOISIE, écrite par celui qui déploie et relue comme
+# du code. Ce fichier n'est pas un annuaire : c'est la liste des API tierces que les agents
+# de CE déploiement ont le droit d'appeler — par la plateforme, jamais eux-mêmes.
+#
+# Celui-ci n'en contient qu'un, et volontairement : l'API Adresse de l'État, publique et
+# sans clé. Elle permet de montrer la chaîne complète (l'agent nomme un outil, la plateforme
+# appelle, l'appel est plafonné et compté) sans demander de compte à personne.
+#
+# Un outil payant ressemblerait à ceci, la clé restant dans l'environnement de l'API :
+#
+#   - name: recherche_profils
+#     provider: un-annuaire
+#     http:
+#       url: https://api.exemple/v1/search
+#       query: { q: "{{ metier }}" }
+#       headers: { Authorization: "Bearer {{ credential }}" }
+#     credential_env: ANNUAIRE_API_KEY   # le NOM de la variable, jamais la clé
+#     price_eur: 0.02
+outils:
+  - name: verifier_adresse
+    description: >-
+      Normalise une adresse postale française et rend sa forme officielle, son code postal
+      et sa commune. À utiliser pour vérifier une adresse fournie dans un dossier plutôt
+      que de la recopier telle quelle.
+    provider: api-adresse-data-gouv
+    categories: [administratif]
+    input_schema:
+      type: object
+      required: [adresse]
+      properties:
+        adresse:
+          type: string
+          description: L'adresse à vérifier, telle qu'elle figure au dossier.
+    http:
+      method: GET
+      url: https://api-adresse.data.gouv.fr/search/
+      query:
+        q: "{{ adresse }}"
+        limit: "1"
+    # Aucune clé : l'API est publique. Le prix est nul, mais l'appel est compté quand
+    # même — un quota gratuit s'épuise aussi, et un agent qui boucle se voit.
+    price_eur: 0.0

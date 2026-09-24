@@ -11,10 +11,12 @@ from typing import Any
 from choregos_contracts import ContextPack, EventType, Finding, StageInput, StageResult
 from choregos_core import PolicyEngine, matches_any, utcnow
 from fastapi import APIRouter, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from ..catalogue import appeler as appeler_outil
+from ..catalogue import outils_du_projet
+from ..db.models import CostLedger, HumanRequest, Project, Run, RunEvent, WorkItem
 from ..db.models import Finding as FindingRow
-from ..db.models import HumanRequest, Project, Run, RunEvent, WorkItem
 from ..deps import Db, RunAuth
 from ..errors import ApiError, conflict, not_found
 from ..schemas import (
@@ -313,3 +315,92 @@ async def get_ci_logs(
     documents = item.documents or {}
     logs = str(documents.get("ci_logs", ""))
     return CiLogs(logs="\n".join(logs.splitlines()[-tail:]), ref=documents.get("ci_ref"))
+
+
+# ───────────────────────── catalogue d'outils ─────────────────────────
+#
+# Un agent qui instruit un dossier a besoin d'API tierces, et ces API ont des clés. Les lui
+# donner serait lui donner de quoi dépenser sans plafond, exfiltrer dans un commit, ou
+# garder. Il nomme donc un outil ; la plateforme fabrique la requête, injecte la clé, et
+# compte l'appel. Son egress à lui reste fermé.
+
+
+def _outils_autorises(project: Project) -> list[str]:
+    """Ce que le projet déclare pouvoir appeler (`labels['tools']`, séparé par des virgules)."""
+    config = project.config or {}
+    declare = (config.get("labels") or {}).get("tools", "")
+    return [t.strip() for t in str(declare).split(",") if t.strip()]
+
+
+@router.get("/runs/{id}/tools", operation_id="getRunTools")
+async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
+    """Les outils que CE run peut appeler, au format MCP (`name`, `description`, `inputSchema`)."""
+    _run, _item, project = await _run_and_item(session, id)
+    outils = outils_du_projet(_outils_autorises(project))
+    return {
+        "tools": [
+            {"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils
+        ]
+    }
+
+
+@router.post("/runs/{id}/tools/{name}", operation_id="callRunTool")
+async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claims: RunAuth) -> dict[str, Any]:
+    """Appelle un outil du catalogue pour le compte du run, et l'inscrit au registre de coûts."""
+    run, item, project = await _run_and_item(session, id)
+    if run.result is not None:
+        raise conflict("résultat déjà posté pour ce run")
+    outil = next((o for o in outils_du_projet(_outils_autorises(project)) if o.name == name), None)
+    if outil is None:
+        # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
+        # le catalogue du déploiement en essayant des noms.
+        raise not_found("Outil", name)
+
+    engine = PolicyEngine(policy_model(await active_policy(session, project.id)))
+    plafond = engine.max_tool_calls_per_run()
+    deja = (
+        await session.execute(
+            select(func.count())
+            .select_from(CostLedger)
+            .where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
+        )
+    ).scalar_one()
+    if plafond and deja >= plafond:
+        raise ApiError(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Plafond d'appels d'outils atteint",
+            f"ce run a déjà appelé {deja} outils (plafond {plafond})",
+        )
+
+    code, corps = await appeler_outil(outil, body or {})
+    session.add(
+        CostLedger(
+            project_id=project.id,
+            work_item_id=item.id,
+            run_id=run.id,
+            # `ts` n'a pas de défaut côté modèle : la colonne est NOT NULL et l'oublier
+            # fait échouer l'INSERT, pas la lecture.
+            ts=utcnow(),
+            kind="tool",
+            provider=outil.provider,
+            model=outil.name,
+            cost_eur=outil.price_eur,
+            stage_role=run.stage_role,
+        )
+    )
+    await persist_event(
+        session,
+        EventType.TOOL_CALLED,
+        project_id=project.id,
+        work_item_id=item.id,
+        project_slug=project.slug,
+        subject=run.id,
+        tool=outil.name,
+        provider=outil.provider,
+        status_code=code,
+    )
+    return {
+        "status_code": code,
+        "result": corps,
+        "remaining": max(0, plafond - deja - 1) if plafond else None,
+    }

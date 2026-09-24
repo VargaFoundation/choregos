@@ -750,6 +750,13 @@ export interface Operations {
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
+  callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
+  [key: string]: unknown;
+}; response: {
+  status_code: number;
+  result: unknown;
+  remaining?: number;
+} };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
@@ -781,6 +788,15 @@ export interface Operations {
   getRunEvents: { method: "GET"; path: "/runs/{id}/events"; body: never; response: Array<RunEvent> };
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
   getRunTicket: { method: "GET"; path: "/internal/runs/{id}/ticket"; body: never; response: RunTicket };
+  getRunTools: { method: "GET"; path: "/internal/runs/{id}/tools"; body: never; response: {
+  tools?: Array<{
+    name: string;
+    description: string;
+    inputSchema?: {
+      [key: string]: unknown;
+    };
+  }>;
+} };
   getRunTranscript: { method: "GET"; path: "/runs/{id}/transcript"; body: never; response: ArtifactRef };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };

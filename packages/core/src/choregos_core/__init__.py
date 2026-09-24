@@ -6,6 +6,7 @@ Tout ce qui parle au monde extérieur vit dans `packages/adapters`.
 
 from __future__ import annotations
 
+from .catalogue import Catalogue, OutilCatalogue, charger_catalogue, construire_requete
 from .domain import (
     Change,
     CiStatus,
@@ -92,6 +93,7 @@ __all__ = [
     "PRESET_NAMES",
     "TEMPLATE_NAMES",
     "ApprovalDecision",
+    "Catalogue",
     "Change",
     "ChoregosError",
     "CiStatus",
@@ -117,6 +119,7 @@ __all__ = [
     "ModelResolutionError",
     "ModelResolver",
     "NewItem",
+    "OutilCatalogue",
     "PolicyEngine",
     "PolicyError",
     "PrRef",
@@ -139,7 +142,9 @@ __all__ = [
     "WorkItemData",
     "WorkflowEngine",
     "aware",
+    "charger_catalogue",
     "checksum",
+    "construire_requete",
     "dump_workflow",
     "elapsed_seconds",
     "engine_for",

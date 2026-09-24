@@ -32,6 +32,17 @@ global:
   playbooks:
     configMap: ""
     mountPath: /etc/choregos/playbooks
+  # Catalogue d'outils : des API tierces que la PLATEFORME appelle pour un agent, clé
+  # côté serveur. Un ConfigMap (le catalogue, lisible en PR) et un Secret (les clés des
+  # fournisseurs, injecté dans l'API). Vide = aucun outil, et c'est le défaut.
+  # Un projet déclare ensuite ce qu'il a le droit d'appeler (`labels.tools`).
+  toolCatalog:
+    configMap: ""
+    mountPath: /etc/choregos/outils
+    fileName: catalogue.yaml
+    #: Secret dont TOUTES les clés deviennent des variables d'environnement de l'API :
+    #: c'est là que vivent les clés des fournisseurs, jamais dans le catalogue.
+    credentialsSecret: ""
   logLevel: INFO
   serviceAccount:
     annotations: {}

@@ -22,6 +22,10 @@ class McpServer:
     def __init__(self, client: InternalClient, context: ToolContext | None = None) -> None:
         self.client = client
         self.context = context or ToolContext()
+        # Les outils du CATALOGUE, s'il y en a : des API tierces que la plateforme appelle
+        # pour l'agent, clé côté serveur. Chargés paresseusement — un déploiement sans
+        # catalogue ne doit pas payer un aller-retour à chaque session.
+        self._catalogue: list[dict[str, Any]] | None = None
 
     async def handle(self, message: dict[str, Any]) -> dict[str, Any] | None:
         method = str(message.get("method", ""))
@@ -39,7 +43,7 @@ class McpServer:
         if method in {"notifications/initialized", "initialized"}:
             return None
         if method == "tools/list":
-            return _ok(request_id, {"tools": TOOL_SCHEMAS})
+            return _ok(request_id, {"tools": [*TOOL_SCHEMAS, *await self._outils_du_catalogue()]})
         if method == "tools/call":
             name = str(params.get("name", ""))
             arguments = params.get("arguments") or {}
@@ -54,9 +58,27 @@ class McpServer:
             return _ok(request_id, {})
         return _error(request_id, -32601, f"méthode inconnue : {method}")
 
+    async def _outils_du_catalogue(self) -> list[dict[str, Any]]:
+        if self._catalogue is None:
+            try:
+                self._catalogue = await self.client.fetch_tools()
+            except Exception:
+                # Un catalogue injoignable ne doit pas priver l'agent de SES outils : il
+                # perd les API tierces, il garde `report_finding` et les autres.
+                self._catalogue = []
+        return self._catalogue
+
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         handler = getattr(self, f"_tool_{name}", None)
         if handler is None:
+            if any(o.get("name") == name for o in await self._outils_du_catalogue()):
+                reponse = await self.client.call_tool(name, arguments)
+                code = int(reponse.get("status_code", 0))
+                corps = json.dumps(reponse.get("result"), ensure_ascii=False, indent=2)[:20_000]
+                # Un 4xx du fournisseur est une réponse, pas une panne : l'agent doit la
+                # lire et décider. On la marque en erreur pour qu'il ne la prenne pas
+                # pour un succès, mais on lui rend le corps.
+                return text_result(corps, is_error=code >= 400)
             return text_result(f"outil inconnu : {name}", is_error=True)
         return await handler(arguments)  # type: ignore[no-any-return]
 

@@ -74,6 +74,16 @@ class InternalClient:
     async def ask_human(self, text: str, options: list[str] | None = None) -> dict[str, Any]:
         return dict(await self._request("POST", "/question", json={"text": text, "options": options or []}))
 
+    async def fetch_tools(self) -> list[dict[str, Any]]:
+        """Les outils du catalogue que CE run peut appeler, au format MCP."""
+        payload = await self._request("GET", "/tools")
+        outils = (payload or {}).get("tools", [])
+        return [dict(o) for o in outils]
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Appelle un outil du catalogue. La clé du fournisseur reste côté plateforme."""
+        return dict(await self._request("POST", f"/tools/{name}", json=arguments))
+
     async def fetch_context(self) -> ContextPack:
         return ContextPack.model_validate(await self._request("GET", "/context"))
 

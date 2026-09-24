@@ -17,6 +17,9 @@ class Budgets(Strict):
     stage_usd: dict[str, BySize] = Field(default_factory=dict)
     max_turns: dict[str, int] = Field(default_factory=dict)
     max_minutes: dict[str, int] = Field(default_factory=dict)
+    #: Appels d'outils du catalogue autorisés par run. `None` = aucun plafond ; un
+    #: catalogue payant sans plafond, c'est une facture sans plafond.
+    tool_calls_per_run: int | None = Field(default=None, ge=0)
     daily_project_usd: float | None = None
     alert_at_ratio: float = Field(default=0.8, ge=0, le=1)
 
