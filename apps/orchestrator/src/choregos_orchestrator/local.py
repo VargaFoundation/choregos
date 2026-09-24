@@ -235,7 +235,7 @@ async def _emit_findings(project_id: str, work_item_id: str, run_id: str, result
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:
         project = await session.get(Project, project_id)
         slug = project.slug if project else project_id
         pending = (

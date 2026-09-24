@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import Settings, get_settings
 from .db.models import ApiToken, Membership, Organization, Project, User
-from .db.session import get_sessionmaker
+from .db.session import TOUT, get_sessionmaker, limiter_aux_organisations
 from .errors import forbidden, not_found, unauthorized
 from .rbac import Permission, Principal
 from .security import RunClaims, hash_api_token, read_session, verify_run_token
@@ -59,7 +59,7 @@ async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
             project_roles[f"{org_slug}/{project_slug}"] = role
         else:
             org_roles[org_slug] = role
-    return Principal(
+    principal = Principal(
         user_id=user.id,
         email=user.email,
         display_name=user.display_name,
@@ -67,6 +67,11 @@ async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
         org_roles=org_roles,
         project_roles=project_roles,
     )
+    # La session de CETTE requête ne voit que les organisations du principal : c'est ici
+    # que la RLS s'arme, parce que c'est ici qu'on sait qui parle.
+    orgs = set(org_roles) | {qualified.split("/", 1)[0] for qualified in project_roles}
+    await limiter_aux_organisations(session, sorted(orgs))
+    return principal
 
 
 async def current_principal(
@@ -177,6 +182,7 @@ ProjectCtx = Annotated[ProjectContext, Depends(project_context)]
 
 async def run_claims(
     id: str,
+    session: Db,
     authorization: Annotated[str | None, Header()] = None,
 ) -> RunClaims:
     """Authentifie un runner : le JWT doit porter **ce** run et ne pas être expiré."""
@@ -188,6 +194,9 @@ async def run_claims(
         raise forbidden(f"jeton de run invalide : {exc}") from exc
     if claims.run_id != id:
         raise forbidden("ce jeton n'est pas celui de ce run")
+    # Un jeton de run est frappé par la plateforme pour UN run : la portée est déjà dans
+    # le jeton (`claims.run_id`, vérifié par chaque route), pas dans une organisation.
+    await limiter_aux_organisations(session, TOUT)
     return claims
 
 

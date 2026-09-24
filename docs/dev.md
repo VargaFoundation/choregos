@@ -92,6 +92,38 @@ docker run -d --name litellm -p 4000:4000 -v $(pwd)/dev/litellm.yaml:/app/config
 La base est obligatoire : sans elle, LiteLLM ne peut pas créer de clé virtuelle, donc aucun
 run ne démarre.
 
+## La RLS sur un vrai PostgreSQL
+
+`apps/api/tests/test_rls_postgres.py` ne tourne que contre PostgreSQL — SQLite n'a pas de
+RLS, et c'est ainsi que la politique est restée fail-open une semaine sans qu'un test le
+voie. La CI lance un service PostgreSQL ; en local :
+
+```bash
+docker run -d --name choregos-test-pg -p 55433:5432 \
+  -e POSTGRES_USER=choregos -e POSTGRES_PASSWORD=choregos -e POSTGRES_DB=choregos_test postgres:16-alpine
+CHOREGOS_TEST_DATABASE_URL=postgresql+asyncpg://choregos:choregos@127.0.0.1:55433/choregos_test \
+  uv run pytest apps/api/tests/test_rls_postgres.py -q
+```
+
+Le test migre le schéma par Alembic, puis le détruit : ne pointez pas une base qui compte.
+
+### Un volume PostgreSQL embarqué créé avant le 2026-09-24
+
+Le chart crée désormais le rôle applicatif `choregos_app` (sans SUPERUSER) à l'initdb, et
+l'API se connecte avec lui — un superutilisateur ignore la RLS. Un volume plus ancien n'a
+pas ce rôle : le créer à la main, puis lui transférer le schéma.
+
+```bash
+kubectl -n choregos exec choregos-postgresql-0 -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "CREATE ROLE choregos_app LOGIN PASSWORD '"'"'$POSTGRES_PASSWORD'"'"' NOSUPERUSER" \
+  -c "ALTER DATABASE choregos OWNER TO choregos_app" -c "ALTER SCHEMA public OWNER TO choregos_app" \
+  -c "DO \$\$ DECLARE r record; BEGIN
+        FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = '"'"'public'"'"' LOOP EXECUTE format('"'"'ALTER TABLE public.%I OWNER TO choregos_app'"'"', r.tablename); END LOOP;
+        FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname = '"'"'public'"'"' LOOP EXECUTE format('"'"'ALTER SEQUENCE public.%I OWNER TO choregos_app'"'"', r.sequencename); END LOOP;
+        FOR r IN SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = '"'"'public'"'"' LOOP EXECUTE format('"'"'ALTER FUNCTION public.%I(%s) OWNER TO choregos_app'"'"', r.proname, r.args); END LOOP;
+      END \$\$"'
+```
+
 ## Le front sans l'API
 
 ```bash

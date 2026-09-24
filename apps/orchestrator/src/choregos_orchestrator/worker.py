@@ -81,7 +81,7 @@ async def start_reconciliation_loops() -> list[str]:
     if settings.reconcile_interval_seconds <= 0:
         logger.info("rattrapage tracker désactivé")
         return []
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:
         slugs = (
             (await session.execute(select(Project.slug).where(Project.status == "active"))).scalars().all()
         )

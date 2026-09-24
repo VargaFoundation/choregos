@@ -62,7 +62,9 @@ app.kubernetes.io/part-of: choregos
       name: {{ . }}
       key: password
 - name: CHOREGOS_DATABASE_URL
-  value: {{ printf "postgresql+asyncpg://%s:$(CHOREGOS_DATABASE_PASSWORD)@%s:%v/%s" $.Values.global.database.user (include "choregos.databaseHost" $) $.Values.global.database.port $.Values.global.database.name | quote }}
+  {{- /* Embarqué : le rôle applicatif sans SUPERUSER créé à l'initdb. Externe : le rôle que
+         l'opérateur a créé (Zalando, CNPG), déjà sans SUPERUSER — `choregos_app` n'y existe pas. */}}
+  value: {{ printf "postgresql+asyncpg://%s:$(CHOREGOS_DATABASE_PASSWORD)@%s:%v/%s" (ternary ($.Values.global.database.appUser | default $.Values.global.database.user) $.Values.global.database.user $.Values.global.database.embedded) (include "choregos.databaseHost" $) $.Values.global.database.port $.Values.global.database.name | quote }}
 {{- else }}
 - name: CHOREGOS_DATABASE_URL
   valueFrom:

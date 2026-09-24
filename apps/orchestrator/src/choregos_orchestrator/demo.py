@@ -45,7 +45,7 @@ async def seed() -> tuple[str, str, Any]:
     gateway.auto_usage = True  # la démo montre des coûts crédibles
     set_adapters_override(adapters)
 
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:
         org = Organization(slug="varga", name="Varga Foundation")
         session.add(org)
         await session.flush()

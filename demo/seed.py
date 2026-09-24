@@ -141,7 +141,7 @@ async def main() -> int:
     from choregos_core.dsl.parser import checksum, parse_workflow
     from sqlalchemy import select
 
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:
         org = (
             await session.execute(select(Organization).where(Organization.slug == "demo"))
         ).scalar_one_or_none()
@@ -265,7 +265,7 @@ async def demarrer() -> None:
     from choregos_api.temporal import get_temporal, interpreter_id
     from sqlalchemy import select
 
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:
         rows = (
             await session.execute(select(WorkItem, Project).join(Project, Project.id == WorkItem.project_id))
         ).all()

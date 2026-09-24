@@ -62,7 +62,13 @@ global:
     host: choregos-pg-rw.choregos-data.svc
     port: 5432
     name: choregos
+    # Rôle d'administration du PostgreSQL embarqué (POSTGRES_USER, superutilisateur).
     user: choregos
+    # Rôle avec lequel l'API et l'orchestrateur se connectent au PostgreSQL EMBARQUÉ : créé
+    # sans SUPERUSER à l'initdb, parce qu'un superutilisateur ignore la RLS et que
+    # l'isolation des organisations n'existe alors pas. L'API refuse un superutilisateur en
+    # staging/prod. Avec une base externe (`secretRef`, clé `url`), c'est l'URL qui décide.
+    appUser: choregos_app
     secretRef: choregos-db
     # À la place de `secretRef` (clé `url`) : le secret d'un opérateur qui ne porte que le
     # mot de passe (Zalando : `<user>.<cluster>.credentials.postgresql.acid.zalan.do`).
