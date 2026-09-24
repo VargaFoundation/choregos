@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     #: sont `developers`. Avant : tout e-mail commençant par `admin` — une escalade par
     #: convention de nommage.
     dev_admin_emails: str = ""
+    #: Amorçage : l'organisation créée au premier démarrage si elle n'existe pas, et les
+    #: e-mails qui y reçoivent ORG_ADMIN. Sans cela, une installation neuve n'avait AUCUN
+    #: moyen de créer une organisation (seuls les scripts de seed le faisaient) — donc aucun
+    #: projet, donc rien (état des lieux du 2026-09-24). Idempotent : rejoué à chaque
+    #: démarrage, il ne touche pas à ce qui existe.
+    bootstrap_org: str = ""
+    bootstrap_org_name: str = ""
+    bootstrap_admins: str = ""
     #: Organisation à laquelle rattacher les groupes OIDC NON préfixés (`developers`,
     #: `org-admins`…). Vide : ces groupes sont ignorés, seuls les groupes
     #: `choregos:<org>:<groupe>` donnent un rôle. Avant : tout groupe donnait le rôle sur
@@ -94,6 +102,10 @@ class Settings(BaseSettings):
                 "ouvre l'API à quiconque atteint /auth/callback. Refusé."
             )
         return self
+
+    @property
+    def bootstrap_admin_emails(self) -> list[str]:
+        return [e.strip().lower() for e in self.bootstrap_admins.split(",") if e.strip()]
 
     @property
     def dev_admins(self) -> set[str]:

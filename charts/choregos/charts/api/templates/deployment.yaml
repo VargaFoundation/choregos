@@ -90,6 +90,12 @@ spec:
               value: {{ .Values.global.oidc.defaultOrg | default "" | quote }}
             # Toujours posée, même à `false` : une valeur absente laisserait le défaut du
             # code décider, et c'est précisément ce qui a ouvert l'API en production.
+            - name: CHOREGOS_BOOTSTRAP_ORG
+              value: {{ .Values.global.bootstrap.org | default "" | quote }}
+            - name: CHOREGOS_BOOTSTRAP_ORG_NAME
+              value: {{ .Values.global.bootstrap.orgName | default "" | quote }}
+            - name: CHOREGOS_BOOTSTRAP_ADMINS
+              value: {{ .Values.global.bootstrap.admins | default "" | quote }}
             - name: CHOREGOS_DEV_LOGIN_ENABLED
               value: {{ .Values.global.devLogin.enabled | default false | quote }}
             - name: CHOREGOS_DEV_ADMIN_EMAILS

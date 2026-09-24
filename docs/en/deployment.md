@@ -232,6 +232,38 @@ helm upgrade --install choregos charts/choregos -n choregos \
 `demo/README.md` has the rest: seeding two projects (one software, one HR), giving agents
 model access, and — just as important — what this bench does **not** prove.
 
+## The first organisation, and the first token
+
+A fresh database has no organisation and no member. The chart bootstraps both:
+
+```yaml
+global:
+  bootstrap:
+    org: acme
+    orgName: ACME
+    admins: "alice@acme.example,bob@acme.example"
+```
+
+At every start the API creates the organisation if it is missing and gives those people
+`org_admin` on it; it never touches what already exists. They can then create other
+organisations (`POST /orgs`, `choregos orgs create`) and invite members.
+
+The CLI and CI authenticate with API tokens, which a person issues for themselves once
+logged in (`POST /me/tokens`, `choregos tokens create`). Before anyone has logged in, the
+first token comes from the server side:
+
+```bash
+kubectl -n choregos exec deploy/choregos-api -- choregos-admin tokens create --email alice@acme.example
+choregos login --api-url https://api.choregos.example --token chg_… --org acme
+```
+
+A project with no repository takes its requests from Choregos itself:
+
+```bash
+choregos projects create staffing --name "Staffing"            # no --repo: tracker `internal`
+choregos items create staffing --title "Data PM for 6 months" --size M
+```
+
 ## Identity: what the OIDC provider must give us
 
 Any OIDC issuer works: the API reads `<issuer>/.well-known/openid-configuration` and uses

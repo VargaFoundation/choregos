@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .amorcage import amorcer
 from .config import get_settings
 from .db.session import create_all, dispose_engine
 from .errors import install_error_handlers
@@ -53,6 +54,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     relais = None if settings.is_sqlite else RelaisPostgres(settings.database_url)
     if relais is not None:
         relais.demarrer()
+    if not settings.is_sqlite:
+        await amorcer(settings)
     if settings.is_sqlite:
         # SQLite seul : une base de fichier ou de mémoire, jetée avec le processus, qu'aucune
         # migration ne suit. Partout ailleurs le schéma vient d'Alembic — y compris en `dev`.
@@ -60,6 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # tombait sur « relation "agent_backends" already exists » : le déploiement échouait
         # en accusant les migrations, alors que c'est l'API qui avait pris leur place.
         await create_all()
+        await amorcer(settings)
     yield
     if relais is not None:
         await relais.arreter()

@@ -287,6 +287,25 @@ export type ModelMatrix = {
   }>;
 };
 
+export type Org = {
+  slug: string;
+  name: string;
+  role?: Role | null;
+};
+
+export type OrgCreate = {
+  slug: string;
+  name: string;
+};
+
+export type WorkItemCreate = {
+  title: string;
+  body?: string;
+  size?: "S" | "M" | "L" | "XL" | null;
+  risk?: "low" | "medium" | "high" | null;
+  start?: boolean;
+};
+
 export type ApiTokenCreate = {
   name: string;
   expires_in_days?: number | null;
@@ -787,8 +806,10 @@ export interface Operations {
   remaining?: number;
 } };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
+  createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
+  createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
@@ -880,6 +901,7 @@ export interface Operations {
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
+  listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };

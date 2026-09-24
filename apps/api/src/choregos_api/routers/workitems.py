@@ -20,10 +20,19 @@ from ..schemas import (
     PageMeta,
     TimelineEntry,
     WorkItemAction,
+    WorkItemCreate,
     WorkItemDto,
     WorkItemPage,
 )
-from ..services import human_request_dto, persist_event, work_item_dto
+from ..services import (
+    active_workflow,
+    cle_de_ticket_interne,
+    human_request_dto,
+    le_tracker_est_interne,
+    persist_event,
+    work_item_dto,
+    workflow_model,
+)
 from ..temporal import deliver_control, deliver_decision, get_temporal, interpreter_id
 
 router = APIRouter(tags=["work-items"])
@@ -66,6 +75,64 @@ async def list_work_items(
         items=[await work_item_dto(session, item, ctx.project) for item in window],
         meta=PageMeta(next_cursor=cursor, has_more=has_more),
     )
+
+
+@router.post(
+    "/projects/{id}/work-items",
+    response_model=WorkItemDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="createWorkItem",
+)
+async def create_work_item(ctx: ProjectCtx, body: WorkItemCreate, session: Db) -> WorkItemDto:
+    """Pose une demande dans Choregos — seulement quand le tracker est interne.
+
+    `tracker: internal` était documenté comme la façon de faire tourner un métier sans
+    GitHub ni Jira, et rien ne permettait de créer une demande (état des lieux du
+    2026-09-24) : ni route, ni commande, ni écran. La clé est frappée par la plateforme
+    (`<PRÉFIXE>-<n>`), l'état initial est celui du workflow du projet, et l'interpréteur
+    démarre tout de suite sauf `start: false`.
+    """
+    ctx.require(Permission.ITEM_CONTROL)
+    if not await le_tracker_est_interne(session, ctx.project):
+        raise conflict("ce projet reçoit ses tickets d'un tracker externe : créez la demande là-bas")
+    workflow = workflow_model(await active_workflow(session, ctx.id))
+    from choregos_core import WorkflowEngine
+
+    key = await cle_de_ticket_interne(session, ctx.project)
+    item = WorkItem(
+        project_id=ctx.id,
+        tracker_key=key,
+        title=body.title,
+        body_snapshot=body.body,
+        size=body.size,
+        risk=body.risk,
+        state=WorkflowEngine(workflow).initial_state,
+        created_by=ctx.principal.email,
+        allowed_paths=[],
+    )
+    session.add(item)
+    await session.flush()
+    await persist_event(
+        session,
+        EventType.WORKITEM_CREATED,
+        project_id=ctx.id,
+        work_item_id=item.id,
+        project_slug=ctx.slug,
+        subject=key,
+        key=key,
+        title=body.title,
+    )
+    if body.start:
+        workflow_id = interpreter_id(ctx.slug, key)
+        await get_temporal().start_interpreter(
+            workflow_id,
+            {"project_id": ctx.id, "project_slug": ctx.slug, "work_item_id": item.id, "tracker_key": key},
+        )
+        item.temporal_wf_id = workflow_id
+    await record(
+        session, ctx.principal, "workitem.create", target_type="work_item", target_id=item.id, key=key
+    )
+    return await work_item_dto(session, item, ctx.project)
 
 
 @router.get("/work-items/{id}", response_model=WorkItemDto, operation_id="getWorkItem")
