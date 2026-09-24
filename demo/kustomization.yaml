@@ -1,0 +1,26 @@
+# Tout ce que la démonstration pose dans le namespace, hors chart : le dépôt git du cluster
+# et les trois ConfigMaps que le chart et le Job de seed attendent PAR NOM — d'où
+# `disableNameSuffixHash` : `demo-playbooks` et `demo-outils` sont cités dans values-demo.yaml.
+#
+#   kubectl -n choregos apply -k demo
+#
+# Le Job de seed n'est pas ici : un Job ne se ré-applique pas, `make demo-seed` le recrée.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - manifests/git.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  - name: demo-seed
+    files:
+      - seed.py=seed.py
+      - demo-code.yaml=workflows/demo-code.yaml
+      - staffing.yaml=workflows/staffing.yaml
+  - name: demo-playbooks
+    files:
+      - sourcing.md=playbooks/sourcing.md
+      - qualification.md=playbooks/qualification.md
+  - name: demo-outils
+    files:
+      - catalogue.yaml=outils/catalogue.yaml

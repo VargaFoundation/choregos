@@ -18,6 +18,16 @@ spec:
           command: ["python", "/demo/seed.py", "--demarrer"]
           env:
             - { name: CHOREGOS_ENV, value: dev }
+            # `litellm` (défaut) : les projets passent par la passerelle embarquée, une clé
+            # par run, coût compté. `direct` : l'agent apporte ses identifiants, rien n'est
+            # compté. `make demo-seed GATEWAY=direct` remplace la valeur.
+            - { name: DEMO_GATEWAY, value: "__GATEWAY__" }
+            # Suffixe des clés de tickets (`DEMO-1b`, `RH-1b`) : un ticket n'a qu'un
+            # interpréteur, rejouer la démonstration demande de nouveaux tickets.
+            - { name: DEMO_SERIE, value: "__SERIE__" }
+            - name: CHOREGOS_GATEWAY_MASTER_KEY
+              valueFrom: { secretKeyRef: { name: choregos-gateway, key: master-key, optional: true } }
+            - { name: CHOREGOS_GATEWAY_URL, value: "http://choregos-litellm:4000" }
             - { name: CHOREGOS_TEMPORAL_ADDRESS, value: "choregos-temporal:7233" }
             - name: CHOREGOS_DATABASE_PASSWORD
               valueFrom: { secretKeyRef: { name: choregos-postgresql, key: password } }

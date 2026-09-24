@@ -14,56 +14,75 @@ le tracker (pas de GitHub ni de Jira sur un banc), donc les tickets sont posés 
 
 ## Monter le banc
 
-```bash
-kind create cluster --config demo/kind.yaml            # un seul nœud
-kubectl create ns choregos
-kubectl -n choregos apply -f demo/manifests/git.yaml   # le dépôt git du cluster
+Compter **une vingtaine de minutes** la première fois (construction des images), un
+nœud avec 8 Go et 4 CPU libres, et Docker, kind, kubectl, helm.
 
-helm upgrade --install choregos charts/choregos -n choregos \
-  -f charts/choregos/values/local.yaml -f demo/values-demo.yaml
+```bash
+make demo-up        # cluster kind mono-nœud, namespace, dépôt git, ConfigMaps, chart
+make demo-images    # construit local/choregos-*:demo et les CHARGE dans le nœud kind
 ```
 
-Le chart embarque PostgreSQL, Temporal, la mémoire (Ecphoria) et, si on veut, la passerelle
-LLM. Rien d'autre à fournir — c'est le sens de `global.<dépendance>.embedded`.
+Le chart de la démonstration attend des images locales (`imagePullPolicy: Never`) : sans
+`make demo-images`, chaque pod reste en `ErrImageNeverPull`. Le chart embarque PostgreSQL,
+Temporal, la mémoire (Ecphoria) et la passerelle LLM (LiteLLM) — c'est le sens de
+`global.<dépendance>.embedded`.
 
 ## Donner un accès modèle aux agents
 
-La démonstration ne monte pas de passerelle LLM : les agents apportent leurs identifiants,
-et le projet emploie le connecteur `gateway: direct`. **Conséquence assumée : aucun coût
-n'est mesuré et aucun plafond de dépense ne s'applique** — seuls les budgets en tours et en
-minutes tiennent encore.
+La démonstration passe par **la passerelle embarquée** : la plateforme frappe une clé par
+run, plafonnée, et compte la dépense au registre — c'est le seul mode où le coût par ticket
+est un chiffre mesuré et pas une case vide. La passerelle a besoin d'une clé de
+fournisseur, qu'elle seule voit :
 
-Avec un abonnement Claude Code :
+```bash
+kubectl -n choregos create secret generic platform-llm-key --from-literal=api-key=sk-ant-…
+kubectl -n choregos rollout restart deploy/choregos-litellm
+```
+
+Sans clé de fournisseur (un abonnement Claude Code seulement), le banc tourne en mode
+**direct** : l'agent apporte ses identifiants, et **rien n'est compté ni plafonné** hors
+tours et minutes. À dire quand on montre le tableau de bord.
 
 ```bash
 kubectl -n choregos create secret generic agent-creds \
   --from-literal=CLAUDE_CODE_OAUTH_TOKEN="$(jq -r .claudeAiOauth.accessToken ~/.claude/.credentials.json)"
+helm upgrade choregos charts/choregos -n choregos -f charts/choregos/values/local.yaml \
+  -f demo/values-demo.yaml --set global.gateway.embedded=false --reuse-values
+make demo-seed GATEWAY=direct
 ```
 
-Avec une clé d'API :
-
-```bash
-kubectl -n choregos create secret generic agent-creds \
-  --from-literal=ANTHROPIC_API_KEY=sk-ant-…
-```
-
-Le secret est monté **par référence** dans chaque pod d'agent (`envFrom`), jamais recopié
-dans une spécification.
+Dans les deux cas le secret est monté **par référence** dans les pods, jamais recopié dans
+une spécification.
 
 ## Poser les projets et les tickets
 
 ```bash
-kubectl -n choregos create configmap demo-seed \
-  --from-file=seed.py=demo/seed.py \
-  --from-file=demo-code.yaml=demo/workflows/demo-code.yaml \
-  --from-file=staffing.yaml=demo/workflows/staffing.yaml
-kubectl -n choregos create configmap demo-playbooks --from-file=demo/playbooks
-kubectl -n choregos apply -f demo/manifests/seed-job.yaml
+make demo-seed
 ```
 
-Le Job démarre aussi chaque ticket (`--demarrer`), c'est-à-dire l'équivalent de
-`mark_agent_ready` dans l'API : un workflow Temporal par ticket, qui lit l'état, choisit la
-transition et lance l'agent.
+Le Job pose l'organisation, les deux projets, leurs workflows et leurs tickets, puis
+démarre chaque ticket — l'équivalent de `mark_agent_ready` dans l'API : un workflow
+Temporal par ticket, qui lit l'état, choisit la transition et lance l'agent.
+
+## Savoir que ça a marché
+
+```bash
+make demo-status
+```
+
+Ce qu'on doit voir, et dans quel délai :
+
+| Quoi | Attendu | Quand |
+|---|---|---|
+| `DEMO-1..3` | `done` | ~10 min |
+| `RH-1`, `RH-2` | `a_valider` (en attente du manager) | ~5 min |
+| registre, `kind=model` | des jetons et des euros **non nuls** | dès le premier run |
+| registre, `kind=tool` | au moins une ligne (`verifier_adresse`, gratuit) | au premier sourcing |
+
+Un ticket qui reste dans son état de départ plus de 15 minutes n'attend pas : il est mort.
+`kubectl -n choregos exec deploy/choregos-temporal -- temporal workflow describe -w
+wi-staffing-RH-1` dit pourquoi. (Ce que l'interface devrait dire elle-même — chantier P0-2
+de l'état des lieux du 2026-09-24.)
 
 ## Ce que ce banc ne prouve pas
 
@@ -77,9 +96,8 @@ pas du moteur. Le reste est réel, y compris la vérification des preuves d'exé
 
 Un ticket n'a **qu'un** interpréteur : Temporal refuse de redémarrer un workflow déjà
 terminé sous le même identifiant (`ALLOW_DUPLICATE_FAILED_ONLY`). C'est voulu — c'est ce
-qui empêche de traiter deux fois le même ticket. Pour rejouer la démonstration, il faut
-donc de **nouveaux tickets** : changer les clés dans `seed.py` (`DEMO-4`, `DEMO-5`…), ou
-repartir d'un cluster neuf.
+qui empêche de traiter deux fois le même ticket. Rejouer demande donc de **nouveaux
+tickets** : `make demo-seed SERIE=b` pose `DEMO-1b`, `RH-1b`… à côté des précédents.
 
 Remettre le dépôt de démonstration à zéro entre deux essais :
 
@@ -91,8 +109,7 @@ kubectl -n choregos exec deploy/demo-git -- sh -c \
 ## Regarder
 
 ```bash
-kubectl -n choregos get pods -l choregos/run-id            # les agents au travail
-kubectl -n choregos logs -l choregos/run-id --tail=50 -f
+kubectl -n choregos logs -l choregos/run-id --tail=50 -f         # les agents au travail
 kubectl -n choregos port-forward deploy/choregos-web 3000:3000   # le front
 ```
 

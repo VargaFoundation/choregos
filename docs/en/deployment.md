@@ -218,19 +218,37 @@ When the database is embedded it does not exist before the release, so the hook 
 itself on SQLite, a development convenience; on PostgreSQL the migrations are the single
 source, and a test compares them against the models on every run.
 
-## A single-node bench in ten minutes
+## A single-node bench in twenty minutes
+
+The bench runs real agents on a one-node kind cluster, with every dependency embedded. It
+needs Docker, kind, kubectl, helm, and a node with 4 CPUs and 8 GB to spare. The first run
+spends most of its twenty minutes building images.
 
 ```bash
-kind create cluster --config demo/kind.yaml
-kubectl create ns choregos
-kubectl -n choregos apply -f demo/manifests/git.yaml
-
-helm upgrade --install choregos charts/choregos -n choregos \
-  -f charts/choregos/values/local.yaml -f demo/values-demo.yaml
+make demo-up        # kind cluster, namespace, in-cluster git, ConfigMaps, the chart
+make demo-images    # builds local/choregos-*:demo and LOADS them into the kind node
+kubectl -n choregos create secret generic platform-llm-key --from-literal=api-key=sk-ant-…
+kubectl -n choregos rollout restart deploy/choregos-litellm
+make demo-seed      # two projects, five tickets, one Temporal workflow per ticket
+make demo-status    # ticket states and the cost ledger
 ```
 
-`demo/README.md` has the rest: seeding two projects (one software, one HR), giving agents
-model access, and — just as important — what this bench does **not** prove.
+Two things are easy to miss and cost an afternoon each:
+
+- **The images are local.** `demo/values-demo.yaml` sets `imagePullPolicy: Never`; without
+  `make demo-images` every pod sits in `ErrImageNeverPull`.
+- **The gateway needs a provider key.** The embedded LiteLLM mints one capped key per run and
+  meters the spend — that is the only configuration in which the cost per ticket is a
+  measured number. Without a provider key the bench can run in *direct* mode (the agent
+  brings its own credentials) and **nothing is metered or capped** beyond turns and minutes;
+  `demo/README.md` shows how, and says so.
+
+What to expect: the three code tickets reach `done` in about ten minutes, the two HR
+tickets reach `a_valider` in about five, the ledger shows non-zero tokens and euros under
+`kind=model` and at least one `kind=tool` row (the HR agent verifies an address through the
+catalogue). A ticket still in its initial state after fifteen minutes is not waiting — it is
+dead; `temporal workflow describe` says why. `demo/README.md` has the rest, including what
+this bench does **not** prove.
 
 ## The first organisation, and the first token
 
@@ -308,4 +326,6 @@ kubectl -n choregos logs deploy/choregos-api      # structured JSON logs
 curl -s https://<api-host>/healthz                # {"status":"ok"}
 ```
 
-A ServiceMonitor, five alerting rules and six Grafana dashboards ship with the chart.
+A ServiceMonitor, alerting rules and six Grafana dashboards ship with the chart. **As of
+2026-09-24 the platform does not yet export the metrics they read** — they are wired, not
+live; see `docs/plan/STATE-OF-THE-PROJECT-2026-09-24.md`, item P0-4.

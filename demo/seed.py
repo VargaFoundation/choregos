@@ -17,17 +17,37 @@ import sys
 
 RACINE = pathlib.Path(__file__).resolve().parent
 
-# Les agents apportent leurs identifiants (abonnement) : on nomme donc le modèle RÉEL, pas
-# un alias de passerelle. Le backend `claude-code` n'accepte que des modèles Claude.
-# Sans passerelle, l'agent parle DIRECTEMENT au fournisseur : le nom doit donc être
-# l'identifiant du modèle chez lui (`claude-sonnet-5`), pas la forme préfixée
-# `anthropic/claude-sonnet-5` que LiteLLM attend pour router.
-MODELES = {
-    "standard": "claude-sonnet-5",
-    "strong": "claude-sonnet-5",
-    "cheap": "claude-haiku-4-5",
-    "by_size": "claude-sonnet-5",
-}
+# Deux façons de donner un modèle aux agents, choisies par DEMO_GATEWAY :
+#
+# - `litellm` (défaut) : la passerelle embarquée frappe une clé PAR RUN, plafonnée, et compte
+#   la dépense. Les projets nomment alors des ALIAS de passerelle (`platform/standard`), et
+#   le resolver lit derrière le modèle réel pour vérifier que `claude-code` reçoit bien un
+#   Claude. C'est le seul mode où le registre de coûts porte un chiffre.
+# - `direct` : l'agent apporte ses identifiants (abonnement Claude Code dans `agent-creds`).
+#   Il parle DIRECTEMENT au fournisseur, donc le nom doit être l'identifiant du modèle chez
+#   lui (`claude-sonnet-5`), pas la forme préfixée que LiteLLM attend pour router. Rien
+#   n'est compté, rien n'est plafonné hors tours et minutes.
+PASSERELLE = os.environ.get("DEMO_GATEWAY", "litellm")
+if PASSERELLE not in {"litellm", "direct"}:
+    raise SystemExit(f"DEMO_GATEWAY={PASSERELLE!r} : attendu `litellm` ou `direct`")
+MODELES = (
+    {
+        "standard": "platform/standard",
+        "strong": "platform/strong",
+        "cheap": "platform/cheap",
+        "by_size": "platform/standard",
+    }
+    if PASSERELLE == "litellm"
+    else {
+        "standard": "claude-sonnet-5",
+        "strong": "claude-sonnet-5",
+        "cheap": "claude-haiku-4-5",
+        "by_size": "claude-sonnet-5",
+    }
+)
+# Un ticket n'a qu'un interpréteur (Temporal refuse un id terminé) : rejouer la
+# démonstration demande de NOUVEAUX tickets. `DEMO_SERIE=b` suffixe les clés (`DEMO-1b`).
+SERIE = os.environ.get("DEMO_SERIE", "")
 
 
 def chemin_workflow(nom: str) -> pathlib.Path:
@@ -62,7 +82,7 @@ PROJETS = {
             "ci": ("fake", {}),
             "cd": ("fake", {}),
             "runtime": ("k8s_job", {}),
-            "gateway": ("direct", {}),
+            "gateway": (PASSERELLE, {}),
             "memory": ("ecphoria", {}),
             "notify": ("fake", {}),
         },
@@ -109,7 +129,7 @@ PROJETS = {
             "ci": ("fake", {}),
             "cd": ("fake", {}),
             "runtime": ("k8s_job", {}),
-            "gateway": ("direct", {}),
+            "gateway": (PASSERELLE, {}),
             "memory": ("ecphoria", {}),
             "notify": ("fake", {}),
         },
@@ -224,7 +244,8 @@ async def main() -> int:
             defini.is_active = True
             await session.flush()
 
-            for cle, titre, corps, taille in spec["tickets"]:
+            for cle_de_base, titre, corps, taille in spec["tickets"]:
+                cle = f"{cle_de_base}{SERIE}"
                 deja = (
                     await session.execute(select(WorkItem).where(WorkItem.tracker_key == cle))
                 ).scalar_one_or_none()
