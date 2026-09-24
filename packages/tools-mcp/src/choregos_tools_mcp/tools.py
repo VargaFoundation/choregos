@@ -13,6 +13,24 @@ from choregos_contracts import Finding
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
+        "name": "validate_result",
+        "description": (
+            "Vérifie ton `.choregos/result.json` contre le contrat `choregos/StageResult/v1` AVANT de "
+            "terminer : rend `ok` ou la liste exacte des erreurs (champ, message). Sans lui, un résultat "
+            "mal formé te revient en réparation après coup."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["result"],
+            "properties": {
+                "result": {
+                    "description": "le contenu du fichier : un objet JSON, ou la chaîne JSON telle quelle",
+                    "anyOf": [{"type": "object"}, {"type": "string"}],
+                },
+            },
+        },
+    },
+    {
         "name": "report_finding",
         "description": (
             "Signale un problème découvert **hors du périmètre** de ce ticket. Ne le corrige pas : "

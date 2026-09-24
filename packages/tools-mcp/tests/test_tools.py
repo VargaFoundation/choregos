@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -170,3 +171,33 @@ async def test_api_failure_does_not_kill_the_session(server: tuple[McpServer, St
         mcp, "report_finding", {"title": "un vrai titre", "type": "bug", "severity": "low", "evidence": "y"}
     )
     assert result["isError"] and "indisponible" in result["content"][0]["text"]
+
+
+async def test_validate_result_dit_avant_de_finir_ce_que_le_runner_dirait_apres(
+    server: tuple[McpServer, StubClient],
+) -> None:
+    """Cinq réparations sur huit runs au banc : l'agent peut maintenant se vérifier lui-même."""
+    mcp, _ = server
+    mauvais = {
+        "schema": "choregos/StageResult/v1",
+        "status": "done",
+        "summary": "x",
+        "questions": ["une chaîne au lieu d'un objet"],
+        "findings": [{"severity": "low"}],
+    }
+    reponse = await mcp.call("validate_result", {"result": mauvais})
+    assert reponse["isError"] is True
+    texte = reponse["content"][0]["text"]
+    assert "questions.0" in texte and "findings.0.title" in texte
+
+    bon = {
+        "schema": "choregos/StageResult/v1",
+        "status": "done",
+        "summary": "x",
+        "questions": [],
+        "findings": [],
+    }
+    ok = await mcp.call("validate_result", {"result": json.dumps(bon)})
+    assert not ok.get("isError") and "conforme" in ok["content"][0]["text"]
+
+    assert (await mcp.call("validate_result", {"result": "{pas du json"}))["isError"] is True

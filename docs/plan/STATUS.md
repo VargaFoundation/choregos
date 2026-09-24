@@ -248,6 +248,13 @@ les 492 tests ne disaient pas :
    contributing, `cli.md` généré et testé) ; `docs/fr/` archive les guides français ; index
    ADR et runbooks avec résumés anglais ; `CLAUDE.md` → `AGENTS.md`. Reste P1-1b/c : l'anglais
    de l'interface, la traduction intégrale des 14 ADR et des 11 runbooks.
+   **Banc série `d` (images de `main` après P0)** : les trois tickets de code `done` ; **la
+   qualification RH réussit** — les profils du sourcing lui parviennent (#28) ; 5 verdicts de
+   garanties journalisés et affichés ; 43 décisions de garde-fous **déduites** du titre ACP
+   (toutes en périmètre) ; 0 réparation de résultat ; toujours **0 appel d'outil** pour 10
+   listages du catalogue → **P1-6 livré** : garantie `tool_called` qui lit le registre (la
+   démo l'exige sur le sourcing), contrat de résultat avec la forme des objets, outil
+   `validate_result` pour que l'agent se vérifie avant de finir.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

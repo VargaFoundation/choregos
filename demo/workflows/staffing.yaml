@@ -40,6 +40,11 @@ transitions:
       # et `min` refuse le zéro poli : ne trouver personne se dit en échouant l'étape.
       - name: evidence_facts
         params: { keys: [profils_retenus, lieu_verifie], min: { profils_retenus: 1 } }
+      # `lieu_verifie: true` est ce que l'agent RACONTE. Ce que la plateforme a COMPTÉ, c'est
+      # l'appel au catalogue : sur le banc du 2026-09-24, dix listages, zéro appel, et le fait
+      # consigné quand même. Un outil annoncé dans un playbook n'est pas un outil employé.
+      - name: tool_called
+        params: { tools: [verifier_adresse] }
     on_fail: { to: demande, max_attempts: 2, escalate_to: needs_human }
   - id: t-qualification
     from: sourcing

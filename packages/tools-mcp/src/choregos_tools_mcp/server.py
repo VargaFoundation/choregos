@@ -84,6 +84,30 @@ class McpServer:
 
     # ───────────────────────── outils ─────────────────────────
 
+    async def _tool_validate_result(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Le contrat, vérifié par l'agent lui-même, avant de finir.
+
+        Cinq `result.repair` sur huit runs au banc du 2026-09-24 : `questions` en chaînes,
+        `findings` sans `title`. Le même validateur que le runner, exposé comme un outil, pour
+        que l'erreur se lise AVANT le dépôt du résultat et non dans une boucle de réparation.
+        """
+        from choregos_contracts import StageResult
+        from pydantic import ValidationError
+
+        brut = arguments.get("result")
+        try:
+            donnees = json.loads(brut) if isinstance(brut, str) else brut
+        except json.JSONDecodeError as exc:
+            return text_result(f"ce n'est pas du JSON : {exc}", is_error=True)
+        if not isinstance(donnees, dict):
+            return text_result("attendu : un objet JSON (`{…}`)", is_error=True)
+        try:
+            StageResult.model_validate(donnees)
+        except ValidationError as exc:
+            lignes = [f"- `{'.'.join(str(p) for p in e['loc'])}` : {e['msg']}" for e in exc.errors()]
+            return text_result("résultat NON conforme :\n" + "\n".join(lignes), is_error=True)
+        return text_result("ok : résultat conforme à choregos/StageResult/v1")
+
     async def _tool_report_finding(self, arguments: dict[str, Any]) -> dict[str, Any]:
         if self.context.findings_remaining <= 0:
             return text_result(

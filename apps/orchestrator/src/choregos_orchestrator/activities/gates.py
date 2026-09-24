@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_api.db.models import Run
+from choregos_api.db.models import CostLedger, Run
 from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
 from choregos_core.domain import PrRef
@@ -73,8 +73,18 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 except Exception:
                     ci_status = None
 
+        # Ce que le run a réellement appelé au catalogue : le registre, pas le résultat.
+        appels: list[str] = []
+        if run is not None:
+            from sqlalchemy import select
+
+            rows = await session.execute(
+                select(CostLedger.model).where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
+            )
+            appels = [str(m) for m in rows.scalars() if m]
         context = GateContext(
             result=result,
+            tool_calls=appels,
             changed_files=changed,
             additions=additions,
             deletions=deletions,
