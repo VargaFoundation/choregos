@@ -39,7 +39,7 @@ transitions:
       # Une sortie est ce que l'agent RACONTE. `evidence_facts` vérifie ce qu'il a COMPTÉ,
       # et `min` refuse le zéro poli : ne trouver personne se dit en échouant l'étape.
       - name: evidence_facts
-        params: { keys: [profils_retenus, besoin_complet], min: { profils_retenus: 1 } }
+        params: { keys: [profils_retenus, lieu_verifie], min: { profils_retenus: 1 } }
     on_fail: { to: demande, max_attempts: 2, escalate_to: needs_human }
   - id: t-qualification
     from: sourcing

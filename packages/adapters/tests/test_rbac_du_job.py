@@ -40,9 +40,7 @@ def _accordes() -> dict[str, set[str]]:
     debut = texte.index("rules:")
     fin = texte.index("---", debut)
     regles = yaml.safe_load(texte[debut:fin])["rules"]
-    return {
-        ressource: set(regle["verbs"]) for regle in regles for ressource in regle["resources"]
-    }
+    return {ressource: set(regle["verbs"]) for regle in regles for ressource in regle["resources"]}
 
 
 def test_il_y_a_bien_des_appels_a_confronter() -> None:
