@@ -167,6 +167,10 @@ choregos-orchestrator:
     # Vide : le tag suit `global.imageTag`.
     tag: ""
     namespacePattern: "proj-{slug}-runners"
+    # Runs simultanés par namespace. Au-delà, le Job attend SANS pod (`spec.suspend`),
+    # dans l'ordre d'arrivée : une pointe de tickets ne se transforme plus en pointe de
+    # pods qui tirent tous la même image. 0 = sans plafond.
+    maxActive: 0
     executor: tekton
     # Ce que chaque pod d'agent reçoit en plus. `env` porte des valeurs en clair (jamais un
     # secret) ; `envFromSecrets` liste des Secrets du namespace, montés par référence —

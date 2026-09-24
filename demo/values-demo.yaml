@@ -24,6 +24,10 @@ choregos-ecphoria:
 
 choregos-orchestrator:
   runner:
+    # Un seul nœud : trois agents qui démarrent ensemble, c'est trois conteneurs de 2 CPU
+    # et une image de plusieurs gigaoctets tirée trois fois. Au-delà de deux, le Job
+    # attend SANS pod, dans l'ordre d'arrivée.
+    maxActive: 2
     env:
       # Les agents parlent au dépôt du cluster, en clair : rien de secret ici.
       GIT_TERMINAL_PROMPT: "0"

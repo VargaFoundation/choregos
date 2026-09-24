@@ -87,6 +87,11 @@ spec:
               value: {{ $root.Values.runner.limits.cpu | quote }}
             - name: CHOREGOS_RUNNER_MEMORY_LIMIT
               value: {{ $root.Values.runner.limits.memory | quote }}
+            # Runs simultanés dans le namespace. Au-delà, le Job est créé SUSPENDU : il
+            # n'a pas de pod, ne tire pas l'image et ne prend pas de place dans le quota.
+            # 0 = sans plafond, le comportement d'avant.
+            - name: CHOREGOS_RUNNER_MAX_ACTIVE
+              value: {{ $root.Values.runner.maxActive | default 0 | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}
