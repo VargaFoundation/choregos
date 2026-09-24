@@ -26,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 choregos-api = "choregos_api.main:main"
+choregos-admin = "choregos_api.outils:main"
 
 [build-system]
 requires = ["hatchling"]

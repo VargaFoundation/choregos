@@ -89,6 +89,28 @@ class ProjectPage(Dto):
     meta: PageMeta
 
 
+class OrgDto(Dto):
+    slug: str
+    name: str
+    role: Role | None = None
+
+
+class OrgCreate(Dto):
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
+    name: str = Field(min_length=1, max_length=200)
+
+
+class WorkItemCreate(Dto):
+    """Une demande posée DANS Choregos, quand le tracker est interne (`tracker: internal`)."""
+
+    title: str = Field(min_length=1, max_length=500)
+    body: str = ""
+    size: Literal["S", "M", "L", "XL"] | None = None
+    risk: Literal["low", "medium", "high"] | None = None
+    #: Démarrer l'interpréteur tout de suite (l'équivalent de `mark_agent_ready`).
+    start: bool = True
+
+
 class ProjectCreate(Dto):
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
     name: str

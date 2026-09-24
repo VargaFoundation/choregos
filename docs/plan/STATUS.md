@@ -225,6 +225,14 @@ les 492 tests ne disaient pas :
    **P0-4a livré** : les métriques existent (voir S7-07). Reste P0-4b : bus d'événements
    sur LISTEN/NOTIFY (le SSE est muet dès deux répliques), `/readyz` qui teste Temporal,
    identifiant de requête et clés `project/work_item/run_id/stage` dans les journaux.
+   **P0-4b livré** (bus sur `pg_notify` au commit + relais `LISTEN` par réplique, `/readyz`
+   teste Temporal, `X-Request-Id`, clés dans les journaux). **P0-5a livré** : amorçage de la
+   première organisation et de ses admins (`CHOREGOS_BOOTSTRAP_*`, chart `global.bootstrap`),
+   `GET/POST /orgs`, `POST /projects/{id}/work-items` sur tracker interne (clé frappée par la
+   plateforme, interpréteur démarré), `choregos-admin tokens create` pour le premier jeton,
+   CLI : `orgs`, `tokens`, `items create`, `projects create` sans `--repo`, et ses premiers
+   tests. Reste P0-5b : le front (login, sélecteur d'org, écran Garanties, connecteurs,
+   policy, membres, provisioning, transcript, i18n, mocks hors bundle, e2e contre l'API).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

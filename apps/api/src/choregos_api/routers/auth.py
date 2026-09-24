@@ -234,8 +234,14 @@ def roles_des_groupes(groups: list[str], default_org: str) -> dict[str, Role]:
     return roles
 
 
-async def _map_groups_to_roles(session: Any, user: User, groups: list[str], settings: Settings) -> None:
-    """Les groupes OIDC deviennent des rôles d'organisation — chacun sur SON organisation."""
+async def _map_groups_to_roles(
+    session: Any, user: User, groups: list[str], settings: Settings, *, ecraser: bool = True
+) -> None:
+    """Les groupes OIDC deviennent des rôles d'organisation — chacun sur SON organisation.
+
+    `ecraser=False` (connexion de développement) : un rôle déjà posé — par l'amorçage, par
+    un admin — n'est pas rétrogradé. L'IdP, lui, fait foi : ce qu'il dit remplace.
+    """
     roles = roles_des_groupes(groups, settings.oidc_default_org)
     if not roles:
         return
@@ -252,7 +258,7 @@ async def _map_groups_to_roles(session: Any, user: User, groups: list[str], sett
         ).scalar_one_or_none()
         if existing is None:
             session.add(Membership(user_id=user.id, org_id=org.id, role=str(roles[org.slug])))
-        else:
+        elif ecraser:
             existing.role = str(roles[org.slug])
 
 
@@ -287,9 +293,8 @@ async def callback(
     if code.startswith("dev:") and settings.dev_login_enabled:
         email = code.removeprefix("dev:")
         user = await _ensure_user(session, email, email.split("@")[0], sub=f"dev|{email}")
-        await _map_groups_to_roles(
-            session, user, await _groupes_de_developpement(session, email, settings), settings
-        )
+        groupes = await _groupes_de_developpement(session, email, settings)
+        await _map_groups_to_roles(session, user, groupes, settings, ecraser=False)
     else:
         import httpx
 
