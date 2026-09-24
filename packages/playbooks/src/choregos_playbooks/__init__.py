@@ -91,6 +91,8 @@ def render_playbook(role: str, **variables: Any) -> str:
         "ticket": {},
         "spec": "",
         "plan_markdown": "",
+        #: Les entrées déclarées par la transition, par nom (`{{ inputs.profils }}`).
+        "inputs": {},
         "allowed_paths": [],
         "context": None,
         "project": None,

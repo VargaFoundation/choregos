@@ -15,7 +15,7 @@ from typing import Any
 from choregos_api.db.models import GatewayKeyRow, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.security import mint_run_token
-from choregos_api.services import persist_event, record_cost
+from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_contracts import (
     AgentRef,
     Budget,
@@ -301,11 +301,15 @@ async def _context_pack(bundle: Any, item: Any, plan: StagePlan) -> ContextPack:
 def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack) -> str:
     from choregos_playbooks import render_playbook
 
+    documents = item.documents or {}
     return render_playbook(
         plan.playbook or plan.role,
         ticket={"key": item.tracker_key, "title": item.title, "body": item.body_snapshot or ""},
-        spec=(item.documents or {}).get("spec_markdown", ""),
-        plan_markdown=(item.documents or {}).get("plan_markdown", ""),
+        spec=documents.get("spec_markdown", ""),
+        plan_markdown=documents.get("plan_markdown", ""),
+        # Les entrées que la transition déclare (`inputs: [profils]`), lues sous leur nom :
+        # c'est ainsi qu'une étape métier reçoit ce que la précédente a produit.
+        inputs={nom: documents.get(nom, "") for nom in (plan.inputs or [])},
         allowed_paths=list(item.allowed_paths or []),
         context=context,
         project=bundle.config,
@@ -593,11 +597,8 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
             item.risk = str(outputs.risk)
         if outputs.allowed_paths:
             item.allowed_paths = list(outputs.allowed_paths)
-        documents = dict(item.documents or {})
-        for field in ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown"):
-            value = getattr(outputs, field, None)
-            if value:
-                documents[field] = value
+        declarees = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
+        documents = ranger_les_sorties(item, outputs, declarees)
         # Une PR d'infra déclarée par l'agent (`artifacts.reports["infra_pr"]`) suit le
         # ticket jusqu'au train, qui en déclenchera l'`apply` Atlantis après approbation.
         infra_pr = result.artifacts.reports.get("infra_pr")

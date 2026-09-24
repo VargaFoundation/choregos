@@ -7,7 +7,10 @@ Tu **qualifies** les profils proposés à l'étape précédente.
 {{ ticket.body }}
 
 ## Les profils à qualifier
-{{ spec }}
+{{ inputs.profils }}
+
+(Ce sont les `outputs.profils` de l'étape de sourcing, transmis tels quels. S'ils sont
+vides, l'étape précédente n'a rien produit : dis-le, ne cherche pas ailleurs.)
 
 ## Ce qu'on attend de toi
 1. Pour chaque profil : ce qui est acquis, ce qui est à vérifier, ce qui est rédhibitoire.
