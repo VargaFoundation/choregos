@@ -327,21 +327,38 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             },
         )
         ref = await bundle.adapters.executor.start(spec)
+        # Un exécuteur qui sait mettre en file (`queue`) a pu créer le run SANS pod, parce
+        # que le plafond de simultanéité était atteint. Le marquer « running » ferait
+        # mentir le board, la page du run et les mesures : rien ne tourne. On lui demande
+        # donc son état, et on ne pose la question qu'à ceux qui peuvent répondre.
+        en_file = False
+        motif = ""
+        if "queue" in getattr(bundle.adapters.executor, "capabilities", frozenset()):
+            etat = await bundle.adapters.executor.status(ref)
+            en_file = etat.state == "pending" and bool(etat.message)
+            motif = etat.message if en_file else ""
         if run is not None:
             run.executor_kind = str(ref.kind)
             run.executor_ref = ref.name
-            run.status = "running"
+            run.status = "queued" if en_file else "running"
         await persist_event(
             session,
-            EventType.RUN_STARTED,
+            EventType.RUN_QUEUED if en_file else EventType.RUN_STARTED,
             project_id=bundle.project.id,
             work_item_id=payload["work_item_id"],
             project_slug=bundle.slug,
             subject=stage_input.run_id,
             run_id=stage_input.run_id,
             executor=str(ref.kind),
+            **({"reason": motif} if en_file else {}),
         )
-        return {"executor_ref": ref.name, "kind": str(ref.kind), "namespace": ref.namespace, "reused": False}
+        return {
+            "executor_ref": ref.name,
+            "kind": str(ref.kind),
+            "namespace": ref.namespace,
+            "reused": False,
+            "queued": en_file,
+        }
 
 
 @activity.defn(name="await_run")
@@ -369,6 +386,22 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 run_id=run_id,
             )
             status = await bundle.adapters.executor.status(ref)
+            # Le run attendait une place et vient de l'obtenir : sans cette bascule, il
+            # resterait « en file » jusqu'à sa fin, alors qu'il tourne. C'est ici que ça
+            # se voit, parce que c'est ici qu'on interroge l'exécuteur.
+            if run is not None and run.status == "queued" and status.state == "running":
+                run.status = "running"
+                run.started_at = run.started_at or utcnow()
+                await persist_event(
+                    session,
+                    EventType.RUN_STARTED,
+                    project_id=bundle.project.id,
+                    work_item_id=run.work_item_id,
+                    project_slug=bundle.slug,
+                    subject=run_id,
+                    run_id=run_id,
+                    executor=str(ref.kind),
+                )
         if status.finished:
             async with db() as session:
                 bundle = await project_bundle(session, payload["project_id"])
