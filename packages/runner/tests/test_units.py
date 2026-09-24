@@ -71,7 +71,7 @@ def test_reseau_sans_allowlist_est_autorise() -> None:
 
 def test_decision_serialisable_pour_le_journal() -> None:
     event = guards(write_paths=["src/**"]).check_write("src/a.py").to_event()
-    assert set(event) == {"allowed", "reason", "kind", "target"}
+    assert set(event) == {"allowed", "reason", "kind", "target", "inferred"}
 
 
 # ───────────────────────────── résultat ─────────────────────────────
@@ -621,3 +621,81 @@ async def test_le_diff_se_mesure_sur_un_historique_superficiel(tmp_path) -> None
 
     assert await espace.changed_files(base) == ["b.py"]
     assert await espace.diff_stats(base) == (1, 0)
+
+
+# ───────────────────────── la nature déduite quand l'ACP ne la dit pas (2026-09-24) ─────────────────────────
+
+#: Le payload RÉEL d'une demande de Claude Code, relevé sur le banc : ni `kind`, ni `type`.
+PERMISSION_CLAUDE_CODE_WRITE = {
+    "options": [
+        {"kind": "allow_always", "name": "Always Allow", "optionId": "allow_always"},
+        {"kind": "allow_once", "name": "Allow", "optionId": "allow"},
+        {"kind": "reject_once", "name": "Reject", "optionId": "reject"},
+    ],
+    "toolCall": {
+        "title": "Write /workspace/src/panier.py",
+        "rawInput": {"content": "class Panier: ...", "file_path": "/workspace/src/panier.py"},
+        "toolCallId": "toolu_01DTrevapHSMwAskwwWMcARv",
+    },
+}
+
+
+def test_une_ecriture_de_claude_code_passe_par_le_perimetre() -> None:
+    """Sans `kind`, l'écriture tombait dans « lecture ou recherche : autorisé » — 23 fois sur 23."""
+    rails = guards(write_paths=["src/**"])
+    dedans = rails.decide(PERMISSION_CLAUDE_CODE_WRITE)
+    assert dedans.allowed and dedans.kind == "write" and dedans.inferred
+
+    dehors = dict(PERMISSION_CLAUDE_CODE_WRITE)
+    dehors["toolCall"] = {
+        **PERMISSION_CLAUDE_CODE_WRITE["toolCall"],
+        "title": "Write /workspace/.github/workflows/ci.yml",
+        "rawInput": {"content": "x", "file_path": "/workspace/.github/workflows/ci.yml"},
+    }
+    refus = rails.decide(dehors)
+    assert not refus.allowed, "une écriture hors périmètre doit être refusée, même sans `kind`"
+    assert refus.kind == "write" and refus.inferred
+    assert "périmètre" in refus.reason
+
+
+def test_la_nature_se_deduit_du_titre_quand_les_arguments_ne_disent_rien() -> None:
+    rails = guards(write_paths=["src/**"])
+    lecture = rails.decide(
+        {
+            "toolCall": {
+                "title": "Read /workspace/README.md",
+                "rawInput": {"file_path": "/workspace/README.md"},
+            }
+        }
+    )
+    assert lecture.allowed and lecture.kind == "read" and lecture.inferred
+    edition = rails.decide(
+        {
+            "toolCall": {
+                "title": "Edit /workspace/docs/x.md",
+                "rawInput": {"file_path": "/workspace/docs/x.md"},
+            }
+        }
+    )
+    assert not edition.allowed and edition.inferred, "`Edit` hors périmètre, déduit du titre"
+    inconnu = rails.decide(
+        {
+            "toolCall": {
+                "title": "Something /workspace/docs/x.md",
+                "rawInput": {"file_path": "/workspace/docs/x.md"},
+            }
+        }
+    )
+    assert inconnu.allowed and not inconnu.inferred, (
+        "ce qu'on ne reconnaît pas garde la règle générale, sans prétendre déduire"
+    )
+    declare = rails.decide(
+        {"toolCall": {"kind": "edit", "title": "Edit", "rawInput": {"file_path": "/workspace/src/a.py"}}}
+    )
+    assert declare.allowed and not declare.inferred
+
+
+def test_decision_serialisable_dit_si_la_nature_est_deduite() -> None:
+    event = guards(write_paths=["src/**"]).decide(PERMISSION_CLAUDE_CODE_WRITE).to_event()
+    assert set(event) == {"allowed", "reason", "kind", "target", "inferred"}
+    assert event["inferred"] is True

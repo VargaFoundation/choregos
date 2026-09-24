@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 import respx
-from httpx import AsyncClient, Response
+from httpx import ASGITransport, AsyncClient, Response
 
 from .conftest import login
 
@@ -281,3 +281,56 @@ async def test_un_jeton_d_api_s_emet_s_use_et_se_revoque(client: AsyncClient, ad
     ).status_code == 401
     # un jeton ne se révoque que par son propriétaire
     assert (await client.delete("/api/v1/me/tokens/inconnu")).status_code == 404
+
+
+# ───────────────────────── limiteur, webhooks ─────────────────────────
+
+
+def test_le_limiteur_compte_par_adresse_et_fenetre_glissante() -> None:
+    from choregos_api.limiteur import Limiteur
+
+    limiteur = Limiteur(par_minute=3)
+    assert [limiteur.admet("1.2.3.4", t)[0] for t in (0.0, 1.0, 2.0)] == [True, True, True]
+    admis, attente = limiteur.admet("1.2.3.4", 3.0)
+    assert not admis and attente >= 1
+    assert limiteur.admet("5.6.7.8", 3.0)[0], "une autre adresse a sa propre fenêtre"
+    assert limiteur.admet("1.2.3.4", 61.0)[0], "la fenêtre glisse : soixante secondes plus tard, une place"
+    assert Limiteur(par_minute=0).admet("x")[0], "0 désactive"
+
+
+async def test_les_routes_sans_principal_sont_limitees(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.main import create_app
+
+    monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "2")
+    from choregos_api.config import reset_settings_cache
+
+    reset_settings_cache()
+    try:
+        app = create_app()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            codes = [(await c.post("/api/v1/webhooks/jira", json={})).status_code for _ in range(3)]
+        assert codes[:2] != [429, 429] and codes[2] == 429
+    finally:
+        reset_settings_cache()
+
+
+async def test_un_webhook_github_sans_secret_est_refuse_en_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.main import create_app
+
+    monkeypatch.setenv("CHOREGOS_ENV", "prod")
+    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("CHOREGOS_GITHUB_WEBHOOK_SECRET", "")
+    reset_settings_cache()
+    try:
+        app = create_app()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            refus = await c.post("/api/v1/webhooks/github", content=b"{}", headers={"X-GitHub-Event": "ping"})
+        assert refus.status_code == 401
+        assert "non configuré" in refus.json()["detail"]
+    finally:
+        reset_settings_cache()

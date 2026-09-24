@@ -6,6 +6,8 @@ import { Empty } from "@/components/ui";
 export type AccesRun = {
   evenements: number;
   refus: number;
+  /** décisions dont la nature a été déduite du titre : l'agent n'avait pas dit `kind` */
+  deduites?: number;
   cout_outils_eur?: number;
   acces: { nature: string; cible: string; demandes: number; refus: number; motifs?: string[] }[];
 };
@@ -37,7 +39,9 @@ export function Acces({ acces }: { acces?: AccesRun }) {
       title="accès"
       action={
         <span className="text-xs text-ink-muted">
-          {acces ? `${acces.evenements} événements · ${acces.refus} refus` : "—"}
+          {acces
+            ? `${acces.evenements} événements · ${acces.refus} refus${acces.deduites ? ` · ${acces.deduites} natures déduites` : ""}`
+            : "—"}
         </span>
       }
     >

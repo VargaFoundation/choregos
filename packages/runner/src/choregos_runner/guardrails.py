@@ -37,6 +37,9 @@ class Decision:
     reason: str
     kind: str = "unknown"
     target: str = ""
+    #: La nature n'était pas dans la demande ACP : on l'a DÉDUITE du titre ou des arguments.
+    #: Dit dans le journal, parce qu'une déduction se relit autrement qu'une déclaration.
+    inferred: bool = False
 
     def to_event(self) -> dict[str, Any]:
         return {
@@ -44,7 +47,48 @@ class Decision:
             "reason": self.reason,
             "kind": self.kind,
             "target": self.target,
+            "inferred": self.inferred,
         }
+
+
+#: Premier mot du titre ACP → nature. Les titres de Claude Code sont « Write /chemin »,
+#: « Edit /chemin », « Read /chemin », « Bash: … » ; ceux des autres agents suivent le même
+#: réflexe. Ce qu'on ne reconnaît pas reste vide : la règle générale décide alors.
+_VERBES_ECRITURE = {
+    "write",
+    "edit",
+    "multiedit",
+    "create",
+    "delete",
+    "remove",
+    "move",
+    "rename",
+    "mkdir",
+    "touch",
+}
+_VERBES_LECTURE = {"read", "glob", "grep", "ls", "search", "view", "cat", "find", "list"}
+_VERBES_EXECUTION = {"bash", "run", "exec", "execute", "shell", "sh", "terminal"}
+_VERBES_RESEAU = {"webfetch", "fetch", "curl", "http", "websearch", "download"}
+
+
+def _nature_deduite(title: str, raw: dict[str, Any], *, path: str, command: str, url: str) -> str:
+    """Déduit `edit`/`read`/`execute`/`network` d'une demande ACP qui n'a pas de `kind`."""
+    if command:
+        return "execute"
+    if url:
+        return "network"
+    if any(k in raw for k in ("content", "new_string", "old_string", "edits", "new_str", "text")) and path:
+        return "edit"
+    premier = title.split(" ", 1)[0].rstrip(":").lower() if title else ""
+    if premier in _VERBES_ECRITURE:
+        return "edit"
+    if premier in _VERBES_LECTURE:
+        return "read"
+    if premier in _VERBES_EXECUTION:
+        return "execute"
+    if premier in _VERBES_RESEAU:
+        return "network"
+    return ""
 
 
 @dataclass
@@ -54,6 +98,10 @@ class GuardRails:
     permissions: Permissions
     allowed_paths: list[str] = field(default_factory=list)
     decisions: list[Decision] = field(default_factory=list)
+    #: Racine du workspace : les agents demandent des chemins ABSOLUS (`/workspace/src/x.py`),
+    #: le périmètre est écrit en relatif (`src/**`). Sans la retirer, tout est « hors
+    #: périmètre » — ce que personne n'avait vu, puisque `check_write` ne tournait jamais.
+    workspace: str = "/workspace"
 
     def __post_init__(self) -> None:
         if not self.allowed_paths:
@@ -72,6 +120,15 @@ class GuardRails:
         path = _first_str(raw, ("path", "file", "filePath", "file_path", "abs_path"))
         url = _first_str(raw, ("url", "endpoint"))
 
+        inferred = False
+        if not kind:
+            # Claude Code n'envoie PAS `kind` dans `session/request_permission` : seulement
+            # `title` (« Write /workspace/x.py ») et `rawInput`. Sans cette déduction, chaque
+            # écriture tombait dans « lecture ou recherche : autorisé » et le périmètre de
+            # chemins n'était jamais consulté — 23 écritures sur 23, banc du 2026-09-24.
+            kind = _nature_deduite(title, raw, path=path, command=command, url=url)
+            inferred = bool(kind)
+
         if command:
             decision = self.check_command(command)
         elif path and kind in {"edit", "write", "create", "delete", "move"}:
@@ -82,13 +139,14 @@ class GuardRails:
             decision = Decision(True, "lecture ou recherche : autorisé", kind or "read", path or title)
         else:
             decision = Decision(True, f"opération `{kind}` sans cible identifiée : autorisée", kind, title)
+        decision.inferred = inferred
         self.decisions.append(decision)
         return decision
 
     # ───────────────────────── règles ─────────────────────────
 
     def check_write(self, path: str) -> Decision:
-        normalized = path.removeprefix("./").lstrip("/")  # `lstrip(".")` mangerait `.choregos`
+        normalized = self._relatif(path)
         if any(normalized.endswith(pattern) or pattern in normalized for pattern in SECRET_FILE_PATTERNS):
             return Decision(False, f"écriture interdite dans un fichier sensible : {path}", "write", path)
         if normalized == ".choregos/result.json":
@@ -112,6 +170,13 @@ class GuardRails:
             "write",
             path,
         )
+
+    def _relatif(self, path: str) -> str:
+        """Le chemin tel que le périmètre le nomme : relatif à la racine du workspace."""
+        racine = self.workspace.rstrip("/")
+        if racine and (path == racine or path.startswith(racine + "/")):
+            path = path[len(racine) :]
+        return path.removeprefix("./").lstrip("/")  # `lstrip(".")` mangerait `.choregos`
 
     def check_command(self, command: str) -> Decision:
         lowered = command.lower()

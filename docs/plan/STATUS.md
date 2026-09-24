@@ -207,7 +207,21 @@ les 492 tests ne disaient pas :
    les webhooks vérifiés et l'orchestrateur ; INSERT d'un projet jugé sur `org_id` ; l'API
    refuse un superutilisateur PostgreSQL en staging/prod et le PostgreSQL embarqué crée
    `choregos_app` sans SUPERUSER ; **quatre tests sur un vrai PostgreSQL**, en CI par un
-   service). Reste : secrets du chart, limiteur, garde-fous du runner (P0-3c).
+   service) ; P0-3c livré (secret des webhooks non signés généré et injecté par le chart, plus
+   de valeur par défaut publiée ; webhook GitHub refusé sans secret en staging/prod ;
+   `rate_limit_per_minute` enfin réel — fenêtre glissante par adresse sur `/auth/*` et
+   `/webhooks/*` ; `SECURITY.md` ne promet plus que ce qui existe ; garde-fous du runner :
+   la nature d'une demande ACP sans `kind` est DÉDUITE du titre et des arguments — les
+   écritures de Claude Code passent enfin par le périmètre —, la racine du workspace est
+   retirée des chemins, la fiche d'accès compte les natures déduites).
+   **Banc série `c` (soir, images P0-2)** : les trois tickets de code `done` avec de vrais
+   agents ; les deux RH passent `sourcing` (les garanties `outputs_present` et
+   `evidence_facts` ont accepté) puis **échouent en `qualification`** : l'agent ne trouve
+   pas les profils, parce que le playbook lit `{{ spec }}` (un document logiciel) et que les
+   sorties d'étape (`inputs: [profils]`) ne lui sont pas données — **défaut de contrat**,
+   PR suivante. Le catalogue a été **listé** par les agents (10 `GET /tools`) mais jamais
+   **appelé** (0 `POST`) : l'outil est annoncé dans le playbook, pas exigé par un mécanisme
+   — une garantie `tool_called` lisant le registre serait le mécanisme.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

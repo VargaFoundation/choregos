@@ -169,9 +169,12 @@ async def github_webhook(
 ) -> WebhookAck:
     body = await request.body()
     settings = get_settings()
-    if settings.github_webhook_secret and not verify_github_signature(
-        settings.github_webhook_secret, body, x_hub_signature_256
-    ):
+    if not settings.github_webhook_secret:
+        # Sans secret, la signature n'était pas vérifiée du tout : n'importe qui pouvait
+        # injecter des événements de tracker. Toléré seulement là où il n'y a pas de GitHub.
+        if settings.env in {"staging", "prod"}:
+            raise unauthorized("webhook GitHub non configuré : CHOREGOS_GITHUB_WEBHOOK_SECRET manque")
+    elif not verify_github_signature(settings.github_webhook_secret, body, x_hub_signature_256):
         raise unauthorized("signature HMAC invalide")
     if await _already_seen(session, "github", x_github_delivery or body_digest(body), x_github_event, body):
         return WebhookAck(accepted=True, duplicate=True)
