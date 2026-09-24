@@ -107,6 +107,27 @@ jobs:
       - name: replay des historiques Temporal archivés
         run: uv run pytest tests/replay -q
 
+  live:
+    # Les adaptateurs face aux VRAIS services (LiteLLM, GitLab, Jira, Ecphoria, ACA). Ils
+    # ne tournaient nulle part : ni en PR, ni la nuit (état des lieux du 2026-09-24). Ils
+    # sont ignorés quand le secret manque — et le disent — plutôt qu'un point vert vide.
+    runs-on: ubuntu-latest
+    env:
+      CHOREGOS_LIVE_LITELLM_URL: ${{ secrets.CHOREGOS_LIVE_LITELLM_URL }}
+      CHOREGOS_LIVE_LITELLM_KEY: ${{ secrets.CHOREGOS_LIVE_LITELLM_KEY }}
+      CHOREGOS_LIVE_GITLAB_TOKEN: ${{ secrets.CHOREGOS_LIVE_GITLAB_TOKEN }}
+      CHOREGOS_LIVE_GITLAB_PROJECT: ${{ secrets.CHOREGOS_LIVE_GITLAB_PROJECT }}
+      CHOREGOS_LIVE_JIRA_URL: ${{ secrets.CHOREGOS_LIVE_JIRA_URL }}
+      CHOREGOS_LIVE_JIRA_EMAIL: ${{ secrets.CHOREGOS_LIVE_JIRA_EMAIL }}
+      CHOREGOS_LIVE_JIRA_TOKEN: ${{ secrets.CHOREGOS_LIVE_JIRA_TOKEN }}
+      CHOREGOS_LIVE_JIRA_PROJECT: ${{ secrets.CHOREGOS_LIVE_JIRA_PROJECT }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --frozen
+      - name: adaptateurs contre les vrais services (ignorés sans secret)
+        run: uv run pytest tests/live -q -m live -rs
+
   dependencies:
     runs-on: ubuntu-latest
     steps:
@@ -125,7 +146,7 @@ jobs:
           exit-code: "1"
 
   alerte:
-    needs: [e2e, cluster, conformance, evals, replay, dependencies]
+    needs: [e2e, cluster, conformance, evals, replay, dependencies, live]
     if: failure()
     runs-on: ubuntu-latest
     steps:

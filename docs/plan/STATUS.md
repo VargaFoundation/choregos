@@ -255,6 +255,13 @@ les 492 tests ne disaient pas :
    listages du catalogue → **P1-6 livré** : garantie `tool_called` qui lit le registre (la
    démo l'exige sur le sourcing), contrat de résultat avec la forme des objets, outil
    `validate_result` pour que l'agent se vérifie avant de finir.
+   **P1-3 (première tranche)** : matrice RBAC **générée** depuis `ROLE_PERMISSIONS` (5 rôles ×
+   12 routes portant une permission, l'attendu se déduit, jamais écrit à la main) ; jetons
+   de run : expiration, audience, émetteur, signature d'une autre paire ; migrations :
+   `downgrade base` puis `upgrade head` ; contrats HTTP de LiteLLM (plafond envoyé, alias
+   déjà pris, dépense, révocation, catalogue) et de Slack sur transport simulé ; les tests
+   `live` tournent la nuit quand les secrets existent. Reste : Ecphoria, ArgoCD, Tekton,
+   GitHub (scm, tracker, client), pgvector, rest, adf — et la couverture à 80 %.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
