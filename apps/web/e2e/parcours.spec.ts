@@ -49,3 +49,16 @@ test("wizard : validation du slug avant de continuer", async ({ page }) => {
   await page.getByLabel("Identifiant (slug)").fill("Billing API");
   await expect(page.getByText("minuscules, chiffres et tirets uniquement")).toBeVisible();
 });
+
+test("connexion : la page existe et dit ce qu'elle attend", async ({ page }) => {
+  await page.goto("/login?next=%2Fadmin");
+  await expect(page.getByRole("heading", { name: "se connecter" })).toBeVisible();
+  // en mode démo la session est simulée : la page le dit au lieu d'un bouton vers un IdP absent
+  await expect(page.getByText(/mode démo/)).toBeVisible();
+});
+
+test("administration : membres et jetons ont un écran", async ({ page }) => {
+  await page.goto("/admin");
+  await expect(page.getByText(/membres de/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /frapper un jeton/ })).toBeVisible();
+});

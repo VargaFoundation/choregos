@@ -22,6 +22,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   // Ce à quoi l'agent a touché, replié depuis le journal : les 200 événements bruts
   // d'un run ne se lisent pas, et un journal que personne ne lit n'est pas un audit.
   const acces = useQuery({ queryKey: ["run-access", id], queryFn: () => api.runAccess(id) });
+  const transcript = useQuery({
+    queryKey: ["run-transcript", id],
+    queryFn: () => api.transcript(id),
+    enabled: run.data?.status === "succeeded" || run.data?.status === "failed",
+    retry: false,
+  });
   const live = useEventStream<RunEventDto>({
     path: `/runs/${id}/events`,
     enabled: run.data?.status === "running",
@@ -51,6 +57,11 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
             display={run.data.status}
             kind={run.data.status === "succeeded" ? "terminal" : run.data.status === "failed" ? "blocked" : "work"}
           />
+          {transcript.data?.url && (
+            <a href={transcript.data.url} className="text-xs text-ink-muted hover:text-ink" target="_blank" rel="noreferrer">
+              transcript complet
+            </a>
+          )}
           <Button
             onClick={() => {
               if (run.data?.work_item_id) void api.action(run.data.work_item_id, "rerun_stage");

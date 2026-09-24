@@ -3,12 +3,14 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Card, Eyebrow, Heading, Lead, Stat, buttonClasses } from "@varga/design-system";
-import { api, DEFAULT_ORG } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useSession } from "@/lib/session";
 import { eur, percent, relative } from "@/lib/format";
 import { Empty, ErrorNote, StateBadge } from "@/components/ui";
 
 export default function ProjectsPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ["projects"], queryFn: () => api.projects() });
+  const { org } = useSession();
+  const { data, isLoading, error } = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
   const projects = data?.items ?? [];
   const actifs = projects.reduce((n, p) => n + (p.stats?.active_work_items ?? 0), 0);
   const cout = projects.reduce((n, p) => n + (p.stats?.cost_month_eur ?? 0), 0);
@@ -17,7 +19,7 @@ export default function ProjectsPage() {
     <div className="space-y-12">
       <header className="flex flex-wrap items-end justify-between gap-6">
         <div className="space-y-5">
-          <Eyebrow>organisation {DEFAULT_ORG}</Eyebrow>
+          <Eyebrow>organisation {org}</Eyebrow>
           <Heading as="h1" size="xl">
             projets
           </Heading>

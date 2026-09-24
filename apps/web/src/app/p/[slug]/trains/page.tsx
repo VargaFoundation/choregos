@@ -129,16 +129,29 @@ function History({ slug }: { slug: string }) {
               <td className="text-xs text-ink-muted">{String(release.verdict?.reason ?? (release.verdict?.go ? "go" : ""))}</td>
               <td>
                 {release.status === "awaiting_approval" && (
-                  <Button
-                    tone="primary"
-                    onClick={async () => {
-                      if (!confirm(`Approuver la mise en production du lot R-${release.batch_no} ?`)) return;
-                      await api.approveRelease(release.id);
-                      queryClient.invalidateQueries({ queryKey: ["releases", slug] });
-                    }}
-                  >
-                    approuver
-                  </Button>
+                  <span className="flex gap-2">
+                    <Button
+                      tone="primary"
+                      onClick={async () => {
+                        if (!confirm(`Approuver la mise en production du lot R-${release.batch_no} ?`)) return;
+                        await api.approveRelease(release.id);
+                        queryClient.invalidateQueries({ queryKey: ["releases", slug] });
+                      }}
+                    >
+                      approuver
+                    </Button>
+                    <Button
+                      tone="danger"
+                      onClick={async () => {
+                        const reason = prompt(`Abandonner le lot R-${release.batch_no} — pourquoi ?`);
+                        if (!reason) return;
+                        await api.abortRelease(release.id, reason);
+                        queryClient.invalidateQueries({ queryKey: ["releases", slug] });
+                      }}
+                    >
+                      abandonner
+                    </Button>
+                  </span>
                 )}
               </td>
             </tr>

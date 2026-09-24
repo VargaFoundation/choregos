@@ -3,9 +3,9 @@
 import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { use } from "react";
+import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { ActorIcon, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import type { WorkItemDto } from "@/lib/types";
@@ -16,6 +16,10 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   const queryClient = useQueryClient();
   const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.workItems(slug) });
   const workflow = useQuery({ queryKey: ["workflow", slug], queryFn: () => api.workflow(slug) });
+  const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
+  // Quand le tracker est interne, la demande se pose ICI — sinon elle vient de GitHub/Jira.
+  const trackerInterne = (connectors.data ?? []).some((c) => c.kind === "tracker" && ["internal", "fake"].includes(c.type));
+  const [nouvelle, setNouvelle] = useState(false);
 
   if (items.error) return <ErrorNote>{(items.error as Error).message}</ErrorNote>;
 
@@ -30,7 +34,23 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         <span className="text-sm text-ink-muted">
           workflow {workflow.data?.name ?? "—"} v{workflow.data?.version ?? "?"}
         </span>
+        {trackerInterne && (
+          <span className="ml-auto">
+            <Button tone="accent" size="sm" onClick={() => setNouvelle((n) => !n)}>
+              nouvelle demande
+            </Button>
+          </span>
+        )}
       </div>
+      {nouvelle && (
+        <NouvelleDemande
+          slug={slug}
+          onDone={() => {
+            setNouvelle(false);
+            void queryClient.invalidateQueries({ queryKey: ["items", slug] });
+          }}
+        />
+      )}
       {items.isLoading && <Empty>chargement…</Empty>}
       <div className="grid gap-3 overflow-x-auto md:grid-flow-col md:auto-cols-[minmax(260px,1fr)]">
         {columns.map((column) => (
@@ -130,4 +150,73 @@ function columnsFrom(yaml: string | undefined, items: WorkItemDto[]): Column[] {
     }
   }
   return columns.filter((column) => column.items.length > 0 || declared.length <= 12);
+}
+
+
+/** Poser une demande dans Choregos : titre, corps, taille. L'interpréteur démarre tout de suite. */
+function NouvelleDemande({ slug, onDone }: { slug: string; onDone: () => void }) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [size, setSize] = useState<"S" | "M" | "L" | "XL" | "">("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function poser() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.createWorkItem(slug, { title, body, size: size || null, start: true });
+      onDone();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "demande refusée");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-3">
+      <form
+        className="space-y-2 text-sm"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void poser();
+        }}
+      >
+        <input
+          aria-label="titre de la demande"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Chef de projet data pour une mission de 6 mois"
+          className="w-full rounded border border-line bg-surface px-2 py-1.5"
+        />
+        <textarea
+          aria-label="détail de la demande"
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          rows={4}
+          placeholder="Client, démarrage, attendu, contraintes…"
+          className="w-full rounded border border-line bg-surface px-2 py-1.5"
+        />
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="taille"
+            value={size}
+            onChange={(event) => setSize(event.target.value as typeof size)}
+            className="rounded border border-line bg-surface px-2 py-1"
+          >
+            <option value="">taille ?</option>
+            {["S", "M", "L", "XL"].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <Button tone="primary" size="sm" type="submit" disabled={busy || !title}>
+            poser et démarrer
+          </Button>
+        </div>
+        {error && <ErrorNote>{error}</ErrorNote>}
+      </form>
+    </Card>
+  );
 }
