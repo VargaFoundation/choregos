@@ -26,7 +26,14 @@ rules:
     verbs: ["get", "list", "watch", "create", "delete", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create", "delete"]
+    # `update` sert à REMPLACER le jeton d'un run : celui d'un run rejoué (sinon l'agent
+    # tourne avec un jeton périmé) et celui d'un run qui attend en file (son jeton vieillit
+    # pendant l'attente). Sans ce verbe, l'API répond 403 et le ticket meurt — deux fois le
+    # même scénario que `patch` sur les Jobs, sur le banc du 2026-09-24.
+    #
+    # La règle qu'on en tire : tout verbe que l'exécuteur EMPLOIE doit figurer ici, et le
+    # test de chart le vérifie désormais plutôt que de compter sur la relecture.
+    verbs: ["get", "create", "update", "delete"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]

@@ -412,16 +412,21 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 item_du_run = await session.get(WorkItem, run.work_item_id)
                 renew = getattr(bundle.adapters.executor, "renew", None)
                 if renew is not None and item_du_run is not None:
-                    await renew(
-                        ref,
-                        mint_run_token(
-                            run_id,
-                            project_slug=bundle.slug,
-                            work_item_key=item_du_run.tracker_key,
-                            # De quoi couvrir ce qu'il reste d'attente, plus l'étape.
-                            ttl_minutes=int(timeout_minutes) + 15,
-                        ),
-                    )
+                    # Un renouvellement raté ne tue pas le run : il peut encore démarrer à
+                    # temps, et s'il n'y arrive pas il échouera sur SON message à lui.
+                    # Un droit absent doit dégrader, pas détruire — c'est la deuxième fois
+                    # que cette leçon se paie (banc du 2026-09-24).
+                    with contextlib.suppress(Exception):
+                        await renew(
+                            ref,
+                            mint_run_token(
+                                run_id,
+                                project_slug=bundle.slug,
+                                work_item_key=item_du_run.tracker_key,
+                                # De quoi couvrir ce qu'il reste d'attente, plus l'étape.
+                                ttl_minutes=int(timeout_minutes) + 15,
+                            ),
+                        )
             # Le run attendait une place et vient de l'obtenir : sans cette bascule, il
             # resterait « en file » jusqu'à sa fin, alors qu'il tourne. C'est ici que ça
             # se voit, parce que c'est ici qu'on interroge l'exécuteur.
