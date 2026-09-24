@@ -19,7 +19,23 @@ from temporalio import activity
 from ..config import get_settings
 from .base import db, project_bundle
 
-TEMPLATES_DIR = Path(__file__).resolve().parents[5] / "templates"
+
+def repertoire_templates() -> Path:
+    """Où vivent les templates de projet : `CHOREGOS_TEMPLATES_DIR`, sinon `templates/` du dépôt.
+
+    `parents[5]` supposait la disposition du dépôt source ; dans l'image, c'est `/app`, et
+    `templates/` n'y était même pas copié. Le réglage dit où chercher, et l'absence se
+    voit à la première lecture, avec le chemin cherché.
+    """
+    import os
+
+    configure = os.environ.get("CHOREGOS_TEMPLATES_DIR", "").strip()
+    if configure:
+        return Path(configure)
+    return Path(__file__).resolve().parents[5] / "templates"
+
+
+TEMPLATES_DIR = repertoire_templates()
 
 LABELS = {
     "agent-ready": "0e8a16",

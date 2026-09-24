@@ -518,7 +518,14 @@ def dev_seed() -> None:
 @dev_app.command("demo")
 def dev_demo() -> None:
     """Joue la démonstration hors ligne (aucun service requis)."""
-    from choregos_orchestrator.demo import main as demo_main
+    try:
+        from choregos_orchestrator.demo import main as demo_main
+    except ImportError:
+        # La CLI ne dépend plus de l'orchestrateur (elle embarquait tout le serveur — SQLAlchemy,
+        # Temporal, asyncpg — pour cette seule commande). La démo hors ligne demande un
+        # checkout du dépôt : `make demo` depuis la racine.
+        fail("la démo hors ligne demande le dépôt : lance `make demo` depuis un checkout de choregos")
+        return
 
     demo_main()
 

@@ -32,6 +32,11 @@ RUN for p in contracts core adapters runner tools-mcp playbooks cli; do mkdir -p
 COPY packages packages
 COPY apps/api apps/api
 COPY apps/orchestrator apps/orchestrator
+# Les templates de projet (manifest, scaffold) : le provisioning les lit à l'exécution.
+# Ils manquaient à l'image — `provisioning.py` cherchait `/app/templates` qui n'existait
+# pas, et aucun projet à template ne pouvait être provisionné depuis un pod (état des
+# lieux du 2026-09-24, P1-4).
+COPY templates templates
 # `uv sync` n'accepte qu'un seul `--package` : deux occurrences font échouer la construction
 # ("the argument '--package <PACKAGE>' cannot be used multiple times"). La cible `worker`
 # partage ce builder, donc il doit porter les deux applications — on synchronise l'espace de

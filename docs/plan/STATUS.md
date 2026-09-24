@@ -262,6 +262,16 @@ les 492 tests ne disaient pas :
    déjà pris, dépense, révocation, catalogue) et de Slack sur transport simulé ; les tests
    `live` tournent la nuit quand les secrets existent. Reste : Ecphoria, ArgoCD, Tekton,
    GitHub (scm, tracker, client), pgvector, rest, adf — et la couverture à 80 %.
+   **P1-4 livré** : `pgvector` n'importe plus l'API (session et modèles **injectés**, la
+   fabrique branchée par `choregos_api.adaptateurs` au démarrage de l'API et de
+   l'orchestrateur) ; le cycle `runner ⇄ tools-mcp` est cassé (le client interne vit dans
+   `choregos_tools_mcp.client`, le runner le réexporte) ; la CLI ne dépend plus de
+   l'orchestrateur ; `CHOREGOS_TEMPLATES_DIR` remplace `parents[5]` — et **l'image ne copiait
+   pas `templates/`** : aucun projet à template ne pouvait être provisionné depuis un pod,
+   corrigé et gardé par un test. Deux constats de l'état des lieux se sont révélés faux à
+   la lecture : les « trois clients GitHub » sont un client et deux adaptateurs qui
+   l'emploient ; le « calcul cross-backend dupliqué » est une politique (choisir le
+   relecteur) et une mesure (la comparer) — deux fonctions, pas une copie.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
