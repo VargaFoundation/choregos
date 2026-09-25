@@ -100,6 +100,10 @@ spec:
               value: {{ $root.Values.runner.egressProxy | default "" | quote }}
             - name: CHOREGOS_EGRESS_IMAGE
               value: {{ $root.Values.runner.egressImage | default "" | quote }}
+            # La RuntimeClass des pods d'agent quand la politique n'en impose pas : un
+            # cluster qui a gVisor ou Kata le dit ici une fois. Vide : celle du cluster.
+            - name: CHOREGOS_RUNNER_RUNTIME_CLASS
+              value: {{ $root.Values.runner.runtimeClass | default "" | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}

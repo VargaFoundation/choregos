@@ -288,3 +288,16 @@ async def test_le_jeton_d_un_run_en_file_se_remplace() -> None:
 
     assert base64.b64decode(secret["data"]["token"]).decode() == "jeton-tout-neuf"
     assert "renew" in KubernetesJobExecutor.capabilities
+
+
+async def test_le_pod_runner_passe_la_regle_kyverno_stricte() -> None:
+    """`infra/policies/pod-security.yaml` exige le profil seccomp au niveau du POD, pas
+    seulement du conteneur : c'est ce que le Job doit porter pour être admis."""
+    client = _RecordingClient()
+    await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
+    pod = job["spec"]["template"]["spec"]
+    assert pod["securityContext"]["runAsNonRoot"] is True
+    assert pod["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}
+    conteneur = pod["containers"][0]["securityContext"]
+    assert conteneur["allowPrivilegeEscalation"] is False and conteneur["capabilities"] == {"drop": ["ALL"]}

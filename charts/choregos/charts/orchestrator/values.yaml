@@ -21,6 +21,7 @@ runner:
   tag: "1.0.0"
   namespacePattern: "proj-{slug}-runners"
   executor: tekton
+  runtimeClass: ""
   egressProxy: "http://choregos-egress.{namespace}.svc:3128"
   egressImage: ""
 podDisruptionBudget:

@@ -250,6 +250,8 @@ catalogue). A ticket still in its initial state after fifteen minutes is not wai
 dead; `temporal workflow describe` says why. `demo/README.md` has the rest, including what
 this bench does **not** prove.
 
+**Hardened runtime for agent pods.** `choregos-orchestrator.runner.runtimeClass` (gVisor, Kata) applies to every agent pod unless the project policy demands gVisor, which always wins. The strict Kyverno rule in `infra/policies/pod-security.yaml` refuses any pod of a platform or project namespace without a non-root, seccomp-profiled security context — the chart's own pods are checked against it by `tests/charts`.
+
 ## The first organisation, and the first token
 
 A fresh database has no organisation and no member. The chart bootstraps both:

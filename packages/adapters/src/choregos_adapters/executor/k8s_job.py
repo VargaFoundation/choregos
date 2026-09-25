@@ -172,7 +172,14 @@ class KubernetesJobExecutor:
             "restartPolicy": "Never",
             "serviceAccountName": self.service_account,
             "automountServiceAccountToken": False,
-            "securityContext": {"runAsNonRoot": True, "runAsUser": 1000, "fsGroup": 1000},
+            # Le contexte du POD, pas seulement du conteneur : la règle Kyverno stricte
+            # (`infra/policies/pod-security.yaml`) exige le profil seccomp à ce niveau.
+            "securityContext": {
+                "runAsNonRoot": True,
+                "runAsUser": 1000,
+                "fsGroup": 1000,
+                "seccompProfile": {"type": "RuntimeDefault"},
+            },
             "containers": [
                 {
                     "name": "runner",
