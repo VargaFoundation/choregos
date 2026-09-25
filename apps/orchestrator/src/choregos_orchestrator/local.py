@@ -22,7 +22,7 @@ from .activities import gates as gate_activities
 from .activities import scm as scm_activities
 from .activities import stage as stage_activities
 from .activities import tracker as tracker_activities
-from .workflows.interpreter import load_context
+from .activities.interpretation import load_context
 
 Decider = Callable[[str, str], bool]
 StateHook = Callable[[str], Awaitable[None]]

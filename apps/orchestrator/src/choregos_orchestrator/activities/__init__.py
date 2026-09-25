@@ -5,15 +5,15 @@ Elles sont idempotentes, typées, et n'appellent jamais un modèle directement.
 
 from __future__ import annotations
 
-from . import evals, findings, gates, memory, provisioning, scm, stage, tracker, train
+from . import bilan, evals, execution, findings, gates, memory, provisioning, scm, stage, tracker, train
 
 ALL_ACTIVITIES = [
     stage.prepare_stage,
-    stage.start_run,
-    stage.await_run,
-    stage.cancel_run,
-    stage.collect_spend,
-    stage.record_run_outcome,
+    execution.start_run,
+    execution.await_run,
+    execution.cancel_run,
+    bilan.collect_spend,
+    bilan.record_run_outcome,
     tracker.mirror_state,
     tracker.update_status_comment,
     tracker.create_human_request,
@@ -58,7 +58,9 @@ ALL_ACTIVITIES = [
 
 __all__ = [
     "ALL_ACTIVITIES",
+    "bilan",
     "evals",
+    "execution",
     "findings",
     "gates",
     "memory",
