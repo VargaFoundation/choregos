@@ -1,80 +1,80 @@
-# 0012 — Le moteur n'est pas lié au logiciel
+# 0012 — The engine is not tied to software
 
-- **Statut** : accepté, 2026-09-23
-- **Concerne** : le cœur (DSL, interpréteur, garanties, playbooks), et ce qui en dépend
+- **Status**: accepted, 2026-09-23
+- **Concerns**: the core (DSL, interpreter, gates, playbooks) and what depends on it
 
-## Contexte
+## Context
 
-Choregos est né pour la livraison logicielle : un ticket entre, une mise en production sort.
-La question posée est autre — le même cœur peut-il porter du **staffing RH**, de
-l'**administratif**, ou tout métier où des demandes arrivent, sont instruites par étapes,
-et où quelqu'un doit répondre de ce qui a été fait ?
+Choregos was born for software delivery: a ticket goes in, a production release comes out.
+The question asked is a different one — can the same core carry **HR staffing**,
+**administrative case handling**, or any line of work where requests arrive, are processed
+in stages, and someone has to answer for what was done?
 
-Ce n'est pas une question de souhait mais d'inventaire : qu'est-ce qui, dans la machine,
-parle vraiment de logiciel ? La démonstration `demo/` répond en pratique — deux projets, le
-même déploiement, l'un qui écrit du code et l'autre qui qualifie des profils.
+This is not a matter of wishing but of inventory: what, in the machine, really speaks of
+software? The `demo/` answers in practice — two projects, the same deployment, one writing
+code and the other qualifying candidate profiles.
 
-## Ce qui ne parle PAS de logiciel, et qui est l'essentiel
+## What does NOT speak of software, and is the essential part
 
-| Mécanisme | Pourquoi il est générique |
+| Mechanism | Why it is generic |
 |---|---|
-| Le DSL (états, transitions, acteurs, `on_fail`, délais) | Un graphe d'états nommés par le métier ; rien n'y suppose un dépôt |
-| L'interpréteur Temporal | Un workflow par demande, repris après panne, avec pause, reprise et migration de définition |
-| Les acteurs `agent` / `human` / `system` | Une validation humaine avec SLA est un besoin de tous les métiers |
-| Budgets (tours, minutes, euros) et clé par run | Ce qui borne la dépense d'un agent ne dépend pas de ce qu'il produit |
-| La mémoire (Ecphoria) | Des faits, des décisions, des épisodes : rien de spécifique au code |
-| L'audit, le coût par étape, la reprise, les évals | Idem |
+| The DSL (states, transitions, actors, `on_fail`, deadlines) | A graph of states named by the business; nothing in it assumes a repository |
+| The Temporal interpreter | One workflow per request, resumed after failure, with pause, resume and definition migration |
+| The `agent` / `human` / `system` actors | A human approval with an SLA is a need of every line of work |
+| Budgets (turns, minutes, euros) and one key per run | What bounds an agent's spend does not depend on what it produces |
+| Memory (Ecphoria) | Facts, decisions, episodes: nothing code-specific |
+| Audit, cost per stage, resumption, evals | Likewise |
 
-## Ce qui parlait de logiciel, et ce qu'on en a fait
+## What spoke of software, and what was done about it
 
-| Point dur | Décision |
+| Hard point | Decision |
 |---|---|
-| Les **playbooks** vivaient dans le paquet, pour dix rôles de développement | `CHOREGOS_PLAYBOOKS_DIR` : le déploiement apporte ses rôles (`<rôle>.md`), lus **avant** ceux du paquet. Un ConfigMap suffit, le chart le monte |
-| La seule garantie utilisable hors code était `evidence_present`, qui exige des **tests** | Nouvelle garantie `outputs_present` : l'étape a produit ce que la transition déclare (`outputs:`). Mécanique, pas déclarative — c'est ce qui distingue une garantie d'une consigne |
-| Le **tracker** était forcément externe (GitHub, Jira) | Connecteur `tracker: internal` : la plateforme tient le ticket, les écritures externes sont des non-opérations franches |
-| Le **runner** clone un dépôt et travaille dans un workspace git | Inchangé, et c'est une limite : un métier sans dépôt garde un `repo` factice. Voir plus bas |
+| **Playbooks** lived in the package, for ten development roles | `CHOREGOS_PLAYBOOKS_DIR`: the deployment brings its roles (`<role>.md`), read **before** the package's. A ConfigMap is enough, the chart mounts it |
+| The only gate usable outside code was `evidence_present`, which requires **tests** | New gate `outputs_present`: the stage produced what the transition declares (`outputs:`). Mechanical, not declarative — which is what separates a guarantee from an instruction |
+| The **tracker** had to be external (GitHub, Jira) | Connector `tracker: internal`: the platform holds the ticket, external writes are honest no-ops |
+| The **runner** clones a repository and works in a git workspace | Unchanged, and that is a limit: a line of work without a repository keeps a dummy `repo`. See below |
 
-## Ce qui reste lié au logiciel, et qu'il faut savoir avant de s'engager
+## What remains tied to software, to know before committing
 
-1. ~~**`ProjectConfig.repo` est obligatoire.**~~ **Levée le 2026-09-24.** `repo` est
-   facultatif : sans lui, le runner prépare un répertoire vide suivi par un git **local**
-   (ce qui lui permet encore de mesurer ce que l'agent a écrit), ne clone rien, ne pousse
-   rien, et les garanties qui lisent un diff refusent faute de matière. Le projet RH de la
-   démonstration n'a plus de dépôt du tout — c'est la preuve, pas l'intention. Ce qui reste
-   vrai : une transition qui suppose un SCM (ouvrir une PR, lire des checks) échoue avec un
-   message qui nomme la cause, plutôt que de partir sur une URL vide.
-2. **`StageOutputs` porte des champs de développement** (`allowed_paths`, `spec_markdown`,
-   `verdict`…). Le modèle tolère les champs supplémentaires, donc un métier nomme ses
-   sorties librement — mais les siennes ne sont pas typées, et la garantie ne peut que
-   vérifier leur présence, pas leur forme.
-3. ~~**`Evidence` parle de tests, de lint et de couverture.**~~ **Levée le 2026-09-24.**
-   `Evidence.facts` porte des faits nommés par le métier, et la garantie `evidence_facts`
-   les lit — présence, seuil minimal, booléen vrai. Le front les affiche à la place des
-   mesures du logiciel quand ce sont elles qui existent.
-4. ~~**Les rôles du DSL sont une énumération fermée.**~~ **Levée le 2026-09-24.** Un rôle
-   est un identifiant libre : `sourcing`, `qualification`, `instruction_dossier`. Les rôles
-   du paquet gardent leur sens — la plateforme s'appuie sur `implement`, `review` et
-   `verify` pour ses mesures et pour la revue croisée — et le playbook se résolvait déjà par
-   le nom du rôle, ce qui rendait l'ouverture presque gratuite. Le validateur **avertit**
-   (il n'interdit pas) quand aucun playbook ne se résout pour un rôle : c'est au déploiement
-   de l'apporter, et l'absence ne se découvrait sinon qu'au premier ticket.
-5. **Les gates du logiciel restent nombreuses** (`diff_size_max`, `ci_green`, `scans_ok`…).
-   Elles ne gênent pas un autre métier, qui ne les déclare pas ; mais l'équilibre montre où
-   la plateforme a grandi.
+1. ~~**`ProjectConfig.repo` is mandatory.**~~ **Lifted on 2026-09-24.** `repo` is optional:
+   without it the runner prepares an empty directory tracked by a **local** git (which still
+   lets it measure what the agent wrote), clones nothing, pushes nothing, and the gates that
+   read a diff refuse for lack of material. The demo's HR project has no repository at all —
+   that is the proof, not the intention. What stays true: a transition that assumes an SCM
+   (open a PR, read checks) fails with a message that names the cause, rather than
+   setting off on an empty URL.
+2. **`StageOutputs` carries development fields** (`allowed_paths`, `spec_markdown`,
+   `verdict`…). The model tolerates extra fields, so a line of work names its outputs
+   freely — but those are not typed, and the gate can only check their presence, not their
+   shape.
+3. ~~**`Evidence` speaks of tests, lint and coverage.**~~ **Lifted on 2026-09-24.**
+   `Evidence.facts` carries facts named by the business, and the `evidence_facts` gate
+   reads them — presence, minimum threshold, boolean true. The front shows them in place of
+   software measurements when they are what exists.
+4. ~~**DSL roles are a closed enumeration.**~~ **Lifted on 2026-09-24.** A role is a free
+   identifier: `sourcing`, `qualification`, `instruction_dossier`. The package's roles keep
+   their meaning — the platform relies on `implement`, `review` and `verify` for its
+   measurements and for cross review — and the playbook already resolved by role name,
+   which made opening it almost free. The validator **warns** (it does not forbid) when no
+   playbook resolves for a role: the deployment has to bring it, and the absence was
+   otherwise discovered on the first ticket.
+5. **Software gates remain numerous** (`diff_size_max`, `ci_green`, `scans_ok`…). They do
+   not get in the way of another line of work, which does not declare them; but the balance
+   shows where the platform grew up.
 
-## Décision
+## Decision
 
-Le cœur est **déclaré générique**, et les quatre mécanismes ci-dessus l'ont rendu utilisable
-tel quel pour un métier non logiciel. Les cinq limites sont écrites ici plutôt que
-découvertes par le premier qui essaiera. Les deux marches annoncées ici — un projet **sans dépôt** et des **preuves nommées par le
-métier** — ont été franchies les 2026-09-24 ; les deux limites restantes ne bloquent aucun
-métier, elles montrent où la plateforme a grandi.
+The core is **declared generic**, and the four mechanisms above made it usable as-is for a
+non-software line of work. The five limits are written here rather than discovered by the
+first person to try. The two steps announced here — a project **without a repository** and
+**business-named evidence** — were taken on 2026-09-24; the two remaining limits block no
+line of work, they show where the platform grew up.
 
-## Conséquences
+## Consequences
 
-- `demo/workflows/staffing.yaml` tourne sur le même déploiement que la démonstration
-  logicielle, sans un seul changement de code entre les deux.
-- Un déploiement peut remplacer **n'importe quel** playbook du paquet, y compris
-  `implement` : l'adaptation d'un rôle à une maison ne demande pas de modifier Choregos.
-- La garantie `outputs_present` donne à tout workflow une garantie mécanique, ce qui évite
-  la pente naturelle du « on fait confiance à l'agent » quand il n'y a pas de tests.
+- `demo/workflows/staffing.yaml` runs on the same deployment as the software demo, without
+  a single code change between the two.
+- A deployment can replace **any** package playbook, including `implement`: adapting a role
+  to a house does not require modifying Choregos.
+- The `outputs_present` gate gives every workflow a mechanical guarantee, which avoids the
+  natural slide into "we trust the agent" when there are no tests.

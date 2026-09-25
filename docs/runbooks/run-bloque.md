@@ -1,51 +1,54 @@
-# Un run reste `Pending` ou ne finit jamais
+# A run stays `Pending` or never ends
 
-## Reconnaître
+## How to know it is this
 
-- L'alerte `ChoregosRunEnAttente` (PipelineRun `Pending` depuis 15 min).
-- Le front `/p/<projet>/runs/<id>` reste sur « en cours » sans nouvel événement.
+- The `ChoregosRunEnAttente` alert (PipelineRun `Pending` for 15 min).
+- The front `/p/<project>/runs/<id>` stays on "running" with no new event.
 
-## Distinguer trois cas
+## Tell three cases apart
 
 ```bash
-RUN=<run-id>; PROJ=<projet>
+RUN=<run-id>; PROJ=<project>
 kubectl -n proj-$PROJ-runners get pipelineruns -l choregos/run-id=$RUN
 kubectl -n proj-$PROJ-runners describe pipelinerun run-$RUN | tail -30
 kubectl -n proj-$PROJ-runners get events --sort-by=.lastTimestamp | tail -20
 ```
 
-| Ce qu'on voit | Cause | Action |
+| What you see | Cause | Action |
 | :-- | :-- | :-- |
-| `Pending`, aucun pod | pas de nœud disponible (pool `runners` à zéro, spot repris) | vérifier l'autoscaler et les taints |
-| `Pending`, `FailedScheduling` : quota | `ResourceQuota` du projet atteint | attendre, ou relever le quota dans `projects/<slug>/quotas.yaml` |
-| pod `Running` mais aucun événement ACP | l'agent est bloqué ou le modèle ne répond pas | regarder les logs du step `run` |
+| `Pending`, no pod | no node available (`runners` pool at zero, spot reclaimed) | check the autoscaler and the taints |
+| `Pending`, `FailedScheduling`: quota | the project's `ResourceQuota` is reached | wait, or raise the quota in `projects/<slug>/quotas.yaml` |
+| pod `Running` but no ACP event | the agent is stuck or the model does not answer | read the `run` step's logs |
 
 ```bash
 kubectl -n proj-$PROJ-runners logs -l choregos/run-id=$RUN -c step-run --tail=100
 ```
 
-## Agir
+With the `k8s_job` executor, a Job created **suspended** is not stuck: it is waiting for a
+slot (`runner.maxActive`), and the run says so (ADR 0013).
 
-1. **Le run va finir seul** dans presque tous les cas : le budget (`max_minutes`) coupe la
-   session, le runner poste un résultat `failed(reason=limit)`, l'orchestrateur réessaie.
-2. **Forcer l'arrêt** si c'est vraiment bloqué :
+## Act
+
+1. **The run will end by itself** in almost every case: the budget (`max_minutes`) cuts the
+   session, the runner posts a `failed(reason=limit)` result, the orchestrator retries.
+2. **Force the stop** if it really is stuck:
    ```bash
    choregos items action <ticket-id> stop
    ```
-   L'activité `cancel_run` supprime le `PipelineRun` et son Secret.
-3. **Rejouer l'étape** une fois la cause corrigée :
+   The `cancel_run` activity deletes the `PipelineRun` and its Secret.
+3. **Replay the stage** once the cause is fixed:
    ```bash
    choregos items action <ticket-id> rerun_stage
    ```
 
-## Vérifier
+## Check it is fixed
 
-- Le Secret `run-<id>` a disparu du namespace : aucun jeton ne traîne.
-- La ligne de coût du run existe **une seule fois** dans `cost_ledger`.
-- Le ticket a repris son cours, ou attend un humain.
+- The `run-<id>` Secret is gone from the namespace: no token lingers.
+- The run's cost line exists **exactly once** in `cost_ledger`.
+- The ticket resumed its course, or is waiting for a human.
 
-## Cause récurrente à corriger
+## Recurring cause to fix
 
-Si les `Pending` reviennent, ce n'est pas un incident mais un dimensionnement : pool
-`runners` trop petit, ou `ResourceQuota` du projet trop serrée (défaut : 8 runs concurrents,
-32 vCPU, 96 Go).
+If `Pending`s keep coming back it is not an incident but sizing: the `runners` pool is too
+small, or the project's `ResourceQuota` too tight (default: 8 concurrent runs, 32 vCPU,
+96 GB).

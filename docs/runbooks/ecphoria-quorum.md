@@ -1,43 +1,43 @@
-# Ecphoria a perdu son quorum Raft
+# Ecphoria lost its Raft quorum
 
-## Reconnaître
+## How to know it is this
 
-- L'alerte de quorum, ou `choregos_context_pack_empty_total` qui grimpe.
-- Les runs continuent : **c'est normal et voulu** — sans mémoire, le context pack est vide.
+- The quorum alert, or `choregos_context_pack_empty_total` climbing.
+- Runs carry on: **that is normal and intended** — without memory, the context pack is empty.
 
-## Comprendre
+## Understand
 
-Ecphoria tourne en StatefulSet de trois répliques avec Raft. Un nœud perdu est toléré ;
-deux, le quorum tombe et les écritures s'arrêtent.
+Ecphoria runs as a three-replica StatefulSet with Raft. One lost node is tolerated; with
+two, the quorum falls and writes stop.
 
 ```bash
 kubectl -n choregos-memory get pods -l app.kubernetes.io/name=ecphoria
 kubectl -n choregos-memory logs ecphoria-0 | grep -i raft
 ```
 
-## Agir
+## Act
 
-1. **Un nœud perdu** : le laisser revenir. Si son PVC est corrompu, le supprimer :
+1. **One node lost**: let it come back. If its PVC is corrupt, delete it:
    ```bash
    kubectl -n choregos-memory delete pvc data-ecphoria-2
    kubectl -n choregos-memory delete pod ecphoria-2
    ```
-   Le nœud se resynchronise depuis le leader.
-2. **Quorum perdu (deux nœuds)** : restaurer depuis la sauvegarde quotidienne.
+   The node resynchronises from the leader.
+2. **Quorum lost (two nodes)**: restore from the daily backup.
    ```bash
    kubectl -n choregos-memory create job --from=cronjob/ecphoria-restore restore-$(date +%s)
    ```
-3. **En attendant** : rien à faire côté plateforme. Le circuit-breaker de l'adaptateur rend
-   des packs vides en moins de 300 ms, et les stages tournent sans mémoire.
+3. **Meanwhile**: nothing to do on the platform side. The adapter's circuit breaker returns
+   empty packs in under 300 ms, and stages run without memory.
 
-## Vérifier
+## Check it is fixed
 
 ```bash
 curl -s http://ecphoria.choregos-memory:8432/health | jq
-choregos items show <ticket>   # les runs suivants ont de nouveau du contexte
+choregos items show <ticket>   # the next runs have context again
 ```
 
-## Ce qu'il ne faut pas faire
+## Do not
 
-- Basculer sur `pgvector` dans la panique : c'est une décision de configuration réfléchie
-  (ADR-0007), pas un geste d'urgence. Les faits écrits dans Ecphoria ne seraient pas là.
+- Switch to `pgvector` in a panic: that is a considered configuration decision (ADR-0007),
+  not an emergency move. The facts written into Ecphoria would not be there.

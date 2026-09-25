@@ -1,30 +1,29 @@
-# ADR-0007 — La mémoire doit faire ses preuves avant qu'on en dépende
+# ADR-0007 — Memory must earn its place before anything depends on it
 
-- **État** : acceptée
-- **Concerne** : S10, S11
+- **Status**: accepted
+- **Concerns**: S10, S11
 
-## Contexte
+## Context
 
-Ecphoria (mémoire bi-temporelle, base de connaissance) est prometteur et jeune : 297
-commits, aucune adoption externe. Construire la plateforme dessus, c'est parier.
+Ecphoria (bi-temporal memory, knowledge base) is promising and young: 297 commits, no
+external adoption. Building the platform on it is a bet.
 
-## Décision
+## Decision
 
-1. **Périmètre réduit** : Ecphoria sert de mémoire et de base de connaissance. Sa partie
-   « plateforme agentique » et son proxy auto-RAG ne sont pas utilisés (feature flags Cargo
-   désactivés dans l'image `ecphoria:memory`).
-2. **Repli d'égale interface** : `PgVectorMemory` implémente le même `MemoryAdapter` dans
-   la base de Choregos. Passer de l'un à l'autre est une ligne de configuration.
-3. **Jamais bloquant** : la lecture a un timeout court et un circuit-breaker ; une panne
-   rend un **context pack vide**, jamais une erreur qui arrête une étape.
-4. **Écriture gouvernée** : l'orchestrateur écrit des faits déterministes avec provenance ;
-   les agents **proposent** (`propose_fact`), un humain ou une règle valide.
-5. **Preuve avant dépendance** : A/B sur quatre semaines (avec et sans context pack) sur le
-   taux de PR mergée au premier passage et le coût par ticket. Si la mémoire ne paie pas,
-   elle reste optionnelle.
+1. **Reduced scope**: Ecphoria serves as memory and knowledge base. Its "agentic platform"
+   part and its auto-RAG proxy are not used (Cargo feature flags disabled in the
+   `ecphoria:memory` image).
+2. **Fallback with the same interface**: `PgVectorMemory` implements the same
+   `MemoryAdapter` in the Choregos database. Switching is a line of configuration.
+3. **Never blocking**: reads have a short timeout and a circuit breaker; a failure returns
+   an **empty context pack**, never an error that stops a stage.
+4. **Governed writes**: the orchestrator writes deterministic facts with provenance; agents
+   **propose** (`propose_fact`), a human or a rule validates.
+5. **Proof before dependence**: a four-week A/B (with and without context pack) on the
+   first-pass merge rate and the cost per ticket. If memory does not pay, it stays optional.
 
-## Conséquences
+## Consequences
 
-- Le context pack est **marqué non fiable** dans le prompt : des données, pas des instructions.
-- La matrice d'évals inclut la variante `with_memory` / `without_memory`.
-- Aucun chemin critique ne dépend d'Ecphoria.
+- The context pack is **marked untrusted** in the prompt: data, not instructions.
+- The evaluation matrix includes the `with_memory` / `without_memory` variant.
+- No critical path depends on Ecphoria.

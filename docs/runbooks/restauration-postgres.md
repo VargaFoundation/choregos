@@ -1,26 +1,26 @@
-# Restauration PostgreSQL (PITR)
+# Restoring PostgreSQL (PITR)
 
-## Reconnaître
+## How to know it is this
 
-Perte de données, corruption, ou suppression accidentelle. RPO visé : 5 minutes.
-RTO visé : 30 minutes.
+Data loss, corruption, or an accidental deletion. Target RPO: 5 minutes. Target RTO: 30
+minutes.
 
-## Avant de restaurer
+## Before restoring
 
-1. **Arrêter les écritures** : mettre l'API à zéro réplique et les workers en pause.
+1. **Stop the writes**: scale the API to zero replicas and pause the workers.
    ```bash
    kubectl -n choregos-system scale deploy/choregos-api --replicas=0
    kubectl -n choregos-system scale deploy/choregos-orchestrator-orchestrator --replicas=0
    ```
-2. **Noter l'instant de restauration** (juste avant l'incident), en UTC.
-3. **Vérifier qu'une sauvegarde couvre cet instant** :
+2. **Note the restore instant** (just before the incident), in UTC.
+3. **Check that a backup covers that instant**:
    ```bash
    kubectl -n choregos-data get backups.postgresql.cnpg.io
    ```
 
-## Restaurer
+## Restore
 
-CloudNativePG restaure dans un **nouveau cluster** ; on ne restaure jamais par-dessus.
+CloudNativePG restores into a **new cluster**; we never restore over the existing one.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -34,14 +34,14 @@ spec:
     recovery:
       source: choregos-pg
       recoveryTarget:
-        targetTime: "2026-09-19 02:15:00+00"   # l'instant noté plus haut
+        targetTime: "2026-09-19 02:15:00+00"   # the instant noted above
   externalClusters:
     - name: choregos-pg
       barmanObjectStore:
         destinationPath: s3://choregos-backups/choregos-pg
-        # `serverName` est le nom du cluster **d'origine**. Sans lui, CNPG cherche la
-        # sauvegarde sous le nom du nouveau cluster et répond « no target backup found »,
-        # avec un magasin d'objets pourtant plein. Vérifié en restaurant pour de vrai.
+        # `serverName` is the name of the ORIGINAL cluster. Without it, CNPG looks for the
+        # backup under the new cluster's name and answers "no target backup found", with
+        # an object store that is nonetheless full. Verified by restoring for real.
         serverName: choregos-pg
         s3Credentials:
           accessKeyId: { name: choregos-backup, key: access-key-id }
@@ -53,24 +53,25 @@ kubectl apply -f restore.yaml
 kubectl -n choregos-data wait --for=condition=Ready cluster/choregos-pg-restore --timeout=30m
 ```
 
-## Basculer
+## Switch over
 
-1. Vérifier le contenu restauré **avant** de basculer :
+1. Check the restored content **before** switching:
    ```bash
    kubectl -n choregos-data exec -it choregos-pg-restore-1 -- psql choregos -c \
      "select count(*), max(created_at) from work_items"
    ```
-2. Pointer le secret `choregos-db` sur le nouveau service (`choregos-pg-restore-rw`).
-3. Remonter l'API et les workers, dans cet ordre.
+2. Point the `choregos-db` secret at the new service (`choregos-pg-restore-rw`).
+3. Bring the API and the workers back, in that order.
 
-## Vérifier
+## Check it is fixed
 
-- `/readyz` répond, le front affiche les projets.
-- Les workflows Temporal reprennent : leur état est dans Temporal, pas dans cette base.
-- **Attention** : les runs en cours au moment du point de restauration seront rejoués ;
-  l'idempotence (ADR-0008) évite le double coût.
+- `/readyz` answers, the front shows the projects.
+- Temporal workflows resume: their state is in Temporal, not in this database — restore
+  both to the same instant (`temporal-backup.md`).
+- **Beware**: runs in flight at the restore point will be replayed; idempotence (ADR-0008)
+  avoids the double cost.
 
-## Test mensuel
+## Monthly test
 
-Un `CronJob` de vérification restaure en staging et compare les compteurs. Un échec de ce
-test est un incident : une sauvegarde non testée n'est pas une sauvegarde.
+A verification `CronJob` restores in staging and compares the counts. A failure of this test
+is an incident: an untested backup is not a backup.

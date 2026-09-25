@@ -313,6 +313,11 @@ les 492 tests ne disaient pas :
    `github-aca` déclarait `requires.azure_capabilities`, inconnu du schéma — servi depuis le
    disque, il aurait été refusé par l'API ; le schéma le porte. Couverture **80,1 %**, seuil
    à **80**. Reste nu : `pgvector` sur base (après #38).
+   **P1-1c livré** : les 14 ADR et les 11 runbooks sont **en anglais** dans `docs/adr/` et
+   `docs/runbooks/` (noms de fichiers inchangés : ce sont des identifiants, les alertes et
+   les pages y pointent) ; les originaux français sont archivés dans `docs/fr/adr/` et
+   `docs/fr/runbooks/`, plus maintenus. Les index ne parlent plus de « French ». Reste
+   P1-1b : l'interface en anglais.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

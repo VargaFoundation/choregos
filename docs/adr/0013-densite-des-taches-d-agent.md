@@ -1,101 +1,101 @@
-# 0013 — La densité des tâches d'agent, et ce qu'on prend à AX
+# 0013 — Agent task density, and what we take from AX
 
-- **Statut** : accepté, 2026-09-24
-- **Concerne** : l'exécution des étapes d'agent (`Executor`), le chart, l'exploitation
+- **Status**: accepted, 2026-09-24
+- **Concerns**: the execution of agent stages (`Executor`), the chart, operations
 
-## Contexte
+## Context
 
-Google a publié [AX](https://github.com/google/ax) (Apache 2.0), un orchestrateur déclaratif
-de tâches d'agent : bac à sable, workspace, passerelle réseau, modèle, suspend/resume, sur un
-plan de contrôle Kubernetes. Il annonce viser « des milliards de charges d'agent dans un
-cluster », au-dessus d'[Agent Substrate](https://cloud.google.com/blog/products/containers-kubernetes/bringing-you-agent-sandbox-on-gke-and-agent-substrate)
-et de gVisor.
+Google published [AX](https://github.com/google/ax) (Apache 2.0), a declarative
+orchestrator of agent tasks: sandbox, workspace, network gateway, model, suspend/resume, on
+a Kubernetes control plane. It announces "billions of agent workloads in a cluster", on top
+of [Agent Substrate](https://cloud.google.com/blog/products/containers-kubernetes/bringing-you-agent-sandbox-on-gke-and-agent-substrate)
+and gVisor.
 
-La question posée n'est pas « faut-il l'adopter » mais **ce qu'il fait que nous ne faisons
-pas**. Et un problème réel se cachait derrière : Choregos lance **un Job par étape d'agent**,
-sans aucun plafond. Dix tickets qui démarrent ensemble font dix pods qui tirent la même image
-en même temps, sur un cluster qui a autre chose à faire.
+The question is not "should we adopt it" but **what it does that we do not**. And a real
+problem hid behind it: Choregos launches **one Job per agent stage**, with no cap at all.
+Ten tickets starting together make ten pods pulling the same image at once, on a cluster
+that has other things to do.
 
-## Ce qu'AX fait, et où nous en sommes
+## What AX does, and where we stand
 
-| Capacité d'AX | Chez nous |
+| AX capability | Here |
 |---|---|
-| Bac à sable par tâche, limites CPU/mémoire | `Executor` × 4 (Tekton, Job Kubernetes, ACA, Docker), gVisor par `RuntimeClass` |
-| Passerelle réseau en liste blanche | NetworkPolicies et CiliumNetworkPolicy, **egress vérifié sur cluster** (7 tests) |
-| Modèle et identifiants | Profils de modèles, clé virtuelle **par run** avec plafond dur, coût au ledger |
-| Workspace (git + MCP pré-câblés) | `StageInput` : dépôt, branche, serveurs MCP, playbook — par run |
-| Phases et conditions | États de run, événements, SSE reprenable |
-| **Plafond et file d'attente** | **Rien. C'est le manque, et il est corrigé ici.** |
-| **Suspend/resume d'un agent EN COURS** | Rien, et ce n'est pas à notre portée (voir plus bas) |
-| `ax ssh` dans le bac à sable | Refusé délibérément (voir plus bas) |
+| Sandbox per task, CPU/memory limits | `Executor` × 4 (Tekton, Kubernetes Job, ACA, Docker), gVisor by `RuntimeClass` |
+| Allowlist network gateway | NetworkPolicies and CiliumNetworkPolicy, **egress verified on a cluster** (7 tests) |
+| Model and credentials | Model profiles, a virtual key **per run** with a hard cap, cost in the ledger |
+| Workspace (git + MCP pre-wired) | `StageInput`: repository, branch, MCP servers, playbook — per run |
+| Phases and conditions | Run states, events, resumable SSE |
+| **Cap and queue** | **Nothing. That is the gap, and it is fixed here.** |
+| **Suspend/resume of an agent IN FLIGHT** | Nothing, and it is not within our reach (see below) |
+| `ax ssh` into the sandbox | Deliberately refused (see below) |
 
-## Décision 1 — La file d'attente est faite par Kubernetes lui-même
+## Decision 1 — The queue is made by Kubernetes itself
 
-`runner.maxActive` borne le nombre de runs **simultanés** par namespace. Au-delà, le Job est
-créé avec `spec.suspend: true` : il n'a aucun pod, ne tire aucune image, ne prend aucune place
-dans le quota. L'admission se fait au fil des relevés d'état — l'orchestrateur interroge déjà
-chaque run, donc chaque tour de boucle est une occasion d'admettre le suivant — et **dans
-l'ordre d'arrivée**, faute de quoi le dernier ticket posé passerait devant à chaque fois.
+`runner.maxActive` bounds the number of **simultaneous** runs per namespace. Beyond it, the
+Job is created with `spec.suspend: true`: it has no pod, pulls no image, takes no room in
+the quota. Admission happens along status polls — the orchestrator already queries every
+run, so every loop turn is an opportunity to admit the next — and **in arrival order**,
+without which the last ticket filed would jump the queue every time.
 
-Ce n'est pas un ordonnanceur, et le plafond est **souple** : deux runs peuvent s'admettre dans
-la même fenêtre et dépasser d'un. C'est le prix de n'ajouter aucun composant, et il est sans
-commune mesure avec le problème évité. `0` garde le comportement d'avant : un déploiement qui
-ne demande rien ne change pas de régime du jour au lendemain.
+This is not a scheduler, and the cap is **soft**: two runs can admit themselves in the same
+window and overshoot by one. That is the price of adding no component, and it is nothing
+next to the problem avoided. `0` keeps the previous behaviour: a deployment that asks for
+nothing does not change regime overnight.
 
-Le banc mono-nœud passe à `maxActive: 2`, parce que c'est exactement là que la pointe fait mal.
+The one-node bench moves to `maxActive: 2`, because that is exactly where the spike hurts.
 
-## Décision 2 — Pas de pool de runners tièdes, et la raison est la sécurité
+## Decision 2 — No pool of warm runners, and the reason is security
 
-La densité maximale s'obtiendrait avec un pool de pods runner tièdes qui enchaînent les
-étapes : plus de création de pod, plus de tirage d'image, caches chauds. Nous **refusons**, et
-il faut dire pourquoi, parce que la tentation reviendra.
+Maximum density would come from a pool of warm runner pods chaining stages: no more pod
+creation, no more image pull, warm caches. We **refuse**, and it has to be said why, because
+the temptation will come back.
 
-Aujourd'hui, le jeton d'un run est un Secret monté **par référence** dans le pod de ce run, et
-il meurt avec lui. Un pod qui enchaîne deux runs porte forcément, à un instant, de quoi
-obtenir les identifiants du second — donc un droit plus large qu'un seul run. On remplacerait
-une frontière que Kubernetes tient (un pod, un run, un jeton) par une frontière que notre code
-prétendrait tenir. La frontière d'isolation reste le **run**, pas le projet.
+Today a run's token is a Secret mounted **by reference** in that run's pod, and it dies
+with it. A pod that chains two runs necessarily holds, at some instant, what it takes to
+obtain the second's credentials — hence a right wider than a single run. We would replace a
+boundary Kubernetes holds (one pod, one run, one token) with a boundary our code would claim
+to hold. The isolation boundary stays the **run**, not the project.
 
-Ce qui rendrait le pool acceptable : un bac à sable capable de repartir d'un instantané propre
-entre deux runs. C'est précisément ce qu'Agent Substrate apporte — et c'est la vraie raison de
-regarder AX plus tard, pas ses primitives.
+What would make the pool acceptable: a sandbox able to restart from a clean snapshot between
+two runs. That is precisely what Agent Substrate brings — and the real reason to look at AX
+later, not its primitives.
 
-## Décision 3 — Ce qu'on ne prend pas, et pourquoi
+## Decision 3 — What we do not take, and why
 
-- **Agent Substrate comme dépendance** : Google le marque lui-même « not an officially
-  supported Google product ». AX annonce par ailleurs des ruptures majeures avant sa
-  stabilisation. Nous échangerions du code éprouvé contre une dépendance non supportée.
-- **Le plan de contrôle d'AX** (`ax-system`, ressources cluster-scoped) : un locataire de
-  notre plateforme cible n'a pas le droit d'en poser — l'AppProject le lui interdit. AX serait
-  inutilisable là où nous déployons.
-- **`ax ssh` dans le bac à sable** : notre Role de locataire exclut délibérément `pods/exec`.
-  Un humain qui entre dans le pod d'un agent voit ses secrets et peut agir en son nom, hors de
-  toute trace. Le journal du run, son transcript et ses preuves sont la réponse — et ils sont
-  archivés, ce qu'une session interactive n'est pas.
-- **Le suspend/resume d'une étape EN COURS** : Kubernetes ne sait pas suspendre un Job déjà
-  démarré sans détruire son pod. Le faire proprement demande un instantané du bac à sable.
-  Reste ouvert, honnêtement : aujourd'hui, un nœud perdu au milieu d'une étape nous la fait
-  **rejouer entière**, et nous la repayons.
+- **Agent Substrate as a dependency**: Google itself marks it "not an officially supported
+  Google product". AX also announces major breaks before stabilising. We would trade proven
+  code for an unsupported dependency.
+- **AX's control plane** (`ax-system`, cluster-scoped resources): a tenant of our target
+  platform is not allowed to create any — the AppProject forbids it. AX would be unusable
+  where we deploy.
+- **`ax ssh` into the sandbox**: our tenant Role deliberately excludes `pods/exec`. A human
+  entering an agent's pod sees its secrets and can act in its name, outside any trace. The
+  run's journal, transcript and evidence are the answer — and they are archived, which an
+  interactive session is not.
+- **Suspend/resume of a stage IN FLIGHT**: Kubernetes cannot suspend a started Job without
+  destroying its pod. Doing it properly requires a sandbox snapshot. Honestly open: today a
+  node lost mid-stage makes us **replay the whole stage**, and pay for it again.
 
-## Décision 4 — La couture est posée maintenant, pas le jour où on en aura besoin
+## Decision 4 — The seam is laid now, not the day we need it
 
-Un exécuteur **annonce ce qu'il sait faire** (`capabilities`), pris dans un vocabulaire fermé :
-`queue`, `suspend`, `resume`, `snapshot`. Aujourd'hui, un seul exécuteur remplit une seule
-capacité — `k8s_job` sait mettre en file. C'est précisément pour cela qu'il faut le poser
-maintenant : le jour où un bac à sable à instantané arrive, l'orchestrateur **demandera** ce
-que le runtime sait faire au lieu de le supposer, et rien d'autre ne bougera.
+An executor **announces what it can do** (`capabilities`), from a closed vocabulary:
+`queue`, `suspend`, `resume`, `snapshot`. Today a single executor fills a single capability
+— `k8s_job` can queue. That is precisely why it must be laid now: the day a snapshotting
+sandbox arrives, the orchestrator will **ask** what the runtime can do instead of assuming
+it, and nothing else will move.
 
-Une suite de conformité refuse qu'un exécuteur annonce une capacité qu'il n'implémente pas :
-une capacité annoncée et absente est pire qu'absente, parce que l'appelant s'y fie. Elle porte
-aussi un test qui dit un **état** plutôt qu'une règle — « aucun exécuteur ne sait encore
-prendre un instantané ». Le jour où il échoue, c'est le signal de relire cet ADR : le pool de
-runners tièdes redevient défendable, et la perte d'un nœud cesse de tout faire rejouer.
+A conformance suite refuses an executor announcing a capability it does not implement: an
+announced, absent capability is worse than an absent one, because the caller relies on it.
+It also carries a test that states a **fact** rather than a rule — "no executor can take a
+snapshot yet". The day it fails is the signal to re-read this ADR: the warm-runner pool
+becomes defensible again, and losing a node stops replaying everything.
 
-## Conséquences
+## Consequences
 
-- `runner.maxActive` dans le chart, `CHOREGOS_RUNNER_MAX_ACTIVE` pour l'exécuteur `k8s_job`.
-- Un run en attente le dit : `en attente d'une place (plafond N par namespace)`.
-- Trois tests sans cluster : le plafond retient, la file avance dans l'ordre, et sans plafond
-  rien ne change.
-- Un défaut trouvé en chemin : notre client Kubernetes écrasait les en-têtes de l'appelant, ce
-  qui rendait tout `PATCH` impossible — il doit annoncer son `Content-Type: application/merge-patch+json`.
+- `runner.maxActive` in the chart, `CHOREGOS_RUNNER_MAX_ACTIVE` for the `k8s_job` executor.
+- A waiting run says so: `waiting for a slot (cap N per namespace)`.
+- Three tests without a cluster: the cap holds, the queue advances in order, and without a
+  cap nothing changes.
+- A defect found on the way: our Kubernetes client overwrote the caller's headers, which
+  made every `PATCH` impossible — it has to announce its
+  `Content-Type: application/merge-patch+json`.

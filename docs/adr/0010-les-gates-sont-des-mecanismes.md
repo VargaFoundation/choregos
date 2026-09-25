@@ -1,35 +1,35 @@
-# ADR-0010 — Une garantie est un mécanisme, jamais un prompt
+# ADR-0010 — A guarantee is a mechanism, never a prompt
 
-- **État** : acceptée
-- **Concerne** : S1, S2, S3
+- **Status**: accepted
+- **Concerns**: S1, S2, S3
 
-## Contexte
+## Context
 
-Il est tentant d'écrire dans un prompt « ne modifie pas les fichiers hors périmètre » et de
-considérer le problème réglé. Un modèle suit une consigne la plupart du temps ; « la plupart
-du temps » n'est pas une garantie.
+It is tempting to write "do not modify files outside the scope" in a prompt and consider
+the problem solved. A model follows an instruction most of the time; "most of the time" is
+not a guarantee.
 
-## Décision
+## Decision
 
-Chaque propriété qu'on veut garantir a un **mécanisme** qui la vérifie, indépendant du
-prompt :
+Every property we want to guarantee has a **mechanism** that checks it, independent of the
+prompt:
 
-| Ce qu'on veut | Le mécanisme |
+| What we want | The mechanism |
 | :-- | :-- |
-| l'agent reste dans son périmètre | permission ACP refusée, **puis vérification du diff et revert**, **puis** gate `scope_respected` |
-| les tests passent vraiment | le runner **exécute** les commandes du dépôt et écrase les preuves déclarées |
-| pas de secret commité | `no_secrets` sur le diff + gitleaks en CI |
-| pas de dépassement de budget | plafond dur sur la clé virtuelle du run |
-| la prod n'est atteinte que par le train | règle de validation du DSL (`prod.requires_train`) |
-| l'agent n'a pas d'accès cloud | aucun credential + NetworkPolicy + shims qui refusent |
+| the agent stays in its scope | ACP permission refused, **then diff check and revert**, **then** the `scope_respected` gate |
+| the tests really pass | the runner **executes** the repository's commands and overwrites declared evidence |
+| no secret committed | `no_secrets` on the diff + gitleaks in CI |
+| no budget overrun | hard cap on the run's virtual key |
+| production is reached only by the train | DSL validation rule (`prod.requires_train`) |
+| the agent has no cloud access | no credential + NetworkPolicy + shims that refuse |
 
-Le prompt sert à obtenir un bon comportement ; le mécanisme sert à ce qu'un mauvais
-comportement ne passe pas.
+The prompt is there to obtain good behaviour; the mechanism is there so that bad behaviour
+does not get through.
 
-## Conséquences
+## Consequences
 
-- Un agent qui tente une écriture hors périmètre reçoit un refus **motivé**, qui lui
-  rappelle les outils légitimes (`report_finding`, `request_scope_change`).
-- Les preuves d'une étape sont celles que le runner a mesurées, pas celles que l'agent a
-  écrites — même quand l'agent est honnête.
-- Chaque gate a un test vert et un test rouge.
+- An agent that attempts a write outside its scope receives a **reasoned** refusal that
+  reminds it of the legitimate tools (`report_finding`, `request_scope_change`).
+- A stage's evidence is what the runner measured, not what the agent wrote — even when the
+  agent is honest.
+- Every gate has a green test and a red test.

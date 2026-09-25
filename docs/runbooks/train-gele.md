@@ -1,50 +1,49 @@
-# Un train est gelé et rien ne part
+# A train is frozen and nothing departs
 
-## Reconnaître
+## How to know it is this
 
-- L'alerte `ChoregosTrainGele` se déclenche (gelé depuis plus de 2 h).
-- Le front `/p/<projet>/trains` affiche **Train gelé** avec un motif.
-- Des tickets s'accumulent dans `pending_items` sans départ.
+- The `ChoregosTrainGele` alert fires (frozen for more than 2 h).
+- The front `/p/<project>/trains` shows **Train frozen** with a reason.
+- Tickets pile up in `pending_items` with no departure.
 
-## Comprendre
+## Understand
 
-Un train se gèle de deux façons : **un humain** l'a gelé (le motif est affiché), ou un
-**rollback** l'a gelé automatiquement (`freeze_on_rollback: true`). Le second cas est le
-plus fréquent et le plus important : la plateforme refuse de redéployer par réflexe après
-un incident.
+A train freezes in two ways: **a human** froze it (the reason is shown), or a **rollback**
+froze it automatically (`freeze_on_rollback: true`). The second case is the most frequent
+and the most important: the platform refuses to redeploy by reflex after an incident.
 
 ```bash
-choregos trains status <projet> --env prod
-# ou directement au workflow :
-temporal workflow query --workflow-id train-<projet>-prod --name status_query
+choregos trains status <project> --env prod
+# or straight from the workflow:
+temporal workflow query --workflow-id train-<project>-prod --name status_query
 ```
 
-## Agir
+## Act
 
-1. **Lire le motif.** S'il vient d'un rollback, trouver la release :
+1. **Read the reason.** If it comes from a rollback, find the release:
    ```bash
-   choregos trains status <projet> --env prod
-   curl -s "$API/api/v1/projects/<projet>/releases?env=prod" | jq '.items[0]'
+   choregos trains status <project> --env prod
+   curl -s "$API/api/v1/projects/<project>/releases?env=prod" | jq '.items[0]'
    ```
-   Le champ `verdict.reason` dit ce qui a échoué (analyse canary, smoke, SLO).
-2. **Corriger la cause**, pas le symptôme. Un finding `critical` a été créé
-   automatiquement : il porte la preuve.
-3. **Dégeler** quand le correctif est en route :
+   `verdict.reason` says what failed (canary analysis, smoke, SLO).
+2. **Fix the cause**, not the symptom. A `critical` finding was created automatically: it
+   carries the evidence.
+3. **Unfreeze** once the fix is on its way:
    ```bash
-   choregos trains unfreeze <projet> --env prod
+   choregos trains unfreeze <project> --env prod
    ```
-4. Si un correctif doit partir tout de suite, utiliser la **voie express** : poser le label
-   `hotfix` sur le ticket. Elle réduit le soak et saute le cron — mais **pas** le gel :
-   il faut dégeler d'abord. C'est voulu.
+4. If a fix has to leave right now, use the **express lane**: put the `hotfix` label on the
+   ticket. It shortens the soak and skips the cron — but **not** the freeze: unfreeze first.
+   That is deliberate.
 
-## Vérifier
+## Check it is fixed
 
-- `choregos trains status <projet> --env prod` : `frozen: false`, un `next_departure`.
-- Le lot repart : la release passe `departing` → `staging` → `done`.
-- L'alerte se résout d'elle-même.
+- `choregos trains status <project> --env prod`: `frozen: false`, a `next_departure`.
+- The batch departs: the release goes `departing` → `staging` → `done`.
+- The alert resolves by itself.
 
-## Ne pas faire
+## Do not
 
-- Dégeler sans avoir compris le rollback : le train repartira sur la même cause.
-- Déployer à la main pour « débloquer » : le troisième verrou (fenêtres Argo, Environment
-  GitHub) vous en empêchera, et c'est heureux.
+- Unfreeze without having understood the rollback: the train will leave on the same cause.
+- Deploy by hand to "unblock": the third lock (Argo windows, GitHub Environment) will stop
+  you, and that is a good thing.

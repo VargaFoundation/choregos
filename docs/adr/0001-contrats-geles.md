@@ -1,38 +1,38 @@
-# ADR-0001 — Les contrats sont gelés à M0 et versionnés
+# ADR-0001 — Contracts are frozen at M0 and versioned
 
-- **État** : acceptée (semaine 1)
-- **Concerne** : tous les flux
+- **Status**: accepted (week 1)
+- **Concerns**: every workstream
 
-## Contexte
+## Context
 
-Treize flux de travail avancent en parallèle. S'ils négocient leurs interfaces au fil de
-l'eau, chaque intégration devient une renégociation : c'est le mode d'échec classique d'un
-projet découpé en équipes.
+Thirteen workstreams move in parallel. If they negotiate their interfaces as they go,
+every integration becomes a renegotiation — the classic failure mode of a project split
+across teams.
 
-## Décision
+## Decision
 
-`packages/contracts` est la **source de vérité** des interfaces : JSON Schemas 2020-12,
-OpenAPI 3.1, types Python et TypeScript générés. Les contrats sont gelés à la fin de la
-semaine 1. Toute modification passe par une PR taguée `contract-change`, relue par le flux
-intégrateur, et régénère les types.
+`packages/contracts` is the **single source of truth** for interfaces: JSON Schema 2020-12,
+OpenAPI 3.1, generated Python and TypeScript types. Contracts are frozen at the end of
+week 1. Any change goes through a PR tagged `contract-change`, reviewed by the integration
+workstream, and regenerates the types.
 
-Trois mécanismes rendent le gel effectif, plutôt que déclaratif :
+Three mechanisms make the freeze effective rather than declarative:
 
-1. les exemples (`schemas/examples/`) sont validés en CI **contre le schéma et contre le
-   modèle Python** — une dérive entre les deux casse la CI ;
-2. `make contracts-check` échoue si les types générés ne sont pas à jour ;
-3. un test vérifie que l'API implémente exactement les chemins et les `operationId` du
-   contrat — ni plus, ni moins.
+1. the examples (`schemas/examples/`) are validated in CI **against the schema and against
+   the Python model** — a drift between the two breaks CI;
+2. `make contracts-check` fails when the generated types are stale;
+3. a test checks that the API implements exactly the paths and `operationId`s of the
+   contract — no more, no less.
 
-## Conséquences
+## Consequences
 
-- Un flux bloqué par un contrat manquant ouvre une issue `contract-change` et continue
-  avec un contournement local marqué `TODO(contract)`.
-- Le front ne redéfinit jamais un type de l'API : il importe les types générés.
-- Le coût du gel est une friction volontaire sur les changements d'interface.
+- A workstream blocked by a missing contract opens a `contract-change` issue and carries
+  on with a local workaround marked `TODO(contract)`.
+- The front never redefines an API type: it imports the generated ones.
+- The cost of the freeze is deliberate friction on interface changes.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **Types partagés par un paquet Python seul** : le front aurait redéfini les siens.
-- **Génération depuis FastAPI** : l'API serait devenue la spécification, et le front
-  aurait attendu l'API pour démarrer.
+- **Shared types in a Python package only**: the front would have redefined its own.
+- **Generation from FastAPI**: the API would have become the specification, and the front
+  would have waited for the API to start.
