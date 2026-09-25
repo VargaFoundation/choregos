@@ -107,6 +107,12 @@
           "enum": ["allow", "reject"],
           "default": "allow",
           "description": "Demande de permission de nature inconnue : laissée passer et journalisée (allow) ou refusée (reject)"
+        },
+        "prompt_injection": {
+          "type": "string",
+          "enum": ["ignore", "warn", "block"],
+          "default": "warn",
+          "description": "Injection de prompt repérée dans ce que l'agent va lire : journaliser (warn), arrêter l'étape (block), ne pas regarder (ignore)"
         }
       }
     },

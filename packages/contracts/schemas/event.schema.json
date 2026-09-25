@@ -23,7 +23,8 @@
         "choregos.release.rolled_back", "choregos.release.frozen",
         "choregos.cost.recorded", "choregos.cost.alert",
         "choregos.project.provisioning.step", "choregos.project.provisioning.completed",
-        "choregos.project.provisioning.failed"
+        "choregos.project.provisioning.failed",
+        "choregos.security.injection_suspected"
       ]
     },
     "subject": { "type": ["string", "null"] },

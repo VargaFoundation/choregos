@@ -46,7 +46,7 @@ export type Event = {
   id: string;
   /** /choregos/orchestrator, /choregos/api, /choregos/runner/<run_id>… */
   source: string;
-  type: "choregos.workitem.created" | "choregos.workitem.state_changed" | "choregos.workitem.closed" | "choregos.workitem.human_requested" | "choregos.workitem.human_decided" | "choregos.run.queued" | "choregos.run.started" | "choregos.run.progress" | "choregos.run.finished" | "choregos.finding.reported" | "choregos.finding.created" | "choregos.finding.duplicate" | "choregos.finding.dismissed" | "choregos.release.collected" | "choregos.release.departed" | "choregos.release.staged" | "choregos.release.approval_requested" | "choregos.release.promoted" | "choregos.release.verified" | "choregos.release.rolled_back" | "choregos.release.frozen" | "choregos.cost.recorded" | "choregos.cost.alert" | "choregos.project.provisioning.step" | "choregos.project.provisioning.completed" | "choregos.project.provisioning.failed";
+  type: "choregos.workitem.created" | "choregos.workitem.state_changed" | "choregos.workitem.closed" | "choregos.workitem.human_requested" | "choregos.workitem.human_decided" | "choregos.run.queued" | "choregos.run.started" | "choregos.run.progress" | "choregos.run.finished" | "choregos.finding.reported" | "choregos.finding.created" | "choregos.finding.duplicate" | "choregos.finding.dismissed" | "choregos.release.collected" | "choregos.release.departed" | "choregos.release.staged" | "choregos.release.approval_requested" | "choregos.release.promoted" | "choregos.release.verified" | "choregos.release.rolled_back" | "choregos.release.frozen" | "choregos.cost.recorded" | "choregos.cost.alert" | "choregos.project.provisioning.step" | "choregos.project.provisioning.completed" | "choregos.project.provisioning.failed" | "choregos.security.injection_suspected";
   subject?: string | null;
   time: string;
   datacontenttype?: string;
@@ -210,6 +210,8 @@ export type Policy = {
     llm_security_analyzer?: boolean;
     /** Demande de permission de nature inconnue : laissée passer et journalisée (allow) ou refusée (reject) */
     unknown_requests?: "allow" | "reject";
+    /** Injection de prompt repérée dans ce que l'agent va lire : journaliser (warn), arrêter l'étape (block), ne pas regarder (ignore) */
+    prompt_injection?: "ignore" | "warn" | "block";
   };
   findings?: {
     max_per_run?: number;

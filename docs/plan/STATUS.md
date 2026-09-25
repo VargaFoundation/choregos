@@ -411,6 +411,16 @@ les 492 tests ne disaient pas :
    `allow` (défaut) elle passe et le journal dit « filet, pas mur ». Ce qui est reconnu
    (lecture déclarée, écriture déduite) ne change pas. Pas encore : la détection d'injection
    de prompt (contenu de tickets marqué non fiable, motifs) — OpenHands l'a, pas nous.
+   **P2 (détection d'injection) livré** : `choregos_core.injection` repère, lexicalement et
+   en deux langues, les motifs grossiers (ignorer les instructions, réassignation de rôle,
+   exfiltration du prompt, envoi vers une URL, script téléchargé, balises de prompt, charge
+   encodée) dans ce que l'agent va lire — ticket, documents, souvenirs du context pack —
+   **avant** le run ; `sandbox.prompt_injection: warn` (défaut) journalise un événement
+   `security.injection_suspected` sur le ticket, `block` (preset `regulated`) arrête l'étape
+   avant tout run avec la raison (le ticket est marqué mort, un humain relit), `ignore` ne
+   regarde pas. Dix motifs positifs, cinq tickets ordinaires sans faux positif, trois modes
+   testés sur l'orchestrateur. Ce que ce n'est pas : une compréhension — un filet contre
+   les cas grossiers, comme chez OpenHands.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
