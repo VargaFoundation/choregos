@@ -101,7 +101,13 @@
             "deny_by_default": { "type": "boolean", "default": true }
           }
         },
-        "llm_security_analyzer": { "type": "boolean", "default": false }
+        "llm_security_analyzer": { "type": "boolean", "default": false },
+        "unknown_requests": {
+          "type": "string",
+          "enum": ["allow", "reject"],
+          "default": "allow",
+          "description": "Demande de permission de nature inconnue : laissée passer et journalisée (allow) ou refusée (reject)"
+        }
       }
     },
     "findings": {

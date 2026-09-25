@@ -381,6 +381,11 @@
           "minimum": 0,
           "default": 3
         },
+        "unknown_requests": {
+          "type": "string",
+          "enum": ["allow", "reject"],
+          "default": "allow"
+        },
         "max_findings": {
           "type": "integer",
           "minimum": 0,

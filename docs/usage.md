@@ -187,6 +187,8 @@ approvals:
   merge: { required: by_size, sizes: [L, XL], group: maintainers }
 scope:
   max_diff_files: 60
+sandbox:
+  unknown_requests: reject      # refuse what the runner cannot classify (default: allow + journal)
 ```
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.

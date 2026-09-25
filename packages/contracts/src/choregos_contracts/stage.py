@@ -110,6 +110,7 @@ class Permissions(Strict):
     allow_domains: list[str] = Field(default_factory=list)
     dod_iterations: int = Field(default=3, ge=0)
     max_findings: int = Field(default=5, ge=0)
+    unknown_requests: Literal["allow", "reject"] = "allow"
 
 
 class Callbacks(Strict):

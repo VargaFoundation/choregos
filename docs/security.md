@@ -28,11 +28,13 @@ organisations must assume **a member of one will try to read another**.
 
 ## What is *not* a wall, and is said so
 
-- **The runner's guardrails are fail-open by construction.** A request whose nature cannot be
-  classified is allowed and journaled. Claude Code's ACP does not send `kind`, so the nature
-  is *inferred* from the title and arguments, and the access card counts how many decisions
-  were inferred. The hard mechanisms are the sandbox and the diff check after the run; the
-  guardrails are a net.
+- **The runner's guardrails are a net by default, a wall on request.** Claude Code's ACP
+  does not send `kind`, so the nature of a request is *inferred* from the title and
+  arguments, and the access card counts how many decisions were inferred. A request whose
+  nature cannot be classified at all is allowed and journaled by default; with
+  `sandbox.unknown_requests: reject` (the `regulated` preset) it is **refused**, with a
+  message that names the legitimate tools (`report_finding`, `request_scope_change`). The
+  hard mechanisms remain the sandbox and the diff check after the run.
 - **Row-level security needs a non-superuser role.** A PostgreSQL superuser ignores every
   policy. The API refuses to start as one in `staging` and `prod`; the embedded PostgreSQL
   creates `choregos_app` at initdb for that reason.
