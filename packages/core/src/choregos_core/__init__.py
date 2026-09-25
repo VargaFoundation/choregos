@@ -69,6 +69,7 @@ from .errors import (
     ValidationError,
 )
 from .gates import GateContext, GateOutcome, evaluate, is_async_gate, known_gates, matches_any, scan_secrets
+from .injection import Suspicion, analyser, suspicions
 from .models import (
     BY_SIZE_MAP,
     KNOWN_BACKEND_NAMES,
@@ -137,6 +138,7 @@ __all__ = [
     "RunRecord",
     "Spend",
     "StageJobSpec",
+    "Suspicion",
     "TrackerStateMapping",
     "ValidationError",
     "ValidationReport",
@@ -144,6 +146,7 @@ __all__ = [
     "Window",
     "WorkItemData",
     "WorkflowEngine",
+    "analyser",
     "aware",
     "charger_catalogue",
     "checksum",
@@ -164,6 +167,7 @@ __all__ = [
     "preset_yaml",
     "rapport_d_acces",
     "scan_secrets",
+    "suspicions",
     "template_yaml",
     "to_graph",
     "to_mermaid",

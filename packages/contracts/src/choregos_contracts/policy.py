@@ -71,6 +71,11 @@ class SandboxPolicy(Strict):
     #: en la journalisant (le défaut — les garde-fous sont un filet), `reject` la refuse avec
     #: le message qui nomme les outils légitimes (fermé par défaut, preset `regulated`).
     unknown_requests: Literal["allow", "reject"] = "allow"
+    #: Ce que l'orchestrateur fait quand il repère une injection de prompt dans ce que
+    #: l'agent va lire (ticket, documents, mémoire) : `warn` journalise un événement de
+    #: sécurité (le défaut), `block` arrête l'étape avant tout run — le ticket est marqué
+    #: mort avec la raison, un humain relit —, `ignore` ne regarde pas.
+    prompt_injection: Literal["ignore", "warn", "block"] = "warn"
 
 
 class FindingsPolicy(Strict):

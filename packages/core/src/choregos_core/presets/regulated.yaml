@@ -39,6 +39,7 @@ sandbox:
     deny_by_default: true
   llm_security_analyzer: true
   unknown_requests: reject
+  prompt_injection: block
 findings:
   max_per_run: 3
   dedupe_threshold: 0.9

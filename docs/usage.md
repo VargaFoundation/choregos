@@ -189,6 +189,7 @@ scope:
   max_diff_files: 60
 sandbox:
   unknown_requests: reject      # refuse what the runner cannot classify (default: allow + journal)
+  prompt_injection: block       # warn (default) journals; block stops the stage before any run
 ```
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.
