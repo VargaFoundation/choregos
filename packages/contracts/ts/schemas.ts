@@ -474,6 +474,8 @@ export type Template = {
       [key: string]: string;
     };
     cluster_capabilities?: Array<string>;
+    /** Fournisseurs de ressources Azure à enregistrer, ex. Microsoft.App/managedEnvironments */
+    azure_capabilities?: Array<string>;
   };
   defaults: {
     workflow?: string;

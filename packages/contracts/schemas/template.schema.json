@@ -30,7 +30,12 @@
           "additionalProperties": { "type": "string" },
           "description": "kind → type attendu, ex. tracker: github-issues"
         },
-        "cluster_capabilities": { "type": "array", "items": { "type": "string" } }
+        "cluster_capabilities": { "type": "array", "items": { "type": "string" } },
+        "azure_capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Fournisseurs de ressources Azure à enregistrer, ex. Microsoft.App/managedEnvironments"
+        }
       }
     },
     "defaults": {
