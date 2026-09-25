@@ -1,43 +1,43 @@
-# Montée de version de Temporal
+# Upgrading Temporal
 
-## Avant
+## Before
 
-1. Lire les notes de version : les montées de Temporal sont incrémentales, on ne saute pas
-   une version majeure.
-2. **`numHistoryShards` ne se change pas.** Il est figé à 512 depuis le premier jour.
-   Le modifier invalide le cluster.
-3. Vérifier que la CI de replay est verte : `uv run pytest tests/replay -q`.
+1. Read the release notes: Temporal upgrades are incremental, a major version is never
+   skipped.
+2. **`numHistoryShards` does not change.** It has been fixed at 512 since day one.
+   Changing it invalidates the cluster.
+3. Check that the replay CI is green: `uv run pytest tests/replay -q`.
 
-## Pendant
+## During
 
 ```bash
-# 1. Sauvegarder la base Temporal (elle contient tous les workflows en cours)
-kubectl -n choregos-data create job --from=cronjob/temporal-pg-nightly backup-avant-montee
+# 1. Back up the Temporal database (it holds every workflow in flight) — see temporal-backup.md
+kubectl -n choregos-data create job --from=cronjob/temporal-pg-nightly backup-before-upgrade
 
-# 2. Jobs de schéma (l'opérateur Helm les lance, mais on vérifie)
+# 2. Schema jobs (the Helm operator runs them, but we check)
 kubectl -n choregos-temporal get jobs | grep schema
 
-# 3. Montée progressive : history, matching, frontend, worker
-helm upgrade temporal ... --set server.image.tag=<nouvelle-version>
+# 3. Progressive upgrade: history, matching, frontend, worker
+helm upgrade temporal ... --set server.image.tag=<new-version>
 kubectl -n choregos-temporal rollout status statefulset/temporal-history
 ```
 
-Les workers Choregos supportent le rolling : le versionnage des workflows (`patched()`)
-garantit qu'un worker neuf reprend un historique ancien.
+Choregos workers support rolling upgrades: workflow versioning (`patched()`) guarantees
+that a new worker resumes an old history.
 
-## Après
+## After
 
 ```bash
 temporal operator cluster health
 temporal workflow list --query 'ExecutionStatus="Running"' | head
 ```
 
-- Vérifier qu'aucun workflow n'est passé en `Failed` pendant la montée.
-- Lancer un ticket S de bout en bout.
+- Check that no workflow went `Failed` during the upgrade.
+- Run an S ticket end to end.
 
-## Si ça tourne mal
+## If it goes wrong
 
-1. Revenir à la version précédente des **services** (la base garde les historiques).
-2. Si le schéma a été migré, la restauration de la base Temporal est le seul retour sûr :
-   voir `restauration-postgres.md`, cluster `temporal`.
-3. Les runs en cours reprendront : aucun coût n'est facturé deux fois (ADR-0008).
+1. Roll the **services** back to the previous version (the database keeps the histories).
+2. If the schema was migrated, restoring the Temporal database is the only safe way back:
+   see `restauration-postgres.md`, cluster `temporal`.
+3. Runs in flight resume: no cost is billed twice (ADR-0008).

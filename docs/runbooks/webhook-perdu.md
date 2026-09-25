@@ -1,70 +1,70 @@
-# Un ticket `agent-ready` n'a pas démarré
+# An `agent-ready` ticket did not start
 
-## Comment savoir que c'est ça
+## How to know it is this
 
-L'étiquette `agent-ready` est posée sur le ticket depuis plusieurs minutes, et :
+The `agent-ready` label has been on the ticket for several minutes, and:
 
-- le ticket n'apparaît pas dans `/p/{slug}` ni dans `GET /projects/{id}/work-items` ;
-- aucun commentaire de suivi Choregos n'a été écrit sur le ticket ;
-- côté GitHub, *Settings → Webhooks → Recent Deliveries* montre une livraison en rouge
-  (401, 5xx, timeout) — ou aucune livraison du tout.
+- the ticket does not appear in `/p/{slug}` nor in `GET /projects/{id}/work-items`;
+- no Choregos status comment was written on the ticket;
+- on GitHub, *Settings → Webhooks → Recent Deliveries* shows a red delivery (401, 5xx,
+  timeout) — or no delivery at all.
 
-Si le ticket **existe** dans Choregos mais reste en `inbox`, ce n'est pas ce runbook :
-voir [run-bloque.md](run-bloque.md).
+If the ticket **exists** in Choregos but stays in `inbox`, this is not the runbook: see
+[run-bloque.md](run-bloque.md).
 
-## Ce qui devrait se passer tout seul
+## What should happen by itself
 
-Le webhook est le chemin nominal ; le rattrapage est le filet. Une boucle
-`TrackerReconciliation` par projet relit les candidats du tracker toutes les
-`CHOREGOS_RECONCILE_INTERVAL_SECONDS` secondes (60 par défaut) et crée ce qui manque.
-**Attendre une minute avant d'agir** règle la plupart des cas.
+The webhook is the nominal path; the catch-up is the net. A `TrackerReconciliation` loop
+per project re-reads the tracker's candidates every `CHOREGOS_RECONCILE_INTERVAL_SECONDS`
+seconds (60 by default) and creates what is missing. **Waiting one minute before acting**
+settles most cases.
 
 ```bash
 temporal workflow query --workflow-id reconcile-<slug> --type status
 # {"passes": 412, "last": {"candidates": 3, "created": [], "started": []}, "stopped": false}
 ```
 
-`passes` doit augmenter. `last.candidates` est ce que le tracker rend : s'il vaut 0 alors
-que l'étiquette est posée, le problème est dans le tracker ou le connecteur, pas ici.
+`passes` must increase. `last.candidates` is what the tracker returns: if it is 0 while the
+label is set, the problem is in the tracker or the connector, not here.
 
-## Agir
+## Act
 
-**1. Forcer un rattrapage immédiat**
+**1. Force an immediate catch-up**
 
 ```bash
 temporal workflow signal --workflow-id reconcile-<slug> --name reconcile_now --input '{}'
 ```
 
-**2. La boucle n'existe pas ou s'est arrêtée** (`stopped: true`, ou workflow introuvable) :
+**2. The loop does not exist or stopped** (`stopped: true`, or workflow not found):
 
 ```bash
 kubectl -n choregos rollout restart deploy/choregos-orchestrator
 ```
 
-Le worker redémarre les boucles des projets actifs au démarrage. Le démarrage est
-idempotent : il ne crée pas de seconde boucle pour un projet qui en a déjà une.
+The worker restarts the loops of active projects at start-up. The start is idempotent: it
+does not create a second loop for a project that already has one.
 
-**3. La boucle tourne mais `candidates` reste vide** — le connecteur ne voit pas le ticket :
+**3. The loop runs but `candidates` stays empty** — the connector does not see the ticket:
 
 ```bash
 choregos connectors test --project <slug> --kind tracker
 ```
 
-Vérifier que l'étiquette est exactement `agent-ready`, que l'issue est ouverte, et que
-l'App GitHub a accès au dépôt. Une clé privée expirée se voit dans le runbook
+Check that the label is exactly `agent-ready`, that the issue is open, and that the GitHub
+App has access to the repository. An expired private key shows up in
 [rotation-secrets.md](rotation-secrets.md).
 
-**4. Réparer la cause côté webhook** : réémettre les livraisons rouges depuis GitHub
-(*Redeliver*), et vérifier le secret partagé si elles repartent en 401.
+**4. Fix the cause on the webhook side**: redeliver the red deliveries from GitHub
+(*Redeliver*), and check the shared secret if they come back as 401.
 
-## Vérifier
+## Check it is fixed
 
-- `GET /projects/{id}/work-items` liste le ticket ;
-- le ticket porte un commentaire de suivi Choregos ;
-- la livraison rejouée depuis GitHub répond 202.
+- `GET /projects/{id}/work-items` lists the ticket;
+- the ticket carries a Choregos status comment;
+- the delivery replayed from GitHub answers 202.
 
-## Ce qu'il ne faut pas faire
+## Do not
 
-Créer le ticket à la main dans la base. L'identifiant du workflow est dérivé de la clé du
-ticket : un ticket inséré à la main sans `temporal_wf_id` sera de toute façon repris par le
-rattrapage, et deux insertions concurrentes laissent une ligne orpheline à nettoyer.
+Create the ticket by hand in the database. The workflow id derives from the ticket key: a
+ticket inserted by hand without `temporal_wf_id` will be picked up by the catch-up anyway,
+and two concurrent insertions leave an orphan row to clean.

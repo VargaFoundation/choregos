@@ -1,58 +1,57 @@
-# 0011 — Retrait d'OpenHands
+# 0011 — OpenHands removed
 
-- **Statut** : accepté, 2026-09-21
-- **Remplace** : le choix d'OpenHands comme backend par défaut (`docs/plan/02-orchestrateur-agents-runner.md`)
+- **Status**: accepted, 2026-09-21
+- **Supersedes**: OpenHands as the default backend (`docs/plan/02-orchestrateur-agents-runner.md`)
 
-## Contexte
+## Context
 
-Le plan faisait d'OpenHands le backend par défaut, lancé en `openhands acp`. Confronté à son
-vrai binaire dans l'image du runner, ce lancement n'existe pas :
+The plan made OpenHands the default backend, launched as `openhands acp`. Confronted with
+its real binary in the runner image, that launch does not exist:
 
-- la **0.59** n'a que deux sous-commandes, `serve` et `cli` ; `openhands acp` retombe
-  silencieusement sur `cli` ;
-- la **1.x** n'a plus de binaire `openhands` du tout. Son point d'entrée est `agent-server`,
-  un serveur HTTP, et le module `openhands` n'est plus importable.
+- **0.59** only has two subcommands, `serve` and `cli`; `openhands acp` silently falls back
+  to `cli`;
+- **1.x** no longer has an `openhands` binary at all. Its entry point is `agent-server`, an
+  HTTP server, and the `openhands` module is no longer importable.
 
-Le plan le disait à demi-mot (« `openhands acp` **ou** `agent-server` + client ACP »). Le code
-avait retenu la première branche comme un fait, et la suite de conformité passait parce
-qu'elle tourne contre des fakes. Un projet provisionné avec le défaut échouait donc à son
-premier ticket.
+The plan half-said it ("`openhands acp` **or** `agent-server` + an ACP client"). The code
+had taken the first branch as a fact, and the conformance suite passed because it runs
+against fakes. A project provisioned with the default therefore failed on its first ticket.
 
-OpenHands était aussi le plus lourd de l'image : son arbre Python portait quatre des quatorze
-CRITICAL relevés par Trivy (`litellm`, `fastmcp`, `anyio`, `GitPython`, dont une exécution de
-code à distance), et c'est lui qui rendait la construction arm64 interminable sous émulation.
+OpenHands was also the heaviest part of the image: its Python tree carried four of the
+fourteen CRITICALs reported by Trivy (`litellm`, `fastmcp`, `anyio`, `GitPython`, including
+a remote code execution), and it is what made the arm64 build interminable under emulation.
 
-## Décision
+## Decision
 
-OpenHands est retiré.
+OpenHands is removed.
 
-- Il n'est plus installé dans l'image `choregos-runner`, ni ses dépendances transitives.
-- Il n'est plus dans le registre des backends. `get_backend("openhands")` le **refuse avec sa
-  raison** (`RETIRED` dans `choregos_runner.backends`) plutôt qu'avec un « backend inconnu »
-  qui ferait croire à une faute de frappe.
-- Le défaut devient `claude-code` partout où il était écrit : schéma et modèle du contrat,
-  templates, résolveur de modèles, évals, et l'ordre de préférence `KNOWN_BACKEND_NAMES`, qui
-  plaçait OpenHands **en tête**.
+- It is no longer installed in the `choregos-runner` image, nor its transitive dependencies.
+- It is no longer in the backend registry. `get_backend("openhands")` **refuses it with its
+  reason** (`RETIRED` in `choregos_runner.backends`) rather than with an "unknown backend"
+  that would look like a typo.
+- The default becomes `claude-code` everywhere it was written: contract schema and model,
+  templates, model resolver, evals, and the `KNOWN_BACKEND_NAMES` preference order, which
+  put OpenHands **first**.
 
-Restent installés et appelés à la construction de l'image : `claude-code-acp`, `gemini`
-(`--acp`) et `opencode` (`acp`).
+Still installed and called when the image is built: `claude-code-acp`, `gemini` (`--acp`)
+and `opencode` (`acp`).
 
-## Conséquences
+## Consequences
 
-- Un projet qui aurait `default_backend: openhands` dans sa configuration échoue au premier
-  run avec un message qui dit pourquoi et vers quoi migrer.
-- `claude-code` n'accepte que des modèles Claude, contrainte dure. Or l'orchestrateur ne
-  charge pas le catalogue du gateway : un alias `platform/*` n'y est jamais résolu, et la
-  contrainte le refusait **toujours** — toute étape échouait dès `prepare_stage`. Sur un alias
-  non résolu, la contrainte devient donc un avertissement ; elle reste bloquante dès que le
-  vrai modèle est connu. Le gateway de la plateforme doit donc router les alias utilisés par
-  un projet `claude-code` vers des modèles Claude.
-- L'image du runner perd l'arbre Python d'OpenHands : plus légère, plus rapide à construire,
-  et quatre CRITICAL de moins à surveiller.
+- A project with `default_backend: openhands` in its configuration fails on its first run
+  with a message that says why and what to migrate to.
+- `claude-code` only accepts Claude models, a hard constraint. But the orchestrator does not
+  load the gateway catalogue: a `platform/*` alias is never resolved there, and the
+  constraint refused it **always** — every stage failed at `prepare_stage`. On an
+  unresolved alias the constraint therefore becomes a warning; it stays blocking as soon as
+  the real model is known. The platform gateway must route the aliases a `claude-code`
+  project uses to Claude models.
+- The runner image loses OpenHands' Python tree: lighter, faster to build, four fewer
+  CRITICALs to watch.
 
-## Pour y revenir
+## To come back to it
 
-Deux conditions, dans cet ordre : qu'OpenHands expose un agent ACP (ou qu'on écrive un client
-ACP vers son `agent-server`), puis que ce backend passe la suite de conformité **contre le
-binaire réel** dans l'image, pas contre un fake. L'adaptateur retiré est dans l'historique
-(`packages/runner/src/choregos_runner/backends/openhands.py`, avant ce commit).
+Two conditions, in this order: that OpenHands exposes an ACP agent (or that an ACP client
+to its `agent-server` is written), then that the backend passes the conformance suite
+**against the real binary** in the image, not against a fake. The removed adapter is in the
+history (`packages/runner/src/choregos_runner/backends/openhands.py`, before that commit).

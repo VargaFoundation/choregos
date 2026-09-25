@@ -1,67 +1,70 @@
-# Perte d'un nœud (éviction spot, panne matérielle)
+# Losing a node (spot eviction, hardware failure)
 
-## Reconnaître
+## How to know it is this
 
-Un nœud passe `NotReady` et n'en revient pas. Les pods qu'il portait restent affichés `Running`
-pendant plusieurs minutes — ce n'est pas un bug d'affichage : **Kubernetes ne les évince pas tout
-de suite**, et tant qu'il ne le fait pas, le travail ne repart nulle part.
+A node goes `NotReady` and does not come back. The pods it carried stay displayed `Running`
+for several minutes — not a display bug: **Kubernetes does not evict them right away**, and
+until it does, the work restarts nowhere.
 
 ```bash
 kubectl get nodes
-kubectl get pods -A -o wide --field-selector spec.nodeName=<nœud>
+kubectl get pods -A -o wide --field-selector spec.nodeName=<node>
 ```
 
-## Les trois instants qui comptent
+## The three instants that matter
 
-Mesurés sur cluster (`tests/cluster/test_node_loss.py`), nœud arrêté brutalement :
+Measured on a cluster (`tests/cluster/test_node_loss.py`), node stopped abruptly:
 
-| | Défauts Kubernetes | Avec `unreachableTolerationSeconds: 20` |
+| | Kubernetes defaults | With `unreachableTolerationSeconds: 20` |
 | :-- | --: | --: |
-| Nœud perdu → `NotReady` | 52–57 s | idem (c'est le `node-monitor-grace-period`) |
-| Nœud perdu → worker reparti ailleurs | **354–359 s** | **74 s** |
+| Node lost → `NotReady` | 52–57 s | same (that is the `node-monitor-grace-period`) |
+| Node lost → worker restarted elsewhere | **354–359 s** | **74 s** |
 
-Les cinq minutes du milieu sont la tolérance par défaut d'une pod à
-`node.kubernetes.io/unreachable`. Elle est prévue pour des charges dont le remplacement coûte cher
-à démarrer — un worker Choregos n'en fait pas partie : il est interchangeable et Temporal reprend
-son travail là où il en était.
+The five minutes in between are a pod's default toleration of
+`node.kubernetes.io/unreachable`. It is meant for workloads whose replacement is expensive
+to start — a Choregos worker is not one of them: it is interchangeable and Temporal resumes
+its work where it stopped.
 
-Le chart met donc `choregos-orchestrator.unreachableTolerationSeconds: 20`. Pour revenir au
-comportement standard de Kubernetes : `0`.
+The chart therefore sets `choregos-orchestrator.unreachableTolerationSeconds: 20`. To get
+Kubernetes' standard behaviour back: `0`. Since 2026-09-25 the replicas of the API, the
+front and each worker queue also repel each other across nodes (`global.antiAffinity`), so
+one lost node does not take a whole component down.
 
-## Pendant la panne
+## During the outage
 
-1. **Vérifier que l'API n'est pas touchée.** Elle a des `topologySpreadConstraints` : si tout est
-   tombé, le problème est plus large qu'un nœud.
+1. **Check the API is not affected.** It has `topologySpreadConstraints`: if everything
+   fell, the problem is wider than one node.
    ```bash
    kubectl -n choregos-system get pods -l app.kubernetes.io/component=api -o wide
    ```
-2. **Ne rien forcer pendant les 20 premières secondes.** Un nœud qui revient (redémarrage réseau,
-   kubelet relancé) reprend ses pods, et un `delete --force` aurait créé des doublons pour rien.
-3. **Après l'éviction**, vérifier que les runs portés par le nœud ont bien repris :
+2. **Force nothing during the first 20 seconds.** A node that comes back (network restart,
+   kubelet relaunched) picks its pods up again, and a `delete --force` would have created
+   duplicates for nothing.
+3. **After the eviction**, check that the runs the node carried resumed:
    ```bash
    kubectl -n choregos-system logs -l choregos/queue=executor --tail=50 | grep -i resume
    ```
-   Temporal rejoue l'activité ; l'idempotence de `start` fait que le job déjà lancé n'est pas
-   relancé une seconde fois — c'est ce que vérifie `test_start_rejoue_ne_double_pas_l_execution`
-   pour ACA et l'équivalent Kubernetes côté `k8s_job`.
+   Temporal replays the activity; `start` being idempotent, the job already launched is not
+   launched a second time — which is what `test_start_rejoue_ne_double_pas_l_execution`
+   checks for ACA, and its Kubernetes counterpart for `k8s_job`.
 
-## Si un run reste bloqué
+## If a run stays stuck
 
-Un run dont le pod a disparu sans que Temporal le remarque se débloque en relançant l'activité :
+A run whose pod vanished without Temporal noticing unblocks by relaunching the activity:
 
 ```bash
-# Identifier le run
+# Identify the run
 kubectl -n choregos-system exec deploy/choregos-api -- choregos runs list --state running
-# Le relancer (idempotent — pas de double exécution ni de double facturation)
+# Relaunch it (idempotent — no double execution, no double billing)
 kubectl -n choregos-system exec deploy/choregos-api -- choregos runs resume <run-id>
 ```
 
-## Ce que ceci ne couvre pas
+## What this does not cover
 
-- **Le préavis d'éviction spot.** Azure et AWS préviennent ~30 secondes avant de reprendre une
-  machine. La plateforme ne l'écoute pas : elle subit la perte comme une panne sèche. L'écouter
-  permettrait de vider le nœud avant qu'il ne parte — c'est une amélioration, pas un correctif.
-- **La perte simultanée de plusieurs nœuds.** Avec des workers sur deux nœuds et les deux perdus,
-  il n'y a nulle part où replacer : c'est un problème de capacité, pas de tolérance.
-- **Un nœud qui revient après l'éviction.** Ses anciens pods sont supprimés par le kubelet au
-  redémarrage ; rien à faire à la main.
+- **The spot eviction notice.** Azure and AWS warn ~30 seconds before reclaiming a machine.
+  The platform does not listen to it: it suffers the loss as a hard failure. Listening would
+  allow draining the node before it leaves — an improvement, not a fix.
+- **Losing several nodes at once.** With workers on two nodes and both lost, there is
+  nowhere to reschedule: that is a capacity problem, not a toleration one.
+- **A node that comes back after the eviction.** Its old pods are deleted by the kubelet at
+  restart; nothing to do by hand.

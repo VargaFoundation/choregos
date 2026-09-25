@@ -1,33 +1,33 @@
-# ADR-0002 — ACP comme contrat d'agent, OpenHands par défaut
+# ADR-0002 — ACP as the agent contract, OpenHands by default
 
-- **État** : acceptée — le choix d'OpenHands par défaut est **remplacé** par l'[ADR 0011](0011-retrait-d-openhands.md) (défaut : `claude-code`)
-- **Concerne** : S2, S13
+- **Status**: accepted — the OpenHands default is **superseded** by [ADR 0011](0011-retrait-d-openhands.md) (default: `claude-code`)
+- **Concerns**: S2, S13
 
-## Contexte
+## Context
 
-L'écosystème des agents de code bouge vite et de façon inégale. Se lier à un agent, c'est
-se lier à sa feuille de route ; en supporter plusieurs sans contrat commun, c'est écrire
-un adaptateur par agent et par version.
+The coding-agent ecosystem moves fast and unevenly. Binding to one agent means binding to
+its roadmap; supporting several without a common contract means one adapter per agent and
+per version.
 
-## Décision
+## Decision
 
-Le runner parle **ACP** (Agent Client Protocol, JSON-RPC sur stdio) et rien d'autre. Un
-backend se résume à : une ligne de commande, des variables d'environnement pour le modèle,
-des fichiers de configuration. OpenHands est l'agent par défaut ; Claude Code, Codex,
-Gemini CLI, Goose, OpenCode et Copilot CLI sont des backends optionnels.
+The runner speaks **ACP** (Agent Client Protocol, JSON-RPC over stdio) and nothing else. A
+backend boils down to a command line, environment variables for the model, and
+configuration files. OpenHands is the default agent; Claude Code, Codex, Gemini CLI, Goose,
+OpenCode and Copilot CLI are optional backends.
 
-Une **suite de conformité** de sept vérifications garde la porte (§2.2) : démarrage,
-serveurs MCP, prompt trivial, permission refusée non contournée, `result.json` valide,
-respect de `max_turns`, coût visible au gateway. Un backend qui échoue est **désactivé
-automatiquement** dans `platform/backends` jusqu'à correction.
+A **conformance suite** of seven checks guards the door (§2.2): start-up, MCP servers, a
+trivial prompt, a refused permission that is not worked around, a valid `result.json`,
+`max_turns` honoured, cost visible at the gateway. A backend that fails is **disabled
+automatically** in `platform/backends` until fixed.
 
-## Conséquences
+## Consequences
 
-- Changer d'agent est une ligne de configuration, pas un chantier.
-- Un agent qui régresse est écarté sans discussion et sans incident de production.
-- On dépend d'un protocole jeune : la suite de conformité est notre filet.
+- Changing agent is a line of configuration, not a project.
+- An agent that regresses is set aside without debate and without a production incident.
+- We depend on a young protocol: the conformance suite is our net.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **Un seul agent** : dépendance totale à sa feuille de route et à ses limites.
-- **Adaptateur maison par agent** : coût de maintenance proportionnel au nombre d'agents.
+- **A single agent**: total dependence on its roadmap and its limits.
+- **A home-made adapter per agent**: maintenance cost proportional to the number of agents.

@@ -1,30 +1,30 @@
-# ADR-0009 — Le cluster ne se modifie que par Git
+# ADR-0009 — The cluster changes only through Git
 
-- **État** : acceptée
-- **Concerne** : S7, S8, S9
+- **Status**: accepted
+- **Concerns**: S7, S8, S9
 
-## Contexte
+## Context
 
-La plateforme crée des namespaces, des quotas, des politiques réseau et des applications
-pour chaque projet provisionné. Lui donner les droits de le faire directement, c'est donner
-`cluster-admin` à un service qui exécute du code d'agents.
+The platform creates namespaces, quotas, network policies and applications for every
+provisioned project. Giving it the rights to do so directly means giving `cluster-admin` to
+a service that executes agents' code.
 
-## Décision
+## Decision
 
-Aucun composant de Choregos n'applique de manifeste. Le provisioning **écrit dans Git**
-(`choregos-infra/projects/<slug>/`) ; un `ApplicationSet` Argo CD synchronise. La promotion
-d'une release est une **PR** sur le dépôt GitOps du projet, jamais un `kubectl set image`.
+No Choregos component applies a manifest. Provisioning **writes to Git**
+(`choregos-infra/projects/<slug>/`); an Argo CD `ApplicationSet` synchronises. Promoting a
+release is a **PR** on the project's GitOps repository, never a `kubectl set image`.
 
-L'API n'a qu'un droit de lecture sur les `PipelineRun` ; l'orchestrateur n'a de droits que
-dans les namespaces `proj-*-runners`, par des `Role` générés projet par projet.
+The API only has read access to `PipelineRun`s; the orchestrator only has rights in the
+`proj-*-runners` namespaces, through `Role`s generated project by project.
 
-## Conséquences
+## Consequences
 
-- Tout changement de cluster est auditable, relisible et réversible (`prune`).
-- Supprimer un projet = supprimer un répertoire.
-- Le provisioning est plus lent qu'un appel direct : c'est le prix de la traçabilité.
+- Every cluster change is auditable, reviewable and reversible (`prune`).
+- Deleting a project = deleting a directory.
+- Provisioning is slower than a direct call: that is the price of traceability.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **API Kubernetes directe depuis l'orchestrateur** : rapide, mais donne à la plateforme
-  des droits qu'aucune revue ne peut plus encadrer.
+- **Direct Kubernetes API from the orchestrator**: fast, but gives the platform rights that
+  no review can frame any more.

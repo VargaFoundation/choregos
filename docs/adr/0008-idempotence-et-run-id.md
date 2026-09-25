@@ -1,35 +1,35 @@
-# ADR-0008 — Identifiants déterministes et idempotence partout
+# ADR-0008 — Deterministic identifiers and idempotence everywhere
 
-- **État** : acceptée
-- **Concerne** : S1, S2, S6
+- **Status**: accepted
+- **Concerns**: S1, S2, S6
 
-## Contexte
+## Context
 
-Temporal rejoue les activités, les webhooks arrivent deux fois, un runner peut mourir après
-avoir travaillé mais avant d'avoir répondu. Sans discipline, on crée deux workflows pour un
-ticket, deux runs pour une étape, et on paie deux fois.
+Temporal replays activities, webhooks arrive twice, a runner can die after doing its work
+but before answering. Without discipline we create two workflows for one ticket, two runs
+for one stage, and pay twice.
 
-## Décision
+## Decision
 
-Tout ce qui peut être rejoué porte un identifiant **déterministe** :
+Everything that can be replayed carries a **deterministic** identifier:
 
-| Objet | Identifiant | Conséquence |
+| Object | Identifier | Consequence |
 | :-- | :-- | :-- |
-| workflow d'un ticket | `wi-<projet>-<clé>` | un ticket = un workflow, quoi qu'il arrive |
-| train | `train-<projet>-<env>` | un seul train par environnement |
-| run d'une étape | `<work_item>-<transition>-<tentative>` | rejouer prépare le même run |
-| livraison de webhook | `(source, delivery_id)` | un rejeu ne déclenche rien |
-| journal ACP | `(run_id, seq)` | un lot renvoyé n'écrit pas deux fois |
-| dépense | drapeau `spend_collected` | le coût est lu une fois au gateway |
+| a ticket's workflow | `wi-<project>-<key>` | one ticket = one workflow, whatever happens |
+| train | `train-<project>-<env>` | a single train per environment |
+| a stage run | `<work_item>-<transition>-<attempt>` | replaying prepares the same run |
+| webhook delivery | `(source, delivery_id)` | a redelivery triggers nothing |
+| ACP journal | `(run_id, seq)` | a resent batch is not written twice |
+| spend | `spend_collected` flag | cost is read once at the gateway |
 
-Les activités qui écrivent vérifient d'abord ce qui existe déjà, et rendent le résultat
-existant plutôt que d'en créer un nouveau.
+Activities that write first check what already exists, and return the existing result
+rather than creating a new one.
 
-## Conséquences
+## Consequences
 
-- Un test de non-régression accompagne chaque chemin : « rejouer ne double ni run ni coût ».
-- L'idempotence prime sur la concision : une activité fait un `SELECT` avant son `INSERT`.
+- A non-regression test goes with every path: "replaying doubles neither run nor cost".
+- Idempotence wins over concision: an activity does a `SELECT` before its `INSERT`.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **Déduplication a posteriori** : trouve les doublons après les avoir payés.
+- **Deduplication after the fact**: finds the duplicates after paying for them.

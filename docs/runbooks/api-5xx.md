@@ -1,50 +1,51 @@
-# L'API renvoie des 5xx
+# The API returns 5xx
 
-## Reconnaître
+## How to know it is this
 
-L'alerte `ChoregosApiErreurs5xx` (plus de 1 % de 5xx sur 10 minutes), ou le front qui
-affiche des erreurs sur toutes les pages.
+The `ChoregosApiErreurs5xx` alert (more than 1 % of 5xx over 10 minutes), or the front
+showing errors on every page.
 
-## Comprendre
+## Understand
 
 ```bash
 kubectl -n choregos-system logs deploy/choregos-api --tail=200 | jq 'select(.level=="error")'
 kubectl -n choregos-system get pods -l app.kubernetes.io/component=api
-curl -s https://api.<domaine>/readyz
+curl -s https://api.<domain>/readyz
 ```
 
-Trois causes couvrent presque tous les cas :
+Three causes cover almost every case:
 
-| Symptôme dans les logs | Cause | Action |
+| Symptom in the logs | Cause | Action |
 | :-- | :-- | :-- |
-| `connection refused` vers Postgres | base indisponible ou saturée | voir `restauration-postgres.md`, vérifier PgBouncer |
-| `temporal` / `RPCError` | frontend Temporal injoignable | vérifier `choregos-temporal`, voir `montee-temporal.md` |
-| `alembic` / colonne inconnue | migration non appliquée | rejouer le Job de migrations |
+| `connection refused` to Postgres | database down or saturated | see `restauration-postgres.md`, check PgBouncer |
+| `temporal` / `RPCError` | Temporal frontend unreachable | check `choregos-temporal`, see `montee-temporal.md` |
+| `alembic` / unknown column | migration not applied | rerun the migrations Job |
 
-## Agir
+## Act
 
-1. **Vérifier la disponibilité** avant tout : `/readyz` dit si la base répond.
-2. **Migration en retard** (après un déploiement) :
+1. **Check readiness** first: `/readyz` says whether the database and Temporal answer.
+2. **Migration behind** (after a deployment):
    ```bash
    kubectl -n choregos-system get jobs | grep migrations
-   kubectl -n choregos-system logs job/choregos-migrations-<révision>
+   kubectl -n choregos-system logs job/choregos-migrations-<revision>
    ```
-   Les migrations sont compatibles N-1 : revenir à la version précédente est sûr.
-3. **Saturation** : regarder le HPA et les connexions Postgres.
+   Migrations are N-1 compatible: rolling back to the previous version is safe.
+3. **Saturation**: look at the HPA and at Postgres connections. Each API replica and each
+   worker holds at most `pool.size + pool.maxOverflow` connections (`docs/deployment.md`,
+   *Operating it*).
    ```bash
    kubectl -n choregos-system get hpa choregos-api
    kubectl -n choregos-data exec -it choregos-pg-1 -- psql -c \
      "select count(*), state from pg_stat_activity group by state"
    ```
 
-## Vérifier
+## Check it is fixed
 
-- Le taux de 5xx retombe sous 1 % sur 10 minutes.
-- `choregos whoami` répond.
-- Les webhooks repassent : `kubectl logs ... | grep webhooks` montre des 202.
+- The 5xx rate falls back under 1 % over 10 minutes.
+- `choregos whoami` answers.
+- Webhooks pass again: `kubectl logs ... | grep webhooks` shows 202s.
 
-## Effet de bord à connaître
+## Side effect worth knowing
 
-Une API indisponible **ne perd pas de travail** : les workflows Temporal continuent, les
-webhooks GitHub sont rejoués par GitHub, et le polling de secours rattrape les cartes
-déplacées en moins de deux minutes.
+An unavailable API **loses no work**: Temporal workflows carry on, GitHub redelivers its
+webhooks, and the fallback polling catches moved cards within two minutes.

@@ -18,8 +18,8 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [Security](security.md) | What stops an agent from doing damage, and what is *not* a wall |
 | [CLI reference](cli.md) | Every command, generated from the CLI itself |
 | [Contributing](CONTRIBUTING.md) | One story, one PR; the contract before the code; what CI checks |
-| [ADRs](adr/README.md) | The structural decisions (French, with an English index) |
-| [Runbooks](runbooks/README.md) | Operations (French, with an English index) |
+| [ADRs](adr/README.md) | The structural decisions |
+| [Runbooks](runbooks/README.md) | Operations: how to know it is this, what to do, how to check |
 | [State of the project](plan/STATE-OF-THE-PROJECT-2026-09-24.md) | The critical assessment of 2026-09-24 and the P0 → P3 plan |
 
 ## What it is, in one paragraph

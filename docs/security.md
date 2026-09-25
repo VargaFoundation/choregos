@@ -56,7 +56,7 @@ Context packs and tickets contain text written by third parties. Two rules:
   the run waits for a slot.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
-- Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md) (French).
+- Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).
 
 ## Supply chain
 

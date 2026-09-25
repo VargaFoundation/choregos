@@ -1,31 +1,31 @@
-# ADR-0005 — Tout connecteur a une interface et un fake
+# ADR-0005 — Every connector has an interface and a fake
 
-- **État** : acceptée
-- **Concerne** : tous les flux
+- **Status**: accepted
+- **Concerns**: every workstream
 
-## Contexte
+## Context
 
-Treize flux en parallèle, et des connecteurs (GitHub, Tekton, Argo, LiteLLM, Ecphoria) qui
-n'existent pas encore le premier jour. Attendre les connecteurs, c'est sérialiser le projet.
+Thirteen workstreams in parallel, and connectors (GitHub, Tekton, Argo, LiteLLM, Ecphoria)
+that do not exist on day one. Waiting for the connectors serialises the project.
 
-## Décision
+## Decision
 
-Chaque intégration est un `Protocol` dans `packages/adapters/base.py`, avec **deux**
-implémentations : la vraie, et un `Fake*` en mémoire **scriptable**. `CHOREGOS_FAKES=1`
-bascule toute la plateforme sur les fakes.
+Every integration is a `Protocol` in `packages/adapters/base.py`, with **two**
+implementations: the real one, and an in-memory, **scriptable** `Fake*`. `CHOREGOS_FAKES=1`
+switches the whole platform to the fakes.
 
-Les fakes ne sont pas des bouchons vides : le tracker garde un commentaire de statut unique,
-le gateway coupe au plafond, l'exécuteur est idempotent par `run_id`, la mémoire supersède
-par sujet et rend un pack vide en cas de panne, le CD sait casser une analyse canary.
+The fakes are not empty stubs: the tracker keeps a single status comment, the gateway cuts
+at the cap, the executor is idempotent by `run_id`, the memory supersedes by subject and
+returns an empty pack on failure, the CD knows how to break a canary analysis.
 
-## Conséquences
+## Consequences
 
-- Le front, l'orchestrateur et le runner se développent et se testent sans aucun service.
-- `make demo` joue la chaîne complète sur un poste, sans cluster.
-- Les fakes doivent rester fidèles : quand un vrai adaptateur change de comportement, le
-  fake suit — sinon les tests mentent.
+- The front, the orchestrator and the runner are developed and tested without any service.
+- `make demo` plays the whole chain on a workstation, with no cluster.
+- The fakes must stay faithful: when a real adapter changes behaviour, the fake follows —
+  otherwise the tests lie.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **Enregistrer des cassettes HTTP seulement** : bien pour un adaptateur, insuffisant pour
-  écrire des scénarios (un canary cassé ne se rejoue pas depuis une cassette).
+- **Recorded HTTP cassettes only**: fine for one adapter, insufficient to write scenarios
+  (a broken canary does not replay from a cassette).

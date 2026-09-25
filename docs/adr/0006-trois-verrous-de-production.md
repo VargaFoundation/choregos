@@ -1,36 +1,36 @@
-# ADR-0006 — Trois verrous indépendants protègent la production
+# ADR-0006 — Three independent locks protect production
 
-- **État** : acceptée
-- **Concerne** : S9, S3, S7
+- **Status**: accepted
+- **Concerns**: S9, S3, S7
 
-## Contexte
+## Context
 
-Des agents produisent des PR à un rythme qu'aucune revue humaine ne suit. Le risque n'est
-pas qu'un agent écrive du mauvais code — la CI l'attrape — mais que dix changements
-arrivent en production en même temps, sans que personne ne sache lequel a cassé quoi.
+Agents produce PRs at a pace no human review can follow. The risk is not that an agent
+writes bad code — CI catches that — but that ten changes reach production at once, with
+nobody able to tell which one broke what.
 
-## Décision
+## Decision
 
-Trois verrous, indépendants, qui ne tombent pas ensemble :
+Three locks, independent, that do not fall together:
 
-1. **La merge queue** (GitHub) : `main` reste intégré et vert, une PR à la fois.
-2. **Le release train** (Temporal, singleton par projet × environnement) : un seul
-   déploiement en cours, des lots, une cadence, des fenêtres, un soak, une approbation,
-   un canary, un rollback, un gel.
-3. **Les garde-fous déclaratifs** : *sync windows* Argo CD, `GitHub Environment production`
-   avec approbateurs requis, lock Atlantis pour Terraform.
+1. **The merge queue** (GitHub): `main` stays integrated and green, one PR at a time.
+2. **The release train** (Temporal, a singleton per project × environment): one deployment
+   in flight, batches, a cadence, windows, a soak, an approval, a canary, a rollback, a
+   freeze.
+3. **Declarative guardrails**: Argo CD *sync windows*, a `GitHub Environment production`
+   with required approvers, an Atlantis lock for Terraform.
 
-Le troisième verrou existe pour une raison précise : **si Choregos tombe, personne ne
-déploie hors des règles**. La plateforme n'est pas le seul rempart.
+The third lock exists for one precise reason: **if Choregos goes down, nobody deploys
+outside the rules**. The platform is not the only rampart.
 
-## Conséquences
+## Consequences
 
-- Un rollback gèle le train (`freeze_on_rollback`) : on ne réessaie pas par réflexe.
-- Un gel exige un motif — un train gelé sans raison est un incident silencieux.
-- Un départ demandé par un humain passe outre la fenêtre et le cron (c'est un acte tracé),
-  mais **jamais** outre un gel.
+- A rollback freezes the train (`freeze_on_rollback`): we do not retry by reflex.
+- A freeze requires a reason — a train frozen without one is a silent incident.
+- A departure requested by a human overrides the window and the cron (it is a traced act),
+  but **never** a freeze.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **Déploiement continu sur merge** : ingérable au rythme d'une flotte d'agents.
-- **Approbation manuelle de chaque PR** : ramène le goulot humain qu'on cherche à éviter.
+- **Continuous deployment on merge**: unmanageable at the pace of a fleet of agents.
+- **Manual approval of every PR**: brings back the human bottleneck we are trying to avoid.

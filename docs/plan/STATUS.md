@@ -262,6 +262,11 @@ les 492 tests ne disaient pas :
    déjà pris, dépense, révocation, catalogue) et de Slack sur transport simulé ; les tests
    `live` tournent la nuit quand les secrets existent. Reste : Ecphoria, ArgoCD, Tekton,
    GitHub (scm, tracker, client), pgvector, rest, adf — et la couverture à 80 %.
+   **P1-1c livré** : les 14 ADR et les 11 runbooks sont **en anglais** dans `docs/adr/` et
+   `docs/runbooks/` (noms de fichiers inchangés : ce sont des identifiants, les alertes et
+   les pages y pointent) ; les originaux français sont archivés dans `docs/fr/adr/` et
+   `docs/fr/runbooks/`, plus maintenus. Les index ne parlent plus de « French ». Reste
+   P1-1b : l'interface en anglais.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
