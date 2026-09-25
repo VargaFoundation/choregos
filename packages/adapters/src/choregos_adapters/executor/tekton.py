@@ -56,7 +56,13 @@ class KubernetesClient:
                 f"{method} {path} → {response.status_code} : {response.text[:300]}",
                 status_code=response.status_code,
             )
-        return response.json() if response.content else {}
+        if not response.content:
+            return {}
+        # Les journaux d'un pod arrivent en `text/plain` : les parser en JSON levait une
+        # erreur de décodage sur la première ligne, et `logs()` ne rendait jamais rien.
+        if "json" not in response.headers.get("content-type", ""):
+            return response.text
+        return response.json()
 
 
 def _in_cluster_token() -> str | None:
