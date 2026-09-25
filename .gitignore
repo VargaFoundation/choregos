@@ -46,3 +46,4 @@ choregos.db-wal
 .seed-test.db*
 *.db-shm
 *.db-wal
+.pnpm-store/
