@@ -285,6 +285,23 @@ les 492 tests ne disaient pas :
    ailleurs) ; ce qui n'est PAS prouvé : un run Tekton complet derrière ce proxy (pas de
    Tekton sur le banc). Au passage : le test e2e des webhooks Jira/GitLab échouait seul
    depuis P0-3 (secret vide → 401) — le banc e2e en pose un.
+   **P1-3 (deuxième tranche)** : contrats HTTP sur transport simulé pour tout ce qui restait
+   nu — App GitHub (JWT, jeton d'installation ciblé et mis en cache, expiration), client
+   GitHub (limites secondaires, 5xx, `retry-after`, GraphQL, pagination), SCM GitHub
+   (branches, PR, brouillon → GraphQL, checks/relectures/fichiers, merge queue ou direct,
+   50 annotations max), tracker GitHub (issues, labels scopés, commentaire de suivi
+   réécrit, board Projects v2 avec création d'option, signature de webhook, événements),
+   client REST (Retry-After, backoff borné, 204, pagination), Tekton (client Kubernetes,
+   secret + PipelineRun, idempotence, états, annulation, journaux, CI, CloudEvents), Argo CD
+   (santé, Rollout abandonné, fenêtres, promotion GitOps de bout en bout), Docker local,
+   Ecphoria (tenant, disjoncteur après 3 pannes, `metadata`, propositions, recherche),
+   passerelle directe, tracker interne, ADF, vecteur lexical. **Trois défauts trouvés par ces
+   tests** : les journaux d'un pod Tekton (`text/plain`) étaient parsés en JSON et `logs()`
+   ne rendait jamais rien ; la **première promotion** vers un environnement échouait toujours
+   (le client GitHub lève sur 404, `_write_manifest` attendait `None`) ; la kustomization
+   absente aussi. Couverture mesurée **78 %** (72 % avant), seuil relevé à 75 ; reste pour
+   atteindre 80 : `pgvector` sur base (après P1-4, session injectée), les routeurs
+   `webhooks`, `costs`, `runs`, `trains`, et `choregos-admin`.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
