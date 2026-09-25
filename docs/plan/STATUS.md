@@ -323,6 +323,17 @@ les 492 tests ne disaient pas :
    travers une porte humaine, instantanés — ADR 0013 revisité) sont **proposés**, pas
    implémentés ; `docs/positioning.md` compare honnêtement à ax, agent-sandbox, OpenHands,
    Tembo, les produits fermés et les courtiers d'outils, et dit ce qu'ils font mieux.
+   **P3 (4–10) posés en ADR** : 0017 (conformité MCP 2026-07-28 : transport sans état,
+   `tasks` pour `get_ci_logs`/`ask_human`, elicitation à la place des questions en prose,
+   OAuth lié à la ressource pour les serveurs MCP du catalogue), 0018 (OTel GenAI depuis le
+   runner et LiteLLM, une trace par run, le registre reste la vérité du coût), 0019
+   (Workflow Streams comme transport du journal d'un run, `run_events` reste l'archive —
+   attend le serveur auto-hébergé), 0020 (évals de trajectoire scorées depuis le journal par
+   des mécanismes, jamais par un juge), 0021 (SPIFFE derrière le jeton de run : révocation
+   par suppression, mTLS vers la passerelle — option d'équipe plateforme), 0022 (catalogue
+   fédérable : une entrée de registre devient une PR, née fermée), 0023 (constructeur visuel :
+   la carte en lecture est livrée, les éditions seront des opérations sur le YAML). Tous
+   **proposés**, aucun implémenté ; chacun dit ses conditions et ce qu'il refuse.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
