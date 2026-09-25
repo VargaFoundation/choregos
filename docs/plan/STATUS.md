@@ -267,6 +267,11 @@ les 492 tests ne disaient pas :
    les pages y pointent) ; les originaux français sont archivés dans `docs/fr/adr/` et
    `docs/fr/runbooks/`, plus maintenus. Les index ne parlent plus de « French ». Reste
    P1-1b : l'interface en anglais.
+   **P3 (1–3) posés en ADR** : ADR 0015 (attestation de paternité IA signée, in-toto/DSSE,
+   pack de preuves art. 50) et ADR 0016 (exécuteur `agent-sandbox` : pool tiède, suspension à
+   travers une porte humaine, instantanés — ADR 0013 revisité) sont **proposés**, pas
+   implémentés ; `docs/positioning.md` compare honnêtement à ax, agent-sandbox, OpenHands,
+   Tembo, les produits fermés et les courtiers d'outils, et dit ce qu'ils font mieux.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

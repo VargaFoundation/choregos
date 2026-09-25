@@ -43,3 +43,5 @@ maintained; the files below keep their original names, which are their identifie
 | [0012](0012-le-moteur-n-est-pas-lie-au-logiciel.md) | The engine is not tied to software | accepted |
 | [0013](0013-densite-des-taches-d-agent.md) | Agent task density, and what we take from AX | accepted |
 | [0014](0014-un-catalogue-d-outils-tenu-par-la-plateforme.md) | A platform-held tool catalogue | accepted |
+| [0015](0015-attestation-de-paternite-ia.md) | A signed "AI authorship" attestation per merged change | proposed |
+| [0016](0016-executeur-agent-sandbox.md) | An `agent-sandbox` executor: warm pools, suspend across a human gate, snapshots | proposed |
