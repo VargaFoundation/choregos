@@ -29,15 +29,15 @@ function Connexion() {
     <div className="mx-auto max-w-md space-y-8 py-12">
       <div className="space-y-3">
         <Heading as="h1" size="xl">
-          se connecter
+          sign in
         </Heading>
-        <Lead>un ticket entre, une mise en production maîtrisée sort. mais d&apos;abord, qui êtes-vous ?</Lead>
+        <Lead>a ticket goes in, a controlled production release comes out. but first, who are you?</Lead>
       </div>
       {IS_MOCK ? (
-        <p className="text-sm text-ink-muted">mode démo : la session est simulée, rien à faire ici.</p>
+        <p className="text-sm text-ink-muted">demo mode: the session is simulated, nothing to do here.</p>
       ) : (
         <a href={api.loginUrl(next)} className={buttonClasses("primary", "md")}>
-          continuer avec le fournisseur d&apos;identité
+          continue with the identity provider
         </a>
       )}
       {devLogin && !IS_MOCK && (
@@ -48,16 +48,16 @@ function Connexion() {
             if (email) window.location.assign(api.loginUrl(next, email));
           }}
         >
-          <p className="text-xs text-ink-muted">connexion de développement — ce banc n&apos;a pas d&apos;IdP</p>
+          <p className="text-xs text-ink-muted">development login — this bench has no IdP</p>
           <input
-            aria-label="e-mail de développement"
+            aria-label="development e-mail"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="admin@varga.dev"
             className="w-full rounded border border-line bg-surface px-2 py-1.5"
           />
           <button type="submit" className={buttonClasses("secondary", "sm")}>
-            entrer
+            enter
           </button>
         </form>
       )}

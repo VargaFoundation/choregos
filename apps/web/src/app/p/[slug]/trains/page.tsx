@@ -36,7 +36,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
       if (action === "depart") await api.departTrain(slug, env);
       if (action === "freeze") {
         if (!reason.trim()) {
-          setError("le motif du gel est obligatoire");
+          setError("a reason for the freeze is required");
           return;
         }
         await api.freezeTrain(slug, env, reason);
@@ -44,46 +44,46 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
       if (action === "unfreeze") await api.unfreezeTrain(slug, env);
       queryClient.invalidateQueries({ queryKey: ["train", slug, env] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "action refusée");
+      setError(cause instanceof Error ? cause.message : "action refused");
     }
   }
 
   const data = train.data;
   return (
     <Card
-      title={`Environnement ${env}`}
+      title={`Environment ${env}`}
       action={data && <StateBadge state={data.status} display={data.status} kind={data.frozen ? "blocked" : "work"} />}
     >
       {!data ? (
-        <Empty>chargement…</Empty>
+        <Empty>loading…</Empty>
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
-            lot en attente : <strong>{data.batch_size}</strong> ticket(s)
-            {data.next_departure && <span className="text-ink-muted"> · départ {relative(data.next_departure)}</span>}
-            {!data.window_open && <span className="text-warn"> · hors fenêtre</span>}
+            pending batch: <strong>{data.batch_size}</strong> ticket(s)
+            {data.next_departure && <span className="text-ink-muted"> · departure {relative(data.next_departure)}</span>}
+            {!data.window_open && <span className="text-warn"> · outside the window</span>}
           </p>
           <ul className="font-mono text-xs text-ink-muted">
             {data.pending_items?.map((key) => <li key={key}>{key}</li>)}
           </ul>
-          {data.frozen && <ErrorNote>Train gelé : {data.freeze_reason ?? "sans motif"}</ErrorNote>}
+          {data.frozen && <ErrorNote>Train frozen: {data.freeze_reason ?? "no reason"}</ErrorNote>}
           <div className="flex flex-wrap items-center gap-2">
             <Button tone="primary" onClick={() => act("depart")} disabled={data.frozen || data.batch_size === 0}>
-              faire partir maintenant
+              depart now
             </Button>
             {data.frozen ? (
-              <Button onClick={() => act("unfreeze")}>dégeler</Button>
+              <Button onClick={() => act("unfreeze")}>unfreeze</Button>
             ) : (
               <>
                 <input
-                  aria-label="motif du gel"
+                  aria-label="freeze reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="motif du gel (obligatoire)"
+                  placeholder="freeze reason (required)"
                   className="min-w-56 rounded border border-line bg-surface px-2 py-1.5 text-sm"
                 />
                 <Button tone="danger" onClick={() => act("freeze")}>
-                  geler
+                  freeze
                 </Button>
               </>
             )}
@@ -99,15 +99,15 @@ function History({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
   const releases = useQuery({ queryKey: ["releases", slug], queryFn: () => api.releases(slug) });
   return (
-    <Card title="historique des lots">
+    <Card title="batch history">
       <table>
         <thead>
           <tr>
-            <th>lot</th>
+            <th>batch</th>
             <th>env</th>
-            <th>état</th>
+            <th>status</th>
             <th>tickets</th>
-            <th>quand</th>
+            <th>when</th>
             <th>verdict</th>
             <th />
           </tr>
@@ -133,23 +133,23 @@ function History({ slug }: { slug: string }) {
                     <Button
                       tone="primary"
                       onClick={async () => {
-                        if (!confirm(`Approuver la mise en production du lot R-${release.batch_no} ?`)) return;
+                        if (!confirm(`Approve the production release of batch R-${release.batch_no}?`)) return;
                         await api.approveRelease(release.id);
                         queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                       }}
                     >
-                      approuver
+                      approve
                     </Button>
                     <Button
                       tone="danger"
                       onClick={async () => {
-                        const reason = prompt(`Abandonner le lot R-${release.batch_no} — pourquoi ?`);
+                        const reason = prompt(`Abort batch R-${release.batch_no} — why?`);
                         if (!reason) return;
                         await api.abortRelease(release.id, reason);
                         queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                       }}
                     >
-                      abandonner
+                      abort
                     </Button>
                   </span>
                 )}
@@ -158,7 +158,7 @@ function History({ slug }: { slug: string }) {
           ))}
         </tbody>
       </table>
-      {releases.data?.items.length === 0 && <Empty>aucun lot</Empty>}
+      {releases.data?.items.length === 0 && <Empty>no batch</Empty>}
     </Card>
   );
 }

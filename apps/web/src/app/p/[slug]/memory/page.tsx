@@ -25,13 +25,13 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
       await api.memoryDecide(slug, id, action);
       queryClient.invalidateQueries({ queryKey: ["memory-pending", slug] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "décision refusée");
+      setError(cause instanceof Error ? cause.message : "decision refused");
     }
   }
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="recherche">
+      <Card title="search">
         <form
           className="mb-3 flex gap-2"
           onSubmit={(event) => {
@@ -40,14 +40,14 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
           }}
         >
           <input
-            aria-label="rechercher dans la mémoire"
+            aria-label="search the memory"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="arrondis, incident, convention de test…"
+            placeholder="rounding, incident, test convention…"
             className="flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
           />
           <Button type="submit" tone="primary">
-            chercher
+            search
           </Button>
         </form>
         <ul className="space-y-3">
@@ -57,36 +57,36 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
               <p className="font-mono text-xs">{memory.subject}</p>
               <p className="mt-1 text-sm">{memory.content}</p>
               <p className="mt-1 text-xs text-ink-muted">
-                valable depuis {shortDate(memory.valid_from)}
-                {memory.valid_to ? ` jusqu'au ${shortDate(memory.valid_to)}` : " (en vigueur)"} · source{" "}
+                valid from {shortDate(memory.valid_from)}
+                {memory.valid_to ? ` to ${shortDate(memory.valid_to)}` : " (in force)"} · source{" "}
                 {String((memory.provenance as Record<string, unknown>)?.source ?? "—")}
               </p>
             </li>
           ))}
         </ul>
-        {submitted && results.data?.length === 0 && <Empty>aucun souvenir pour « {submitted} »</Empty>}
+        {submitted && results.data?.length === 0 && <Empty>no memory for “{submitted}”</Empty>}
       </Card>
 
-      <Card title="faits proposés par des agents">
+      <Card title="facts proposed by agents">
         {error && <ErrorNote>{error}</ErrorNote>}
         <ul className="space-y-3">
           {(pending.data ?? []).filter((memory) => memory.id).map((memory) => (
             <li key={memory.id} className="rounded border border-line border-l-2 border-l-warn bg-surface p-3">
               <p className="font-mono text-xs">{memory.subject}</p>
               <p className="mt-1 text-sm">{memory.content}</p>
-              <p className="mt-1 text-xs text-ink-muted">proposé par le run {memory.proposed_by ?? "—"}</p>
+              <p className="mt-1 text-xs text-ink-muted">proposed by run {memory.proposed_by ?? "—"}</p>
               <div className="mt-2 flex gap-2">
                 <Button tone="primary" onClick={() => decide(memory.id ?? "", "accept")}>
-                  accepter
+                  accept
                 </Button>
                 <Button tone="danger" onClick={() => decide(memory.id ?? "", "reject")}>
-                  rejeter
+                  reject
                 </Button>
               </div>
             </li>
           ))}
         </ul>
-        {pending.data?.length === 0 && <Empty>aucun fait en attente</Empty>}
+        {pending.data?.length === 0 && <Empty>no pending fact</Empty>}
       </Card>
     </div>
   );

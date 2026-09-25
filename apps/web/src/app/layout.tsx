@@ -8,13 +8,13 @@ import { TopNav } from "./top-nav";
 
 export const metadata: Metadata = {
   title: "choregos · varga foundation",
-  description: "Un ticket entre, une mise en production maîtrisée sort.",
+  description: "A ticket goes in, a controlled production release comes out.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   const demo = process.env.NEXT_PUBLIC_API_MODE === "mock";
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body>
         <Providers>
           <div className="flex min-h-screen flex-col">
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <TopNav />
                 {demo && (
                   <span className="ml-auto border border-line-strong px-2 py-0.5 text-xs text-ink-muted">
-                    mode démo · fixtures
+                    demo mode · fixtures
                   </span>
                 )}
               </Container>
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </main>
             <footer className="border-t border-line">
               <Container size="wide" className="flex h-14 items-center justify-between text-xs text-ink-muted">
-                <span>un ticket entre, une mise en production maîtrisée sort.</span>
+                <span>a ticket goes in, a controlled production release comes out.</span>
                 <span>apache 2.0</span>
               </Container>
             </footer>

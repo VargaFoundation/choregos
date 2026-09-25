@@ -6,13 +6,13 @@ import { use, type ReactNode } from "react";
 import { Eyebrow, Heading, TabList, tabClasses } from "@varga/design-system";
 
 const TABS = [
-  { suffix: "", label: "vue d'ensemble" },
+  { suffix: "", label: "overview" },
   { suffix: "/board", label: "board" },
   { suffix: "/trains", label: "trains" },
   { suffix: "/findings", label: "findings" },
-  { suffix: "/memory", label: "mémoire" },
+  { suffix: "/memory", label: "memory" },
   { suffix: "/workflow", label: "workflow" },
-  { suffix: "/settings", label: "paramètres" },
+  { suffix: "/settings", label: "settings" },
 ];
 
 export default function ProjectLayout({
@@ -27,12 +27,12 @@ export default function ProjectLayout({
   return (
     <div className="space-y-8">
       <div className="space-y-4">
-        <Eyebrow>projet</Eyebrow>
+        <Eyebrow>project</Eyebrow>
         <Heading as="h1" size="xl">
           {slug}
         </Heading>
       </div>
-      <TabList aria-label="sections du projet">
+      <TabList aria-label="project sections">
         {TABS.map((tab) => {
           const href = `/p/${slug}${tab.suffix}`;
           const active = pathname === href;

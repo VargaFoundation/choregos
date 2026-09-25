@@ -29,14 +29,14 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <input
-          aria-label="filtrer le journal"
+          aria-label="filter the journal"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder="filtrer (permission, dod, result…)"
+          placeholder="filter (permission, dod, result…)"
           className="w-64 rounded border border-line bg-surface px-2 py-1 text-xs"
         />
         <span className="text-xs text-ink-muted">
-          {rows.length} événement{rows.length > 1 ? "s" : ""}
+          {rows.length} event{rows.length > 1 ? "s" : ""}
         </span>
       </div>
       <div
@@ -76,7 +76,7 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
 function summarize(event: RunEventDto): string {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   if (event.type === "session/request_permission") {
-    return `${payload.allowed ? "autorisé" : "REFUSÉ"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
+    return `${payload.allowed ? "allowed" : "REFUSED"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
   }
   if (event.type === "session/update") return String(payload.text ?? JSON.stringify(payload));
   return JSON.stringify(payload);

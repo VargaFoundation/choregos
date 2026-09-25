@@ -21,40 +21,40 @@ export default function ProjectsPage() {
         <div className="space-y-5">
           <Eyebrow>organisation {org}</Eyebrow>
           <Heading as="h1" size="xl">
-            projets
+            projects
           </Heading>
-          <Lead>chaque projet relie un dépôt à un workflow : un ticket entre, une mise en production maîtrisée sort.</Lead>
+          <Lead>each project ties a repository to a workflow: a ticket goes in, a controlled production release comes out.</Lead>
         </div>
         <Link href="/projects/new" className={buttonClasses("primary", "md")}>
-          nouveau projet
+          new project
         </Link>
       </header>
 
       {error && <ErrorNote>{(error as Error).message}</ErrorNote>}
-      {isLoading && <Empty>chargement…</Empty>}
+      {isLoading && <Empty>loading…</Empty>}
       {data && projects.length === 0 && (
         <Empty
-          title="aucun projet"
+          title="no project"
           action={
             <Link href="/projects/new" className={buttonClasses("primary", "sm")}>
-              créer le premier
+              create the first one
             </Link>
           }
         >
-          un projet relie un dépôt, un tracker et un workflow. le provisioning fait le reste.
+          a project ties a repository, a tracker and a workflow. provisioning does the rest.
         </Empty>
       )}
 
       {projects.length > 0 && (
         <div className="grid grid-cols-2 border border-line md:grid-cols-3">
           <div className="p-6">
-            <Stat value={projects.length} label="projets" />
+            <Stat value={projects.length} label="projects" />
           </div>
           <div className="border-l border-line p-6">
-            <Stat value={actifs} label="tickets en cours" tone={actifs > 0 ? "accent" : "ink"} />
+            <Stat value={actifs} label="tickets in flight" tone={actifs > 0 ? "accent" : "ink"} />
           </div>
           <div className="col-span-2 border-t border-line p-6 md:col-span-1 md:border-t-0 md:border-l">
-            <Stat value={eur(cout)} label="dépensé ce mois" />
+            <Stat value={eur(cout)} label="spent this month" />
           </div>
         </div>
       )}
@@ -76,13 +76,13 @@ export default function ProjectsPage() {
               }
             >
               <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5">
-                <Stat value={project.stats?.active_work_items ?? 0} label="tickets actifs" />
+                <Stat value={project.stats?.active_work_items ?? 0} label="active tickets" />
                 <Stat
                   value={eur(project.stats?.cost_month_eur)}
-                  label={project.stats?.budget_month_eur ? `sur ${eur(project.stats.budget_month_eur)}` : "coût du mois"}
+                  label={project.stats?.budget_month_eur ? `of ${eur(project.stats.budget_month_eur)}` : "cost this month"}
                 />
-                <Stat value={percent(project.stats?.first_pass_merge_rate)} label="pr au 1er passage" />
-                <Stat value={project.stats?.trains_pending ?? 0} label="trains en cours" />
+                <Stat value={percent(project.stats?.first_pass_merge_rate)} label="prs on first pass" />
+                <Stat value={project.stats?.trains_pending ?? 0} label="trains in flight" />
               </dl>
               <p className="mt-6 text-xs text-ink-muted">
                 {project.workflow_name ?? "—"} · {project.policy_name ?? "—"} · {relative(project.updated_at)}

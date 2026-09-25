@@ -25,11 +25,11 @@ export function DecisionBar({
       await api.decide(itemId, {
         kind: decision,
         ...(decision === "answer" ? { answer } : {}),
-        ...(decision === "reject" ? { reason: answer || "renvoyé" } : {}),
+        ...(decision === "reject" ? { reason: answer || "sent back" } : {}),
       });
       onDone?.();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "décision refusée");
+      setError(cause instanceof Error ? cause.message : "decision refused");
     } finally {
       setBusy(false);
     }
@@ -40,30 +40,30 @@ export function DecisionBar({
       {kind === "question" ? (
         <>
           <input
-            aria-label="réponse"
+            aria-label="answer"
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="votre réponse…"
+            placeholder="your answer…"
             className="min-w-64 flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
           />
           <Button tone="primary" disabled={busy || !answer} onClick={() => send("answer")}>
-            répondre
+            answer
           </Button>
         </>
       ) : (
         <>
           <Button tone="primary" disabled={busy} onClick={() => send("approve")}>
-            approuver
+            approve
           </Button>
           <input
-            aria-label="motif du renvoi"
+            aria-label="reason for sending back"
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="motif (si renvoi)"
+            placeholder="reason (if sent back)"
             className="min-w-48 rounded border border-line bg-surface px-2 py-1.5 text-sm"
           />
           <Button tone="danger" disabled={busy} onClick={() => send("reject")}>
-            renvoyer
+            send back
           </Button>
         </>
       )}

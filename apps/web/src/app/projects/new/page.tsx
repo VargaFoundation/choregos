@@ -9,9 +9,9 @@ import { Button, Card, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
-const STEPS = ["template", "projet", "connecteurs", "récapitulatif"];
+const STEPS = ["template", "project", "connectors", "summary"];
 const TRACKERS = [
-  { value: "internal", label: "Choregos (les demandes se posent ici)" },
+  { value: "internal", label: "Choregos (requests are filed here)" },
   { value: "github", label: "GitHub Issues / Projects" },
   { value: "jira", label: "Jira" },
   { value: "gitlab", label: "GitLab" },
@@ -76,7 +76,7 @@ export default function NewProjectPage() {
       if (avecTemplate) await api.provision(project.id);
       router.push(`/p/${project.slug}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "création refusée");
+      setError(cause instanceof Error ? cause.message : "creation refused");
       setBusy(false);
     }
   }
@@ -84,7 +84,7 @@ export default function NewProjectPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <Heading as="h1" size="xl">
-        nouveau projet
+        new project
       </Heading>
       <ol className="grid grid-cols-4 border border-line">
         {STEPS.map((label, index) => (
@@ -115,26 +115,26 @@ export default function NewProjectPage() {
                 checked={form.sansDepot}
                 onChange={(event) => set("sansDepot", event.target.checked)}
               />
-              <span>ce projet n&apos;a pas de dépôt de code (un métier : RH, achats, juridique…)</span>
+              <span>this project has no code repository (a line of business: HR, purchasing, legal…)</span>
             </label>
             {!form.sansDepot && (
               <label className="block space-y-1">
-                <span>template de stack</span>
+                <span>stack template</span>
                 <select
                   value={form.template}
                   onChange={(event) => set("template", event.target.value)}
                   className="w-full rounded border border-line bg-surface px-2 py-1.5"
                 >
-                  <option value="">aucun — je branche mes connecteurs moi-même</option>
+                  <option value="">none — I wire my connectors myself</option>
                   {(templates.data ?? []).map((template) => (
                     <option key={`${template.name}@${template.version}`} value={`${template.name}@${template.version}`}>
                       {template.display}
-                      {template.is_published ? "" : " (non publié)"}
+                      {template.is_published ? "" : " (unpublished)"}
                     </option>
                   ))}
                 </select>
                 <span className="block text-xs text-ink-muted">
-                  Un template installe les labels, le board, les webhooks, les namespaces et la CI.
+                  A template installs the labels, the board, the webhooks, the namespaces and the CI.
                 </span>
               </label>
             )}
@@ -143,15 +143,15 @@ export default function NewProjectPage() {
 
         {step === 1 && (
           <div className="space-y-3 text-sm">
-            <Field label="identifiant (slug)" value={form.slug} onChange={(value) => set("slug", value)} placeholder="billing-api" />
-            {!slugValid && form.slug && <ErrorNote>minuscules, chiffres et tirets uniquement</ErrorNote>}
-            <Field label="nom affiché" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
+            <Field label="identifier (slug)" value={form.slug} onChange={(value) => set("slug", value)} placeholder="billing-api" />
+            {!slugValid && form.slug && <ErrorNote>lowercase letters, digits and dashes only</ErrorNote>}
+            <Field label="display name" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
             {!form.sansDepot && (
               <>
-                <Field label="dépôt" value={form.repo} onChange={(value) => set("repo", value)} placeholder="varga/billing-api" />
-                {!repoValid && form.repo && <ErrorNote>attendu : `owner/repo` ou une URL https</ErrorNote>}
+                <Field label="repository" value={form.repo} onChange={(value) => set("repo", value)} placeholder="varga/billing-api" />
+                {!repoValid && form.repo && <ErrorNote>expected: `owner/repo` or an https URL</ErrorNote>}
                 <label className="block space-y-1">
-                  <span>langage principal</span>
+                  <span>main language</span>
                   <select
                     value={form.language}
                     onChange={(event) => set("language", event.target.value)}
@@ -172,7 +172,7 @@ export default function NewProjectPage() {
         {step === 2 && (
           <div className="space-y-3 text-sm">
             <label className="block space-y-1">
-              <span>tracker (d&apos;où viennent les tickets)</span>
+              <span>tracker (where tickets come from)</span>
               <select
                 value={form.tracker}
                 onChange={(event) => set("tracker", event.target.value)}
@@ -187,16 +187,16 @@ export default function NewProjectPage() {
             </label>
             {!form.sansDepot && (
               <Field
-                label="dépôt GitOps (environnements)"
+                label="GitOps repository (environments)"
                 value={form.gitops}
                 onChange={(value) => set("gitops", value)}
                 placeholder="https://github.com/varga/billing-api-gitops.git"
               />
             )}
-            <Field label="canal Slack" value={form.channel} onChange={(value) => set("channel", value)} placeholder="#choregos" />
+            <Field label="Slack channel" value={form.channel} onChange={(value) => set("channel", value)} placeholder="#choregos" />
             <p className="text-xs text-ink-muted">
-              Les secrets ne sont pas saisis ici : ils viennent d&apos;External Secrets, référencés par le connecteur.
-              Les autres connecteurs (SCM, CI, CD, passerelle) se règlent dans les paramètres du projet.
+              Secrets are not typed here: they come from External Secrets, referenced by the connector.
+              The other connectors (SCM, CI, CD, gateway) are set in the project settings.
             </p>
           </div>
         )}
@@ -220,7 +220,7 @@ export default function NewProjectPage() {
 
         <div className="mt-4 flex justify-between">
           <Button onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}>
-            précédent
+            previous
           </Button>
           {step < STEPS.length - 1 ? (
             <Button
@@ -228,11 +228,11 @@ export default function NewProjectPage() {
               onClick={() => setStep((current) => current + 1)}
               disabled={step === 1 && (!slugValid || !repoValid)}
             >
-              suivant
+              next
             </Button>
           ) : (
             <Button tone="primary" onClick={create} disabled={busy || !slugValid || !repoValid}>
-              {avecTemplate ? "créer et provisionner" : "créer"}
+              {avecTemplate ? "create and provision" : "create"}
             </Button>
           )}
         </div>
