@@ -387,6 +387,13 @@ les 492 tests ne disaient pas :
    verdicts journalisés), et le code (`DEMO-2f`) passe implement → verify avec le jeton neuf.
    Ce qu'elle ne prouve toujours pas : un appel d'outil réel par un agent (les runs RH n'ont
    pas tourné), ni le coût (mode `direct`).
+   **Replay enfin réel** : quatre historiques du banc archivés dans `tests/replay/histories/`
+   (`DEMO-2d` code jusqu'à `done`, `RH-1d` sourcing → qualification, `DEMO-1e` mort sur
+   401, `RH-1f` jamais admis) et **rejoués** contre l'interpréteur courant — le test ne
+   skippe plus. Les payloads Temporal sont en base64 : la clé de passerelle (en mode
+   `direct`, le jeton OAuth lui-même) et les jetons de run y étaient ; ils sont caviardés
+   à l'archivage, gitleaks passe sur le dossier, et l'URL de l'API interne y est mise en
+   liste blanche par motif (faux positif `generic-api-key`).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

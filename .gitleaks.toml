@@ -15,3 +15,12 @@ paths = [
   '''packages/core/tests/test_gates\.py''',
   '''packages/contracts/schemas/examples/.*\.json''',
 ]
+# Les historiques Temporal archivés portent l'URL de l'API interne des agents
+# (`choregos-api:8000/api/v1/internal`), que la règle « generic-api-key » prend pour une
+# clé. Les vrais secrets de ces historiques (clé de passerelle, jeton de run) sont
+# caviardés à l'archivage — `tools/replay_record.py` — et c'est la RÈGLE ci-dessous qui le
+# garde : un `sk-ant-` ou un JWT dans un historique reste un fuite.
+regexTarget = "match"
+regexes = [
+  '''choregos-api:8000/api/v1/internal''',
+]
