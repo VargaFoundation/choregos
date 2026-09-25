@@ -404,6 +404,13 @@ les 492 tests ne disaient pas :
    `direct`, le jeton OAuth lui-même) et les jetons de run y étaient ; ils sont caviardés
    à l'archivage, gitleaks passe sur le dossier, et l'URL de l'API interne y est mise en
    liste blanche par motif (faux positif `generic-api-key`).
+   **P2 (garde-fous fermés) livré** : `sandbox.unknown_requests: allow|reject` dans la
+   politique (`contract-change`, schémas et types régénérés) ; en `reject` — le preset
+   `regulated` — une demande de permission dont le runner ne reconnaît pas la nature est
+   **refusée** avec un message qui nomme `report_finding` et `request_scope_change` ; en
+   `allow` (défaut) elle passe et le journal dit « filet, pas mur ». Ce qui est reconnu
+   (lecture déclarée, écriture déduite) ne change pas. Pas encore : la détection d'injection
+   de prompt (contenu de tickets marqué non fiable, motifs) — OpenHands l'a, pas nous.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

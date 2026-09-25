@@ -66,6 +66,11 @@ class SandboxPolicy(Strict):
     )
     network: NetworkPolicy = Field(default_factory=NetworkPolicy)
     llm_security_analyzer: bool = False
+    #: Ce que le runner fait d'une demande de permission dont il ne reconnaît PAS la nature
+    #: (ni `kind`, ni verbe connu, ni chemin, ni commande, ni URL) : `allow` la laisse passer
+    #: en la journalisant (le défaut — les garde-fous sont un filet), `reject` la refuse avec
+    #: le message qui nomme les outils légitimes (fermé par défaut, preset `regulated`).
+    unknown_requests: Literal["allow", "reject"] = "allow"
 
 
 class FindingsPolicy(Strict):

@@ -699,3 +699,44 @@ def test_decision_serialisable_dit_si_la_nature_est_deduite() -> None:
     event = guards(write_paths=["src/**"]).decide(PERMISSION_CLAUDE_CODE_WRITE).to_event()
     assert set(event) == {"allowed", "reason", "kind", "target", "inferred"}
     assert event["inferred"] is True
+
+
+def test_une_demande_de_nature_inconnue_passe_par_defaut_et_le_dit() -> None:
+    """Le défaut reste un filet : ce que le runner ne sait pas nommer passe, journalisé."""
+    rails = guards(write_paths=["src/**"])
+    decision = rails.decide({"toolCall": {"title": "Frobnicate", "rawInput": {"foo": "bar"}}})
+    assert decision.allowed and decision.kind == "read" and "filet" in decision.reason
+
+
+def test_la_politique_peut_fermer_les_demandes_de_nature_inconnue() -> None:
+    """`sandbox.unknown_requests: reject` (preset `regulated`) : refusé, et le refus dit à
+    l'agent par où passer — `report_finding`, `request_scope_change`."""
+    rails = guards(write_paths=["src/**"], unknown_requests="reject")
+    decision = rails.decide({"toolCall": {"title": "Frobnicate", "rawInput": {"foo": "bar"}}})
+    assert not decision.allowed and decision.kind == "unknown"
+    assert "request_scope_change" in decision.reason and "report_finding" in decision.reason
+    # Ce qui est reconnu n'est pas touché : une lecture déclarée, une écriture déduite en périmètre.
+    assert rails.decide({"toolCall": {"kind": "read", "rawInput": {"path": "README.md"}}}).allowed
+    assert rails.decide(
+        {
+            "toolCall": {
+                "title": "Write /workspace/src/a.py",
+                "rawInput": {"file_path": "/workspace/src/a.py", "content": "x"},
+            }
+        }
+    ).allowed
+    assert not rails.decide(
+        {
+            "toolCall": {
+                "title": "Write /workspace/infra/x.tf",
+                "rawInput": {"file_path": "/workspace/infra/x.tf", "content": "x"},
+            }
+        }
+    ).allowed
+
+
+def test_le_preset_regulated_ferme_les_demandes_inconnues() -> None:
+    from choregos_core import load_preset
+
+    assert load_preset("regulated").sandbox.unknown_requests == "reject"
+    assert load_preset("team").sandbox.unknown_requests == "allow"

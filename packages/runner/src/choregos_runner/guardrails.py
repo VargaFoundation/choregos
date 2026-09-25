@@ -135,8 +135,24 @@ class GuardRails:
             decision = self.check_write(path)
         elif url:
             decision = self.check_network(url)
-        elif kind in {"read", "search", "fetch", "think", "other", ""}:
-            decision = Decision(True, "lecture ou recherche : autorisé", kind or "read", path or title)
+        elif kind in {"read", "search", "fetch", "think", "other"}:
+            decision = Decision(True, "lecture ou recherche : autorisé", kind, path or title)
+        elif not kind and self.permissions.unknown_requests == "reject":
+            # Fermé : la politique (`sandbox.unknown_requests: reject`) refuse ce qu'elle ne
+            # sait pas nommer. Le message dit à l'agent par où passer — un refus muet fait
+            # un agent qui réessaie autrement.
+            decision = Decision(
+                False,
+                "demande de nature inconnue, refusée par la politique du projet "
+                "(sandbox.unknown_requests: reject) ; pour signaler ou demander plus de "
+                "périmètre : `report_finding`, `request_scope_change`",
+                "unknown",
+                path or title,
+            )
+        elif not kind:
+            decision = Decision(
+                True, "nature inconnue : autorisée et journalisée (filet, pas mur)", "read", path or title
+            )
         else:
             decision = Decision(True, f"opération `{kind}` sans cible identifiée : autorisée", kind, title)
         decision.inferred = inferred

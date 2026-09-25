@@ -208,6 +208,8 @@ export type Policy = {
       deny_by_default?: boolean;
     };
     llm_security_analyzer?: boolean;
+    /** Demande de permission de nature inconnue : laissée passer et journalisée (allow) ou refusée (reject) */
+    unknown_requests?: "allow" | "reject";
   };
   findings?: {
     max_per_run?: number;
@@ -385,6 +387,7 @@ export type StageInput = {
     deny_commands?: Array<string>;
     allow_domains?: Array<string>;
     dod_iterations?: number;
+    unknown_requests?: "allow" | "reject";
     max_findings?: number;
   };
   callbacks: {

@@ -224,6 +224,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 allow_domains=engine.allow_domains(),
                 dod_iterations=engine.dod_iterations(),
                 max_findings=engine.max_findings_per_run(),
+                unknown_requests=bundle.policy.sandbox.unknown_requests,
             ),
             callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=token),
         )

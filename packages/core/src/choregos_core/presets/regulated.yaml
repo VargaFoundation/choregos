@@ -38,6 +38,7 @@ sandbox:
     allow_domains: []
     deny_by_default: true
   llm_security_analyzer: true
+  unknown_requests: reject
 findings:
   max_per_run: 3
   dedupe_threshold: 0.9
