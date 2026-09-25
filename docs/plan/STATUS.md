@@ -421,6 +421,15 @@ les 492 tests ne disaient pas :
    regarde pas. Dix motifs positifs, cinq tickets ordinaires sans faux positif, trois modes
    testés sur l'orchestrateur. Ce que ce n'est pas : une compréhension — un filet contre
    les cas grossiers, comme chez OpenHands.
+   **P2 (complexité) livré** : les règles `C901`, `PLR0912`, `PLR0913`, `PLR0915` sont
+   **actives** (seuils 15 / 20 / 8 / 80 — l'état des lieux les trouvait toutes ignorées) ;
+   sept fonctions dépassaient : `_check_references` (validateur) et `type_of` (générateur
+   TS) découpés, `_execute` (provisioning) devenu une table d'étapes, le diagnostic « agent
+   silencieux » sorti de `Runner.execute`, deux signatures larges assumées avec un `noqa`
+   motivé. **Un défaut trouvé en découpant** : la boucle des acteurs du validateur relisait
+   la variable de la boucle des transitions — l'escalade d'un acteur humain vers un acteur
+   inconnu n'était jamais rapportée ; corrigé et testé. Le découpage des gros modules
+   (`stage.py`, `interpreter.py`, `services.py`) reste à faire : ils passent les seuils.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

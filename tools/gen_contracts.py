@@ -15,7 +15,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 
@@ -58,9 +58,15 @@ class Emitter:
             return self.external_prefix + pascal(base)
         return "unknown"
 
+    _PRIMITIFS: ClassVar[dict[str, str]] = {
+        "null": "null",
+        "string": "string",
+        "number": "number",
+        "integer": "number",
+        "boolean": "boolean",
+    }
+
     def type_of(self, schema: Any, indent: int = 0) -> str:
-        if schema is True or schema is None:
-            return "unknown"
         if schema is False:
             return "never"
         if not isinstance(schema, dict):
@@ -71,22 +77,23 @@ class Emitter:
             return json.dumps(schema["const"])
         if "enum" in schema:
             return " | ".join(json.dumps(v) for v in schema["enum"])
+        return self._compose_of(schema, indent) or self._typed_of(schema, indent)
+
+    def _compose_of(self, schema: dict[str, Any], indent: int) -> str:
+        """`oneOf`/`anyOf` → union, `allOf` → intersection ; vide si le schéma n'en a pas."""
         for key in ("oneOf", "anyOf"):
             if key in schema:
                 return " | ".join(self.type_of(s, indent) for s in schema[key])
         if "allOf" in schema:
             return " & ".join(self.type_of(s, indent) for s in schema["allOf"])
+        return ""
+
+    def _typed_of(self, schema: dict[str, Any], indent: int) -> str:
         t = schema.get("type")
         if isinstance(t, list):
             return " | ".join(self.type_of({**schema, "type": one}, indent) for one in t)
-        if t == "null":
-            return "null"
-        if t == "string":
-            return "string"
-        if t in {"number", "integer"}:
-            return "number"
-        if t == "boolean":
-            return "boolean"
+        if t in self._PRIMITIFS:
+            return self._PRIMITIFS[str(t)]
         if t == "array":
             return f"Array<{self.type_of(schema.get('items', True), indent)}>"
         if t == "object" or "properties" in schema:

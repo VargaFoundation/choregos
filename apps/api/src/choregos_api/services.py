@@ -406,7 +406,7 @@ async def estimate_cost(session: AsyncSession, project_id: str, item: WorkItem) 
     return CostEstimate(median_usd=median, p80_usd=p80, sample_size=len(costs), over_p80=spent > p80)
 
 
-async def record_cost(
+async def record_cost(  # noqa: PLR0913 — une ligne du registre, champ par champ, en mots-clés
     session: AsyncSession,
     *,
     project_id: str,
