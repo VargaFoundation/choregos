@@ -1,39 +1,39 @@
-# ADR-0003 — Temporal pour l'orchestration durable
+# ADR-0003 — Temporal for durable orchestration
 
-- **État** : acceptée
-- **Concerne** : S1, S9, S7
+- **Status**: accepted
+- **Concerns**: S1, S9, S7
 
-## Contexte
+## Context
 
-Un ticket vit des heures ou des jours : un agent travaille, un humain valide, la CI tourne,
-un train part. Il faut survivre aux redémarrages, aux pannes de nœud, aux déploiements de
-la plateforme elle-même — sans perdre l'état ni payer deux fois le même run.
+A ticket lives for hours or days: an agent works, a human approves, CI runs, a train
+departs. It has to survive restarts, node failures and deployments of the platform itself —
+without losing state or paying twice for the same run.
 
-## Décision
+## Decision
 
-Temporal, auto-hébergé (Helm + CloudNativePG), avec la possibilité de passer à Temporal
-Cloud sans changer une ligne de code. Un workflow par ticket (`WorkflowInterpreter`), un
-par environnement (`ReleaseTrain`), un par projet (`FindingsTriage`, `MemoryIngestion`),
-un par provisioning.
+Temporal, self-hosted (Helm + CloudNativePG), with the option of moving to Temporal Cloud
+without changing a line of code. One workflow per ticket (`WorkflowInterpreter`), one per
+environment (`ReleaseTrain`), one per project (`FindingsTriage`, `MemoryIngestion`), one
+per provisioning.
 
-Trois disciplines rendent cela sûr :
+Three disciplines make this safe:
 
-- **la logique de décision est pure** : `choregos_core.WorkflowEngine` ne fait aucune
-  entrée/sortie, ce qui la rend testable sans Temporal et rejouable sans surprise ;
-- **les activités sont idempotentes** par `(run_id | work_item_id, étape)` ;
-- **`workflow.patched()` est obligatoire** pour tout changement de logique, et la CI
-  rejoue des historiques archivés (`tests/replay`).
+- **decision logic is pure**: `choregos_core.WorkflowEngine` does no I/O, which makes it
+  testable without Temporal and replayable without surprises;
+- **activities are idempotent** by `(run_id | work_item_id, stage)`;
+- **`workflow.patched()` is mandatory** for any change of logic, and CI replays archived
+  histories (`tests/replay`).
 
-`numHistoryShards: 512` est figé dès le départ : il n'est pas modifiable ensuite.
+`numHistoryShards: 512` is fixed from day one: it cannot be changed afterwards.
 
-## Conséquences
+## Consequences
 
-- Une panne de worker ne perd rien et ne facture rien deux fois.
-- L'opérateur voit l'état réel (requêtes de workflow) plutôt qu'un reflet en base.
-- On accepte un composant de plus à exploiter, avec ses sauvegardes et ses montées de version.
+- A worker failure loses nothing and bills nothing twice.
+- The operator sees the real state (workflow queries) rather than a reflection in a database.
+- We accept one more component to operate, with its backups and upgrades.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **File + base d'état maison** : réécrire mal ce que Temporal fait bien.
-- **Airflow / Argo Workflows** : pensés pour des DAG de traitement, pas pour des processus
-  longs qui attendent des humains.
+- **A queue plus a home-made state store**: rewriting badly what Temporal does well.
+- **Airflow / Argo Workflows**: built for processing DAGs, not for long processes that wait
+  for humans.

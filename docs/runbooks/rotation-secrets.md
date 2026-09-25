@@ -1,52 +1,51 @@
-# Rotation des secrets
+# Rotating secrets
 
-## Calendrier
+## Schedule
 
-| Secret | Période | Effet d'une rotation ratée |
+| Secret | Period | Effect of a failed rotation |
 | :-- | :-- | :-- |
-| clé privée de l'App GitHub `choregos-bot` | 90 j | plus de webhooks, plus de PR, plus de tokens de run |
-| `master_key` LiteLLM | 90 j | plus aucun appel de modèle : tous les runs échouent |
-| clés JWT ES256 de l'API (jetons de run) | 30 j | les runs en cours ne peuvent plus poster leur résultat |
-| secrets de webhook (GitHub, générique) | 180 j | les webhooks sont rejetés en 401 |
+| private key of the `choregos-bot` GitHub App | 90 d | no more webhooks, PRs or run tokens |
+| LiteLLM `master_key` | 90 d | no model call at all: every run fails |
+| the API's ES256 JWT keys (run tokens) | 30 d | runs in flight can no longer post their result |
+| webhook secrets (GitHub, generic) | 180 d | webhooks are rejected with 401 |
 
-## Principe : deux clés valides pendant la transition
+## Principle: two valid keys during the transition
 
-Les jetons de run vivent jusqu'à 2 h. Une rotation « d'un coup » casse les runs en cours.
-L'API accepte donc **deux** clés de vérification pendant la fenêtre de rotation.
+Run tokens live up to 2 h. A rotation "in one go" breaks the runs in flight. The API
+therefore accepts **two** verification keys during the rotation window.
 
-## App GitHub
+## GitHub App
 
-1. Générer une nouvelle clé privée dans les réglages de l'App.
-2. L'écrire dans le coffre : `choregos/api` → `github-app-private-key-next`.
-3. Déployer : l'API essaie la nouvelle, puis l'ancienne.
-4. Après 24 h sans erreur, supprimer l'ancienne clé côté GitHub **puis** dans le coffre.
+1. Generate a new private key in the App settings.
+2. Write it into the vault: `choregos/api` → `github-app-private-key-next`.
+3. Deploy: the API tries the new key, then the old one.
+4. After 24 h without errors, delete the old key on GitHub's side **then** in the vault.
 
 ```bash
-kubectl -n choregos-system logs deploy/choregos-api | grep -c "github.*401"   # doit rester 0
+kubectl -n choregos-system logs deploy/choregos-api | grep -c "github.*401"   # must stay 0
 ```
 
-## `master_key` LiteLLM
+## LiteLLM `master_key`
 
-1. Créer la nouvelle clé dans LiteLLM (`/key/generate` avec le rôle admin).
-2. Mettre à jour `choregos/gateway` → `master-key` dans le coffre.
-3. Redéployer l'API et les workers (le `checksum/config` du chart force le redémarrage).
-4. **Ne pas** révoquer l'ancienne avant que les runs en cours soient terminés : leurs clés
-   virtuelles ont été mintées avec elle.
+1. Create the new key in LiteLLM (`/key/generate` with the admin role).
+2. Update `choregos/gateway` → `master-key` in the vault.
+3. Redeploy the API and the workers (the chart's `checksum/config` forces the restart).
+4. **Do not** revoke the old key before the runs in flight are finished: their virtual keys
+   were minted with it.
 
-## Clés JWT de l'API
+## The API's JWT keys
 
 ```bash
-# Générer une paire ES256
+# Generate an ES256 pair
 openssl ecparam -genkey -name prime256v1 -noout -out run-token.pem
 openssl ec -in run-token.pem -pubout -out run-token.pub
 ```
 
-1. Écrire la nouvelle paire dans `choregos/api` (`run-token-private-key-next`).
-2. Déployer : les nouveaux jetons sont signés avec la nouvelle clé, les anciens restent
-   vérifiables.
-3. Après `max_minutes + 15` (2 h suffisent), promouvoir la nouvelle paire et supprimer l'ancienne.
+1. Write the new pair into `choregos/api` (`run-token-private-key-next`).
+2. Deploy: new tokens are signed with the new key, old ones stay verifiable.
+3. After `max_minutes + 15` (2 h is enough), promote the new pair and delete the old one.
 
-## Vérifier
+## Check it is fixed
 
-- Un run de bout en bout passe (`make demo` ne suffit pas : lancer un vrai ticket S).
-- Aucun 401 dans les logs de l'API sur les routes `/internal` et `/webhooks`.
+- An end-to-end run passes (`make demo` is not enough: start a real S ticket).
+- No 401 in the API logs on the `/internal` and `/webhooks` routes.

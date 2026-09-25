@@ -1,31 +1,31 @@
-# ADR-0004 — Le coût se compte au gateway, pas chez l'agent
+# ADR-0004 — Cost is counted at the gateway, not by the agent
 
-- **État** : acceptée
-- **Concerne** : S4, S1
+- **Status**: accepted
+- **Concerns**: S4, S1
 
-## Contexte
+## Context
 
-Un agent peut se tromper sur sa consommation, ou mentir. Une plateforme qui facture
-d'après ce que l'agent déclare ne sait pas ce qu'elle dépense.
+An agent can be wrong about its consumption, or lie. A platform that bills from what the
+agent declares does not know what it spends.
 
-## Décision
+## Decision
 
-Tous les appels de modèles passent par LiteLLM. Chaque run reçoit une **clé virtuelle**
-dédiée, avec un **plafond dur** égal au budget de l'étape et une durée de vie courte.
-Le coût est lu au gateway (`/key/info`, `/spend/logs`), jamais dans le `StageResult` — le
-contrat ne prévoit même pas de champ pour ça.
+Every model call goes through LiteLLM. Each run receives a dedicated **virtual key** with a
+**hard cap** equal to the stage budget and a short lifetime. Cost is read at the gateway
+(`/key/info`, `/spend/logs`), never from the `StageResult` — the contract does not even have
+a field for it.
 
-Quand le plafond est atteint, LiteLLM refuse : l'agent reçoit une erreur, le runner
-termine `failed(reason=budget)`, l'orchestrateur escalade vers un humain.
+When the cap is reached LiteLLM refuses: the agent gets an error, the runner finishes
+`failed(reason=budget)`, the orchestrator escalates to a human.
 
-## Conséquences
+## Consequences
 
-- Le coût affiché dans le ticket est le coût réel, à la requête près.
-- Un agent qui s'emballe coûte au maximum le budget de son étape.
-- Un modèle local est comptabilisé avec un **prix interne** configuré, pour rester comparable.
-- La clé est révoquée dès la fin du run : elle ne sert plus à rien si elle fuit.
+- The cost shown on the ticket is the real cost, request by request.
+- A runaway agent costs at most its stage budget.
+- A local model is accounted with a configured **internal price**, to stay comparable.
+- The key is revoked as soon as the run ends: it is worthless if it leaks.
 
-## Alternatives écartées
+## Alternatives discarded
 
-- **Compter les tokens côté runner** : duplique la logique de tarification et rate le cache.
-- **Faire confiance au `StageResult`** : ce serait la seule mesure non vérifiée de la chaîne.
+- **Counting tokens in the runner**: duplicates pricing logic and misses the cache.
+- **Trusting the `StageResult`**: it would be the only unverified measurement in the chain.

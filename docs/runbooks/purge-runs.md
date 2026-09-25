@@ -1,47 +1,47 @@
-# La base grossit : purger runs, événements et transcripts
+# The database grows: purging runs, events and transcripts
 
-## Reconnaître
+## How to know it is this
 
-La table `run_events` domine la taille de la base, ou l'object store dépasse son quota.
+The `run_events` table dominates the database size, or the object store exceeds its quota.
 
 ```bash
 kubectl -n choregos-data exec -it choregos-pg-1 -- psql choregos -c "
-  select relname, pg_size_pretty(pg_total_relation_size(relid)) as taille
+  select relname, pg_size_pretty(pg_total_relation_size(relid)) as size
   from pg_catalog.pg_statio_user_tables order by pg_total_relation_size(relid) desc limit 10"
 ```
 
-## Ce qu'on garde, et pourquoi
+## What we keep, and why
 
-| Donnée | Rétention | Raison |
+| Data | Retention | Reason |
 | :-- | :-- | :-- |
-| `runs` (métadonnées, résultat) | indéfinie | l'historique d'un ticket doit rester lisible |
-| `run_events` (journal ACP) | 90 jours | volumineux ; le transcript archivé reste |
-| `events` (bus interne) | 180 jours | audit et statistiques |
-| `cost_ledger` | indéfinie | comptabilité |
-| transcripts, rapports (object store) | 180 jours (lifecycle) | preuve d'un run |
-| `audit_log` | indéfinie | exigence d'audit |
+| `runs` (metadata, result) | indefinite | a ticket's history must stay readable |
+| `run_events` (ACP journal) | 90 days | large; the archived transcript remains |
+| `events` (internal bus) | 180 days | audit and statistics |
+| `cost_ledger` | indefinite | accounting |
+| transcripts, reports (object store) | 180 days (lifecycle) | evidence of a run |
+| `audit_log` | indefinite | audit requirement |
 
-## Purger
+## Purge
 
 ```sql
--- Journal ACP de plus de 90 jours (les runs eux-mêmes sont conservés)
+-- ACP journal older than 90 days (the runs themselves are kept)
 DELETE FROM run_events WHERE ts < now() - interval '90 days';
 
--- Bus interne de plus de 180 jours
+-- Internal bus older than 180 days
 DELETE FROM events WHERE ts < now() - interval '180 days';
 
--- Livraisons de webhooks (dédup) de plus de 30 jours
+-- Webhook deliveries (dedup) older than 30 days
 DELETE FROM webhook_deliveries WHERE ts < now() - interval '30 days';
 ```
 
-Puis `VACUUM (ANALYZE)` sur les tables purgées.
+Then `VACUUM (ANALYZE)` on the purged tables.
 
-## Ne pas purger
+## Do not purge
 
-- `cost_ledger` et `audit_log` : ce sont les deux tables qu'on regrette toujours d'avoir purgées.
-- Les runs d'un ticket encore ouvert.
+- `cost_ledger` and `audit_log`: the two tables one always regrets having purged.
+- The runs of a ticket that is still open.
 
-## Automatiser
+## Automate
 
-Un `CronJob` mensuel applique ces requêtes en staging depuis six mois ; en production, la
-purge reste déclenchée à la main après lecture des volumes.
+A monthly `CronJob` has applied these queries in staging for six months; in production the
+purge is still triggered by hand after reading the volumes.
