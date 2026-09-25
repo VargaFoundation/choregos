@@ -334,6 +334,11 @@ les 492 tests ne disaient pas :
    fédérable : une entrée de registre devient une PR, née fermée), 0023 (constructeur visuel :
    la carte en lecture est livrée, les éditions seront des opérations sur le YAML). Tous
    **proposés**, aucun implémenté ; chacun dit ses conditions et ce qu'il refuse.
+   **Reste du P2, différé à dessein** : le découpage de `stage.py` (723 l.), `interpreter.py`
+   (775 l.), `services.py` (678 l.) et `schemas.py` (780 l.) — les seuils de complexité
+   sont tenus (#51) et trois PR ouvertes (#39, #48, #50) touchent `stage.py` : découper
+   maintenant, c'est trois conflits garantis pour un gain de lecture. À faire dans une PR
+   seule après les fusions, l'interpréteur sous les historiques de replay (#48).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
