@@ -276,9 +276,20 @@ les 492 tests ne disaient pas :
    tests** : les journaux d'un pod Tekton (`text/plain`) étaient parsés en JSON et `logs()`
    ne rendait jamais rien ; la **première promotion** vers un environnement échouait toujours
    (le client GitHub lève sur 404, `_write_manifest` attendait `None`) ; la kustomization
-   absente aussi. Couverture mesurée **78 %** (72 % avant), seuil relevé à 75 ; reste pour
-   atteindre 80 : `pgvector` sur base (après P1-4, session injectée), les routeurs
-   `webhooks`, `costs`, `runs`, `trains`, et `choregos-admin`.
+   absente aussi. Couverture mesurée **78 %** (72 % avant), seuil relevé à 75.
+   **P1-3 (troisième tranche)** : les routeurs que rien n'exerçait, par HTTP avec les fakes —
+   tickets (création interne, liste, timeline complète, actions, décisions), runs
+   (événements, `after_seq`, accès, diff en/hors périmètre, transcript), coûts (par nature,
+   étape, jour, fenêtre, CSV avec BOM et budget, organisation par projet), trains (état depuis
+   le workflow, départ/gel/dégel signalés et audités, approbation/abandon d'une release),
+   webhooks (Tekton dédupliqué, Argo CD et Alertmanager sous secret partagé, GitHub sans
+   secret hors prod), templates (lus du dépôt, créés, mis à jour, **chaque template livré
+   passe le schéma**), plateforme (backends, exécuteurs, clés, 403 hors admin),
+   provisioning, API interne au jeton de run, `choregos-admin`, `RealTemporal.describe()`
+   sur client simulé, bus d'événements. **Un défaut trouvé** : le template livré
+   `github-aca` déclarait `requires.azure_capabilities`, inconnu du schéma — servi depuis le
+   disque, il aurait été refusé par l'API ; le schéma le porte. Couverture **80,1 %**, seuil
+   à **80**. Reste nu : `pgvector` sur base (après #38).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**
