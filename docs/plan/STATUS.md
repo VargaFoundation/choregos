@@ -348,6 +348,14 @@ les 492 tests ne disaient pas :
    sont tenus (#51) et trois PR ouvertes (#39, #48, #50) touchent `stage.py` : découper
    maintenant, c'est trois conflits garantis pour un gain de lecture. À faire dans une PR
    seule après les fusions, l'interpréteur sous les historiques de replay (#48).
+   **Découpage de l'orchestrateur livré** : `stage.py` (847 l.) devient quatre modules —
+   `plan` (le `StagePlan`), `stage` (la préparation : modèle, clé, contexte, `StageInput`),
+   `execution` (lancer, attendre, abandonner), `bilan` (dépense, résultat, findings),
+   `garde` (l'injection) — et `stage` réexporte tout, l'interpréteur et les tests lisent au
+   même endroit. Les trois activités que le workflow portait en fin de fichier (`load_context`,
+   `record_workflow_failure`, `signal_train`) et la lecture des erreurs Temporal passent dans
+   `activities/interpretation.py` ; `interpreter.py` ne contient plus que le workflow. Aucune
+   logique changée : 107 tests orchestrateur/replay/e2e verts, les quatre historiques rejoués.
    **P1-1b livré** : l'interface est **en anglais** — les 26 fichiers du front (pages,
    composants, libellés, `aria-label`, placeholders, messages d'erreur), `lang="en"`,
    formats `en-GB` (montants, dates, durées). Pas d'i18n : `next-intl` avait été retiré le

@@ -16,7 +16,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ActivityError, ApplicationError
+from temporalio.exceptions import ActivityError
 
 #: Attente maximale d'un run EN FILE (six heures), la même valeur que
 #: `activities.stage.FILE_MAX_MINUTES` — écrite ici parce qu'un workflow n'importe pas
@@ -31,6 +31,13 @@ with workflow.unsafe.imports_passed_through():
     from ..activities import scm as scm_activities
     from ..activities import stage as stage_activities
     from ..activities import tracker as tracker_activities
+    from ..activities.interpretation import (
+        activite_de,
+        load_context,
+        message_de,
+        record_workflow_failure,
+        signal_train,
+    )
 
 DEFAULT_RETRY = RetryPolicy(
     initial_interval=timedelta(seconds=2),
@@ -160,8 +167,8 @@ class WorkflowInterpreter:
                     {
                         "project_id": params.project_id,
                         "work_item_id": params.work_item_id,
-                        "message": _message_de(exc),
-                        "activity": _activite_de(exc),
+                        "message": message_de(exc),
+                        "activity": activite_de(exc),
                         "state": self.state,
                     },
                     start_to_close_timeout=timedelta(seconds=30),
@@ -326,7 +333,7 @@ class WorkflowInterpreter:
                 retry_policy=NO_RETRY,
             )
         except ActivityError as exc:
-            workflow.logger.warning("diff du run non collecté : %s", _message_de(exc))
+            workflow.logger.warning("diff du run non collecté : %s", message_de(exc))
         self.current_run = None
         self.last_run = run_id  # les transitions `system` évaluent leurs gates sur ce run
 
@@ -670,111 +677,3 @@ def _decision(state: str, reason: str) -> Any:
     from choregos_core import Decision
 
     return Decision(next_state=state, escalated=True, reason=reason)
-
-
-# ───────────────────────── activités propres à l'interpréteur ─────────────────────────
-
-from temporalio import activity  # noqa: E402
-
-
-@activity.defn(name="load_context")
-async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
-    """Charge la définition épinglée, la politique et l'état courant du ticket."""
-    from ..activities.base import db, load_work_item, project_bundle
-
-    async with db() as session:
-        bundle = await project_bundle(session, payload["project_id"])
-        item = await load_work_item(session, payload["work_item_id"])
-        # Un interpréteur qui (re)démarre n'est plus mort : la marque tombe ici, et nulle
-        # part ailleurs — c'est la seule activité que tout démarrage traverse.
-        item.failure = None
-        return {
-            "workflow": bundle.workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
-            "state": item.state,
-            "ticket_budget_usd": bundle.engine.budget_ticket(item.size),
-            "tracker_key": item.tracker_key,
-            "project_slug": bundle.slug,
-        }
-
-
-@activity.defn(name="record_workflow_failure")
-async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
-    """Écrit sur le ticket que son interpréteur est mort, et publie l'événement.
-
-    C'est le workflow qui l'appelle en mourant. Ce n'est PAS un remplacement de l'état
-    Temporal — l'API le lit aussi — mais c'est ce qui reste quand Temporal a purgé
-    l'historique, et c'est ce que le front et la chronologie affichent.
-    """
-    from choregos_api.services import persist_event
-    from choregos_contracts import EventType
-    from choregos_core import utcnow
-
-    from ..activities.base import db, load_work_item, project_bundle
-
-    async with db() as session:
-        bundle = await project_bundle(session, payload["project_id"])
-        item = await load_work_item(session, payload["work_item_id"])
-        failure = {
-            "message": str(payload.get("message") or "interpréteur en échec"),
-            "activity": payload.get("activity"),
-            "state": payload.get("state") or item.state,
-            "at": utcnow().isoformat(),
-        }
-        item.failure = failure
-        await persist_event(
-            session,
-            EventType.WORKITEM_WORKFLOW_FAILED,
-            project_id=bundle.project.id,
-            work_item_id=item.id,
-            project_slug=bundle.slug,
-            subject=item.tracker_key,
-            **failure,
-        )
-        return failure
-
-
-def _message_de(exc: BaseException) -> str:
-    """Le message utile d'une erreur Temporal : celui de la cause, pas « Activity task failed »."""
-    cause: BaseException | None = exc
-    while cause is not None:
-        if isinstance(cause, ApplicationError) and cause.message:
-            return cause.message
-        if cause.__cause__ is None:
-            break
-        cause = cause.__cause__
-    return str(cause or exc)[:500]
-
-
-def _activite_de(exc: BaseException) -> str | None:
-    return exc.activity_type if isinstance(exc, ActivityError) else None
-
-
-@activity.defn(name="signal_train")
-async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
-    """Annonce au train de l'environnement qu'un ticket est prêt à embarquer."""
-    from choregos_core import utcnow
-
-    from ..activities.base import db, load_work_item, project_bundle
-    from ..train_client import signal_release_train
-
-    async with db() as session:
-        bundle = await project_bundle(session, payload["project_id"])
-        item = await load_work_item(session, payload["work_item_id"])
-        await signal_release_train(
-            bundle.slug,
-            payload["env"],
-            "merged",
-            {
-                "work_item_key": item.tracker_key,
-                "title": item.title,
-                "merged_at": utcnow().isoformat(),
-                "sha": (item.documents or {}).get("merge_sha", ""),
-                # Déclarée par l'agent dans `artifacts.reports["infra_pr"]` : le train
-                # l'appliquera via Atlantis pendant le départ, après approbation.
-                "infra_pr_url": (item.documents or {}).get("infra_pr_url"),
-                "risk": item.risk,
-                "labels": [],
-                "pr_url": item.pr_url,
-            },
-        )
-        return {"signalled": True}
