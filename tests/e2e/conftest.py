@@ -20,6 +20,8 @@ os.environ.setdefault("CHOREGOS_ENV", "test")
 # qui s'en sert doit le dire, et nommer qui est admin.
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+# Les webhooks refusent un secret vide depuis P0-3 : le banc de bout en bout en pose un.
+os.environ.setdefault("CHOREGOS_GENERIC_WEBHOOK_SECRET", "e2e-webhook-secret")
 
 
 class BridgedTemporal:

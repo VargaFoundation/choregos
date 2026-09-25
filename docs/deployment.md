@@ -326,6 +326,25 @@ kubectl -n choregos logs deploy/choregos-api      # structured JSON logs
 curl -s https://<api-host>/healthz                # {"status":"ok"}
 ```
 
-A ServiceMonitor, alerting rules and six Grafana dashboards ship with the chart. **As of
-2026-09-24 the platform does not yet export the metrics they read** — they are wired, not
-live; see `docs/plan/STATE-OF-THE-PROJECT-2026-09-24.md`, item P0-4.
+A ServiceMonitor, alerting rules and six Grafana dashboards ship with the chart. The API
+exposes `/metrics` (Prometheus text format, computed from the database), and a test keeps
+the dashboards and rules honest: they may only name metrics the API actually exports.
+
+## Operating it
+
+What the chart does for a multi-node installation, and the knobs behind it:
+
+| Concern | Mechanism | Value |
+| :-- | :-- | :-- |
+| A node drain must not take the API, the front or a worker queue down | one `PodDisruptionBudget` per component, and per orchestrator queue — rendered only when there is more than one replica (a budget on a single replica blocks the drain and protects nothing) | `choregos-api.podDisruptionBudget`, `choregos-web.podDisruptionBudget`, `choregos-orchestrator.podDisruptionBudget` |
+| Two replicas must not share a node | pod anti-affinity on `kubernetes.io/hostname`: `soft` (preferred, the default — a one-node bench still schedules), `hard` (one replica per node, or no pod), `none` | `global.antiAffinity` |
+| The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
+| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets` or `devLogin` is on, and names the value | `templates/garde.yaml` |
+| A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
+| An agent must not reach the Internet except where the policy says | the runners namespace denies egress by default; the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains`, and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest |
+| Temporal must be restorable | it holds the position of every ticket in flight; `docs/runbooks/temporal-backup.md` says what to copy and how to reconcile afterwards | — |
+
+The proxy is the honest part of "egress allowlist": before 2026-09-25 the NetworkPolicy
+opened a `choregos-egress` namespace that no chart delivered, and the allowlist was an
+annotation. It is verified on a cluster (`tests/cluster/test_egress_proxy.py`: an
+allowed domain answers 200 through the proxy, any other gets 403 from Squid).

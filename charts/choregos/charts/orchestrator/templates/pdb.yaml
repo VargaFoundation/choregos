@@ -1,0 +1,24 @@
+{{- /*
+Un budget par file d'attente : c'est le déploiement qu'un drain évince. Une file à une
+réplique n'a pas de budget — il bloquerait le drain sans rien protéger.
+*/ -}}
+{{- if and .Values.enabled .Values.podDisruptionBudget.enabled }}
+{{- $root := . }}
+{{- range .Values.queues }}
+{{- if gt (int .replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: choregos-orchestrator-{{ .name }}
+  labels: {{- include "choregos.labels" $root | nindent 4 }}
+    choregos/queue: {{ .name }}
+spec:
+  minAvailable: {{ $root.Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-orchestrator
+      choregos/queue: {{ .name }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -21,6 +21,11 @@ runner:
   tag: "1.0.0"
   namespacePattern: "proj-{slug}-runners"
   executor: tekton
+  egressProxy: "http://choregos-egress.{namespace}.svc:3128"
+  egressImage: ""
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
 
 # Secondes pendant lesquelles un worker reste accroché à un nœud devenu injoignable avant d'être
 # évincé. Le défaut de Kubernetes est 300 : mesuré sur cluster, cela fait 359 s d'immobilité après

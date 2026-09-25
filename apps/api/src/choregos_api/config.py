@@ -23,7 +23,15 @@ class Settings(BaseSettings):
     # Base de données
     database_url: str = "sqlite+aiosqlite:///./choregos.db"
     db_echo: bool = False
+    #: Pool de connexions, BORNÉ. `pool_size` seul laissait SQLAlchemy ouvrir dix
+    #: connexions de débordement de plus, et attendre trente secondes une connexion
+    #: libre (état des lieux du 2026-09-24). Chaque processus tient au plus
+    #: `db_pool_size + db_max_overflow` connexions ; `db_pool_recycle_s` ferme celles
+    #: qu'un pare-feu ou PgBouncer aurait coupées en silence.
     db_pool_size: int = 10
+    db_max_overflow: int = 5
+    db_pool_timeout_s: int = 10
+    db_pool_recycle_s: int = 1800
 
     # Identité
     oidc_issuer: str = "http://localhost:8080/realms/choregos"

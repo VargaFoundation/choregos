@@ -66,6 +66,8 @@ choregos-orchestrator:
     executor: k8s_job
     # Un seul namespace sur un banc : les agents tournent à côté de la plateforme.
     namespacePattern: choregos
+    # Ni NetworkPolicy ni proxy dans ce namespace : les agents sortent en direct.
+    egressProxy: ""
     limits: { cpu: "2", memory: 4Gi }
 
 # Sidecar d'outils : une Task Tekton, donc sans objet sur un banc local.

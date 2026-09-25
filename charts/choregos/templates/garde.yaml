@@ -1,0 +1,21 @@
+{{- /*
+La garde des environnements sérieux. Les dépendances embarquées (un PostgreSQL à une
+instance sans sauvegarde, un Temporal sur SQLite, une passerelle à une réplique), les
+secrets écrits par le chart et la connexion de développement sont faits pour un banc.
+Ce fichier ne rend rien ; en `staging` et `prod`, il ARRÊTE le rendu si l'une de ces
+valeurs est allumée, et nomme laquelle. Avant : rien ne l'interdisait, et l'API ne refusait
+que la connexion de développement.
+*/ -}}
+{{- $g := .Values.global }}
+{{- if has $g.environment (list "staging" "prod") }}
+{{- $fautes := list }}
+{{- if $g.database.embedded }}{{ $fautes = append $fautes "global.database.embedded" }}{{ end }}
+{{- if $g.temporal.embedded }}{{ $fautes = append $fautes "global.temporal.embedded" }}{{ end }}
+{{- if $g.gateway.embedded }}{{ $fautes = append $fautes "global.gateway.embedded" }}{{ end }}
+{{- if $g.memory.embedded }}{{ $fautes = append $fautes "global.memory.embedded" }}{{ end }}
+{{- if $g.devSecrets }}{{ $fautes = append $fautes "global.devSecrets" }}{{ end }}
+{{- if ($g.devLogin | default dict).enabled }}{{ $fautes = append $fautes "global.devLogin.enabled" }}{{ end }}
+{{- if $fautes }}
+{{- fail (printf "global.environment=%s refuse : %s. Ces valeurs sont celles d'un banc (values/local.yaml) ; un environnement sérieux apporte ses dépendances et ses secrets." $g.environment (join ", " $fautes)) }}
+{{- end }}
+{{- end }}

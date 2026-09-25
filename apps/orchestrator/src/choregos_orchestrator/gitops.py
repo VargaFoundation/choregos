@@ -16,8 +16,176 @@ def _dump(documents: list[dict[str, Any]]) -> str:
     return yaml.safe_dump_all(documents, sort_keys=False, allow_unicode=True)
 
 
-def render_project_manifests(slug: str, config: ProjectConfig, policy: Policy) -> dict[str, str]:
-    """Rend les fichiers d'un projet : namespaces, quotas, netpol, RBAC, Tekton, Argo."""
+#: Le proxy d'egress d'un projet : ce par quoi un runner sort, et rien d'autre. Squid,
+#: exécuté sans root, sans capacité, sur un système de fichiers en lecture seule — vérifié
+#: tel quel en conteneur (allowlist : 200 sur `api.github.com`, 403 ailleurs).
+EGRESS_IMAGE = "docker.io/ubuntu/squid:6.6-24.04_beta"
+EGRESS_PORT = 3128
+EGRESS_NAME = "choregos-egress"
+KUBE_NS = "kubernetes.io/metadata.name"
+#: Ce que le proxy ne joint JAMAIS : le cluster lui-même et le lien local (métadonnées cloud).
+PLAGES_PRIVEES = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"]
+
+
+def squid_config(allowed_domains: list[str]) -> str:
+    """La configuration du proxy : une allowlist par domaine, tout le reste refusé.
+
+    `dstdomain .github.com` couvre `github.com` et ses sous-domaines. `CONNECT` n'est
+    accepté que vers 443 : un tunnel vers un autre port serait une sortie déguisée. Pas de
+    cache (un runner n'a rien à partager avec le suivant), pas de `Via` ni de
+    `X-Forwarded-For` (le fournisseur n'a pas à connaître l'adresse du pod), journal
+    d'accès sur la sortie standard : c'est là que `kubectl logs` le lit.
+    """
+    domaines = " ".join(sorted({f".{d.lstrip('.')}" for d in allowed_domains}))
+    return "\n".join(
+        [
+            f"http_port {EGRESS_PORT}",
+            f"acl allowed dstdomain {domaines}",
+            "acl SSL_ports port 443",
+            "acl Safe_ports port 80 443",
+            "acl CONNECT method CONNECT",
+            "http_access deny !Safe_ports",
+            "http_access deny CONNECT !SSL_ports",
+            "http_access allow allowed",
+            "http_access deny all",
+            "cache deny all",
+            # Sans cache, Squid réserve quand même 256 Mo de `cache_mem` par défaut : sous
+            # une limite de 256 Mi le pod était tué (OOM) avant d'écouter.
+            "cache_mem 8 MB",
+            "memory_pools off",
+            # Squid dimensionne ses tables sur `ulimit -n` : sous containerd, plus d'un
+            # milliard — le pod était tué (OOM) dans la seconde, quelle que soit sa limite
+            # mémoire. Reproduit en conteneur avec ce ulimit, guéri par cette ligne.
+            "max_filedescriptors 4096",
+            "access_log stdio:/dev/stdout",
+            "cache_log /dev/stderr",
+            "pid_filename none",
+            "logfile_rotate 0",
+            "pinger_enable off",
+            "via off",
+            "forwarded_for delete",
+            "",
+        ]
+    )
+
+
+def render_egress_proxy(
+    namespace: str, slug: str, allowed_domains: list[str], image: str = EGRESS_IMAGE
+) -> str:
+    """Le proxy d'egress du namespace des runners : ConfigMap, Deployment, Service, et la
+    NetworkPolicy qui n'ouvre Internet QU'À LUI. Le `default-deny-egress` du namespace
+    s'applique aussi au proxy ; cette politique ne le lève que pour son pod, vers les ports
+    web publics, jamais vers les plages privées du cluster.
+    """
+    labels = {"app.kubernetes.io/name": EGRESS_NAME, "choregos/project": slug}
+    # Les seuls répertoires que Squid écrit ; des emptyDir, le reste du système en lecture seule.
+    volumes = (("log", "/var/log/squid"), ("spool", "/var/spool/squid"), ("run", "/run"), ("tmp", "/tmp"))  # noqa: S108
+    return _dump(
+        [
+            {
+                "apiVersion": "v1",
+                "kind": "ConfigMap",
+                "metadata": {"name": EGRESS_NAME, "namespace": namespace, "labels": labels},
+                "data": {"squid.conf": squid_config(allowed_domains)},
+            },
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "metadata": {"name": EGRESS_NAME, "namespace": namespace, "labels": labels},
+                "spec": {
+                    "replicas": 1,
+                    "selector": {"matchLabels": labels},
+                    "template": {
+                        "metadata": {"labels": labels},
+                        "spec": {
+                            "automountServiceAccountToken": False,
+                            "securityContext": {
+                                "runAsNonRoot": True,
+                                # `proxy`, l'utilisateur de l'image ; Squid n'a besoin de rien d'autre.
+                                "runAsUser": 13,
+                                "runAsGroup": 13,
+                                "seccompProfile": {"type": "RuntimeDefault"},
+                            },
+                            "containers": [
+                                {
+                                    "name": "squid",
+                                    "image": image,
+                                    # Sans le point d'entrée de l'image : il veut créer un
+                                    # certificat et des répertoires de cache, en root.
+                                    "command": ["squid", "-N", "-f", "/etc/squid/choregos.conf"],
+                                    "ports": [{"name": "proxy", "containerPort": EGRESS_PORT}],
+                                    "readinessProbe": {"tcpSocket": {"port": "proxy"}, "periodSeconds": 5},
+                                    "resources": {
+                                        "requests": {"cpu": "50m", "memory": "64Mi"},
+                                        "limits": {"cpu": "500m", "memory": "256Mi"},
+                                    },
+                                    "securityContext": {
+                                        "allowPrivilegeEscalation": False,
+                                        "readOnlyRootFilesystem": True,
+                                        "capabilities": {"drop": ["ALL"]},
+                                    },
+                                    "volumeMounts": [
+                                        {
+                                            "name": "config",
+                                            "mountPath": "/etc/squid/choregos.conf",
+                                            "subPath": "squid.conf",
+                                            "readOnly": True,
+                                        },
+                                        *({"name": nom, "mountPath": chemin} for nom, chemin in volumes),
+                                    ],
+                                }
+                            ],
+                            "volumes": [
+                                {"name": "config", "configMap": {"name": EGRESS_NAME}},
+                                *({"name": nom, "emptyDir": {}} for nom, _ in volumes),
+                            ],
+                        },
+                    },
+                },
+            },
+            {
+                "apiVersion": "v1",
+                "kind": "Service",
+                "metadata": {"name": EGRESS_NAME, "namespace": namespace, "labels": labels},
+                "spec": {
+                    "selector": labels,
+                    "ports": [{"name": "proxy", "port": EGRESS_PORT, "targetPort": "proxy"}],
+                },
+            },
+            {
+                "apiVersion": "networking.k8s.io/v1",
+                "kind": "NetworkPolicy",
+                "metadata": {"name": f"{EGRESS_NAME}-out", "namespace": namespace},
+                "spec": {
+                    "podSelector": {"matchLabels": {"app.kubernetes.io/name": EGRESS_NAME}},
+                    "policyTypes": ["Egress"],
+                    "egress": [
+                        {
+                            "to": [
+                                {
+                                    "ipBlock": {
+                                        "cidr": "0.0.0.0/0",
+                                        "except": PLAGES_PRIVEES,
+                                    }
+                                }
+                            ],
+                            "ports": [{"protocol": "TCP", "port": 443}, {"protocol": "TCP", "port": 80}],
+                        },
+                        {
+                            "to": [{"namespaceSelector": {"matchLabels": {KUBE_NS: "kube-system"}}}],
+                            "ports": [{"protocol": "UDP", "port": 53}],
+                        },
+                    ],
+                },
+            },
+        ]
+    )
+
+
+def render_project_manifests(
+    slug: str, config: ProjectConfig, policy: Policy, *, egress_image: str = EGRESS_IMAGE
+) -> dict[str, str]:
+    """Rend les fichiers d'un projet : namespaces, quotas, netpol, RBAC, egress, Tekton, Argo."""
     runners = f"proj-{slug}-runners"
     ci = f"proj-{slug}-ci"
     quota_cpu = "32"
@@ -78,7 +246,21 @@ def render_project_manifests(slug: str, config: ProjectConfig, policy: Policy) -
         ]
     )
 
-    allowed_domains = policy.sandbox.network.allow_domains
+    allowed_domains = list(policy.sandbox.network.allow_domains)
+    # Internet, pour un runner, c'est le proxy du namespace — et seulement s'il y a des
+    # domaines à autoriser. Avant : la politique ouvrait un namespace `choregos-egress`
+    # qu'aucun chart ne livrait ; l'allowlist n'était qu'une annotation (état des lieux du
+    # 2026-09-24). Sans domaine, pas de proxy : la porte n'existe pas.
+    sortie_proxy = (
+        [
+            {
+                "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": EGRESS_NAME}}}],
+                "ports": [{"protocol": "TCP", "port": EGRESS_PORT}],
+            }
+        ]
+        if allowed_domains
+        else []
+    )
     netpol = _dump(
         [
             {
@@ -109,10 +291,10 @@ def render_project_manifests(slug: str, config: ProjectConfig, policy: Policy) -
                             ("choregos-system", 8000),
                             ("choregos-gateway", 4000),
                             ("choregos-memory", 8432),
-                            ("choregos-egress", 3128),
                             ("monitoring", 4318),
                         )
                     ]
+                    + sortie_proxy
                     + [
                         {
                             "to": [
@@ -257,6 +439,7 @@ def render_project_manifests(slug: str, config: ProjectConfig, policy: Policy) -
                     "quotas.yaml",
                     "netpol.yaml",
                     "rbac.yaml",
+                    *(["egress.yaml"] if allowed_domains else []),
                     "tekton.yaml",
                     "argocd.yaml",
                 ],
@@ -273,6 +456,8 @@ def render_project_manifests(slug: str, config: ProjectConfig, policy: Policy) -
         "tekton.yaml": tekton,
         "kustomization.yaml": kustomization,
     }
+    if allowed_domains:
+        files["egress.yaml"] = render_egress_proxy(runners, slug, allowed_domains, image=egress_image)
     if gvisor:
         files["runtimeclass.yaml"] = _dump(
             [

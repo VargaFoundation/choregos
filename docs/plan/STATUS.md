@@ -272,6 +272,19 @@ les 492 tests ne disaient pas :
    la lecture : les « trois clients GitHub » sont un client et deux adaptateurs qui
    l'emploient ; le « calcul cross-backend dupliqué » est une politique (choisir le
    relecteur) et une mesure (la comparer) — deux fonctions, pas une copie.
+   **P1-5 livré** : PodDisruptionBudget pour le front et **par file d'attente** de
+   l'orchestrateur (rendus seulement au-delà d'une réplique) ; anti-affinité `soft|hard|none`
+   sur les trois composants ; pool de connexions **borné** (`max_overflow`, `pool_timeout`,
+   `pool_recycle`, exposés par le chart) ; garde du chart qui **refuse le rendu** en
+   staging/prod avec une dépendance embarquée, `devSecrets` ou `devLogin` ; runbook de
+   sauvegarde Temporal (anglais) ; et l'egress par domaine **livré** au lieu de promis : le
+   provisioning écrit un **Squid par projet** dans le namespace des runners (allowlist =
+   `allow_domains`, sans root, en lecture seule, `CONNECT` vers 443 seulement), la
+   NetworkPolicy n'ouvre Internet qu'à lui, chaque pod d'agent reçoit `HTTPS_PROXY`. Prouvé
+   sur le kind local (`tests/cluster/test_egress_proxy.py` : 200 sur `api.github.com`, 403
+   ailleurs) ; ce qui n'est PAS prouvé : un run Tekton complet derrière ce proxy (pas de
+   Tekton sur le banc). Au passage : le test e2e des webhooks Jira/GitLab échouait seul
+   depuis P0-3 (secret vide → 401) — le banc e2e en pose un.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

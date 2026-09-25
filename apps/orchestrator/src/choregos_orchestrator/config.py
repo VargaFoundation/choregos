@@ -34,6 +34,14 @@ class OrchestratorSettings(BaseSettings):
     # l'exécuteur monte par référence.
     runner_env: dict[str, str] = {}
     runner_namespace_pattern: str = "proj-{slug}-runners"
+    # Le proxy par lequel un pod d'agent sort (`HTTP_PROXY`/`HTTPS_PROXY`), avec
+    # `{namespace}` pour celui des runners : le provisioning y déploie un Squid dont
+    # l'allowlist est celle de la politique du projet. Vide : aucun proxy — le banc local,
+    # dont le namespace n'a ni NetworkPolicy ni proxy.
+    runner_egress_proxy: str = ""
+    # L'image de ce proxy ; vide : celle que `gitops.py` connaît. À épingler par digest là
+    # où Kyverno l'exige.
+    egress_image: str = ""
 
     @property
     def callback_url(self) -> str:

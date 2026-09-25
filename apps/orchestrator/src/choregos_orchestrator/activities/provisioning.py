@@ -254,9 +254,14 @@ async def _check_aca(step: str, bundle: Any) -> str:
 async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -> str:
     """Écrit les manifests du projet dans le dépôt GitOps — Argo CD applique, pas l'API."""
     path = str(params.get("path", "projects/{{slug}}/")).replace("{{slug}}", bundle.slug)
-    from ..gitops import render_project_manifests
+    from ..gitops import EGRESS_IMAGE, render_project_manifests
 
-    manifests = render_project_manifests(bundle.slug, bundle.config, bundle.policy)
+    manifests = render_project_manifests(
+        bundle.slug,
+        bundle.config,
+        bundle.policy,
+        egress_image=str(getattr(settings, "egress_image", "") or EGRESS_IMAGE),
+    )
     writer = getattr(bundle.adapters.cd, "write_files", None)
     if writer is not None:
         await writer(path, manifests)

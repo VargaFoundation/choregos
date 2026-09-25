@@ -20,6 +20,9 @@ def _create_engine(settings: Settings) -> AsyncEngine:
     kwargs: dict[str, Any] = {"echo": settings.db_echo, "future": True}
     if not settings.is_sqlite:
         kwargs["pool_size"] = settings.db_pool_size
+        kwargs["max_overflow"] = settings.db_max_overflow
+        kwargs["pool_timeout"] = settings.db_pool_timeout_s
+        kwargs["pool_recycle"] = settings.db_pool_recycle_s
         kwargs["pool_pre_ping"] = True
     engine = create_async_engine(settings.database_url, **kwargs)
     if settings.is_sqlite:
