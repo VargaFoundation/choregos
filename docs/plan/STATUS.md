@@ -355,6 +355,15 @@ les 492 tests ne disaient pas :
    qui lit l'en-tête et vérifie qu'un script inline sans nonce ne s'exécute pas ; budget de
    bundle en CI (`pnpm bundle:check` : 1 600 kB au total, 600 kB par page ; mesuré 1 025 /
    224 kB). Reste P2 front : `design-system` publié sur npm/GHCR.
+   **P2 front (clavier sur le graphe) livré** : les états du graphe de workflow se parcourent
+   au clavier — Tab dans l'ordre de lecture (colonne par colonne, le DOM est trié comme la
+   carte), ← → suivent les transitions (nominale d'abord), ↑ ↓ changent d'état, Début/Fin ;
+   l'état sous le curseur est décrit sous la carte (`aria-live`, transitions, acteurs, gates),
+   chaque nœud porte un `aria-label`, anneau de focus visible. Au passage : un état atteint
+   seulement par une arête secondaire (question, escalade) se place après son origine au lieu
+   de la première colonne ; le contrat OpenAPI des arêtes déclare enfin `kind`/`label`/`wildcard`
+   que l'API émettait sans le dire ; le mode démo répond à la validation avec une carte, donc
+   l'écran workflow est couvert par axe. Sept tests vitest, un parcours e2e.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

@@ -96,6 +96,12 @@ The validator refuses more than syntax: an unreachable state, a retry that can l
 an unknown gate, or **a gate that would have nothing to check** — `outputs_present` on a
 transition that declares no `outputs:`. If you mean it, say so: `params: { allow_empty: true }`.
 
+The web editor (`/p/<slug>/workflow`) validates as you type and draws the workflow as a map,
+one lane per kind of actor. The map is keyboard-navigable: Tab reaches the states in reading
+order, ← and → follow transitions, ↑ and ↓ move between states, Home and End jump to the
+ends. The state under the cursor is described below the map, with its outgoing transitions,
+actors and gates — that sentence is what a screen reader announces.
+
 ### Workflows outside software
 
 The same engine carries work that has no repository. Name your own roles, bring your own
