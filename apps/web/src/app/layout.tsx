@@ -6,6 +6,9 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { TopNav } from "./top-nav";
 
+// Un nonce par requête (CSP, `src/proxy.ts`) exige un rendu par requête.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "choregos · varga foundation",
   description: "A ticket goes in, a controlled production release comes out.",
