@@ -345,6 +345,16 @@ les 492 tests ne disaient pas :
    2026-09-24 (« pas de demi-état ») et l'anglais est la langue de référence ; le français
    reste dans le code, les commentaires et les données de démonstration (`mocks/data.ts`).
    Tests vitest, e2e Playwright et `tsc`/`eslint` alignés. S5-01 passe ✅.
+   **P2 front (a11y) livré** (#47) : `eslint-plugin-jsx-a11y` en mode strict (33 règles, zéro
+   faute) ; axe dans Playwright sur six écrans en mode démo, bloquant sur serious/critical
+   (une vraie violation trouvée : un `<dl>` sans `dt`/`dd`) ; parcours et axe joués en CI dans
+   le job web, rapport en artefact sur échec. Pas encore : clavier sur le graphe de workflow.
+   **P2 front (CSP et bundle) livré** (#52) : CSP à **nonce** pour les scripts (`'strict-dynamic'`,
+   plus d'`unsafe-inline` — les styles le gardent, Next injecte des styles inline) posée par
+   `src/proxy.ts`, rendu dynamique forcé pour que le nonce change à chaque réponse ; test e2e
+   qui lit l'en-tête et vérifie qu'un script inline sans nonce ne s'exécute pas ; budget de
+   bundle en CI (`pnpm bundle:check` : 1 600 kB au total, 600 kB par page ; mesuré 1 025 /
+   224 kB). Reste P2 front : `design-system` publié sur npm/GHCR.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

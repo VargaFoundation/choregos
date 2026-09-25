@@ -119,6 +119,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # Le budget de bundle se lit sur le build : une dépendance embarquée par mégarde se voit ici.
+      - run: pnpm bundle:check
       # Les parcours Playwright et le passage d'axe tournent contre le build en mode démo :
       # un écran inaccessible ou un parcours cassé se voit ici, pas chez un utilisateur.
       - run: pnpm exec playwright install --with-deps chromium
