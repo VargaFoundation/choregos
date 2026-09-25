@@ -6,6 +6,7 @@ là où il s'est arrêté, sans rien créer en double.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -145,85 +146,143 @@ async def _execute(
     name: str, params: dict[str, Any], bundle: Any, settings: Any, payload: dict[str, Any]
 ) -> str:
     """Aiguillage des étapes. Toute étape inconnue est ignorée explicitement, jamais devinée."""
-    tracker = bundle.adapters.tracker
-    if name == "github.install_app":
-        checker = getattr(tracker, "test", None)
-        if checker is not None:
-            result = await checker()
-            return f"App installée : {result.get('repo', bundle.slug)}"
-        return "App supposée installée (mode fakes)"
-    if name == "github.ensure_labels":
-        ensure = getattr(tracker, "ensure_labels", None)
-        if ensure is not None:
-            await ensure(LABELS)
-        return f"{len(LABELS)} labels garantis"
-    if name == "github.ensure_project_board":
-        fields = params.get("fields", ["Status", "Cost", "Size", "Risk", "Run"])
-        return f"board vérifié ({', '.join(fields)})"
-    if name == "github.ensure_issue_template":
-        return "gabarit d'issue déposé"
-    if name == "github.ensure_webhooks":
-        events = params.get("events", [])
-        return f"webhooks : {', '.join(events) if events else 'par défaut'}"
-    if name in {"aca.check_environment", "aca.check_identity"}:
-        return await _check_aca(name, bundle)
-    if name == "gitops.write_project_manifests":
-        return await _write_manifests(bundle, params, settings)
-    if name == "gitops.open_pr_or_commit":
-        return "PR GitOps ouverte sur choregos-infra"
-    if name == "argocd.wait_synced":
-        apps = params.get("apps", [f"choregos-project-{bundle.slug}"])
-        for app in apps:
-            health = await bundle.adapters.cd.health(str(app).replace("{{slug}}", bundle.slug))
-            if health.status in {"Degraded", "Missing"}:
-                raise RuntimeError(f"application {app} non synchronisée : {health.status}")
-        return f"{len(apps)} application(s) synchronisée(s)"
-    if name == "repo.scaffold_pr":
-        files = params.get("files", [])
-        return f"PR de scaffolding : {len(files)} fichier(s)"
-    if name == "memory.create_tenant":
-        await bundle.adapters.memory.write_fact(
-            bundle.slug,
-            Fact(
-                kind="convention",
-                subject=f"convention:{bundle.slug}:bootstrap",
-                content=f"Projet {bundle.slug} provisionné par Choregos.",
-                provenance=Provenance(source="provisioning"),
-            ),
-        )
-        return "tenant mémoire créé"
-    if name == "memory.initial_import":
-        sources = params.get("sources", ["readme", "docs", "adr"])
-        await bundle.adapters.memory.ingest_events(
-            bundle.slug,
-            [
-                {
-                    "external_id": f"{bundle.slug}:{source}",
-                    "kind": "convention",
-                    "subject": f"convention:{bundle.slug}:{source}",
-                    "content": f"Import initial depuis {source}",
-                    "source": "provisioning",
-                }
-                for source in sources
-            ],
-        )
-        return f"import initial : {', '.join(sources)}"
-    if name == "gateway.create_team_and_budget":
-        key = await bundle.adapters.gateway.mint_key(
-            {"project": bundle.slug, "kind": "team"},
-            budget_usd=bundle.engine.daily_budget() or 100.0,
-            ttl_s=30 * 24 * 3600,
-            models=[],
-        )
-        await bundle.adapters.gateway.revoke(key.key_id)
-        return "équipe et budget gateway créés"
-    if name == "notify.test_message":
-        await bundle.adapters.notify.send(
-            bundle.config.notify.slack_channel or "#choregos",
-            Message(title=f"Choregos — projet {bundle.slug} provisionné", severity="success"),
-        )
-        return "message de test envoyé"
+    handler = _ETAPES.get(name)
+    if handler is None:
+        return _etape_inconnue(name)
+    return str(await handler(params, bundle, settings))
+
+
+async def _github_install_app(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    checker = getattr(bundle.adapters.tracker, "test", None)
+    if checker is not None:
+        result = await checker()
+        return f"App installée : {result.get('repo', bundle.slug)}"
+    return "App supposée installée (mode fakes)"
+
+
+async def _github_ensure_labels(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    ensure = getattr(bundle.adapters.tracker, "ensure_labels", None)
+    if ensure is not None:
+        await ensure(LABELS)
+    return f"{len(LABELS)} labels garantis"
+
+
+async def _github_ensure_project_board(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    fields = params.get("fields", ["Status", "Cost", "Size", "Risk", "Run"])
+    return f"board vérifié ({', '.join(fields)})"
+
+
+async def _github_ensure_webhooks(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    events = params.get("events", [])
+    return f"webhooks : {', '.join(events) if events else 'par défaut'}"
+
+
+async def _argocd_wait_synced(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    apps = params.get("apps", [f"choregos-project-{bundle.slug}"])
+    for app in apps:
+        health = await bundle.adapters.cd.health(str(app).replace("{{slug}}", bundle.slug))
+        if health.status in {"Degraded", "Missing"}:
+            raise RuntimeError(f"application {app} non synchronisée : {health.status}")
+    return f"{len(apps)} application(s) synchronisée(s)"
+
+
+async def _memory_create_tenant(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    await bundle.adapters.memory.write_fact(
+        bundle.slug,
+        Fact(
+            kind="convention",
+            subject=f"convention:{bundle.slug}:bootstrap",
+            content=f"Projet {bundle.slug} provisionné par Choregos.",
+            provenance=Provenance(source="provisioning"),
+        ),
+    )
+    return "tenant mémoire créé"
+
+
+async def _memory_initial_import(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    sources = params.get("sources", ["readme", "docs", "adr"])
+    await bundle.adapters.memory.ingest_events(
+        bundle.slug,
+        [
+            {
+                "external_id": f"{bundle.slug}:{source}",
+                "kind": "convention",
+                "subject": f"convention:{bundle.slug}:{source}",
+                "content": f"Import initial depuis {source}",
+                "source": "provisioning",
+            }
+            for source in sources
+        ],
+    )
+    return f"import initial : {', '.join(sources)}"
+
+
+async def _gateway_create_team_and_budget(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    key = await bundle.adapters.gateway.mint_key(
+        {"project": bundle.slug, "kind": "team"},
+        budget_usd=bundle.engine.daily_budget() or 100.0,
+        ttl_s=30 * 24 * 3600,
+        models=[],
+    )
+    await bundle.adapters.gateway.revoke(key.key_id)
+    return "équipe et budget gateway créés"
+
+
+async def _notify_test_message(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    await bundle.adapters.notify.send(
+        bundle.config.notify.slack_channel or "#choregos",
+        Message(title=f"Choregos — projet {bundle.slug} provisionné", severity="success"),
+    )
+    return "message de test envoyé"
+
+
+def _etape_constante(texte: str) -> Etape:
+    async def _etape(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+        return texte
+
+    return _etape
+
+
+def _etape_inconnue(name: str) -> str:
     return f"étape `{name}` ignorée (non implémentée par ce template)"
+
+
+async def _gitops_write(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    return await _write_manifests(bundle, params, settings)
+
+
+async def _repo_scaffold_pr(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    return f"PR de scaffolding : {len(params.get('files', []))} fichier(s)"
+
+
+async def _aca_check_environment(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    return await _check_aca("aca.check_environment", bundle)
+
+
+async def _aca_check_identity(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    return await _check_aca("aca.check_identity", bundle)
+
+
+Etape = Callable[[dict[str, Any], Any, Any], Awaitable[str]]
+
+#: Une étape = une fonction ; ce qu'un template nomme et qui n'est pas ici est ignoré, et dit.
+_ETAPES: dict[str, Etape] = {
+    "github.install_app": _github_install_app,
+    "github.ensure_labels": _github_ensure_labels,
+    "github.ensure_project_board": _github_ensure_project_board,
+    "github.ensure_issue_template": _etape_constante("gabarit d'issue déposé"),
+    "github.ensure_webhooks": _github_ensure_webhooks,
+    "aca.check_environment": _aca_check_environment,
+    "aca.check_identity": _aca_check_identity,
+    "gitops.write_project_manifests": _gitops_write,
+    "gitops.open_pr_or_commit": _etape_constante("PR GitOps ouverte sur choregos-infra"),
+    "argocd.wait_synced": _argocd_wait_synced,
+    "repo.scaffold_pr": _repo_scaffold_pr,
+    "memory.create_tenant": _memory_create_tenant,
+    "memory.initial_import": _memory_initial_import,
+    "gateway.create_team_and_budget": _gateway_create_team_and_budget,
+    "notify.test_message": _notify_test_message,
+}
 
 
 async def _check_aca(step: str, bundle: Any) -> str:

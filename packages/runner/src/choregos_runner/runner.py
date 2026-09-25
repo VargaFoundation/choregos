@@ -240,23 +240,7 @@ class Runner:
                     result_repairs=repairs,
                 )
                 if agent_result is None:
-                    # Deux échecs qui se ressemblent et ne se soignent pas pareil : un agent
-                    # qui a travaillé mais n'a pas écrit son résultat, et un agent dont le
-                    # tour revient VIDE — clé refusée, quota atteint, fournisseur en panne.
-                    # Le second accusé d'un oubli envoie l'enquête du mauvais côté.
-                    if _agent_muet(agent.outcome) and not workspace.result_path().exists():
-                        raison = "agent_silencieux"
-                        # Ce que l'agent a écrit sur sa sortie d'erreur vaut mieux que toute
-                        # reformulation : c'est là que le fournisseur dit « quota atteint »
-                        # ou « clé refusée ».
-                        bruit = " | ".join(agent.outcome.errors[-2:] or agent.stderr_tail[-2:])
-                        detail = (
-                            "l'agent n'a produit ni texte ni appel d'outil : vérifier l'accès "
-                            f"au modèle (fin de tour : {agent.outcome.stop_reason})"
-                            + (f" — {bruit[:300]}" if bruit else "")
-                        )
-                    else:
-                        raison, detail = "invalid_result", (load.error or "résultat illisible")
+                    raison, detail = _diagnostic_sans_resultat(agent, load.error, workspace.result_path())
                     invalid = fallback_result(raison, detail)
                     final = complete_result(
                         invalid,
@@ -360,6 +344,23 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
     scope = stage_input.work_item.key.rsplit("#", 1)[-1]
     summary = result.summary.strip().splitlines()[0][:100] if result.summary else "étape Choregos"
     return f"{prefix}({scope}): {summary}"
+
+
+def _diagnostic_sans_resultat(agent: Any, erreur: str | None, result_path: Path) -> tuple[str, str]:
+    """Deux échecs qui se ressemblent et ne se soignent pas pareil : un agent qui a travaillé
+    mais n'a pas écrit son résultat, et un agent dont le tour revient VIDE — clé refusée,
+    quota atteint, fournisseur en panne. Le second accusé d'un oubli envoie l'enquête du
+    mauvais côté."""
+    if _agent_muet(agent.outcome) and not result_path.exists():
+        # Ce que l'agent a écrit sur sa sortie d'erreur vaut mieux que toute reformulation :
+        # c'est là que le fournisseur dit « quota atteint » ou « clé refusée ».
+        bruit = " | ".join(agent.outcome.errors[-2:] or agent.stderr_tail[-2:])
+        detail = (
+            "l'agent n'a produit ni texte ni appel d'outil : vérifier l'accès "
+            f"au modèle (fin de tour : {agent.outcome.stop_reason})" + (f" — {bruit[:300]}" if bruit else "")
+        )
+        return "agent_silencieux", detail
+    return "invalid_result", (erreur or "résultat illisible")
 
 
 def _agent_muet(outcome: PromptOutcome) -> bool:

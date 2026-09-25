@@ -323,3 +323,23 @@ transitions:
     )
     _, rapport = parse_workflow(ok, strict=False)
     assert not [e for e in rapport.errors if e.code == "gate.sans_matiere"]
+
+
+def test_l_escalade_d_un_humain_vers_un_acteur_inconnu_est_refusee() -> None:
+    """Trouvé en découpant `_check_references` (2026-09-25) : la boucle des acteurs relisait la
+    variable de la boucle des transitions, et cette erreur n'était jamais rapportée."""
+    yaml_text = """
+apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: t, version: 1 }
+actors:
+  dev: { type: agent, role: implement, model: "profile:standard" }
+  owner: { type: human, group: maintainers, escalate_to: fantome }
+states:
+  inbox: { display: Inbox }
+  done: { display: Done, terminal: true }
+transitions:
+  - { id: t1, from: inbox, to: done, by: dev }
+"""
+    _, report = parse_workflow(yaml_text, strict=False)
+    assert any(e.code == "actor.unknown" and "fantome" in e.message for e in report.errors), report.errors

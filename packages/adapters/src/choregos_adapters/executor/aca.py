@@ -34,7 +34,7 @@ LOG_ANALYTICS = "https://api.loganalytics.io/v1"
 class AzureArmClient:
     """Client ARM minimal : un jeton AAD mis en cache, et des appels REST."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 — la configuration ARM, tout en mots-clés avec défauts
         self,
         *,
         subscription_id: str = "",

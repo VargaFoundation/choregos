@@ -67,7 +67,19 @@ extend-exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ASYNC", "S", "RET", "PL", "RUF"]
 # PLC0415 : les imports paresseux sont assumés (rupture de cycles, coût de démarrage).
-ignore = ["S101", "PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "PLR0912", "PLR0911", "PLR0915", "SIM108", "PLC0415", "PLR0917"]
+# PLR0911 (retours) et PLR0917 (positionnels) restent ignorés ; les autres règles de
+# complexité sont actives avec des seuils réalistes (ci-dessous) — l'état des lieux du
+# 2026-09-24 les trouvait toutes ignorées, et trois fonctions dépassaient largement.
+ignore = ["S101", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "PLR0911", "SIM108", "PLC0415", "PLR0917"]
+extend-select = ["C901"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.pylint]
+max-branches = 20
+max-args = 8
+max-statements = 80
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S", "PLR", "ASYNC"]

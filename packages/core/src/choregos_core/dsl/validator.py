@@ -63,55 +63,10 @@ def _check_references(
     wf: Workflow, states: set[str], gates: set[str], report: ValidationReport, source: Any
 ) -> None:
     for index, t in enumerate(wf.transitions):
-        path: list[str | int] = ["transitions", index]
-        if t.from_ != AGENT_WILDCARD and t.from_ not in states:
-            report.error("state.unknown", f"état source inconnu : {t.from_}", [*path, "from"], source)
-        if t.to not in states:
-            report.error("state.unknown", f"état cible inconnu : {t.to}", [*path, "to"], source)
-        if t.by is not None and t.by not in wf.actors:
-            report.error("actor.unknown", f"acteur inconnu : {t.by}", [*path, "by"], source)
-        for g_index, g in enumerate(t.gates):
-            if g.name not in gates:
-                report.error(
-                    "gate.unknown",
-                    f"gate inconnue : {g.name} (connues : {', '.join(sorted(gates))})",
-                    [*path, "gates", g_index],
-                    source,
-                )
-        for field_name in ("on_fail", "on_changes_requested"):
-            retry = getattr(t, field_name)
-            if retry is None:
-                continue
-            for attr in ("to", "escalate_to"):
-                target = getattr(retry, attr)
-                if target not in states:
-                    report.error(
-                        "state.unknown",
-                        f"état inconnu dans {field_name}.{attr} : {target}",
-                        [*path, field_name, attr],
-                        source,
-                    )
-        if t.on_reject is not None and t.on_reject not in states:
-            report.error("state.unknown", f"état inconnu : {t.on_reject}", [*path, "on_reject"], source)
-        if t.review and t.review.agents:
-            for a_index, actor_id in enumerate(t.review.agents):
-                if actor_id not in wf.actors:
-                    report.error(
-                        "actor.unknown",
-                        f"relecteur inconnu : {actor_id}",
-                        [*path, "review", "agents", a_index],
-                        source,
-                    )
-        if t.by:
-            actor = wf.actors.get(t.by)
-            if isinstance(actor, AgentActor) and actor.model.startswith("profile:"):
-                name = actor.model.removeprefix("profile:")
-                if not name:
-                    report.error(
-                        "model.profile_empty", "profil de modèle vide", ["actors", t.by, "model"], source
-                    )
-
-    for actor_id in wf.actors:
+        _check_transition_references(wf, t, ["transitions", index], states, gates, report, source)
+    for actor_id, actor in wf.actors.items():
+        # Avant le 2026-09-25, cette boucle relisait la variable `actor` de la boucle des
+        # transitions : l'escalade d'un acteur humain vers un inconnu n'était jamais vue.
         if isinstance(actor, HumanActor) and actor.escalate_to and actor.escalate_to not in wf.actors:
             report.error(
                 "actor.unknown",
@@ -119,9 +74,60 @@ def _check_references(
                 ["actors", actor_id, "escalate_to"],
                 source,
             )
+    _check_defaults_references(wf, states, report, source)
 
+
+def _check_transition_references(
+    wf: Workflow,
+    t: Any,
+    path: list[str | int],
+    states: set[str],
+    gates: set[str],
+    report: ValidationReport,
+    source: Any,
+) -> None:
+    def etat(nom: str | None, chemin: list[str | int], libelle: str) -> None:
+        if nom is not None and nom not in states:
+            report.error("state.unknown", f"{libelle} : {nom}", chemin, source)
+
+    if t.from_ != AGENT_WILDCARD:
+        etat(t.from_, [*path, "from"], "état source inconnu")
+    etat(t.to, [*path, "to"], "état cible inconnu")
+    etat(t.on_reject, [*path, "on_reject"], "état inconnu")
+    if t.by is not None and t.by not in wf.actors:
+        report.error("actor.unknown", f"acteur inconnu : {t.by}", [*path, "by"], source)
+    for g_index, g in enumerate(t.gates):
+        if g.name not in gates:
+            report.error(
+                "gate.unknown",
+                f"gate inconnue : {g.name} (connues : {', '.join(sorted(gates))})",
+                [*path, "gates", g_index],
+                source,
+            )
+    for field_name in ("on_fail", "on_changes_requested"):
+        retry = getattr(t, field_name)
+        if retry is None:
+            continue
+        for attr in ("to", "escalate_to"):
+            etat(getattr(retry, attr), [*path, field_name, attr], f"état inconnu dans {field_name}.{attr}")
+    for a_index, actor_id in enumerate(t.review.agents if t.review and t.review.agents else []):
+        if actor_id not in wf.actors:
+            report.error(
+                "actor.unknown",
+                f"relecteur inconnu : {actor_id}",
+                [*path, "review", "agents", a_index],
+                source,
+            )
+    actor = wf.actors.get(t.by) if t.by else None
+    if isinstance(actor, AgentActor) and actor.model == "profile:":
+        report.error("model.profile_empty", "profil de modèle vide", ["actors", t.by, "model"], source)
+
+
+def _check_defaults_references(wf: Workflow, states: set[str], report: ValidationReport, source: Any) -> None:
     defaults = wf.defaults
-    if defaults and defaults.from_any_agent_state:
+    if not defaults:
+        return
+    if defaults.from_any_agent_state:
         for attr in ("on_question", "on_budget_exceeded", "on_timeout"):
             target = getattr(defaults.from_any_agent_state, attr)
             if target is not None and target not in states:
@@ -131,17 +137,10 @@ def _check_references(
                     ["defaults", "from_any_agent_state", attr],
                     source,
                 )
-    if (
-        defaults
-        and defaults.needs_human
-        and defaults.needs_human.on_abandon
-        and defaults.needs_human.on_abandon not in states
-    ):
+    abandon = defaults.needs_human.on_abandon if defaults.needs_human else None
+    if abandon and abandon not in states:
         report.error(
-            "state.unknown",
-            f"état inconnu : {defaults.needs_human.on_abandon}",
-            ["defaults", "needs_human", "on_abandon"],
-            source,
+            "state.unknown", f"état inconnu : {abandon}", ["defaults", "needs_human", "on_abandon"], source
         )
 
 
