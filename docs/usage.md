@@ -41,6 +41,11 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 | `memory` | `ecphoria`, `pgvector`, `fake` |
 | `notify` | `slack`, `fake` |
 
+`memory: pgvector` keeps the project's memory in Choregos's own database — no extra service,
+a lexical ranking instead of embeddings, the same governed writes. The connector type decides
+for both the API and the orchestrator; on PostgreSQL the memory is read under the project's
+organization, like everything else under row-level security.
+
 `gateway: direct` lets agents use credentials they bring themselves. It is the honest choice
 for a bench, and it says what it costs: **no spend is measured and no cap applies** — only
 the turn and minute budgets still hold.

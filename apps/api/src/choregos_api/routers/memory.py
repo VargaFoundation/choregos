@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from choregos_core.domain import Memory
 from fastapi import APIRouter, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..deps import Db, Me, ProjectCtx
+from ..db.models import Connector
+from ..deps import Db, Me, ProjectContext, ProjectCtx
 from ..errors import forbidden
 from ..rbac import Permission
 from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryReimport
@@ -18,10 +21,24 @@ from ..temporal import get_temporal
 router = APIRouter(tags=["memory"])
 
 
-def _adapter(project_slug: str) -> object:
+async def _adapter(ctx: ProjectContext, session: AsyncSession) -> Any:
+    """La mémoire du projet, selon SON connecteur `memory` — pas Ecphoria d'office.
+
+    Le type était codé en dur : un projet configuré en `pgvector` (le repli sans service
+    de plus) lisait Ecphoria ici et pgvector dans l'orchestrateur. L'organisation est
+    passée à la fabrique : sur PostgreSQL, la mémoire pgvector ne voit que ce que la RLS
+    montre à cette organisation.
+    """
     from choregos_adapters import build
 
-    return build("memory", "ecphoria", {"tenant": project_slug})
+    row = (
+        await session.execute(
+            select(Connector).where(Connector.project_id == ctx.id, Connector.kind == "memory")
+        )
+    ).scalar_one_or_none()
+    type_name = row.type if row is not None else "ecphoria"
+    config = dict(row.config or {}) if row is not None else {}
+    return build("memory", type_name, {**config, "tenant": ctx.slug, "org": ctx.org_slug})
 
 
 def _dto(memory: Memory) -> MemoryDto:
@@ -50,16 +67,16 @@ async def search(
     policy = policy_model(await active_policy(session, ctx.id))
     if not policy.memory.enabled:
         return []
-    adapter = _adapter(ctx.slug)
-    results = await adapter.search(ctx.slug, q, k)  # type: ignore[attr-defined]
+    adapter = await _adapter(ctx, session)
+    results = await adapter.search(ctx.slug, q, k)
     wanted = {kind.strip() for kind in (kinds or "").split(",") if kind.strip()}
     return [_dto(m) for m in results if not wanted or str(m.kind) in wanted]
 
 
 @router.get("/projects/{id}/memory/pending", response_model=list[MemoryDto], operation_id="listPendingMemory")
-async def pending(ctx: ProjectCtx) -> list[MemoryDto]:
+async def pending(ctx: ProjectCtx, session: Db) -> list[MemoryDto]:
     """Faits proposés par des agents, en attente de validation humaine (écriture gouvernée)."""
-    adapter = _adapter(ctx.slug)
+    adapter = await _adapter(ctx, session)
     rows = getattr(adapter, "pending", {}).get(ctx.slug, []) if hasattr(adapter, "pending") else []
     if hasattr(adapter, "list_pending"):
         rows = await adapter.list_pending(ctx.slug)
@@ -69,9 +86,9 @@ async def pending(ctx: ProjectCtx) -> list[MemoryDto]:
 @router.post("/projects/{id}/memory/pending", operation_id="decidePendingMemory")
 async def decide(ctx: ProjectCtx, body: MemoryDecision, session: Db) -> dict[str, str]:
     ctx.require(Permission.MEMORY_WRITE)
-    adapter = _adapter(ctx.slug)
+    adapter = await _adapter(ctx, session)
     if body.action == "accept":
-        accepted = await adapter.accept_pending(ctx.slug, body.id)  # type: ignore[attr-defined]
+        accepted = await adapter.accept_pending(ctx.slug, body.id)
     else:
         accepted = (
             await adapter.reject_pending(ctx.slug, body.id) if hasattr(adapter, "reject_pending") else True
