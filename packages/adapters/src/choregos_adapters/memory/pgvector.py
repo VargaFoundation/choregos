@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from choregos_contracts import ContextPack, MemoryItem
@@ -15,6 +16,8 @@ from choregos_core.domain import Fact, Memory, Provenance, utcnow
 from choregos_core.models import estimate_tokens
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from ..errors import ConfigurationError
 
 TOKEN_RE = re.compile(r"[a-zà-ÿ0-9_]+")
 
@@ -38,21 +41,45 @@ def similarity(a: dict[str, float], b: dict[str, float]) -> float:
     return sum(value * large.get(token, 0.0) for token, value in small.items())
 
 
+@dataclass(frozen=True)
+class ModelesPgVector:
+    """Les deux tables dont cet adaptateur a besoin, INJECTÉES par l'application qui les possède.
+
+    L'adaptateur importait `choregos_api.db.*` — une dépendance inversée (les adaptateurs
+    ne connaissent pas l'API) et non déclarée, cachée derrière des imports paresseux : le
+    wheel de `choregos-adapters` explosait en `ModuleNotFoundError` dès qu'on touchait
+    pgvector hors de l'espace de travail (état des lieux du 2026-09-24).
+    """
+
+    Project: Any
+    MemoryFact: Any
+
+
 class PgVectorMemory:
     """Mémoire stockée dans `memory_facts`, avec supersession par sujet."""
 
-    def __init__(self, sessionmaker: async_sessionmaker[Any] | None = None) -> None:
+    def __init__(
+        self, sessionmaker: async_sessionmaker[Any] | None = None, modeles: ModelesPgVector | None = None
+    ) -> None:
         self._sessionmaker = sessionmaker
+        self._modeles = modeles
 
     def _sessions(self) -> async_sessionmaker[Any]:
-        if self._sessionmaker is not None:
-            return self._sessionmaker
-        from choregos_api.db.session import get_sessionmaker
+        if self._sessionmaker is None:
+            raise ConfigurationError(
+                "pgvector : aucune session injectée — l'application doit enregistrer la fabrique "
+                "(`choregos_api.adaptateurs.brancher_pgvector`)"
+            )
+        return self._sessionmaker
 
-        return get_sessionmaker()
+    @property
+    def modeles(self) -> ModelesPgVector:
+        if self._modeles is None:
+            raise ConfigurationError("pgvector : modèles non injectés (voir `brancher_pgvector`)")
+        return self._modeles
 
     async def _project_id(self, session: Any, project: str) -> str:
-        from choregos_api.db.models import Project
+        Project = self.modeles.Project  # noqa: N806 — c'est une classe
 
         row = (await session.execute(select(Project).where(Project.slug == project))).scalar_one_or_none()
         if row is None:
@@ -105,7 +132,7 @@ class PgVectorMemory:
     async def _ranked(
         self, project: str, query: str, kinds: list[str] | None, limit: int
     ) -> list[tuple[Any, float]]:
-        from choregos_api.db.models import MemoryFact
+        MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         vector = lexical_vector(query)
         async with self._sessions()() as session:
@@ -122,7 +149,7 @@ class PgVectorMemory:
 
     async def write_fact(self, project: str, fact: Fact) -> str:
         """Écriture gouvernée : le fait précédent de même `subject` est superseded."""
-        from choregos_api.db.models import MemoryFact
+        MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
             project_id = await self._project_id(session, project)
@@ -163,7 +190,7 @@ class PgVectorMemory:
             return memory_id
 
     async def propose_fact(self, project: str, fact: Fact, provenance: Provenance) -> str:
-        from choregos_api.db.models import MemoryFact
+        MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
             project_id = await self._project_id(session, project)
@@ -186,7 +213,7 @@ class PgVectorMemory:
             return memory_id
 
     async def list_pending(self, project: str) -> list[Memory]:
-        from choregos_api.db.models import MemoryFact
+        MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
             project_id = await self._project_id(session, project)
@@ -210,7 +237,7 @@ class PgVectorMemory:
         return await self._set_status(memory_id, "rejected")
 
     async def _set_status(self, memory_id: str, status: str) -> bool:
-        from choregos_api.db.models import MemoryFact
+        MemoryFact = self.modeles.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
             row = await session.get(MemoryFact, memory_id)

@@ -291,7 +291,6 @@ version = "0.3.0"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "choregos-core" },
-    { name = "choregos-orchestrator" },
     { name = "httpx" },
     { name = "pyyaml" },
     { name = "rich" },
@@ -301,7 +300,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "choregos-core", editable = "packages/core" },
-    { name = "choregos-orchestrator", editable = "apps/orchestrator" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.9" },
@@ -418,8 +416,8 @@ name = "choregos-tools-mcp"
 version = "0.3.0"
 source = { editable = "packages/tools-mcp" }
 dependencies = [
+    { name = "choregos-contracts" },
     { name = "choregos-core" },
-    { name = "choregos-runner" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -430,8 +428,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "choregos-contracts", editable = "packages/contracts" },
     { name = "choregos-core", editable = "packages/core" },
-    { name = "choregos-runner", editable = "packages/runner" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.9" },

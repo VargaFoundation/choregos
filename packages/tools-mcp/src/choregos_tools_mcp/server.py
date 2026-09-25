@@ -8,8 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from choregos_runner.client import InternalClient
-
+from .client import InternalClient
 from .tools import TOOL_SCHEMAS, ToolContext, finding_from, text_result
 
 PROTOCOL_VERSION = "2025-06-18"

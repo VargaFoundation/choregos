@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from choregos_adapters import AdapterSet
+from choregos_api.adaptateurs import brancher_pgvector
 from choregos_api.db.models import Connector, Organization, PolicyDef, Project, WorkflowDef, WorkItem
 from choregos_api.db.session import session_scope
 from choregos_api.services import policy_model, workflow_model
@@ -19,6 +20,9 @@ from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import PolicyEngine
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# L'orchestrateur possède les mêmes tables que l'API : il branche pgvector de la même façon.
+brancher_pgvector()
 
 
 @dataclass(slots=True)

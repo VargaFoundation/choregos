@@ -7,10 +7,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from choregos_runner.client import InternalClient
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
+from .client import InternalClient
 from .server import McpServer
 from .tools import ToolContext
 
