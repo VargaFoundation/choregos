@@ -364,6 +364,14 @@ les 492 tests ne disaient pas :
    de la première colonne ; le contrat OpenAPI des arêtes déclare enfin `kind`/`label`/`wildcard`
    que l'API émettait sans le dire ; le mode démo répond à la validation avec une carte, donc
    l'écran workflow est couvert par axe. Sept tests vitest, un parcours e2e.
+   **P2 (Kyverno, RuntimeClass) livré** : la règle `non-root` est **stricte** — le contexte
+   de sécurité du pod (non-root, seccomp) et des conteneurs (pas d'escalade, capacités
+   retirées) est exigé, plus toléré s'il manque ; `tests/charts` rend le chart pour les quatre
+   environnements et applique la règle à chaque pod (LiteLLM embarqué corrigé : il n'avait
+   pas de contexte de pod ; l'image tourne en uid 1000, vérifié à l'import, pas encore en
+   service sur le banc faute de clé) ; les pods d'agent (Job et PipelineRun) portent le
+   profil seccomp au niveau du pod ; `runner.runtimeClass` (gVisor, Kata) s'applique à
+   chaque pod d'agent quand la politique n'impose pas déjà gVisor, qui l'emporte toujours.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

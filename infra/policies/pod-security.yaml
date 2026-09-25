@@ -6,6 +6,11 @@ spec:
   validationFailureAction: Enforce
   background: true
   rules:
+    # Règle STRICTE. Avant le 2026-09-25, chaque champ était en ancre conditionnelle
+    # (`=(runAsNonRoot): true`) : un pod qui ne posait aucun securityContext passait, et
+    # c'est précisément le pod qu'on veut arrêter. Désormais le contexte est exigé, pour le
+    # pod et pour chaque conteneur, avec un profil seccomp. `tests/charts` rend le chart et
+    # vérifie que chacun de nos pods y satisfait.
     - name: non-root
       match:
         any:
@@ -13,15 +18,23 @@ spec:
               kinds: [Pod]
               namespaces: ["choregos-*", "proj-*"]
       validate:
-        message: "les conteneurs Choregos tournent en non-root, sans privilèges"
+        message: >-
+          les conteneurs Choregos tournent en non-root, sans escalade de privilèges, sous
+          seccomp RuntimeDefault : securityContext.runAsNonRoot, seccompProfile et
+          allowPrivilegeEscalation: false sont obligatoires
         pattern:
           spec:
-            =(securityContext):
-              =(runAsNonRoot): true
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: "RuntimeDefault | Localhost"
             containers:
-              - =(securityContext):
-                  =(allowPrivilegeEscalation): false
+              - securityContext:
+                  allowPrivilegeEscalation: false
                   =(privileged): false
+                  capabilities:
+                    drop:
+                      - ALL
     - name: pas-de-hostpath
       match:
         any:

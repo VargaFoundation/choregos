@@ -284,6 +284,14 @@ def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
     return env
 
 
+def classe_d_execution(settings: Any, policy: Any) -> str | None:
+    """La `RuntimeClass` d'un pod d'agent : celle qu'exige la politique, sinon celle du
+    déploiement, sinon aucune. Une politique `gvisor` ne se contourne pas par la valeur."""
+    if policy.sandbox.runtime == "gvisor":
+        return "gvisor"
+    return str(getattr(settings, "runner_runtime_class", "") or "") or None
+
+
 def _run_id(plan: StagePlan) -> str:
     """Identifiant déterministe : rejouer l'activité ne crée pas un second run."""
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
@@ -355,7 +363,7 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             run_token=stage_input.callbacks.run_token,
             stage_input=stage_input,
             timeout_minutes=stage_input.budget.max_minutes + 10,
-            runtime_class="gvisor" if bundle.policy.sandbox.runtime == "gvisor" else None,
+            runtime_class=classe_d_execution(settings, bundle.policy),
             env=env_du_runner(settings, _runner_namespace(settings, bundle.slug)),
             labels={
                 "choregos/project": bundle.slug,

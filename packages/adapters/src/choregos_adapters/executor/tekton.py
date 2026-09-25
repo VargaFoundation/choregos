@@ -133,7 +133,12 @@ class TektonExecutor:
     def _pipeline_run(self, spec: StageJobSpec, name: str) -> dict[str, Any]:
         depot = spec.stage_input.repo if spec.stage_input else None
         pod_template: dict[str, Any] = {
-            "securityContext": {"runAsNonRoot": True, "runAsUser": 1000, "fsGroup": 1000},
+            "securityContext": {
+                "runAsNonRoot": True,
+                "runAsUser": 1000,
+                "fsGroup": 1000,
+                "seccompProfile": {"type": "RuntimeDefault"},
+            },
             "nodeSelector": {"role": "runners"},
             "tolerations": [{"key": "role", "operator": "Equal", "value": "runners", "effect": "NoSchedule"}],
         }

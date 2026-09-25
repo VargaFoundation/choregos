@@ -227,6 +227,9 @@ choregos-orchestrator:
     limits:
       cpu: "2"
       memory: 6Gi
+    # La RuntimeClass (gVisor, Kata) de chaque pod d'agent quand la politique du projet
+    # n'en impose pas (`sandbox.runtime: gvisor` l'emporte). Vide : la runtime du cluster.
+    runtimeClass: ""
     # Le proxy d'egress par lequel CHAQUE pod d'agent sort (`HTTP_PROXY`/`HTTPS_PROXY`),
     # `{namespace}` = celui des runners. Le provisioning y déploie un Squid dont
     # l'allowlist est `policy.sandbox.network.allow_domains` ; sans domaine autorisé,

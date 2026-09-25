@@ -42,6 +42,10 @@ class OrchestratorSettings(BaseSettings):
     # L'image de ce proxy ; vide : celle que `gitops.py` connaît. À épingler par digest là
     # où Kyverno l'exige.
     egress_image: str = ""
+    # La `RuntimeClass` de CHAQUE pod d'agent quand la politique du projet n'en impose pas
+    # (`sandbox.runtime: gvisor` l'emporte). Vide : la runtime par défaut du cluster. Un
+    # cluster qui a gVisor ou Kata le dit ici une fois, plutôt que projet par projet.
+    runner_runtime_class: str = ""
 
     @property
     def callback_url(self) -> str:
