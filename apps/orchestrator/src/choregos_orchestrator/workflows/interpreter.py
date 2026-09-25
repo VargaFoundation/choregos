@@ -18,6 +18,11 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ApplicationError
 
+#: Attente maximale d'un run EN FILE (six heures), la même valeur que
+#: `activities.stage.FILE_MAX_MINUTES` — écrite ici parce qu'un workflow n'importe pas
+#: le module des activités, et parce qu'elle entre dans des bornes Temporal.
+FILE_MAX_MINUTES = 360
+
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus, Workflow
     from choregos_core import WorkflowEngine

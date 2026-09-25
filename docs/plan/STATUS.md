@@ -372,6 +372,38 @@ les 492 tests ne disaient pas :
    service sur le banc faute de clé) ; les pods d'agent (Job et PipelineRun) portent le
    profil seccomp au niveau du pod ; `runner.runtimeClass` (gVisor, Kata) s'applique à
    chaque pod d'agent quand la politique n'impose pas déjà gVisor, qui l'emporte toujours.
+   **Banc séries `e`/`f` (2026-09-25, images de `main` après #37)** : la série `e` est morte
+   sur un jeton OAuth révoqué (refait, kind seulement) ; la série `f` a montré **deux défauts
+   réels** de la file d'admission (ADR 0013). 1) Deux runs RH ont « dépassé 20 min » **sans
+   qu'un pod ait jamais tourné** : leur Job attendait une place, et l'attente en file
+   comptait contre le budget de l'étape. 2) Les Jobs suspendus de ces runs morts sont restés
+   en **tête de file** — plus personne ne relevait leur état, et `_admettre` n'admet que le
+   plus ancien : cinq tickets figés derrière deux zombies, débloqués à la main
+   (`kubectl delete job`). Corrigé : l'attente en file a sa propre borne (`FILE_MAX_MINUTES`,
+   six heures) et ne consomme pas le budget ; tout run que `await_run` n'attend plus
+   (budget dépassé, jamais admis) **retire son Job** et se marque `failed` ; les bornes
+   Temporal couvrent la file. Trois tests. Ce que la série `f` prouve par ailleurs : la
+   garantie `tool_called` **refuse** quand `verifier_adresse` n'est pas au registre (6
+   verdicts journalisés), et le code (`DEMO-2f`) passe implement → verify avec le jeton neuf.
+   Ce qu'elle ne prouve toujours pas : un appel d'outil réel par un agent (les runs RH n'ont
+   pas tourné), ni le coût (mode `direct`).
+   **Banc série `g` (2026-09-25 09:12–09:58, orchestrateur corrigé de #48 chargé dans kind)** :
+   cinq tickets, onze runs, **zéro zombie** — la file s'est vidée seule, chaque run refusé
+   s'est terminé, chaque ticket a fini en `needs_human` (validation de l'abandon) et il ne
+   reste aucun Job dans l'espace de noms : le correctif de la série `f` tient sur le banc.
+   `tool_called` refuse encore à raison (RH-1g/2g, `verifier_adresse` jamais au registre).
+   Mais dix runs sur onze sont morts en `agent_silencieux` : **« OAuth access token has been
+   revoked »** — le jeton copié dans `agent-creds` a été révoqué par la rotation locale de
+   Claude Code pendant la série (seul `DEMO-1g` implement, parti à 09:12, a fini). Le mode
+   `direct` avec ce jeton n'est **pas reproductible** au-delà d'une rotation : appel d'outil
+   réel et coût restent non prouvés jusqu'à une clé de fournisseur dans LiteLLM.
+   **Replay enfin réel** : quatre historiques du banc archivés dans `tests/replay/histories/`
+   (`DEMO-2d` code jusqu'à `done`, `RH-1d` sourcing → qualification, `DEMO-1e` mort sur
+   401, `RH-1f` jamais admis) et **rejoués** contre l'interpréteur courant — le test ne
+   skippe plus. Les payloads Temporal sont en base64 : la clé de passerelle (en mode
+   `direct`, le jeton OAuth lui-même) et les jetons de run y étaient ; ils sont caviardés
+   à l'archivage, gitleaks passe sur le dossier, et l'URL de l'API interne y est mise en
+   liste blanche par motif (faux positif `generic-api-key`).
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

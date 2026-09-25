@@ -292,6 +292,11 @@ def classe_d_execution(settings: Any, policy: Any) -> str | None:
     return str(getattr(settings, "runner_runtime_class", "") or "") or None
 
 
+#: Combien de temps un run peut attendre une place avant d'être abandonné — six heures :
+#: une nuit de pointe, pas une éternité.
+FILE_MAX_MINUTES = 360
+
+
 def _run_id(plan: StagePlan) -> str:
     """Identifiant déterministe : rejouer l'activité ne crée pas un second run."""
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
@@ -411,10 +416,18 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
     """Attend la fin du run, avec heartbeat et annulation propre (S1-03)."""
     settings = get_settings()
     run_id = payload["run_id"]
-    timeout_minutes = int(payload.get("timeout_minutes", 120))
+    timeout_minutes = float(payload.get("timeout_minutes", 120))
     deadline = timedelta(minutes=timeout_minutes).total_seconds()
+    # Le temps passé EN FILE ne compte pas contre le budget de l'étape : le banc du
+    # 2026-09-25 a vu deux runs RH « dépasser 20 min » sans qu'un pod ait jamais tourné —
+    # leur Job attendait une place. La file a sa propre borne, bien plus large.
+    file_max = timedelta(
+        minutes=float(payload.get("queue_timeout_minutes", FILE_MAX_MINUTES))
+    ).total_seconds()
     waited = 0.0
+    en_file = 0.0
     interval = float(payload.get("poll_seconds", settings.heartbeat_seconds))
+    a_tourne = False
     while waited <= deadline:
         async with db() as session:
             bundle = await project_bundle(session, payload["project_id"])
@@ -508,15 +521,49 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 ).model_dump(mode="json", by_alias=True),
             }
         with contextlib.suppress(RuntimeError):  # hors contexte Temporal (tests unitaires)
-            activity.heartbeat({"run_id": run_id, "waited_s": waited})
+            activity.heartbeat({"run_id": run_id, "waited_s": waited, "en_file_s": en_file})
         await asyncio.sleep(interval)
+        if status.state == "pending" and not a_tourne:
+            en_file += interval
+            if en_file > file_max:
+                await _abandonner(payload["project_id"], run_id, ref)
+                return {
+                    "status": "queue_timed_out",
+                    "result": StageResult(
+                        status=StageStatus.FAILED,
+                        summary=(
+                            f"jamais admis : {en_file / 60:.0f} min en file d'attente "
+                            f"({status.message or 'plafond atteint'})"
+                        ),
+                        reason="queue_timeout",
+                    ).model_dump(mode="json", by_alias=True),
+                }
+            continue
+        a_tourne = True
         waited += interval
+    # Un run qui dépasse son budget ne doit rien laisser derrière lui : un Job suspendu
+    # dont plus personne ne relève l'état reste en tête de file et bloque tous les suivants
+    # — vu sur le banc du 2026-09-25, cinq tickets figés derrière deux runs morts.
+    await _abandonner(payload["project_id"], run_id, ref)
     return {
         "status": "timed_out",
         "result": StageResult(
-            status=StageStatus.FAILED, summary=f"dépassement de {timeout_minutes} min", reason="timeout"
+            status=StageStatus.FAILED, summary=f"dépassement de {timeout_minutes:g} min", reason="timeout"
         ).model_dump(mode="json", by_alias=True),
     }
+
+
+async def _abandonner(project_id: str, run_id: str, ref: ExecRef) -> None:
+    """Retire le Job (ou l'équivalent) d'un run qu'on n'attend plus, sans jamais lever :
+    ce qui compte est que le run se termine, le nettoyage est un devoir, pas une condition."""
+    with contextlib.suppress(Exception):
+        async with db() as session:
+            bundle = await project_bundle(session, project_id)
+            await bundle.adapters.executor.cancel(ref)
+            run = await session.get(Run, run_id)
+            if run is not None and run.status in {"queued", "running"}:
+                run.status = "failed"
+                run.ended_at = utcnow()
 
 
 @activity.defn(name="cancel_run")
