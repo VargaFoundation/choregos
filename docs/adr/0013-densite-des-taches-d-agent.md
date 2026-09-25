@@ -1,6 +1,6 @@
 # 0013 — Agent task density, and what we take from AX
 
-- **Status**: accepted, 2026-09-24
+- **Status**: accepted, 2026-09-24 — Decisions 2 and 3 are revisited by [ADR 0016](0016-executeur-agent-sandbox.md) (proposed)
 - **Concerns**: the execution of agent stages (`Executor`), the chart, operations
 
 ## Context

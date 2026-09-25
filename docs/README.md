@@ -19,6 +19,7 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [CLI reference](cli.md) | Every command, generated from the CLI itself |
 | [Contributing](CONTRIBUTING.md) | One story, one PR; the contract before the code; what CI checks |
 | [ADRs](adr/README.md) | The structural decisions |
+| [Positioning](positioning.md) | Where Choregos sits against runtimes, agent platforms and tool brokers — and what they do better |
 | [Runbooks](runbooks/README.md) | Operations: how to know it is this, what to do, how to check |
 | [State of the project](plan/STATE-OF-THE-PROJECT-2026-09-24.md) | The critical assessment of 2026-09-24 and the P0 → P3 plan |
 
