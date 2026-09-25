@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,9 +17,14 @@ from choregos_contracts import ContextPack, MemoryItem
 from choregos_core.domain import Fact, Memory, Provenance, utcnow
 from choregos_core.models import estimate_tokens
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from ..errors import ConfigurationError
+
+#: Une fabrique de sessions : appelée sans argument, elle rend un `async with` qui donne
+#: une session. Un `async_sessionmaker` convient ; une `session_scope(orgs=…)` partielle
+#: aussi — et c'est celle-là qu'il faut sur PostgreSQL, parce que la RLS ne montre rien à
+#: une session qui ne nomme pas son organisation.
+Sessions = Callable[[], AbstractAsyncContextManager[Any]]
 
 TOKEN_RE = re.compile(r"[a-zà-ÿ0-9_]+")
 
@@ -58,13 +65,15 @@ class ModelesPgVector:
 class PgVectorMemory:
     """Mémoire stockée dans `memory_facts`, avec supersession par sujet."""
 
-    def __init__(
-        self, sessionmaker: async_sessionmaker[Any] | None = None, modeles: ModelesPgVector | None = None
-    ) -> None:
-        self._sessionmaker = sessionmaker
+    def __init__(self, sessions: Sessions | None = None, modeles: ModelesPgVector | None = None) -> None:
+        """`sessions` porte déjà la portée RLS (l'organisation du projet, ou `*` pour un
+        processus de la plateforme) : l'adaptateur ne la connaît pas et ne la pose pas.
+        Avec un `async_sessionmaker` nu, il tournait sur PostgreSQL sans jamais rien voir —
+        « projet inconnu » sur tout projet, seul SQLite le faisait passer."""
+        self._sessionmaker = sessions
         self._modeles = modeles
 
-    def _sessions(self) -> async_sessionmaker[Any]:
+    def _sessions(self) -> Sessions:
         if self._sessionmaker is None:
             raise ConfigurationError(
                 "pgvector : aucune session injectée — l'application doit enregistrer la fabrique "

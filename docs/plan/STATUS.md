@@ -312,7 +312,16 @@ les 492 tests ne disaient pas :
    sur client simulé, bus d'événements. **Un défaut trouvé** : le template livré
    `github-aca` déclarait `requires.azure_capabilities`, inconnu du schéma — servi depuis le
    disque, il aurait été refusé par l'API ; le schéma le porte. Couverture **80,1 %**, seuil
-   à **80**. Reste nu : `pgvector` sur base (après #38).
+   à **80**. **`pgvector` sur base, enfin** : l'adaptateur n'avait jamais été exercé sur
+   une base, et sur PostgreSQL il ne voyait **rien** — la fabrique lui donnait une session
+   nue, et la RLS fail-closed du 2026-09-24 ne montre rien à une session qui ne nomme pas
+   son organisation (« projet inconnu » partout ; SQLite, sans RLS, laissait passer). La
+   fabrique exige l'organisation (`org`, ou `*` pour l'orchestrateur) et refuse sans ; le
+   routeur mémoire de l'API lit le **connecteur `memory` du projet** au lieu de coder
+   Ecphoria en dur (un projet en `pgvector` lisait Ecphoria ici et pgvector dans
+   l'orchestrateur). Trois tests : cycle complet sur SQLite, refus sans organisation, et sur
+   PostgreSQL deux organisations dont chacune ne voit que sa mémoire — la session nue
+   d'avant y échoue, comme prévu.
    **P1-1c livré** : les 14 ADR et les 11 runbooks sont **en anglais** dans `docs/adr/` et
    `docs/runbooks/` (noms de fichiers inchangés : ce sont des identifiants, les alertes et
    les pages y pointent) ; les originaux français sont archivés dans `docs/fr/adr/` et

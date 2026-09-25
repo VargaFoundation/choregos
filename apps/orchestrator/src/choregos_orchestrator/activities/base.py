@@ -14,7 +14,7 @@ from typing import Any
 from choregos_adapters import AdapterSet
 from choregos_api.adaptateurs import brancher_pgvector
 from choregos_api.db.models import Connector, Organization, PolicyDef, Project, WorkflowDef, WorkItem
-from choregos_api.db.session import session_scope
+from choregos_api.db.session import TOUT, session_scope
 from choregos_api.services import policy_model, workflow_model
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import PolicyEngine
@@ -94,7 +94,16 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         workflow=workflow_model(workflow_row),
         policy=policy_model(policy_row),
         adapters=AdapterSet.from_connectors(
-            {c.kind: {"type": c.type, "config": c.config} for c in connectors}
+            {
+                # La mémoire `pgvector` vit dans les tables de l'API : elle doit dire depuis
+                # quelle organisation elle lit. L'orchestrateur est un processus de la
+                # plateforme, il voit tout (`*`) — comme ses propres sessions (`db()`).
+                c.kind: {
+                    "type": c.type,
+                    "config": {**c.config, "org": TOUT} if c.kind == "memory" else c.config,
+                }
+                for c in connectors
+            }
         ),
     )
 
