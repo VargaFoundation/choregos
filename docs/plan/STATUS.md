@@ -387,6 +387,16 @@ les 492 tests ne disaient pas :
    verdicts journalisés), et le code (`DEMO-2f`) passe implement → verify avec le jeton neuf.
    Ce qu'elle ne prouve toujours pas : un appel d'outil réel par un agent (les runs RH n'ont
    pas tourné), ni le coût (mode `direct`).
+   **Banc série `g` (2026-09-25 09:12–09:58, orchestrateur corrigé de #48 chargé dans kind)** :
+   cinq tickets, onze runs, **zéro zombie** — la file s'est vidée seule, chaque run refusé
+   s'est terminé, chaque ticket a fini en `needs_human` (validation de l'abandon) et il ne
+   reste aucun Job dans l'espace de noms : le correctif de la série `f` tient sur le banc.
+   `tool_called` refuse encore à raison (RH-1g/2g, `verifier_adresse` jamais au registre).
+   Mais dix runs sur onze sont morts en `agent_silencieux` : **« OAuth access token has been
+   revoked »** — le jeton copié dans `agent-creds` a été révoqué par la rotation locale de
+   Claude Code pendant la série (seul `DEMO-1g` implement, parti à 09:12, a fini). Le mode
+   `direct` avec ce jeton n'est **pas reproductible** au-delà d'une rotation : appel d'outil
+   réel et coût restent non prouvés jusqu'à une clé de fournisseur dans LiteLLM.
    **Replay enfin réel** : quatre historiques du banc archivés dans `tests/replay/histories/`
    (`DEMO-2d` code jusqu'à `done`, `RH-1d` sourcing → qualification, `DEMO-1e` mort sur
    401, `RH-1f` jamais admis) et **rejoués** contre l'interpréteur courant — le test ne
