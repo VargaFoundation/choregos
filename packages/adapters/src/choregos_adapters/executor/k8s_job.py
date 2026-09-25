@@ -1,7 +1,7 @@
 """Executor Job Kubernetes : le repli quand Tekton n'est pas disponible (§2.3).
 
-Même contrat que Tekton : un Job par run, un Secret pour le jeton, un nettoyage automatique
-par `ttlSecondsAfterFinished`.
+Même contrat que Tekton : un Job par run, un Secret pour le jeton (rattaché au Job, donc
+ramassé avec lui), un nettoyage automatique par `ttlSecondsAfterFinished`.
 
 DENSITÉ — un Job par étape, sans plafond, met le cluster à la merci d'une pointe : dix
 tickets qui démarrent ensemble font dix pods qui tirent la même image en même temps, et un
@@ -80,8 +80,33 @@ class KubernetesJobExecutor:
                 # Suspendu : aucun pod, aucune image tirée, aucune place prise dans le
                 # quota. Le tour viendra à un relevé d'état, dans l'ordre d'arrivée.
                 job["spec"]["suspend"] = True
-        await self.client.request("POST", f"{BATCH_API}/namespaces/{spec.namespace}/jobs", json=job)
+        cree = await self.client.request("POST", f"{BATCH_API}/namespaces/{spec.namespace}/jobs", json=job)
+        await self._rattacher_le_secret(spec.namespace, name, cree)
         return ExecRef(kind=self.kind, name=name, namespace=spec.namespace, run_id=spec.run_id)
+
+    async def _rattacher_le_secret(self, namespace: str, name: str, job: Any) -> None:
+        """Le secret du run appartient à son Job : quand `ttlSecondsAfterFinished` emporte
+        le Job, le ramasse-miettes emporte le jeton avec lui.
+
+        Sans ce lien, chaque run laissait son secret derrière lui — soixante-quatre jetons
+        de runs finis dans le namespace du banc, valides jusqu'à leur expiration, et une
+        liste qui ne fait que grandir. `cancel` supprime explicitement ; ici c'est la fin
+        normale qui nettoie. Sans `uid` (client qui ne renvoie pas l'objet créé), rien ne
+        se casse : le secret reste orphelin, comme avant.
+        """
+        uid = ((job or {}).get("metadata") or {}).get("uid") if isinstance(job, dict) else None
+        if not uid:
+            return
+        await self.client.request(
+            "PATCH",
+            f"{CORE_API}/namespaces/{namespace}/secrets/{name}",
+            json={
+                "metadata": {
+                    "ownerReferences": [{"apiVersion": "batch/v1", "kind": "Job", "name": name, "uid": uid}]
+                }
+            },
+            headers={"Content-Type": "application/merge-patch+json"},
+        )
 
     async def _file(self, namespace: str) -> tuple[int, list[dict[str, Any]]]:
         """Combien de runs tournent, et quels Jobs attendent — les plus anciens d'abord."""

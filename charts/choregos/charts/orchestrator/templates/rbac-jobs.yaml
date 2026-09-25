@@ -33,7 +33,9 @@ rules:
     #
     # La règle qu'on en tire : tout verbe que l'exécuteur EMPLOIE doit figurer ici, et le
     # test de chart le vérifie désormais plutôt que de compter sur la relecture.
-    verbs: ["get", "create", "update", "delete"]
+    # `patch` rattache le secret à son Job (`ownerReferences`) : le ramasse-miettes
+    # l'emporte avec le Job fini, au lieu de laisser un jeton par run dans le namespace.
+    verbs: ["get", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]

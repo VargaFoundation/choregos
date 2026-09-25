@@ -330,15 +330,21 @@ def render_project_manifests(
                         "resources": ["pipelineruns", "taskruns"],
                         "verbs": ["create", "get", "list", "watch", "delete"],
                     },
+                    # Les MÊMES verbes que le Role du chart (`rbac-jobs.yaml`) : ce Role-ci est
+                    # celui d'un vrai namespace de projet, et il n'avait ni `patch` sur les
+                    # Jobs (réveiller un run en file) ni `update`/`patch` sur les Secrets
+                    # (remplacer, puis rattacher le jeton). Le banc tourne dans le namespace
+                    # du chart et ne l'a jamais vu ; un projet provisionné l'aurait payé en
+                    # runs figés en file — l'admission ratée se tait, par choix.
                     {
                         "apiGroups": [""],
                         "resources": ["secrets", "configmaps"],
-                        "verbs": ["create", "get", "delete"],
+                        "verbs": ["create", "get", "update", "patch", "delete"],
                     },
                     {
                         "apiGroups": ["batch"],
                         "resources": ["jobs"],
-                        "verbs": ["create", "get", "list", "watch", "delete"],
+                        "verbs": ["create", "get", "list", "watch", "patch", "delete"],
                     },
                     {"apiGroups": [""], "resources": ["pods", "pods/log"], "verbs": ["get", "list", "watch"]},
                 ],

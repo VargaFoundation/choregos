@@ -348,6 +348,19 @@ les 492 tests ne disaient pas :
    sont tenus (#51) et trois PR ouvertes (#39, #48, #50) touchent `stage.py` : découper
    maintenant, c'est trois conflits garantis pour un gain de lecture. À faire dans une PR
    seule après les fusions, l'interpréteur sous les historiques de replay (#48).
+   **Déploiement de `main` fusionné sur le banc kind (2026-09-25, soir)** : images
+   reconstruites, chart mis à niveau, six déploiements relancés — `/readyz`, `/healthz`,
+   OpenAPI, 39 séries `choregos_*`, le web avec sa CSP à nonce ; aucune erreur au journal.
+   LiteLLM embarqué attend le secret `platform-llm-key` (« pas de clé pour l'instant »), donc
+   `helm --wait` expire : c'est le seul pod qui manque. **Deux défauts trouvés en regardant
+   le namespace** : 64 secrets `run-*` (un jeton par run) survivaient à leur Job — le
+   secret est désormais **rattaché au Job** (`ownerReferences`, posé après la création du
+   Job) et le ramasse-miettes l'emporte avec `ttlSecondsAfterFinished` ; et le Role rendu
+   par `gitops.py` pour le namespace d'un **projet provisionné** n'accordait ni `patch` sur
+   les Jobs (la file d'admission y aurait échoué en silence) ni `update`/`patch` sur les
+   Secrets — le banc tourne dans le namespace du chart et ne l'a jamais vu. Les deux Roles
+   ont les mêmes verbes, et un test confronte désormais l'exécuteur au Role du projet comme
+   il le faisait déjà au Role du chart.
    **Découpage de l'orchestrateur livré** : `stage.py` (847 l.) devient quatre modules —
    `plan` (le `StagePlan`), `stage` (la préparation : modèle, clé, contexte, `StageInput`),
    `execution` (lancer, attendre, abandonner), `bilan` (dépense, résultat, findings),

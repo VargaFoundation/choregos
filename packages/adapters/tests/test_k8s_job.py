@@ -301,3 +301,35 @@ async def test_le_pod_runner_passe_la_regle_kyverno_stricte() -> None:
     assert pod["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}
     conteneur = pod["containers"][0]["securityContext"]
     assert conteneur["allowPrivilegeEscalation"] is False and conteneur["capabilities"] == {"drop": ["ALL"]}
+
+
+class _ClientQuiNomme(_RecordingClient):
+    """Un serveur d'API rend l'objet créé, avec son `uid` : c'est lui qui porte le lien."""
+
+    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        await super().request(method, path, **kwargs)
+        if method == "POST" and path.endswith("/jobs"):
+            return {**kwargs["json"], "metadata": {**kwargs["json"]["metadata"], "uid": "uid-du-job"}}
+        return None
+
+
+async def test_le_secret_du_run_appartient_a_son_job() -> None:
+    """Le jeton d'un run fini ne doit pas survivre au Job : soixante-quatre secrets orphelins
+    dans le namespace du banc, un par run, tant que rien ne les rattachait."""
+    client = _ClientQuiNomme()
+    await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    patch = next(
+        body for method, path, body in client.calls if method == "PATCH" and path.endswith("/secrets/run-r-1")
+    )
+    assert patch["metadata"]["ownerReferences"] == [
+        {"apiVersion": "batch/v1", "kind": "Job", "name": "run-r-1", "uid": "uid-du-job"}
+    ]
+    ordre = [method for method, path, _ in client.calls if "/jobs" in path or "/secrets" in path]
+    assert ordre.index("POST") < len(ordre) - 1, "le Job est créé avant que le secret lui soit rattaché"
+
+
+async def test_sans_uid_le_secret_reste_comme_avant() -> None:
+    """Un client qui ne rend rien (les tests, un proxy avare) ne casse pas le démarrage."""
+    client = _RecordingClient()
+    await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
+    assert not [1 for method, path, _ in client.calls if method == "PATCH" and "/secrets/" in path]
