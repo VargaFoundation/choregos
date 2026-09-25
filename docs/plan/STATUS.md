@@ -348,6 +348,15 @@ les 492 tests ne disaient pas :
    sont tenus (#51) et trois PR ouvertes (#39, #48, #50) touchent `stage.py` : découper
    maintenant, c'est trois conflits garantis pour un gain de lecture. À faire dans une PR
    seule après les fusions, l'interpréteur sous les historiques de replay (#48).
+   **Découpage de l'API livré** : `services.py` (678 l.) devient le paquet `services/` —
+   `definitions` (workflow et politique actifs, défauts d'un projet neuf), `projets`,
+   `tickets` (projections des tickets, runs, demandes, releases ; clé interne ; rangement des
+   sorties), `couts`, `evenements` (`persist_event`), `memoire` (A/B) — et `schemas.py`
+   (780 l.) le paquet `schemas/` en huit modules par domaine (base, identité, projets,
+   définitions, tickets, livraison, mesures, plateforme). Les deux `__init__` réexportent
+   tout : `choregos_api.services.X` et `choregos_api.schemas.X` restent l'adresse de tout,
+   aucun import n'a changé ailleurs. Aucune logique changée : 112 tests API, 7 sur
+   PostgreSQL, 115 orchestrateur/CLI/e2e/replay et 476 paquets verts.
    **P1-1b livré** : l'interface est **en anglais** — les 26 fichiers du front (pages,
    composants, libellés, `aria-label`, placeholders, messages d'erreur), `lang="en"`,
    formats `en-GB` (montants, dates, durées). Pas d'i18n : `next-intl` avait été retiré le
