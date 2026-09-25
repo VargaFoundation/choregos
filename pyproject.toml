@@ -149,7 +149,7 @@ omit = ["*/generated/*", "*/tests/*"]
 # tous les appels sortants (apps/api, packages/adapters) échappaient au seuil. Avec eux,
 # la couverture mesurée le 2026-09-24 est de 72 %. Le seuil suit la mesure — il monte
 # avec P1-3 (matrice RBAC, adaptateurs nus, jetons), pas avant.
-fail_under = 75
+fail_under = 80
 show_missing = true
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
 
