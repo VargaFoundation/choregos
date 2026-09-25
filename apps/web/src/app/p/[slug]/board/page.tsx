@@ -37,7 +37,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         {trackerInterne && (
           <span className="ml-auto">
             <Button tone="accent" size="sm" onClick={() => setNouvelle((n) => !n)}>
-              nouvelle demande
+              new request
             </Button>
           </span>
         )}
@@ -51,7 +51,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
           }}
         />
       )}
-      {items.isLoading && <Empty>chargement…</Empty>}
+      {items.isLoading && <Empty>loading…</Empty>}
       <div className="grid gap-3 overflow-x-auto md:grid-flow-col md:auto-cols-[minmax(260px,1fr)]">
         {columns.map((column) => (
           <section key={column.state} className="space-y-2">
@@ -70,13 +70,13 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                 <p className="mt-1 font-mono text-xs text-ink-muted">{item.tracker_key}</p>
                 {item.current_run && (
                   <p className="mt-2 flex items-center gap-2 text-xs">
-                    <ActorIcon kind="agent" name={`${item.current_run.stage_role} · tentative ${item.current_run.attempt}`} />
+                    <ActorIcon kind="agent" name={`${item.current_run.stage_role} · attempt ${item.current_run.attempt}`} />
                     <span className="text-ink-muted">{item.current_run.status}</span>
                   </p>
                 )}
                 {item.failure && (
                   <p className="mt-1 text-xs font-medium text-danger" title={item.failure.message}>
-                    mort · {item.failure.activity ?? "interpréteur"}
+                    dead · {item.failure.activity ?? "interpreter"}
                   </p>
                 )}
                 {item.pending_request && (
@@ -168,7 +168,7 @@ function NouvelleDemande({ slug, onDone }: { slug: string; onDone: () => void })
       await api.createWorkItem(slug, { title, body, size: size || null, start: true });
       onDone();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "demande refusée");
+      setError(cause instanceof Error ? cause.message : "request refused");
       setBusy(false);
     }
   }
@@ -183,28 +183,28 @@ function NouvelleDemande({ slug, onDone }: { slug: string; onDone: () => void })
         }}
       >
         <input
-          aria-label="titre de la demande"
+          aria-label="request title"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="Chef de projet data pour une mission de 6 mois"
+          placeholder="Data project manager for a 6-month assignment"
           className="w-full rounded border border-line bg-surface px-2 py-1.5"
         />
         <textarea
-          aria-label="détail de la demande"
+          aria-label="request details"
           value={body}
           onChange={(event) => setBody(event.target.value)}
           rows={4}
-          placeholder="Client, démarrage, attendu, contraintes…"
+          placeholder="Client, start date, expected outcome, constraints…"
           className="w-full rounded border border-line bg-surface px-2 py-1.5"
         />
         <div className="flex items-center gap-2">
           <select
-            aria-label="taille"
+            aria-label="size"
             value={size}
             onChange={(event) => setSize(event.target.value as typeof size)}
             className="rounded border border-line bg-surface px-2 py-1"
           >
-            <option value="">taille ?</option>
+            <option value="">size?</option>
             {["S", "M", "L", "XL"].map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -212,7 +212,7 @@ function NouvelleDemande({ slug, onDone }: { slug: string; onDone: () => void })
             ))}
           </select>
           <Button tone="primary" size="sm" type="submit" disabled={busy || !title}>
-            poser et démarrer
+            file and start
           </Button>
         </div>
         {error && <ErrorNote>{error}</ErrorNote>}

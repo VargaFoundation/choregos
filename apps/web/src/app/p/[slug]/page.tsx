@@ -54,45 +54,45 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
               </li>
             ))}
           </ol>
-          {provisioning.data.steps.length === 0 && <Empty>en attente du premier pas…</Empty>}
+          {provisioning.data.steps.length === 0 && <Empty>waiting for the first step…</Empty>}
         </Card>
       )}
       <div className="grid grid-cols-2 border border-line md:grid-cols-4">
         <div className="p-6">
-          <Stat value={actifs} label="tickets actifs" tone={actifs > 0 ? "accent" : "ink"} />
+          <Stat value={actifs} label="active tickets" tone={actifs > 0 ? "accent" : "ink"} />
         </div>
         <div className="border-l border-line p-6">
-          <Stat value={percent(stats?.first_pass_merge_rate)} label="pr mergées au 1er passage" />
+          <Stat value={percent(stats?.first_pass_merge_rate)} label="prs merged on first pass" />
         </div>
         <div className="border-t border-line p-6 md:border-t-0 md:border-l">
           <Stat
             value={
               stats?.cycle_time_p50_hours
-                ? `${stats.cycle_time_p50_hours.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} h`
+                ? `${stats.cycle_time_p50_hours.toLocaleString("en-GB", { maximumFractionDigits: 1 })} h`
                 : "—"
             }
-            label="cycle time médian"
+            label="median cycle time"
           />
         </div>
         <div className="border-t border-l border-line p-6 md:border-t-0">
-          <Stat value={stats?.trains_pending ?? 0} label="trains en cours" />
+          <Stat value={stats?.trains_pending ?? 0} label="trains in flight" />
         </div>
       </div>
 
       <Card
-        eyebrow="coût"
-        title="les 14 derniers jours"
+        eyebrow="cost"
+        title="the last 14 days"
         action={
           <a href={api.costsCsvUrl(slug, "day")} className="text-xs text-ink-muted hover:text-ink" download>
-            exporter en csv
+            export as csv
           </a>
         }
       >
         {rows.length === 0 ? (
-          <Empty>aucune dépense enregistrée.</Empty>
+          <Empty>no spend recorded.</Empty>
         ) : (
           <>
-            <div className="flex h-40 items-end gap-1.5 border-b border-ink" role="img" aria-label="coût par jour">
+            <div className="flex h-40 items-end gap-1.5 border-b border-ink" role="img" aria-label="cost per day">
               {rows.map((row) => (
                 <div
                   key={row.key}
@@ -106,7 +106,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
               <Stat value={eur(costs.data?.total.cost_eur)} label="total" />
               <Stat
                 value={costs.data?.total.budget_usd ? eur(costs.data.total.budget_usd * 0.92) : "—"}
-                label="budget quotidien"
+                label="daily budget"
               />
               {(parNature.data?.rows ?? [])
                 .filter((row) => row.key === "tool")
@@ -116,7 +116,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                     <Stat
                       key={row.key}
                       value={eur(row.cost_eur)}
-                      label={`outils du catalogue · ${appels} appel${appels > 1 ? "s" : ""}`}
+                      label={`catalogue tools · ${appels} call${appels > 1 ? "s" : ""}`}
                     />
                   );
                 })}
@@ -125,31 +125,31 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         )}
       </Card>
 
-      <Card eyebrow="livraison" title="dora">
+      <Card eyebrow="delivery" title="dora">
         {dora.data === undefined ? (
-          <Empty>mesures en cours de calcul.</Empty>
+          <Empty>measurements being computed.</Empty>
         ) : dora.data.deployments === 0 ? (
-          <Empty>aucune mise en production enregistrée sur la fenêtre.</Empty>
+          <Empty>no production deployment recorded in the window.</Empty>
         ) : (
           <div className="grid border-t border-line sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="fréquence de déploiement" metric={dora.data.deployment_frequency} />
-            <Metric label="délai de livraison" metric={dora.data.lead_time} />
-            <Metric label="taux d'échec des changements" metric={dora.data.change_failure_rate} ratio />
-            <Metric label="délai de rétablissement" metric={dora.data.time_to_restore} />
+            <Metric label="deployment frequency" metric={dora.data.deployment_frequency} />
+            <Metric label="lead time" metric={dora.data.lead_time} />
+            <Metric label="change failure rate" metric={dora.data.change_failure_rate} ratio />
+            <Metric label="time to restore" metric={dora.data.time_to_restore} />
           </div>
         )}
       </Card>
 
-      <Card eyebrow="tickets" title="les plus récents" padding="none" className="overflow-hidden">
+      <Card eyebrow="tickets" title="most recent" padding="none" className="overflow-hidden">
         <div className="px-6 pb-2">
           <table>
             <thead>
               <tr>
                 <th>ticket</th>
-                <th>titre</th>
-                <th>état</th>
-                <th>taille</th>
-                <th className="text-right">coût</th>
+                <th>title</th>
+                <th>state</th>
+                <th>size</th>
+                <th className="text-right">cost</th>
               </tr>
             </thead>
             <tbody>
@@ -179,20 +179,20 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 }
 
 const LEVELS: Record<string, { label: string; tone: "ok" | "warn" | "danger" | "ink" }> = {
-  elite: { label: "élite", tone: "ok" },
-  high: { label: "haut", tone: "ok" },
-  medium: { label: "moyen", tone: "warn" },
-  low: { label: "bas", tone: "danger" },
+  elite: { label: "elite", tone: "ok" },
+  high: { label: "high", tone: "ok" },
+  medium: { label: "medium", tone: "warn" },
+  low: { label: "low", tone: "danger" },
 };
 
 function Metric({ label, metric, ratio }: { label: string; metric: DoraMetric; ratio?: boolean }) {
-  const level = LEVELS[metric.level ?? ""] ?? { label: "sans verdict", tone: "ink" as const };
+  const level = LEVELS[metric.level ?? ""] ?? { label: "no verdict", tone: "ink" as const };
   const value =
     metric.value === null || metric.value === undefined
       ? "—"
       : ratio
         ? percent(metric.value)
-        : `${metric.value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ${metric.unit ?? ""}`.trim();
+        : `${metric.value.toLocaleString("en-GB", { maximumFractionDigits: 2 })} ${metric.unit ?? ""}`.trim();
   return (
     <div className="border-line p-5 sm:[&:nth-child(n+2)]:border-l lg:[&:nth-child(n+2)]:border-l">
       <Label>{label}</Label>
@@ -205,7 +205,7 @@ function Metric({ label, metric, ratio }: { label: string; metric: DoraMetric; r
         >
           {level.label}
         </span>
-        {metric.sample ? ` · ${metric.sample} mesure(s)` : " · pas assez de données"}
+        {metric.sample ? ` · ${metric.sample} sample(s)` : " · not enough data"}
       </p>
     </div>
   );

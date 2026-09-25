@@ -35,7 +35,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   });
 
   if (run.error) return <ErrorNote>{(run.error as Error).message}</ErrorNote>;
-  if (!run.data) return <Empty>chargement…</Empty>;
+  if (!run.data) return <Empty>loading…</Empty>;
 
   const events = dedupe([...(stored.data ?? []), ...live.events]);
   const evidence = run.data.result?.evidence;
@@ -45,10 +45,10 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Heading as="h2" size="lg">
-            Run {run.data.stage_role} · tentative {run.data.attempt}
+            Run {run.data.stage_role} · attempt {run.data.attempt}
           </Heading>
           <p className="font-mono text-xs text-ink-muted">
-            {run.data.backend} · {run.data.model} · exécuteur {run.data.executor_kind ?? "—"}
+            {run.data.backend} · {run.data.model} · executor {run.data.executor_kind ?? "—"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -59,7 +59,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           />
           {transcript.data?.url && (
             <a href={transcript.data.url} className="text-xs text-ink-muted hover:text-ink" target="_blank" rel="noreferrer">
-              transcript complet
+              full transcript
             </a>
           )}
           <Button
@@ -67,32 +67,32 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
               if (run.data?.work_item_id) void api.action(run.data.work_item_id, "rerun_stage");
             }}
           >
-            Rejouer l&apos;étape
+            Replay the stage
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-4">
-        <Card title="coût">
+        <Card title="cost">
           <p className="text-2xl">{usd(run.data.cost_usd)}</p>
           <p className="text-xs text-ink-muted">
-            {tokens(run.data.tokens?.tokens_in)} entrants · {tokens(run.data.tokens?.tokens_out)} sortants ·{" "}
-            {tokens(run.data.tokens?.tokens_cached)} en cache
+            {tokens(run.data.tokens?.tokens_in)} in · {tokens(run.data.tokens?.tokens_out)} out ·{" "}
+            {tokens(run.data.tokens?.tokens_cached)} cached
           </p>
         </Card>
-        <Card title="durée">
+        <Card title="duration">
           <p className="text-2xl">{duration(run.data.tokens?.duration_s)}</p>
-          <p className="text-xs text-ink-muted">{run.data.result?.diagnostics?.turns ?? 0} tours d&apos;agent</p>
+          <p className="text-xs text-ink-muted">{run.data.result?.diagnostics?.turns ?? 0} agent turns</p>
         </Card>
         <Preuves evidence={evidence} />
-        <Card title="périmètre">
+        <Card title="scope">
           <ul className="space-y-1 font-mono text-xs text-ink-muted">
             {(run.data.allowed_paths ?? []).map((path) => (
               <li key={path}>{path}</li>
             ))}
           </ul>
           <p className="mt-2 text-xs">
-            {run.data.result?.diagnostics?.permission_denials ?? 0} permission(s) refusée(s)
+            {run.data.result?.diagnostics?.permission_denials ?? 0} permission(s) refused
           </p>
         </Card>
       </div>
@@ -102,10 +102,10 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       <Acces acces={acces.data} />
 
       <Card
-        title="journal ACP"
+        title="ACP journal"
         action={
           <span className="text-xs text-ink-muted">
-            {live.connected ? "● en direct" : live.error ? live.error : "flux fermé"}
+            {live.connected ? "● live" : live.error ? live.error : "stream closed"}
           </span>
         }
       >
@@ -114,15 +114,15 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
 
       <Card title="diff">
         {(diff.data?.files ?? []).length === 0 ? (
-          <Empty>aucun fichier modifié</Empty>
+          <Empty>no file changed</Empty>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>fichier</th>
+                <th>file</th>
                 <th className="text-right">+</th>
                 <th className="text-right">-</th>
-                <th>périmètre</th>
+                <th>scope</th>
               </tr>
             </thead>
             <tbody>
@@ -131,7 +131,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
                   <td className="font-mono text-xs">{file.path}</td>
                   <td className="text-right text-ok">+{file.additions}</td>
                   <td className="text-right text-danger">−{file.deletions}</td>
-                  <td>{file.in_scope === false ? <span className="text-danger">hors périmètre</span> : "✓"}</td>
+                  <td>{file.in_scope === false ? <span className="text-danger">out of scope</span> : "✓"}</td>
                 </tr>
               ))}
             </tbody>

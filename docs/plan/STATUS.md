@@ -63,7 +63,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S4-04 | S4 | ✅ | — | estimation médiane/p80 sur 90 jours, alerte de dépassement |
 | S4-05 | S4 | ✅ | — | `/v1/messages` vérifié contre un vrai LiteLLM ; l'environnement remis à `claude-code` appelle pour de vrai (8 tests live) |
 | S4-06 | S4 | ✅ | — | profils plateforme/projet, validation, matrice opposable |
-| S5-01 | S5 | 🟡 | — | socle Next.js / React 19 / TS strict / Tailwind + composants transverses. **Interface en français seulement** : `next-intl` a été retiré le 2026-09-24 (déclaré, jamais branché — pas de demi-état) ; l'anglais de l'interface est un chantier à part entière (P1-1b), pas une case cochée |
+| S5-01 | S5 | ✅ | — | socle Next.js / React 19 / TS strict / Tailwind + composants transverses. Interface **en anglais** depuis le 2026-09-25 (P1-1b) ; `next-intl` retiré le 2026-09-24 (déclaré, jamais branché — pas de demi-état) |
 | S5-02 | S5 | ✅ | — | projets et wizard de création avec validation par étape |
 | S5-03 | S5 | ✅ | — | board : colonnes = états du DSL, décisions en ligne |
 | S5-04 | S5 | ✅ | — | ticket (coût par étape, timeline) et run (journal virtualisé, diff, preuves) |
@@ -339,6 +339,12 @@ les 492 tests ne disaient pas :
    sont tenus (#51) et trois PR ouvertes (#39, #48, #50) touchent `stage.py` : découper
    maintenant, c'est trois conflits garantis pour un gain de lecture. À faire dans une PR
    seule après les fusions, l'interpréteur sous les historiques de replay (#48).
+   **P1-1b livré** : l'interface est **en anglais** — les 26 fichiers du front (pages,
+   composants, libellés, `aria-label`, placeholders, messages d'erreur), `lang="en"`,
+   formats `en-GB` (montants, dates, durées). Pas d'i18n : `next-intl` avait été retiré le
+   2026-09-24 (« pas de demi-état ») et l'anglais est la langue de référence ; le français
+   reste dans le code, les commentaires et les données de démonstration (`mocks/data.ts`).
+   Tests vitest, e2e Playwright et `tsc`/`eslint` alignés. S5-01 passe ✅.
 
 1. **Ce que la démonstration mono-nœud ne prouve pas** : elle tourne avec un SCM factice, donc
    les garanties qui lisent un diff (`scope_respected`, `diff_size_max`, `no_secrets`) **refusent**

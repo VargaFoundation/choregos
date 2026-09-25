@@ -10,7 +10,7 @@ import type { ConnectorType, ProjectModels } from "@/lib/types";
 
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
   ssr: false,
-  loading: () => <p className="text-sm text-ink-muted">éditeur en cours de chargement…</p>,
+  loading: () => <p className="text-sm text-ink-muted">loading the editor…</p>,
 });
 
 const KINDS = ["tracker", "scm", "ci", "cd", "runtime", "gateway", "memory", "notify"];
@@ -46,7 +46,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
       setMessage(succes);
       for (const cle of cles) void queryClient.invalidateQueries({ queryKey: [cle, slug] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "refusé");
+      setError(cause instanceof Error ? cause.message : "refused");
     }
   }
 
@@ -55,7 +55,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
       async () => {
         const result = await api.testConnector(slug, kind);
         setMessage(
-          `${kind} : ${result.ok ? "connexion OK" : "échec"} — ` +
+          `${kind}: ${result.ok ? "connection OK" : "failed"} — ` +
             result.checks.map((check) => `${check.name} ${check.ok ? "✓" : "✗"}`).join(", "),
         );
       },
@@ -73,14 +73,14 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         </div>
       )}
 
-      <Card title="connecteurs" className="lg:col-span-2">
+      <Card title="connectors" className="lg:col-span-2">
         <table>
           <thead>
             <tr>
-              <th>type</th>
-              <th>implémentation</th>
-              <th>état</th>
-              <th>dernier test</th>
+              <th>kind</th>
+              <th>implementation</th>
+              <th>status</th>
+              <th>last test</th>
               <th />
             </tr>
           </thead>
@@ -94,7 +94,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                   current={connector}
                   types={(types.data ?? []).filter((t) => t.kind === kind)}
                   onSave={(type, config) =>
-                    faire(() => api.putConnector(slug, kind, { type, config }), `connecteur ${kind} enregistré`, ["connectors"])
+                    faire(() => api.putConnector(slug, kind, { type, config }), `${kind} connector saved`, ["connectors"])
                   }
                   onTest={connector ? () => test(kind) : undefined}
                 />
@@ -104,33 +104,33 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         </table>
       </Card>
 
-      <Card title="politique" className="lg:col-span-2">
+      <Card title="policy" className="lg:col-span-2">
         <PolicyEditor
           yaml={policy.data?.yaml ?? ""}
-          onSave={(yaml) => faire(() => api.putPolicy(slug, yaml), "politique enregistrée", ["policy"])}
+          onSave={(yaml) => faire(() => api.putPolicy(slug, yaml), "policy saved", ["policy"])}
         />
       </Card>
 
-      <Card title="profils de modèles">
+      <Card title="model profiles">
         <ModelsEditor
           models={models.data}
           disponibles={(platformModels.data ?? []).map((m) => m.model_name)}
-          onSave={(body) => faire(() => api.putModels(slug, body), "profils enregistrés", ["models", "matrix"])}
+          onSave={(body) => faire(() => api.putModels(slug, body), "profiles saved", ["models", "matrix"])}
         />
       </Card>
 
-      <Card title="outils du catalogue">
+      <Card title="tool catalogue">
         {(tools.data?.tools ?? []).length === 0 ? (
-          <Empty>aucun outil déclaré par le déploiement.</Empty>
+          <Empty>no tool declared by the deployment.</Empty>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>outil</th>
-                <th>fournisseur</th>
-                <th>ouvert à</th>
-                <th>par appel</th>
-                <th>ce projet</th>
+                <th>tool</th>
+                <th>provider</th>
+                <th>open to</th>
+                <th>per call</th>
+                <th>this project</th>
               </tr>
             </thead>
             <tbody>
@@ -142,12 +142,12 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                   </td>
                   <td className="text-xs">
                     {tool.provider}
-                    {tool.source === "mcp" ? " · MCP distant" : ""}
-                    {tool.needs_credential ? " · clé plateforme" : " · sans clé"}
+                    {tool.source === "mcp" ? " · remote MCP" : ""}
+                    {tool.needs_credential ? " · platform key" : " · no key"}
                   </td>
-                  <td className="text-xs">{(tool.groups ?? []).join(", ") || "tous"}</td>
+                  <td className="text-xs">{(tool.groups ?? []).join(", ") || "everyone"}</td>
                   <td className="text-xs">{eur(tool.price_eur ?? 0)}</td>
-                  <td className="text-xs">{tool.allowed ? "autorisé" : "—"}</td>
+                  <td className="text-xs">{tool.allowed ? "allowed" : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -155,28 +155,28 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         )}
         {tools.data?.allows_all && (
           <p className="mt-2 text-xs text-ink-muted">
-            ce projet déclare <span className="font-mono">*</span> : tout le catalogue lui est ouvert.
+            this project declares <span className="font-mono">*</span>: the whole catalogue is open to it.
           </p>
         )}
         <p className="mt-2 text-xs text-ink-muted">
-          la liste des outils d&apos;un projet (`tools`, `groups`) se règle dans sa configuration — elle est relue
-          comme du code.
+          a project&apos;s tool list (`tools`, `groups`) is set in its configuration — it is reviewed like
+          code.
         </p>
       </Card>
 
-      <Card title="matrice backend × modèle" className="lg:col-span-2">
+      <Card title="backend × model matrix" className="lg:col-span-2">
         <p className="mb-2 text-sm text-ink-muted">
-          Publiée par les évals nocturnes : une combinaison non validée est refusée à l&apos;enregistrement.
+          Published by the nightly evals: an unvalidated combination is refused on save.
         </p>
         <table>
           <thead>
             <tr>
               <th>backend</th>
-              <th>modèle</th>
-              <th>validé</th>
-              <th className="text-right">réussite</th>
-              <th className="text-right">coût médian</th>
-              <th>mémoire</th>
+              <th>model</th>
+              <th>validated</th>
+              <th className="text-right">success</th>
+              <th className="text-right">median cost</th>
+              <th>memory</th>
             </tr>
           </thead>
           <tbody>
@@ -187,12 +187,12 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                 <td>{entry.validated ? "✓" : <span className="text-danger">✗</span>}</td>
                 <td className="text-right">{entry.success_rate != null ? `${Math.round(entry.success_rate * 100)} %` : "—"}</td>
                 <td className="text-right">{entry.median_cost_usd != null ? `${entry.median_cost_usd.toFixed(2)} $` : "—"}</td>
-                <td>{entry.with_memory == null ? "—" : entry.with_memory ? "avec" : "sans"}</td>
+                <td>{entry.with_memory == null ? "—" : entry.with_memory ? "with" : "without"}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        {(matrix.data?.entries ?? []).length === 0 && <Empty>aucune éval publiée pour l&apos;instant</Empty>}
+        {(matrix.data?.entries ?? []).length === 0 && <Empty>no eval published yet</Empty>}
       </Card>
     </div>
   );
@@ -221,7 +221,7 @@ function ConnectorRow({
     try {
       parsed = config.trim() ? (JSON.parse(config) as Record<string, unknown>) : {};
     } catch {
-      setInvalide("la configuration doit être un objet JSON");
+      setInvalide("the configuration must be a JSON object");
       return;
     }
     setInvalide(null);
@@ -233,7 +233,7 @@ function ConnectorRow({
     <>
       <tr>
         <td>{kind}</td>
-        <td className="font-mono text-xs">{current?.type ?? <span className="text-ink-muted">— non configuré</span>}</td>
+        <td className="font-mono text-xs">{current?.type ?? <span className="text-ink-muted">— not configured</span>}</td>
         <td>
           {current && (
             <StateBadge
@@ -247,11 +247,11 @@ function ConnectorRow({
         <td className="space-x-2 whitespace-nowrap">
           {onTest && (
             <Button size="sm" onClick={() => void onTest()}>
-              tester
+              test
             </Button>
           )}
           <Button size="sm" onClick={() => setEditing((e) => !e)}>
-            {current ? "modifier" : "configurer"}
+            {current ? "edit" : "configure"}
           </Button>
         </td>
       </tr>
@@ -260,7 +260,7 @@ function ConnectorRow({
           <td colSpan={5}>
             <div className="space-y-2 border border-line bg-surface p-3 text-sm">
               <label className="block space-y-1">
-                <span>implémentation</span>
+                <span>implementation</span>
                 {types.length > 0 ? (
                   <select
                     value={type}
@@ -270,7 +270,7 @@ function ConnectorRow({
                     {types.map((t) => (
                       <option key={t.type} value={t.type} disabled={t.available === false}>
                         {t.display}
-                        {t.available === false ? " (indisponible)" : ""}
+                        {t.available === false ? " (unavailable)" : ""}
                       </option>
                     ))}
                   </select>
@@ -283,7 +283,7 @@ function ConnectorRow({
                 )}
               </label>
               <label className="block space-y-1">
-                <span>configuration (JSON — jamais un secret : les secrets sont référencés, pas saisis)</span>
+                <span>configuration (JSON — never a secret: secrets are referenced, not typed)</span>
                 <textarea
                   value={config}
                   onChange={(event) => setConfig(event.target.value)}
@@ -294,10 +294,10 @@ function ConnectorRow({
               {invalide && <ErrorNote>{invalide}</ErrorNote>}
               <div className="flex justify-end gap-2">
                 <Button size="sm" onClick={() => setEditing(false)}>
-                  annuler
+                  cancel
                 </Button>
                 <Button size="sm" tone="primary" onClick={() => void save()}>
-                  enregistrer
+                  save
                 </Button>
               </div>
             </div>
@@ -317,15 +317,15 @@ function PolicyEditor({ yaml, onSave }: { yaml: string; onSave: (yaml: string) =
   }
   return (
     <div className="space-y-2">
-      <YamlEditor label="politique YAML" value={texte} onChange={setTexte} issues={[]} />
+      <YamlEditor label="policy YAML" value={texte} onChange={setTexte} issues={[]} />
       <div className="flex justify-end">
         <Button tone="primary" onClick={() => void onSave(texte)} disabled={!texte || texte === yaml}>
-          enregistrer la politique
+          save the policy
         </Button>
       </div>
       <p className="text-xs text-ink-muted">
-        budgets, approbations, tentatives, périmètre : la même politique que l&apos;orchestrateur applique. Le serveur
-        la valide à l&apos;enregistrement.
+        budgets, approvals, attempts, scope: the same policy the orchestrator applies. The server
+        validates it on save.
       </p>
     </div>
   );
@@ -357,7 +357,7 @@ function ModelsEditor({
           <input
             list="modeles-disponibles"
             value={profils[profil] ?? ""}
-            placeholder={models?.inherited?.[profil] ? `hérité : ${models.inherited[profil]}` : "platform/standard"}
+            placeholder={models?.inherited?.[profil] ? `inherited: ${models.inherited[profil]}` : "platform/standard"}
             onChange={(event) => setProfils((p) => ({ ...p, [profil]: event.target.value }))}
             className="w-64 rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
           />
@@ -370,7 +370,7 @@ function ModelsEditor({
       </datalist>
       <label className="flex items-center gap-2 text-xs text-ink-muted">
         <input type="checkbox" checked={allowUnvalidated} onChange={(e) => setAllowUnvalidated(e.target.checked)} />
-        accepter une combinaison backend × modèle non validée par les évals
+        accept a backend × model combination not validated by the evals
       </label>
       <div className="flex justify-end">
         <Button
@@ -387,7 +387,7 @@ function ModelsEditor({
             })
           }
         >
-          enregistrer les profils
+          save the profiles
         </Button>
       </div>
     </div>

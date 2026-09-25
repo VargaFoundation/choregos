@@ -63,7 +63,7 @@ export function useEventStream<T>({
     };
     source.onerror = () => {
       setConnected(false);
-      setError("connexion interrompue — reprise automatique");
+      setError("connection lost — reconnecting");
     };
     return () => source.close();
     // `parse` et `mockEvents` sont fournis par l'appelant et stables pour la durée du flux :

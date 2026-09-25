@@ -41,7 +41,7 @@ export default function AdminPage() {
       setInvite({ email: "", role: "developer", project_slug: "" });
       void queryClient.invalidateQueries({ queryKey: ["members", org] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "invitation refusée");
+      setError(cause instanceof Error ? cause.message : "invitation refused");
     }
   }
 
@@ -53,7 +53,7 @@ export default function AdminPage() {
       setTokenName("");
       void queryClient.invalidateQueries({ queryKey: ["tokens"] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "jeton refusé");
+      setError(cause instanceof Error ? cause.message : "token refused");
     }
   }
 
@@ -79,11 +79,11 @@ export default function AdminPage() {
           </ul>
         </Card>
 
-        <Card title="mes jetons d'API">
+        <Card title="my API tokens">
           {/* Le clair n'existe qu'ici, une fois : il n'est jamais stocké ni réaffiché. */}
           {tokenClair && (
             <div className="mb-3 border border-line border-l-2 border-l-accent bg-surface p-3 text-sm">
-              <p className="text-xs text-ink-muted">copiez-le maintenant — il ne sera plus affiché</p>
+              <p className="text-xs text-ink-muted">copy it now — it will not be shown again</p>
               <code className="block break-all font-mono text-xs">{tokenClair}</code>
             </div>
           )}
@@ -95,14 +95,14 @@ export default function AdminPage() {
             }}
           >
             <input
-              aria-label="nom du jeton"
+              aria-label="token name"
               value={tokenName}
               onChange={(event) => setTokenName(event.target.value)}
               placeholder="cli"
               className="rounded border border-line bg-surface px-2 py-1"
             />
             <Button size="sm" tone="primary" type="submit">
-              frapper un jeton (90 jours)
+              mint a token (90 days)
             </Button>
           </form>
           <ul className="space-y-1 text-xs">
@@ -112,7 +112,7 @@ export default function AdminPage() {
                   <span className="font-mono">{token.name}</span>
                   <span className="text-ink-muted">
                     {" "}
-                    · expire {token.expires_at ? shortDate(token.expires_at) : "jamais"} · dernier usage{" "}
+                    · expires {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
                     {token.last_used_at ? shortDate(token.last_used_at) : "—"}
                   </span>
                 </span>
@@ -123,15 +123,15 @@ export default function AdminPage() {
                     void api.revokeToken(token.id).then(() => queryClient.invalidateQueries({ queryKey: ["tokens"] }))
                   }
                 >
-                  révoquer
+                  revoke
                 </Button>
               </li>
             ))}
           </ul>
-          {(tokens.data ?? []).length === 0 && <Empty>aucun jeton</Empty>}
+          {(tokens.data ?? []).length === 0 && <Empty>no token</Empty>}
         </Card>
 
-        <Card title={`membres de ${org}`} className="lg:col-span-2">
+        <Card title={`members of ${org}`} className="lg:col-span-2">
           <form
             className="mb-3 flex flex-wrap items-center gap-2 text-sm"
             onSubmit={(event) => {
@@ -140,14 +140,14 @@ export default function AdminPage() {
             }}
           >
             <input
-              aria-label="e-mail du membre"
+              aria-label="member e-mail"
               value={invite.email}
               onChange={(event) => setInvite((i) => ({ ...i, email: event.target.value }))}
               placeholder="alice@example.org"
               className="rounded border border-line bg-surface px-2 py-1"
             />
             <select
-              aria-label="rôle"
+              aria-label="role"
               value={invite.role}
               onChange={(event) => setInvite((i) => ({ ...i, role: event.target.value }))}
               className="rounded border border-line bg-surface px-2 py-1"
@@ -159,44 +159,44 @@ export default function AdminPage() {
               ))}
             </select>
             <input
-              aria-label="projet (facultatif)"
+              aria-label="project (optional)"
               value={invite.project_slug}
               onChange={(event) => setInvite((i) => ({ ...i, project_slug: event.target.value }))}
-              placeholder="projet (vide = toute l'organisation)"
+              placeholder="project (empty = whole organisation)"
               className="rounded border border-line bg-surface px-2 py-1"
             />
             <Button size="sm" tone="primary" type="submit" disabled={!invite.email}>
-              inviter
+              invite
             </Button>
           </form>
           <table>
             <thead>
               <tr>
-                <th>membre</th>
-                <th>portée</th>
-                <th>rôle</th>
+                <th>member</th>
+                <th>scope</th>
+                <th>role</th>
               </tr>
             </thead>
             <tbody>
               {(members.data ?? []).map((membership, index) => (
                 <tr key={index}>
                   <td className="text-xs">{membership.email ?? membership.user_id}</td>
-                  <td className="text-xs text-ink-muted">{membership.project_slug ?? "toute l'organisation"}</td>
+                  <td className="text-xs text-ink-muted">{membership.project_slug ?? "whole organisation"}</td>
                   <td className="font-mono text-xs">{membership.role}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {(members.data ?? []).length === 0 && <Empty>aucun membre</Empty>}
+          {(members.data ?? []).length === 0 && <Empty>no member</Empty>}
         </Card>
 
-        <Card title="backends d'agents">
+        <Card title="agent backends">
           <ul className="space-y-1 text-xs">
             {(backends.data ?? []).map((backend) => (
               <li key={backend.name} className="flex items-center gap-2">
                 <StateBadge
                   state={backend.enabled ? "ok" : "disabled"}
-                  display={backend.enabled ? "activé" : "désactivé"}
+                  display={backend.enabled ? "enabled" : "disabled"}
                   kind={backend.enabled ? "terminal" : "blocked"}
                 />
                 <span className="font-mono">{backend.name}</span>
@@ -204,29 +204,29 @@ export default function AdminPage() {
               </li>
             ))}
           </ul>
-          {(backends.data ?? []).length === 0 && <Empty>aucun backend enregistré</Empty>}
+          {(backends.data ?? []).length === 0 && <Empty>no backend registered</Empty>}
         </Card>
 
-        <Card title="exécuteurs">
+        <Card title="executors">
           <ul className="space-y-1 text-xs">
             {(executors.data ?? []).map((executor) => (
               <li key={executor.kind} className="flex items-center gap-2">
                 <span className="font-mono">{executor.kind}</span>
-                <span className="text-ink-muted">{executor.enabled === false ? "désactivé" : "activé"}</span>
+                <span className="text-ink-muted">{executor.enabled === false ? "disabled" : "enabled"}</span>
               </li>
             ))}
           </ul>
-          {(executors.data ?? []).length === 0 && <Empty>aucun exécuteur enregistré</Empty>}
+          {(executors.data ?? []).length === 0 && <Empty>no executor registered</Empty>}
         </Card>
 
-        <Card title="journal d'audit" className="lg:col-span-2">
+        <Card title="audit log" className="lg:col-span-2">
           <table>
             <thead>
               <tr>
-                <th>quand</th>
-                <th>acteur</th>
+                <th>when</th>
+                <th>actor</th>
                 <th>action</th>
-                <th>cible</th>
+                <th>target</th>
               </tr>
             </thead>
             <tbody>
@@ -246,7 +246,7 @@ export default function AdminPage() {
               ))}
             </tbody>
           </table>
-          {(audit.data?.items ?? []).length === 0 && <Empty>aucune entrée d&apos;audit</Empty>}
+          {(audit.data?.items ?? []).length === 0 && <Empty>no audit entry</Empty>}
         </Card>
       </div>
     </div>

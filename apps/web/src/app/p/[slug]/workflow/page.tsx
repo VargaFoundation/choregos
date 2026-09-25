@@ -11,11 +11,11 @@ import type { WorkflowValidation } from "@/lib/types";
 // et d'elle seule. Le board et les runs n'en paient pas le prix.
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
   ssr: false,
-  loading: () => <p className="text-sm text-ink-muted">éditeur en cours de chargement…</p>,
+  loading: () => <p className="text-sm text-ink-muted">loading the editor…</p>,
 });
 const WorkflowGraph = dynamic(
   () => import("@/components/workflow-graph").then((m) => m.WorkflowGraph),
-  { ssr: false, loading: () => <p className="text-sm text-ink-muted">graphe en cours de rendu…</p> },
+  { ssr: false, loading: () => <p className="text-sm text-ink-muted">rendering the graph…</p> },
 );
 
 /**
@@ -58,9 +58,9 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
     setMessage(null);
     try {
       const saved = await api.putWorkflow(slug, yaml);
-      setMessage(`workflow ${saved.name} v${saved.version} enregistré`);
+      setMessage(`workflow ${saved.name} v${saved.version} saved`);
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "enregistrement refusé");
+      setMessage(cause instanceof Error ? cause.message : "save refused");
     } finally {
       setSaving(false);
     }
@@ -69,10 +69,10 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card
-        title="définition (YAML)"
+        title="definition (YAML)"
         action={
           <Button tone="primary" onClick={save} disabled={saving || report?.valid === false}>
-            enregistrer
+            save
           </Button>
         }
       >
@@ -88,12 +88,12 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
 
       <div className="space-y-4">
         <Card title="validation">
-          {!report && <Empty>validation en cours…</Empty>}
-          {report?.valid && <p className="text-sm text-ok">✓ workflow valide</p>}
+          {!report && <Empty>validating…</Empty>}
+          {report?.valid && <p className="text-sm text-ok">✓ valid workflow</p>}
           {report?.errors?.map((issue, index) => (
             <ErrorNote key={index}>
               {issue.message}
-              {issue.line ? ` — ligne ${issue.line}` : ""} {issue.path ? `(${issue.path})` : ""}
+              {issue.line ? ` — line ${issue.line}` : ""} {issue.path ? `(${issue.path})` : ""}
             </ErrorNote>
           ))}
           {report?.warnings?.map((issue, index) => (
@@ -103,14 +103,14 @@ export default function WorkflowPage({ params }: { params: Promise<{ slug: strin
           ))}
         </Card>
 
-        <Card title="graphe">
+        <Card title="graph">
           {report?.graph ? (
             <>
               <WorkflowGraph graph={report.graph} />
               <Lanes graph={report.graph} />
             </>
           ) : (
-            <Empty>le graphe apparaît dès que le workflow est valide</Empty>
+            <Empty>the graph appears as soon as the workflow is valid</Empty>
           )}
         </Card>
       </div>
@@ -132,7 +132,7 @@ function Lanes({ graph }: { graph: NonNullable<WorkflowValidation["graph"]> }) {
   }>;
   return (
     <details className="mt-3 space-y-4">
-      <summary className="cursor-pointer text-xs text-ink-muted">détail par couloir</summary>
+      <summary className="cursor-pointer text-xs text-ink-muted">detail per lane</summary>
       {lanes.map((lane) => {
         const inLane = nodes.filter((node) => (node.lane ?? "system") === lane);
         if (inLane.length === 0) return null;

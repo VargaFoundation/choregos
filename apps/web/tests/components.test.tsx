@@ -36,7 +36,7 @@ describe("journal ACP", () => {
     const { container } = render(<LiveLog events={events} height={300} />);
     const rows = container.querySelectorAll('[data-testid="live-log"] > div > div');
     expect(rows.length).toBeLessThan(60);
-    expect(screen.getByText(/5000 événements/)).toBeInTheDocument();
+    expect(screen.getByText(/5000 events/)).toBeInTheDocument();
   });
 
   it("met en évidence les permissions refusées", () => {
@@ -57,13 +57,13 @@ describe("preuves d'une étape", () => {
 
   it("garde les mesures du logiciel quand ce sont elles qui existent", () => {
     render(<Preuves evidence={{ tests_run: 6, tests_passed: true, lint: "ok" }} />);
-    expect(screen.getByText(/tests : ✓ 6/)).toBeInTheDocument();
-    expect(screen.getByText(/lint : ok/)).toBeInTheDocument();
+    expect(screen.getByText(/tests: ✓ 6/)).toBeInTheDocument();
+    expect(screen.getByText(/lint: ok/)).toBeInTheDocument();
   });
 
   it("ne montre pas une grille de tirets quand il n'y a aucune preuve", () => {
     render(<Preuves evidence={{}} />);
-    expect(screen.getByText(/aucune preuve consignée/)).toBeInTheDocument();
+    expect(screen.getByText(/no evidence recorded/)).toBeInTheDocument();
   });
 });
 
@@ -85,12 +85,12 @@ describe("fiche d'accès", () => {
     );
     expect(screen.getAllByText(/refus/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/fichier sensible/)).toBeInTheDocument();
-    expect(screen.getByText(/220 événements/)).toBeInTheDocument();
+    expect(screen.getByText(/220 events/)).toBeInTheDocument();
   });
 
   it("ne prétend rien quand il n'y a rien", () => {
     render(<Acces />);
-    expect(screen.getByText(/aucun accès enregistré/)).toBeInTheDocument();
+    expect(screen.getByText(/no access recorded/)).toBeInTheDocument();
   });
 });
 
@@ -113,15 +113,15 @@ describe("garanties", () => {
 
   it("montre chaque garantie évaluée et son verdict, les refus d'abord", () => {
     render(<Garanties events={events} />);
-    expect(screen.getByText("2 évaluée(s) · 1 refus")).toBeInTheDocument();
+    expect(screen.getByText("2 evaluated · 1 refused")).toBeInTheDocument();
     const items = screen.getAllByRole("listitem");
     expect(items[0]?.textContent).toContain("evidence_present");
     expect(items[0]?.textContent).toContain("aucun test exécuté");
-    expect(screen.getByLabelText("refusée")).toBeInTheDocument();
+    expect(screen.getByLabelText("refused")).toBeInTheDocument();
   });
 
   it("dit quand aucune garantie n'a été évaluée, plutôt qu'un ✓ à vide", () => {
     render(<Garanties events={[events[0]!]} />);
-    expect(screen.getByText(/aucune garantie évaluée/)).toBeInTheDocument();
+    expect(screen.getByText(/no gate evaluated/)).toBeInTheDocument();
   });
 });

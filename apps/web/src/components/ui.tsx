@@ -76,7 +76,7 @@ export function CostChip({
 }) {
   const over = budgetEur != null && costEur != null && costEur > budgetEur;
   const title =
-    tokensIn || tokensOut ? `${tokens(tokensIn)} tokens entrants / ${tokens(tokensOut)} sortants` : undefined;
+    tokensIn || tokensOut ? `${tokens(tokensIn)} tokens in / ${tokens(tokensOut)} out` : undefined;
   return (
     <span
       title={title}
@@ -90,9 +90,9 @@ export function CostChip({
 
 const ACTORS: Record<string, { tone: Tone; label: string }> = {
   agent: { tone: "accent", label: "agent" },
-  user: { tone: "ink", label: "humain" },
-  human: { tone: "ink", label: "humain" },
-  system: { tone: "neutral", label: "système" },
+  user: { tone: "ink", label: "human" },
+  human: { tone: "ink", label: "human" },
+  system: { tone: "neutral", label: "system" },
   train: { tone: "neutral", label: "release train" },
 };
 
@@ -102,7 +102,7 @@ const ACTORS: Record<string, { tone: Tone; label: string }> = {
  * type d'acteur est toujours énoncé en toutes lettres.
  */
 export function ActorIcon({ kind, name }: { kind: string; name?: string | null }) {
-  const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "système" };
+  const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "system" };
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted" title={actor.label}>
       <Dot tone={actor.tone} size={6} />

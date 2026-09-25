@@ -29,7 +29,7 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
       await api.findingAction(id, action);
       queryClient.invalidateQueries({ queryKey: ["findings", slug] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "action refusée");
+      setError(cause instanceof Error ? cause.message : "action refused");
     }
   }
 
@@ -38,16 +38,16 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
       title="findings"
       action={
         <select
-          aria-label="filtrer par état"
+          aria-label="filter by status"
           value={status}
           onChange={(event) => setStatus(event.target.value)}
           className="rounded border border-line bg-surface px-2 py-1 text-sm"
         >
-          <option value="">tous</option>
-          <option value="pending">à trier</option>
-          <option value="created">ticket créé</option>
-          <option value="duplicate">doublons</option>
-          <option value="dismissed">écartés</option>
+          <option value="">all</option>
+          <option value="pending">to triage</option>
+          <option value="created">ticket created</option>
+          <option value="duplicate">duplicates</option>
+          <option value="dismissed">dismissed</option>
         </select>
       }
     >
@@ -55,12 +55,12 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
       <table>
         <thead>
           <tr>
-            <th>sévérité</th>
+            <th>severity</th>
             <th>type</th>
-            <th>titre</th>
-            <th>preuve</th>
-            <th>origine</th>
-            <th>état</th>
+            <th>title</th>
+            <th>evidence</th>
+            <th>origin</th>
+            <th>status</th>
             <th>actions</th>
           </tr>
         </thead>
@@ -89,24 +89,24 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
               <td className="space-x-1 whitespace-nowrap">
                 {finding.status === "pending" && (
                   <Button tone="primary" onClick={() => act(finding.id, "create_ticket")}>
-                    créer le ticket
+                    create the ticket
                   </Button>
                 )}
                 {finding.status === "created" && (
                   <Button tone="primary" onClick={() => act(finding.id, "agent_ready")}>
-                    Rendre agent-ready
+                    Make agent-ready
                   </Button>
                 )}
-                <Button onClick={() => act(finding.id, "mark_duplicate")}>doublon</Button>
+                <Button onClick={() => act(finding.id, "mark_duplicate")}>duplicate</Button>
                 <Button tone="danger" onClick={() => act(finding.id, "dismiss")}>
-                  ignorer
+                  dismiss
                 </Button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {findings.data?.items.length === 0 && <Empty>aucun finding</Empty>}
+      {findings.data?.items.length === 0 && <Empty>no finding</Empty>}
     </Card>
   );
 }

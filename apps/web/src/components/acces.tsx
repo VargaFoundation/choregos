@@ -13,12 +13,12 @@ export type AccesRun = {
 };
 
 const LIBELLE: Record<string, string> = {
-  read: "lu",
-  write: "écrit",
-  execute: "exécuté",
-  network: "réseau",
-  tool: "outil",
-  autre: "autre",
+  read: "read",
+  write: "write",
+  execute: "execute",
+  network: "network",
+  tool: "tool",
+  autre: "other",
 };
 
 /**
@@ -36,27 +36,27 @@ export function Acces({ acces }: { acces?: AccesRun }) {
 
   return (
     <Card
-      title="accès"
+      title="access"
       action={
         <span className="text-xs text-ink-muted">
           {acces
-            ? `${acces.evenements} événements · ${acces.refus} refus${acces.deduites ? ` · ${acces.deduites} natures déduites` : ""}`
+            ? `${acces.evenements} events · ${acces.refus} refusals${acces.deduites ? ` · ${acces.deduites} kinds inferred` : ""}`
             : "—"}
         </span>
       }
     >
       {lignes.length === 0 ? (
-        <Empty>aucun accès enregistré pour ce run.</Empty>
+        <Empty>no access recorded for this run.</Empty>
       ) : (
         <>
           {refuses.length > 0 && (
             <div className="mb-4 border-l-2 border-danger pl-3">
-              <p className="mb-1 text-xs uppercase tracking-wide text-danger">refusé</p>
+              <p className="mb-1 text-xs uppercase tracking-wide text-danger">refused</p>
               <ul className="space-y-1 text-sm">
                 {refuses.map((ligne) => (
                   <li key={`${ligne.nature}:${ligne.cible}`}>
                     <span className="font-mono text-xs">{ligne.cible}</span>
-                    <span className="text-ink-muted"> — {ligne.motifs?.join(" · ") || "sans motif"}</span>
+                    <span className="text-ink-muted"> — {ligne.motifs?.join(" · ") || "no reason"}</span>
                   </li>
                 ))}
               </ul>
@@ -65,9 +65,9 @@ export function Acces({ acces }: { acces?: AccesRun }) {
           <table>
             <thead>
               <tr>
-                <th>nature</th>
-                <th>cible</th>
-                <th>demandes</th>
+                <th>kind</th>
+                <th>target</th>
+                <th>requests</th>
               </tr>
             </thead>
             <tbody>
@@ -79,7 +79,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
                   </td>
                   <td className="text-xs">
                     {ligne.demandes}
-                    {ligne.refus > 0 && <span className="text-danger"> · {ligne.refus} refusé(s)</span>}
+                    {ligne.refus > 0 && <span className="text-danger"> · {ligne.refus} refused</span>}
                   </td>
                 </tr>
               ))}
@@ -87,7 +87,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
           </table>
           {acces?.cout_outils_eur ? (
             <p className="mt-2 text-xs text-ink-muted">
-              outils du catalogue : {acces.cout_outils_eur.toFixed(4)} €
+              catalogue tools: {acces.cout_outils_eur.toFixed(4)} €
             </p>
           ) : null}
         </>

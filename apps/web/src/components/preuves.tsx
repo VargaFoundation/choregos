@@ -22,21 +22,21 @@ export function Preuves({ evidence }: { evidence?: Evidence }) {
     logiciel.push(["tests", `${evidence.tests_passed ? "✓" : "✗"} ${evidence.tests_run}`]);
   }
   if (evidence?.lint) logiciel.push(["lint", evidence.lint]);
-  if (evidence?.typecheck) logiciel.push(["typage", evidence.typecheck]);
+  if (evidence?.typecheck) logiciel.push(["typing", evidence.typecheck]);
   if (evidence?.coverage_delta != null) {
-    logiciel.push(["couverture", `${evidence.coverage_delta > 0 ? "+" : ""}${evidence.coverage_delta}`]);
+    logiciel.push(["coverage", `${evidence.coverage_delta > 0 ? "+" : ""}${evidence.coverage_delta}`]);
   }
   const lignes = faits.length > 0 ? faits : logiciel;
 
   return (
-    <Card title="preuves">
+    <Card title="evidence">
       {lignes.length === 0 ? (
-        <Empty>aucune preuve consignée.</Empty>
+        <Empty>no evidence recorded.</Empty>
       ) : (
         <ul className="space-y-1 text-sm">
           {lignes.map(([nom, valeur]) => (
             <li key={nom}>
-              {nom.replace(/_/g, " ")} :{" "}
+              {nom.replace(/_/g, " ")}:{" "}
               {typeof valeur === "boolean" ? (valeur ? "✓" : "✗") : String(valeur)}
             </li>
           ))}

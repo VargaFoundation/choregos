@@ -6,7 +6,7 @@ import { navLinkClasses } from "@varga/design-system";
 import { useSession } from "@/lib/session";
 
 const NAV = [
-  { href: "/", label: "projets" },
+  { href: "/", label: "projects" },
   { href: "/admin", label: "administration" },
 ];
 
@@ -15,7 +15,7 @@ export function TopNav() {
   const pathname = usePathname();
   const { me, orgs, org, choisirOrg, deconnecter } = useSession();
   return (
-    <nav className="flex flex-1 items-center gap-8" aria-label="navigation principale">
+    <nav className="flex flex-1 items-center gap-8" aria-label="main navigation">
       {NAV.map((entry) => {
         const active = entry.href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(entry.href);
         return (
@@ -34,7 +34,7 @@ export function TopNav() {
           <label className="flex items-center gap-2">
             <span className="text-ink-muted">organisation</span>
             <select
-              aria-label="organisation courante"
+              aria-label="current organisation"
               value={org}
               onChange={(event) => choisirOrg(event.target.value)}
               className="rounded border border-line bg-surface px-2 py-1"
@@ -53,12 +53,12 @@ export function TopNav() {
           <>
             <span title={me.email}>{me.display_name || me.email}</span>
             <button type="button" onClick={() => void deconnecter()} className="text-ink-muted hover:text-ink">
-              se déconnecter
+              sign out
             </button>
           </>
         ) : (
           <Link href="/login" className="text-ink-muted hover:text-ink">
-            se connecter
+            sign in
           </Link>
         )}
       </div>

@@ -42,15 +42,15 @@ export function Garanties({ events }: { events: RunEventDto[] }) {
   const refusees = verdicts.filter((v) => !v.passed && !v.pending).length;
   return (
     <Card
-      title="garanties"
+      title="gates"
       action={
         <span className="text-xs text-ink-muted">
-          {verdicts.length === 0 ? "—" : `${verdicts.length} évaluée(s) · ${refusees} refus`}
+          {verdicts.length === 0 ? "—" : `${verdicts.length} evaluated · ${refusees} refused`}
         </span>
       }
     >
       {verdicts.length === 0 ? (
-        <Empty>aucune garantie évaluée sur ce run (la transition n&apos;en déclare pas, ou l&apos;étape n&apos;a pas abouti).</Empty>
+        <Empty>no gate evaluated on this run (the transition declares none, or the stage did not complete).</Empty>
       ) : (
         <ul className="space-y-2">
           {[...verdicts]
@@ -58,7 +58,7 @@ export function Garanties({ events }: { events: RunEventDto[] }) {
             .map((verdict, index) => (
               <li key={`${verdict.name}-${index}`} className="flex items-start gap-3 text-sm">
                 <span
-                  aria-label={verdict.pending ? "en attente" : verdict.passed ? "acceptée" : "refusée"}
+                  aria-label={verdict.pending ? "pending" : verdict.passed ? "passed" : "refused"}
                   className={verdict.pending ? "text-warn" : verdict.passed ? "text-ok" : "text-danger"}
                 >
                   {verdict.pending ? "…" : verdict.passed ? "✓" : "✗"}

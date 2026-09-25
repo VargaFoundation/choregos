@@ -17,7 +17,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
 
   if (item.error) return <ErrorNote>{(item.error as Error).message}</ErrorNote>;
-  if (!item.data) return <Empty>chargement…</Empty>;
+  if (!item.data) return <Empty>loading…</Empty>;
   const data = item.data;
 
   async function control(action: string) {
@@ -40,27 +40,27 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           <StateBadge state={data.state} display={data.state_display} />
           <CostChip costEur={data.totals?.cost_eur} tokensIn={data.totals?.tokens_in} />
           <Button onClick={() => control(data.paused ? "resume" : "pause")}>
-            {data.paused ? "Reprendre" : "Mettre en pause"}
+            {data.paused ? "Resume" : "Pause"}
           </Button>
           <Button tone="danger" onClick={() => control("stop")}>
-            arrêter
+            stop
           </Button>
         </div>
       </div>
 
       {(data.failure || (data.workflow_status && ["FAILED", "TERMINATED", "TIMED_OUT"].includes(data.workflow_status))) && (
         <ErrorNote>
-          <strong>Ce ticket est mort.</strong> Son interpréteur s&apos;est arrêté
+          <strong>This ticket is dead.</strong> Its interpreter stopped
           {data.workflow_status ? ` (${data.workflow_status})` : ""}
-          {data.failure?.activity ? ` dans ${data.failure.activity}` : ""} : il ne bougera plus tant qu&apos;on ne le
-          relance pas.
+          {data.failure?.activity ? ` in ${data.failure.activity}` : ""}: it will not move again until it is
+          restarted.
           {data.failure?.message && <span className="mt-2 block font-mono text-xs">{data.failure.message}</span>}
           {data.failure?.at && <span className="mt-1 block text-xs">{relative(data.failure.at)}</span>}
         </ErrorNote>
       )}
 
       {data.pending_request && (
-        <Card title="décision attendue">
+        <Card title="decision awaited">
           <p className="mb-2 text-sm">
             {String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary ?? "")}
           </p>
@@ -73,15 +73,15 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="coût par étape" className="lg:col-span-2">
+        <Card title="cost per stage" className="lg:col-span-2">
           <table>
             <thead>
               <tr>
-                <th>étape</th>
-                <th>backend · modèle</th>
+                <th>stage</th>
+                <th>backend · model</th>
                 <th className="text-right">tokens</th>
-                <th className="text-right">coût</th>
-                <th>résultat</th>
+                <th className="text-right">cost</th>
+                <th>result</th>
               </tr>
             </thead>
             <tbody>
@@ -104,14 +104,14 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               ))}
             </tbody>
           </table>
-          {runs.data?.length === 0 && <Empty>aucun run pour l&apos;instant</Empty>}
+          {runs.data?.length === 0 && <Empty>no run yet</Empty>}
           <p className="mt-3 text-sm">
             Total {eur(data.totals?.cost_eur)}
             {data.estimate?.median_usd ? (
               <span className="text-ink-muted">
                 {" "}
-                · estimé {usd(data.estimate.median_usd)} (p80 {usd(data.estimate.p80_usd)})
-                {data.estimate.over_p80 ? " ⚠ dépassement" : ""}
+                · estimated {usd(data.estimate.median_usd)} (p80 {usd(data.estimate.p80_usd)})
+                {data.estimate.over_p80 ? " ⚠ over" : ""}
               </span>
             ) : null}
           </p>
@@ -133,7 +133,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               </li>
             ))}
           </ol>
-          {timeline.data?.length === 0 && <Empty>rien à afficher</Empty>}
+          {timeline.data?.length === 0 && <Empty>nothing to show</Empty>}
         </Card>
       </div>
 
