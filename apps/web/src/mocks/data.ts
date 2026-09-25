@@ -18,6 +18,7 @@ import type {
   TimelineEntry,
   TrainStatus,
   WorkflowDef,
+  WorkflowValidation,
   WorkItemDto,
   WorkItemPage,
 } from "@/lib/types";
@@ -440,10 +441,29 @@ transitions:
 `,
 };
 
+/** Ce que l'API répond à la validation du workflow ci-dessus : la carte de `default-simple`. */
+export const workflowValidation: WorkflowValidation = {
+  valid: true,
+  errors: [],
+  warnings: [],
+  graph: {
+    nodes: [
+      { id: "inbox", display: "À trier", kind: "wait", lane: "agent" },
+      { id: "ready", display: "Prêt", kind: "normal", lane: "agent" },
+      { id: "done", display: "Fini", kind: "normal", terminal: true, lane: "terminal" },
+    ],
+    edges: [
+      { id: "t-refine", from: "inbox", to: "ready", kind: "nominal", label: "t-refine", actor: "refiner", gates: [] },
+      { id: "t-implement", from: "ready", to: "done", kind: "nominal", label: "t-implement", actor: "dev", gates: ["scope_respected"] },
+    ],
+  },
+};
+
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
+  if (method === "POST" && path === "/workflows/validate") return workflowValidation as T;
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   const table: Array<[RegExp, unknown]> = [

@@ -1189,6 +1189,11 @@ components:
               id: { type: [string, "null"] }
               from: { type: string }
               to: { type: string }
+              kind:
+                type: string
+                description: "`nominal` pour une transition du YAML ; `reject`, `resume`, `escalate`, `default`… pour les arêtes secondaires (rendues en pointillés)."
+              label: { type: string }
+              wildcard: { type: boolean }
               actor: { type: [string, "null"] }
               actor_type: { type: [string, "null"] }
               gates: { type: array, items: { type: string } }

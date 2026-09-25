@@ -216,6 +216,10 @@ export type WorkflowGraph = {
     id?: string | null;
     from: string;
     to: string;
+    /** `nominal` pour une transition du YAML ; `reject`, `resume`, `escalate`, `default`… pour les arêtes secondaires (rendues en pointillés). */
+    kind?: string;
+    label?: string;
+    wildcard?: boolean;
     actor?: string | null;
     actor_type?: string | null;
     gates?: Array<string>;
