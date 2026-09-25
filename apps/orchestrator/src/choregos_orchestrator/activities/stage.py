@@ -51,6 +51,7 @@ from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
+from ..gitops import PLAGES_PRIVEES
 from ..train_client import signal_findings
 from .base import db, load_work_item, project_bundle
 
@@ -265,6 +266,24 @@ def _runner_namespace(settings: Any, slug: str) -> str:
     return str(settings.runner_namespace_pattern).format(slug=slug)
 
 
+def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
+    """L'environnement d'un pod d'agent : ce que le déploiement passe, plus le proxy d'egress.
+
+    `git`, `pip`, `npm`, `uv` et l'agent lisent `HTTP_PROXY`/`HTTPS_PROXY` ; `NO_PROXY`
+    garde le trafic du cluster (API interne, passerelle, mémoire) en direct — le proxy ne
+    sert qu'à sortir. Sans `runner_egress_proxy`, rien n'est ajouté.
+    """
+    env = dict(settings.runner_env)
+    proxy = str(getattr(settings, "runner_egress_proxy", "") or "").format(namespace=namespace)
+    if proxy:
+        env.setdefault("HTTP_PROXY", proxy)
+        env.setdefault("HTTPS_PROXY", proxy)
+        env.setdefault("NO_PROXY", ",".join(("localhost,127.0.0.1,.svc,.cluster.local", *PLAGES_PRIVEES[:3])))
+        for nom in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
+            env[nom.lower()] = env[nom]
+    return env
+
+
 def _run_id(plan: StagePlan) -> str:
     """Identifiant déterministe : rejouer l'activité ne crée pas un second run."""
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
@@ -337,7 +356,7 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             stage_input=stage_input,
             timeout_minutes=stage_input.budget.max_minutes + 10,
             runtime_class="gvisor" if bundle.policy.sandbox.runtime == "gvisor" else None,
-            env=dict(settings.runner_env),
+            env=env_du_runner(settings, _runner_namespace(settings, bundle.slug)),
             labels={
                 "choregos/project": bundle.slug,
                 "choregos/run-id": stage_input.run_id,

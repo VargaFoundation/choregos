@@ -14,3 +14,6 @@ ingress:
   hostnames: ["app.choregos.local"]
   gateway: choregos-gateway
   gatewayNamespace: gateway
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

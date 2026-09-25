@@ -53,6 +53,16 @@ app.kubernetes.io/part-of: choregos
   value: {{ .Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain) | quote }}
 - name: CHOREGOS_API_URL
   value: {{ .Values.global.apiUrl | default (printf "https://api.%s" .Values.global.domain) | quote }}
+{{- /* Le pool de connexions, BORNÉ : `pool_size` seul laissait SQLAlchemy ouvrir dix
+       connexions de débordement par processus sans limite de temps d'attente (état des lieux
+       du 2026-09-24). Chaque réplique de l'API et chaque worker tient au plus size+maxOverflow
+       connexions ; à multiplier par les répliques pour dimensionner `max_connections`. */}}
+- name: CHOREGOS_DB_POOL_SIZE
+  value: {{ .Values.global.database.pool.size | quote }}
+- name: CHOREGOS_DB_MAX_OVERFLOW
+  value: {{ .Values.global.database.pool.maxOverflow | quote }}
+- name: CHOREGOS_DB_POOL_TIMEOUT_S
+  value: {{ .Values.global.database.pool.timeoutSeconds | quote }}
 {{- with (include "choregos.databasePasswordSecret" .) }}
 {{- /* Le mot de passe vient d'un secret posé par un opérateur (Zalando : clé `password`),
        l'URL est composée ici — Kubernetes développe `$(VAR)` d'une variable déclarée avant. */}}
@@ -137,4 +147,31 @@ http://{{ .Release.Name }}-ecphoria:8432
 {{- else if .Values.global.memory.embedded -}}
 {{ .Release.Name }}-memory
 {{- end -}}
+{{- end -}}
+
+{{/*
+Anti-affinité entre les répliques d'un même composant. `global.antiAffinity` : `soft`
+(préférée, le défaut — un mono-nœud place quand même ses pods), `hard` (exigée : une
+réplique par nœud, ou pas de pod) ou `none`. Un PodDisruptionBudget sans anti-affinité
+protège d'un drain, pas d'une panne : deux répliques sur le même nœud tombent ensemble.
+*/}}
+{{- define "choregos.antiAffinity" -}}
+{{- $mode := .global.antiAffinity | default "soft" -}}
+{{- if ne $mode "none" }}
+affinity:
+  podAntiAffinity:
+    {{- if eq $mode "hard" }}
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - topologyKey: kubernetes.io/hostname
+        labelSelector:
+          matchLabels: {{- toYaml .labels | nindent 12 }}
+    {{- else }}
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels: {{- toYaml .labels | nindent 14 }}
+    {{- end }}
+{{- end }}
 {{- end -}}

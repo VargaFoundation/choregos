@@ -1,0 +1,17 @@
+{{- /*
+Un PodDisruptionBudget sur UNE réplique bloque tout drain de nœud sans rien protéger :
+il n'est rendu qu'à partir de deux, quoi que dise `enabled`.
+*/ -}}
+{{- if and .Values.enabled .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: choregos-web
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-web
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

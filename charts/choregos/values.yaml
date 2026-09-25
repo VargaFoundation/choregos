@@ -44,6 +44,9 @@ global:
     #: c'est là que vivent les clés des fournisseurs, jamais dans le catalogue.
     credentialsSecret: ""
   logLevel: INFO
+  # Anti-affinité entre les répliques d'un même composant : `soft` (préférée), `hard`
+  # (une réplique par nœud, sinon pas de pod) ou `none`.
+  antiAffinity: soft
   serviceAccount:
     annotations: {}
   podSecurityContext:
@@ -73,6 +76,13 @@ global:
     # À la place de `secretRef` (clé `url`) : le secret d'un opérateur qui ne porte que le
     # mot de passe (Zalando : `<user>.<cluster>.credentials.postgresql.acid.zalan.do`).
     passwordSecret: ""
+    # Pool de connexions de CHAQUE processus (réplique d'API, worker) : au plus
+    # size + maxOverflow connexions, une attente bornée au-delà. Dimensionner
+    # `max_connections` de PostgreSQL en conséquence : (répliques API + workers) × (size + maxOverflow).
+    pool:
+      size: 10
+      maxOverflow: 5
+      timeoutSeconds: 10
   temporal:
     embedded: false
     address: temporal-frontend.choregos-temporal.svc:7233
@@ -166,6 +176,9 @@ choregos-web:
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { cpu: 500m, memory: 512Mi }
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
   ingress:
     enabled: true
     kind: httproute
@@ -214,6 +227,17 @@ choregos-orchestrator:
     limits:
       cpu: "2"
       memory: 6Gi
+    # Le proxy d'egress par lequel CHAQUE pod d'agent sort (`HTTP_PROXY`/`HTTPS_PROXY`),
+    # `{namespace}` = celui des runners. Le provisioning y déploie un Squid dont
+    # l'allowlist est `policy.sandbox.network.allow_domains` ; sans domaine autorisé,
+    # pas de proxy et pas de sortie. Vide : aucun proxy (banc local).
+    egressProxy: "http://choregos-egress.{namespace}.svc:3128"
+    # Son image, à épingler par digest là où Kyverno l'exige. Vide : celle de `gitops.py`.
+    egressImage: ""
+  # Un budget par file d'attente comptant plus d'une réplique.
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
 
 choregos-tools:
   enabled: true

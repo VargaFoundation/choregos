@@ -19,6 +19,7 @@ A runbook is read at 3 a.m. by someone who did not write the code. Each one star
 | `webhook-perdu.md` | an `agent-ready` ticket did not start |
 | `perte-de-noeud.md` | a node disappears (spot eviction, failure) and work does not resume |
 | `aca-live.md` | checking the Azure Container Apps executor against a real subscription |
+| `temporal-backup.md` (English) | what Temporal holds, how to back it up, what a loss costs and how to reconcile after a restore |
 
 ## Index (français)
 
@@ -35,3 +36,4 @@ A runbook is read at 3 a.m. by someone who did not write the code. Each one star
 | [webhook-perdu.md](webhook-perdu.md) | un ticket `agent-ready` n'a pas démarré |
 | [perte-de-noeud.md](perte-de-noeud.md) | un nœud disparaît (éviction spot, panne) et le travail ne repart pas |
 | [aca-live.md](aca-live.md) | vérifier l'exécuteur Azure Container Apps contre un vrai abonnement |
+| [temporal-backup.md](temporal-backup.md) | (en anglais) ce que Temporal détient, sa sauvegarde, ce qu'une perte coûte |

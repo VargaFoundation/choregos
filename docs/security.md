@@ -15,7 +15,7 @@ organisations must assume **a member of one will try to read another**.
 | Threat | Mechanism | Where |
 | :-- | :-- | :-- |
 | writing outside the allowed paths | ACP permission refused → diff verified after the run → revert → gate `scope_respected` | `guardrails.py`, `scope.py`, `gates/` |
-| exfiltrating data | egress denied by default, per-project allowlist | `gitops.py`, `charts/…/networkpolicies.yaml`, `tests/cluster/test_sandbox_egress.py` |
+| exfiltrating data | egress denied by default; the only way out is a **per-project Squid proxy** whose allowlist is the policy's `allow_domains`, non-root, read-only, `CONNECT` to 443 only; the agent's own guardrails refuse the same domains first | `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
 | using credentials | there are none in the workspace; the run token only authenticates the agent **to us**, and never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py` |
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
 | spending without limit | one virtual key per run with a hard cap, a budget per ticket, tool calls in the same ledger | ADR 0004, ADR 0014 |
