@@ -54,7 +54,7 @@ test("connexion : la page existe et dit ce qu'elle attend", async ({ page }) => 
   await page.goto("/login?next=%2Fadmin");
   await expect(page.getByRole("heading", { name: "sign in" })).toBeVisible();
   // en mode démo la session est simulée : la page le dit au lieu d'un bouton vers un IdP absent
-  await expect(page.getByText(/demo mode/)).toBeVisible();
+  await expect(page.getByText(/demo mode: the session/)).toBeVisible();
 });
 
 test("administration : membres et jetons ont un écran", async ({ page }) => {

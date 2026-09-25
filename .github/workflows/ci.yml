@@ -119,6 +119,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # Les parcours Playwright et le passage d'axe tournent contre le build en mode démo :
+      # un écran inaccessible ou un parcours cassé se voit ici, pas chez un utilisateur.
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+        env: { CI: "true" }
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with: { name: playwright-report, path: apps/web/playwright-report, retention-days: 7 }
 
   charts:
     needs: changes

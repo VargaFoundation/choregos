@@ -75,7 +75,8 @@ export default function ProjectsPage() {
                 />
               }
             >
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5">
+              {/* Pas un <dl> : `Stat` ne rend ni <dt> ni <dd>, et axe le refuse à raison (definition-list). */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5">
                 <Stat value={project.stats?.active_work_items ?? 0} label="active tickets" />
                 <Stat
                   value={eur(project.stats?.cost_month_eur)}
@@ -83,7 +84,7 @@ export default function ProjectsPage() {
                 />
                 <Stat value={percent(project.stats?.first_pass_merge_rate)} label="prs on first pass" />
                 <Stat value={project.stats?.trains_pending ?? 0} label="trains in flight" />
-              </dl>
+              </div>
               <p className="mt-6 text-xs text-ink-muted">
                 {project.workflow_name ?? "—"} · {project.policy_name ?? "—"} · {relative(project.updated_at)}
               </p>
