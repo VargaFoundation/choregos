@@ -185,14 +185,30 @@ class ArgoCdAdapter:
             json={"ref": f"refs/heads/{branch}", "sha": head["object"]["sha"]},
         )
 
+    async def _contenu(self, path: str, branch: str) -> dict[str, Any] | None:
+        """Le fichier sur la branche, ou `None` s'il n'existe pas.
+
+        Le client GitHub lève sur un 404, il ne rend pas `None` : la première promotion
+        vers un environnement — sans `releases/<env>/manifest.yaml` encore écrit — échouait
+        donc toujours, et une kustomization absente aussi (trouvé par le test de contrat).
+        """
+        assert self.github is not None
+        try:
+            payload: dict[str, Any] | None = await self.github.request(
+                "GET",
+                f"/repos/{self.gitops_repo}/contents/{path}",
+                repo=self.gitops_repo,
+                params={"ref": branch},
+            )
+        except UpstreamError as exc:
+            if exc.status_code != 404:
+                raise
+            return None
+        return payload
+
     async def _patch_image(self, path: str, branch: str, change: Change) -> None:
         assert self.github is not None
-        current = await self.github.request(
-            "GET",
-            f"/repos/{self.gitops_repo}/contents/{path}",
-            repo=self.gitops_repo,
-            params={"ref": branch},
-        )
+        current = await self._contenu(path, branch)
         if current is None:
             return
         content = base64.b64decode(current["content"]).decode("utf-8")
@@ -226,9 +242,7 @@ class ArgoCdAdapter:
             sort_keys=False,
             allow_unicode=True,
         )
-        current = await self.github.request(
-            "GET", f"/repos/{self.gitops_repo}/contents/{path}", repo=self.gitops_repo, params={"ref": branch}
-        )
+        current = await self._contenu(path, branch)
         body: dict[str, Any] = {
             "message": f"release({env}): {release}",
             "content": base64.b64encode(payload.encode()).decode(),
