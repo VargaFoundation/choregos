@@ -97,6 +97,7 @@ async def decide(ctx: ProjectCtx, body: MemoryDecision, session: Db) -> dict[str
         session,
         ctx.principal,
         f"memory.{body.action}",
+        org_id=ctx.project.org_id,
         target_type="memory",
         target_id=body.id,
         reason=body.reason,
@@ -112,7 +113,14 @@ async def reimport(ctx: ProjectCtx, body: MemoryReimport, session: Db) -> dict[s
     await get_temporal().signal(
         f"mem-{ctx.slug}", "reimport", {"sources": body.sources or ["readme", "docs", "adr", "closed_issues"]}
     )
-    await record(session, ctx.principal, "memory.reimport", target_type="project", target_id=ctx.id)
+    await record(
+        session,
+        ctx.principal,
+        "memory.reimport",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+    )
     return {"status": "accepted"}
 
 

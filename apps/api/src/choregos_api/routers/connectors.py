@@ -197,6 +197,7 @@ async def put_connector(
         session,
         ctx.principal,
         "connector.upsert",
+        org_id=ctx.project.org_id,
         target_type="connector",
         target_id=row.id,
         kind=kind,

@@ -123,7 +123,13 @@ async def create_template(body: TemplateUpsert, session: Db, principal: Me) -> T
     session.add(row)
     await session.flush()
     await record(
-        session, principal, "template.create", target_type="template", target_id=row.id, name=row.name
+        session,
+        principal,
+        "template.create",
+        org_id=None,  # un template est de plateforme, pas d'une organisation
+        target_type="template",
+        target_id=row.id,
+        name=row.name,
     )
     return TemplateSummary(
         name=row.name,
@@ -152,7 +158,13 @@ async def update_template(name: str, body: TemplateUpsert, session: Db, principa
     row.repo_url = body.repo_url
     row.is_published = body.is_published
     await record(
-        session, principal, "template.update", target_type="template", target_id=row.id, name=row.name
+        session,
+        principal,
+        "template.update",
+        org_id=None,  # idem
+        target_type="template",
+        target_id=row.id,
+        name=row.name,
     )
     return TemplateSummary(
         name=row.name,

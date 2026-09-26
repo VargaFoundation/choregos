@@ -83,7 +83,14 @@ async def put_models(ctx: ProjectCtx, body: ProjectModels, session: Db) -> Proje
             raise unprocessable(str(exc), [{"loc": ["profiles", name], "msg": str(exc)}]) from exc
 
     ctx.project.config = config.model_dump(mode="json", exclude_none=True)
-    await record(session, ctx.principal, "models.put", target_type="project", target_id=ctx.id)
+    await record(
+        session,
+        ctx.principal,
+        "models.put",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+    )
     return await get_models(ctx)
 
 

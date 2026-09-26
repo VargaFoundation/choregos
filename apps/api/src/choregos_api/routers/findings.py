@@ -118,5 +118,12 @@ async def act(id: str, body: FindingAction, session: Db, principal: Me) -> Findi
         action=body.action,
         by=principal.email,
     )
-    await record(session, principal, f"finding.{body.action}", target_type="finding", target_id=row.id)
+    await record(
+        session,
+        principal,
+        f"finding.{body.action}",
+        org_id=project.org_id,
+        target_type="finding",
+        target_id=row.id,
+    )
     return await _dto(session, row, project.slug)

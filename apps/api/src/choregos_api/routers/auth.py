@@ -322,7 +322,8 @@ async def callback(
         user = await _ensure_user(session, info["email"], info.get("name", ""), info.get("sub"))
         await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 
-    await record(session, None, "auth.login", target_type="user", target_id=user.id)
+    # une connexion précède la résolution d'organisation : événement de plateforme
+    await record(session, None, "auth.login", org_id=None, target_type="user", target_id=user.id)
     cookie = sign_session({"sub": user.id, "exp": int(time.time()) + settings.session_max_age_s}, settings)
     response = RedirectResponse(url=target, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     response.set_cookie(
@@ -381,7 +382,8 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
     )
     session.add(row)
     await session.flush()
-    await record(session, principal, "token.create", target_type="api_token", target_id=row.id)
+    # un jeton d'API appartient à un utilisateur, pas à une organisation
+    await record(session, principal, "token.create", org_id=None, target_type="api_token", target_id=row.id)
     return ApiTokenCreated(**_token_dto(row).model_dump(), token=raw)
 
 
@@ -391,7 +393,7 @@ async def revoke_my_token(id: str, session: Db, principal: Me) -> Response:
     if row is None or row.user_id != principal.user_id:
         raise not_found("Jeton", id)
     await session.delete(row)
-    await record(session, principal, "token.revoke", target_type="api_token", target_id=id)
+    await record(session, principal, "token.revoke", org_id=None, target_type="api_token", target_id=id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

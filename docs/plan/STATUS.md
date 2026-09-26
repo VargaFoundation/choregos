@@ -252,6 +252,17 @@ les 492 tests ne disaient pas :
    deux côtés pendant deux jours — restauré et gardé par `tests/docs/test_instructions_des_agents.py`,
    qui refuse aussi une cible `make` inexistante. Reste P1-1b/c : l'anglais
    de l'interface, la traduction intégrale des 14 ADR et des 11 runbooks.
+   **Fuite d'audit entre organisations, trouvée le 2026-09-26** : `audit_log` était la
+   dernière table de mutation **hors RLS**, et n'avait même pas de colonne d'organisation ;
+   `GET /audit` renvoyait `select(AuditLog)` **sans aucun `where`**. Un `project_owner` d'une
+   organisation lisait l'audit de toutes les autres. Corrigé : colonne `org_id` sur les 29 sites
+   d'écriture (argument **obligatoire**, donc `mypy --strict` garde les suivants), politique RLS
+   avec `WITH CHECK` distinct de `USING` (une connexion écrit une trace sans organisation, elle
+   ne doit pas pour autant pouvoir en écrire pour une autre), et filtre de route sur les
+   organisations où `audit:read` est **réellement** détenu. Deux tests sur vrai PostgreSQL, dont
+   un qui échoue si le filtre saute. Le même travail a mis au jour un second défaut, consigné
+   dans BLOCKERS : `is_platform_admin()` rend vrai pour tout `org_admin` de n'importe quelle
+   organisation.
    **Banc série `d` (images de `main` après P0)** : les trois tickets de code `done` ; **la
    qualification RH réussit** — les profils du sourcing lui parviennent (#28) ; 5 verdicts de
    garanties journalisés et affichés ; 43 décisions de garde-fous **déduites** du titre ACP

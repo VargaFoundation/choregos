@@ -130,7 +130,13 @@ async def create_work_item(ctx: ProjectCtx, body: WorkItemCreate, session: Db) -
         )
         item.temporal_wf_id = workflow_id
     await record(
-        session, ctx.principal, "workitem.create", target_type="work_item", target_id=item.id, key=key
+        session,
+        ctx.principal,
+        "workitem.create",
+        org_id=ctx.project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        key=key,
     )
     return await work_item_dto(session, item, ctx.project)
 
@@ -301,7 +307,13 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         by=principal.email,
     )
     await record(
-        session, principal, "workitem.decision", target_type="work_item", target_id=item.id, kind=body.kind
+        session,
+        principal,
+        "workitem.decision",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        kind=body.kind,
     )
     return human_request_dto(request_row)
 
@@ -345,6 +357,7 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
         session,
         principal,
         f"workitem.{body.action}",
+        org_id=project.org_id,
         target_type="work_item",
         target_id=item.id,
         reason=body.reason,

@@ -346,10 +346,18 @@ class CostLedger(Base, PkMixin):
 
 
 class AuditLog(Base, PkMixin):
+    """Journal d'audit. `org_id` est NULL pour un événement de plateforme (une connexion, un
+    jeton) : ces lignes ne sont visibles que d'une session de portée `*`. Sans cette colonne,
+    la table était hors RLS et la route ne filtrait rien — un `project_owner` d'une
+    organisation lisait l'audit de toutes les autres."""
+
     __tablename__ = "audit_log"
 
     actor_id: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
     actor_kind: Mapped[str] = mapped_column(String(16), default="user")
+    org_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     action: Mapped[str] = mapped_column(String(80), index=True)
     target_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
