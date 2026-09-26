@@ -349,6 +349,21 @@ a real tenant on 2026-09-26. The alert rules themselves are written once and ser
 flavours, and a test fails if they ever diverge. An unknown flavour stops the render and names
 itself.
 
+### When a secret is not a secret
+
+The API **refuses to start** if any setting holds the literal string `<no value>` (or `<nil>`).
+That is what a Go template — Helm, or the Infisical operator — writes when the variable it
+references does not exist: it renders the words instead of failing. Ten characters that look
+like a value.
+
+This is not hypothetical. On 2026-09-26 a tenant ran with `GATEWAY_MASTER_KEY` and
+`PLATFORM_LLM_KEY` both set to `<no value>`: every pod was `1/1 Running`, the namespace looked
+healthy, and the upstream gateway answered `401 LiteLLM Virtual Key expected. Received=<no
+value>` on the first model call. Nothing said the key had never resolved.
+
+If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
+is missing where it is stored, not where it is read.
+
 ## Operating it
 
 What the chart does for a multi-node installation, and the knobs behind it:
