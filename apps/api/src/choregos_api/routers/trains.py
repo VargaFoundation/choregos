@@ -113,7 +113,14 @@ async def train_status(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db
 async def depart(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db) -> dict[str, str]:
     ctx.require(Permission.TRAIN_OPERATE)
     await get_temporal().signal(train_id(ctx.slug, env), "depart_now", {"by": ctx.principal.email})
-    await record(session, ctx.principal, "train.depart", target_type="train", target_id=f"{ctx.slug}/{env}")
+    await record(
+        session,
+        ctx.principal,
+        "train.depart",
+        org_id=ctx.project.org_id,
+        target_type="train",
+        target_id=f"{ctx.slug}/{env}",
+    )
     return {"status": "accepted"}
 
 
@@ -142,6 +149,7 @@ async def freeze(
         session,
         ctx.principal,
         "train.freeze",
+        org_id=ctx.project.org_id,
         target_type="train",
         target_id=f"{ctx.slug}/{env}",
         reason=body.reason,
@@ -155,7 +163,14 @@ async def freeze(
 async def unfreeze(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db) -> dict[str, str]:
     ctx.require(Permission.TRAIN_OPERATE)
     await get_temporal().signal(train_id(ctx.slug, env), "unfreeze", {"by": ctx.principal.email})
-    await record(session, ctx.principal, "train.unfreeze", target_type="train", target_id=f"{ctx.slug}/{env}")
+    await record(
+        session,
+        ctx.principal,
+        "train.unfreeze",
+        org_id=ctx.project.org_id,
+        target_type="train",
+        target_id=f"{ctx.slug}/{env}",
+    )
     return {"status": "accepted"}
 
 
@@ -171,7 +186,14 @@ async def approve(id: str, body: ApproveRequest, session: Db, principal: Me) -> 
         {"release_id": row.id, "by": principal.email, "note": body.note},
     )
     row.approved_by = principal.email
-    await record(session, principal, "release.approve", target_type="release", target_id=row.id)
+    await record(
+        session,
+        principal,
+        "release.approve",
+        org_id=project.org_id,
+        target_type="release",
+        target_id=row.id,
+    )
     return {"status": "accepted"}
 
 
@@ -186,6 +208,12 @@ async def abort(id: str, body: AbortRequest, session: Db, principal: Me) -> dict
         {"release_id": row.id, "by": principal.email, "reason": body.reason},
     )
     await record(
-        session, principal, "release.abort", target_type="release", target_id=row.id, reason=body.reason
+        session,
+        principal,
+        "release.abort",
+        org_id=project.org_id,
+        target_type="release",
+        target_id=row.id,
+        reason=body.reason,
     )
     return {"status": "accepted"}

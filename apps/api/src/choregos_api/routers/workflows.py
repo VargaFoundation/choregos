@@ -119,6 +119,7 @@ async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> Workf
         session,
         ctx.principal,
         "workflow.put",
+        org_id=ctx.project.org_id,
         target_type="workflow",
         target_id=row.id,
         name=row.name,
@@ -171,7 +172,15 @@ async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto
     )
     session.add(row)
     await session.flush()
-    await record(session, ctx.principal, "policy.put", target_type="policy", target_id=row.id, name=row.name)
+    await record(
+        session,
+        ctx.principal,
+        "policy.put",
+        org_id=ctx.project.org_id,
+        target_type="policy",
+        target_id=row.id,
+        name=row.name,
+    )
     return PolicyDto(
         id=row.id,
         name=row.name,

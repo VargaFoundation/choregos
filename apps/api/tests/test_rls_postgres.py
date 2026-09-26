@@ -132,3 +132,98 @@ async def test_un_jeton_de_run_voit_son_run_quelle_que_soit_l_organisation(
         )
         assert reponse.status_code == 200, reponse.text
         assert reponse.json()["key"] == "b-1"
+
+
+@pytest.fixture
+async def trois_traces(deux_organisations: dict[str, str]) -> dict[str, str]:
+    """Une trace pour `a`, une pour `b`, une de plateforme (sans organisation)."""
+    from choregos_api.db.models import AuditLog, Organization
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+
+    ids: dict[str, str] = {}
+    async with session_scope(orgs="*") as session:
+        orgs = {org.slug: org.id for org in (await session.execute(select(Organization))).scalars().all()}
+        for slug in ("a", "b"):
+            trace = AuditLog(
+                actor_id=f"u-{slug}",
+                actor_kind="user",
+                org_id=orgs[slug],
+                action="project.update",
+                target_type="project",
+                target_id=deux_organisations[slug],
+                payload={},
+                ts=utcnow(),
+            )
+            session.add(trace)
+            await session.flush()
+            ids[slug] = trace.id
+        plateforme = AuditLog(
+            actor_id="u-a",
+            actor_kind="user",
+            org_id=None,
+            action="auth.login",
+            target_type="user",
+            target_id="u-a",
+            payload={},
+            ts=utcnow(),
+        )
+        session.add(plateforme)
+        await session.flush()
+        ids["plateforme"] = plateforme.id
+    return ids
+
+
+async def test_la_trace_d_audit_d_une_organisation_est_invisible_a_l_autre(
+    pg_app: Any, trois_traces: dict[str, str]
+) -> None:
+    """`audit_log` était la dernière table de mutation hors RLS — et sans colonne d'organisation."""
+    from choregos_api.db.models import AuditLog
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs=["a"]) as session:
+        vues = (await session.execute(select(AuditLog.id))).scalars().all()
+        assert vues == [trois_traces["a"]], "une session bornée à `a` voit autre chose que `a`"
+    async with session_scope() as session:  # aucune portée : l'oubli ne doit rien ouvrir
+        assert (await session.execute(select(AuditLog))).scalars().all() == []
+    async with session_scope(orgs="*") as session:
+        assert len((await session.execute(select(AuditLog))).scalars().all()) == 3
+
+
+async def test_par_l_api_membre_des_deux_mais_audit_read_dans_une_seule(
+    pg_app: Any, trois_traces: dict[str, str]
+) -> None:
+    """Le cas que la RLS seule NE couvre PAS, et c'est celui qui fuyait.
+
+    Un principal membre de `a` **et** de `b` a une session bornée aux deux : la politique
+    laisse donc passer les traces des deux. Seule la route peut distinguer « membre de `b` »
+    de « autorisé à lire l'audit de `b` ». Avant le 2026-09-26 elle ne distinguait rien —
+    `GET /audit` renvoyait `select(AuditLog)` sans le moindre `where`, et `audit:read` dans
+    une organisation donnait l'audit de toutes les autres.
+
+    Retirer le filtre de `routers/admin.py` fait rougir ce test, et lui seul.
+    """
+    from choregos_api.db.models import Membership, Organization, User
+    from choregos_api.db.session import session_scope
+
+    async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
+        await login(client, "admin@a.test")  # ORG_ADMIN de `a` — donc `audit:read` sur `a`
+        async with session_scope(orgs="*") as session:
+            user = (
+                await session.execute(select(User).where(User.email == "admin@a.test"))
+            ).scalar_one()
+            org_b = (
+                await session.execute(select(Organization).where(Organization.slug == "b"))
+            ).scalar_one()
+            # simple lecteur chez `b` : la session le verra, la permission non
+            session.add(Membership(user_id=user.id, org_id=org_b.id, project_id=None, role="viewer"))
+
+        me = (await client.get("/api/v1/me")).json()
+        assert {m["org"] for m in me["memberships"]} == {"a", "b"}, "le principal doit porter les deux"
+
+        page = await client.get("/api/v1/audit")
+        assert page.status_code == 200, page.text
+        ids = {ligne["id"] for ligne in page.json()["items"]}
+        assert trois_traces["b"] not in ids, "l'audit de `b` fuit vers un simple lecteur de `b`"
+        assert trois_traces["plateforme"] not in ids, "un événement de plateforme fuit"
+        assert trois_traces["a"] in ids, "l'audit de `a` doit rester lisible par son administrateur"

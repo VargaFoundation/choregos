@@ -62,7 +62,9 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     session.add(org)
     await session.flush()
     session.add(Membership(user_id=principal.user_id, org_id=org.id, role=str(Role.ORG_ADMIN)))
-    await record(session, principal, "org.create", target_type="org", target_id=org.id, slug=body.slug)
+    await record(
+        session, principal, "org.create", org_id=org.id, target_type="org", target_id=org.id, slug=body.slug
+    )
     return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN)
 
 
@@ -131,7 +133,13 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
         )
     )
     await record(
-        session, principal, "project.create", target_type="project", target_id=project.id, slug=body.slug
+        session,
+        principal,
+        "project.create",
+        org_id=project.org_id,
+        target_type="project",
+        target_id=project.id,
+        slug=body.slug,
     )
     return await project_dto(session, project, org)
 
@@ -184,7 +192,14 @@ async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> P
         ctx.project.name = body.name
     if body.config is not None:
         ctx.project.config = body.config.model_dump(mode="json", exclude_none=True)
-    await record(session, ctx.principal, "project.update", target_type="project", target_id=ctx.id)
+    await record(
+        session,
+        ctx.principal,
+        "project.update",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+    )
     return await project_dto(session, ctx.project, ctx.org_slug)
 
 
@@ -193,14 +208,28 @@ async def delete_project(ctx: ProjectCtx, session: Db) -> None:
     ctx.require(Permission.PROJECT_DELETE)
     if ctx.project.status == "active":
         ctx.project.status = "archived"
-    await record(session, ctx.principal, "project.archive", target_type="project", target_id=ctx.id)
+    await record(
+        session,
+        ctx.principal,
+        "project.archive",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+    )
 
 
 @router.post("/projects/{id}/suspend", response_model=ProjectDto, operation_id="suspendProject")
 async def suspend_project(ctx: ProjectCtx, session: Db) -> ProjectDto:
     ctx.require(Permission.PROJECT_WRITE)
     ctx.project.status = "suspended"
-    await record(session, ctx.principal, "project.suspend", target_type="project", target_id=ctx.id)
+    await record(
+        session,
+        ctx.principal,
+        "project.suspend",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+    )
     return await project_dto(session, ctx.project, ctx.org_slug)
 
 
@@ -252,7 +281,14 @@ async def provision(ctx: ProjectCtx, body: ProvisionRequest, session: Db) -> Pro
         step="start",
         status="running",
     )
-    await record(session, ctx.principal, "project.provision", target_type="project", target_id=ctx.id)
+    await record(
+        session,
+        ctx.principal,
+        "project.provision",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+    )
     return _provision_status(ctx.project)
 
 

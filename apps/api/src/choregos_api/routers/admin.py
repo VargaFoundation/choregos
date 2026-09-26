@@ -6,7 +6,7 @@ from typing import Annotated
 
 from choregos_contracts import Role
 from fastapi import APIRouter, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from ..audit import record
 from ..db.models import (
@@ -85,7 +85,13 @@ async def put_backend(body: AgentBackendUpdate, session: Db, principal: Me) -> A
     row.disabled_reason = body.disabled_reason
     await session.flush()
     await record(
-        session, principal, "backend.update", target_type="backend", target_id=row.name, enabled=body.enabled
+        session,
+        principal,
+        "backend.update",
+        org_id=None,  # le catalogue de backends est de plateforme
+        target_type="backend",
+        target_id=row.name,
+        enabled=body.enabled,
     )
     return AgentBackendInfo(
         name=row.name,
@@ -134,7 +140,14 @@ async def put_executor(body: ExecutorInfo, session: Db, principal: Me) -> Execut
     row.namespace_pattern = body.namespace_pattern
     row.runner_image = body.runner_image
     row.default_timeout_minutes = body.default_timeout_minutes
-    await record(session, principal, "executor.update", target_type="executor", target_id=body.kind)
+    await record(
+        session,
+        principal,
+        "executor.update",
+        org_id=None,  # idem
+        target_type="executor",
+        target_id=body.kind,
+    )
     return body
 
 
@@ -241,7 +254,15 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
         session.add(existing)
     else:
         existing.role = str(body.role)
-    await record(session, principal, "member.add", target_type="user", target_id=user.id, role=str(body.role))
+    await record(
+        session,
+        principal,
+        "member.add",
+        org_id=organization.id,
+        target_type="user",
+        target_id=user.id,
+        role=str(body.role),
+    )
     return MembershipDto(
         user_id=user.id, email=user.email, org=org, project_slug=body.project_slug, role=body.role
     )
@@ -257,12 +278,27 @@ async def list_audit(
 ) -> AuditPage:
     from ..rbac import Permission
 
-    if (
-        not any(principal.can(Permission.AUDIT_READ, org) for org in principal.org_roles)
-        and not principal.is_platform_admin()
-    ):
+    # Les organisations où le principal a VRAIMENT le droit de lire l'audit — pas celles où il
+    # est simplement membre. La RLS borne déjà la session à ses organisations, mais elle ne sait
+    # pas distinguer « membre de b » de « autorisé à lire l'audit de b » : ce filtre-ci est plus
+    # fin, et c'est lui qui manquait. Jusqu'au 2026-09-26 la requête n'avait aucun `where`.
+    lisibles = [org for org in principal.org_roles if principal.can(Permission.AUDIT_READ, org)]
+    if not lisibles:
         raise forbidden("lecture de l'audit réservée aux propriétaires et administrateurs")
+
+    # Volontairement SANS `is_platform_admin()` : ce prédicat rend vrai pour TOUT `org_admin`
+    # de N'IMPORTE QUELLE organisation (`rbac.py:112`), donc s'en servir ici rouvrirait la fuite
+    # pour le rôle le plus répandu. Les lignes de plateforme (`org_id IS NULL` : connexions,
+    # jetons) ne sortent que si le droit couvre TOUTES les organisations de l'instance — ce qui
+    # est le cas normal d'une installation à une seule organisation, et n'est jamais vrai chez
+    # un locataire parmi d'autres.
+    total = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
+    toute_l_instance = len(lisibles) >= int(total)
+
     query = select(AuditLog).order_by(AuditLog.ts.desc())
+    ids = select(Organization.id).where(Organization.slug.in_(lisibles))
+    portee = AuditLog.org_id.in_(ids)
+    query = query.where(or_(portee, AuditLog.org_id.is_(None)) if toute_l_instance else portee)
     if actor:
         query = query.where(AuditLog.actor_id == actor)
     if target_type:
