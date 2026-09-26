@@ -375,7 +375,12 @@ les 492 tests ne disaient pas :
    `global.serviceAccount` (une base en identité de charge de travail doit pouvoir s'y
    authentifier). Garde : `tests/charts/test_hook_de_migration.py`, qui rend le chart pour les
    quatre environnements et exige que le compte du hook soit dans le même hook et avant le Job
-   — neuf cas, en Python, sans greffon Helm.
+   — neuf cas, en Python, sans greffon Helm. **Vérifié sur le banc kind** (2026-09-26) : montée
+   en chart **0.4.0**, révision Helm 13 « Upgrade complete », donc le hook `post-upgrade` a
+   bien créé le compte puis joué le Job ; `alembic_version` = `b2d4f6a8c0e1` en base, et le
+   Job a été nettoyé par sa propre politique (`hook-succeeded`). Reste, comme la veille, le
+   seul LiteLLM embarqué en `CreateContainerConfigError` : il attend `platform-llm-key`, la
+   clé de fournisseur qu'on n'a pas.
    **Et le greffon qui mentait** : `make charts-test` ne vérifiait que la *présence* de
    `helm-unittest`, pas sa version épinglée. Un 0.5.1 resté sur le poste déclarait rouge un
    test vert en CI (il traite un chemin JSONPath absent comme une erreur). La cible compare
