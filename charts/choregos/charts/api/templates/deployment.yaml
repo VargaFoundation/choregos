@@ -101,20 +101,33 @@ spec:
               value: {{ .Values.global.devLogin.enabled | default false | quote }}
             - name: CHOREGOS_DEV_ADMIN_EMAILS
               value: {{ .Values.global.devLogin.adminEmails | default "" | quote }}
+            # STRUCTURELLES, jamais optionnelles : une API qui démarre sans secret de
+            # session signe des cookies avec une valeur vide, et une clé de jeton de run
+            # absente fait repartir chaque processus sur une paire éphémère — l'agent reçoit
+            # alors « Signature verification failed », un message qui accuse le jeton.
+            # Les autres clés de ce secret sont optionnelles : leur absence est une
+            # fonctionnalité éteinte, pas un déploiement cassé. Le locataire dev l'a payé le
+            # 2026-09-26 : `generic-webhook-secret` absent du modèle InfisicalSecret, et
+            # TOUTE l'API en CreateContainerConfigError.
             - name: CHOREGOS_SESSION_SECRET
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: session-secret } }
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-private-key } }
             - name: CHOREGOS_RUN_TOKEN_PUBLIC_KEY
-              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-public-key } }
+              # Optionnelle : elle se DÉDUIT de la privée (`public_from_private`).
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-public-key, optional: true } }
             - name: CHOREGOS_GITHUB_WEBHOOK_SECRET
-              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-webhook-secret } }
+              # Optionnelle : pas de GitHub, pas de secret — et vide, l'API refuse en staging/prod.
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-webhook-secret, optional: true } }
             - name: CHOREGOS_GENERIC_WEBHOOK_SECRET
-              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: generic-webhook-secret } }
+              # Optionnelle : vide, `verify_shared_secret` rend False : Jira, GitLab et le webhook générique refusent.
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: generic-webhook-secret, optional: true } }
             - name: CHOREGOS_GITHUB_APP_ID
-              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-id } }
+              # Optionnelle : un locataire sans App GitHub n'en a pas.
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-id, optional: true } }
             - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
-              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-private-key } }
+              # Optionnelle : un locataire sans App GitHub n'en a pas.
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-private-key, optional: true } }
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: master-key } }
           readinessProbe:
