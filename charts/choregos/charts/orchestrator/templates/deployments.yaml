@@ -71,6 +71,10 @@ spec:
             - name: CHOREGOS_PLAYBOOKS_DIR
               value: {{ $root.Values.global.playbooks.mountPath | quote }}
             {{- end }}
+            {{- with $root.Values.global.workflowTemplates.configMap }}
+            - name: CHOREGOS_WORKFLOW_TEMPLATES_DIR
+              value: {{ $root.Values.global.workflowTemplates.mountPath | quote }}
+            {{- end }}
             # La clé qui SIGNE les jetons de run. L'orchestrateur émet, l'API vérifie :
             # sans cette variable il signait avec une paire éphémère, et l'agent recevait
             # « Signature verification failed » — un message qui accuse le jeton.
@@ -113,10 +117,17 @@ spec:
             {{- with $root.Values.global.playbooks.configMap }}
             - { name: playbooks, mountPath: {{ $root.Values.global.playbooks.mountPath }}, readOnly: true }
             {{- end }}
+            {{- with $root.Values.global.workflowTemplates.configMap }}
+            - { name: workflow-templates, mountPath: {{ $root.Values.global.workflowTemplates.mountPath }}, readOnly: true }
+            {{- end }}
       volumes:
         - { name: tmp, emptyDir: {} }
         {{- with $root.Values.global.playbooks.configMap }}
         - name: playbooks
+          configMap: { name: {{ . }} }
+        {{- end }}
+        {{- with $root.Values.global.workflowTemplates.configMap }}
+        - name: workflow-templates
           configMap: { name: {{ . }} }
         {{- end }}
 {{- end }}

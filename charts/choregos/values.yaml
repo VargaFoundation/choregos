@@ -41,6 +41,13 @@ global:
   # côté serveur. Un ConfigMap (le catalogue, lisible en PR) et un Secret (les clés des
   # fournisseurs, injecté dans l'API). Vide = aucun outil, et c'est le défaut.
   # Un projet déclare ensuite ce qu'il a le droit d'appeler (`tools` de sa configuration).
+  # Templates de workflow apportés par le déploiement, en plus des trois du paquet. Un
+  # template du déploiement l'emporte sur celui du paquet, comme pour les playbooks ; c'est
+  # ainsi qu'un métier apporte ses enchaînements d'états sans réécrire la plateforme. Vide :
+  # seuls les trois livrés existent.
+  workflowTemplates:
+    configMap: ""
+    mountPath: /etc/choregos/workflow-templates
   toolCatalog:
     configMap: ""
     mountPath: /etc/choregos/outils
