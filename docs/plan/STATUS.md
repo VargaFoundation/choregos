@@ -246,7 +246,11 @@ les 492 tests ne disaient pas :
    et `adapters` (seuil 70 % = 72 % mesurés). **P1-1a livré** : `docs/` est la référence,
    en anglais (getting started, deployment, usage, concepts, development, security,
    contributing, `cli.md` généré et testé) ; `docs/fr/` archive les guides français ; index
-   ADR et runbooks avec résumés anglais ; `CLAUDE.md` → `AGENTS.md`. Reste P1-1b/c : l'anglais
+   ADR et runbooks avec résumés anglais. **`CLAUDE.md` → `AGENTS.md` était FAUX** : le même
+   commit a remplacé le contenu d'`AGENTS.md` par un import de lui-même (onze octets), et
+   `CLAUDE.md` étant un lien symbolique dessus, les instructions du dépôt étaient vides des
+   deux côtés pendant deux jours — restauré et gardé par `tests/docs/test_instructions_des_agents.py`,
+   qui refuse aussi une cible `make` inexistante. Reste P1-1b/c : l'anglais
    de l'interface, la traduction intégrale des 14 ADR et des 11 runbooks.
    **Banc série `d` (images de `main` après P0)** : les trois tickets de code `done` ; **la
    qualification RH réussit** — les profils du sourcing lui parviennent (#28) ; 5 verdicts de
