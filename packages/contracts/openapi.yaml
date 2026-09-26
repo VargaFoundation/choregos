@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     API de la plateforme Choregos. Le front et le CLI ne consomment que cette API.
     Auth : session OIDC (cookie) ou `Authorization: Bearer <api_token>`.

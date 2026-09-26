@@ -1,6 +1,6 @@
 [project]
 name = "choregos-workspace"
-version = "0.5.0"
+version = "0.6.0"
 description = "Choregos — plateforme de delivery agentique (Varga Foundation)"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
