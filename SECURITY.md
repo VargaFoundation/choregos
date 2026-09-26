@@ -1,56 +1,63 @@
-# Politique de sécurité
+# Security policy
 
-## Signaler une vulnérabilité
+## Reporting a vulnerability
 
-Écrivez à **security@varga.foundation** (ou ouvrez un *security advisory* privé sur GitHub).
-N'ouvrez pas d'issue publique : nous préférons corriger avant de publier.
+Write to **security@varga.foundation**, or open a private security advisory on GitHub. Please do
+not open a public issue: we would rather fix before we publish.
 
-Merci d'inclure : la version ou le commit, ce que vous avez observé, comment le reproduire,
-et l'impact que vous estimez. Nous accusons réception sous 3 jours ouvrés et donnons un
-premier avis sous 10 jours.
+Include the version or commit, what you observed, how to reproduce it, and the impact you
+estimate. We acknowledge within 3 working days and give a first assessment within 10.
 
-## Versions suivies
+## Supported versions
 
-| Version | Corrections de sécurité |
+The project is at **0.x**: only the latest minor receives security fixes, and there is no
+long-term support branch yet. A supported-version table will mean something once a 1.0 exists;
+until then, upgrading is the fix.
+
+## What we consider a vulnerability
+
+- Any way for an agent to write outside its scope without being caught.
+- Any secret leak: into a workspace, an image, a log, a transcript.
+- Any bypass of the three production locks (merge queue, release train, guardrails).
+- Any privilege escalation into the cluster from a runner.
+- Any access to another organisation's data (RLS, RBAC, audit).
+
+## What we do not consider a vulnerability
+
+- An agent producing bad code: that is what CI and review are for.
+- A model following an injected instruction **without that granting it any power**: the
+  mechanisms (scope, absence of credentials, gates) apply just the same.
+- `CHOREGOS_FAKES=1`, which is not meant for production.
+
+## What we do, and where to check it
+
+| Claim | Where it is enforced |
 | :-- | :-- |
-| `1.x` (dernière mineure) | oui |
-| versions antérieures | non |
+| Images are signed (cosign keyless) and admitted by digest | `.github/workflows/release.yml`, `infra/policies/images.yaml` |
+| An SBOM and a `mode=max` provenance attestation ship with every release image | `release.yml`, job `images` |
+| A CRITICAL from Trivy blocks publication — on `main` **and** on the released image | `ci.yml` job `images`, `release.yml` job `manifest` (`exit-code: 1`) |
+| The nightly dependency scan **blocks**, and its failure opens an issue | `nightly.yml` (`exit-code: 1`, job `alerte`) |
+| Secrets never enter git: gitleaks is a gate on every pull request | `ci.yml` job `secrets` |
+| Organisations are isolated by fail-closed PostgreSQL RLS, audit included | migrations `b2d4f6a8c0e1`, `c3e5a7f9b1d4`, `db/session.py` |
+| Secrets rotate on the schedule in `docs/runbooks/rotation-secrets.md` | that runbook |
 
-## Ce que nous considérons comme une vulnérabilité
+## What we do **not** guarantee, stated rather than discovered
 
-- Toute façon pour un agent d'écrire hors de son périmètre sans être détecté.
-- Toute fuite de secret : dans un workspace, une image, un journal, un transcript.
-- Tout contournement d'un des trois verrous de production (merge queue, train, garde-fous).
-- Toute élévation de privilège dans le cluster depuis un runner.
-- Tout accès aux données d'une autre organisation (RLS, RBAC).
+- **Runner guardrails are a net, not a wall.** What they cannot classify is allowed and logged,
+  unless the project policy sets `sandbox.unknown_requests: reject`. The hard mechanisms are the
+  sandbox (NetworkPolicy, per-project egress proxy, non-root, no service-account token) and the
+  after-the-fact diff check.
+- **The development login** (`/auth/login?as=`) is off by default and refused in staging and
+  production, by the API *and* by the chart. An installation that turns it on is open to anyone
+  who can reach the API.
+- **RLS assumes the API does not connect as a PostgreSQL superuser** — a superuser ignores every
+  policy. The API refuses to start that way in staging and production.
+- **Platform administration is over-broad**: `Principal.is_platform_admin()` is true for any
+  `org_admin` of any organisation. Harmless on a single-organisation install; a tenant crossing
+  from the second one on. Tracked in `docs/plan/BLOCKERS.md`.
+- **A run token cannot be revoked** before it expires (`max_minutes + 15`).
+- **Audit is not tamper-evident**, and its retention is documented in a runbook but applied by
+  no code.
 
-## Ce que nous ne considérons pas comme une vulnérabilité
-
-- Un agent qui produit du mauvais code : c'est le rôle de la CI et de la review.
-- Un modèle qui suit une instruction injectée **sans que cela lui donne un pouvoir** : les
-  mécanismes (périmètre, absence de credential, gates) s'appliquent de la même façon.
-- Le mode `CHOREGOS_FAKES=1`, qui n'est pas destiné à la production.
-
-## Nos engagements
-
-- Les images sont signées (cosign keyless) et vérifiées par digest à l'admission (Kyverno).
-- Un CRITICAL Trivy bloque la publication des images de `main`.
-- Les secrets tournent selon le calendrier de `docs/runbooks/rotation-secrets.md`.
-
-## Ce que nous ne garantissons PAS encore (et que nous disions garantir)
-
-Écrit le 2026-09-24, après un état des lieux qui a trouvé ce fichier plus optimiste que le
-dépôt :
-
-- **Pas de SBOM** avec les images, et **pas de scan des images de release** : prévu (P1-2 de
-  `docs/plan/STATE-OF-THE-PROJECT-2026-09-24.md`). Le scan nocturne des dépendances ne bloque
-  rien pour l'instant.
-- **L'isolation des organisations** (RLS PostgreSQL) est fail-closed et testée sur un vrai
-  PostgreSQL depuis le 2026-09-24 — elle ne l'était pas avant. Elle suppose que l'API ne se
-  connecte **pas en superutilisateur** (l'API refuse de démarrer ainsi en staging/prod).
-- **Les garde-fous du runner** (périmètre de chemins, commandes) sont *fail-open* par
-  construction : ce qu'ils ne savent pas classer est autorisé et journalisé. Le sandbox
-  (NetworkPolicy, non-root, pas de jeton de compte de service) et la vérification du diff
-  après coup sont les mécanismes durs ; les garde-fous sont un filet, pas un mur.
-- **La connexion de développement** (`/auth/login?as=`) est éteinte par défaut et refusée
-  en staging/prod. Une installation qui l'allume est ouverte à quiconque atteint l'API.
+This section is deliberately longer than the one above it. Where a page and the code disagree,
+the code wins — and the page is a bug.

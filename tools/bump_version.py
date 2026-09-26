@@ -66,6 +66,11 @@ def _fichiers() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
             ],
         )
     )
+    # L'OpenAPI est le contrat que le front et la CLI consomment ; sa `info.version` annonçait
+    # `1.0.0` depuis le premier jour, pendant que tout le reste du dépôt était en 0.x. Une
+    # version qui ment est exactement ce que cet outil existe pour empêcher.
+    openapi = RACINE / "packages" / "contracts" / "openapi.yaml"
+    cibles.append((openapi, [(re.compile(r"^(  version: ).*$", re.M), r"\g<1>{v}")]))
     return cibles
 
 

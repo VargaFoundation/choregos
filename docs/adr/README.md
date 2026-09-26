@@ -8,22 +8,10 @@ English is the reference language since 2026-09-24. The French originals of the 
 written before that date are kept in [`docs/fr/adr/`](../fr/adr/) and are no longer
 maintained; the files below keep their original names, which are their identifiers.
 
-| # | Decision (English summary) | Status |
-| --: | :-- | :-- |
-| 0001 | Contracts are frozen at M0 and versioned — `packages/contracts` is the single source of truth | accepted |
-| 0002 | ACP (Agent Client Protocol) as the agent contract; the OpenHands default was superseded by 0011 | accepted |
-| 0003 | Temporal, self-hosted, for durable orchestration — one workflow per ticket | accepted |
-| 0004 | Cost is counted at the LiteLLM gateway, never from the agent's claim; one capped virtual key per run | accepted |
-| 0005 | Every connector is a `Protocol` with a real and a scriptable fake implementation | accepted |
-| 0006 | Three independent production locks: merge queue, release train, declarative guardrails | accepted |
-| 0007 | Memory must earn its place before anything depends on it | accepted |
-| 0008 | Deterministic identifiers and idempotence everywhere | accepted |
-| 0009 | The cluster changes only through Git (GitOps as the only mutation path) | accepted |
-| 0010 | A guarantee is a mechanism, never a prompt — a gate that cannot see refuses | accepted |
-| 0011 | OpenHands removed: it exposes no CLI ACP agent; `claude-code` becomes the default | accepted |
-| 0012 | The engine is not tied to software: deployment playbooks, generic gates, internal tracker, optional repo, business evidence, open roles | accepted |
-| 0013 | Agent task density: an admission queue (suspended Jobs), executor capabilities — and what is taken from google/ax | accepted |
-| 0014 | A platform-held tool catalogue: HTTP and external MCP tools called *for* the agent, keys server-side, per-group access | accepted |
+The table below is the whole list, and it is checked by `tests/docs/test_index_des_adr.py`:
+every file in this folder appears in it, with the status the file itself declares. A second,
+hand-kept summary table used to live here; it silently stopped at 0014 and told readers that
+nine records did not exist.
 
 ## Index
 

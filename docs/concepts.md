@@ -58,7 +58,7 @@ minimum. Gates shipped today:
 ```
 ci_green · coverage_delta_min · diff_size_max · evidence_facts · evidence_present
 external · flag_present · no_secrets · outputs_present · provenance_signed
-review_approved · scans_ok · scope_respected
+review_approved · scans_ok · scope_respected · tool_called
 ```
 
 **A gate that cannot see what it must check refuses.** If the SCM connector cannot produce a

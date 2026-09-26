@@ -122,7 +122,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S13-05 | S13 | 🟡 | — | exécuteur ACA **vérifié contre un vrai abonnement Azure** (6 tests live : cycle complet, `start` rejoué sans double exécution, jeton absent d'ARM, annulation, 404, logs) — trois défauts trouvés et corrigés au passage ; template `github-aca` livré. `azure-devops-aca` complet attend une organisation Azure DevOps (Boards + Pipelines), qu'un abonnement ne fournit pas |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 96 livrées, 6 partielles, 0 non commencée.
+**Total** : 92 livrées, 10 partielles, 0 non commencée.
 
 Depuis le 2026-09-23, le dépôt a reçu du matériel qui ne correspond à aucune story du backlog
 initial — il est venu de l'usage : dépendances embarquées en option, banc mono-nœud (`demo/`),
@@ -168,7 +168,7 @@ Les ADR 0012 à 0014 en portent les décisions.
   des API tierces appelées POUR l'agent, clé côté serveur, plafonnées par run et inscrites au
   registre de coûts. L'agent ne choisit ni l'URL ni la méthode, et n'a aucun identifiant de
   fournisseur.
-- **Une documentation anglaise** de déploiement et d'usage (`docs/en/`), dont les exemples YAML
+- **Une documentation anglaise** de déploiement et d'usage (`docs/`), dont les exemples YAML
   sont relus par le parseur du DSL et le modèle de politique — un test les garde.
 
 ## Ce que le banc du 2026-09-24 a montré
