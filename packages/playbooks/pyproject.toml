@@ -11,7 +11,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
+# `packages` embarque TOUT l'arbre, y compris les gabarits `roles/*.md` et les évals : un
+# `force-include` sur `roles/` les ajoutait une seconde fois au même chemin, et hatchling
+# refuse — « A second file is being added to the wheel archive at the same path ». Le job
+# de release échouait donc sur ce seul paquet depuis qu'il construit des wheels (v0.4.0).
+# Le test `tests/docs` vérifie que les gabarits sont bien dans le wheel, pas seulement que
+# la construction passe.
 packages = ["src/choregos_playbooks"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"src/choregos_playbooks/roles" = "choregos_playbooks/roles"
