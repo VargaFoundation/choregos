@@ -390,6 +390,19 @@ les 492 tests ne disaient pas :
    sont simplement là. Corrigé, et tenu par `tests/paquets/` qui regarde **dans** le wheel :
    les onze gabarits de rôle et les six évals y sont, chaque chemin une seule fois, et la
    liste des `.md` du dossier source est comparée à celle du wheel plutôt qu'écrite à la main.
+   **Le locataire dev est monté, et a livré un troisième défaut** : le hook de migration est
+   passé (compte du hook créé avant le Job, migrations appliquées, Job nettoyé, synchro
+   `Synced`), tous les pods sont venus — sauf l'API, en `CreateContainerConfigError` sur
+   « couldn't find key generic-webhook-secret ». Le chart réclamait **en dur** sept clés du
+   secret de l'API, dont cinq ne servent qu'à une fonctionnalité : une fonctionnalité non
+   utilisée empêchait donc l'API d'exister. Règle posée et tenue par
+   `tests/charts/test_cles_de_secret_optionnelles.py` (quatre environnements) : `session-secret`
+   et `run-token-private-key` restent **exigées** (démarrer sans elles serait pire — cookies
+   signés à vide, jetons émis par une paire éphémère) ; `run-token-public-key` (elle se déduit
+   de la privée), les deux secrets de webhook et les deux clés d'App GitHub passent en
+   `optional: true`, parce que le code refuse déjà à vide (`verify_shared_secret` rend False,
+   le webhook GitHub refuse en staging/prod). Un troisième test interdit qu'une clé nouvelle
+   arrive sans qu'on ait tranché son camp.
    **Et le greffon qui mentait** : `make charts-test` ne vérifiait que la *présence* de
    `helm-unittest`, pas sa version épinglée. Un 0.5.1 resté sur le poste déclarait rouge un
    test vert en CI (il traite un chemin JSONPath absent comme une erreur). La cible compare
