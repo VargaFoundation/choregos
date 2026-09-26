@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from . import __version__
 from .adaptateurs import brancher_memoire_lexicale
 from .amorcage import amorcer
 from .config import get_settings
@@ -102,7 +103,10 @@ def create_app() -> FastAPI:
     brancher_memoire_lexicale()
     app = FastAPI(
         title="Choregos API",
-        version="1.0.0",
+        # La version du paquet, pas une constante : l'API s'annonçait `1.0.0` depuis le premier
+        # jour, et `/openapi.json` du locataire dev le répétait pendant que le chart et les
+        # paquets étaient en 0.4.1. Une version qui ment est ce que ce dépôt traque.
+        version=__version__,
         description="Un ticket entre, une mise en production maîtrisée sort.",
         lifespan=lifespan,
         docs_url="/docs",
@@ -171,6 +175,17 @@ def create_app() -> FastAPI:
     @app.get("/healthz", tags=["session"], operation_id="healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/edition", tags=["session"], operation_id="edition")
+    async def edition_courante() -> dict[str, Any]:
+        """Quelle édition tourne, et ce qu'elle s'autorise (ADR 0024).
+
+        Sans route, la seule façon de savoir sur quoi on est branché serait de tenter une action
+        et de lire le refus. Un exploitant doit pouvoir le demander.
+        """
+        from .edition import courante, fonctions
+
+        return {"edition": courante(), "features": sorted(fonctions()), "version": __version__}
 
     @app.get("/readyz", tags=["session"], operation_id="readyz")
     async def readyz() -> Any:
