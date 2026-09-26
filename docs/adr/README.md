@@ -40,3 +40,4 @@ nine records did not exist.
 | [0021](0021-spiffe-derriere-le-jeton-de-run.md) | SPIFFE identities behind the run token: revocation by deletion, mTLS to the gateway | proposed |
 | [0022](0022-catalogue-federable.md) | A federable catalogue: registry entries become pull requests, born closed | proposed |
 | [0023](0023-constructeur-visuel-de-workflow.md) | A visual builder: read-only map first, then edits that are YAML diffs | proposed |
+| [0024](0024-deux-editions.md) | Two editions: a single-organisation community core, a separate enterprise layer | accepted |
