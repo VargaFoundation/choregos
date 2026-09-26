@@ -250,6 +250,11 @@ choregos-tools:
   publishTask: true
 
 monitoring:
+  # `prometheus` rend des objets `monitoring.coreos.com` ; `victoriametrics` rend des
+  # `operator.victoriametrics.com/v1beta1`. Un opérateur qui ne connaît pas le type ne le voit
+  # pas : sur une plateforme VictoriaMetrics, un ServiceMonitor est un objet INERTE — le
+  # déploiement paraît surveillé et ne l'est pas. Constaté sur un locataire réel le 2026-09-26.
+  flavour: prometheus
   serviceMonitor: true
   dashboards: true
   alerts: true

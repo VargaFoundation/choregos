@@ -1,6 +1,25 @@
+{{- /*
+Deux saveurs d'observabilité, parce que « rendre un ServiceMonitor » n'est pas « être collecté ».
+
+Le 2026-09-26, le locataire dev de Diametral tournait depuis une heure avec un ServiceMonitor et
+une PrometheusRule bien présents dans son namespace — et pas une série collectée, pas une alerte
+évaluée : la plateforme tourne sur VictoriaMetrics, dont l'opérateur ne regarde pas les types
+`monitoring.coreos.com`. Un objet inerte ne dit rien, et c'est pire qu'un objet absent : il donne
+la sensation d'être surveillé.
+
+`monitoring.flavour` tranche. Les règles PromQL sont écrites UNE fois et servies aux deux.
+
+Côté VictoriaMetrics : UN seul `VMRule`. Deux dans la même portée de vmalert font boucler
+l'opérateur, ce que l'exploitant de la plateforme a déjà payé une fois.
+*/ -}}
+{{- $saveur := .Values.monitoring.flavour | default "prometheus" }}
+{{- if not (has $saveur (list "prometheus" "victoriametrics")) }}
+{{- fail (printf "monitoring.flavour=%s inconnu : `prometheus` ou `victoriametrics`." $saveur) }}
+{{- end }}
+{{- $vm := eq $saveur "victoriametrics" }}
 {{- if .Values.monitoring.serviceMonitor }}
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+apiVersion: {{ if $vm }}operator.victoriametrics.com/v1beta1{{ else }}monitoring.coreos.com/v1{{ end }}
+kind: {{ if $vm }}VMServiceScrape{{ else }}ServiceMonitor{{ end }}
 metadata:
   name: choregos
   labels: {{- include "choregos.labels" . | nindent 4 }}
@@ -18,8 +37,8 @@ spec:
 {{- end }}
 {{- if .Values.monitoring.alerts }}
 ---
-apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
+apiVersion: {{ if $vm }}operator.victoriametrics.com/v1beta1{{ else }}monitoring.coreos.com/v1{{ end }}
+kind: {{ if $vm }}VMRule{{ else }}PrometheusRule{{ end }}
 metadata:
   name: choregos
   labels: {{- include "choregos.labels" . | nindent 4 }}
@@ -27,38 +46,5 @@ spec:
   groups:
     - name: choregos.plateforme
       rules:
-        - alert: ChoregosApiErreurs5xx
-          expr: |
-            sum(rate(http_requests_total{job="choregos-api",status=~"5.."}[5m]))
-            / clamp_min(sum(rate(http_requests_total{job="choregos-api"}[5m])), 0.001) > 0.01
-          for: 10m
-          labels: { severity: critical }
-          annotations:
-            summary: "Plus de 1 % de 5xx sur l'API Choregos"
-            runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/api-5xx.md"
-        - alert: ChoregosBacklogTemporal
-          expr: sum(temporal_task_queue_backlog{namespace="default"}) > 100
-          for: 10m
-          labels: { severity: warning }
-          annotations:
-            summary: "File Temporal saturée : les étapes attendent"
-        - alert: ChoregosRunEnAttente
-          expr: sum(kube_pod_status_phase{phase="Pending",namespace=~"proj-.*-runners"}) > 0
-          for: 15m
-          labels: { severity: warning }
-          annotations:
-            summary: "Un PipelineRun attend depuis 15 min (autoscaling en panne ?)"
-        - alert: ChoregosBudgetJournalier
-          expr: choregos_project_daily_cost_usd / choregos_project_daily_budget_usd > 0.8
-          for: 5m
-          labels: { severity: warning }
-          annotations:
-            summary: "Budget journalier d'un projet consommé à plus de 80 %"
-        - alert: ChoregosTrainGele
-          expr: choregos_train_frozen == 1
-          for: 2h
-          labels: { severity: warning }
-          annotations:
-            summary: "Un release train est gelé depuis 2 heures"
-            runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-gele.md"
+{{ include "choregos.reglesDAlerte" . | indent 8 }}
 {{- end }}
