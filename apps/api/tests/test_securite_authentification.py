@@ -368,3 +368,28 @@ async def test_une_passerelle_directe_ne_s_ecrit_pas_en_production(
         monkeypatch.delenv("CHOREGOS_ENV", raising=False)
         monkeypatch.delenv("CHOREGOS_DEV_LOGIN_ENABLED", raising=False)
         reset_settings_cache()
+
+
+@pytest.mark.parametrize("artefact", ("<no value>", "<nil>", "  <no value>  "))
+def test_un_reglage_non_resolu_empeche_le_demarrage(artefact: str) -> None:
+    """Dix caractères qui ont l'air d'une valeur, et qui n'en sont pas.
+
+    Le 2026-09-26, sur le locataire dev, `GATEWAY_MASTER_KEY` et `PLATFORM_LLM_KEY` valaient
+    tous les deux la chaîne `<no value>`. Le pod était `1/1 Running`, le locataire paraissait
+    sain, et la passerelle répondait 401 au premier appel de modèle. Rien ne disait que la clé
+    n'avait jamais été résolue — c'est le mode de panne de tout secret rendu par un gabarit Go,
+    Helm comme l'opérateur Infisical, et il touche aussi bien le secret de session.
+
+    Le refus vaut dans TOUS les environnements : personne n'écrit `<no value>` exprès.
+    """
+    from choregos_api.config import Settings
+
+    with pytest.raises(ValueError, match="non résolus"):
+        Settings(session_secret=artefact)
+
+
+def test_une_vraie_valeur_passe() -> None:
+    """La garde ne doit pas refuser un secret qui contient un chevron par hasard."""
+    from choregos_api.config import Settings
+
+    assert Settings(session_secret="<s3cr3t-avec-des-chevrons>").session_secret

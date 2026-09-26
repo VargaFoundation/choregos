@@ -8,6 +8,10 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+#: Ce qu'un moteur de gabarit Go écrit quand la variable n'existe pas : il rend littéralement
+#: cette chaîne au lieu d'échouer. Helm et l'opérateur Infisical le font tous les deux.
+GABARIT_NON_RESOLU = ("<no value>", "<nil>")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
@@ -108,6 +112,34 @@ class Settings(BaseSettings):
             raise ValueError(
                 "CHOREGOS_DEV_LOGIN_ENABLED=true en staging/prod : la connexion de développement "
                 "ouvre l'API à quiconque atteint /auth/callback. Refusé."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _aucun_gabarit_non_resolu(self) -> Settings:
+        """Un réglage qui vaut `<no value>` n'est pas une valeur : c'est un gabarit qui a raté.
+
+        Le 2026-09-26, sur le locataire dev, `GATEWAY_MASTER_KEY` et `PLATFORM_LLM_KEY`
+        contenaient tous deux la chaîne `<no value>` — dix caractères, l'air d'une valeur. Le
+        pod LiteLLM était `1/1 Running`, le locataire paraissait sain, et la passerelle
+        répondait 401 au premier appel de modèle : « LiteLLM Virtual Key expected.
+        Received=<no value> ». Rien, nulle part, ne disait que la clé n'avait jamais été
+        résolue.
+
+        C'est un mode de panne de tout secret rendu par un gabarit Go — Helm comme l'opérateur
+        Infisical — et il touche aussi bien le secret de session que les clés de jetons. On
+        refuse de démarrer, dans TOUS les environnements : personne n'écrit `<no value>` exprès.
+        """
+        fautifs = sorted(
+            nom
+            for nom, valeur in self.__dict__.items()
+            if isinstance(valeur, str) and valeur.strip() in GABARIT_NON_RESOLU
+        )
+        if fautifs:
+            raise ValueError(
+                f"réglages non résolus : {fautifs}. Leur valeur est littéralement « <no value> », "
+                "ce qu'un gabarit Go écrit quand la variable n'existe pas — la clé n'a jamais été "
+                "posée. Vérifier la source du secret (Infisical, Helm) avant de redémarrer."
             )
         return self
 
