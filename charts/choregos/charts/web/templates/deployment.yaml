@@ -20,6 +20,7 @@ spec:
     spec:
       {{- include "choregos.antiAffinity" (dict "global" .Values.global "labels" (dict "app.kubernetes.io/name" "choregos-web" "app.kubernetes.io/instance" .Release.Name)) | nindent 6 }}
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       containers:
         - name: web
           image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}

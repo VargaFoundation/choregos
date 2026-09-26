@@ -53,6 +53,7 @@ spec:
         checksum/config: {{ toJson .Values | sha256sum }}
     spec:
       serviceAccountName: choregos-api
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       {{- include "choregos.antiAffinity" (dict "global" .Values.global "labels" (dict "app.kubernetes.io/name" "choregos-api" "app.kubernetes.io/instance" .Release.Name)) | nindent 6 }}
       {{- with .Values.hostAliases }}
       # Un fournisseur OIDC dont le nom ne résout pas depuis le cluster (split-horizon) :

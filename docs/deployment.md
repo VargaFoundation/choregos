@@ -349,6 +349,21 @@ a real tenant on 2026-09-26. The alert rules themselves are written once and ser
 flavours, and a test fails if they ever diverge. An unknown flavour stops the render and names
 itself.
 
+### A private registry
+
+```yaml
+global:
+  imagePullSecrets: [harbor-prive]
+```
+
+Every pod the chart renders carries it — the four Choregos components **and** the embedded
+dependencies, because a platform that admits a single registry sends every image through it, not
+only ours. The secret must already exist in the namespace; on a shared platform it is usually the
+tenant's base layer that creates it from a secret store, not this chart.
+
+Without the value, no pod declares one. A test renders the chart both ways and fails if a new
+pod is added without it.
+
 ### Which edition am I running?
 
 ```bash
