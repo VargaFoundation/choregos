@@ -1,0 +1,35 @@
+Choregos
+Copyright 2026 Varga Foundation
+
+This product includes software developed at the Varga Foundation
+(https://github.com/VargaFoundation/choregos), licensed under the
+Apache License, Version 2.0. See LICENSE.
+
+------------------------------------------------------------------------------
+Editions
+------------------------------------------------------------------------------
+
+This repository is the **community edition**, and all of it is Apache-2.0.
+
+A separate **enterprise edition**, published by Diametral, builds on this one and
+is proprietary. It is not distributed here, and no file in this repository is
+subject to its terms. See docs/adr/0024-deux-editions.md.
+
+Neither the name "Choregos" nor the Varga Foundation name may be used to endorse
+or describe a derived product in a way that suggests it is this project. The
+Apache licence grants no trademark rights (section 6).
+
+------------------------------------------------------------------------------
+Third-party components
+------------------------------------------------------------------------------
+
+The platform runs alongside, but does not embed, the following. Each keeps its
+own licence and its own notices:
+
+  Temporal            MIT          durable orchestration (server and Python SDK)
+  LiteLLM             MIT          model gateway (container image)
+  PostgreSQL          PostgreSQL   database (container image)
+  Ecphoria            Apache-2.0   optional memory service (container image)
+
+Python and JavaScript dependencies are declared in uv.lock and
+apps/web/pnpm-lock.yaml, and an SBOM ships with every release image.
