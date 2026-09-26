@@ -21,7 +21,7 @@ Optional but recommended in production: a model gateway (LiteLLM), a memory serv
 
 ```bash
 helm upgrade --install choregos oci://ghcr.io/vargafoundation/charts/choregos \
-  --version 0.2.0 --namespace choregos --create-namespace \
+  --version 0.4.1 --namespace choregos --create-namespace \
   -f my-values.yaml
 ```
 
