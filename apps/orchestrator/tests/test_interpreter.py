@@ -109,7 +109,7 @@ async def test_human_rejection_returns_to_refining(
                 "reason": "périmètre trop large",
             },
         )
-        await _wait_state(handle, "awaiting_spec_approval", after="refining")
+        await _wait_state(handle, "awaiting_spec_approval")
         status = await handle.query("status")
         assert status["state"] == "awaiting_spec_approval"
         await handle.signal("control", {"action": "stop"})
@@ -170,7 +170,15 @@ async def test_pause_and_resume(setup: Fixture, temporal_env: Any, worker_factor
         status = await handle.query("status")
         assert status["paused"] is True
         await handle.signal("control", {"action": "resume"})
-        await _wait_state(handle, "in_progress", timeout=40)
+        # Ce qu'on veut prouver, c'est que la reprise DÉBLOQUE : plus en pause, et le workflow
+        # a quitté l'attente humaine. Attendre `in_progress` par égalité attendait un état de
+        # passage, que le scrutin rate dès que la machine va vite.
+        await _wait_until(
+            handle,
+            "le workflow a repris",
+            lambda s: not s["paused"] and s["state"] != "awaiting_spec_approval",
+            timeout=40,
+        )
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
@@ -213,18 +221,33 @@ def _pr_ref(setup: Fixture) -> Any:
     return PrRef(repo="varga/billing-api", number=1)
 
 
-async def _wait_state(handle: Any, state: str, *, after: str | None = None, timeout: int = 60) -> None:
-    """Attend qu'un workflow atteigne un état, via sa requête `status`."""
+async def _wait_until(handle: Any, description: str, predicat: Any, *, timeout: int = 60) -> None:
+    """Attend qu'une CONDITION soit vraie sur le `status` du workflow.
+
+    Attendre un état par égalité ne marche que pour un état **stable** — un état où le workflow
+    s'arrête (une attente humaine, une fin). Pour un état de passage, le scrutin à 100 ms le rate
+    une fois sur deux : `test_pause_and_resume` attendait `in_progress` après une reprise et a
+    rougi en CI sur `pr_open`, parce que les étapes suivantes étaient déjà passées. Un test qui
+    échoue selon la charge de la machine ne dit rien sur le code.
+    """
     import asyncio
 
     for _ in range(timeout * 10):
         status = await handle.query("status")
-        if status["state"] == state:
+        if predicat(status):
             return
         await asyncio.sleep(0.1)
-    raise AssertionError(
-        f"état `{state}` jamais atteint (courant : {(await handle.query('status'))['state']})"
-    )
+    raise AssertionError(f"{description} : jamais vrai (status : {await handle.query('status')})")
+
+
+async def _wait_state(handle: Any, state: str, *, timeout: int = 60) -> None:
+    """Attend un état **stable**, via la requête `status`.
+
+    Le paramètre `after=` a existé ici et n'était **jamais lu** : `test_refus_de_spec` croyait
+    vérifier un passage par `refining` et ne vérifiait rien. Il n'est pas remplacé — reconstruire
+    un historique à coups de scrutin serait précisément la même illusion.
+    """
+    await _wait_until(handle, f"état `{state}`", lambda s: s["state"] == state, timeout=timeout)
 
 
 # ───────────────────────── un ticket mort se voit (2026-09-24) ─────────────────────────
