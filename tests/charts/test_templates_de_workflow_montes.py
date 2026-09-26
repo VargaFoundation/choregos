@@ -60,6 +60,24 @@ def test_sans_configmap_rien_n_est_monte() -> None:
             assert VARIABLE not in noms, f"{nom} pose {VARIABLE} sans ConfigMap"
 
 
+def test_les_playbooks_aussi_sont_vus_des_deux_cotes() -> None:
+    """Le même défaut existait pour les playbooks, et je l'ai écrit juste après l'avoir décrit.
+
+    Ils n'étaient montés que sur l'orchestrateur. Or l'API **valide** un workflow : sans les
+    playbooks elle avertit `role.playbook_introuvable` sur des rôles que le déploiement fournit
+    bel et bien, et un avertissement faux apprend à ignorer les avertissements.
+    """
+    docs = _rendu("global.playbooks.configMap=mes-roles")
+    porteurs = {
+        nom
+        for nom, spec in _deploiements(docs).items()
+        for conteneur in spec.get("containers", [])
+        if any(m["name"] == "playbooks" for m in conteneur.get("volumeMounts", []) or [])
+    }
+    assert "choregos-api" in porteurs, "l'API ne voit pas les playbooks : elle valide à l'aveugle"
+    assert "choregos-orchestrator-orchestrator" in porteurs, "l'orchestrateur ne les voit pas"
+
+
 @pytest.mark.parametrize("deploiement", sorted(ATTENDUS))
 def test_l_api_et_l_orchestrateur_voient_les_memes_templates(deploiement: str) -> None:
     """Un montage sur un seul des deux, et les deux processus ne connaîtraient pas les mêmes
