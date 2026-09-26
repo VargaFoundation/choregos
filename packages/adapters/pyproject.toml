@@ -1,6 +1,6 @@
 [project]
 name = "choregos-adapters"
-version = "0.4.0"
+version = "0.4.1"
 description = "Adaptateurs Choregos : tracker, scm, ci, cd, executor, memory, gateway, notify"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
