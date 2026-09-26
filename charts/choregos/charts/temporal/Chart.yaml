@@ -2,5 +2,5 @@ apiVersion: v2
 name: choregos-temporal
 description: Temporal de développement (serveur unique, SQLite) — banc et démo, pas la production.
 type: application
-version: 0.4.1
-appVersion: "0.4.1"
+version: 0.5.0
+appVersion: "0.5.0"

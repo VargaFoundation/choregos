@@ -252,6 +252,23 @@ les 492 tests ne disaient pas :
    deux côtés pendant deux jours — restauré et gardé par `tests/docs/test_instructions_des_agents.py`,
    qui refuse aussi une cible `make` inexistante. Reste P1-1b/c : l'anglais
    de l'interface, la traduction intégrale des 14 ADR et des 11 runbooks.
+   **Édition communautaire et édition entreprise (2026-09-26)** : [ADR 0024](../adr/0024-deux-editions.md)
+   rouvre D1 et acte deux éditions. Le cœur reste Apache-2.0 sous la Varga Foundation ; l'édition
+   entreprise sera propriétaire, dans un dépôt privé séparé, éditée par Diametral. Le
+   communautaire devient **mono-organisation** : `POST /orgs` refuse la seconde avec un 409 qui
+   nomme la décision, et le refus tient à l'ÉDITION, pas à un plafond codé en dur — l'édition
+   entreprise le lèvera sans forker le cœur. Le contrôle des droits passe avant celui de
+   l'édition, pour qu'un développeur n'apprenne rien d'une limite qu'il n'a pas le droit de
+   rencontrer. `GET /edition` répond. Ce qui sort est mince et aucune capacité *prouvée* n'est
+   perdue : ce qu'on retire, c'est la promesse d'un multi-locataire inachevé (treize tables
+   encore hors RLS).
+
+   **La couture de greffons (2026-09-26)** : il n'en existait AUCUNE — `register()` était public
+   mais rien n'importait jamais un module tiers, ce qui rendait le dépôt séparé impossible.
+   `charger_les_greffons()` lit les points d'entrée `choregos.plugins` ; l'API et l'orchestrateur
+   l'appellent au démarrage ; un greffon déclaré qui ne charge pas **arrête le processus**. Les
+   tests écrivent un vrai `.dist-info` plutôt que de bouchonner la découverte.
+
    **Fuite d'audit entre organisations, trouvée le 2026-09-26** : `audit_log` était la
    dernière table de mutation **hors RLS**, et n'avait même pas de colonne d'organisation ;
    `GET /audit` renvoyait `select(AuditLog)` **sans aucun `where`**. Un `project_owner` d'une
