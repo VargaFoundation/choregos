@@ -403,6 +403,15 @@ les 492 tests ne disaient pas :
    `optional: true`, parce que le code refuse déjà à vide (`verify_shared_secret` rend False,
    le webhook GitHub refuse en staging/prod). Un troisième test interdit qu'une clé nouvelle
    arrive sans qu'on ait tranché son camp.
+   **Le même défaut d'empaquetage dans trois paquets** : `core` (presets et gabarits du DSL) et
+   `runner` (`versions.lock`) avaient eux aussi un `force-include` sur un chemin déjà couvert
+   par `packages`. La release 0.4.1 est retombée dessus après la 0.4.0 — parce que le premier
+   test ne construisait QUE le paquet qui avait cassé, et parce que « neuf wheels » ne voulait
+   rien dire sans savoir combien en attendre. `tests/paquets/` construit désormais tout
+   l'espace de travail (`uv build --all-packages`, la commande de la release), compte les
+   wheels contre la liste des `pyproject`, vérifie dans CHAQUE wheel les fichiers de données
+   lus sur le disque, et éprouve les `force-include` légitimes — ceux de `contracts`, dont les
+   schémas vivent hors du module. Dix-neuf cas.
    **Et le greffon qui mentait** : `make charts-test` ne vérifiait que la *présence* de
    `helm-unittest`, pas sa version épinglée. Un 0.5.1 resté sur le poste déclarait rouge un
    test vert en CI (il traite un chemin JSONPath absent comme une erreur). La cible compare
