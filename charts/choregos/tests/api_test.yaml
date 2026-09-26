@@ -39,6 +39,10 @@ tests:
 
   - it: exécute les migrations avant la mise à jour des pods
     template: charts/choregos-api/templates/migrations-job.yaml
+    # Le modèle rend deux documents depuis le 2026-09-26 : le compte de service DU HOOK
+    # (index 0) puis le Job (index 1). La garde complète est dans
+    # `tests/charts/test_hook_de_migration.py`, qui rend le chart pour de vrai.
+    documentIndex: 1
     asserts:
       - equal:
           path: metadata.annotations["helm.sh/hook"]

@@ -92,7 +92,20 @@ charts-lint:  ## helm lint + kubeconform (ignoré si helm absent)
 .PHONY: charts-test
 charts-test:  ## helm unittest
 	@command -v helm >/dev/null 2>&1 || { echo "helm absent — installer Helm >= 3.18"; exit 1; }
-	@helm plugin list 2>/dev/null | grep -q "^unittest" || helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2
+	@# La version du greffon est ÉPINGLÉE, et il faut la vérifier, pas seulement sa présence :
+	@# `|| install` n'installe que s'il n'y en a aucun, donc un vieux greffon restait en place
+	@# et rendait un verdict faux. Constaté le 2026-09-26 : 0.5.1 sur ce poste déclarait rouge
+	@# un test vert en CI (il traite un chemin JSONPath absent comme une erreur). Un test dont
+	@# le verdict dépend du poste ne vaut rien ; mieux vaut refuser de le jouer.
+	@v=$$(helm plugin list 2>/dev/null | awk '$$1=="unittest"{print $$2}'); \
+	if [ "$$v" != "1.1.2" ]; then \
+	  echo "greffon helm-unittest en « $${v:-absent} », épinglé à 1.1.2."; \
+	  echo "  helm plugin uninstall unittest 2>/dev/null; rm -rf ~/.local/share/helm/plugins/helm-unittest"; \
+	  echo "  helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2"; \
+	  echo "Il exige Helm >= 3.18 (platformHooks dans son plugin.yaml) ; ici : $$(helm version --short)."; \
+	  echo "En attendant, tests/charts/ rend le chart et l'éprouve en Python, sans greffon."; \
+	  exit 1; \
+	fi
 	helm unittest charts/choregos
 
 # ───────────────────────── images ─────────────────────────
