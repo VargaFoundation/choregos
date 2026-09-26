@@ -381,6 +381,15 @@ les 492 tests ne disaient pas :
    Job a été nettoyé par sa propre politique (`hook-succeeded`). Reste, comme la veille, le
    seul LiteLLM embarqué en `CreateContainerConfigError` : il attend `platform-llm-key`, la
    clé de fournisseur qu'on n'a pas.
+   **v0.4.0 publiée (2026-09-26)** : dix images multi-arch signées et le chart sur
+   `oci://ghcr.io/vargafoundation/charts/choregos` — c'est ce chart que le locataire Diametral
+   vendore. Un job de la release a échoué, et sur un vrai défaut : `choregos-playbooks`
+   déclarait `packages` (qui embarque tout l'arbre) **et** un `force-include` sur `roles/`,
+   donc hatchling refusait d'ajouter deux fois le même chemin. Rien ne le voyait — `make ci`
+   ne construit aucun wheel, et l'espace de travail tourne en mode éditable où les gabarits
+   sont simplement là. Corrigé, et tenu par `tests/paquets/` qui regarde **dans** le wheel :
+   les onze gabarits de rôle et les six évals y sont, chaque chemin une seule fois, et la
+   liste des `.md` du dossier source est comparée à celle du wheel plutôt qu'écrite à la main.
    **Et le greffon qui mentait** : `make charts-test` ne vérifiait que la *présence* de
    `helm-unittest`, pas sa version épinglée. Un 0.5.1 resté sur le poste déclarait rouge un
    test vert en CI (il traite un chemin JSONPath absent comme une erreur). La cible compare
