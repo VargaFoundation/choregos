@@ -45,6 +45,7 @@ __all__ = [
     "TrackerAdapter",
     "available",
     "build",
+    "charger_les_greffons",
     "fakes_enabled",
     "register",
 ]
@@ -261,6 +262,40 @@ def _register_builtins() -> None:
             public_url=cfg.get("public_url", _env("CHOREGOS_PUBLIC_URL", "")),
         )
     )
+
+
+#: Le groupe de points d'entrée que la plateforme lit au démarrage. Un paquet installé à côté
+#: — l'édition entreprise, un connecteur maison — s'y déclare et s'enregistre lui-même.
+GROUPE_DE_GREFFONS = "choregos.plugins"
+
+
+def charger_les_greffons(groupe: str = GROUPE_DE_GREFFONS) -> list[str]:
+    """Charge les greffons déclarés hors de cet arbre, et rend leurs noms.
+
+    Jusqu'au 2026-09-26 il n'existait AUCUNE couture : `register()` était public, mais rien
+    n'importait jamais un module tiers, donc un paquet extérieur ne pouvait pas s'enregistrer
+    sans qu'on patche `_register_builtins()`. Les playbooks étaient la seule capacité vraiment
+    extensible depuis l'extérieur (`CHOREGOS_PLAYBOOKS_DIR`) ; c'est le modèle qu'on copie ici.
+
+    Chaque point d'entrée désigne un appelable sans argument, qui fait ses `register(...)`.
+
+    **Un greffon déclaré qui ne charge pas arrête le processus.** Même règle que `garde.yaml` et
+    que le refus d'un réglage non résolu : quelqu'un l'a installé pour qu'il serve, et un greffon
+    silencieusement absent laisse une plateforme qui paraît complète et ne l'est pas.
+    """
+    from importlib import metadata
+
+    charges: list[str] = []
+    for point in metadata.entry_points(group=groupe):
+        try:
+            point.load()()
+        except Exception as erreur:
+            raise RuntimeError(
+                f"greffon « {point.name} » ({point.value}) : chargement impossible — {erreur}. "
+                "Il est déclaré, donc il doit servir ; la plateforme ne démarre pas sans lui."
+            ) from erreur
+        charges.append(point.name)
+    return charges
 
 
 _register_builtins()

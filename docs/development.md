@@ -154,7 +154,40 @@ choregos runs diff <run-id>      # annotated diff: out-of-scope changes are mark
 In the front, a run's page shows its **guarantees** (each gate and its verdict), its
 **evidence**, its **access card** and its journal.
 
+## Shipping a connector from outside this tree
+
+A package installed next to Choregos can register its own connectors — no fork, no patch to the
+core. Declare an entry point in the `choregos.plugins` group:
+
+```toml
+# pyproject.toml of your package
+[project.entry-points."choregos.plugins"]
+mon-tracker = "mon_paquet:brancher"
+```
+
+```python
+# mon_paquet/__init__.py
+from choregos_adapters import register
+
+def brancher() -> None:
+    register("tracker", "maison")(lambda cfg: MonTracker(cfg))
+```
+
+The API and the orchestrator load the group at start-up. A declared plugin that fails to load
+**stops the process**, naming it: someone installed it so that it would serve, and a silently
+missing plugin leaves a platform that looks complete and is not. Same rule as `garde.yaml`.
+
+This is how the enterprise edition attaches ([ADR 0024](adr/0024-deux-editions.md)), and it is
+the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which was the model.
+`packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
+rather than stubbing the discovery.
+
 ## Known pitfalls
+
+**`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test
+suite sets it globally, so a test that builds a real adapter passes on its own and fails in the
+group. Set `CHOREGOS_FAKES=0` explicitly in such a test. This has cost three debugging sessions;
+it is written here so it costs no more.
 
 - **The Temporal test server downloads itself** on the first `pytest` touching workflows.
   Expect a connection, or run `uv run pytest packages` (no Temporal needed).
