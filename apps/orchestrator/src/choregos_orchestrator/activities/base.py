@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from choregos_adapters import AdapterSet
+from choregos_adapters import AdapterSet, charger_les_greffons
 from choregos_api.adaptateurs import brancher_memoire_lexicale
 from choregos_api.db.models import Connector, Organization, PolicyDef, Project, WorkflowDef, WorkItem
 from choregos_api.db.session import TOUT, session_scope
@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # L'orchestrateur possède les mêmes tables que l'API : il branche le repli lexical pareil.
 brancher_memoire_lexicale()
+# … et les greffons déclarés hors de l'arbre, comme l'API.
+charger_les_greffons()
 
 
 @dataclass(slots=True)

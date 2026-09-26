@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
+from choregos_adapters import charger_les_greffons
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -101,6 +102,9 @@ async def _refuser_le_superutilisateur() -> None:
 def create_app() -> FastAPI:
     settings = get_settings()
     brancher_memoire_lexicale()
+    # Les greffons installés à côté (édition entreprise, connecteurs maison) s'enregistrent
+    # eux-mêmes. Un greffon déclaré qui ne charge pas arrête le démarrage, exprès.
+    charger_les_greffons()
     app = FastAPI(
         title="Choregos API",
         # La version du paquet, pas une constante : l'API s'annonçait `1.0.0` depuis le premier
