@@ -3,6 +3,6 @@
 from __future__ import annotations
 
 from .ecphoria import EcphoriaMemory
-from .pgvector import PgVectorMemory
+from .lexicale import LexicalMemory
 
-__all__ = ["EcphoriaMemory", "PgVectorMemory"]
+__all__ = ["EcphoriaMemory", "LexicalMemory"]

@@ -1,8 +1,8 @@
-"""Les deux traducteurs purs : markdown ↔ ADF pour Jira, vecteur lexical pour pgvector."""
+"""Les deux traducteurs purs : markdown ↔ ADF pour Jira, vecteur lexical pour le repli mémoire."""
 
 from __future__ import annotations
 
-from choregos_adapters.memory.pgvector import lexical_vector, similarity
+from choregos_adapters.memory.lexicale import lexical_vector, similarity
 from choregos_adapters.tracker.adf import markdown_to_adf, text_of_adf
 
 

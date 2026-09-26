@@ -369,7 +369,11 @@ class ApiToken(Base, PkMixin, TimestampMixin):
 
 
 class MemoryFact(Base, PkMixin, TimestampMixin):
-    """Repli pgvector : mémoire stockée dans Choregos quand Ecphoria n'est pas déployé."""
+    """Repli lexical : mémoire stockée dans Choregos quand Ecphoria n'est pas déployé.
+
+    `embedding` est un `Json`, pas un vecteur : la similarité est un produit scalaire entre
+    sacs de mots, calculé en Python. Le connecteur s'appelait `pgvector`, ce qui promettait
+    autre chose."""
 
     __tablename__ = "memory_facts"
     __table_args__ = (Index("ix_memory_facts_project_subject", "project_id", "subject"),)

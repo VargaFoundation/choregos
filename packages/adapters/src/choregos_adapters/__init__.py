@@ -122,7 +122,7 @@ def _register_builtins() -> None:
     from .gateway.litellm import LiteLlmGateway
     from .http import RestClient
     from .memory.ecphoria import EcphoriaMemory
-    from .memory.pgvector import PgVectorMemory
+    from .memory.lexicale import LexicalMemory
     from .notify.slack import SlackNotifier
     from .scm.github import GitHubScm
     from .tracker.github import GitHubTracker
@@ -239,7 +239,10 @@ def _register_builtins() -> None:
             read_timeout_ms=int(cfg.get("read_timeout_ms", 300)),
         )
     )
-    register("memory", "pgvector")(lambda cfg: PgVectorMemory())
+    # `pgvector` : alias déprécié de `lexical` — le nom promettait des vecteurs, le code fait
+    # une similarité lexicale. Conservé pour les projets déjà configurés.
+    register("memory", "lexical")(lambda cfg: LexicalMemory())
+    register("memory", "pgvector")(lambda cfg: LexicalMemory())
     register("gateway", "direct")(_passerelle_directe)
     register("gateway", "litellm")(
         lambda cfg: LiteLlmGateway(

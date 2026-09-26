@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from choregos_adapters import AdapterSet
-from choregos_api.adaptateurs import brancher_pgvector
+from choregos_api.adaptateurs import brancher_memoire_lexicale
 from choregos_api.db.models import Connector, Organization, PolicyDef, Project, WorkflowDef, WorkItem
 from choregos_api.db.session import TOUT, session_scope
 from choregos_api.services import policy_model, workflow_model
@@ -21,8 +21,8 @@ from choregos_core import PolicyEngine
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# L'orchestrateur possède les mêmes tables que l'API : il branche pgvector de la même façon.
-brancher_pgvector()
+# L'orchestrateur possède les mêmes tables que l'API : il branche le repli lexical pareil.
+brancher_memoire_lexicale()
 
 
 @dataclass(slots=True)
@@ -95,7 +95,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         policy=policy_model(policy_row),
         adapters=AdapterSet.from_connectors(
             {
-                # La mémoire `pgvector` vit dans les tables de l'API : elle doit dire depuis
+                # La mémoire `lexical` vit dans les tables de l'API : elle doit dire depuis
                 # quelle organisation elle lit. L'orchestrateur est un processus de la
                 # plateforme, il voit tout (`*`) — comme ses propres sessions (`db()`).
                 c.kind: {

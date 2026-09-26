@@ -120,8 +120,8 @@ CONNECTOR_TYPES: list[ConnectorType] = [
     ),
     ConnectorType(
         kind="memory",
-        type="pgvector",
-        display="pgvector (repli)",
+        type="lexical",
+        display="lexical (repli, sans service)",
         config_schema={"type": "object", "properties": {}},
     ),
     ConnectorType(
