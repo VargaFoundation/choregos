@@ -81,6 +81,17 @@ spec:
             - name: CHOREGOS_TOOL_CATALOG
               value: {{ printf "%s/%s" $.Values.global.toolCatalog.mountPath $.Values.global.toolCatalog.fileName | quote }}
             {{- end }}
+            {{- with .Values.global.workflowTemplates.configMap }}
+            - name: CHOREGOS_WORKFLOW_TEMPLATES_DIR
+              value: {{ $.Values.global.workflowTemplates.mountPath | quote }}
+            {{- end }}
+            {{- with .Values.global.playbooks.configMap }}
+            # L'API valide un workflow, donc elle doit voir les playbooks : sans eux elle
+            # avertit `role.playbook_introuvable` sur des rôles que le déploiement fournit
+            # bel et bien, et l'avertissement apprend à ignorer les avertissements.
+            - name: CHOREGOS_PLAYBOOKS_DIR
+              value: {{ $.Values.global.playbooks.mountPath | quote }}
+            {{- end }}
             {{- include "choregos.commonEnv" . | nindent 12 }}
             - name: CHOREGOS_OIDC_ISSUER
               value: {{ .Values.global.oidc.issuer | quote }}
@@ -146,11 +157,25 @@ spec:
             {{- with .Values.global.toolCatalog.configMap }}
             - { name: catalogue, mountPath: {{ $.Values.global.toolCatalog.mountPath }}, readOnly: true }
             {{- end }}
+            {{- with .Values.global.workflowTemplates.configMap }}
+            - { name: workflow-templates, mountPath: {{ $.Values.global.workflowTemplates.mountPath }}, readOnly: true }
+            {{- end }}
+            {{- with .Values.global.playbooks.configMap }}
+            - { name: playbooks, mountPath: {{ $.Values.global.playbooks.mountPath }}, readOnly: true }
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
         {{- with .Values.global.toolCatalog.configMap }}
         - name: catalogue
+          configMap: { name: {{ . }} }
+        {{- end }}
+        {{- with .Values.global.workflowTemplates.configMap }}
+        - name: workflow-templates
+          configMap: { name: {{ . }} }
+        {{- end }}
+        {{- with .Values.global.playbooks.configMap }}
+        - name: playbooks
           configMap: { name: {{ . }} }
         {{- end }}
       topologySpreadConstraints:

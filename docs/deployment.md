@@ -349,6 +349,24 @@ a real tenant on 2026-09-26. The alert rules themselves are written once and ser
 flavours, and a test fails if they ever diverge. An unknown flavour stops the render and names
 itself.
 
+### Bringing your own workflow templates
+
+```yaml
+global:
+  workflowTemplates:
+    configMap: mes-templates      # keys are <name>.yaml
+    mountPath: /etc/choregos/workflow-templates
+```
+
+Mounted into **both** the API and the orchestrator, and `CHOREGOS_WORKFLOW_TEMPLATES_DIR` points
+at it. Both, deliberately: the orchestrator runs the steps, but the API loads a workflow
+definition and serves the template catalogue. Mounting it on one of them would give two processes
+that do not know the same templates, and the disagreement would surface when someone creates a
+project — far from the cause.
+
+A deployment template wins over a shipped one of the same name. See
+[Shipping a workflow template from outside this tree](development.md).
+
 ### A private registry
 
 ```yaml
