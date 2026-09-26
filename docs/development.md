@@ -154,6 +154,20 @@ choregos runs diff <run-id>      # annotated diff: out-of-scope changes are mark
 In the front, a run's page shows its **guarantees** (each gate and its verdict), its
 **evidence**, its **access card** and its journal.
 
+## Shipping a workflow template from outside this tree
+
+Set `CHOREGOS_WORKFLOW_TEMPLATES_DIR` to one or more directories (separated by `:`) holding
+`<name>.yaml` workflows. They appear in `template_names()`, in `choregos workflow templates`, and
+can be loaded by name like the shipped ones.
+
+A deployment template **wins over a shipped one of the same name**, which is how a shop adapts
+`default-simple` without rewriting the platform. Same seam as `CHOREGOS_PLAYBOOKS_DIR`, and for
+the same reason: a domain's states and transitions do not belong in this package, while budgets,
+gates and memory do not change from one domain to the next.
+
+Before this existed, the only way in was `PUT /projects/{id}/workflow` with the full YAML — no
+name, no reuse, and no way for two projects to start from the same model.
+
 ## Shipping a connector from outside this tree
 
 A package installed next to Choregos can register its own connectors — no fork, no patch to the
