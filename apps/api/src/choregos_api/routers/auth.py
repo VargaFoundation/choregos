@@ -383,9 +383,7 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
     session.add(row)
     await session.flush()
     # un jeton d'API appartient à un utilisateur, pas à une organisation
-    await record(
-        session, principal, "token.create", org_id=None, target_type="api_token", target_id=row.id
-    )
+    await record(session, principal, "token.create", org_id=None, target_type="api_token", target_id=row.id)
     return ApiTokenCreated(**_token_dto(row).model_dump(), token=raw)
 
 

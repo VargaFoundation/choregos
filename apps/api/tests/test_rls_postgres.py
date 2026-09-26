@@ -209,12 +209,8 @@ async def test_par_l_api_membre_des_deux_mais_audit_read_dans_une_seule(
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         await login(client, "admin@a.test")  # ORG_ADMIN de `a` — donc `audit:read` sur `a`
         async with session_scope(orgs="*") as session:
-            user = (
-                await session.execute(select(User).where(User.email == "admin@a.test"))
-            ).scalar_one()
-            org_b = (
-                await session.execute(select(Organization).where(Organization.slug == "b"))
-            ).scalar_one()
+            user = (await session.execute(select(User).where(User.email == "admin@a.test"))).scalar_one()
+            org_b = (await session.execute(select(Organization).where(Organization.slug == "b"))).scalar_one()
             # simple lecteur chez `b` : la session le verra, la permission non
             session.add(Membership(user_id=user.id, org_id=org_b.id, project_id=None, role="viewer"))
 
