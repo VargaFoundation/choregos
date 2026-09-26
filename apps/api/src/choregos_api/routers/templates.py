@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -17,15 +18,27 @@ from ..schemas import TemplateDetail, TemplateSummary, TemplateUpsert
 
 router = APIRouter(tags=["templates"])
 
-TEMPLATES_DIR = Path(__file__).resolve().parents[5] / "templates"
+
+def _repertoire_des_templates() -> Path:
+    """Le même dossier que l'orchestrateur, lu par le même réglage.
+
+    Il y avait DEUX calculs pour un seul dossier : ici un `parents[5]` qui suppose la
+    disposition du dépôt source — dans l'image c'est `/app`, et `templates/` n'y est pas —
+    et là-bas `CHOREGOS_TEMPLATES_DIR`, ajouté précisément parce que le premier ne marchait
+    pas. Deux lecteurs qui divergent, c'est une liste de templates qui dépend du processus
+    qui la demande.
+    """
+    configure = os.environ.get("CHOREGOS_TEMPLATES_DIR", "").strip()
+    return Path(configure) if configure else Path(__file__).resolve().parents[5] / "templates"
 
 
 def _from_disk() -> list[TemplateDetail]:
     """Les templates livrés dans le dépôt sont visibles même sans base peuplée."""
     out: list[TemplateDetail] = []
-    if not TEMPLATES_DIR.is_dir():
+    racine = _repertoire_des_templates()
+    if not racine.is_dir():
         return out
-    for manifest_path in sorted(TEMPLATES_DIR.glob("*/manifest.yaml")):
+    for manifest_path in sorted(racine.glob("*/manifest.yaml")):
         try:
             manifest: dict[str, Any] = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
         except yaml.YAMLError:

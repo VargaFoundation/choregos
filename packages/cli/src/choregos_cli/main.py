@@ -472,9 +472,9 @@ def workflow_show(
 
 @workflow_app.command("templates")
 def workflow_templates() -> None:
-    from choregos_core.dsl import TEMPLATE_NAMES, load_template
+    from choregos_core.dsl import load_template, template_names
 
-    for name in TEMPLATE_NAMES:
+    for name in template_names():
         workflow = load_template(name)
         console.print(
             f"[bold]{name}[/bold] v{workflow.metadata.version} — "
