@@ -6,7 +6,7 @@
 # n'existe pas au premier build et qui, ensuite, vient du commit **précédent** — les workers
 # auraient embarqué le code d'hier sans que rien ne le signale. Deux cibles (`--target api`,
 # `--target worker`) d'un même build règlent les deux.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.14-slim-bookworm AS builder
 
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
@@ -44,7 +44,7 @@ COPY templates templates
 RUN uv sync --frozen --no-dev --all-packages
 
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
-FROM python:3.12-slim-bookworm AS commun
+FROM python:3.14-slim-bookworm AS commun
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
