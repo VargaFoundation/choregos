@@ -361,6 +361,27 @@ les 492 tests ne disaient pas :
    Secrets — le banc tourne dans le namespace du chart et ne l'a jamais vu. Les deux Roles
    ont les mêmes verbes, et un test confronte désormais l'exécuteur au Role du projet comme
    il le faisait déjà au Role du chart.
+   **Le hook de migration ne pouvait pas démarrer sur un vrai Argo CD (2026-09-26)** : le
+   locataire dev était bloqué depuis **sept heures** sur `choregos-migrations-1`, Job sans
+   aucun pod, et toute la Sync attendait derrière. Cause : le Job tournait sous
+   `choregos-api`, une ressource **ordinaire** de la version, alors qu'un hook `pre-install`
+   (que Argo CD traduit en PreSync) part avant toute ressource ordinaire — « error looking up
+   service account choregos/choregos-api: serviceaccount not found ». Le chart documentait
+   déjà ce piège pour Helm et l'avait contourné en passant le banc kind en `post-install`
+   (`values/local.yaml`, base embarquée) : le **défaut par défaut** est donc resté, et seul un
+   déploiement Argo CD réel pouvait le montrer. Corrigé à la racine : le Job a son **propre**
+   compte de service, rendu par le même hook avec un poids plus faible (-10 contre -5), sans
+   jeton monté (les migrations ne parlent qu'à la base) et portant les annotations de
+   `global.serviceAccount` (une base en identité de charge de travail doit pouvoir s'y
+   authentifier). Garde : `tests/charts/test_hook_de_migration.py`, qui rend le chart pour les
+   quatre environnements et exige que le compte du hook soit dans le même hook et avant le Job
+   — neuf cas, en Python, sans greffon Helm.
+   **Et le greffon qui mentait** : `make charts-test` ne vérifiait que la *présence* de
+   `helm-unittest`, pas sa version épinglée. Un 0.5.1 resté sur le poste déclarait rouge un
+   test vert en CI (il traite un chemin JSONPath absent comme une erreur). La cible compare
+   désormais la version, refuse de jouer si elle diffère, et dit comment la poser — un test
+   dont le verdict dépend du poste ne vaut rien. La CI, elle, était juste : Helm 3.22 et le
+   greffon 1.1.2 installés à chaque exécution.
    **Découpage de l'orchestrateur livré** : `stage.py` (847 l.) devient quatre modules —
    `plan` (le `StagePlan`), `stage` (la préparation : modèle, clé, contexte, `StageInput`),
    `execution` (lancer, attendre, abandonner), `bilan` (dépense, résultat, findings),

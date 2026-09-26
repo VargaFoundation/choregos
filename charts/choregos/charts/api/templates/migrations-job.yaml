@@ -1,4 +1,34 @@
 {{- if and .Values.enabled .Values.migrations.enabled }}
+# Le compte de service DU HOOK, créé par le MÊME hook et d'un poids plus faible.
+#
+# Le Job tournait sous `choregos-api`, qui est une ressource ORDINAIRE de la version. En
+# `pre-install` (Helm) comme en PreSync (Argo CD, qui traduit le hook Helm), le Job est créé
+# avant elle : le contrôleur répond « error looking up service account
+# choregos/choregos-api: serviceaccount not found », aucun pod ne naît, et la synchro attend
+# un hook qui ne peut pas démarrer. Le commentaire ci-dessous disait déjà ce piège pour Helm
+# et on l'a « réglé » en passant le locataire kind en `post-install` — donc le défaut est
+# resté cassé, et le locataire dev l'a payé le 2026-09-26 : sept heures, zéro pod, la Sync
+# bloquée derrière un Job sans pod.
+#
+# Un compte à lui casse la dépendance pour de bon, dans les deux moteurs et dans les deux
+# modes : les migrations n'appellent jamais l'API Kubernetes, elles ne parlent qu'à la base.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: choregos-migrations
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": {{ .Values.migrations.hook }}
+    # Plus léger que le Job (-5) : il existe donc avant lui.
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+    {{- with .Values.global.serviceAccount.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+# Rien à appeler dans le cluster, donc aucun jeton monté. Les annotations, elles, sont
+# reprises : c'est par elles qu'une base s'authentifie par identité de charge de travail.
+automountServiceAccountToken: false
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -7,11 +37,13 @@ metadata:
   annotations:
     # Les migrations passent **avant** les nouveaux pods (expand/contract, compatibles N-1).
     #
-    # `post-install` existe pour un cas précis : quand le chart embarque lui-même la base.
-    # Un hook `pre-install` s'exécute avant TOUT le reste de la version — y compris le
-    # compte de service, les secrets et le PostgreSQL embarqué. Le Job est alors créé,
-    # le contrôleur répond « serviceaccount choregos-api not found », et l'installation
-    # échoue sur un « timed out waiting for the condition » qui n'accuse rien.
+    # `post-install` existe pour un cas précis : quand le chart embarque lui-même la base et
+    # ses secrets. Un hook `pre-install` s'exécute avant TOUTE ressource ordinaire de la
+    # version — donc avant les secrets du chart et avant le PostgreSQL embarqué ; le Job
+    # attend alors une base et des valeurs qui n'arriveront pas, et l'installation expire sur
+    # un « timed out waiting for the condition » qui n'accuse rien. Quand la base et les
+    # secrets viennent d'ailleurs (opérateur PostgreSQL, opérateur de secrets), `pre-install`
+    # est le bon choix : le compte de service du hook, lui, est désormais créé par le hook.
     "helm.sh/hook": {{ .Values.migrations.hook }}
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
@@ -23,7 +55,7 @@ spec:
       labels: {{- include "choregos.labels" . | nindent 8 }}
     spec:
       restartPolicy: Never
-      serviceAccountName: choregos-api
+      serviceAccountName: choregos-migrations
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
       initContainers:
         # La base peut n'être pas encore là — elle démarre dans la même version quand le
