@@ -12,6 +12,11 @@ global:
   imagePullPolicy: IfNotPresent
   # Les images sont référencées par digest en staging et en prod (politique Kyverno).
   imageDigest: ""
+  # Secrets de tirage d'image, pour un registre privé — une édition entreprise, un miroir
+  # Harbor fermé, une image maison. Vide : toutes les images sont publiques. Le secret doit
+  # exister dans le namespace ; sur une plateforme mutualisée, c'est en général le socle du
+  # locataire qui le pose (par exemple depuis un magasin de secrets), pas ce chart.
+  imagePullSecrets: []
   environment: dev
   fakes: false
   # Canary de la plateforme (S7-08). Désactivé par défaut : il exige Argo Rollouts dans le

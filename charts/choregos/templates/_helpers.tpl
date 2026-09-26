@@ -216,3 +216,23 @@ Le PromQL est le même ; seul l'emballage change.
     summary: "Un release train est gelé depuis 2 heures"
     runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-gele.md"
 {{- end }}
+
+{{/*
+Les secrets de tirage d'image, pour les registres privés.
+
+Le chart n'en déclarait aucun (`rg imagePullSecrets charts/` : zéro). Tant que toutes les images
+sont publiques, personne ne le voit. Dès qu'une ne l'est plus — une édition entreprise, un miroir
+Harbor privé, une image maison — le déploiement échoue en `ImagePullBackOff`, et la seule issue
+était de patcher le compte de service à la main, hors GitOps.
+
+Le nom est global (`global.imagePullSecrets`) parce que la question se pose pour TOUS les pods du
+chart, et qu'un locataire qui pose un secret en pose un pour l'ensemble.
+*/}}
+{{- define "choregos.imagePullSecrets" -}}
+{{- with .Values.global.imagePullSecrets }}
+imagePullSecrets:
+{{- range . }}
+  - name: {{ . }}
+{{- end }}
+{{- end }}
+{{- end }}

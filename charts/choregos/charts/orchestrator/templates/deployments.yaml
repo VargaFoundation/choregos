@@ -23,6 +23,7 @@ spec:
         choregos/queue: {{ .name }}
     spec:
       serviceAccountName: choregos-orchestrator
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       {{- include "choregos.antiAffinity" (dict "global" $root.Values.global "labels" (dict "app.kubernetes.io/name" "choregos-orchestrator" "choregos/queue" .name)) | nindent 6 }}
       # Un nœud qui disparaît (éviction spot, panne matérielle) n'est remarqué qu'au bout d'une
       # cinquantaine de secondes, et le défaut de Kubernetes laisse ensuite la pod **cinq minutes**

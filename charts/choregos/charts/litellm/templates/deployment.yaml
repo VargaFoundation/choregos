@@ -50,6 +50,7 @@ spec:
       annotations:
         checksum/config: {{ toJson .Values.models | sha256sum }}
     spec:
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       # La règle Kyverno `non-root` est stricte depuis le 2026-09-25 : le contexte du pod est
       # exigé. L'image tourne en uid 1000 (vérifié : `python -c "import litellm"` sous
       # `--user 1000`) ; le proxy en service n'a pas encore été vu sous ce contexte sur le

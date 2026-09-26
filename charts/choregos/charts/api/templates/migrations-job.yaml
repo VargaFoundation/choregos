@@ -56,6 +56,7 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: choregos-migrations
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
       initContainers:
         # La base peut n'être pas encore là — elle démarre dans la même version quand le
