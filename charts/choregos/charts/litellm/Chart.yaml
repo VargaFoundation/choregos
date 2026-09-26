@@ -2,5 +2,5 @@ apiVersion: v2
 name: choregos-litellm
 description: Passerelle LLM de Choregos (LiteLLM) — clé virtuelle par run, budget et coût par étape.
 type: application
-version: 0.3.0
-appVersion: "0.3.0"
+version: 0.4.0
+appVersion: "0.4.0"

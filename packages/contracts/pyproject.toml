@@ -1,6 +1,6 @@
 [project]
 name = "choregos-contracts"
-version = "0.3.0"
+version = "0.4.0"
 description = "Contrats Choregos : schémas JSON, OpenAPI, types générés"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
