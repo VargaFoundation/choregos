@@ -24,9 +24,9 @@ router = APIRouter(tags=["memory"])
 async def _adapter(ctx: ProjectContext, session: AsyncSession) -> Any:
     """La mémoire du projet, selon SON connecteur `memory` — pas Ecphoria d'office.
 
-    Le type était codé en dur : un projet configuré en `pgvector` (le repli sans service
-    de plus) lisait Ecphoria ici et pgvector dans l'orchestrateur. L'organisation est
-    passée à la fabrique : sur PostgreSQL, la mémoire pgvector ne voit que ce que la RLS
+    Le type était codé en dur : un projet configuré en `lexical` (le repli sans service
+    de plus) lisait Ecphoria ici et le repli dans l'orchestrateur. L'organisation est
+    passée à la fabrique : sur PostgreSQL, la mémoire lexicale ne voit que ce que la RLS
     montre à cette organisation.
     """
     from choregos_adapters import build

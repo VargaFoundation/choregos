@@ -1,4 +1,12 @@
-"""MemoryAdapter de repli : pgvector dans la base de Choregos (docs/plan/04).
+"""MemoryAdapter de repli : recherche **lexicale**, dans la base de Choregos.
+
+Ce connecteur s'est appelé `pgvector` jusqu'au 2026-09-26, et le nom mentait sur trois
+points : il n'y a aucune extension `vector` dans les migrations, la colonne `embedding` est
+un `Json`, et la similarité est un produit scalaire entre sacs de mots calculé en Python.
+Personne n'avait menti — le nom disait l'intention du jour où il a été écrit — mais un
+exploitant qui lit « pgvector » en conclut qu'il a de la recherche sémantique, et il n'en a
+pas. Le type de connecteur s'appelle donc `lexical`, et `pgvector` reste accepté en alias
+déprécié pour les projets déjà configurés.
 
 Moins malin qu'Ecphoria, zéro service de plus, **même interface** : c'est ce qui rend la
 dépendance à Ecphoria optionnelle, comme le veut la décision « preuve avant dépendance ».
@@ -49,23 +57,23 @@ def similarity(a: dict[str, float], b: dict[str, float]) -> float:
 
 
 @dataclass(frozen=True)
-class ModelesPgVector:
+class ModelesMemoire:
     """Les deux tables dont cet adaptateur a besoin, INJECTÉES par l'application qui les possède.
 
     L'adaptateur importait `choregos_api.db.*` — une dépendance inversée (les adaptateurs
     ne connaissent pas l'API) et non déclarée, cachée derrière des imports paresseux : le
     wheel de `choregos-adapters` explosait en `ModuleNotFoundError` dès qu'on touchait
-    pgvector hors de l'espace de travail (état des lieux du 2026-09-24).
+    le repli mémoire hors de l'espace de travail (état des lieux du 2026-09-24).
     """
 
     Project: Any
     MemoryFact: Any
 
 
-class PgVectorMemory:
+class LexicalMemory:
     """Mémoire stockée dans `memory_facts`, avec supersession par sujet."""
 
-    def __init__(self, sessions: Sessions | None = None, modeles: ModelesPgVector | None = None) -> None:
+    def __init__(self, sessions: Sessions | None = None, modeles: ModelesMemoire | None = None) -> None:
         """`sessions` porte déjà la portée RLS (l'organisation du projet, ou `*` pour un
         processus de la plateforme) : l'adaptateur ne la connaît pas et ne la pose pas.
         Avec un `async_sessionmaker` nu, il tournait sur PostgreSQL sans jamais rien voir —
@@ -76,13 +84,13 @@ class PgVectorMemory:
     def _sessions(self) -> Sessions:
         if self._sessionmaker is None:
             raise ConfigurationError(
-                "pgvector : aucune session injectée — l'application doit enregistrer la fabrique "
-                "(`choregos_api.adaptateurs.brancher_pgvector`)"
+                "mémoire lexicale : aucune session injectée — l'application doit enregistrer la "
+                "fabrique (`choregos_api.adaptateurs.brancher_memoire_lexicale`)"
             )
         return self._sessionmaker
 
     @property
-    def modeles(self) -> ModelesPgVector:
+    def modeles(self) -> ModelesMemoire:
         if self._modeles is None:
             raise ConfigurationError("pgvector : modèles non injectés (voir `brancher_pgvector`)")
         return self._modeles

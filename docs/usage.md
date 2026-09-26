@@ -38,10 +38,13 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 | `ci` / `cd` | `tekton` / `argocd`, `fake` |
 | `runtime` | `tekton`, `k8s_job`, `aca`, `local_docker`, `fake` |
 | `gateway` | `litellm`, `direct`, `fake` |
-| `memory` | `ecphoria`, `pgvector`, `fake` |
+| `memory` | `ecphoria`, `lexical`, `fake` |
 | `notify` | `slack`, `fake` |
 
-`memory: pgvector` keeps the project's memory in Choregos's own database — no extra service,
+`memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
+and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
+`pgvector` until 2026-09-26, which promised something the code does not do; that name still
+works as a deprecated alias.
 a lexical ranking instead of embeddings, the same governed writes. The connector type decides
 for both the API and the orchestrator; on PostgreSQL the memory is read under the project's
 organization, like everything else under row-level security.

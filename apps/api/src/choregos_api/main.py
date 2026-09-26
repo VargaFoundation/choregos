@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .adaptateurs import brancher_pgvector
+from .adaptateurs import brancher_memoire_lexicale
 from .amorcage import amorcer
 from .config import get_settings
 from .db.session import create_all, dispose_engine
@@ -99,7 +99,7 @@ async def _refuser_le_superutilisateur() -> None:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    brancher_pgvector()
+    brancher_memoire_lexicale()
     app = FastAPI(
         title="Choregos API",
         version="1.0.0",
