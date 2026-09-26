@@ -349,6 +349,27 @@ a real tenant on 2026-09-26. The alert rules themselves are written once and ser
 flavours, and a test fails if they ever diverge. An unknown flavour stops the render and names
 itself.
 
+### Which edition am I running?
+
+```bash
+curl -s https://<api-host>/edition
+{"edition":"community","features":[],"version":"0.4.1"}
+```
+
+This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
+second one is refused with a 409 that names the decision behind it
+([ADR 0024](adr/0024-deux-editions.md)). That is not an arbitrary cap — multi-tenancy is not
+finished here, thirteen tables are still outside row-level security, and a single-organisation
+install is exposed to none of it because there is nothing to cross.
+
+The **enterprise edition** unlocks multiple organisations *and finishes the isolation*. It is
+published separately, and it declares itself at start-up; the core never assumes it is there,
+which is why the default is the most restrictive one.
+
+The rights check runs **before** the edition check on purpose: a developer gets `403` and
+learns nothing about the edition or the number of organisations. A product limit is not
+explained to someone who has no right to meet it.
+
 ### When a secret is not a secret
 
 The API **refuses to start** if any setting holds the literal string `<no value>` (or `<nil>`).

@@ -7,12 +7,13 @@ from typing import Annotated, Any
 from choregos_contracts import EventType, Role
 from choregos_core import utcnow
 from fastapi import APIRouter, Path, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sse_starlette.sse import EventSourceResponse
 
 from ..audit import record
 from ..db.models import Membership, Organization, Project
 from ..deps import Db, Me, Pagination, ProjectCtx
+from ..edition import est_entreprise
 from ..errors import conflict, forbidden, not_found
 from ..rbac import Permission
 from ..schemas import (
@@ -54,6 +55,17 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     """
     if not principal.is_platform_admin():
         raise forbidden("créer une organisation demande le rôle org_admin sur une organisation")
+    if not est_entreprise():
+        # L'édition communautaire est mono-organisation (ADR 0024). Ce n'est pas un plafond
+        # arbitraire : le multi-locataire n'est pas fini ici — treize tables restent hors RLS —
+        # et une installation à une seule organisation n'est exposée à aucune de ces fuites,
+        # parce qu'il n'y a rien à franchir. L'édition entreprise le déverrouille ET le termine.
+        deja = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
+        if deja:
+            raise conflict(
+                "l'édition communautaire tient une seule organisation. Le multi-organisation, "
+                "et l'isolation qui va avec, sont l'édition entreprise (docs/adr/0024-deux-editions.md)."
+            )
     if (
         await session.execute(select(Organization).where(Organization.slug == body.slug))
     ).scalar_one_or_none():

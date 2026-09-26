@@ -919,6 +919,24 @@ paths:
         "200": { description: Logs, content: { application/json: { schema: { type: object, properties: { logs: { type: string }, ref: { type: string } } } } } }
   /healthz:
     get: { tags: [session], security: [], operationId: healthz, responses: { "200": { description: OK } } }
+  /edition:
+    get:
+      tags: [session]
+      security: []
+      operationId: edition
+      summary: Quelle édition tourne, et ce qu'elle s'autorise (ADR 0024)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [edition, features, version]
+                properties:
+                  edition: { type: string, enum: [community, enterprise] }
+                  features: { type: array, items: { type: string } }
+                  version: { type: string }
   /readyz:
     get: { tags: [session], security: [], operationId: readyz, responses: { "200": { description: OK }, "503": { description: Non prêt } } }
 components:

@@ -37,15 +37,36 @@ async def test_l_amorcage_cree_l_organisation_et_ses_admins_une_seule_fois(
 
 
 async def test_un_admin_cree_une_organisation_un_developpeur_non(client: AsyncClient, admin: str) -> None:
-    created = await client.post("/api/v1/orgs", json={"slug": "filiale", "name": "La filiale"})
-    assert created.status_code == 201, created.text
-    assert created.json()["role"] == "org_admin"
-    assert (await client.post("/api/v1/orgs", json={"slug": "filiale", "name": "encore"})).status_code == 409
-    slugs = [o["slug"] for o in (await client.get("/api/v1/orgs")).json()]
-    assert slugs == ["filiale", "varga"]
+    """Le contrôle des DROITS passe avant celui de l'ÉDITION, et c'est volontaire.
 
-    await login(client, "dev@varga.dev")
-    assert (await client.post("/api/v1/orgs", json={"slug": "pirate", "name": "x"})).status_code == 403
+    Un développeur reçoit 403 sans rien apprendre de l'édition ni du nombre d'organisations ;
+    un administrateur reçoit 409 et la raison. Une limite de produit ne se raconte pas à qui
+    n'a pas le droit de la rencontrer.
+
+    Ce test créait une seconde organisation ; l'édition communautaire n'en tient qu'une
+    (ADR 0024), donc il la crée désormais en édition entreprise — ce qui prouve au passage que
+    la garde tient à l'édition et non à un plafond codé en dur.
+    """
+    from choregos_api import edition
+
+    refus = await client.post("/api/v1/orgs", json={"slug": "filiale", "name": "La filiale"})
+    assert refus.status_code == 409, refus.text
+    assert "communautaire" in refus.json()["detail"]
+
+    edition.declarer(edition.ENTREPRISE)
+    try:
+        created = await client.post("/api/v1/orgs", json={"slug": "filiale", "name": "La filiale"})
+        assert created.status_code == 201, created.text
+        assert created.json()["role"] == "org_admin"
+        encore = await client.post("/api/v1/orgs", json={"slug": "filiale", "name": "encore"})
+        assert encore.status_code == 409, "un slug déjà pris reste un conflit"
+        slugs = [o["slug"] for o in (await client.get("/api/v1/orgs")).json()]
+        assert slugs == ["filiale", "varga"]
+
+        await login(client, "dev@varga.dev")
+        assert (await client.post("/api/v1/orgs", json={"slug": "pirate", "name": "x"})).status_code == 403
+    finally:
+        edition.reinitialiser()
 
 
 async def test_une_demande_se_pose_dans_choregos_quand_le_tracker_est_interne(
