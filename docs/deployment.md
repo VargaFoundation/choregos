@@ -328,9 +328,26 @@ kubectl -n choregos logs deploy/choregos-api      # structured JSON logs
 curl -s https://<api-host>/healthz                # {"status":"ok"}
 ```
 
-A ServiceMonitor, alerting rules and six Grafana dashboards ship with the chart. The API
+A scrape object, alerting rules and six Grafana dashboards ship with the chart. The API
 exposes `/metrics` (Prometheus text format, computed from the database), and a test keeps
 the dashboards and rules honest: they may only name metrics the API actually exports.
+
+**Pick the flavour your platform actually runs.** `monitoring.flavour` is `prometheus` by
+default and renders `ServiceMonitor` and `PrometheusRule` (`monitoring.coreos.com/v1`). Set it
+to `victoriametrics` to render `VMServiceScrape` and a single `VMRule`
+(`operator.victoriametrics.com/v1beta1`) instead:
+
+```yaml
+monitoring:
+  flavour: victoriametrics
+```
+
+This is not cosmetic. An operator does not see a kind it does not know, so on a
+VictoriaMetrics platform a `ServiceMonitor` is an **inert object**: nothing is scraped, no
+alert is ever evaluated, and the namespace looks monitored. That is exactly what happened to
+a real tenant on 2026-09-26. The alert rules themselves are written once and served to both
+flavours, and a test fails if they ever diverge. An unknown flavour stops the render and names
+itself.
 
 ## Operating it
 
