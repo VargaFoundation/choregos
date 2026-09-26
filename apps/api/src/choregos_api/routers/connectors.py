@@ -9,9 +9,10 @@ from fastapi import APIRouter, Path
 from sqlalchemy import select
 
 from ..audit import record
+from ..config import get_settings
 from ..db.models import Connector
 from ..deps import Db, ProjectCtx
-from ..errors import not_found
+from ..errors import not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import ConnectorCheck, ConnectorDto, ConnectorTestResult, ConnectorType, ConnectorUpsert
 
@@ -171,6 +172,16 @@ async def put_connector(
     session: Db,
 ) -> ConnectorDto:
     ctx.require(Permission.CONNECTOR_WRITE)
+    if kind == "gateway" and body.type == "direct" and get_settings().env in {"staging", "prod"}:
+        # La passerelle directe rend la clé qu'on lui a donnée : aucune clé virtuelle par run,
+        # aucun plafond dur, aucun coût mesuré. Le banc a tourné ainsi une semaine et
+        # « prouvait » un plafond de dépense qui n'avait jamais mesuré une dépense. La fabrique
+        # d'adaptateur la refuse déjà ; on refuse aussi de l'ÉCRIRE, pour que l'erreur arrive
+        # quand quelqu'un la choisit, pas au premier run de la nuit suivante.
+        raise unprocessable(
+            "passerelle `direct` refusée sur cet environnement : elle ne mesure aucun coût et "
+            "n'applique aucun plafond. Utiliser `litellm`."
+        )
     row = (
         await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))
     ).scalar_one_or_none()

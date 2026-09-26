@@ -334,3 +334,37 @@ async def test_un_webhook_github_sans_secret_est_refuse_en_production(
         assert "non configuré" in refus.json()["detail"]
     finally:
         reset_settings_cache()
+
+
+async def test_une_passerelle_directe_ne_s_ecrit_pas_en_production(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`gateway: direct` ne mesure aucun coût et n'applique aucun plafond.
+
+    En développement c'est un choix légitime — l'agent apporte son abonnement. Sur un
+    environnement sérieux, c'est une comptabilité éteinte sans que personne l'ait décidé : le
+    banc a tourné ainsi une semaine et « prouvait » un plafond de dépense qui n'avait jamais
+    mesuré une dépense. On refuse donc de l'écrire, au moment où quelqu'un la choisit.
+    """
+    from choregos_api.config import get_settings, reset_settings_cache
+
+    chemin = f"/api/v1/projects/{project['id']}/connectors/gateway"
+    accepte = await client.put(chemin, json={"type": "direct", "config": {}})
+    assert accepte.status_code == 200, accepte.text  # en test, c'est permis
+
+    monkeypatch.setenv("CHOREGOS_ENV", "prod")
+    # la connexion de développement est refusée en prod (garde de `config.py`) : le cookie déjà
+    # posé suffit, on éteint seulement le drapeau pour que les réglages se construisent
+    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
+    reset_settings_cache()
+    try:
+        assert get_settings().env == "prod"
+        refus = await client.put(chemin, json={"type": "direct", "config": {}})
+        assert refus.status_code == 422, refus.text
+        assert "litellm" in refus.json()["detail"]
+        # et la passerelle qui compte, elle, passe
+        assert (await client.put(chemin, json={"type": "litellm", "config": {}})).status_code == 200
+    finally:
+        monkeypatch.delenv("CHOREGOS_ENV", raising=False)
+        monkeypatch.delenv("CHOREGOS_DEV_LOGIN_ENABLED", raising=False)
+        reset_settings_cache()

@@ -20,6 +20,7 @@ from .base import (
     ScmAdapter,
     TrackerAdapter,
 )
+from .errors import ConfigurationError
 from .registry import AdapterSet, available, build, fakes_enabled, register
 
 
@@ -64,6 +65,31 @@ def _github_client(config: dict[str, Any]) -> Any:
     )
 
 
+def _passerelle_directe(cfg: dict[str, Any]) -> Any:
+    """La passerelle « directe » ne compte rien et ne plafonne rien : interdite en production.
+
+    Elle rend la clé qu'on lui a donnée. Aucune clé virtuelle par run, donc aucun plafond dur,
+    et le registre de coûts reste à zéro — le banc a tourné ainsi pendant une semaine et
+    « prouvait » un plafond de dépense qui n'avait jamais mesuré une dépense (BLOCKERS, S12).
+    Sur un environnement sérieux, ce n'est pas une configuration : c'est une comptabilité
+    éteinte sans que personne l'ait décidé. On refuse donc de la construire, en nommant la
+    sortie — comme `garde.yaml` refuse une dépendance embarquée en staging et en prod.
+    """
+    from .gateway.direct import DirectGateway  # import paresseux, comme les autres
+
+    environnement = _env("CHOREGOS_ENV", "dev")
+    if environnement in {"staging", "prod"}:
+        raise ConfigurationError(
+            f"connecteur `gateway: direct` refusé en {environnement} : cette passerelle ne "
+            "mesure aucun coût et n'applique aucun plafond. Utiliser `litellm`, qui émet une "
+            "clé virtuelle plafonnée par run."
+        )
+    return DirectGateway(
+        key=cfg.get("key", _env("CHOREGOS_GATEWAY_DIRECT_KEY", "")),
+        models=cfg.get("models", []),
+    )
+
+
 def _register_builtins() -> None:
     """Enregistre les implémentations livrées (import paresseux pour éviter les cycles)."""
     from .fakes import (
@@ -93,7 +119,6 @@ def _register_builtins() -> None:
     from .executor.k8s_job import KubernetesJobExecutor
     from .executor.local_docker import LocalDockerExecutor
     from .executor.tekton import KubernetesClient, TektonExecutor
-    from .gateway.direct import DirectGateway
     from .gateway.litellm import LiteLlmGateway
     from .http import RestClient
     from .memory.ecphoria import EcphoriaMemory
@@ -215,12 +240,7 @@ def _register_builtins() -> None:
         )
     )
     register("memory", "pgvector")(lambda cfg: PgVectorMemory())
-    register("gateway", "direct")(
-        lambda cfg: DirectGateway(
-            key=cfg.get("key", _env("CHOREGOS_GATEWAY_DIRECT_KEY", "")),
-            models=cfg.get("models", []),
-        )
-    )
+    register("gateway", "direct")(_passerelle_directe)
     register("gateway", "litellm")(
         lambda cfg: LiteLlmGateway(
             cfg.get("base_url", _env("CHOREGOS_GATEWAY_URL", "http://litellm.choregos-gateway:4000")),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from choregos_adapters.gateway.direct import DirectGateway
 from choregos_adapters.tracker.interne import InternalTracker
 from choregos_contracts import ProjectConfig
@@ -44,3 +45,34 @@ async def test_le_tracker_interne_n_accepte_aucun_webhook() -> None:
     assert tracker.parse_webhook({}, b"{}") == []
     assert await tracker.set_state("RH-1", TrackerStateMapping(label="x")) is None
     assert await tracker.comment("RH-1", "texte") == ""
+
+
+@pytest.mark.parametrize("environnement", ("staging", "prod"))
+def test_la_passerelle_directe_refuse_de_se_construire_en_production(
+    environnement: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Une comptabilité éteinte ne doit pas pouvoir l'être par accident.
+
+    `direct` rend la clé qu'on lui a donnée : aucune clé virtuelle par run, donc aucun plafond
+    dur et aucun coût mesuré. Le banc a tourné ainsi une semaine et « prouvait » un plafond de
+    dépense qui n'avait jamais mesuré une dépense (BLOCKERS, S12). Sur un environnement
+    sérieux, c'est un refus — comme `garde.yaml` refuse une dépendance embarquée.
+    """
+    from choregos_adapters import build
+    from choregos_adapters.errors import ConfigurationError
+
+    # `CHOREGOS_FAKES=1` (posé par la suite de l'API quand tout tourne ensemble) court-circuite
+    # la fabrique et rend un faux : sans ce zéro, le test passait seul et rougissait en groupe.
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("CHOREGOS_ENV", environnement)
+    with pytest.raises(ConfigurationError, match="refusé"):
+        build("gateway", "direct", {})
+
+
+def test_elle_se_construit_ailleurs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un poste de développement ou un banc garde le droit d'apporter sa propre clé."""
+    from choregos_adapters import build
+
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("CHOREGOS_ENV", "dev")
+    assert isinstance(build("gateway", "direct", {"key": "sk-perso"}), DirectGateway)
