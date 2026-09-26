@@ -1,6 +1,6 @@
 [project]
 name = "choregos-core"
-version = "0.4.1"
+version = "0.5.0"
 description = "Cœur Choregos : DSL de workflow, politiques, résolution de modèles, gates"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }

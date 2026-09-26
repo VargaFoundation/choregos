@@ -1,6 +1,6 @@
 [project]
 name = "choregos-orchestrator"
-version = "0.4.1"
+version = "0.5.0"
 description = "Orchestrateur Choregos : workers et workflows Temporal"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
