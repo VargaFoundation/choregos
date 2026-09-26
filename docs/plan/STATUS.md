@@ -252,6 +252,21 @@ les 492 tests ne disaient pas :
    deux côtés pendant deux jours — restauré et gardé par `tests/docs/test_instructions_des_agents.py`,
    qui refuse aussi une cible `make` inexistante. Reste P1-1b/c : l'anglais
    de l'interface, la traduction intégrale des 14 ADR et des 11 runbooks.
+   **Le premier coût non nul du produit (2026-09-26, 18 h)** : sur le locataire dev de Diametral,
+   un appel `platform/cheap` a répondu à travers la passerelle du locataire puis celle de la
+   plateforme — 16 tokens, et la clé virtuelle `choregos-dev` porte **2,7 × 10⁻⁵ USD** de dépense,
+   sous un plafond de 20 $ sur 30 jours. L'argument n°1 du produit avait douze lignes de registre
+   à zéro depuis le premier jour ; il a maintenant un chiffre.
+   Ce qui l'empêchait n'était pas ce que BLOCKERS disait. Les **dix** valeurs du magasin de secrets
+   du locataire étaient absentes sauf une, et l'opérateur Infisical écrivait à leur place la chaîne
+   littérale `<no value>` : dix pods `1/1`, Argo CD `Synced`, `/readyz` à 200, et des cookies de
+   session signés avec une constante publique. Les neuf valeurs ont été posées par un Job qui les
+   **génère dans le cluster** — elles n'ont transité par aucun journal. La garde ajoutée le même
+   jour (refus de démarrage sur `<no value>`) rend ce mode de panne impossible à répéter.
+   Ce qui reste à prouver : un **agent** qui consomme cette clé et une ligne `kind=tool` au
+   registre. Le locataire n'a pas d'accès Anthropic, donc ce sera sur le backend `opencode`, jamais
+   éprouvé sur un banc.
+
    **Édition communautaire et édition entreprise (2026-09-26)** : [ADR 0024](../adr/0024-deux-editions.md)
    rouvre D1 et acte deux éditions. Le cœur reste Apache-2.0 sous la Varga Foundation ; l'édition
    entreprise sera propriétaire, dans un dépôt privé séparé, éditée par Diametral. Le
