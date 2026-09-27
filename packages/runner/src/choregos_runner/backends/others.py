@@ -110,7 +110,20 @@ class OpenCodeBackend(Backend):
             "provider": {
                 "choregos": {
                     "npm": "@ai-sdk/openai-compatible",
-                    "options": {"baseURL": stage_input.model.base_url},
+                    "options": {
+                        "baseURL": stage_input.model.base_url,
+                        # Le NOM de la variable, jamais la clé : ce fichier est écrit dans
+                        # l'espace de travail de l'agent, donc potentiellement lu dans un diff.
+                        # `{env:…}` est la forme qu'opencode résout à l'exécution.
+                        #
+                        # Sans cette ligne, le fournisseur `choregos` n'a AUCUNE clé et la
+                        # passerelle répond « Authentication Error, No api key passed in » —
+                        # `OPENAI_API_KEY` de l'environnement ne sert qu'au fournisseur `openai`
+                        # intégré, pas à un fournisseur déclaré par la configuration. Mesuré le
+                        # 2026-09-27 dans le locataire dev : `opencode run` échoue sans elle et
+                        # rend `pong` avec, sur le même modèle et la même passerelle.
+                        "apiKey": "{env:OPENAI_API_KEY}",
+                    },
                     "models": {stage_input.model.litellm_model: {"name": stage_input.model.litellm_model}},
                 }
             },

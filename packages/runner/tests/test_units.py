@@ -794,3 +794,32 @@ def test_les_autres_backends_gardent_le_format_repandu(tmp_path: Path) -> None:
     stage_input.tools.mcp = {"choregos": McpServerRef(url="http://localhost:7777/mcp")}
     serveurs = _json.loads(get_backend("opencode").mcp_config_json(stage_input))["mcpServers"]
     assert serveurs["choregos"] == {"type": "http", "url": "http://localhost:7777/mcp"}
+
+
+def test_opencode_sait_ou_trouver_sa_cle_sans_jamais_la_porter(tmp_path: Path) -> None:
+    """Le fournisseur `choregos` a besoin d'une clé, et la config ne doit pas la contenir.
+
+    `OPENAI_API_KEY` de l'environnement ne sert qu'au fournisseur `openai` **intégré** ; un
+    fournisseur déclaré par la configuration n'en hérite pas. Sans `apiKey` dans ses options, la
+    passerelle répond « Authentication Error, No api key passed in ». Mesuré le 2026-09-27 dans le
+    locataire dev : `opencode run` échoue sans cette ligne et rend `pong` avec, sur le même modèle
+    et la même passerelle.
+
+    Et ce qui est écrit reste le NOM de la variable : `opencode.json` est posé dans l'espace de
+    travail de l'agent, donc susceptible d'être lu dans un diff.
+    """
+    import json as _json
+
+    stage_input = _minimal_stage_input(tmp_path)
+    stage_input.gateway_key = "sk-le-secret-du-run"
+    config = _json.loads(get_backend("opencode").launch_plan(stage_input, tmp_path).files["opencode.json"])
+
+    options = config["provider"]["choregos"]["options"]
+    assert options["apiKey"] == "{env:OPENAI_API_KEY}", (
+        "sans clé, la passerelle refuse ; avec la clé en clair, le secret part dans l'espace de travail"
+    )
+    assert "sk-le-secret-du-run" not in _json.dumps(config), "la clé du run est écrite dans la config"
+
+    # La variable, elle, est bien posée dans l'environnement du processus.
+    env = get_backend("opencode").model_env(stage_input.model, stage_input.gateway_key)
+    assert env["OPENAI_API_KEY"] == "sk-le-secret-du-run"
