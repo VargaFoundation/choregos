@@ -7,6 +7,18 @@ valeurs est allumée, et nomme laquelle. Avant : rien ne l'interdisait, et l'API
 que la connexion de développement.
 */ -}}
 {{- $g := .Values.global }}
+{{- /*
+L'édition entreprise est distribuée par un registre PRIVÉ : c'est tout le contrôle d'accès
+(ADR 0024, décision 5 — pas de clé de licence en phase 1). L'annoncer sans secret de tirage
+donne un `ImagePullBackOff` qui ne nomme jamais la cause, et un exploitant cherche du côté du
+réseau. On le dit ici, où la valeur est écrite.
+*/ -}}
+{{- if and (eq ($g.edition | default "community") "enterprise") (not $g.imagePullSecrets) }}
+{{- fail "global.edition=enterprise exige global.imagePullSecrets : les images de l'édition entreprise sont dans un registre privé. Sans secret de tirage, les pods restent en ImagePullBackOff sans dire pourquoi." }}
+{{- end }}
+{{- if not (has ($g.edition | default "community") (list "community" "enterprise")) }}
+{{- fail (printf "global.edition=%s inconnue : `community` ou `enterprise`." $g.edition) }}
+{{- end }}
 {{- if has $g.environment (list "staging" "prod") }}
 {{- $fautes := list }}
 {{- if $g.database.embedded }}{{ $fautes = append $fautes "global.database.embedded" }}{{ end }}

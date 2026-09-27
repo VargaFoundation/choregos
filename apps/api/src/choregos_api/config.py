@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
     fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
+    #: L'édition que le DÉPLOIEMENT annonce (ADR 0024). Ce n'est pas la même chose que l'édition
+    #: qui tourne : celle-là, c'est le greffon entreprise qui la déclare en se chargeant. Les deux
+    #: sont comparées au démarrage, parce qu'un écart est silencieux autrement — le chart
+    #: annoncerait `enterprise`, l'image serait communautaire, tout démarrerait, et la première
+    #: seconde organisation serait refusée sans que personne comprenne pourquoi.
+    edition: Literal["community", "enterprise"] = "community"
 
     # Base de données
     database_url: str = "sqlite+aiosqlite:///./choregos.db"

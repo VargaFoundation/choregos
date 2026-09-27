@@ -99,12 +99,38 @@ async def _refuser_le_superutilisateur() -> None:
         logger.error(message)
 
 
+def _verifier_l_edition(settings: Any) -> None:
+    """Ce que le déploiement annonce doit être ce qui est chargé (ADR 0024).
+
+    L'édition qui tourne n'est pas une valeur du chart : c'est le greffon entreprise qui la
+    déclare en se chargeant. Rien ne reliait les deux. Un exploitant qui écrit
+    `global.edition: enterprise` sur des images communautaires obtenait donc une plateforme qui
+    démarre, paraît saine, et refuse la seconde organisation — le symptôme arrivant des semaines
+    après la cause, sur une action sans rapport apparent.
+
+    Le refus est au démarrage et il nomme ce qui manque. L'inverse ne se refuse pas : un
+    déploiement qui n'annonce rien et charge le greffon entreprise est simplement un déploiement
+    qui a oublié de le dire, et le priver de démarrage n'aiderait personne — la métrique
+    `choregos_edition_info` et `GET /edition` disent la vérité dans les deux cas.
+    """
+    from .edition import ENTREPRISE, courante
+
+    if settings.edition == ENTREPRISE and courante() != ENTREPRISE:
+        raise RuntimeError(
+            "global.edition=enterprise mais aucun greffon d'édition entreprise ne s'est déclaré. "
+            "L'image est celle de l'édition communautaire, ou le paquet `choregos-ee` n'est pas "
+            "installé, ou son point d'entrée `choregos.plugins` n'appelle pas `declarer`. "
+            "Corriger l'image, ou remettre global.edition=community."
+        )
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     brancher_memoire_lexicale()
     # Les greffons installés à côté (édition entreprise, connecteurs maison) s'enregistrent
     # eux-mêmes. Un greffon déclaré qui ne charge pas arrête le démarrage, exprès.
     charger_les_greffons()
+    _verifier_l_edition(settings)
     app = FastAPI(
         title="Choregos API",
         # La version du paquet, pas une constante : l'API s'annonçait `1.0.0` depuis le premier

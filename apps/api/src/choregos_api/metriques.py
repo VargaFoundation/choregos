@@ -33,6 +33,8 @@ from prometheus_client.core import GaugeMetricFamily, HistogramMetricFamily
 from prometheus_client.registry import Collector
 from sqlalchemy import func, select
 
+from . import __version__
+from .edition import courante
 from .logging import get_logger
 
 logger = get_logger("choregos.metriques")
@@ -55,6 +57,7 @@ NOMS = frozenset(
         "choregos_permission_denials_total",
         "choregos_memory_pending",
         "choregos_context_pack_empty_total",
+        "choregos_edition_info",
     }
 )
 
@@ -120,6 +123,16 @@ class CollecteurPlateforme(Collector):
 
     def collect(self) -> Iterable[Any]:
         s = _Courant.instantane
+        # L'édition ne vient pas de la base : c'est une propriété du processus. Une série `_info`
+        # à 1 avec l'édition en étiquette est la forme habituelle — elle se joint aux autres, donc
+        # un tableau de bord peut dire « quelle édition a produit ce chiffre ». Sans elle, la seule
+        # façon de savoir sur quoi un exploitant est branché est d'appeler `/edition` à la main,
+        # et rien ne le dit dans l'historique des métriques.
+        edition = GaugeMetricFamily(
+            "choregos_edition_info", "Édition qui tourne (ADR 0024)", labels=["edition", "version"]
+        )
+        edition.add_metric([courante(), __version__], 1.0)
+        yield edition
         yield GaugeMetricFamily("choregos_runs_active", "Runs en file ou en cours", value=s.runs_active)
         g = GaugeMetricFamily("choregos_runs_total", "Runs par état final", labels=["status"])
         for status, n in s.runs_total.items():
