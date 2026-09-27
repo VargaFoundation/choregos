@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """SCM en mémoire : branches, PR, checks, reviews, merge queue, diffs."""
 
 from __future__ import annotations

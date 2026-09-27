@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Backends secondaires : Codex, Gemini CLI, Goose, OpenCode, Copilot CLI (S13-02).
 
 Tous parlent ACP ; ce qui change est la façon de leur donner le modèle et la configuration

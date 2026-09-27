@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Interfaces des adaptateurs (docs/plan/01 §1.9).
 
 Chaque `Protocol` a une implémentation réelle et un `Fake*` en mémoire. Les flux

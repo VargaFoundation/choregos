@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Backends ACP : comment lancer un agent, et comment lui passer son modèle.
 
 Un backend ne contient **aucune** logique métier : il traduit un `StageInput` en

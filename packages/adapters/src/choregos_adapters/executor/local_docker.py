@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Executor Docker local : pour développer sans Kubernetes (`dev/compose.yaml`)."""
 
 from __future__ import annotations

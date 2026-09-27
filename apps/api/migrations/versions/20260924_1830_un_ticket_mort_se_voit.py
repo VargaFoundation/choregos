@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Un ticket mort se voit : la marque que l'interpréteur pose en mourant
 
 Deux tickets RH du banc du 2026-09-24 sont restés « en attente » alors que leur workflow

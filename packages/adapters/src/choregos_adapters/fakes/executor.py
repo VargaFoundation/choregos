@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Exécuteur en mémoire : joue un `StageResult` scripté, ou délègue à une fonction."""
 
 from __future__ import annotations

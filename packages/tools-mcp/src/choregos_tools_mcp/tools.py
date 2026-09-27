@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Les outils exposés à l'agent par le sidecar `choregos-tools`.
 
 Toutes les écritures passent par l'API interne : l'agent n'a **aucun** credential,

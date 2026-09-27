@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Modèle de données (docs/plan/01 §1.3).
 
 Toutes les tables porteuses de données projet ont `project_id` et sont couvertes par

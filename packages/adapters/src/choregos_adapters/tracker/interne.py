@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tracker « interne » : il n'y en a pas d'autre, la plateforme tient le ticket.
 
 Le modèle par défaut de Choregos est d'être **invité** chez un tracker existant : GitHub

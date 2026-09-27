@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Un seul chemin pour un événement : la table `events` et le bus SSE."""
 
 from __future__ import annotations

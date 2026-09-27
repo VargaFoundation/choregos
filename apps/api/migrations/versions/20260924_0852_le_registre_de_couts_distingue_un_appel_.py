@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le registre de coûts distingue un appel de modèle d'un appel d'outil
 
 Un outil du catalogue coûte à chaque appel, comme un modèle. Sans cette colonne, il

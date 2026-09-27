@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Les métriques Prometheus de la plateforme — calculées depuis la base, exposées par l'API.
 
 POURQUOI DEPUIS LA BASE

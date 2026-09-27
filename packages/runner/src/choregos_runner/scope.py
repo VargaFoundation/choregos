@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Vérification de périmètre : ce que l'agent a réellement modifié.
 
 La permission refusée est un raccourci ; la garantie est ici : on regarde le diff,

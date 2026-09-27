@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """API Choregos : REST, webhooks, SSE, API interne, OIDC, RLS."""
 
 from __future__ import annotations

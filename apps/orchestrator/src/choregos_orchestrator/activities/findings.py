@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités de triage des findings : dédup, classement, ticket lié, mémoire (docs/plan/05 §5.4)."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités mémoire : ingestion idempotente, context pack, écriture gouvernée."""
 
 from __future__ import annotations

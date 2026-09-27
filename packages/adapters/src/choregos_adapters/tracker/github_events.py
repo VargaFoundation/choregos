@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Normalisation des webhooks GitHub en `InboundEvent`, et commandes `/choregos …`.
 
 C'est ici que le tracker devient une interface : une carte déplacée, un label posé,

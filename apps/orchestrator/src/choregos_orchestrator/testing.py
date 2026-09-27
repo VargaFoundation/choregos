@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Outillage de test : des workers **répartis par file**, comme le chart en déploie un par file.
 
 Ce module vit dans le paquet et non dans un `conftest.py` parce que **trois** suites en ont besoin

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Client ACP headless : lance l'agent, tient la session, arbitre les permissions."""
 
 from __future__ import annotations

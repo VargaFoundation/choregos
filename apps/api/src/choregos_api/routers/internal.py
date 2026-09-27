@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """API interne : le seul canal d'écriture d'un runner (JWT de run, portée = un run).
 
 Aucune de ces routes n'accepte une session humaine ; aucun token GitHub large ne

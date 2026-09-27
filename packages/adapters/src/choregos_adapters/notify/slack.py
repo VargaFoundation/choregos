@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Notifier Slack : messages avec boutons qui renvoient vers l'API de décision (§3.1)."""
 
 from __future__ import annotations

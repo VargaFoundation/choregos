@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """ScmAdapter GitHub : branches, PR, checks, reviews, merge queue, check-runs Choregos."""
 
 from __future__ import annotations

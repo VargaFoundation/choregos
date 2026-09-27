@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Interpréteur local : la même logique de décision, sans serveur Temporal.
 
 Il sert deux usages honnêtes :

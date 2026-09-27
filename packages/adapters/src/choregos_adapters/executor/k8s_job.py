@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Executor Job Kubernetes : le repli quand Tekton n'est pas disponible (§2.3).
 
 Même contrat que Tekton : un Job par run, un Secret pour le jeton (rattaché au Job, donc

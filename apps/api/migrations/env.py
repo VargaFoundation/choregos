@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Environnement Alembic : migrations async, schéma lu depuis les modèles."""
 
 from __future__ import annotations

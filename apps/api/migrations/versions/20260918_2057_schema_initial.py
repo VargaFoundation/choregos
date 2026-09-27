@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """schema initial
 
 Revision ID: a6de8f2759b3

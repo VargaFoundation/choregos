@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Connecteurs : configuration, test de connexion, catalogue des types."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Catalogue d'outils : des API tierces utilisables par un agent, sans lui donner de clé.
 
 POURQUOI CE FICHIER EXISTE

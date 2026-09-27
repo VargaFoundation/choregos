@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le catalogue d'outils du déploiement, et l'appel d'un outil pour le compte d'un run.
 
 La clé du fournisseur vit ici, dans l'environnement de l'API — jamais dans le pod d'un

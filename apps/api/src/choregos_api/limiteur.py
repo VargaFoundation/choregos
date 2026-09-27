@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Limiteur de débit sur les routes SANS principal : connexion et webhooks.
 
 `rate_limit_per_minute` existait dans les réglages sans qu'aucun code ne le lise (état des

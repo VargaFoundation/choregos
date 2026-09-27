@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Preuve avant dépendance : la comparaison A/B des projets avec et sans mémoire."""
 
 from __future__ import annotations

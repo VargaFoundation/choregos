@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Mémoire en mémoire (sic) : recherche lexicale, supersession par sujet, file `pending`."""
 
 from __future__ import annotations

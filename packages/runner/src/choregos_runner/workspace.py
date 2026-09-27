@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Workspace du run : clone, branche, fichiers de contexte, diff, commit, push.
 
 Toutes les commandes git passent par ici, avec un `git` non interactif et une identité

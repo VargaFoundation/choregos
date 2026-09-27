@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`EvalMatrix` : évals nocturnes backend × modèle × mémoire (docs/plan/04 §4.2, S12-02)."""
 
 from __future__ import annotations

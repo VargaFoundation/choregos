@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le client de l'API interne vit dans `choregos_tools_mcp.client` ; ce module le réexporte.
 
 Le runner importe le serveur d'outils (pour le démarrer dans son pod) et le serveur

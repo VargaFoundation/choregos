@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Findings : liste et triage (ticket, doublon, ignoré, agent-ready, faux positif)."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Ce que l'API branche dans le registre des adaptateurs — parce qu'elle seule le possède.
 
 La mémoire `lexical` range ses faits dans les tables de l'API (`memory_facts`, `projects`). Les

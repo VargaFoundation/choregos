@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Boucle « definition of done » : tests, lint, typage — et re-prompt borné si c'est rouge.
 
 C'est le mécanisme qui transforme « l'agent dit que c'est fini » en « les commandes du dépôt

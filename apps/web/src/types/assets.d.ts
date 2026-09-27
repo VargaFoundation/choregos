@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Déclarations des imports de fichiers non-TypeScript.
 //
 // TypeScript 6 refuse un import à effet de bord dont il ne trouve ni module ni déclaration

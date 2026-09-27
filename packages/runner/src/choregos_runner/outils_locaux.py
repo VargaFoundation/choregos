@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le serveur d'outils de la plateforme, servi par le runner lui-même.
 
 POURQUOI

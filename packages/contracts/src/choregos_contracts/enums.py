@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Énumérations partagées par tous les contrats Choregos."""
 
 from __future__ import annotations

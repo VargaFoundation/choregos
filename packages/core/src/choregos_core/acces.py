@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Ce à quoi un agent a touché, en une page.
 
 POURQUOI

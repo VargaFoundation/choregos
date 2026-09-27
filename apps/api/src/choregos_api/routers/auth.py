@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Session : OIDC (discovery, PKCE, `state` signé) en production, connexion de développement en local.
 
 Ce que ce routeur garantit, et pourquoi chaque garantie existe :

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Registre des gates : conditions déterministes portées par une transition.
 
 Une gate est **le** mécanisme de garantie (docs/plan/01) : elle ne fait pas confiance

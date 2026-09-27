@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Client HTTP de la CLI : jeton d'API ou cookie de session, erreurs lisibles."""
 
 from __future__ import annotations

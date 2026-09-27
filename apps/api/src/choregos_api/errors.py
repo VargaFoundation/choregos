@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Erreurs HTTP au format RFC 9457 (`application/problem+json`)."""
 
 from __future__ import annotations

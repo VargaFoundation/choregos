@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """DTO de l'API : les corps de requête et de réponse décrits par `openapi.yaml`.
 
 Huit modules, un par domaine, réexportés : `choregos_api.schemas.X` reste l'adresse de tout.

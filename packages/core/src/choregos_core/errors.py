@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Erreurs du cœur Choregos, localisées quand la source est connue."""
 
 from __future__ import annotations

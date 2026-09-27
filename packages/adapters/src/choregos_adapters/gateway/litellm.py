@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """GatewayAdapter LiteLLM : une clé virtuelle par run, le coût compté à la source.
 
 Le budget est un **plafond dur** posé sur la clé : quand il est atteint, LiteLLM refuse,

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Work items : liste, détail, timeline, décisions humaines, actions de contrôle."""
 
 from __future__ import annotations

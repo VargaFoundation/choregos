@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Sécurité : jetons de run (ES256), jetons d'API, sessions signées, vérification de webhooks."""
 
 from __future__ import annotations

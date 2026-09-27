@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le coût : l'estimation d'un ticket depuis ses semblables, et une ligne du registre."""
 
 from __future__ import annotations

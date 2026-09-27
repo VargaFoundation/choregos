@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CLI `choregos`."""
 
 from __future__ import annotations

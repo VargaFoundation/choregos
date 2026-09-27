@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Envoi de signaux aux workflows Temporal depuis une activité (train, findings, mémoire).
 
 En mode fakes, les signaux sont mis en file en mémoire : la démo et les tests fonctionnent

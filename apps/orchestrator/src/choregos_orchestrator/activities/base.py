@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Socle des activités : accès base, adaptateurs par projet, idempotence.
 
 Toutes les activités sont **idempotentes** par `(run_id | work_item_id, step)` : Temporal

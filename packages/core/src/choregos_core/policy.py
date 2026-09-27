@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Policy engine : budgets, approbations, tentatives, périmètre.
 
 Une politique répond à quatre questions, et à elles seules :

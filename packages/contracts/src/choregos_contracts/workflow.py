@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Modèles du DSL de workflow (schemas/workflow.schema.json)."""
 
 from __future__ import annotations

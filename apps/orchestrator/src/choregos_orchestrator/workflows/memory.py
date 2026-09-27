@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`MemoryIngestion` : import planifié tracker/SCM/CD → mémoire (docs/plan/04)."""
 
 from __future__ import annotations

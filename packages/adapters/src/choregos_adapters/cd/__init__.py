@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Adaptateurs de déploiement continu."""
 
 from __future__ import annotations

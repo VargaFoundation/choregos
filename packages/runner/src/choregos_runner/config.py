@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Configuration du runner, lue dans l'environnement du conteneur."""
 
 from __future__ import annotations

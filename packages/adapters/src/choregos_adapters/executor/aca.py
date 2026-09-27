@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Executor Azure Container Apps : un *job* ACA par run (§2.3, S13-05).
 
 Même contrat que Tekton et les Jobs Kubernetes : un run = une exécution isolée, démarrée

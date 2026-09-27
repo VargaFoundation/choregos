@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Playbooks Choregos : un prompt par rôle, rendu en Jinja2, versionné et évalué.
 
 Invariants communs à tous les rôles (docs/plan/02 §2.5) : écrire `.choregos/result.json`,

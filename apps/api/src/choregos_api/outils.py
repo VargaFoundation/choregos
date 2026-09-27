@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`choregos-admin` : les gestes qui précèdent le premier jeton.
 
 Le premier jeton d'API ne peut pas venir de l'API : il faut une session pour appeler

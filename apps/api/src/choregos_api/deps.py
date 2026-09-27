@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Dépendances FastAPI : session, identité, RBAC, pagination."""
 
 from __future__ import annotations

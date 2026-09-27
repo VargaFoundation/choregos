@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités d'évals : exécution d'une cellule de la matrice et publication des résultats.
 
 Une cellule = (backend × modèle × mémoire) jouée sur les tickets de référence de

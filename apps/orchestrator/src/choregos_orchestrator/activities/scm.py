@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités SCM : branche, PR, review, merge queue — pilotées par les transitions `system`."""
 
 from __future__ import annotations

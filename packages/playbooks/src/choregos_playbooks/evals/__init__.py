@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Évals des playbooks : des assertions déterministes, plus un juge pour le reste.
 
 Un prompt dégradé doit faire échouer la CI. Les cas vivent dans `cases/`, chacun décrit

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Runner Choregos : client ACP headless, guardrails, boucle DoD, publication.
 
 Le runner est jetable : il ne garde rien. Tout ce qu'il produit part par l'API interne

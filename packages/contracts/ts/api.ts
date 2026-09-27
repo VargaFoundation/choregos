@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /* eslint-disable */
 /**
  * Généré par tools/gen_contracts.py — NE PAS MODIFIER À LA MAIN.

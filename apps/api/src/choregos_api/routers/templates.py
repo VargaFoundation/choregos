@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Templates de stack : catalogue, détail, publication (admin)."""
 
 from __future__ import annotations

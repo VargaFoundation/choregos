@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Session SQLAlchemy async, RLS par organisation, création du schéma en dev/test."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`make demo` — la chaîne complète sur un poste, sans cluster ni serveur.
 
 Un ticket entre, un agent simulé travaille, les gates vérifient, un humain valide,

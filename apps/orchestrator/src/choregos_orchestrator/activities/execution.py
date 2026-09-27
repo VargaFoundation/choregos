@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités d'exécution d'une étape : lancer le run, l'attendre, l'abandonner.
 
 C'est la moitié de `stage` qui parle à l'exécuteur (Tekton, Job Kubernetes, Docker local,

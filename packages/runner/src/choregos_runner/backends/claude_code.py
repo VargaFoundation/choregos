@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Backend Claude Code (adaptateur ACP `claude-agent-acp`)."""
 
 from __future__ import annotations

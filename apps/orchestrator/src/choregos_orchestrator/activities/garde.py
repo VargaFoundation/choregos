@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """La garde contre l'injection de prompt, jouée avant de donner quoi que ce soit à l'agent."""
 
 from __future__ import annotations

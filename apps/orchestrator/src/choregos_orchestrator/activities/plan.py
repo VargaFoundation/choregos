@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Ce que l'interpréteur transmet aux activités d'une étape : le plan d'un run."""
 
 from __future__ import annotations

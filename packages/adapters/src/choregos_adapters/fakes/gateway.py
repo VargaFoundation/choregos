@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Gateway de modèles en mémoire : clés virtuelles à plafond dur et dépenses simulées."""
 
 from __future__ import annotations

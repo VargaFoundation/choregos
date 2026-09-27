@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Serveur MCP `choregos-tools` : HTTP (JSON-RPC) exposé au backend agent en localhost.
 
 Il tient dans un sidecar, ne détient que le jeton du run, et relaie tout à l'API interne.

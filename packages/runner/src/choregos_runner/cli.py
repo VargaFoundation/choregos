@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CLI du runner : `choregos-runner run`, et quelques commandes de diagnostic."""
 
 from __future__ import annotations

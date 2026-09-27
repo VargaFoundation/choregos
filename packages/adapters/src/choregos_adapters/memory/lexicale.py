@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """MemoryAdapter de repli : recherche **lexicale**, dans la base de Choregos.
 
 Ce connecteur s'est appelé `pgvector` jusqu'au 2026-09-26, et le nom mentait sur trois

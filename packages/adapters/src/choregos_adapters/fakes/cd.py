@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CD en mémoire : promotions GitOps, santé, rollouts canary."""
 
 from __future__ import annotations

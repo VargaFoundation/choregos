@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Validation statique du DSL de workflow (règles de docs/plan/01 §1.4).
 
 Les erreurs sont **bloquantes** : un workflow invalide n'est jamais épinglé sur un ticket.

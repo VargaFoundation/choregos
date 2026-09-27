@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """RBAC : cinq rôles, une matrice de permissions explicite."""
 
 from __future__ import annotations

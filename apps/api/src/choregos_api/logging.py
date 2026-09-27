@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Journalisation JSON structurée (clés `project`, `work_item`, `run_id`, `stage`)."""
 
 from __future__ import annotations

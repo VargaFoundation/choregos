@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`TrackerReconciliation` : le polling de secours du tracker (docs/plan/03, S3-06).
 
 Les webhooks sont le chemin nominal. Ils se perdent : livraison en échec, plateforme

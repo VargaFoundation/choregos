@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Modèles de domaine partagés par les adaptateurs, l'orchestrateur et l'API.
 
 Ce sont les types qui circulent dans les signatures de `packages/adapters/base.py` (§1.9).

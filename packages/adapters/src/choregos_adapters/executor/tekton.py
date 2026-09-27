@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Executor Tekton : un `PipelineRun` par étape d'agent (docs/plan/02 §2.3).
 
 Le secret du run est créé pour ce run et supprimé à la fin ; le PipelineRun porte les

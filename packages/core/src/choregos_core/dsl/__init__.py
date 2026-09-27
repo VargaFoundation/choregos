@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """DSL de workflow : chargement, validation, moteur de décision, rendu graphique."""
 
 from __future__ import annotations

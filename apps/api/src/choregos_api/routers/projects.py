@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Projets : création, configuration, provisioning (SSE), suspension."""
 
 from __future__ import annotations

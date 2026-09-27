@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Client Temporal côté API : démarrage de workflows et routage des signaux.
 
 L'API ne connaît de Temporal que quatre gestes : démarrer un `WorkflowInterpreter`,

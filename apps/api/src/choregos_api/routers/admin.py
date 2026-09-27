@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Administration plateforme : backends agents, exécuteurs, clés gateway, membres, audit."""
 
 from __future__ import annotations

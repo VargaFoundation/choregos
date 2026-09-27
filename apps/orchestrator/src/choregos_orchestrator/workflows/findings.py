@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`FindingsTriage` : un workflow par projet, qui déduplique et crée les tickets liés."""
 
 from __future__ import annotations

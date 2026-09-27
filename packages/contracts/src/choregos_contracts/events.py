@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Événements : entrants normalisés (InboundEvent), internes (CloudEvents), décisions humaines."""
 
 from __future__ import annotations

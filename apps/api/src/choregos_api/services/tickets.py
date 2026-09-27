@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Projections des tickets, runs, demandes humaines et releases ; la clé d'un ticket interne ;
 le rangement des sorties d'une étape."""
 

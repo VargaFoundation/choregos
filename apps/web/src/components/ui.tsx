@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Composants transverses de Choregos, posés sur le design system de la Varga Foundation.
  *

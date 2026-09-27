@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Parsing d'un workflow : YAML/JSON → modèle validé, avec erreurs localisées."""
 
 from __future__ import annotations

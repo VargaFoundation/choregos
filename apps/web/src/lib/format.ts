@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /** Formatage FR : argent, tokens, durées, dates relatives. Utilisé partout, testé. */
 
 export function eur(value: number | null | undefined): string {

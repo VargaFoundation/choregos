@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Configuration d'un projet (schemas/project.schema.json)."""
 
 from __future__ import annotations

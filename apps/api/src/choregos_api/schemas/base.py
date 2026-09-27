@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """La base des DTO et la pagination."""
 
 from __future__ import annotations

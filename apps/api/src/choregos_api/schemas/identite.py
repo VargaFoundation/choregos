@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Qui appelle : membres, organisations, jetons d'API."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """L'identifiant d'un run est lisible, pas un UUID : 128 caractères
 
 `<ticket>-<transition>-<tentative>` dépasse les 36 caractères d'un UUID. PostgreSQL

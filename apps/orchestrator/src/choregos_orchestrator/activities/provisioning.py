@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités de provisioning d'un projet (docs/plan/03 §3.3).
 
 Chaque étape est idempotente : rejouer un provisioning partiellement échoué reprend

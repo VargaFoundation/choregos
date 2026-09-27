@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Client GitHub : REST + GraphQL, avec backoff sur 429/secondary limits et file par installation."""
 
 from __future__ import annotations

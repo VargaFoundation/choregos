@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Workflow, politique et modèles d'un projet."""
 
 from __future__ import annotations

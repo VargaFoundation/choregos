@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Implémentations `Fake*` en mémoire de tous les adaptateurs (S0-06).
 
 Activées par `CHOREGOS_FAKES=1`. Elles sont **scriptables** : chaque fake expose des
