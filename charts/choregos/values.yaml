@@ -226,6 +226,11 @@ choregos-orchestrator:
       resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
   runner:
     image: choregos-runner
+    # Vide : le tag suit `global.imageTag`. NE PAS RETIRER cette ligne — sans elle, le défaut du
+    # sous-chart reprend la main et l'image des agents repart sur `1.0.0`, absente de toute
+    # installation. C'est arrivé le 2026-09-27 : une coupe un peu large en retirant un réglage
+    # voisin, et `helm-unittest` l'a attrapé sur `global.imageTag: 9.9.9` → `…-runner:1.0.0`.
+    tag: ""
     namespacePattern: "proj-{slug}-runners"
     # Runs simultanés par namespace. Au-delà, le Job attend SANS pod (`spec.suspend`),
     # dans l'ordre d'arrivée : une pointe de tickets ne se transforme plus en pointe de
