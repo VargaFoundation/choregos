@@ -205,19 +205,40 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
         )
         await bundle.adapters.tracker.comment(item.tracker_key, markdown)
         channel = bundle.config.notify.slack_channel or "#choregos"
-        await bundle.adapters.notify.send(
-            channel,
-            Message(
-                title=f"Choregos — {payload['kind']} sur {item.tracker_key}",
-                body=item.title,
-                url=f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
-                severity="warning",
-                actions=[
-                    MessageAction(id="approve", label="Approuver", style="primary", value=row.id),
-                    MessageAction(id="reject", label="Renvoyer", style="danger", value=row.id),
-                ],
-            ),
-        )
+        # La notification est une COURTOISIE, pas la demande. La demande existe (en base) et se
+        # lit (commentaire sur le ticket, écran du front, API) sans elle.
+        #
+        # Avant le 2026-09-27 elle était dans le chemin critique, et le défaut était brutal : sur
+        # un déploiement sans Slack — le locataire dev — `notify.send` lève, l'exception annule la
+        # TRANSACTION (donc la demande qu'on vient d'écrire), les cinq tentatives échouent au même
+        # endroit, et le ticket meurt sur « [slack] ni bot_token ni webhook_url configurés ».
+        # Autrement dit : la porte humaine était inatteignable sur toute installation sans
+        # notificateur, et le message accusait Slack au lieu de dire « la demande est là, personne
+        # n'a été prévenu ».
+        #
+        # `notifiee` part dans l'événement et dans le retour : un silence se voit au lieu d'être
+        # deviné. Ne rien dire aurait remplacé une panne bruyante par une panne muette.
+        notifiee = True
+        try:
+            await bundle.adapters.notify.send(
+                channel,
+                Message(
+                    title=f"Choregos — {payload['kind']} sur {item.tracker_key}",
+                    body=item.title,
+                    url=f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
+                    severity="warning",
+                    actions=[
+                        MessageAction(id="approve", label="Approuver", style="primary", value=row.id),
+                        MessageAction(id="reject", label="Renvoyer", style="danger", value=row.id),
+                    ],
+                ),
+            )
+        # Volontairement large : aucune panne de notificateur ne doit tuer un ticket.
+        except Exception as exc:
+            notifiee = False
+            activity.logger.warning(
+                "demande humaine %s créée mais NON notifiée sur %s : %s", row.id, channel, exc
+            )
         await persist_event(
             session,
             EventType.WORKITEM_HUMAN_REQUESTED,
@@ -227,8 +248,9 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             subject=item.tracker_key,
             kind=payload["kind"],
             request_id=row.id,
+            notified=notifiee,
         )
-        return {"request_id": row.id, "reused": False}
+        return {"request_id": row.id, "reused": False, "notified": notifiee}
 
 
 @activity.defn(name="close_human_request")
