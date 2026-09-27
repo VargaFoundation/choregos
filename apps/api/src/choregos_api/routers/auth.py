@@ -37,6 +37,7 @@ from ..audit import record
 from ..config import Settings
 from ..db.models import ApiToken, Membership, Organization, User
 from ..deps import Config, Db, Me
+from ..edition import mappeur_de_groupes
 from ..errors import not_found, unauthorized
 from ..logging import get_logger
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
@@ -243,7 +244,10 @@ async def _map_groups_to_roles(
     `ecraser=False` (connexion de développement) : un rôle déjà posé — par l'amorçage, par
     un admin — n'est pas rétrogradé. L'IdP, lui, fait foi : ce qu'il dit remplace.
     """
-    roles = roles_des_groupes(groups, settings.oidc_default_org)
+    # Le mappeur du cœur, ou celui qu'un greffon a déclaré (édition entreprise : un préfixe par
+    # organisation, des groupes SAML/SCIM). L'indirection tient en une ligne et évite un fork de
+    # ce fichier — c'est tout ce que la couture C3 demandait, et rien de plus.
+    roles = mappeur_de_groupes(roles_des_groupes)(groups, settings.oidc_default_org)
     if not roles:
         return
     orgs = (await session.execute(select(Organization).where(Organization.slug.in_(roles)))).scalars().all()

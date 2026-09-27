@@ -87,3 +87,46 @@ async def test_les_metriques_disent_l_edition(client: Any) -> None:
     corps = (await client.get("/metrics")).text
     assert 'choregos_edition_info{edition="community",version=' in corps
     assert corps.count("choregos_edition_info{") == 1, "une seule série : ce n'est pas une mesure"
+
+
+@pytest.mark.asyncio
+async def test_un_greffon_peut_remplacer_le_mappage_des_groupes(client: Any, monkeypatch: Any) -> None:
+    """Couture C3 : l'édition entreprise change la traduction groupes → rôles SANS forker `auth.py`.
+
+    Le cœur sait faire un préfixe (`choregos:<org>:<role>`) et un groupe nu pour l'organisation par
+    défaut. L'entreprise en veut un autre — un préfixe PAR organisation, des groupes venus de SAML
+    ou de SCIM, une table éditable en interface. C'est la seule décision d'identité qui se
+    SUBSTITUE ; le reste (SAML, SCIM, révocation de session) sont des routes nouvelles.
+    """
+    from choregos_api.edition import declarer_le_mappeur_de_groupes, mappeur_de_groupes
+    from choregos_api.routers.auth import roles_des_groupes
+    from choregos_contracts import Role
+
+    # Sans greffon, c'est le mappeur du cœur qui sert.
+    assert mappeur_de_groupes(roles_des_groupes) is roles_des_groupes
+
+    vus: list[tuple[list[str], str]] = []
+
+    def mappeur_maison(groups: list[str], default_org: str) -> dict[str, Role]:
+        vus.append((list(groups), default_org))
+        return {"acme": Role.ORG_ADMIN}
+
+    declarer_le_mappeur_de_groupes(mappeur_maison)
+    try:
+        assert mappeur_de_groupes(roles_des_groupes) is mappeur_maison
+        # Et il est réellement appelé par la connexion : c'est ce qui distingue une couture d'un
+        # réglage décoratif.
+        # La connexion de développement REDIRIGE vers son rappel, et c'est le rappel qui traduit
+        # les groupes. S'arrêter au 307 ne prouvait rien.
+        depart = await client.get("/api/v1/auth/login", params={"as": "greffon@varga.dev"})
+        assert depart.status_code in (302, 307), depart.status_code
+        await client.get(depart.headers["location"])
+        assert vus, "le mappeur déclaré n'a pas été appelé par la connexion"
+    finally:
+        declarer_le_mappeur_de_groupes(None)
+        from choregos_api.edition import reinitialiser
+
+        reinitialiser()
+
+    # Et le cœur reprend la main dès que le greffon s'en va.
+    assert mappeur_de_groupes(roles_des_groupes) is roles_des_groupes
