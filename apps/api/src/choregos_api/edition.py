@@ -19,7 +19,7 @@ où un client l'hébergera lui-même (ADR 0024, décision 5).
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Any, Final
 
 COMMUNAUTAIRE: Final = "community"
 ENTREPRISE: Final = "enterprise"
@@ -37,6 +37,34 @@ def declarer(nom: str, *, fonctions: frozenset[str] | None = None) -> None:
     _etat["fonctions"] = fonctions or frozenset[str]()
 
 
+#: Ce que le CŒUR sait faire d'une liste de groupes d'IdP : `choregos:<org>:<role>`, et un groupe
+#: nu pour l'organisation par défaut. Une organisation, un préfixe.
+#:
+#: L'édition entreprise en veut un autre — un préfixe PAR organisation, des groupes venus de SAML
+#: ou de SCIM, une table de correspondance éditable en interface (§2.2 du plan). Elle le déclare
+#: ici, au chargement de son greffon, au lieu de forker `routers/auth.py`.
+#:
+#: Pourquoi un point d'injection et pas un `Protocol` : il y a UNE décision substituable, avec une
+#: signature stable et un appelant. Un protocole `IdentityProvider` complet aurait autant
+#: d'implémentations que de spéculations sur ce que l'entreprise voudra — et le reste de son
+#: identité (SAML, SCIM, révocation de session) sont des routes NOUVELLES, pas des substitutions.
+_MAPPEUR: dict[str, Any] = {}
+
+
+def declarer_le_mappeur_de_groupes(fonction: Any) -> None:
+    """Remplace la traduction groupes d'IdP → rôles par organisation. Le cœur ne l'appelle jamais.
+
+    Signature attendue : `(groups: list[str], default_org: str) -> dict[str, Role]` — la même que
+    `routers.auth.roles_des_groupes`, qui reste le défaut.
+    """
+    _MAPPEUR["fonction"] = fonction
+
+
+def mappeur_de_groupes(defaut: Any) -> Any:
+    """Le mappeur en service : celui qu'un greffon a déclaré, sinon celui du cœur."""
+    return _MAPPEUR.get("fonction") or defaut
+
+
 def courante() -> str:
     return str(_etat["edition"])
 
@@ -52,5 +80,6 @@ def est_entreprise() -> bool:
 
 
 def reinitialiser() -> None:
-    """Pour les tests : revient au défaut le plus restrictif."""
+    """Pour les tests : revient au défaut le plus restrictif, et au mappeur du cœur."""
     declarer(COMMUNAUTAIRE)
+    _MAPPEUR.pop("fonction", None)

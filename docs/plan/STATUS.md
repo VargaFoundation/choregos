@@ -692,3 +692,30 @@ les 492 tests ne disaient pas :
     `runner/outils_locaux.py` sert déjà ces outils quand personne ne le fait — son en-tête décrit
     exactement le défaut que je pensais trouver. Ma condition a donc retiré une annonce **vraie**,
     et le sidecar rétablit à grands frais ce que le runner faisait seul. Corrigé.
+
+12. **Couture C3 : livrée à moitié, et la moitié non livrée est un refus argumenté.**
+
+    Le plan demandait `IdentityProvider` et `TenancyPolicy` en `Protocol`, pour que l'édition
+    entreprise substitue sans forker `auth.py` ni `deps.py`. En regardant les points de décision
+    réels, il n'y en avait qu'un de substituable.
+
+    **La tenancy n'a pas besoin de protocole** : la seule décision est « une seconde organisation
+    peut-elle exister ? », et elle passe déjà par `edition.est_entreprise()`. L'édition entreprise
+    appelle `declarer(ENTREPRISE)` depuis son greffon (couture C1) et la garde s'ouvre — sans
+    toucher à `projects.py`. La couture existe donc, elle s'appelle `edition.declarer`. Ce que
+    l'entreprise ajoute par-dessus (suspension d'organisation, plafonds par organisation, RLS sur
+    les treize tables restantes) sont des routes et des colonnes **nouvelles**, pas des
+    substitutions : un `TenancyPolicy` n'aurait eu qu'une implémentation et qu'un appelant.
+
+    **L'identité en a besoin pour un seul point** : la traduction groupes d'IdP → rôles par
+    organisation. Le cœur sait faire un préfixe (`choregos:<org>:<role>`) ; l'entreprise en veut un
+    par organisation, et des groupes venus de SAML ou de SCIM (§2.2). C'est livré par
+    `edition.declarer_le_mappeur_de_groupes`, avec un test qui vérifie que le mappeur déclaré est
+    **réellement appelé par la connexion** — sans quoi ce serait un réglage décoratif. Le reste de
+    l'identité d'entreprise (SAML, SCIM, révocation de session, ré-authentification forte) sont des
+    routes nouvelles.
+
+    Pourquoi c'est écrit ici plutôt que construit : un protocole à une implémentation est le genre
+    d'abstraction que ce plan dit lui-même de refuser (§8, et la même leçon que C2, où les gates
+    étaient déjà extensibles). Le jour où l'édition entreprise existe et veut autre chose, elle le
+    demandera avec un cas précis — et ce sera moins cher que de deviner aujourd'hui.
