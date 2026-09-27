@@ -56,6 +56,18 @@ def declarer_le_mappeur_de_groupes(fonction: Any) -> None:
 
     Signature attendue : `(groups: list[str], default_org: str) -> dict[str, Role]` — la même que
     `routers.auth.roles_des_groupes`, qui reste le défaut.
+
+    ⚠️ **Un mappeur de remplacement doit DÉLÉGUER au mappeur du cœur pour ce qu'il ne comprend
+    pas**, au lieu de rendre un dictionnaire vide. Il remplace la traduction ENTIÈRE : un mappeur
+    qui ne lit que `<org>/<role>` fait perdre au déploiement ses connexions en
+    `choregos:<org>:<role>` — y compris celle de l'amorçage et celle du développement. Constaté en
+    éprouvant cette couture avec un greffon installé pour de vrai : `403 … il manque ['varga']` sur
+    la création d'une organisation, et la cause n'était pas là où le message pointait.
+
+        def le_mien(groups, default_org):
+            roles = dict(roles_des_groupes(groups, default_org))   # d'abord le cœur
+            ...                                                    # puis les formes maison
+            return roles
     """
     _MAPPEUR["fonction"] = fonction
 

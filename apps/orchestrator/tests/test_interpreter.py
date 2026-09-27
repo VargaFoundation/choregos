@@ -93,13 +93,44 @@ async def test_default_simple_full_traversal(setup: Fixture, temporal_env: Any, 
     assert "agent refine" in comment and "agent implement" in comment
 
 
+async def _runs(setup: Fixture) -> int:
+    """Combien d'étapes d'agent ont tourné pour ce ticket."""
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import func, select
+
+    async with session_scope() as session:
+        return int(
+            (
+                await session.execute(
+                    select(func.count()).select_from(Run).where(Run.work_item_id == setup.work_item_id)
+                )
+            ).scalar_one()
+        )
+
+
 async def test_human_rejection_returns_to_refining(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
+    """Un refus renvoie le ticket se faire une SECONDE spec, et il repasse par la porte humaine.
+
+    Ce test s'appelle `returns_to_refining` et n'observait jamais `refining` : il attendait
+    `awaiting_spec_approval`, puis RE-INTERROGEAIT l'état et l'affirmait. Deux appels, et l'état
+    peut bouger entre les deux — il a rougi en groupe le 2026-09-28 sur
+    `assert 'refining' == 'awaiting_spec_approval'`, parce que l'attente avait reconnu le PREMIER
+    passage par la porte, avant que le refus soit traité.
+
+    `refining` est un état de PASSAGE : le scruter est la même illusion que celle déjà corrigée
+    dans `_wait_until` et dans `test_pause_and_resume`. Ce qui se constate sans course, c'est son
+    effet — une seconde étape d'agent a tourné.
+    """
     scripted(setup.adapters, stage_result("spec v1"), stage_result("spec v2"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
+        apres_la_premiere = await _runs(setup)
+        assert apres_la_premiere == 1, apres_la_premiere
+
         await handle.signal(
             "human_decision",
             {
@@ -109,9 +140,17 @@ async def test_human_rejection_returns_to_refining(
                 "reason": "périmètre trop large",
             },
         )
+        # L'effet du refus, pas l'état à un instant : une SECONDE étape d'agent tourne.
+        import asyncio
+
+        for _ in range(600):
+            if await _runs(setup) > apres_la_premiere:
+                break
+            await asyncio.sleep(0.1)
+        assert await _runs(setup) == 2, "le refus n'a pas renvoyé le ticket se faire une seconde spec"
+
+        # Et il revient bien attendre un humain, avec la seconde spec.
         await _wait_state(handle, "awaiting_spec_approval")
-        status = await handle.query("status")
-        assert status["state"] == "awaiting_spec_approval"
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
