@@ -63,6 +63,16 @@ spec:
               # il désignait `1.0.0` dans une installation 0.1.0 — une image absente, et un
               # pod d'agent en ErrImagePull que rien d'autre n'explique.
               value: {{ $root.Values.global.imageRegistry }}/{{ $root.Values.runner.image }}:{{ $root.Values.runner.tag | default $root.Values.global.imageTag }}
+            # Le sidecar qui SERT le catalogue d'outils dans le pod d'agent, sur localhost:7777.
+            # Sans lui, un agent en `k8s_job` ne peut appeler aucun outil du catalogue : ce
+            # serveur n'existait que dans la Task Tekton, et c'est la raison pour laquelle le
+            # registre de coûts n'a jamais porté de ligne `kind=tool`. Vide (`toolCatalog.configMap`
+            # non renseigné) : aucun sidecar, et l'orchestrateur n'annonce aucun outil — l'absence
+            # est dite plutôt que subie.
+            {{- if $root.Values.global.toolCatalog.configMap }}
+            - name: CHOREGOS_TOOLS_IMAGE
+              value: {{ $root.Values.global.imageRegistry }}/{{ $root.Values.runner.toolsImage | default "choregos-tools" }}:{{ $root.Values.runner.toolsTag | default $root.Values.global.imageTag }}
+            {{- end }}
             - name: CHOREGOS_RUNNER_NAMESPACE_PATTERN
               value: {{ $root.Values.runner.namespacePattern | quote }}
             - name: CHOREGOS_EXECUTOR_KIND

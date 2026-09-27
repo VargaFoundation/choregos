@@ -131,10 +131,17 @@ async def test_le_sidecar_d_outils_n_est_annonce_que_si_l_executeur_le_monte() -
     tekton = OrchestratorSettings(executor_kind="tekton", memory_url="http://ecphoria:8432")
     assert "choregos" in _serveurs_mcp(tekton), "sous tekton, le sidecar existe"
 
-    k8s = OrchestratorSettings(executor_kind="k8s_job", memory_url="http://ecphoria:8432")
-    assert "choregos" not in _serveurs_mcp(k8s), (
-        "sous k8s_job, aucun sidecar n'est monté : l'annoncer fait attendre l'agent pour rien"
+    k8s_sans_image = OrchestratorSettings(executor_kind="k8s_job", memory_url="http://ecphoria:8432")
+    assert "choregos" not in _serveurs_mcp(k8s_sans_image), (
+        "sans image d'outils, le Job ne monte aucun sidecar : l'annoncer fait attendre l'agent"
     )
+
+    # Depuis le 2026-09-27, `k8s_job` monte le sidecar lui-même — mais seulement si une image
+    # est configurée. Les deux moitiés doivent s'accorder : le Job qui monte, l'URL qu'on annonce.
+    k8s_avec_image = OrchestratorSettings(
+        executor_kind="k8s_job", memory_url="http://ecphoria:8432", tools_image="reg/outils:1"
+    )
+    assert _serveurs_mcp(k8s_avec_image)["choregos"].url == "http://localhost:7777/mcp"
 
 
 async def test_l_url_de_la_memoire_vient_de_son_reglage_pas_d_un_remplacement_de_port() -> None:

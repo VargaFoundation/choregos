@@ -27,6 +27,10 @@ from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
 from .tekton import CORE_API, KubernetesClient, _parse_time
 
 BATCH_API = "/apis/batch/v1"
+#: Le port du sidecar qui sert le catalogue d'outils. La même valeur que la Task Tekton
+#: (`templates/github-tekton-argo-k8s/tekton/agent-stage.yaml`) et que l'URL annoncée à l'agent
+#: (`OrchestratorSettings.tools_mcp_url`) : trois endroits, une valeur, et un test qui les compare.
+TOOLS_PORT = 7777
 RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernetes.io/component": "runner"}
 
 
@@ -47,6 +51,7 @@ class KubernetesJobExecutor:
         memory_limit: str = "6Gi",
         env_from_secrets: list[str] | None = None,
         max_active: int = 0,
+        tools_image: str = "",
     ) -> None:
         self.client = client or KubernetesClient()
         self.service_account = service_account
@@ -63,6 +68,14 @@ class KubernetesJobExecutor:
         # plafond, le comportement d'avant : un déploiement qui ne dit rien ne change pas
         # de régime du jour au lendemain.
         self.max_active = max(0, int(max_active))
+        # Le sidecar qui SERT le catalogue d'outils à l'agent, sur `localhost:7777`. Vide :
+        # aucun outil, et l'orchestrateur n'en annonce alors aucun — ce qui est la vérité.
+        #
+        # Jusqu'au 2026-09-27, ce sidecar n'existait QUE dans la Task Tekton. L'exécuteur
+        # `k8s_job` n'en montait aucun, et c'est la raison structurelle pour laquelle le
+        # registre de coûts n'avait jamais porté de ligne `kind=tool` : monter un catalogue ne
+        # suffit pas, il faut un exécuteur qui le serve.
+        self.tools_image = tools_image
 
     def _name(self, run_id: str) -> str:
         return f"run-{run_id}"[:63].lower()
@@ -192,6 +205,65 @@ class KubernetesJobExecutor:
             "data": {"token": base64.b64encode(spec.run_token.encode()).decode()},
         }
 
+    def _sidecar_d_outils(self, spec: StageJobSpec, secret: str) -> dict[str, Any]:
+        """Le serveur MCP qui sert le catalogue à l'agent, dans SON pod.
+
+        Déclaré en `initContainers` avec `restartPolicy: Always` : c'est un **sidecar natif**
+        (Kubernetes ≥ 1.29, GA). Deux propriétés qu'un conteneur ordinaire n'a pas, et dont
+        chacune est nécessaire ici :
+
+        * il démarre AVANT le conteneur principal, et Kubernetes attend sa sonde de disponibilité.
+          L'agent trouve donc `localhost:7777` prêt à son premier appel, au lieu de courir contre
+          lui ;
+        * Kubernetes l'ARRÊTE quand le conteneur principal se termine. Un sidecar ordinaire dans
+          un Job ne s'arrête jamais et le Job ne se complète jamais — le run resterait éternellement
+          « en cours », ce qui est précisément le genre de silence que ce produit combat.
+
+        Le jeton du run lui est donné par référence au Secret que l'exécuteur vient d'écrire, pas
+        par valeur : une valeur recopiée dans la spec du Job serait lisible par qui peut lire un pod.
+        Et c'est le MÊME jeton que celui de l'agent — le sidecar appelle l'API interne pour le
+        compte de ce run, et de rien d'autre.
+        """
+        return {
+            "name": "outils",
+            "image": self.tools_image,
+            # Ce mot-clé est tout : sans lui, le Job ne se termine jamais.
+            "restartPolicy": "Always",
+            "env": [
+                {"name": "CHOREGOS_RUN_ID", "value": spec.run_id},
+                {"name": "CHOREGOS_API_URL", "value": spec.api_url},
+                {
+                    "name": "CHOREGOS_RUN_TOKEN",
+                    "valueFrom": {"secretKeyRef": {"name": secret, "key": "token"}},
+                },
+                {"name": "CHOREGOS_TOOLS_PORT", "value": str(TOOLS_PORT)},
+            ],
+            "readinessProbe": {
+                "httpGet": {"path": "/healthz", "port": TOOLS_PORT},
+                "initialDelaySeconds": 2,
+                "periodSeconds": 2,
+                # Trente secondes avant d'abandonner : un pod qui tire une image froide y arrive,
+                # et au-delà c'est une panne, pas une lenteur.
+                "failureThreshold": 15,
+            },
+            # Un serveur qui relaie des appels HTTP : petit, et borné pour ne pas manger le
+            # plafond du pod d'agent sous un LimitRange.
+            "resources": {
+                "requests": {"cpu": "50m", "memory": "128Mi"},
+                "limits": {"cpu": "500m", "memory": "512Mi"},
+            },
+            # Le même contexte que le conteneur runner, et pas plus strict. `readOnlyRootFilesystem`
+            # serait une bonne hygiène, mais il n'a jamais été éprouvé sur ce serveur — et l'échec
+            # ne serait pas anodin : la sonde de disponibilité du sidecar bloque le DÉMARRAGE du
+            # conteneur principal, donc un sidecar qui ne monte pas empêche tout run de partir.
+            # À resserrer le jour où quelqu'un l'aura vérifié, pas avant.
+            "securityContext": {
+                "allowPrivilegeEscalation": False,
+                "capabilities": {"drop": ["ALL"]},
+                "seccompProfile": {"type": "RuntimeDefault"},
+            },
+        }
+
     def _job(self, spec: StageJobSpec, name: str) -> dict[str, Any]:
         pod_spec: dict[str, Any] = {
             "restartPolicy": "Never",
@@ -238,6 +310,8 @@ class KubernetesJobExecutor:
             ],
             "volumes": [{"name": "workspace", "emptyDir": {"sizeLimit": "10Gi"}}],
         }
+        if self.tools_image:
+            pod_spec["initContainers"] = [self._sidecar_d_outils(spec, name)]
         if spec.runtime_class:
             pod_spec["runtimeClassName"] = spec.runtime_class
         return {

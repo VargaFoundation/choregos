@@ -44,6 +44,10 @@ class OrchestratorSettings(BaseSettings):
     #: serveur d'outils inexistant. Vide = ne rien annoncer, et c'est ce que `url_du_sidecar`
     #: rend quand l'exécuteur ne le fournit pas.
     tools_mcp_url: str = "http://localhost:7777/mcp"
+    #: L'image du sidecar qui sert le catalogue d'outils dans le pod d'agent (exécuteur
+    #: `k8s_job`). Vide : aucun sidecar, donc aucun outil annoncé — l'absence est dite, pas
+    #: subie. Sous `tekton`, c'est la Task qui porte le sidecar et cette valeur ne sert pas.
+    tools_image: str = ""
     runner_image: str = "ghcr.io/vargafoundation/choregos-runner:1.0.0"
     executor_kind: str = "tekton"
     # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
@@ -78,9 +82,13 @@ class OrchestratorSettings(BaseSettings):
         catalogue était hors de portée. Mieux vaut n'annoncer aucun outil — c'est faux dans les
         deux cas, mais l'un des deux se voit.
         """
-        if self.executor_kind not in EXECUTEURS_AVEC_SIDECAR_MCP:
-            return ""
-        return self.tools_mcp_url
+        if self.executor_kind == "tekton":
+            # La Task Tekton porte le sidecar dans sa définition : rien d'autre à exiger.
+            return self.tools_mcp_url
+        if self.executor_kind == "k8s_job" and self.tools_image:
+            # Le Job monte le sidecar lui-même, et seulement si une image est configurée.
+            return self.tools_mcp_url
+        return ""
 
     object_store_url: str = "s3://choregos"
     public_url: str = "http://localhost:3000"
@@ -91,11 +99,6 @@ class OrchestratorSettings(BaseSettings):
     heartbeat_seconds: int = 60
     # Polling de secours du tracker (S3-06) : 0 désactive le rattrapage.
     reconcile_interval_seconds: int = 60
-
-
-#: Les exécuteurs qui montent le sidecar MCP du catalogue. C'est une propriété de l'exécuteur,
-#: pas un réglage : un déploiement ne peut pas décider qu'un `k8s_job` a un sidecar qu'il n'a pas.
-EXECUTEURS_AVEC_SIDECAR_MCP = frozenset({"tekton"})
 
 
 @lru_cache(maxsize=1)
