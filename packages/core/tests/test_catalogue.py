@@ -120,3 +120,88 @@ def test_sans_groupe_declare_l_outil_ne_restreint_rien() -> None:
     outil = charger_catalogue(CATALOGUE).par_nom("recherche_profils")
     assert outil is not None and outil.groups == []
     assert outil.ouvert_a([]) and outil.ouvert_a(["n'importe quoi"])
+
+
+# ──────── ce que l'agent envoie ne choisit pas la cible (2026-09-27) ────────
+
+CHEMIN_GABARIT = """
+outils:
+  - name: lire_un_depot
+    description: Lit les métadonnées publiques d'un dépôt GitHub.
+    provider: github
+    input_schema:
+      type: object
+      required: [owner, repo]
+      properties:
+        owner: { type: string, pattern: "^[A-Za-z0-9._-]+$" }
+        repo: { type: string, pattern: "^[A-Za-z0-9._-]+$" }
+    http:
+      method: GET
+      url: https://api.github.com/repos/{{ owner }}/{{ repo }}
+    price_eur: 0.0
+"""
+
+
+def test_un_argument_ne_peut_pas_remonter_le_chemin_de_l_url() -> None:
+    """Le catalogue existe pour que l'agent ne choisisse PAS l'URL (ADR 0014).
+
+    L'hôte est écrit dans le catalogue, donc il ne bouge pas. Mais tant que la valeur était
+    substituée nue, `owner` valant `..` remontait d'un segment : un outil censé lire
+    `/repos/<org>/<dépôt>` atteignait n'importe quel autre point d'entrée du même hôte — **avec la
+    clé du fournisseur que la plateforme y attache**. L'en-tête de ce fichier affirmait depuis
+    toujours que « l'URL n'est jamais libre » ; elle l'était en partie.
+    """
+    outil = charger_catalogue(CHEMIN_GABARIT).par_nom("lire_un_depot")
+    assert outil is not None
+
+    # L'encodage seul ne suffisait PAS, et c'est le piège : `quote("..")` rend `..`, le point
+    # étant un caractère non réservé. `/repos/../user` se normalise en `/user` — un autre point
+    # d'entrée du même hôte. C'est la comparaison au préfixe qui refuse.
+    with pytest.raises(ArgumentRefuseError) as refus:
+        construire_requete(outil, {"owner": "..", "repo": "user"}, None)
+    assert "sorti du chemin" in str(refus.value), refus.value
+
+    # Une valeur qui tenterait d'ajouter un segment, une requête ou un fragment est encodée.
+    requete = construire_requete(outil, {"owner": "org", "repo": "d?token=x#y"}, None)
+    assert requete["url"] == "https://api.github.com/repos/org/d%3Ftoken%3Dx%23y"
+    requete = construire_requete(outil, {"owner": "org/autre", "repo": "d"}, None)
+    assert requete["url"] == "https://api.github.com/repos/org%2Fautre/d"
+
+    # Et le cas nominal passe, inchangé.
+    requete = construire_requete(outil, {"owner": "VargaFoundation", "repo": "choregos"}, None)
+    assert requete["url"] == "https://api.github.com/repos/VargaFoundation/choregos"
+
+
+def test_un_argument_hors_schema_est_refuse_avant_l_appel() -> None:
+    """`input_schema` était DÉCORATIF : annoncé à l'agent, jamais vérifié.
+
+    C'est l'`inputSchema` que `GET /internal/runs/{id}/tools` rend au format MCP. Un agent avait
+    toutes les raisons de le croire contraignant. Un schéma annoncé et non appliqué décrit une
+    garantie qui n'existe pas.
+    """
+    from choregos_core.catalogue import valider_les_arguments
+
+    outil = charger_catalogue(CHEMIN_GABARIT).par_nom("lire_un_depot")
+    assert outil is not None
+
+    valider_les_arguments(outil, {"owner": "VargaFoundation", "repo": "choregos"})  # nominal
+
+    with pytest.raises(ArgumentRefuseError) as refus:
+        valider_les_arguments(outil, {"owner": "../..", "repo": "choregos"})
+    assert "owner" in str(refus.value), f"le refus doit nommer l'argument : {refus.value}"
+
+    with pytest.raises(ArgumentRefuseError):
+        valider_les_arguments(outil, {"owner": "org"})  # `repo` requis et absent
+
+    with pytest.raises(ArgumentRefuseError):
+        valider_les_arguments(outil, {"owner": 42, "repo": "choregos"})  # mauvais type
+
+
+def test_un_outil_sans_schema_n_impose_rien() -> None:
+    """Le catalogue doit rester écrivable à la main pour un outil trivial."""
+    from choregos_core.catalogue import valider_les_arguments
+
+    outil = charger_catalogue(CATALOGUE).par_nom("recherche_profils")
+    assert outil is not None
+    outil.input_schema = {}
+    valider_les_arguments(outil, {"n_importe": "quoi"})
