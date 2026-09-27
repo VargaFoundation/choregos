@@ -371,9 +371,12 @@ async def test_le_sidecar_d_outils_est_un_sidecar_natif() -> None:
         "sans `restartPolicy: Always`, ce conteneur ne s'arrête pas et le Job ne se complète jamais"
     )
     assert sidecar["image"] == "reg/choregos-tools:0.8.0"
-    assert sidecar["readinessProbe"]["httpGet"]["port"] == TOOLS_PORT, (
-        "l'agent appelle localhost:7777 : attendre la sonde évite une course au premier appel"
+    sonde = sidecar["readinessProbe"]
+    assert "httpGet" not in sonde, (
+        "le serveur n'écoute que sur 127.0.0.1 et kubelet sonde l'IP du pod : une sonde httpGet "
+        "ne peut JAMAIS réussir, et Kubernetes tue alors un service sain en boucle"
     )
+    assert f"127.0.0.1:{TOOLS_PORT}" in " ".join(sonde["exec"]["command"]), sonde
 
     env = {v["name"]: v for v in sidecar["env"]}
     assert env["CHOREGOS_TOOLS_PORT"]["value"] == str(TOOLS_PORT)

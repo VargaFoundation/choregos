@@ -60,6 +60,10 @@ spec:
         - { name: CHOREGOS_API_URL, value: $(params.api-url) }
         - { name: CHOREGOS_RUN_ID, value: $(params.run-id) }
         - { name: CHOREGOS_TOOLS_PORT, value: "7777" }
+      # `exec` et non `httpGet` : le serveur n'écoute que sur 127.0.0.1 (voulu — un sidecar
+      # d'outils ne doit être joignable que par l'agent de SON pod), or kubelet envoie une sonde
+      # httpGet à l'IP du pod. Elle ne pouvait donc jamais réussir, depuis le premier jour.
       readinessProbe:
-        httpGet: { path: /healthz, port: 7777 }
+        exec:
+          command: ["python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:7777/healthz', timeout=2)"]
         initialDelaySeconds: 2
