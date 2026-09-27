@@ -9,6 +9,8 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
+from .planification import executer_activite
+
 with workflow.unsafe.imports_passed_through():
     from ..activities import provisioning as provisioning_activities
 
@@ -41,7 +43,7 @@ class ProjectProvisioning:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = ProvisioningInput(**payload)
-        template = await workflow.execute_activity(
+        template = await executer_activite(
             provisioning_activities.load_template_steps,
             {"template_ref": params.template_ref},
             start_to_close_timeout=timedelta(seconds=30),
@@ -54,7 +56,7 @@ class ProjectProvisioning:
         for step in steps:
             self.current = step["name"]
             try:
-                outcome = await workflow.execute_activity(
+                outcome = await executer_activite(
                     provisioning_activities.run_provision_step,
                     {
                         "project_id": params.project_id,
@@ -72,7 +74,7 @@ class ProjectProvisioning:
             self.completed.append(outcome["step"])
         self.current = None
 
-        result = await workflow.execute_activity(
+        result = await executer_activite(
             provisioning_activities.finish_provisioning,
             {"project_id": params.project_id},
             start_to_close_timeout=timedelta(minutes=2),

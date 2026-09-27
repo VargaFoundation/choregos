@@ -15,6 +15,8 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
+from .planification import executer_activite
+
 with workflow.unsafe.imports_passed_through():
     from ..activities import tracker as tracker_activities
 
@@ -59,7 +61,7 @@ class TrackerReconciliation:
         params = ReconciliationInput(**payload)
         done = 0
         while not self.stopped and done < params.max_passes:
-            self.last = await workflow.execute_activity(
+            self.last = await executer_activite(
                 tracker_activities.reconcile_tracker,
                 {"project_slug": params.project_slug},
                 start_to_close_timeout=timedelta(minutes=5),

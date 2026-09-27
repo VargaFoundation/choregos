@@ -15,6 +15,8 @@
 
 Task queues : `orchestrator` (workflows + activités légères), `executor` (création/suivi de runs), `tracker` (appels API externes, rate-limités), `memory`. Workers : `apps/orchestrator/worker.py --queues …` ; déploiement 2+ réplicas par queue (section 6).
 
+La table qui dit **quelle activité va sur quelle file** vit dans `choregos_orchestrator.repartition`, et les workflows planifient chaque activité sur la file déclarée via `workflows.planification.executer_activite`. Ce détail n'en est pas un : jusqu'au 2026-09-27, la table n'était lue que par le worker (pour savoir ce qu'il enregistre) et jamais par les workflows (pour savoir où planifier). `workflow.execute_activity` sans `task_queue` planifie sur la file du *workflow* — donc tout tournait sur `orchestrator`, les trois workers spécialisés ne recevaient rien, et une politique réseau écrite d'après la répartition déclarée échouait. Les quatre historiques de `tests/replay/` en portent la trace : 83 activités planifiées, **toutes** sur `orchestrator`.
+
 ### `WorkflowInterpreter` — algorithme
 
 ```python

@@ -15,6 +15,8 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
+from .planification import executer_activite
+
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import ReleaseStatus
 
@@ -121,7 +123,7 @@ class ReleaseTrain:
         self.batch_no = params.batch_no
         self.frozen = params.frozen
 
-        config = await workflow.execute_activity(
+        config = await executer_activite(
             train_activities.load_train_config,
             {"project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(seconds=30),
@@ -159,7 +161,7 @@ class ReleaseTrain:
         self.status = str(ReleaseStatus.COLLECTING)
         batch_max = int(config.get("batch_max", 8))
         while True:
-            window = await workflow.execute_activity(
+            window = await executer_activite(
                 train_activities.check_window,
                 {"config": config},
                 start_to_close_timeout=timedelta(seconds=30),
@@ -197,7 +199,7 @@ class ReleaseTrain:
         items = list(self.batch)
         self.batch = []
         self.status = str(ReleaseStatus.DEPARTING)
-        release = await workflow.execute_activity(
+        release = await executer_activite(
             train_activities.create_release,
             {
                 "project_slug": params.project_slug,
@@ -212,7 +214,7 @@ class ReleaseTrain:
         self.current_release = release["release_id"]
         self.batch_no += 1
 
-        promoted = await workflow.execute_activity(
+        promoted = await executer_activite(
             train_activities.promote,
             {"release_id": self.current_release, "project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(minutes=10),
@@ -225,7 +227,7 @@ class ReleaseTrain:
         soak_minutes = int(
             (config.get("express_soak_minutes") if express else config.get("soak_minutes")) or 10
         )
-        smoke = await workflow.execute_activity(
+        smoke = await executer_activite(
             train_activities.run_smoke,
             {"release_id": self.current_release, "project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(minutes=15),
@@ -234,7 +236,7 @@ class ReleaseTrain:
         if not smoke.get("ok"):
             return await self._rollback(params, config, "smoke tests en échec")
 
-        soak = await workflow.execute_activity(
+        soak = await executer_activite(
             train_activities.soak,
             {
                 "release_id": self.current_release,
@@ -252,7 +254,7 @@ class ReleaseTrain:
         if approval.get("required"):
             self.status = str(ReleaseStatus.AWAITING_APPROVAL)
             self.approved = None
-            await workflow.execute_activity(
+            await executer_activite(
                 train_activities.request_approval,
                 {
                     "release_id": self.current_release,
@@ -268,7 +270,7 @@ class ReleaseTrain:
             if self.abort_requested or self.approved is False or not got:
                 self.batch = items + self.batch  # le lot repart au prochain tour
                 self.status = str(ReleaseStatus.COLLECTING)
-                await workflow.execute_activity(
+                await executer_activite(
                     train_activities.mark_release,
                     {
                         "release_id": self.current_release,
@@ -282,7 +284,7 @@ class ReleaseTrain:
 
         # L'infra passe avant le code : appliquer Terraform après le canary reviendrait à
         # envoyer du code en production sur une infra qui ne l'attend pas encore.
-        terraform = await workflow.execute_activity(
+        terraform = await executer_activite(
             train_activities.apply_terraform,
             {
                 "release_id": self.current_release,
@@ -301,7 +303,7 @@ class ReleaseTrain:
         steps = list(canary.get("steps", [100]))
         step_minutes = list(canary.get("step_minutes", [0] * len(steps)))
         for index, weight in enumerate(steps):
-            analysis = await workflow.execute_activity(
+            analysis = await executer_activite(
                 train_activities.promote_canary_step,
                 {
                     "release_id": self.current_release,
@@ -319,7 +321,7 @@ class ReleaseTrain:
                 return await self._rollback(params, config, analysis.get("reason", "analyse canary KO"))
 
         self.status = str(ReleaseStatus.VERIFYING)
-        verdict = await workflow.execute_activity(
+        verdict = await executer_activite(
             train_activities.verify_prod,
             {"release_id": self.current_release, "project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(minutes=30),
@@ -331,7 +333,7 @@ class ReleaseTrain:
             )
 
         self.status = str(ReleaseStatus.DONE)
-        await workflow.execute_activity(
+        await executer_activite(
             train_activities.finish_release,
             {
                 "release_id": self.current_release,
@@ -347,7 +349,7 @@ class ReleaseTrain:
     async def _rollback(self, params: TrainInput, config: dict[str, Any], reason: str) -> dict[str, Any]:
         """Rollback : annuler, marquer, notifier, geler si la politique le demande."""
         self.status = str(ReleaseStatus.ROLLED_BACK)
-        await workflow.execute_activity(
+        await executer_activite(
             train_activities.rollback,
             {
                 "release_id": self.current_release,

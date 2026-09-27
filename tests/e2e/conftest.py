@@ -164,15 +164,15 @@ async def platform(tmp_path: Any) -> AsyncIterator[Platform]:
 @pytest.fixture
 def worker(platform: Platform) -> Any:
     from choregos_orchestrator.activities import ALL_ACTIVITIES
+    from choregos_orchestrator.testing import workers_repartis
     from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
-    from temporalio.worker import Worker
 
-    def factory(task_queue: str = "e2e") -> Worker:
-        return Worker(
+    def factory(task_queue: str = "e2e") -> Any:
+        return workers_repartis(
             platform.env.client,
-            task_queue=task_queue,
+            activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
             workflows=ALL_WORKFLOWS,
-            activities=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+            file_du_workflow=task_queue,
         )
 
     return factory

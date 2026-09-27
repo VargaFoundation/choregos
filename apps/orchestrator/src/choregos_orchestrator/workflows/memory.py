@@ -12,6 +12,8 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
+from .planification import executer_activite
+
 with workflow.unsafe.imports_passed_through():
     from ..activities import memory as memory_activities
 
@@ -80,7 +82,7 @@ class MemoryIngestion:
                 )
             while self.events:
                 event = self.events.popleft()
-                await workflow.execute_activity(
+                await executer_activite(
                     memory_activities.ingest_alert,
                     {"project_slug": params.project_slug, "event": event},
                     start_to_close_timeout=timedelta(minutes=2),
@@ -88,7 +90,7 @@ class MemoryIngestion:
                 )
             wanted = self.requested or sources
             self.requested = None
-            outcome = await workflow.execute_activity(
+            outcome = await executer_activite(
                 memory_activities.ingest_sources,
                 {"project_slug": params.project_slug, "sources": wanted},
                 start_to_close_timeout=timedelta(minutes=15),
@@ -112,7 +114,7 @@ class MemoryIngestion:
         week = workflow.now().isocalendar().week
         if week == (self.last_report_week or params.last_report_week):
             return
-        self.last_report = await workflow.execute_activity(
+        self.last_report = await executer_activite(
             memory_activities.memory_ab_report,
             {"org": params.org, "weeks": params.ab_report_weeks, "notify": True},
             start_to_close_timeout=timedelta(minutes=5),
