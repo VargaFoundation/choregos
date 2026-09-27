@@ -12,8 +12,8 @@ from sqlalchemy import select
 
 from ..audit import record
 from ..db.models import Template
-from ..deps import Db, Me
-from ..errors import forbidden, not_found, unprocessable
+from ..deps import Db, Me, exiger_admin_de_plateforme
+from ..errors import not_found, unprocessable
 from ..schemas import TemplateDetail, TemplateSummary, TemplateUpsert
 
 router = APIRouter(tags=["templates"])
@@ -122,8 +122,10 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
     operation_id="createTemplate",
 )
 async def create_template(body: TemplateUpsert, session: Db, principal: Me) -> TemplateSummary:
-    if not principal.is_platform_admin():
-        raise forbidden("publier un template demande le rôle org_admin")
+    # Un template est de PLATEFORME (son audit porte `org_id=None`) : le droit se juge donc sur
+    # l'instance, pas sur une organisation. `is_platform_admin()` rendait vrai pour l'admin de
+    # n'importe quel locataire.
+    await exiger_admin_de_plateforme(session, principal)
     _validate_manifest(body.manifest)
     metadata = body.manifest.get("metadata", {})
     row = Template(
@@ -156,8 +158,7 @@ async def create_template(body: TemplateUpsert, session: Db, principal: Me) -> T
 
 @router.put("/templates/{name}", response_model=TemplateSummary, operation_id="updateTemplate")
 async def update_template(name: str, body: TemplateUpsert, session: Db, principal: Me) -> TemplateSummary:
-    if not principal.is_platform_admin():
-        raise forbidden("modifier un template demande le rôle org_admin")
+    await exiger_admin_de_plateforme(session, principal)
     _validate_manifest(body.manifest)
     metadata = body.manifest.get("metadata", {})
     row = (

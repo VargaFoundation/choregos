@@ -19,7 +19,7 @@ from ..db.models import (
     Project,
     User,
 )
-from ..deps import Db, Me, Pagination
+from ..deps import Db, Me, Pagination, exiger_admin_de_plateforme
 from ..errors import forbidden, not_found
 from ..schemas import (
     AgentBackendInfo,
@@ -46,11 +46,6 @@ KNOWN_BACKENDS = [
 ]
 
 
-def _require_admin(principal: Me) -> None:
-    if not principal.is_platform_admin():
-        raise forbidden("réservé aux administrateurs de la plateforme")
-
-
 @router.get("/platform/backends", response_model=list[AgentBackendInfo], operation_id="listBackends")
 async def list_backends(session: Db, principal: Me) -> list[AgentBackendInfo]:
     rows = {row.name: row for row in (await session.execute(select(BackendRegistryRow))).scalars().all()}
@@ -74,7 +69,7 @@ async def list_backends(session: Db, principal: Me) -> list[AgentBackendInfo]:
 
 @router.put("/platform/backends", response_model=AgentBackendInfo, operation_id="putBackend")
 async def put_backend(body: AgentBackendUpdate, session: Db, principal: Me) -> AgentBackendInfo:
-    _require_admin(principal)
+    await exiger_admin_de_plateforme(session, principal)
     row = (
         await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == body.name))
     ).scalar_one_or_none()
@@ -128,7 +123,7 @@ async def list_executors(session: Db, principal: Me) -> list[ExecutorInfo]:
 
 @router.put("/platform/executors", response_model=ExecutorInfo, operation_id="putExecutor")
 async def put_executor(body: ExecutorInfo, session: Db, principal: Me) -> ExecutorInfo:
-    _require_admin(principal)
+    await exiger_admin_de_plateforme(session, principal)
     row = (
         await session.execute(select(ExecutorRow).where(ExecutorRow.kind == body.kind))
     ).scalar_one_or_none()
@@ -153,7 +148,7 @@ async def put_executor(body: ExecutorInfo, session: Db, principal: Me) -> Execut
 
 @router.get("/platform/gateway/keys", response_model=list[GatewayKeyInfo], operation_id="listGatewayKeys")
 async def list_gateway_keys(session: Db, principal: Me) -> list[GatewayKeyInfo]:
-    _require_admin(principal)
+    await exiger_admin_de_plateforme(session, principal)
     rows = (
         (await session.execute(select(GatewayKeyRow).order_by(GatewayKeyRow.created_at.desc()).limit(200)))
         .scalars()

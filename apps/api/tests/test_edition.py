@@ -81,4 +81,41 @@ async def test_sans_organisation_ce_n_est_pas_l_edition_qui_refuse(client: Async
 
     reponse = await client.post("/api/v1/orgs", json={"slug": "premiere", "name": "Première"})
     assert reponse.status_code == 403, reponse.text
-    assert "org_admin" in reponse.json()["detail"]
+    detail = reponse.json()["detail"]
+    assert "plateforme" in detail, f"le refus doit parler de droits, pas d'édition : {detail}"
+    assert "communautaire" not in detail, "ce n'est pas l'édition qui refuse ici"
+
+
+async def test_administrer_la_plateforme_est_un_droit_sur_l_instance(
+    client: AsyncClient, org: str, admin: str
+) -> None:
+    """Le défaut consigné dans BLOCKERS le 2026-09-26, et corrigé ici.
+
+    `Principal.is_platform_admin()` rend vrai dès qu'on est `org_admin` de N'IMPORTE QUELLE
+    organisation. Sur une installation à une seule organisation c'est exact — l'administrateur de
+    cette organisation EST celui de l'instance. Dès qu'il y en a deux, ça ne l'est plus, et le
+    prédicat accordait les routes `/platform/*` (backends, exécuteurs, profils de modèles, clés de
+    passerelle) à l'administrateur de n'importe quel locataire.
+
+    On exige désormais d'administrer TOUTES les organisations. En multi-org, ce n'est vrai de
+    personne tant que l'édition entreprise n'a pas défini un vrai rôle de plateforme : un refus,
+    et c'est le bon défaut — mieux vaut une route inaccessible qu'une route ouverte au mauvais
+    locataire.
+    """
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+
+    # `GET /platform/gateway/keys` — budgets, dépense, expiration, révocation : la route la plus
+    # sensible de `/platform/*`, et l'une des trois qui étaient gardées.
+    # (Au passage : `GET /platform/backends` et `GET /platform/executors` n'ont AUCUNE garde ;
+    # seuls les `PUT` en avaient. Ce n'est pas un secret, mais c'est incohérent — noté.)
+    assert (await client.get("/api/v1/platform/gateway/keys")).status_code == 200
+
+    async with session_scope(orgs="*") as session:
+        session.add(Organization(slug="autre-locataire", name="Autre"))
+
+    refus = await client.get("/api/v1/platform/gateway/keys")
+    assert refus.status_code == 403, refus.text
+    detail = refus.json()["detail"]
+    assert "instance" in detail, f"le refus doit dire pourquoi : {detail}"
+    assert "autre-locataire" in detail, "et nommer ce qui manque, sinon personne ne comprend"
