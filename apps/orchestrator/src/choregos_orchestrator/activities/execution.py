@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 from choregos_api.db.models import Run, WorkItem
 from choregos_api.security import mint_run_token
@@ -29,6 +30,32 @@ def _runner_namespace(settings: Any, slug: str) -> str:
     return str(settings.runner_namespace_pattern).format(slug=slug)
 
 
+def hotes_a_joindre_en_direct(settings: Any) -> list[str]:
+    """Les hôtes que le runner doit joindre SANS passer par le proxy d'egress.
+
+    Ce ne sont pas des hôtes devinés : ce sont ceux que la plateforme lui donne elle-même —
+    l'URL de rappel de l'API interne, la passerelle de modèles, la mémoire. Les lire ici rend
+    la promesse de `NO_PROXY` vraie par construction au lieu de reposer sur un suffixe.
+
+    Le suffixe ne suffisait pas. `.svc` couvre `choregos-api.choregos.svc`, PAS `choregos-api`,
+    et c'est précisément la forme courte que la plateforme fabrique elle-même
+    (`callback_url` → `http://choregos-api:8000`). Sur le locataire dev du 2026-09-27, le
+    premier appel du runner — chercher son `StageInput` — partait donc vers un proxy d'egress
+    qui n'existait pas dans ce namespace, et mourait sur « Name or service not known ». Le
+    message ne nommait ni l'URL, ni le proxy : le runner concluait « StageInput introuvable ».
+    """
+    hotes: list[str] = []
+    for url in (
+        getattr(settings, "callback_url", ""),
+        getattr(settings, "gateway_url", ""),
+        getattr(settings, "memory_url", ""),
+    ):
+        hote = urlsplit(str(url or "")).hostname
+        if hote and hote not in hotes:
+            hotes.append(hote)
+    return hotes
+
+
 def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
     """L'environnement d'un pod d'agent : ce que le déploiement passe, plus le proxy d'egress.
 
@@ -41,7 +68,19 @@ def env_du_runner(settings: Any, namespace: str) -> dict[str, str]:
     if proxy:
         env.setdefault("HTTP_PROXY", proxy)
         env.setdefault("HTTPS_PROXY", proxy)
-        env.setdefault("NO_PROXY", ",".join(("localhost,127.0.0.1,.svc,.cluster.local", *PLAGES_PRIVEES[:3])))
+        env.setdefault(
+            "NO_PROXY",
+            ",".join(
+                (
+                    "localhost",
+                    "127.0.0.1",
+                    ".svc",
+                    ".cluster.local",
+                    *hotes_a_joindre_en_direct(settings),
+                    *PLAGES_PRIVEES[:3],
+                )
+            ),
+        )
         for nom in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
             env[nom.lower()] = env[nom]
     return env
