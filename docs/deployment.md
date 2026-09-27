@@ -166,6 +166,36 @@ outils:
     price_eur: 0.05
 ```
 
+### How a tool reaches the agent, and what has to exist for it to
+
+An agent never calls a provider. It calls an MCP server that runs **in its own pod**, on
+`localhost:7777`, and that server calls the platform's internal API with the run's token. The
+platform makes the outbound call, with the provider credential, and writes a `kind=tool` line to
+the cost ledger.
+
+That sidecar has to exist, and until 2026-09-27 it existed in **one** place only: the Tekton Task.
+Under the `k8s_job` executor no sidecar was mounted, while the platform still told every agent to
+use `localhost:7777` — so an agent asked for tools, waited, and the ticket said nothing about the
+catalogue being out of reach. That is the structural reason the cost ledger had never carried a
+`kind=tool` line.
+
+Both halves are now honest:
+
+| Executor | Who mounts the sidecar | If it cannot |
+|---|---|---|
+| `tekton` | the Task (`sidecar:`) | — |
+| `k8s_job` | the Job, as a **native sidecar** (`initContainers` + `restartPolicy: Always`, Kubernetes ≥ 1.29) | no image configured ⇒ no sidecar **and** no tool announced to the agent |
+
+`restartPolicy: Always` is the whole of it. A plain extra container in a Job never exits, so the
+Job never completes and the run stays "in progress" for ever. A native sidecar starts *before* the
+main container, Kubernetes waits for its readiness probe — the agent finds the server ready on its
+first call instead of racing it — and Kubernetes stops it when the runner finishes.
+
+The chart passes the image only when `global.toolCatalog.configMap` is set, so a deployment that
+asked for nothing gets no extra container. Override the image with
+`choregos-orchestrator.runner.toolsImage` / `.toolsTag`; the tag follows `global.imageTag` by
+default, because a pinned one eventually points at an image that is not there.
+
 ### The rules that make an external MCP server safe to add
 
 - **The run token never leaves the platform.** It authenticates the agent *to us*; handing it
