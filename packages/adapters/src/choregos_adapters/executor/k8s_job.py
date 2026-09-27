@@ -238,8 +238,23 @@ class KubernetesJobExecutor:
                 },
                 {"name": "CHOREGOS_TOOLS_PORT", "value": str(TOOLS_PORT)},
             ],
+            # Une sonde `exec`, PAS `httpGet` : le serveur n'écoute que sur `127.0.0.1`
+            # (`tools_mcp/app.py`, et c'est voulu — un sidecar d'outils ne doit être joignable
+            # que par l'agent de SON pod). Or kubelet envoie une sonde `httpGet` à l'IP du pod :
+            # elle ne peut donc JAMAIS réussir. Constaté le 2026-09-27 sur le locataire dev, et le
+            # symptôme ne désignait pas la cause — Kubernetes tuait le conteneur pour sonde en
+            # échec, le redémarrage courait contre le processus mourant, et le journal disait
+            # « address already in use » sur le port 7777. Une sonde qui ne peut pas réussir est
+            # pire qu'une sonde absente : elle transforme un service sain en boucle de redémarrage.
             "readinessProbe": {
-                "httpGet": {"path": "/healthz", "port": TOOLS_PORT},
+                "exec": {
+                    "command": [
+                        "python",
+                        "-c",
+                        "import urllib.request;"
+                        f"urllib.request.urlopen('http://127.0.0.1:{TOOLS_PORT}/healthz', timeout=2)",
+                    ]
+                },
                 "initialDelaySeconds": 2,
                 "periodSeconds": 2,
                 # Trente secondes avant d'abandonner : un pod qui tire une image froide y arrive,

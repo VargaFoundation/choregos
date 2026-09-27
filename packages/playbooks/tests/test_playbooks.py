@@ -41,3 +41,24 @@ def test_role_inconnu_est_refuse() -> None:
 def test_les_evals_de_playbooks_passent(path) -> None:
     result = evaluate_case(path)
     assert result.passed, f"manque : {result.missing} · interdit : {result.forbidden}"
+
+
+def test_les_invariants_ne_se_contredisent_pas_sur_result_json() -> None:
+    """Le premier invariant EXIGE d'écrire `.choregos/result.json` ; le dernier interdisait
+    de toucher à `.choregos/**`.
+
+    Un modèle doit alors arbitrer entre deux ordres, et un petit modèle obéit au dernier. Sur le
+    locataire dev, le 2026-09-27, l'agent a tourné, appelé le modèle, et n'a rien écrit : l'étape
+    est morte sur « `result.json` est absent ». Le garde-fou, lui, connaissait l'exception
+    (`guardrails.py` autorise ce seul fichier) — c'était le PROMPT qui se contredisait, et un
+    garde-fou correct derrière une consigne contradictoire ne sert à rien.
+    """
+    from choregos_playbooks import INVARIANTS
+
+    lignes = [ligne for ligne in INVARIANTS.splitlines() if ".choregos/**" in ligne]
+    assert lignes, "l'invariant sur `.choregos/**` a disparu"
+    for ligne in lignes:
+        assert "autre" in ligne or "sauf" in ligne or "result.json" in ligne, (
+            f"cet invariant interdit `.choregos/**` sans excepter result.json, "
+            f"que le premier invariant exige : {ligne}"
+        )

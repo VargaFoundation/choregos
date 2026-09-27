@@ -117,7 +117,8 @@ INVARIANTS = """- Écris `.choregos/result.json` conforme au contrat avant de te
 - Un problème hors périmètre se signale avec `report_finding(...)`, il ne se corrige pas.
 - Préfère `ask_human(question)` à une hypothèse qui engage le produit.
 - Commits conventionnels (`fix(orders): …`), un commit par intention.
-- Ne touche pas aux fichiers de configuration Choregos (`.choregos/**`).
+- Ne touche à aucun AUTRE fichier de `.choregos/**` : `result.json` en est la seule sortie
+  qui t'appartient, le reste est la configuration du run.
 - Consulte `search_memory(query)` avant toute décision d'architecture."""
 
 OUTPUT_CONTRACT = """Écris `.choregos/result.json` — exactement cette forme (le runner la valide contre
