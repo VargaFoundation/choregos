@@ -162,6 +162,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 test_command=depot.test_command if depot else "",
                 lint_command=depot.lint_command if depot else "",
                 typecheck_command=depot.typecheck_command if depot else "",
+                # Les commandes de faits viennent de la RACINE de la configuration, pas de
+                # `repo` : un projet sans dépôt doit pouvoir prouver quelque chose (ADR 0012).
+                fact_commands=dict(bundle.config.dod.facts),
             ),
             work_item=WorkItemRef(
                 key=item.tracker_key,

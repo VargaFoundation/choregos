@@ -308,6 +308,10 @@ export type StageInput = {
     test_command?: string;
     lint_command?: string;
     typecheck_command?: string;
+    /** Commandes qui MESURENT un fait booléen : nom du fait → commande, code de sortie 0 = vrai. Le runner les exécute après l'étape et le fait mesuré écrase celui que l'agent a déclaré, comme les tests écrasent tests_passed. À la racine de la configuration du projet (dod.facts), pas sous repo : un projet sans dépôt doit pouvoir prouver quelque chose. */
+    fact_commands?: {
+      [key: string]: string;
+    };
   };
   work_item: {
     key: string;
