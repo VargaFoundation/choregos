@@ -94,3 +94,43 @@ def test_le_pod_d_agent_recoit_le_proxy_de_son_namespace() -> None:
 def test_sans_proxy_configure_l_environnement_reste_celui_du_deploiement() -> None:
     env = env_du_runner(SimpleNamespace(runner_env={"TZ": "UTC"}, runner_egress_proxy=""), "choregos")
     assert env == {"TZ": "UTC"}
+
+
+def test_le_rappel_interne_ne_passe_jamais_par_le_proxy_d_egress() -> None:
+    """`NO_PROXY` doit nommer les hôtes que la PLATEFORME donne au runner, pas un suffixe.
+
+    Le suffixe `.svc` couvre `choregos-api.choregos.svc` et **pas** `choregos-api` — or c'est
+    la forme courte que la plateforme fabrique elle-même (`callback_url`). Sur le locataire dev
+    du 2026-09-27, le premier appel du runner (chercher son `StageInput`) partait donc vers le
+    proxy d'egress, qui n'existait pas dans ce namespace : « Name or service not known », sans
+    que le message nomme ni l'URL ni le proxy. Le runner en concluait « StageInput introuvable ».
+
+    Le proxy existe pour contrôler ce qui SORT. Le rappel interne ne sort pas.
+    """
+    settings = SimpleNamespace(
+        runner_env={},
+        runner_egress_proxy="http://choregos-egress.{namespace}.svc:3128",
+        callback_url="http://choregos-api:8000",
+        gateway_url="http://litellm:4000",
+        memory_url="http://ecphoria:8432",
+    )
+    sans_proxy = env_du_runner(settings, "choregos")["NO_PROXY"].split(",")
+    for hote in ("choregos-api", "litellm", "ecphoria"):
+        assert hote in sans_proxy, f"{hote} passerait par le proxy d'egress ({sans_proxy})"
+
+
+def test_les_hotes_directs_viennent_des_url_de_la_plateforme() -> None:
+    """Aucun nom n'est deviné : un changement d'URL suit, sans toucher à cette liste."""
+    from choregos_orchestrator.activities.execution import hotes_a_joindre_en_direct
+
+    hotes = hotes_a_joindre_en_direct(
+        SimpleNamespace(
+            # Un hôte SANS point ni port collé à « api » : `api.x:8443/api/v1/...` déclenche la
+            # règle générique de gitleaks, qui y voit une clé. Le test porte sur l'extraction
+            # d'un hôte, pas sur la forme du nom.
+            callback_url="https://interne-exemple:8443/api/v1/internal",
+            gateway_url="http://passerelle:4000",
+            memory_url="",
+        )
+    )
+    assert hotes == ["interne-exemple", "passerelle"], hotes
