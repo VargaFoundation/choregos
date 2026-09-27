@@ -490,22 +490,36 @@ async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
     setup.adapters.notify.panne = "[slack] ni `bot_token` ni `webhook_url` configurés"
     scripted(setup.adapters, stage_result("spec rédigée", outputs={"size": "M", "risk": "low"}))
 
+    async def demandes() -> list[Any]:
+        async with session_scope() as session:
+            return list(
+                (
+                    await session.execute(
+                        select(HumanRequest).where(HumanRequest.work_item_id == setup.work_item_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
     async with worker_factory():
         handle = await start(temporal_env, setup)
         # L'état d'attente humaine est atteint : la porte fonctionne sans notification.
         await _wait_state(handle, "awaiting_spec_approval")
 
-    async with session_scope() as session:
-        demandes = (
-            (
-                await session.execute(
-                    select(HumanRequest).where(HumanRequest.work_item_id == setup.work_item_id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-    assert len(demandes) == 1, "la demande humaine a été annulée avec la notification"
+        # ATTENDRE la demande, ne pas la lire tout de suite. L'interpréteur pose l'état AVANT
+        # d'appeler `create_human_request` : lire juste après `_wait_state` gagnait en local et
+        # perdait en CI — 0 demande, pas parce qu'elle avait été annulée mais parce qu'elle
+        # n'était pas encore écrite. Un test qui dépend de la vitesse de la machine ne dit rien
+        # sur le code (même leçon que `test_pause_and_resume`, 2026-09-24).
+        import asyncio
+
+        for _ in range(300):
+            if await demandes():
+                break
+            await asyncio.sleep(0.1)
+
+    assert len(await demandes()) == 1, "la demande humaine a été annulée avec la notification"
 
     item = await _ticket(setup)
     assert item.failure is None, f"le ticket est mort pour une notification : {item.failure}"
