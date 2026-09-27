@@ -48,43 +48,50 @@ def stack() -> None:
         "-",
         input_text=yaml.safe_dump({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NS}}),
     )
-    kubectl("apply", "-f", "-", input_text=_minio())
-    _wait_ready("pod/minio", "condition=Ready", timeout="300s")
+    kubectl("apply", "-f", "-", input_text=_magasin())
+    _wait_ready("pod/magasin", "condition=Ready", timeout="300s")
     kubectl("apply", "-f", "-", input_text=_secrets())
     _create_bucket()
     yield
     kubectl("delete", "ns", NS, "--ignore-not-found", "--wait=false", check=False)
 
 
-# Images du magasin d'objets, prises sur quay.io et figées (cf. `_minio`).
-MINIO = "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
-MC = "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+# Le magasin d'objets du test. SeaweedFS et non MinIO : le 2026-09-27, `minio/minio` a cessé
+# d'être tirable ANONYMEMENT sur quay.io (401 sur le tag épinglé) comme sur Docker Hub
+# (« authentication required »). Le commentaire précédent disait déjà s'être replié de Docker Hub
+# vers quay pour cette raison ; quay a suivi. Le test échouait toutes les nuits au montage, sur
+# un pod qui n'atteignait jamais `Ready` — et le message parlait d'une condition non remplie, pas
+# d'une image introuvable.
+#
+# Une seule image, et elle sert aussi de client : `weed shell` crée le seau, donc rien à tirer de
+# plus. Version figée pour la raison habituelle : une nuit ne doit pas changer d'image toute
+# seule. Vérifié à la main avant de changer le test — seau créé, objet écrit et relu, et surtout
+# un envoi MULTIPART complet de 6 Mo relu à l'octet, puisque c'est ce que fait Barman.
+SEAWEEDFS = "chrislusf/seaweedfs:3.97"
+#: Le port S3 de SeaweedFS, là où MinIO écoutait 9000.
+S3_PORT = 8333
 
 
-def _minio() -> str:
-    """MinIO mono-pod : le magasin d'objets que Barman utilisera."""
+def _magasin() -> str:
+    """SeaweedFS mono-pod : le magasin d'objets que Barman utilisera."""
     return yaml.safe_dump_all(
         [
             {
                 "apiVersion": "v1",
                 "kind": "Pod",
-                "metadata": {"name": "minio", "namespace": NS, "labels": {"app": "minio"}},
+                "metadata": {"name": "magasin", "namespace": NS, "labels": {"app": "magasin"}},
                 "spec": {
                     "containers": [
                         {
-                            "name": "minio",
-                            # quay.io, pas Docker Hub : `docker.io/minio/minio` répond
-                            # « insufficient_scope » à un tirage anonyme, ce qui rendait ce
-                            # test rouge toutes les nuits. Version figée pour la même raison
-                            # qu'ailleurs : une nuit ne doit pas changer d'image toute seule.
-                            "image": MINIO,
-                            "args": ["server", "/data"],
+                            "name": "magasin",
+                            "image": SEAWEEDFS,
+                            # `server -s3` monte maître, volume, filer et passerelle S3 dans un
+                            # seul processus : c'est fait pour un test. Sans `-s3.config`, la
+                            # passerelle accepte n'importe quelles clés — d'où les identifiants
+                            # factices du secret, qui ne sont vérifiés par personne.
+                            "args": ["server", "-s3", "-dir=/data"],
                             "imagePullPolicy": "IfNotPresent",
-                            "env": [
-                                {"name": "MINIO_ROOT_USER", "value": "minioadmin"},
-                                {"name": "MINIO_ROOT_PASSWORD", "value": "minioadmin"},
-                            ],
-                            "ports": [{"containerPort": 9000}],
+                            "ports": [{"containerPort": S3_PORT}],
                         }
                     ]
                 },
@@ -92,8 +99,11 @@ def _minio() -> str:
             {
                 "apiVersion": "v1",
                 "kind": "Service",
-                "metadata": {"name": "minio", "namespace": NS},
-                "spec": {"selector": {"app": "minio"}, "ports": [{"port": 9000, "targetPort": 9000}]},
+                "metadata": {"name": "magasin", "namespace": NS},
+                "spec": {
+                    "selector": {"app": "magasin"},
+                    "ports": [{"port": S3_PORT, "targetPort": S3_PORT}],
+                },
             },
         ]
     )
@@ -113,27 +123,27 @@ def _secrets() -> str:
                 "apiVersion": "v1",
                 "kind": "Secret",
                 "metadata": {"name": "choregos-backup", "namespace": NS},
-                "stringData": {"access-key-id": "minioadmin", "secret-access-key": "minioadmin"},
+                "stringData": {"access-key-id": "choregos", "secret-access-key": "choregos-test"},
             },
         ]
     )
 
 
 def _create_bucket() -> None:
+    """Le seau est créé DEPUIS le pod du magasin, par `weed shell`.
+
+    Avant, un second pod tirait le client `mc`. Une image de moins à tirer est une cause
+    d'échec de moins la nuit — et c'était précisément la deuxième image disparue.
+    """
     kubectl(
         "-n",
         NS,
-        "run",
-        "mc",
-        "--rm",
-        "-i",
-        "--restart=Never",
-        f"--image={MC}",
-        "--command",
+        "exec",
+        "pod/magasin",
         "--",
         "sh",
         "-c",
-        f"mc alias set local http://minio:9000 minioadmin minioadmin && mc mb -p local/{BUCKET}",
+        f"echo 's3.bucket.create -name {BUCKET}' | weed shell",
         check=False,
     )
 
@@ -146,8 +156,9 @@ def _cluster_manifest(name: str, *, restore_from: str | None = None) -> str:
     """La configuration du dépôt, ramenée à la taille d'un cluster de test.
 
     Ce qui change : une instance au lieu de trois, la classe de stockage par défaut, des
-    volumes de 1 Gi et MinIO à la place de S3. Ce qui ne change pas — et qui est l'objet du
-    test — c'est le bloc `backup.barmanObjectStore` et le chemin de restauration.
+    volumes de 1 Gi, et un magasin S3 local à la place de celui du nuage. Ce qui ne change pas —
+    et qui est l'objet du test — c'est le bloc `backup.barmanObjectStore` et le chemin de
+    restauration.
     """
     source = yaml.safe_load(_repo_cluster())
     spec = source["spec"]
@@ -159,7 +170,7 @@ def _cluster_manifest(name: str, *, restore_from: str | None = None) -> str:
     # moins de mémoire que ses buffers ne démarre pas longtemps.
     spec["resources"] = {"requests": {"cpu": "100m", "memory": "1Gi"}}
     spec["backup"]["barmanObjectStore"]["destinationPath"] = f"s3://{BUCKET}/{name}"
-    spec["backup"]["barmanObjectStore"]["endpointURL"] = "http://minio:9000"
+    spec["backup"]["barmanObjectStore"]["endpointURL"] = f"http://magasin:{S3_PORT}"
     spec["backup"]["barmanObjectStore"]["s3Credentials"] = {
         "accessKeyId": {"name": "choregos-backup", "key": "access-key-id"},
         "secretAccessKey": {"name": "choregos-backup", "key": "secret-access-key"},
@@ -172,7 +183,7 @@ def _cluster_manifest(name: str, *, restore_from: str | None = None) -> str:
                 "name": "origine",
                 "barmanObjectStore": {
                     "destinationPath": f"s3://{BUCKET}/{restore_from}",
-                    "endpointURL": "http://minio:9000",
+                    "endpointURL": f"http://magasin:{S3_PORT}",
                     # Sans `serverName`, CNPG cherche la sauvegarde sous le nom du **nouveau**
                     # cluster et répond « no target backup found ». C'est le nom du serveur
                     # d'origine qu'il faut donner : le piège classique d'une restauration.
