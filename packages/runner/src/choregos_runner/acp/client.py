@@ -223,8 +223,37 @@ class AcpClient:
         await self.process.stdin.drain()
         try:
             return await asyncio.wait_for(future, timeout=timeout)
+        except TimeoutError as exc:
+            raise AgentUnreachableError(self._pourquoi_muet(method, timeout)) from exc
         finally:
             self._pending.pop(request.id, None)
+
+    def _pourquoi_muet(self, method: str, timeout: float) -> str:
+        """Ce qu'on sait d'un agent qui n'a pas répondu — au lieu d'un `TimeoutError` nu.
+
+        Le 2026-09-27, sur le locataire dev, `opencode` n'a pas répondu à `initialize` et le
+        journal du pod ne portait QUE la pile d'`asyncio.wait_for`. Rien sur la commande lancée,
+        rien sur le fait que le processus vivait encore, rien de sa sortie d'erreur — alors que
+        `stderr_tail` la collecte depuis le premier jour et que personne ne la lisait à cet
+        endroit. Un agent muet est le cas le plus fréquent d'un premier déploiement : c'est
+        exactement là qu'il faut une phrase qui dit quoi regarder.
+        """
+        morceaux = [
+            f"l'agent n'a pas répondu à `{method}` en {timeout:.0f} s",
+            f"commande : {' '.join(self.command)}",
+        ]
+        if self.process is None:
+            morceaux.append("processus : absent")
+        elif self.process.returncode is None:
+            morceaux.append("processus : vivant (il n'a donc pas planté, il n'a rien écrit)")
+        else:
+            morceaux.append(f"processus : terminé, code {self.process.returncode}")
+        if self.stderr_tail:
+            dernieres = " / ".join(ligne.strip() for ligne in self.stderr_tail[-5:] if ligne.strip())
+            morceaux.append(f"sortie d'erreur de l'agent : {dernieres[:600]}")
+        else:
+            morceaux.append("sortie d'erreur de l'agent : VIDE")
+        return " — ".join(morceaux)
 
     async def notify(self, method: str, params: dict[str, Any]) -> None:
         if self.process is None or self.process.stdin is None:

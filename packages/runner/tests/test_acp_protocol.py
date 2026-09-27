@@ -165,3 +165,60 @@ def test_protocol_methods_are_covered() -> None:
         protocol.FS_WRITE_TEXT_FILE,
     }
     assert len(expected) == 10
+
+
+# ──────── un agent muet doit dire pourquoi il l'est (2026-09-27) ────────
+
+
+@pytest.mark.asyncio
+async def test_un_agent_qui_ne_repond_pas_explique_ce_qu_on_sait(tmp_path: Path) -> None:
+    """Un `TimeoutError` nu n'apprend rien ; ce refus nomme quoi regarder.
+
+    Sur le locataire dev, `opencode` n'a pas répondu à `initialize` et le journal du pod ne
+    portait QUE la pile d'`asyncio.wait_for` : rien sur la commande, rien sur l'état du
+    processus, rien de sa sortie d'erreur — alors que `stderr_tail` la collecte depuis le
+    premier jour et que personne ne la lisait à cet endroit.
+    """
+    from choregos_runner.acp.client import AgentUnreachableError
+
+    muet = tmp_path / "muet.py"
+    muet.write_text(
+        "import sys, time\n"
+        "print('je démarre mais je ne parle pas ACP', file=sys.stderr, flush=True)\n"
+        "print('provider introuvable : @ai-sdk/openai-compatible', file=sys.stderr, flush=True)\n"
+        "time.sleep(30)\n",
+        encoding="utf-8",
+    )
+    client = AcpClient(command=[sys.executable, str(muet)], cwd=tmp_path)
+    await client.start()
+    try:
+        with pytest.raises(AgentUnreachableError) as refus:
+            await client.request(INITIALIZE, {"protocolVersion": 1}, timeout=1.0)
+    finally:
+        await client.stop()
+
+    message = str(refus.value)
+    assert INITIALIZE in message, message
+    assert "muet.py" in message, "le refus doit nommer la commande lancée"
+    assert "vivant" in message, "il doit dire que le processus n'a pas planté"
+    assert "provider introuvable" in message, "il doit porter la sortie d'erreur de l'agent"
+
+
+@pytest.mark.asyncio
+async def test_un_agent_qui_meurt_le_dit_aussi(tmp_path: Path) -> None:
+    """Le processus mort est l'autre moitié du diagnostic : son code de sortie."""
+    from choregos_runner.acp.client import AgentUnreachableError
+
+    mort = tmp_path / "mort.py"
+    mort.write_text("import sys\nsys.stderr.write('config illisible\\n')\nsys.exit(3)\n", encoding="utf-8")
+    client = AcpClient(command=[sys.executable, str(mort)], cwd=tmp_path)
+    await client.start()
+    try:
+        with pytest.raises(AgentUnreachableError) as refus:
+            await client.request(INITIALIZE, {"protocolVersion": 1}, timeout=1.0)
+    finally:
+        await client.stop()
+
+    message = str(refus.value)
+    assert "code 3" in message, message
+    assert "config illisible" in message, message
