@@ -719,3 +719,37 @@ les 492 tests ne disaient pas :
     d'abstraction que ce plan dit lui-même de refuser (§8, et la même leçon que C2, où les gates
     étaient déjà extensibles). Le jour où l'édition entreprise existe et veut autre chose, elle le
     demandera avec un cas précis — et ce sera moins cher que de deviner aujourd'hui.
+
+13. **La traversée COMPLÈTE est prouvée sur le locataire dev** (2026-09-27, 22:19 UTC, chart 0.8.3).
+
+    Le §10 prouvait les deux lignes du registre. Celui-ci prouve le parcours entier d'un ticket :
+
+    `inbox` → l'agent appelle le modèle **et l'outil**, écrit `outputs.rapport`, la garantie
+    `outputs_present` **accepte** → `en_cours` → un humain approuve par
+    `POST /work-items/{id}/decisions` → **`fini`**.
+
+    Le rapport de l'agent, mot pour mot : « Branche par défaut : main. Langue principale : Python.
+    Issues ouvertes : 1. » Les trois faits sont **exacts**, vérifiés contre
+    `GET /repos/VargaFoundation/choregos` après coup. L'agent n'a rien inventé : il a appelé
+    l'outil, lu la réponse, et rapporté. Run `succeeded`, `cost_usd 0.017137`.
+
+    Registre à la fin de la nuit : `model/openai` **10 lignes, 0,131805 €**, 243 303 jetons en
+    entrée et 9 949 en sortie ; `tool/github` **5 lignes** ; **5** événements
+    `choregos.tool.called`.
+
+    **Deux tickets sont `fini`, et ils résument la nuit.** Le premier est né `fini` — c'est le
+    défaut `jsonb` du §10, un ticket clos en 1,5 seconde sans avoir rien fait. Le second a
+    réellement traversé. Le même état, deux vérités opposées : voilà pourquoi ce dépôt exige un
+    test qui échoue en l'absence de la garantie, et pas une capture d'écran verte.
+
+    **Ce qui a échoué en route, et c'est un bon échec** : au premier essai avec l'outil,
+    `outputs_present` a REFUSÉ. L'agent avait mis son texte dans `summary` au lieu de
+    `outputs.rapport` ; le ticket a retenté une fois puis escaladé en `needs_human`, exactement
+    comme `on_fail` le déclare. La garantie a fait son travail — et c'était ma consigne qui
+    nommait une intention là où un petit modèle suit une **forme**. Corrigée en donnant le JSON
+    exact, l'étape est passée.
+
+    **Ce que ça ne prouve toujours pas** : un outil payant, un fournisseur qu'il faut ouvrir au
+    réseau, plus d'un backend, plus d'un modèle, et aucune garantie de périmètre (ce projet n'a pas
+    de dépôt, donc pas de diff). Sept tickets restent en `needs_human` : les débris de la nuit de
+    débogage, gardés exprès — ils portent chacun le message qui les a tués.
