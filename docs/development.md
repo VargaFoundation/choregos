@@ -168,6 +168,35 @@ gates and memory do not change from one domain to the next.
 Before this existed, the only way in was `PUT /projects/{id}/workflow` with the full YAML — no
 name, no reuse, and no way for two projects to start from the same model.
 
+## Shipping a gate from outside this tree
+
+A plugin can register a gate the same way it registers a connector, and nothing else is needed:
+
+```python
+from choregos_core.gates import GateContext, GateOutcome, gate
+
+@gate("collecteur_propre")
+def _collecteur_propre(ctx: GateContext, params: dict) -> GateOutcome:
+    faits = (ctx.result.evidence.facts or {}) if ctx.result else {}
+    propre = bool(faits.get("collecteur_propre"))
+    return GateOutcome("collecteur_propre", propre, detail="…")
+```
+
+The property that decides everything is that the **DSL validator accepts it**: an unknown gate is a
+blocking error (`gate.unknown`), so a gate registered at start-up must become known to the
+validator, or no workflow using it would ever be valid. It does, and
+`packages/core/tests/test_gate_hors_de_l_arbre.py` proves it — including that the gate really is
+missing before the plugin loads, so the test cannot lie to itself.
+
+No field needs to be added to `GateContext`: `ctx.result` already carries the step's outputs and
+`evidence.facts`. That is enough for any gate that judges what the step produced — which is most of
+them.
+
+**What still needs a core change**: a gate that reads something the context does not carry — a live
+diff, a CI verdict, the cost ledger — needs its field on `GateContext` *and* its population in
+`activities/gates.py`. That is a narrower limit than the one the plan assumed, and it is worth
+knowing before designing around it.
+
 ## Shipping a connector from outside this tree
 
 A package installed next to Choregos can register its own connectors — no fork, no patch to the
