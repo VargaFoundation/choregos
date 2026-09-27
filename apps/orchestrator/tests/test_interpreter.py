@@ -467,3 +467,66 @@ async def test_les_verdicts_des_garanties_sont_dans_le_journal_du_run(
     noms = {r.payload["name"] for r in rows}
     assert "scope_respected" in noms or "evidence_present" in noms, noms
     assert all(isinstance(r.payload["passed"], bool) and "detail" in r.payload for r in rows)
+
+
+# ──────── une notification en panne ne tue pas un ticket (2026-09-27) ────────
+
+
+async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """La demande humaine doit exister même quand personne ne peut être prévenu.
+
+    Sur le locataire dev, sans Slack configuré, `notify.send` levait — et l'exception annulait la
+    TRANSACTION, donc la demande qu'on venait d'écrire. Les cinq tentatives échouaient au même
+    endroit et le ticket mourait sur « [slack] ni `bot_token` ni `webhook_url` configurés ». La
+    porte humaine était donc inatteignable sur toute installation sans notificateur, et le message
+    accusait Slack au lieu de dire « la demande est là, personne n'a été prévenu ».
+    """
+    from choregos_api.db.models import HumanRequest
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    setup.adapters.notify.panne = "[slack] ni `bot_token` ni `webhook_url` configurés"
+    scripted(setup.adapters, stage_result("spec rédigée", outputs={"size": "M", "risk": "low"}))
+
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        # L'état d'attente humaine est atteint : la porte fonctionne sans notification.
+        await _wait_state(handle, "awaiting_spec_approval")
+
+    async with session_scope() as session:
+        demandes = (
+            (
+                await session.execute(
+                    select(HumanRequest).where(HumanRequest.work_item_id == setup.work_item_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert len(demandes) == 1, "la demande humaine a été annulée avec la notification"
+
+    item = await _ticket(setup)
+    assert item.failure is None, f"le ticket est mort pour une notification : {item.failure}"
+
+    # Et le silence se voit : l'événement dit que personne n'a été prévenu.
+    from choregos_api.db.models import Event
+
+    async with session_scope() as session:
+        evenements = (
+            (
+                await session.execute(
+                    select(Event).where(
+                        Event.work_item_id == setup.work_item_id,
+                        Event.type == "choregos.workitem.human_requested",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert evenements, "aucun événement de demande humaine"
+    assert any((e.payload or {}).get("notified") is False for e in evenements), (
+        "un silence non enregistré remplace une panne bruyante par une panne muette"
+    )
