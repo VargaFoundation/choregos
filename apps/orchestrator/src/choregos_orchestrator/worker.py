@@ -11,52 +11,24 @@ from choregos_api.logging import configure_logging, get_logger
 
 from .activities import ALL_ACTIVITIES
 from .config import ALL_QUEUES, get_settings
+from .repartition import ACTIVITES_PAR_FILE
 from .workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
 logger = get_logger("choregos.worker")
 
-# Répartition des activités par queue : les appels externes lents sont isolés
-# pour ne pas bloquer la boucle de décision.
-QUEUE_ACTIVITY_PREFIX: dict[str, tuple[str, ...]] = {
-    "executor": (
-        "prepare_stage",
-        "start_run",
-        "await_run",
-        "cancel_run",
-        "collect_spend",
-        "record_run_outcome",
-    ),
-    "tracker": (
-        "mirror_state",
-        "update_status_comment",
-        "create_human_request",
-        "close_human_request",
-        "notify",
-        "open_pull_request",
-        "enqueue_merge",
-        "ensure_branch",
-        "collect_run_artifacts",
-        "evaluate_gates",
-        "check_scope_violations",
-        "triage_finding",
-        "reconcile_tracker",
-    ),
-    "memory": (
-        "ingest_sources",
-        "ingest_alert",
-        "write_run_lesson",
-        "accept_pending_facts",
-        "memory_ab_report",
-    ),
-}
-
 
 def activities_for(queue: str) -> list[Any]:
-    """La queue `orchestrator` porte tout ; les autres portent leur spécialité."""
+    """La queue `orchestrator` porte tout ; les autres portent leur spécialité.
+
+    Le filet est volontaire : les workflows planifient désormais chaque activité sur sa file
+    (`workflows.planification`), mais une tâche déjà en attente sur `orchestrator` au moment d'une
+    montée de version ne doit pas rester orpheline. La répartition est garantie par un test, pas
+    par une absence d'enregistrement.
+    """
     everything = [*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES]
     if queue == "orchestrator":
         return everything
-    names = QUEUE_ACTIVITY_PREFIX.get(queue, ())
+    names = ACTIVITES_PAR_FILE.get(queue, ())
     selected: list[Any] = []
     for candidate in everything:
         definition = getattr(candidate, "__temporal_activity_definition", None)

@@ -127,16 +127,25 @@ async def temporal_env() -> AsyncIterator[Any]:
 
 @pytest.fixture
 def worker_factory(temporal_env: Any) -> Any:
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
-    from temporalio.worker import Worker
+    """Les workers du test, **un par file**, comme le chart en déploie un par file.
 
-    def factory(task_queue: str = "test") -> Worker:
-        return Worker(
+    Un worker unique portant toutes les activités ne prouve rien de la répartition : il répond
+    quelle que soit la file demandée. Or les workflows planifient chaque activité sur sa file
+    déclarée (`workflows.planification`), et c'est exactement ce qui doit être éprouvé. Le
+    2026-09-27, sur le locataire dev, `start_run` tournait sur `orchestrator` alors que la
+    politique réseau n'ouvrait l'API Kubernetes qu'à `executor` : le Job n'était jamais créé.
+    """
+    from choregos_orchestrator.activities import ALL_ACTIVITIES
+    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+
+    def factory(task_queue: str = "test", **kwargs: Any) -> Any:
+        return workers_repartis(
             temporal_env.client,
-            task_queue=task_queue,
+            activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
             workflows=ALL_WORKFLOWS,
-            activities=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+            file_du_workflow=task_queue,
+            **kwargs,
         )
 
     return factory

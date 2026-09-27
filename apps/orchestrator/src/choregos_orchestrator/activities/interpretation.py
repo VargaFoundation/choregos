@@ -67,16 +67,37 @@ async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
         return failure
 
 
+#: Ce que Temporal met à la place d'un message absent, littéralement
+#: (`converter/_failure_converter.py`, branche `application_failure_info` :
+#: `failure.message or "Application error"`). Le message n'est donc JAMAIS vide, et un test de
+#: vacuité ne suffit pas : il faut reconnaître le bouche-trou pour préférer le type.
+BOUCHE_TROU_TEMPORAL = frozenset({"Application error", "Timeout", "Activity task failed"})
+
+
 def message_de(exc: BaseException) -> str:
-    """Le message utile d'une erreur Temporal : celui de la cause, pas « Activity task failed »."""
+    """Le message utile d'une erreur Temporal : celui de la cause, pas « Activity task failed ».
+
+        Une exception ordinaire traverse Temporal quand même : le convertisseur en fait une
+        `ApplicationError` dont `type` porte le nom de la classe et `message` le `str()`. Or beaucoup
+        d'erreurs réseau se lèvent **sans message** — `httpx.ConnectTimeout()` n'en a aucun. Le repli
+    valait alors `"Application error"` — la chaîne que Temporal substitue à un message
+        absent — et le ticket ne disait plus rien de sa mort. C'est arrivé le 2026-09-27 sur le
+        locataire dev : la vraie cause, l'API Kubernetes injoignable, ne vivait que dans le journal de
+        l'orchestrateur, que personne ne lit avant d'avoir une raison de le lire. À défaut de message,
+        le **type** est ce qu'il y a de plus utile.
+    """
+    repli: str | None = None
     cause: BaseException | None = exc
     while cause is not None:
-        if isinstance(cause, ApplicationError) and cause.message:
-            return cause.message
+        if isinstance(cause, ApplicationError):
+            if cause.message and cause.message not in BOUCHE_TROU_TEMPORAL:
+                return cause.message
+            if cause.type and repli is None:
+                repli = cause.type
         if cause.__cause__ is None:
             break
         cause = cause.__cause__
-    return str(cause or exc)[:500]
+    return repli or str(cause or exc)[:500]
 
 
 def activite_de(exc: BaseException) -> str | None:

@@ -254,17 +254,21 @@ async def _wait_state(handle: Any, state: str, *, timeout: int = 60) -> None:
 
 
 def _worker_avec(temporal_env: Any, remplacements: dict[str, Any]) -> Any:
-    """Le worker complet, où quelques activités sont remplacées par leur doublure."""
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
-    from temporalio.worker import Worker
+    """Les workers répartis par file, où quelques activités sont remplacées par leur doublure.
 
-    gardees = [a for a in [*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES] if a.__name__ not in remplacements]
-    return Worker(
+    Les clés sont des **noms Temporal** : c'est le nom déclaré par `@activity.defn(name=…)` qui
+    décide de la file, donc une doublure de `await_run` s'enregistre sur `executor`, là où le
+    workflow la planifie.
+    """
+    from choregos_orchestrator.activities import ALL_ACTIVITIES
+    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+
+    return workers_repartis(
         temporal_env.client,
-        task_queue="test",
+        activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
         workflows=ALL_WORKFLOWS,
-        activities=[*gardees, *remplacements.values()],
+        remplacements=remplacements,
     )
 
 
@@ -315,6 +319,36 @@ async def test_un_interpreteur_qui_meurt_le_dit(setup: Fixture, temporal_env: An
             .all()
         )
     assert "choregos.workitem.workflow_failed" in types
+
+
+async def test_une_erreur_sans_message_laisse_quand_meme_son_type(setup: Fixture, temporal_env: Any) -> None:
+    """Une erreur réseau se lève souvent SANS message : le ticket doit au moins nommer sa classe.
+
+    Rejoue l'incident du 2026-09-27 sur le locataire dev. `start_run` a levé un
+    `httpx.ConnectTimeout` — l'API Kubernetes était injoignable, la file `executor` étant la seule
+    à qui la politique Cilium ouvre le port. Le ticket a enregistré `"Application error"`, la
+    chaîne par défaut de Temporal : rien sur la cause, rien sur le réseau, et la vraie erreur ne
+    vivait que dans le journal de l'orchestrateur.
+    """
+    import httpx
+    from temporalio import activity
+    from temporalio.client import WorkflowFailureError
+
+    @activity.defn(name="start_run")
+    async def start_run_injoignable(payload: dict[str, Any]) -> dict[str, Any]:
+        raise httpx.ConnectTimeout("")  # tel qu'httpx le lève : aucun message
+
+    async with _worker_avec(temporal_env, {"start_run": start_run_injoignable}):
+        handle = await start(temporal_env, setup)
+        with pytest.raises(WorkflowFailureError):
+            await handle.result()
+
+    item = await _ticket(setup)
+    assert item.failure is not None
+    assert item.failure["message"] == "ConnectTimeout", (
+        f"le ticket doit nommer la classe de l'erreur à défaut de message (vu : {item.failure['message']!r})"
+    )
+    assert item.failure["activity"] == "start_run"
 
 
 async def test_un_interpreteur_qui_redemarre_efface_la_marque(setup: Fixture, temporal_env: Any) -> None:

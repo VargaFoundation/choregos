@@ -18,10 +18,13 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
+from .planification import executer_activite
+
 #: Attente maximale d'un run EN FILE (six heures), la même valeur que
 #: `activities.stage.FILE_MAX_MINUTES` — écrite ici parce qu'un workflow n'importe pas
 #: le module des activités, et parce qu'elle entre dans des bornes Temporal.
 FILE_MAX_MINUTES = 360
+
 
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus, Workflow
@@ -162,7 +165,7 @@ class WorkflowInterpreter:
             # dans son état d'origine et rien — ni écran, ni événement — ne distingue « il
             # attend » de « il est mort ». Le banc du 2026-09-24 a perdu deux tickets ainsi.
             with contextlib.suppress(Exception):
-                await workflow.execute_activity(
+                await executer_activite(
                     record_workflow_failure,
                     {
                         "project_id": params.project_id,
@@ -180,7 +183,7 @@ class WorkflowInterpreter:
         self.attempts.update(params.attempts)
         self.cost_usd = params.cost_usd
 
-        context = await workflow.execute_activity(
+        context = await executer_activite(
             load_context,
             {"project_id": params.project_id, "work_item_id": params.work_item_id},
             start_to_close_timeout=timedelta(seconds=30),
@@ -234,7 +237,7 @@ class WorkflowInterpreter:
                     }
                 )
 
-        await workflow.execute_activity(
+        await executer_activite(
             tracker_activities.close_out,
             {"project_id": params.project_id, "work_item_id": params.work_item_id},
             start_to_close_timeout=timedelta(minutes=2),
@@ -256,7 +259,7 @@ class WorkflowInterpreter:
         attempt = self.attempts[key]
         self.attempts[key] = attempt + 1
 
-        prepared = await workflow.execute_activity(
+        prepared = await executer_activite(
             stage_activities.prepare_stage,
             {
                 "project_id": params.project_id,
@@ -283,7 +286,7 @@ class WorkflowInterpreter:
         self.current_run = run_id
         budget = prepared["stage_input"]["budget"]
 
-        await workflow.execute_activity(
+        await executer_activite(
             stage_activities.start_run,
             {
                 "project_id": params.project_id,
@@ -293,7 +296,7 @@ class WorkflowInterpreter:
             start_to_close_timeout=timedelta(minutes=5),
             retry_policy=DEFAULT_RETRY,
         )
-        awaited = await workflow.execute_activity(
+        awaited = await executer_activite(
             stage_activities.await_run,
             {
                 "project_id": params.project_id,
@@ -309,14 +312,14 @@ class WorkflowInterpreter:
         )
         result = StageResult.model_validate(awaited["result"])
 
-        spend = await workflow.execute_activity(
+        spend = await executer_activite(
             stage_activities.collect_spend,
             {"project_id": params.project_id, "run_id": run_id},
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=DEFAULT_RETRY,
         )
         self.cost_usd += float(spend.get("cost_usd", 0.0))
-        await workflow.execute_activity(
+        await executer_activite(
             stage_activities.record_run_outcome,
             {"project_id": params.project_id, "run_id": run_id, "result": awaited["result"]},
             start_to_close_timeout=timedelta(minutes=1),
@@ -326,7 +329,7 @@ class WorkflowInterpreter:
         # ici (SCM injoignable, projet sans dépôt sur une image en retard) ne doit pas tuer une
         # étape qui vient de réussir : c'est arrivé à RH-1 le 2026-09-24.
         try:
-            await workflow.execute_activity(
+            await executer_activite(
                 scm_activities.collect_run_artifacts,
                 {"project_id": params.project_id, "work_item_id": params.work_item_id, "run_id": run_id},
                 start_to_close_timeout=timedelta(minutes=2),
@@ -370,7 +373,7 @@ class WorkflowInterpreter:
             return []
         from choregos_core import GateOutcome
 
-        raw = await workflow.execute_activity(
+        raw = await executer_activite(
             gate_activities.evaluate_gates,
             {
                 "project_id": params.project_id,
@@ -414,7 +417,7 @@ class WorkflowInterpreter:
             while self.inbox:
                 event = self.inbox.popleft()
                 self._absorb(event)
-            raw = await workflow.execute_activity(
+            raw = await executer_activite(
                 gate_activities.evaluate_gates,
                 {
                     "project_id": params.project_id,
@@ -479,7 +482,7 @@ class WorkflowInterpreter:
                 return None
             if self.decisions:
                 decision = self.decisions.popleft()
-                await workflow.execute_activity(
+                await executer_activite(
                     tracker_activities.close_human_request,
                     {
                         "request_id": decision.get("request_id") or self.pending_request,
@@ -508,7 +511,7 @@ class WorkflowInterpreter:
 
         sla = actor.sla_hours if actor else 24
 
-        await workflow.execute_activity(
+        await executer_activite(
             tracker_activities.notify,
             {
                 "project_id": params.project_id,
@@ -531,7 +534,9 @@ class WorkflowInterpreter:
         payload: dict[str, Any],
         sla_hours: int = 24,
     ) -> dict[str, Any]:
-        return await workflow.execute_activity(
+        # L'enveloppe de planification rend un `Any` là où `execute_activity` avait une surcharge
+        # typée : le passage par un nom annoté garde la promesse de la signature.
+        demande: dict[str, Any] = await executer_activite(
             tracker_activities.create_human_request,
             {
                 "project_id": params.project_id,
@@ -544,6 +549,7 @@ class WorkflowInterpreter:
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )
+        return demande
 
     async def _request_scope_change(self, params: InterpreterInput, transition: Any, request: Any) -> None:
         await self._create_request(
@@ -561,7 +567,7 @@ class WorkflowInterpreter:
         self.attempts[key] = attempt + 1
 
         if transition.to.startswith("pr_"):
-            await workflow.execute_activity(
+            await executer_activite(
                 scm_activities.open_pull_request,
                 {"project_id": params.project_id, "work_item_id": params.work_item_id},
                 start_to_close_timeout=timedelta(minutes=3),
@@ -569,7 +575,7 @@ class WorkflowInterpreter:
             )
         outcomes = await self._gates(params, transition, self.current_run or self.last_run or "")
         if transition.to.startswith("merged") and all(not o.blocking and not o.pending for o in outcomes):
-            await workflow.execute_activity(
+            await executer_activite(
                 scm_activities.enqueue_merge,
                 {"project_id": params.project_id, "work_item_id": params.work_item_id},
                 start_to_close_timeout=timedelta(minutes=3),
@@ -579,7 +585,7 @@ class WorkflowInterpreter:
 
     async def _run_train(self, params: InterpreterInput, engine: WorkflowEngine, transition: Any) -> Any:
         env = transition.train.env if transition.train else "prod"
-        await workflow.execute_activity(
+        await executer_activite(
             signal_train,
             {
                 "project_id": params.project_id,
@@ -638,7 +644,7 @@ class WorkflowInterpreter:
         return None
 
     async def _mirror(self, params: InterpreterInput, reason: str) -> None:
-        await workflow.execute_activity(
+        await executer_activite(
             tracker_activities.mirror_state,
             {
                 "project_id": params.project_id,
@@ -649,7 +655,7 @@ class WorkflowInterpreter:
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )
-        await workflow.execute_activity(
+        await executer_activite(
             tracker_activities.update_status_comment,
             {"project_id": params.project_id, "work_item_id": params.work_item_id},
             start_to_close_timeout=timedelta(minutes=2),

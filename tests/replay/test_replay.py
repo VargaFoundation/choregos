@@ -35,19 +35,23 @@ async def test_replay_history(path: Path) -> None:
 
 async def test_record_and_replay_roundtrip(tmp_path: Path) -> None:
     """Enregistre un historique neuf puis le rejoue : la boucle est vérifiable en CI."""
+    from choregos_orchestrator.testing import workers_repartis
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from choregos_orchestrator.workflows.train import ReleaseTrain
     from temporalio.client import WorkflowHistory
     from temporalio.testing import WorkflowEnvironment
-    from temporalio.worker import Replayer, Worker
+    from temporalio.worker import Replayer
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with Worker(
+        # Un worker par file : `notify` et `enqueue_merge` sont planifiées sur `tracker`, pas sur
+        # la file du workflow. Un worker unique masquerait la répartition que l'historique doit
+        # porter, et l'historique rejoué serait celui d'un déploiement qui n'existe pas.
+        async with workers_repartis(
             environment.client,
-            task_queue="replay",
+            activites=_stub_activities(),
             workflows=[ReleaseTrain],
-            activities=_stub_activities(),
+            file_du_workflow="replay",
         ):
             handle = await environment.client.start_workflow(
                 "ReleaseTrain",

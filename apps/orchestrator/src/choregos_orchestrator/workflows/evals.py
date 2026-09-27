@@ -9,6 +9,8 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
+from .planification import executer_activite
+
 with workflow.unsafe.imports_passed_through():
     from ..activities import evals as eval_activities
 
@@ -38,7 +40,7 @@ class EvalMatrix:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = EvalInput(**payload)
-        fixtures = params.fixtures or await workflow.execute_activity(
+        fixtures = params.fixtures or await executer_activite(
             eval_activities.list_fixtures,
             {},
             start_to_close_timeout=timedelta(minutes=1),
@@ -47,7 +49,7 @@ class EvalMatrix:
         for backend in params.backends:
             for model in params.models:
                 for memory in params.with_memory:
-                    outcome = await workflow.execute_activity(
+                    outcome = await executer_activite(
                         eval_activities.run_eval_cell,
                         {
                             "project_slug": params.project_slug,
@@ -62,7 +64,7 @@ class EvalMatrix:
                     )
                     self.results.append(outcome)
         if params.publish:
-            await workflow.execute_activity(
+            await executer_activite(
                 eval_activities.publish_matrix,
                 {"project_slug": params.project_slug, "results": self.results},
                 start_to_close_timeout=timedelta(minutes=5),

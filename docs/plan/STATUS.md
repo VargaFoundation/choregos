@@ -604,3 +604,28 @@ les 492 tests ne disaient pas :
    le développement et seulement vérifiable en présence, et le déséquilibre des garanties, dont
    la plupart ne savent lire qu'un diff de code. Ni l'une ni l'autre ne bloque un métier ; elles
    sont laissées écrites plutôt que corrigées par une abstraction dont personne n'a besoin.
+
+8. **Ce que la répartition des files ne prouvait pas, et ce qu'elle prouve depuis le 2026-09-27.**
+   `worker.py` déclarait depuis le premier jour quelle activité va sur quelle file — « les appels
+   externes lents sont isolés pour ne pas bloquer la boucle de décision » — et **rien ne
+   l'appliquait** : `workflow.execute_activity` sans `task_queue` planifie sur la file du
+   *workflow*. Tout tournait donc sur `orchestrator` ; les trois déploiements de workers
+   spécialisés que le chart crée ne recevaient jamais une tâche. Aucun test ne pouvait le voir,
+   les trois suites Temporal montant un worker unique portant toutes les activités : il répond
+   quelle que soit la file demandée. Ce qui l'a rendu visible est une politique réseau de
+   Diametral qui, elle, prenait la répartition au sérieux.
+
+   Ce que la correction prouve : `apps/orchestrator/tests/test_repartition_des_files.py` lit dans
+   l'historique Temporal la file sur laquelle chaque activité a été planifiée — `prepare_stage` et
+   `start_run` sur `executor`, `mirror_state` sur `tracker`, `load_context` sur la file du
+   workflow. L'historique porte cette information dès la planification, avant qu'un worker ait pris
+   la tâche : l'affirmation ne dépend donc pas de ce qu'un worker écoute. Les trois suites montent
+   désormais **un worker par file**, et la file du workflow n'y porte que les activités sans file
+   déclarée — sans quoi un routage cassé y tournerait quand même.
+
+   Ce que ça ne prouve pas : rien ne mesure que l'isolation *sert* à quelque chose. Personne n'a
+   montré qu'une saturation de la file `tracker` laissait la boucle de décision réactive ; c'est
+   la raison d'être invoquée par le commentaire, et elle reste une intention. En production,
+   `orchestrator` garde par ailleurs toutes les activités — un filet pour ne pas laisser une tâche
+   orpheline pendant une montée de version — donc un routage qui régresserait en production
+   dégraderait au lieu de casser. C'est le test qui l'interdit, pas le déploiement.

@@ -10,6 +10,8 @@ from typing import Any
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 
+from .planification import executer_activite
+
 with workflow.unsafe.imports_passed_through():
     from ..activities import findings as finding_activities
 
@@ -61,7 +63,7 @@ class FindingsTriage:
             await workflow.wait_condition(lambda: bool(self.queue) or self.stopped)
             while self.queue:
                 item = self.queue.popleft()
-                outcome = await workflow.execute_activity(
+                outcome = await executer_activite(
                     finding_activities.triage_finding,
                     {"project_slug": params.project_slug, "finding_id": item["finding_id"]},
                     start_to_close_timeout=timedelta(minutes=3),
