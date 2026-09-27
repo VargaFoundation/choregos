@@ -113,6 +113,33 @@ async def current_principal(
 Me = Annotated[Principal, Depends(current_principal)]
 
 
+async def exiger_admin_de_plateforme(session: AsyncSession, principal: Principal) -> None:
+    """Administrer la PLATEFORME est un droit sur l'instance, pas sur une organisation.
+
+    `Principal.is_platform_admin()` rend vrai dès qu'on est `org_admin` de N'IMPORTE QUELLE
+    organisation. Sur une installation à une seule organisation — l'édition communautaire
+    (ADR 0024) — c'est exact : l'administrateur de cette organisation EST l'administrateur de
+    l'instance. Dès qu'il y en a deux, ça ne l'est plus, et le prédicat accordait alors les
+    routes `/platform/*` — catalogue de backends, exécuteurs, profils de modèles, clés de
+    passerelle — à l'administrateur de n'importe quel locataire.
+
+    On exige donc d'être `org_admin` de TOUTES les organisations de l'instance. En mono-org, rien
+    ne change. En multi-org, ce n'est vrai de personne tant que l'édition entreprise n'a pas
+    défini un vrai rôle de plateforme : un refus, et c'est le bon défaut — mieux vaut une route
+    inaccessible qu'une route ouverte au mauvais locataire.
+    """
+    from .db.models import Organization
+
+    slugs = set((await session.execute(select(Organization.slug))).scalars().all())
+    administrees = {org for org, role in principal.org_roles.items() if role == Role.ORG_ADMIN}
+    if not slugs or not slugs <= administrees:
+        manquantes = sorted(slugs - administrees)
+        raise forbidden(
+            "réservé aux administrateurs de la plateforme : ce droit porte sur l'instance "
+            f"entière, et il manque {manquantes or 'toute organisation'}."
+        )
+
+
 @dataclass(slots=True)
 class ProjectContext:
     """Un projet résolu, avec l'organisation et le rôle de l'appelant."""

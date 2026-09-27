@@ -12,7 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from ..audit import record
 from ..db.models import Membership, Organization, Project
-from ..deps import Db, Me, Pagination, ProjectCtx
+from ..deps import Db, Me, Pagination, ProjectCtx, exiger_admin_de_plateforme
 from ..edition import est_entreprise
 from ..errors import conflict, forbidden, not_found
 from ..rbac import Permission
@@ -53,8 +53,9 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     (`CHOREGOS_BOOTSTRAP_ORG`) : avant le 2026-09-24, aucune route, aucune commande ni
     aucun écran ne savait en créer une.
     """
-    if not principal.is_platform_admin():
-        raise forbidden("créer une organisation demande le rôle org_admin sur une organisation")
+    # Créer une organisation est un geste d'INSTANCE : il faut administrer l'instance, pas une
+    # organisation parmi d'autres.
+    await exiger_admin_de_plateforme(session, principal)
     if not est_entreprise():
         # L'édition communautaire est mono-organisation (ADR 0024). Ce n'est pas un plafond
         # arbitraire : le multi-locataire n'est pas fini ici — treize tables restent hors RLS —
