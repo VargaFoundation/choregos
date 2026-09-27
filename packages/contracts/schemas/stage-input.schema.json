@@ -57,6 +57,13 @@
         },
         "typecheck_command": {
           "type": "string"
+        },
+        "fact_commands": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Commandes qui MESURENT un fait booléen : nom du fait → commande, code de sortie 0 = vrai. Le runner les exécute après l'étape et le fait mesuré écrase celui que l'agent a déclaré, comme les tests écrasent tests_passed. À la racine de la configuration du projet (dod.facts), pas sous repo : un projet sans dépôt doit pouvoir prouver quelque chose."
         }
       }
     },
@@ -383,7 +390,10 @@
         },
         "unknown_requests": {
           "type": "string",
-          "enum": ["allow", "reject"],
+          "enum": [
+            "allow",
+            "reject"
+          ],
           "default": "allow"
         },
         "max_findings": {

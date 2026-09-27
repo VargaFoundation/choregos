@@ -20,6 +20,9 @@ class ProjectRef(Strict):
     test_command: str | None = None
     lint_command: str | None = None
     typecheck_command: str | None = None
+    #: {nom du fait: commande}. Code de sortie 0 = vrai. Le runner les exécute et le fait
+    #: MESURÉ écrase celui que l'agent a déclaré — c'est ce qui sépare une garantie d'un récit.
+    fact_commands: dict[str, str] = Field(default_factory=dict)
 
 
 class WorkItemLinks(Strict):

@@ -50,7 +50,7 @@ from .policy import (
     ScopePolicy,
     TrainEnvPolicy,
 )
-from .project import AgentConfig, ModelProfile, ModelsConfig, ProjectConfig, RepoConfig
+from .project import AgentConfig, DodConfig, ModelProfile, ModelsConfig, ProjectConfig, RepoConfig
 from .stage import (
     STAGE_INPUT_SCHEMA,
     STAGE_RESULT_SCHEMA,
@@ -164,6 +164,7 @@ __all__ = [
     "Control",
     "DeployResult",
     "Diagnostics",
+    "DodConfig",
     "EventType",
     "Evidence",
     "ExecutorKind",

@@ -26,6 +26,29 @@ class RepoConfig(Strict):
     typecheck_command: str | None = None
 
 
+class DodConfig(Strict):
+    """Ce que le RUNNER mesure lui-même, par opposition à ce que l'agent raconte.
+
+    `repo.test_command` et ses voisines vivent sous `repo`, donc un projet sans dépôt — un
+    métier qui instruit des dossiers, qualifie des profils, entretient une plateforme — ne
+    pouvait mesurer AUCUNE preuve. `evidence_facts` lisait alors des faits que l'agent avait
+    écrits, et un fait narré ne vaut pas un fait mesuré (ADR 0010, « les gates sont des
+    mécanismes »).
+
+    `facts` associe un nom de fait à une commande : **code de sortie 0 = vrai**, autre chose =
+    faux. Le runner l'exécute après l'étape et le fait mesuré écrase celui de l'agent, exactement
+    comme les tests écrasent `tests_passed`. Une commande qui n'existe pas rend donc `false`,
+    jamais « on ne sait pas » : c'est le même choix que pour une garantie sans matière.
+
+        dod:
+          facts:
+            constat_resolu: "ops/healthcheck/collectors/20-k3s.sh | grep -qv CLE-DU-CONSTAT"
+            piece_identite: "test -f dossier/identite.pdf"
+    """
+
+    facts: dict[str, str] = Field(default_factory=dict)
+
+
 class AgentConfig(Strict):
     default_backend: str = "claude-code"
     allowed_backends: list[str] = Field(default_factory=list)
@@ -72,6 +95,9 @@ class ProjectConfig(Strict):
     gitops: GitopsConfig | None = None
     cluster: str | None = None
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
+    #: Ce que le runner mesure lui-même. À la racine, et non sous `repo` : un projet sans dépôt
+    #: doit pouvoir prouver quelque chose.
+    dod: DodConfig = Field(default_factory=DodConfig)
     #: Les outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun, et
     #: c'est le défaut : un catalogue déployé ne s'ouvre pas à tous les projets par
     #: accident. `["*"]` ouvre tout le catalogue, ce qui se décide, pas se subit.
