@@ -18,6 +18,11 @@ global:
   # locataire qui le pose (par exemple depuis un magasin de secrets), pas ce chart.
   imagePullSecrets: []
   environment: dev
+  # Édition annoncée par ce déploiement (ADR 0024). `community` est le défaut, et le plus
+  # restrictif : une seule organisation. `enterprise` exige des images de l'édition entreprise —
+  # l'API REFUSE de démarrer si aucun greffon entreprise ne s'est déclaré, plutôt que de paraître
+  # saine et de refuser la seconde organisation des semaines plus tard.
+  edition: community
   fakes: false
   # Canary de la plateforme (S7-08). Désactivé par défaut : il exige Argo Rollouts dans le
   # cluster, et un chart qui suppose un opérateur absent est un chart qui ne s'installe pas.

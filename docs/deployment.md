@@ -403,6 +403,28 @@ The rights check runs **before** the edition check on purpose: a developer gets 
 learns nothing about the edition or the number of organisations. A product limit is not
 explained to someone who has no right to meet it.
 
+#### Announcing an edition, and why the chart refuses a half-announcement
+
+`global.edition` (default `community`) is what the *deployment* claims. It reaches every process
+as `CHOREGOS_EDITION`, and `/metrics` carries it as `choregos_edition_info{edition,version}` — so
+a dashboard from three weeks ago still says which edition produced its numbers, which `/edition`
+cannot do.
+
+The claim and the reality are two different things, and they used to be unrelated. The edition
+that *runs* is declared at start-up by the enterprise plugin; the chart value is a declaration by
+a human. Set `global.edition: enterprise` on community images and you used to get a platform that
+starts, looks healthy, serves metrics — and refuses the second organisation weeks later, a symptom
+with no visible connection to its cause. Two guards now close that gap:
+
+| Where | What it refuses | Why there |
+|---|---|---|
+| `helm template` | `edition: enterprise` with no `global.imagePullSecrets` | the enterprise images live in a private registry; that pull secret **is** the access control in phase 1 ([ADR 0024](adr/0024-deux-editions.md), decision 5). Without it the pods sit in `ImagePullBackOff`, which never names the cause |
+| API start-up | `CHOREGOS_EDITION=enterprise` while no plugin declared itself | the image is the community one, or `choregos-ee` is not installed, or its `choregos.plugins` entry point does not call `declarer`. The refusal names all three |
+
+The reverse is **not** refused: a deployment that announces nothing and loads the enterprise
+plugin is simply one that forgot to say so, and denying it start-up would help no one. `/edition`
+and the metric tell the truth either way.
+
 ### When a secret is not a secret
 
 The API **refuses to start** if any setting holds the literal string `<no value>` (or `<nil>`).

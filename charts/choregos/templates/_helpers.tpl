@@ -28,6 +28,8 @@ app.kubernetes.io/part-of: choregos
 {{- define "choregos.commonEnv" -}}
 - name: CHOREGOS_ENV
   value: {{ .Values.global.environment | quote }}
+- name: CHOREGOS_EDITION
+  value: {{ .Values.global.edition | default "community" | quote }}
 - name: CHOREGOS_LOG_LEVEL
   value: {{ .Values.global.logLevel | quote }}
 - name: CHOREGOS_FAKES
