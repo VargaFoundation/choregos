@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from choregos_contracts import ModelRef, StageInput
 
@@ -115,7 +115,7 @@ class OpenCodeBackend(Backend):
                 }
             },
             "model": f"choregos/{stage_input.model.litellm_model}",
-            "mcp": json.loads(self.mcp_config_json(stage_input))["mcpServers"],
+            "mcp": self._mcp_pour_opencode(stage_input),
         }
         return LaunchPlan(
             command=command,
@@ -123,6 +123,43 @@ class OpenCodeBackend(Backend):
             files={"opencode.json": json.dumps(config, indent=2, ensure_ascii=False)},
             mcp_servers=self.mcp_servers(stage_input),
         )
+
+    @staticmethod
+    def _mcp_pour_opencode(stage_input: StageInput) -> dict[str, Any]:
+        """Les serveurs MCP au format d'**opencode**, qui n'est pas le format répandu.
+
+        `mcp_config_json` rend la forme `mcpServers` que Claude Code, Codex et Gemini lisent :
+        `{"type": "http", "url": …}`. Opencode attend autre chose, et il ne s'en accommode pas —
+        il refuse TOUTE la configuration et s'arrête :
+
+            Configuration is invalid at /tmp/ws/opencode.json
+            ↳ Expected { readonly "type": "local", … } | { readonly "type": "remote", … },
+              got {"type":"http","url":"http://localhost:7777/mcp"} mcp.choregos
+            ↳ Missing key mcp.choregos.enabled
+
+        Relevé le 2026-09-27 en lançant `opencode acp` à la main dans le locataire dev, avec la
+        configuration que ce backend écrit. C'est la raison pour laquelle aucun agent n'avait
+        jamais tourné sur ce locataire : le refus partait sur la sortie d'erreur, que le runner
+        ne lisait pas, et l'étape mourait sur un `TimeoutError` d'`initialize`.
+
+        La leçon de fond : une configuration d'agent n'est pas un format commun. La réutiliser
+        d'un backend à l'autre était une économie, et elle a coûté un silence.
+        """
+        serveurs: dict[str, Any] = {}
+        for nom, serveur in stage_input.tools.mcp.items():
+            if serveur.url:
+                serveurs[nom] = {"type": "remote", "url": serveur.url, "enabled": True}
+                if serveur.env:
+                    serveurs[nom]["headers"] = dict(serveur.env)
+            elif serveur.command:
+                serveurs[nom] = {
+                    "type": "local",
+                    "command": list(serveur.command),
+                    "enabled": True,
+                }
+                if serveur.env:
+                    serveurs[nom]["environment"] = dict(serveur.env)
+        return serveurs
 
     def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
         return self.openai_env(model, key)

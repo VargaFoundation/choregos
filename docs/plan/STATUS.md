@@ -629,3 +629,29 @@ les 492 tests ne disaient pas :
    `orchestrator` garde par ailleurs toutes les activités — un filet pour ne pas laisser une tâche
    orpheline pendant une montée de version — donc un routage qui régresserait en production
    dégraderait au lieu de casser. C'est le test qui l'interdit, pas le déploiement.
+
+9. **Le premier run d'agent réel, et les six obstacles qu'il a révélés** (nuit du 2026-09-27).
+   Aucun n'était visible en test ; chacun a été trouvé en levant le précédent. Dans l'ordre :
+
+   | Obstacle | Ce que ça donnait | Où c'est corrigé |
+   |---|---|---|
+   | un ticket naissait dans son état **terminal** | workflow `COMPLETED` en 1,5 s, zéro étape, board vert | #105 (contrat `initial`) |
+   | les activités n'allaient jamais sur leur file déclarée | `start_run` sur `orchestrator`, `ConnectTimeout` vers l'API Kubernetes | #106 |
+   | le ticket enregistrait `"Application error"` | la cause réelle ne vivait que dans le journal | #106 |
+   | le Role `job-runner` de la plateforme manquait 3 verbes | Job créé, puis `403` sur `PATCH secrets` | infra#750 |
+   | le pod d'agent recevait un proxy d'egress **inexistant** | premier appel mort sur « Name or service not known » | #110 + deploy#13 |
+   | opencode **refusait sa configuration** | `initialize` en délai dépassé, stderr jamais lu | #111 (le diagnostic) puis le correctif de schéma MCP |
+
+   Ce que ça prouve : la chaîne ticket → interpréteur → file `executor` → API Kubernetes → Job →
+   clé virtuelle de passerelle fonctionne de bout en bout sur un locataire réel, sous Kyverno en
+   Enforce et `clusterResourceWhitelist: []`. Le Job d'agent est créé, son secret lui appartient,
+   sa clé est émise puis révoquée.
+
+   Ce que ça ne prouve **pas** : aucun agent n'a encore produit un résultat, le registre n'a
+   toujours aucune ligne `kind=tool`, et le coût du produit reste à 2,7 × 10⁻⁵ USD — un appel de
+   sonde, pas un run. Les deux preuves du blocage 4 restent ouvertes.
+
+   La leçon de méthode : **cinq des six obstacles ont été trouvés en rendant une panne lisible,
+   pas en lisant du code.** Le seul qu'un test aurait pu attraper — la répartition des files —
+   était invisible parce que les trois suites Temporal montaient un worker unique portant toutes
+   les activités. Un décor qui répond toujours ne prouve rien.

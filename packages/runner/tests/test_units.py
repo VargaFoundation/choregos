@@ -740,3 +740,57 @@ def test_le_preset_regulated_ferme_les_demandes_inconnues() -> None:
 
     assert load_preset("regulated").sandbox.unknown_requests == "reject"
     assert load_preset("team").sandbox.unknown_requests == "allow"
+
+
+# ──────── opencode a son propre schéma MCP (2026-09-27) ────────
+
+
+def test_opencode_ecrit_ses_serveurs_mcp_dans_son_propre_schema(tmp_path: Path) -> None:
+    """Le format `mcpServers` répandu fait REFUSER toute la configuration à opencode.
+
+    Relevé en lançant `opencode acp` 1.18.31 à la main dans le locataire dev, avec la
+    configuration que ce backend écrivait :
+
+        Configuration is invalid at /tmp/ws/opencode.json
+        ↳ Expected { readonly "type": "local", … } | { readonly "type": "remote", … },
+          got {"type":"http","url":"http://localhost:7777/mcp"} mcp.choregos
+        ↳ Missing key mcp.choregos.enabled
+
+    C'est la raison pour laquelle aucun agent n'avait jamais tourné sur ce locataire : opencode
+    écrivait ce refus sur sa sortie d'erreur, que le runner ne lisait pas, et l'étape mourait sur
+    un `TimeoutError` d'`initialize`. Avec `type: remote` + `enabled`, le même binaire répond en
+    six secondes — vérifié dans le même pod.
+    """
+    import json as _json
+
+    from choregos_contracts import McpServerRef
+
+    stage_input = _minimal_stage_input(tmp_path)
+    stage_input.tools.mcp = {
+        "choregos": McpServerRef(url="http://localhost:7777/mcp"),
+        "memory": McpServerRef(url="http://ecphoria:8432/mcp", env={"Authorization": "Bearer jeton"}),
+        "local": McpServerRef(command=["mon-serveur", "--stdio"], env={"TZ": "UTC"}),
+    }
+    plan = get_backend("opencode").launch_plan(stage_input, tmp_path)
+    config = _json.loads(plan.files["opencode.json"])
+
+    for nom, serveur in config["mcp"].items():
+        assert serveur["type"] in {"remote", "local"}, f"{nom} : {serveur['type']} refusé par opencode"
+        assert serveur["enabled"] is True, f"{nom} : opencode exige `enabled`"
+        assert serveur["type"] != "http", f"{nom} : `http` est le format des AUTRES backends"
+
+    assert config["mcp"]["memory"]["headers"] == {"Authorization": "Bearer jeton"}
+    assert config["mcp"]["local"]["command"] == ["mon-serveur", "--stdio"]
+    assert config["mcp"]["local"]["environment"] == {"TZ": "UTC"}
+
+
+def test_les_autres_backends_gardent_le_format_repandu(tmp_path: Path) -> None:
+    """Le format `mcpServers` reste celui de Claude Code, Codex et Gemini : ne pas l'aligner."""
+    import json as _json
+
+    from choregos_contracts import McpServerRef
+
+    stage_input = _minimal_stage_input(tmp_path)
+    stage_input.tools.mcp = {"choregos": McpServerRef(url="http://localhost:7777/mcp")}
+    serveurs = _json.loads(get_backend("opencode").mcp_config_json(stage_input))["mcpServers"]
+    assert serveurs["choregos"] == {"type": "http", "url": "http://localhost:7777/mcp"}
