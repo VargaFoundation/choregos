@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Protocole ACP : JSON-RPC 2.0 sur stdio (docs/plan/02 §2.2).
 
 Le runner est le **client** : il lance l'agent, l'initialise, ouvre une session,

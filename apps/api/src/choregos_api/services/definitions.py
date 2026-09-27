@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le workflow et la politique actifs d'un projet, leurs modèles, et les défauts d'un projet neuf."""
 
 from __future__ import annotations

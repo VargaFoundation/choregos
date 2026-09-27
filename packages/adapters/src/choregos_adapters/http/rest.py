@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Client REST minimal partagé par les trackers Jira et GitLab.
 
 Ni l'un ni l'autre n'a les subtilités de GitHub (App, installations, secondary limits) :

@@ -24,7 +24,12 @@ CONTRACTS = ROOT / "packages" / "contracts"
 SCHEMAS = CONTRACTS / "schemas"
 TS_DIR = CONTRACTS / "ts"
 
-HEADER = """/* eslint-disable */
+#: Le bandeau des fichiers TypeScript générés. L'identifiant SPDX en fait partie : ces fichiers
+#: sont distribués comme les autres, et le test de `tests/licences/` l'exige de TOUT ce qui ship.
+#: L'ajouter à la main dans le fichier généré aurait fait rougir `make contracts-check` au premier
+#: passage — un en-tête doit venir de ce qui écrit le fichier.
+HEADER = """// SPDX-License-Identifier: Apache-2.0
+/* eslint-disable */
 /**
  * Généré par tools/gen_contracts.py — NE PAS MODIFIER À LA MAIN.
  * Source : packages/contracts/{source}

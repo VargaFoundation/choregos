@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Journal d'audit : toute mutation laisse une trace, et cette trace appartient à une organisation.
 
 `org_id` est un argument **obligatoire**. C'est voulu : jusqu'au 2026-09-26, `audit_log` n'avait

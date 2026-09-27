@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Normalisation des webhooks GitLab en `InboundEvent`.
 
 GitLab annonce le type dans `object_kind` (`issue`, `note`, `merge_request`, `pipeline`) et

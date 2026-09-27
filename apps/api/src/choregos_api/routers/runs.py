@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Runs : détail, journal ACP (SSE), transcript, diff."""
 
 from __future__ import annotations

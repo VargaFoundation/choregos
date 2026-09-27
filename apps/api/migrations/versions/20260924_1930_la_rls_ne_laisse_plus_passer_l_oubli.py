@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """La RLS ne laisse plus passer l'oubli : fail-closed, et une portée par session
 
 La politique initiale était `choregos_current_org() IS NULL OR …` : une session qui ne

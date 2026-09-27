@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Backends, exécuteurs, clés, audit, webhooks."""
 
 from __future__ import annotations

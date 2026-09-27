@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Contrats Choregos : schémas JSON, OpenAPI et types Python.
 
 `packages/contracts` est la **source de vérité** des interfaces entre les flux.

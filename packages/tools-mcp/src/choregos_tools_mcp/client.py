@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Client de l'API interne : le seul canal de sortie du runner."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """TrackerAdapter GitHub : Issues (REST) + Projects v2 (GraphQL).
 
 Le board est la vue humaine : Choregos y écrit l'état, le coût, la taille, le risque

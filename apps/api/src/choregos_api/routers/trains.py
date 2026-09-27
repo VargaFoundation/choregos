@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Trains et releases : état, départ, gel, approbation, abandon.
 
 L'API ne décide rien : elle signale le workflow `ReleaseTrain`, qui est le seul

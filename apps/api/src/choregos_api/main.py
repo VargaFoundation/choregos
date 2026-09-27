@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Application FastAPI de Choregos."""
 
 from __future__ import annotations

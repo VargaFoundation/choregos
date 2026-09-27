@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Adaptateurs de tracker."""
 
 from __future__ import annotations

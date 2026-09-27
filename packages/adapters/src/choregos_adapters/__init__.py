@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Adaptateurs Choregos : tout ce qui parle au monde extérieur.
 
 Un adaptateur implémente un `Protocol` de `base.py` et **n'a aucune logique métier** :

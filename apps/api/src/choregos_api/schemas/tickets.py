@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Tickets, runs, demandes humaines, diffs, questions."""
 
 from __future__ import annotations

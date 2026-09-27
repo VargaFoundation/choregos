@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Types de l'API, réexportés depuis les contrats générés (`make contracts`).
  * Le front ne redéfinit jamais un type de l'API : il en dépend.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Les activités propres à l'interpréteur : charger le contexte d'un ticket, consigner la
 mort d'un interpréteur, annoncer un ticket au train — et lire une erreur Temporal.
 

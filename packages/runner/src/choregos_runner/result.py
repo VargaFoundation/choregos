@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Lecture, validation et réparation de `.choregos/result.json`.
 
 L'agent écrit ce fichier ; le runner le valide contre le contrat, demande une réparation

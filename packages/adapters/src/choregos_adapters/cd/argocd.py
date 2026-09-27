@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CdAdapter Argo CD + Argo Rollouts : promotion par PR GitOps, santé, canary, abandon.
 
 Choregos ne fait **jamais** `kubectl apply` : il écrit dans le dépôt GitOps et Argo applique.

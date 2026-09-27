@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """TrackerAdapter Jira Cloud : issues, transitions, commentaires, champs personnalisés.
 
 Jira n'a ni labels scopés comme GitHub ni colonnes libres : l'état du DSL devient une

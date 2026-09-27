@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Modèles : catalogue plateforme, profils projet, matrice backend × modèle."""
 
 from __future__ import annotations

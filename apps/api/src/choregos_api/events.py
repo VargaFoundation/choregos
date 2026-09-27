@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Bus d'événements interne : persistance + diffusion SSE au front.
 
 Un seul chemin pour tout ce qui bouge : `diffuser()` publie un événement — dans le

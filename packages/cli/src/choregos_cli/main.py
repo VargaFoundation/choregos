@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CLI `choregos` : projets, tickets, runs, trains, findings, workflow, dev."""
 
 from __future__ import annotations

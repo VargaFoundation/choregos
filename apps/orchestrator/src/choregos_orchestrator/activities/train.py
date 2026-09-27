@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités du release train : fenêtres, promotion GitOps, soak, canary, rollback, notes."""
 
 from __future__ import annotations

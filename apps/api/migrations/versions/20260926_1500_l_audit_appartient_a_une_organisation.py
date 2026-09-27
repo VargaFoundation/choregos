@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """L'audit appartient à une organisation
 
 `audit_log` était la dernière table de mutation hors RLS, et elle n'avait même pas de colonne

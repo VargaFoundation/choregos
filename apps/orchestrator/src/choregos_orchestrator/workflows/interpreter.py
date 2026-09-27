@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`WorkflowInterpreter` : exécute le DSL épinglé pour un ticket (docs/plan/02 §2.1).
 
 Le workflow ne fait **aucune** entrée/sortie et n'appelle **jamais** un modèle : il décide,

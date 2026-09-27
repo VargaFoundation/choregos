@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Markdown ↔ Atlassian Document Format, juste ce qu'il faut pour Choregos.
 
 Jira Cloud n'accepte plus de markdown dans ses commentaires : il veut de l'ADF. Le

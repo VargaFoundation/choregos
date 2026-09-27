@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Abonnement SSE avec reprise : le front reprend après `Last-Event-ID`, donc un
  * rechargement ne perd pas d'événement (§3.4).

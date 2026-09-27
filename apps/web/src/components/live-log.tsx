@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /** Journal ACP virtualisé : 10 000 événements sans saccade, permissions mises en évidence. */
 "use client";
 

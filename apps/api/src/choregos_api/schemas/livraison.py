@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Releases, trains, findings."""
 
 from __future__ import annotations

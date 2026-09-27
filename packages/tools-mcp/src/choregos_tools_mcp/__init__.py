@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Sidecar MCP `choregos-tools` : les seuls outils d'écriture d'un agent."""
 
 from __future__ import annotations

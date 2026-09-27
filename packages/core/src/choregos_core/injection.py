@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Détection basique d'injection de prompt dans ce que l'agent va lire.
 
 Un ticket, un commentaire, un document ou un souvenir de la mémoire est un texte que

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Workers Temporal : un déploiement par task queue (docs/plan/02 §2.1)."""
 
 from __future__ import annotations

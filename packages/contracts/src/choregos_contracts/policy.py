@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Modèles de politique (schemas/policy.schema.json)."""
 
 from __future__ import annotations

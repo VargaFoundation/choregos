@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Mémoire, A/B, coûts, DORA, revue croisée."""
 
 from __future__ import annotations

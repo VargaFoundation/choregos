@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Quelle file porte quelle activité (docs/plan/02 §2.1).
 
 Ce module existe parce que **deux côtés** ont besoin de la même table : le worker, pour savoir

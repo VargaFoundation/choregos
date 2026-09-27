@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Sidecar HTTP du serveur MCP `choregos-tools` (endpoint `/mcp`)."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le runner : l'algorithme en douze étapes de docs/plan/02 §2.2.
 
 Il est jetable et sans mémoire : tout ce qu'il produit part dans l'API interne et

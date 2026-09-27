@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités tracker : miroir d'état, commentaire de suivi, champs du board, demandes humaines."""
 
 from __future__ import annotations

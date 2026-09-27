@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`python -m choregos_playbooks.evals.runner --all` — les évals qui bloquent la CI.
 
 Deux niveaux, dans cet ordre :

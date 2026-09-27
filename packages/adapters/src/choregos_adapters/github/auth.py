@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Authentification GitHub App : JWT d'App, jetons d'installation, cache et portée minimale."""
 
 from __future__ import annotations

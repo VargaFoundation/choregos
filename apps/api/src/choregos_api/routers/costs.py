@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Coûts : agrégats par jour, étape, modèle, backend, taille, export CSV — et métriques DORA."""
 
 from __future__ import annotations

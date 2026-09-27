@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Planifier une activité **sur sa file** (docs/plan/02 §2.1).
 
 `workflow.execute_activity` sans `task_queue` planifie sur la file du *workflow*. Tous les

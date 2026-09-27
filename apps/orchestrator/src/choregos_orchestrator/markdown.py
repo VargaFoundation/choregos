@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Rendu du commentaire de suivi écrit dans le ticket (docs/plan/04 §4.3).
 
 Un seul commentaire, repéré par un marqueur, réécrit à chaque étape : c'est la vue

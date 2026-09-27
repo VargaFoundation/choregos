@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Évaluation des gates : le mécanisme qui vérifie ce que l'agent affirme."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Chargement YAML avec position des nœuds, pour des erreurs localisées (ligne/colonne).
 
 Le validateur du DSL doit dire « ligne 42, colonne 7 » et pas seulement « champ manquant » :

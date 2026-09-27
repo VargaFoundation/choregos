@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Passerelle « directe » : il n'y en a pas.
 
 Le modèle par défaut de Choregos est une passerelle qui frappe **une clé virtuelle par run**,

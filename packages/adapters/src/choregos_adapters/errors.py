@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Erreurs des adaptateurs : toute panne externe est nommée et porte un `retry_after`."""
 
 from __future__ import annotations

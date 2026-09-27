@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Normalisation des webhooks Jira Cloud en `InboundEvent`.
 
 Jira envoie un `webhookEvent` (`jira:issue_created`, `jira:issue_updated`, `comment_created`)

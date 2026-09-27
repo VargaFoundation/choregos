@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`ProjectProvisioning` : exécute les étapes du template, reprend là où ça a cassé."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Rendu d'un workflow en graphe (couloirs par acteur) pour le front et la CLI."""
 
 from __future__ import annotations

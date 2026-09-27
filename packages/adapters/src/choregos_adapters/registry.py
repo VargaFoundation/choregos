@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Fabrique d'adaptateurs : du `connector.type` à l'implémentation.
 
 `CHOREGOS_FAKES=1` bascule toute la plateforme sur les fakes en mémoire — c'est le mode

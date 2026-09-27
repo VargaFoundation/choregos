@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """MemoryAdapter Ecphoria : mémoire bi-temporelle et base de connaissance (docs/plan/04).
 
 Deux règles tiennent tout : lecture à **timeout court** (une mémoire lente ne bloque jamais

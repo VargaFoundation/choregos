@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Client de l'API Choregos, typé par les contrats générés.
  *

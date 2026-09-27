@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """StageInput / StageResult : le contrat entre l'orchestrateur, le runner et l'agent."""
 
 from __future__ import annotations

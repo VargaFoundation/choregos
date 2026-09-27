@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Clients HTTP partagés par les adaptateurs."""
 
 from __future__ import annotations

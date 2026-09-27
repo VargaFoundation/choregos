@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Rattrapage du schéma : ce que les modèles avaient et les migrations pas.
 
 `runs.spend_collected` a été ajoutée au modèle sans migration. Personne ne l'a vu parce que

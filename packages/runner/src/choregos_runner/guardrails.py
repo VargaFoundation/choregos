@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Garde-fous du runner : ce que l'agent a le droit de faire, et ce qui est vérifié après.
 
 La permission n'est pas la garantie : la garantie, c'est la vérification du diff et les

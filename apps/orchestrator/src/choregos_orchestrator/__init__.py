@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Orchestrateur Choregos : workflows Temporal et activités.
 
 L'orchestrateur planifie et n'appelle jamais un modèle : il décide quelle étape lancer,

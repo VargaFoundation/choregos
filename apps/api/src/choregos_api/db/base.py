@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Base SQLAlchemy : UUID v7, horodatage, JSON portable SQLite/PostgreSQL."""
 
 from __future__ import annotations

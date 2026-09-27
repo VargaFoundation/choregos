@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Le bilan d'une étape : la dépense lue au gateway, le résultat consigné, les findings gardés.
 
 Toutes idempotentes par `run_id` : `collect_spend` ne compte qu'une fois (`spend_collected`),

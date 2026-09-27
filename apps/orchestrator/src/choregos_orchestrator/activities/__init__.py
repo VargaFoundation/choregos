@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Activités de l'orchestrateur : tout ce qui touche au monde extérieur.
 
 Elles sont idempotentes, typées, et n'appellent jamais un modèle directement.

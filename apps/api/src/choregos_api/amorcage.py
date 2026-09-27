@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Amorçage d'une installation neuve : la première organisation et ses administrateurs.
 
 Une base vide n'a ni organisation ni membre. `POST /orgs/{org}/projects` répond 404,

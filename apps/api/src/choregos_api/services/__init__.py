@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Services partagés par les routeurs : requêtes, conversions, effets de bord.
 
 Les routeurs restent minces ; toute la logique réutilisable (par le CLI, l'orchestrateur

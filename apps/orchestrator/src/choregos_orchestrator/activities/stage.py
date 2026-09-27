@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """La préparation d'une étape agent : modèle, clé, contexte, `StageInput`.
 
 Chaque fonction est une activité Temporal ; toutes sont idempotentes par `run_id`. Le

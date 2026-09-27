@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Webhooks entrants : vérification de signature, dédup, normalisation, réponse < 500 ms.
 
 Le traitement lourd n'a pas lieu ici : on normalise en `InboundEvent`, on déduplique

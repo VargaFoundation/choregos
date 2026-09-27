@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Cœur Choregos : domaine, DSL de workflow, politiques, gates, résolution de modèles.
 
 Ce paquet ne fait **aucune** entrée/sortie : il est pur, typé strict et testable sans service.

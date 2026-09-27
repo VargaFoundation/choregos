@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Configuration de l'API (12-factor, préfixe `CHOREGOS_`)."""
 
 from __future__ import annotations

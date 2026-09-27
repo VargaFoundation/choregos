@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Projection d'un projet : son DTO et ses statistiques du mois."""
 
 from __future__ import annotations

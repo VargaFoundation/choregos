@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """`ReleaseTrain` : un singleton par projet × environnement (docs/plan/05 §5.2).
 
 Le train est le deuxième des trois verrous : la merge queue garde `main` vert, le train

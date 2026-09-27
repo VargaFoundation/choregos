@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Résolution des modèles (docs/plan/04 §4.2).
 
 Un acteur demande `profile:strong`, `profile:by_size` ou un identifiant LiteLLM direct.

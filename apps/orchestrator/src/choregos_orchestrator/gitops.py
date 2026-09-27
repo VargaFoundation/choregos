@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Rendu des manifests Kubernetes d'un projet, écrits dans `choregos-infra/projects/<slug>/`.
 
 Personne n'applique de manifeste à la main : l'orchestrateur écrit dans Git, Argo CD applique.

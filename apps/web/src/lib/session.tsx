@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";

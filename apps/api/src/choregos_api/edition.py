@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Quelle édition tourne ici, et ce qu'elle s'autorise.
 
 Choregos existe en deux éditions ([ADR 0024](../../../docs/adr/0024-deux-editions.md)) :

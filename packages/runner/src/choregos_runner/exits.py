@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Codes de sortie du runner (docs/plan/02 §2.2).
 
 `0` signifie « résultat posté », quel que soit le statut de l'étape : c'est l'orchestrateur

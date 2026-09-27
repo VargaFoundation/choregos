@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Moteur du DSL : la logique de décision de l'interpréteur, **sans Temporal**.
 
 L'orchestrateur (apps/orchestrator) se contente d'appeler ces fonctions pures, ce qui

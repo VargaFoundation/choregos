@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Fixtures du mode démo (`NEXT_PUBLIC_API_MODE=mock`).
  *
