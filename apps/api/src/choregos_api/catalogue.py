@@ -13,7 +13,13 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from choregos_core.catalogue import Catalogue, OutilCatalogue, charger_catalogue, construire_requete
+from choregos_core.catalogue import (
+    Catalogue,
+    OutilCatalogue,
+    charger_catalogue,
+    construire_requete,
+    valider_les_arguments,
+)
 
 
 @lru_cache(maxsize=1)
@@ -58,6 +64,8 @@ async def appeler(outil: OutilCatalogue, arguments: dict[str, Any]) -> tuple[int
     confier de quoi écrire dans la plateforme. Le distant reçoit `credential_env`, une clé
     qui ne vaut que pour lui.
     """
+    # Avant tout appel, et pour les DEUX chemins : un schéma annoncé doit être appliqué.
+    valider_les_arguments(outil, arguments)
     if outil.mcp is not None:
         return await _appeler_mcp(outil, arguments)
     cle = os.environ.get(outil.credential_env, "") if outil.credential_env else None

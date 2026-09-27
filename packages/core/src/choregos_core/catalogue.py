@@ -28,8 +28,10 @@ public, c'est un outil du catalogue qui y mène — pas une dépendance de la pl
 
 from __future__ import annotations
 
+import posixpath
 import re
 from typing import Any, Literal
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -131,17 +133,75 @@ class OutilInconnuError(ChoregosError):
 
 
 class ArgumentRefuseError(ChoregosError):
-    """Un gabarit réclame un argument que l'agent n'a pas donné."""
+    """Un argument manque, ou ne respecte pas le schéma que l'outil annonce."""
 
 
-def _remplir(gabarit: str, arguments: dict[str, Any]) -> str:
+def valider_les_arguments(outil: OutilCatalogue, arguments: dict[str, Any]) -> None:
+    """Refuse des arguments qui ne respectent pas `input_schema`.
+
+    `input_schema` était **décoratif** : la plateforme l'annonçait à l'agent — c'est
+    l'`inputSchema` que `GET /internal/runs/{id}/tools` rend au format MCP — et ne le vérifiait
+    jamais. Un agent avait donc toutes les raisons de le croire contraignant, et il ne l'était pas.
+    Un schéma annoncé et non appliqué est pire que pas de schéma : il décrit une garantie qui
+    n'existe pas.
+
+    Un outil sans schéma n'impose rien, et c'est volontaire — le catalogue reste écrivable à la
+    main pour un outil trivial.
+    """
+    if not outil.input_schema:
+        return
+    import jsonschema
+
+    try:
+        jsonschema.validate(arguments, outil.input_schema)
+    except jsonschema.ValidationError as exc:
+        chemin = "/".join(str(p) for p in exc.absolute_path) or "(racine)"
+        raise ArgumentRefuseError(
+            f"argument refusé par le schéma de {outil.name} en {chemin} : {exc.message}"
+        ) from exc
+
+
+def _remplir(gabarit: str, arguments: dict[str, Any], *, encoder: bool = False) -> str:
+    """Remplit `{{ cle }}`. `encoder` percent-encode la valeur : à employer dans une URL."""
+
     def _un(m: re.Match[str]) -> str:
         cle = m.group(1)
         if cle not in arguments:
             raise ArgumentRefuseError(f"argument manquant : {cle}")
-        return str(arguments[cle])
+        valeur = str(arguments[cle])
+        return quote(valeur, safe="") if encoder else valeur
 
     return GABARIT.sub(_un, gabarit)
+
+
+def _url_de(gabarit: str, arguments: dict[str, Any]) -> str:
+    """L'URL d'un appel : les valeurs de l'agent la remplissent **sans pouvoir la déplacer**.
+
+    Le catalogue existe précisément pour que l'agent ne choisisse pas l'URL (ADR 0014). Il la
+    choisissait en partie : la valeur était substituée nue, donc `{{ owner }}` valant `../..`
+    remontait le chemin et un outil censé lire `/repos/<org>/<dépôt>` atteignait n'importe quel
+    autre point d'entrée du même hôte — **avec la clé du fournisseur que la plateforme y attache**.
+
+    Deux gardes, parce que la première ne suffit pas : l'encodage neutralise `/`, `?` et `#`, mais
+    **pas** la remontée — `quote("..")` rend `..`, le point étant un caractère non réservé. La
+    seconde compare donc l'URL NORMALISÉE au préfixe littéral du gabarit, celui qui précède le
+    premier `{{`. Ce qui sort de ce préfixe est refusé, quelle qu'en soit l'écriture.
+    """
+    url = _remplir(gabarit, arguments, encoder=True)
+    prefixe = gabarit.split("{{", 1)[0]
+    if prefixe == gabarit:  # aucun gabarit : rien à vérifier
+        return url
+    decoupe, attendu = urlsplit(url), urlsplit(prefixe)
+    if (decoupe.scheme, decoupe.netloc) != (attendu.scheme, attendu.netloc):
+        raise ArgumentRefuseError(f"un argument a déplacé l'hôte de l'appel : {url}")
+    normalise = posixpath.normpath(decoupe.path)
+    if decoupe.path.endswith("/") and not normalise.endswith("/"):
+        normalise += "/"
+    if not normalise.startswith(attendu.path):
+        raise ArgumentRefuseError(
+            f"un argument est sorti du chemin de l'outil : {normalise} n'est pas sous {attendu.path}"
+        )
+    return urlunsplit((decoupe.scheme, decoupe.netloc, normalise, decoupe.query, decoupe.fragment))
 
 
 def construire_requete(outil: OutilCatalogue, arguments: dict[str, Any], cle: str | None) -> dict[str, Any]:
@@ -158,7 +218,7 @@ def construire_requete(outil: OutilCatalogue, arguments: dict[str, Any], cle: st
     }
     return {
         "method": outil.http.method,
-        "url": _remplir(outil.http.url, arguments),
+        "url": _url_de(outil.http.url, arguments),
         "params": {nom: _remplir(v, arguments) for nom, v in outil.http.query.items()},
         "headers": entetes,
         "json": _remplir_profond(outil.http.body, arguments) if outil.http.body else None,
@@ -195,4 +255,5 @@ __all__ = [
     "OutilInconnuError",
     "charger_catalogue",
     "construire_requete",
+    "valider_les_arguments",
 ]

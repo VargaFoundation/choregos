@@ -361,3 +361,47 @@ async def test_un_projet_hors_du_groupe_n_obtient_pas_l_outil(
         json={"siren": "1"},
     )
     assert refus.status_code == 404
+
+
+async def test_un_argument_hors_schema_est_refuse_et_ne_coute_rien(
+    client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Le schéma annoncé à l'agent doit être appliqué — et le refus doit précéder l'appel.
+
+    `input_schema` était décoratif : la plateforme le rend à l'agent au format MCP
+    (`GET /internal/runs/{id}/tools`, clé `inputSchema`) et ne l'a jamais vérifié. Deux
+    conséquences, et la seconde est la plus coûteuse : un fournisseur payant recevait un appel
+    malformé, et le registre le comptait quand même.
+    """
+    from choregos_api.db.models import CostLedger
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    vues: list[Any] = []
+    _intercepter(
+        monkeypatch,
+        httpx.Response(
+            200, json={"profils": []}, request=httpx.Request("GET", "https://api.annuaire.example/v1/search")
+        ),
+        vues,
+    )
+
+    # Un argument PRÉSENT mais du mauvais type. Le cas discriminant est celui-là, pas l'argument
+    # absent : un argument manquant était déjà refusé par le gabarit (`{{ metier }}` n'a rien à
+    # substituer). Un argument du mauvais type, lui, passait — `str(valeur)` accepte tout, et le
+    # fournisseur recevait `q={'sql': '...'}`.
+    reponse = await client.post(
+        f"/api/v1/internal/runs/{run_id}/tools/recherche_profils",
+        headers=headers,
+        json={"metier": {"sql": "1=1"}},
+    )
+    assert reponse.status_code == 400, reponse.text
+    assert "metier" in reponse.text, f"le refus doit nommer l'argument fautif : {reponse.text}"
+
+    assert not vues, "le fournisseur a été appelé malgré un argument refusé"
+    async with session_scope() as session:
+        lignes = (
+            (await session.execute(select(CostLedger).where(CostLedger.run_id == run_id))).scalars().all()
+        )
+    assert not lignes, "un appel refusé a été inscrit au registre de coûts"
