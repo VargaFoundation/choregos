@@ -166,35 +166,31 @@ outils:
     price_eur: 0.05
 ```
 
-### How a tool reaches the agent, and what has to exist for it to
+### How a tool reaches the agent
 
 An agent never calls a provider. It calls an MCP server that runs **in its own pod**, on
 `localhost:7777`, and that server calls the platform's internal API with the run's token. The
 platform makes the outbound call, with the provider credential, and writes a `kind=tool` line to
 the cost ledger.
 
-That sidecar has to exist, and until 2026-09-27 it existed in **one** place only: the Tekton Task.
-Under the `k8s_job` executor no sidecar was mounted, while the platform still told every agent to
-use `localhost:7777` — so an agent asked for tools, waited, and the ticket said nothing about the
-catalogue being out of reach. That is the structural reason the cost ledger had never carried a
-`kind=tool` line.
+That local address is always announced, and somebody always serves it:
 
-Both halves are now honest:
+| Executor | Who serves `localhost:7777` |
+|---|---|
+| `tekton` | a `sidecar:` in the Task |
+| everything else | **the runner itself** (`runner/outils_locaux.py`), which starts the server when the announced address is local and nothing answers |
 
-| Executor | Who mounts the sidecar | If it cannot |
-|---|---|---|
-| `tekton` | the Task (`sidecar:`) | — |
-| `k8s_job` | the Job, as a **native sidecar** (`initContainers` + `restartPolicy: Always`, Kubernetes ≥ 1.29) | no image configured ⇒ no sidecar **and** no tool announced to the agent |
+A sidecar, where one exists, keeps the port: the runner probes first and stands aside. A **non**-local
+address is served by nobody automatically — that is a deployment providing its own server, and the
+runner deliberately abstains.
 
-`restartPolicy: Always` is the whole of it. A plain extra container in a Job never exits, so the
-Job never completes and the run stays "in progress" for ever. A native sidecar starts *before* the
-main container, Kubernetes waits for its readiness probe — the agent finds the server ready on its
-first call instead of racing it — and Kubernetes stops it when the runner finishes.
+Two things have to be true for an agent to actually get a tool, and both are easy to miss:
 
-The chart passes the image only when `global.toolCatalog.configMap` is set, so a deployment that
-asked for nothing gets no extra container. Override the image with
-`choregos-orchestrator.runner.toolsImage` / `.toolsTag`; the tag follows `global.imageTag` by
-default, because a pinned one eventually points at an image that is not there.
+1. the deployment declares it in the catalogue (`global.toolCatalog.configMap`);
+2. **the project declares that it uses it** (`tools:` in its configuration). The catalogue says
+   what exists; the project says what it draws on. A tool that is in the catalogue and not in the
+   project's list comes back `allowed: false`, and the agent correctly reports that it has no such
+   tool — which is exactly what happened on the dev tenant on 2026-09-27, and cost an hour.
 
 ### The rules that make an external MCP server safe to add
 

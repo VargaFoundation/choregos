@@ -226,17 +226,6 @@ choregos-orchestrator:
       resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
   runner:
     image: choregos-runner
-    # Le sidecar MCP monté dans CHAQUE pod d'agent quand un catalogue d'outils est configuré
-    # (`global.toolCatalog.configMap`). C'est ce serveur qui SERT le catalogue à l'agent ; sans
-    # lui, aucun outil n'est appelable sous l'exécuteur `k8s_job` — le serveur n'existait que
-    # dans la Task Tekton, et c'est pourquoi le registre n'a jamais porté de ligne `kind=tool`.
-    # Nommé ici et non `choregos-tools` : ce n'est pas le sous-chart du même nom (un Deployment
-    # de plateforme), c'est un conteneur du pod d'agent.
-    toolsImage: choregos-tools
-    # Vide : le tag suit `global.imageTag`.
-    toolsTag: ""
-    # Vide : le tag suit `global.imageTag`.
-    tag: ""
     namespacePattern: "proj-{slug}-runners"
     # Runs simultanés par namespace. Au-delà, le Job attend SANS pod (`spec.suspend`),
     # dans l'ordre d'arrivée : une pointe de tickets ne se transforme plus en pointe de

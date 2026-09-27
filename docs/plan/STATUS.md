@@ -655,3 +655,40 @@ les 492 tests ne disaient pas :
    pas en lisant du code.** Le seul qu'un test aurait pu attraper — la répartition des files —
    était invisible parce que les trois suites Temporal montaient un worker unique portant toutes
    les activités. Un décor qui répond toujours ne prouve rien.
+
+10. **Les deux preuves du blocage 4 sont acquises** (2026-09-27, 19:05 UTC, locataire dev).
+
+    Ce que la base dit, et c'est la seule chose qui compte :
+
+    | `kind` | fournisseur | modèle / outil | lignes | € |
+    |---|---|---|---|---|
+    | `model` | `openai` | `platform/cheap` | 6 | **0,045872** |
+    | `tool` | `github` | `lire_un_depot` | 1 | 0,000000 |
+
+    Plus l'événement `choregos.tool.called` — outil `lire_un_depot`, fournisseur `github`,
+    **code 200** : la plateforme a appelé l'API tierce pour le compte de l'agent, avec sa propre
+    clé, et l'a compté. Le run porte `status: succeeded`, `cost_usd: 0.028728`, 30 858 jetons en
+    entrée, 1 241 en sortie, et son résultat dit « Plan d'implémentation rédigé à partir des
+    métadonnées du dépôt ».
+
+    La chaîne prouvée, de bout en bout, sur un locataire sous Kyverno en Enforce et
+    `clusterResourceWhitelist: []` : ticket → interpréteur → file `executor` → API Kubernetes →
+    Job d'agent → opencode → passerelle (coût réel) → serveur MCP d'outils → API interne →
+    GitHub (200) → registre de coûts.
+
+    La ligne `tool` est à 0,00 € parce que cet outil est gratuit. C'est la LIGNE que `tool_called`
+    exige, pas son montant ; le montant non nul est du côté `model`.
+
+    **Ce que ça ne prouve pas.** Un seul outil, gratuit, sur un FQDN déjà ouvert : rien n'est
+    prouvé d'un outil payant ni d'un fournisseur qu'il faut autoriser au réseau. Un seul backend
+    (`opencode`) et un seul modèle (`platform/cheap`). Aucune garantie de périmètre n'a été
+    éprouvée — le projet n'a pas de dépôt, donc pas de diff. Et le prix est une **copie** des
+    tarifs de la passerelle plateforme, recopiée dans les valeurs du locataire : rien ne la
+    resynchronise.
+
+11. **Deux de mes propres changements de cette nuit étaient en trop, et c'est écrit ici.**
+    En croyant découvrir que l'exécuteur `k8s_job` ne servait pas le catalogue, j'ai rendu
+    l'annonce de l'URL conditionnelle (#112) puis ajouté un sidecar au Job (#113). Or
+    `runner/outils_locaux.py` sert déjà ces outils quand personne ne le fait — son en-tête décrit
+    exactement le défaut que je pensais trouver. Ma condition a donc retiré une annonce **vraie**,
+    et le sidecar rétablit à grands frais ce que le runner faisait seul. Corrigé.

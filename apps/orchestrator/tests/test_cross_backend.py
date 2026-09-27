@@ -118,30 +118,22 @@ async def test_un_seul_backend_autorise_degrade_sans_bloquer(setup: Fixture) -> 
 # ──────── on n'annonce à l'agent que les serveurs MCP qui existent (2026-09-27) ────────
 
 
-async def test_le_sidecar_d_outils_n_est_annonce_que_si_l_executeur_le_monte() -> None:
-    """`localhost:7777` n'existe que sous `tekton` : c'est un `sidecar:` de la Task.
+async def test_le_serveur_d_outils_est_annonce_a_tout_agent() -> None:
+    """L'adresse est locale, et quelqu'un la sert TOUJOURS — sidecar sous Tekton, runner ailleurs.
 
-    `grep 7777` dans `k8s_job.py` ne rend rien. L'URL était pourtant annoncée à TOUT agent :
-    sur le locataire dev, en `k8s_job`, l'agent recevait un serveur d'outils inexistant et rien
-    dans le ticket ne disait que le catalogue était hors de portée.
+    J'ai brièvement rendu cette annonce conditionnelle, en croyant qu'aucun serveur n'existait
+    sous `k8s_job`. La condition retirait une annonce vraie et privait l'agent de ses outils :
+    `runner/outils_locaux.py` démarre le serveur quand rien ne répond, mais l'agent ne le sait que
+    si on le lui dit.
     """
     from choregos_orchestrator.activities.stage import _serveurs_mcp
     from choregos_orchestrator.config import OrchestratorSettings
 
-    tekton = OrchestratorSettings(executor_kind="tekton", memory_url="http://ecphoria:8432")
-    assert "choregos" in _serveurs_mcp(tekton), "sous tekton, le sidecar existe"
-
-    k8s_sans_image = OrchestratorSettings(executor_kind="k8s_job", memory_url="http://ecphoria:8432")
-    assert "choregos" not in _serveurs_mcp(k8s_sans_image), (
-        "sans image d'outils, le Job ne monte aucun sidecar : l'annoncer fait attendre l'agent"
-    )
-
-    # Depuis le 2026-09-27, `k8s_job` monte le sidecar lui-même — mais seulement si une image
-    # est configurée. Les deux moitiés doivent s'accorder : le Job qui monte, l'URL qu'on annonce.
-    k8s_avec_image = OrchestratorSettings(
-        executor_kind="k8s_job", memory_url="http://ecphoria:8432", tools_image="reg/outils:1"
-    )
-    assert _serveurs_mcp(k8s_avec_image)["choregos"].url == "http://localhost:7777/mcp"
+    for executeur in ("tekton", "k8s_job", "local_docker", "aca"):
+        serveurs = _serveurs_mcp(
+            OrchestratorSettings(executor_kind=executeur, memory_url="http://ecphoria:8432")
+        )
+        assert serveurs["choregos"].url == "http://localhost:7777/mcp", executeur
 
 
 async def test_l_url_de_la_memoire_vient_de_son_reglage_pas_d_un_remplacement_de_port() -> None:

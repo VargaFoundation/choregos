@@ -335,83 +335,27 @@ async def test_sans_uid_le_secret_reste_comme_avant() -> None:
     assert not [1 for method, path, _ in client.calls if method == "PATCH" and "/secrets/" in path]
 
 
-# ──────── le Job sert le catalogue d'outils à l'agent (2026-09-27) ────────
+# ──────── qui sert le catalogue d'outils, et pourquoi pas ce Job (2026-09-27) ────────
 
 
-async def test_sans_image_d_outils_le_pod_n_a_aucun_sidecar() -> None:
-    """Le défaut ne change pas : un déploiement qui ne configure pas de catalogue n'a rien de plus."""
+async def test_le_pod_d_agent_n_a_qu_un_conteneur() -> None:
+    """Pas de sidecar d'outils ici, et c'est un CHOIX vérifié, pas un oubli.
+
+    J'en ai ajouté un le 2026-09-27 en croyant que rien ne servait le catalogue sous cet
+    exécuteur. C'était faux : `runner/outils_locaux.py` démarre ce serveur lui-même quand
+    l'adresse annoncée est locale et que rien ne répond — son en-tête décrit exactement le défaut
+    que je pensais trouver. Le sidecar coûtait un conteneur, un tirage d'image et du quota par pod
+    d'agent pour refaire ce qui marchait, et il gagnait la course au port 7777, donc le serveur du
+    runner s'abstenait.
+
+    Ce test existe pour que personne ne le rajoute sans avoir lu `outils_locaux.py`.
+    """
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
-    assert "initContainers" not in job["spec"]["template"]["spec"]
-
-
-async def test_le_sidecar_d_outils_est_un_sidecar_natif() -> None:
-    """`restartPolicy: Always` dans `initContainers` — et ce mot-clé est tout.
-
-    Un conteneur ordinaire ajouté à côté du runner ne s'arrête jamais : le Job ne se complète
-    jamais, et le run reste éternellement « en cours ». Un sidecar natif (Kubernetes ≥ 1.29, GA)
-    démarre AVANT le runner, Kubernetes attend sa sonde de disponibilité, et il est arrêté quand
-    le runner se termine.
-
-    Ce sidecar est ce qui manquait pour qu'un agent puisse appeler un outil du catalogue sous
-    l'exécuteur `k8s_job` : le serveur n'existait que dans la Task Tekton, et c'est la raison pour
-    laquelle le registre de coûts n'a jamais porté de ligne `kind=tool`.
-    """
-    from choregos_adapters.executor.k8s_job import TOOLS_PORT
-
-    client = _RecordingClient()
-    executeur = KubernetesJobExecutor(client=client, tools_image="reg/choregos-tools:0.8.0")
-    await executeur.start(_spec())  # type: ignore[arg-type]
-    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
     pod = job["spec"]["template"]["spec"]
-
-    (sidecar,) = pod["initContainers"]
-    assert sidecar["restartPolicy"] == "Always", (
-        "sans `restartPolicy: Always`, ce conteneur ne s'arrête pas et le Job ne se complète jamais"
+    assert "initContainers" not in pod, (
+        "le catalogue est servi par le runner lui-même (`outils_locaux.py`) : un sidecar ici "
+        "refait ce qui marche, et il prend le port avant lui"
     )
-    assert sidecar["image"] == "reg/choregos-tools:0.8.0"
-    sonde = sidecar["readinessProbe"]
-    assert "httpGet" not in sonde, (
-        "le serveur n'écoute que sur 127.0.0.1 et kubelet sonde l'IP du pod : une sonde httpGet "
-        "ne peut JAMAIS réussir, et Kubernetes tue alors un service sain en boucle"
-    )
-    assert f"127.0.0.1:{TOOLS_PORT}" in " ".join(sonde["exec"]["command"]), sonde
-
-    env = {v["name"]: v for v in sidecar["env"]}
-    assert env["CHOREGOS_TOOLS_PORT"]["value"] == str(TOOLS_PORT)
-    assert env["CHOREGOS_API_URL"]["value"] == "http://choregos-api:8000"
-    assert env["CHOREGOS_RUN_ID"]["value"] == "r-1"
-
-
-async def test_le_jeton_du_run_arrive_au_sidecar_par_reference() -> None:
-    """Jamais par valeur : une valeur recopiée dans la spec du Job est lisible par qui lit un pod.
-
-    Et c'est le MÊME jeton que celui de l'agent — le sidecar appelle l'API interne pour le compte
-    de ce run, et de rien d'autre.
-    """
-    client = _RecordingClient()
-    await KubernetesJobExecutor(client=client, tools_image="reg/outils:1").start(_spec())  # type: ignore[arg-type]
-    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
-    pod = job["spec"]["template"]["spec"]
-
-    (sidecar,) = pod["initContainers"]
-    jeton = next(v for v in sidecar["env"] if v["name"] == "CHOREGOS_RUN_TOKEN")
-    assert "value" not in jeton, "le jeton du run est recopié en clair dans la spec du Job"
-    assert jeton["valueFrom"]["secretKeyRef"]["key"] == "token"
-    # le même secret que celui du runner
-    runner = next(c for c in pod["containers"] if c["name"] == "runner")
-    jeton_runner = next(v for v in runner["env"] if v["name"] == "CHOREGOS_RUN_TOKEN")
-    assert jeton["valueFrom"]["secretKeyRef"]["name"] == jeton_runner["valueFrom"]["secretKeyRef"]["name"]
-
-
-async def test_le_sidecar_respecte_la_securite_des_pods_de_la_plateforme() -> None:
-    """Kyverno `restricted` refuse le POD entier si un seul conteneur s'en écarte."""
-    client = _RecordingClient()
-    await KubernetesJobExecutor(client=client, tools_image="reg/outils:1").start(_spec())  # type: ignore[arg-type]
-    job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
-    (sidecar,) = job["spec"]["template"]["spec"]["initContainers"]
-    securite = sidecar["securityContext"]
-    assert securite["allowPrivilegeEscalation"] is False
-    assert securite["capabilities"]["drop"] == ["ALL"]
-    assert securite["seccompProfile"]["type"] == "RuntimeDefault"
+    assert [c["name"] for c in pod["containers"]] == ["runner"]

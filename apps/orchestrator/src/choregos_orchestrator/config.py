@@ -36,18 +36,11 @@ class OrchestratorSettings(BaseSettings):
     #: 2026-09-27 — aucune réponse en huit secondes, là où `http://ecphoria:8432/mcp` répond
     #: 401 en neuf millisecondes.
     memory_url: str = "http://localhost:8432"
-    #: Le sidecar MCP du catalogue d'outils (`choregos-tools`), tel que l'agent le voit.
-    #: **Il n'existe que pour l'exécuteur `tekton`** : c'est un `sidecar:` de la Task
-    #: (`templates/github-tekton-argo-k8s/tekton/agent-stage.yaml`). L'exécuteur `k8s_job`
-    #: n'en monte aucun — `grep 7777` dans `k8s_job.py` ne rend rien. L'URL était pourtant
-    #: annoncée à TOUT agent : sur le locataire dev, en `k8s_job`, l'agent recevait donc un
-    #: serveur d'outils inexistant. Vide = ne rien annoncer, et c'est ce que `url_du_sidecar`
-    #: rend quand l'exécuteur ne le fournit pas.
+    #: L'adresse du serveur MCP du catalogue d'outils, telle que l'agent la voit. Elle est
+    #: LOCALE au pod d'agent, et quelqu'un la sert toujours : un `sidecar:` sous Tekton
+    #: (`templates/github-tekton-argo-k8s/tekton/agent-stage.yaml`), le runner lui-même partout
+    #: ailleurs (`runner/outils_locaux.py`, qui démarre le serveur si rien ne répond).
     tools_mcp_url: str = "http://localhost:7777/mcp"
-    #: L'image du sidecar qui sert le catalogue d'outils dans le pod d'agent (exécuteur
-    #: `k8s_job`). Vide : aucun sidecar, donc aucun outil annoncé — l'absence est dite, pas
-    #: subie. Sous `tekton`, c'est la Task qui porte le sidecar et cette valeur ne sert pas.
-    tools_image: str = ""
     runner_image: str = "ghcr.io/vargafoundation/choregos-runner:1.0.0"
     executor_kind: str = "tekton"
     # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
@@ -75,20 +68,20 @@ class OrchestratorSettings(BaseSettings):
 
     @property
     def url_du_sidecar_d_outils(self) -> str:
-        """L'URL du sidecar MCP, ou `""` quand l'exécuteur n'en monte pas.
+        """L'URL du serveur MCP d'outils, annoncée à l'agent — toujours, et c'est correct.
 
-        Annoncer à un agent un serveur d'outils qui n'existe pas n'est pas neutre : opencode
-        tente de s'y connecter au démarrage de sa session, et rien dans le ticket ne dit que le
-        catalogue était hors de portée. Mieux vaut n'annoncer aucun outil — c'est faux dans les
-        deux cas, mais l'un des deux se voit.
+        J'ai brièvement rendu cette annonce conditionnelle à un sidecar, en croyant qu'aucun
+        serveur n'existait sous l'exécuteur `k8s_job`. C'était faux : `runner/outils_locaux.py`
+        démarre ce serveur lui-même quand l'adresse annoncée est locale et que rien ne répond —
+        et son en-tête décrit précisément le défaut que je pensais trouver, réglé avant moi.
+        La condition retirait donc une annonce VRAIE, et privait l'agent de ses outils.
+
+        Le contrat est simple, et il tient pour tous les exécuteurs : la plateforme annonce une
+        adresse locale, et quelqu'un la sert — un sidecar sous Tekton, le runner partout ailleurs.
+        Une adresse NON locale n'est servie par personne automatiquement : c'est au déploiement de
+        fournir le serveur, et `demarrer_si_absent` s'abstient alors, exprès.
         """
-        if self.executor_kind == "tekton":
-            # La Task Tekton porte le sidecar dans sa définition : rien d'autre à exiger.
-            return self.tools_mcp_url
-        if self.executor_kind == "k8s_job" and self.tools_image:
-            # Le Job monte le sidecar lui-même, et seulement si une image est configurée.
-            return self.tools_mcp_url
-        return ""
+        return self.tools_mcp_url
 
     object_store_url: str = "s3://choregos"
     public_url: str = "http://localhost:3000"

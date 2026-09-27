@@ -208,9 +208,6 @@ def _register_builtins() -> None:
             or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
             # Combien de runs tournent en même temps dans le namespace. 0 = sans plafond.
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
-            # L'image du sidecar qui sert le catalogue d'outils dans le pod d'agent. Vide :
-            # aucun outil servi, et l'orchestrateur n'en annonce alors aucun.
-            tools_image=cfg.get("tools_image", os.environ.get("CHOREGOS_TOOLS_IMAGE", "")),
         )
     )
     register("runtime", "aca")(
