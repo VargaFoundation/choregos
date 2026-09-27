@@ -2,9 +2,13 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 UV ?= uv
-# La version de pnpm est celle de `apps/web/package.json` : corepack la récupère,
-# quelle que soit celle installée globalement (sinon ERR_PNPM_BAD_PM_VERSION).
-PNPM_VERSION ?= 9.15.0
+# La version de pnpm est LUE dans `apps/web/package.json`, jamais recopiée. Le commentaire
+# précédent disait déjà « c'est celle de package.json » au-dessus d'un 9.15.0 écrit à la main,
+# resté là quand le dépôt est passé à pnpm 12 : `make web-install` échouait sur « packages field
+# missing or empty », parce que pnpm 9 lit `pnpm-workspace.yaml` comme une définition d'espace de
+# travail là où pnpm 12 y met `allowBuilds`. La CI, elle, ne recopie rien (`package_json_file`),
+# et c'est pour cette raison qu'elle marchait quand le Makefile ne marchait plus.
+PNPM_VERSION ?= $(shell python3 -c "import json;print(json.load(open('apps/web/package.json'))['packageManager'].split('@')[1])")
 PNPM ?= corepack pnpm@$(PNPM_VERSION)
 PY_PATHS := packages apps/api apps/orchestrator tools tests
 
