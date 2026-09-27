@@ -113,3 +113,47 @@ async def test_un_seul_backend_autorise_degrade_sans_bloquer(setup: Fixture) -> 
 
     assert prepared["stage_input"]["agent"]["backend"] == "codex"
     assert prepared["run_id"], "le ticket avance malgré la revue dégradée"
+
+
+# ──────── on n'annonce à l'agent que les serveurs MCP qui existent (2026-09-27) ────────
+
+
+async def test_le_sidecar_d_outils_n_est_annonce_que_si_l_executeur_le_monte() -> None:
+    """`localhost:7777` n'existe que sous `tekton` : c'est un `sidecar:` de la Task.
+
+    `grep 7777` dans `k8s_job.py` ne rend rien. L'URL était pourtant annoncée à TOUT agent :
+    sur le locataire dev, en `k8s_job`, l'agent recevait un serveur d'outils inexistant et rien
+    dans le ticket ne disait que le catalogue était hors de portée.
+    """
+    from choregos_orchestrator.activities.stage import _serveurs_mcp
+    from choregos_orchestrator.config import OrchestratorSettings
+
+    tekton = OrchestratorSettings(executor_kind="tekton", memory_url="http://ecphoria:8432")
+    assert "choregos" in _serveurs_mcp(tekton), "sous tekton, le sidecar existe"
+
+    k8s = OrchestratorSettings(executor_kind="k8s_job", memory_url="http://ecphoria:8432")
+    assert "choregos" not in _serveurs_mcp(k8s), (
+        "sous k8s_job, aucun sidecar n'est monté : l'annoncer fait attendre l'agent pour rien"
+    )
+
+
+async def test_l_url_de_la_memoire_vient_de_son_reglage_pas_d_un_remplacement_de_port() -> None:
+    """Elle était fabriquée par `gateway_url.replace("4000", "8432")`.
+
+    Le remplacement ne tient que si la passerelle et la mémoire partagent un hôte. Sur le
+    locataire dev, la passerelle est `http://litellm:4000` : la mémoire devenait
+    `http://litellm:8432` — mesuré sans réponse en huit secondes, quand `http://ecphoria:8432/mcp`
+    répond 401 en neuf millisecondes.
+    """
+    from choregos_orchestrator.activities.stage import _serveurs_mcp
+    from choregos_orchestrator.config import OrchestratorSettings
+
+    reglages = OrchestratorSettings(
+        executor_kind="k8s_job", gateway_url="http://litellm:4000", memory_url="http://ecphoria:8432"
+    )
+    serveurs = _serveurs_mcp(reglages)
+    assert serveurs["memory"].url == "http://ecphoria:8432/mcp", serveurs["memory"].url
+    assert "litellm" not in serveurs["memory"].url, "la mémoire ne vit pas sur l'hôte de la passerelle"
+
+    # Sans mémoire configurée, on n'annonce pas un serveur de mémoire.
+    assert "memory" not in _serveurs_mcp(OrchestratorSettings(executor_kind="k8s_job", memory_url=""))

@@ -69,6 +69,24 @@ __all__ = [
 logger = get_logger("choregos.stage")
 
 
+def _serveurs_mcp(settings: Any) -> dict[str, McpServerRef]:
+    """Les serveurs MCP qu'on annonce à l'agent — ceux qui existent, et eux seuls.
+
+    Les deux étaient écrits en dur, et les deux étaient faux sur le locataire dev du 2026-09-27 :
+    le sidecar d'outils n'existe que sous l'exécuteur `tekton`, et l'URL de la mémoire était
+    fabriquée par `gateway_url.replace("4000", "8432")` — un remplacement de port qui ne tient
+    que si la passerelle et la mémoire partagent un hôte. Là-bas, la passerelle est
+    `http://litellm:4000` : la mémoire devenait `http://litellm:8432`, mesurée sans réponse en
+    huit secondes, quand `http://ecphoria:8432/mcp` répond en neuf millisecondes.
+    """
+    serveurs: dict[str, McpServerRef] = {}
+    if url := settings.url_du_sidecar_d_outils:
+        serveurs["choregos"] = McpServerRef(url=url)
+    if settings.memory_url:
+        serveurs["memory"] = McpServerRef(url=f"{settings.memory_url.rstrip('/')}/mcp")
+    return serveurs
+
+
 @activity.defn(name="prepare_stage")
 async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
     """Résout le modèle, mint la clé gateway, construit le context pack et le `StageInput`.
@@ -205,12 +223,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             allowed_paths=allowed_paths,
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
-            tools=ToolsRef(
-                mcp={
-                    "choregos": McpServerRef(url="http://localhost:7777/mcp"),
-                    "memory": McpServerRef(url=f"{settings.gateway_url.replace('4000', '8432')}/mcp"),
-                }
-            ),
+            tools=ToolsRef(mcp=_serveurs_mcp(settings)),
             permissions=Permissions(
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
