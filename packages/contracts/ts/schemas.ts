@@ -595,6 +595,8 @@ export type Workflow = {
   };
   transitions: Array<WorkflowTransition>;
   defaults?: WorkflowDefaults;
+  /** Où commence le workflow. Facultatif : le parseur y écrit le premier état déclaré (§1.4). Le champ existe parce que l'ordre des clés d'un objet ne survit pas à un stockage jsonb, et qu'un workflow qui croit commencer par son état terminal clôt le ticket sans rien faire. */
+  initial?: string;
 };
 
 export type ChoregosContract =

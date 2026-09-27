@@ -145,12 +145,20 @@ def _check_defaults_references(wf: Workflow, states: set[str], report: Validatio
 
 
 def _check_initial_and_terminal(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """L'état initial est le premier déclaré (§1.4) ; il doit pouvoir mener à un état terminal."""
+    """L'état initial est celui que le document déclare (§1.4) ; il mène à un état terminal."""
     initial = wf.initial_state
+    if initial not in wf.states:
+        report.error(
+            "workflow.initial_state_unknown",
+            f"`initial: {initial}` ne nomme aucun état déclaré",
+            ["initial"],
+            source,
+        )
+        return
     if wf.states[initial].terminal:
         report.error(
             "workflow.initial_state_terminal",
-            f"l'état initial ({initial}, le premier déclaré) ne peut pas être terminal",
+            f"l'état initial ({initial}) ne peut pas être terminal : le ticket naîtrait fini",
             ["states", initial],
             source,
         )

@@ -186,11 +186,28 @@ class Workflow(Strict):
     states: dict[str, State]
     transitions: list[Transition]
     defaults: WorkflowDefaults | None = None
+    #: Où commence le workflow. **Facultatif dans le YAML** : le parseur le remplit avec le premier
+    #: état déclaré, qui reste la règle (§1.4). Mais il faut que ce soit ÉCRIT dans le document, et
+    #: non déduit de l'ordre des clés — parce que cet ordre ne survit pas au stockage.
+    #:
+    #: PostgreSQL `jsonb` range les clés d'un objet par longueur puis par octets. Un workflow rangé
+    #: dans la colonne `json` de `workflow_defs` en ressortait donc dans un autre ordre, et « le
+    #: premier état déclaré » devenait « le nom d'état le plus court ». Constaté le 2026-09-27 sur
+    #: un locataire réel : un ticket est né dans son état TERMINAL, l'interpréteur a fermé le
+    #: ticket en 1,5 seconde, aucune étape n'a tourné, et rien nulle part n'a signalé d'anomalie.
+    #: Les trois templates livrés y échappaient par chance — `inbox` y est le plus court.
+    initial: str | None = None
 
     @property
     def initial_state(self) -> str:
-        """Le premier état déclaré est l'état initial (règle §1.4)."""
-        return next(iter(self.states))
+        """Où commence le workflow : ce que le document déclare, sinon le premier état.
+
+        Le repli sur l'ordre des clés reste, pour les documents écrits avant que le champ existe —
+        mais il n'est fiable que si le document n'a pas traversé un `jsonb`. C'est pourquoi le
+        parseur écrit toujours le champ, et pourquoi `workflow_model` préfère relire le YAML quand
+        il manque.
+        """
+        return self.initial or next(iter(self.states))
 
     def terminal_states(self) -> list[str]:
         return [name for name, state in self.states.items() if state.terminal]

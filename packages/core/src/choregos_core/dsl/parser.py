@@ -71,8 +71,16 @@ def parse_workflow(text: str, *, strict: bool = True) -> tuple[Workflow, Validat
             [Issue("yaml.not_a_mapping", "le document doit être un objet YAML", None)], subject="workflow"
         )
 
+    document = dict(source)
+    # L'ordre des clés est vrai ICI, et nulle part ailleurs : on inscrit donc le départ dans le
+    # document avant toute sérialisation. Un `initial` déjà écrit est respecté — c'est le validateur
+    # qui dira s'il nomme un état connu et non terminal.
+    etats = document.get("states")
+    if not document.get("initial") and isinstance(etats, dict) and etats:
+        document["initial"] = next(iter(etats))
+
     try:
-        workflow = Workflow.model_validate(dict(source))
+        workflow = Workflow.model_validate(document)
     except PydanticValidationError as exc:
         raise ValidationError(_pydantic_issues(exc, source), subject="workflow") from exc
 
