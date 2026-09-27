@@ -251,6 +251,39 @@ jobs:
           docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.24.3 \
             detect --source /repo --config /repo/.gitleaks.toml --redact --exit-code 1 --no-banner
 
+  dco:
+    # Chaque commit certifie le Developer Certificate of Origin (fichier `DCO`) par une ligne
+    # `Signed-off-by`. Ce job existe parce qu'un certificat que personne ne vérifie est une
+    # décoration : la demander dans CONTRIBUTING sans la contrôler aurait produit exactement ce
+    # que ce dépôt traque — une règle qui ressemble à une règle.
+    #
+    # Deux entités publient depuis ce code (ADR 0024). La provenance de chaque ligne doit être
+    # vérifiable par quiconque, y compris par elles.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: chaque commit porte un Signed-off-by
+        run: |
+          base='${{ github.event.pull_request.base.sha }}'
+          tete='${{ github.event.pull_request.head.sha }}'
+          manquants=0
+          while read -r sha; do
+            [ -z "$sha" ] && continue
+            if ! git show -s --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
+              echo "::error::commit sans Signed-off-by : $sha $(git show -s --format=%s "$sha")"
+              manquants=$((manquants + 1))
+            fi
+          done <<< "$(git rev-list "$base..$tete")"
+          if [ "$manquants" -gt 0 ]; then
+            echo "$manquants commit(s) non signé(s). `git commit --amend -s` sur le dernier," \
+                 "ou `git rebase --signoff $base` pour toute la branche. Voir DCO et" \
+                 "docs/CONTRIBUTING.md."
+            exit 1
+          fi
+          echo "tous les commits portent leur Signed-off-by"
+
   ci-ok:
     # Cible unique pour la protection de branche et la merge queue.
     #
@@ -262,7 +295,7 @@ jobs:
     # `changes` en fait partie aussi : quand le calcul des filtres échoue, tous les jobs qui en
     # dépendent sont *sautés*, et une porte qui ne regarde que des jobs sautés est verte. Une PR
     # Dependabot est passée comme ça, sans qu'une seule ligne n'ait été testée.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, secrets]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, secrets, dco]
     if: always()
     runs-on: ubuntu-latest
     steps:

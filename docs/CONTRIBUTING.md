@@ -35,6 +35,30 @@ regenerate the types (to be committed).
 If a contract is missing: open the issue, continue with a local workaround marked
 `TODO(contract)`, and do not block.
 
+## Signing off: the DCO
+
+Every commit must carry a `Signed-off-by` line matching its author:
+
+```bash
+git commit -s -m "fix(runner): …"        # adds it for you
+git config format.signOff true          # or once, for this repository
+```
+
+That line certifies the [Developer Certificate of Origin](../DCO) 1.1: you wrote the change, or
+you have the right to submit it under Apache-2.0. **CI refuses a PR whose commits are unsigned**,
+and it names them — a certificate nobody verifies is decoration, and this repository does not ship
+decoration.
+
+Why the DCO and not a CLA: it asks contributors to certify something they can actually know, in one
+line, without a lawyer and without assigning anything to anyone. Two entities publish from this
+codebase ([ADR 0024](adr/0024-deux-editions.md)); the DCO is what makes the provenance of each line
+checkable by anyone, including them.
+
+## Using the name
+
+See [TRADEMARK.md](TRADEMARK.md). Short version: use the software freely, say truthfully that your
+work builds on it, and ask before naming a **product** as if it were ours.
+
 ## One story, one PR
 
 - One branch, one PR, one squash.
