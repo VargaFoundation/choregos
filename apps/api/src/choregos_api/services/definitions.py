@@ -87,7 +87,11 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
 def workflow_model(row: WorkflowDef | None) -> Workflow:
     if row is None:
         return load_template(DEFAULT_WORKFLOW)
-    if row.json_doc:
+    # Un document JSON qui ne dit pas OÙ il commence ne peut pas être cru sur l'ordre de ses
+    # clés : la colonne est un `jsonb`, qui les range par longueur puis par octets. On relit alors
+    # le YAML, seul endroit où l'ordre de déclaration a survécu. Les documents écrits depuis que
+    # le champ existe portent `initial` et passent par le chemin rapide.
+    if row.json_doc and row.json_doc.get("initial"):
         return Workflow.model_validate(row.json_doc)
     parsed, _ = parse_workflow(row.yaml)
     return parsed
