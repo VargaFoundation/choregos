@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 from alembic import command
-from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 
 os.environ.setdefault("CHOREGOS_ENV", "test")
@@ -150,12 +149,15 @@ async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@a.test")
     reset_settings_cache()
     await db_session.dispose_engine()
-    config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "migrations"))
+    # La configuration de `python -m choregos_api.migrer`, celle du Job du chart : ce banc
+    # PostgreSQL éprouve donc la commande qu'on déploie, pas une variante de test.
+    from choregos_api.migrer import configuration
+
+    config = configuration()
     # `migrations/env.py` fait `asyncio.run()` : interdit depuis une boucle déjà en cours,
     # donc dans un fil à part. Les tables appartiennent au rôle applicatif : `FORCE ROW
     # LEVEL SECURITY` s'applique donc à lui aussi.
-    await asyncio.to_thread(command.upgrade, config, "head")
+    await asyncio.to_thread(command.upgrade, config, "heads")
     set_temporal(FakeTemporal())
     try:
         yield create_app()

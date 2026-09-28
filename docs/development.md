@@ -269,6 +269,31 @@ it, and only if `global.edition: enterprise` was set. On those images, write
 `pip --python /app/.venv/bin/python install …`. `tests/paquets/test_image_ee.py` builds a real
 image FROM a community one and checks the edition the platform reports
 (`CHOREGOS_IMAGES_CE=choregos-api:local,choregos-orchestrator:local`).
+## Shipping a schema from a plugin
+
+The migrations live **inside** the `choregos_api` package and are run by one command, the one the
+chart's migration Job runs:
+
+```sh
+python -m choregos_api.migrer            # upgrade heads — the core, then every plugin branch
+python -m choregos_api.migrer downgrade <plugin_label>@base
+```
+
+A plugin that needs tables declares a directory of Alembic revisions in the `choregos.migrations`
+entry-point group; the value it points to is a path:
+
+```toml
+[project.entry-points."choregos.migrations"]
+mine = "mon_paquet:EMPLACEMENT_DES_MIGRATIONS"   # pathlib.Path to a versions directory
+```
+
+Its revisions form a **branch** in the same `alembic_version` table: the first one has
+`down_revision = None`, a `branch_labels` of its own and `depends_on` a core revision. A plugin
+creates **its** tables and may point foreign keys at the core's; it never alters a core table —
+two owners for one table is how the next core migration breaks. A declared directory that does not
+exist stops the command: a plugin whose schema silently did not run gives a platform that starts
+and fails at the first request touching its tables. `apps/api/tests/test_migrer.py` proves all of
+it with a plugin installed for real.
 
 ## Known pitfalls
 

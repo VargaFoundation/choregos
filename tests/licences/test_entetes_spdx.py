@@ -30,7 +30,7 @@ def _fichiers_distribues() -> list[pathlib.Path]:
     racines = [
         *sorted((RACINE / "packages").glob("*/src")),
         *sorted((RACINE / "apps").glob("*/src")),
-        RACINE / "apps/api/migrations",
+        RACINE / "apps/api/src/choregos_api/migrations",
     ]
     for racine in racines:
         if not racine.exists():

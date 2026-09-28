@@ -97,7 +97,7 @@ Dépôt séparé `VargaFoundation/choregos-infra` : bootstrap Argo CD app-of-app
 
 ## 1.3 Modèle de données (PostgreSQL)
 
-Conventions : UUID v7 en clé primaire, `created_at`/`updated_at` partout, `jsonb` pour les documents validés par schéma, migrations Alembic dans `apps/api/migrations/`. Toutes les tables porteuses de données projet ont `project_id` et sont couvertes par RLS (`SET app.current_org`).
+Conventions : UUID v7 en clé primaire, `created_at`/`updated_at` partout, `jsonb` pour les documents validés par schéma, migrations Alembic dans `apps/api/src/choregos_api/migrations/` (jouées par `python -m choregos_api.migrer`). Toutes les tables porteuses de données projet ont `project_id` et sont couvertes par RLS (`SET app.current_org`).
 
 | Table | Colonnes clés | Notes |
 | :-- | :-- | :-- |

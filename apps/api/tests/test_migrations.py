@@ -27,7 +27,7 @@ def _config(url: str) -> Config:
     évite de répéter la chaîne de connexion en deux endroits). Le test suit donc le même
     chemin : il pose la variable d'environnement et vide le cache des réglages."""
     config = Config(str(API / "alembic.ini"))
-    config.set_main_option("script_location", str(API / "migrations"))
+    config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 

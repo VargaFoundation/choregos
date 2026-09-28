@@ -114,11 +114,10 @@ def _stack() -> str:
                 command=[
                     "sh",
                     "-c",
-                    # Sans `cd`, `script_location = migrations` (relatif) ne résout pas, et
-                    # le `|| true` d'avant transformait cet échec en démarrage silencieux :
-                    # le schéma venait alors de `create_all`, pas des migrations — donc ce
-                    # banc ne prouvait rien sur les migrations.
-                    "cd /app/apps/api && alembic -c alembic.ini upgrade head && cd /app && "
+                    # Pas de `|| true` : il transformait un échec de migration en démarrage
+                    # silencieux, le schéma venait alors de `create_all` — et ce banc ne
+                    # prouvait rien sur les migrations. Même commande que le Job du chart.
+                    "python -m choregos_api.migrer && "
                     "uvicorn choregos_api.main:app --host 0.0.0.0 --port 8000",
                 ],
             ),
