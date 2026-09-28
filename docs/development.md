@@ -220,6 +220,30 @@ The API and the orchestrator load the group at start-up. A declared plugin that 
 **stops the process**, naming it: someone installed it so that it would serve, and a silently
 missing plugin leaves a platform that looks complete and is not. Same rule as `garde.yaml`.
 
+A plugin can also **serve routes**. It builds an ordinary `APIRouter`, with the core's own
+dependencies for authentication and rights (`Me`, `Db`…), and declares it:
+
+```python
+from fastapi import APIRouter
+from choregos_api.greffons import declarer_un_routeur
+
+routeur = APIRouter(tags=["mine"])
+
+@routeur.get("/mine/ping")
+async def ping() -> dict[str, str]:
+    return {"pong": "mine"}
+
+def brancher() -> None:
+    declarer_un_routeur(routeur)   # served under /api/v1, after the core's routers
+```
+
+A plugin **adds** routes; it never replaces one. A route that covers a core route (same method,
+same path) **stops start-up**, naming it: Starlette serves the first match, so the plugin would be
+silently ignored — or, if the order ever changed, would silently replace a core route, an
+authentication route included. Nested routers are refused for the same reason: FastAPI exposes them
+only through a private object, and a route nobody can see is a route nobody can check.
+`apps/api/tests/test_greffons_routes.py` proves both with a plugin installed for real.
+
 This is how the enterprise edition attaches ([ADR 0024](adr/0024-deux-editions.md)), and it is
 the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which was the model.
 `packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
