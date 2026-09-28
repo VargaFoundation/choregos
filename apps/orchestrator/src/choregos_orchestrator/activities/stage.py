@@ -121,6 +121,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         if plan.max_minutes:
             budget = Budget(usd=budget.usd, max_turns=budget.max_turns, max_minutes=plan.max_minutes)
 
+        await _admettre(bundle, item, run_id, plan, backend, budget.usd)
+
         key = await bundle.adapters.gateway.mint_key(
             {
                 "project": bundle.slug,
@@ -267,6 +269,34 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             model=resolved.litellm_model,
         )
         return {"run_id": run_id, "stage_input": payload, "reused": False}
+
+
+async def _admettre(
+    bundle: Any, item: Any, run_id: str, plan: StagePlan, backend: str, budget_usd: float
+) -> None:
+    """Les admissions déclarées par les greffons (`choregos_core.admission`), avant toute clé.
+
+    Un refus arrête l'étape SANS reprise, comme la garde contre l'injection : retenter ne changerait
+    rien tant que la règle tient, et le ticket est marqué mort avec la raison, qu'un humain lit.
+    """
+    from choregos_core.admission import AdmissionRefusee, DemandeDeRun, verifier
+    from temporalio.exceptions import ApplicationError
+
+    demande = DemandeDeRun(
+        org=bundle.org_slug,
+        project=bundle.slug,
+        work_item=item.tracker_key,
+        run_id=run_id,
+        role=plan.role,
+        backend=backend,
+        budget_usd=budget_usd,
+    )
+    try:
+        await verifier(demande)
+    except AdmissionRefusee as refus:
+        raise ApplicationError(
+            f"run refusé avant démarrage — {refus}", type="admission_refused", non_retryable=True
+        ) from refus
 
 
 def _run_id(plan: StagePlan) -> str:

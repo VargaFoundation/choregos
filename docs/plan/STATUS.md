@@ -817,3 +817,19 @@ les 492 tests ne disaient pas :
     `test_rls_postgres.py` éprouve donc en CI la commande qu'on déploie.
     **Ce que ça ne prouve pas** : le Job du chart n'a pas tourné sur un cluster avec la nouvelle
     commande (`tests/cluster` le fera en nocturne) ; aucun greffon réel n'apporte encore de schéma.
+17. **Couture d'admission : un greffon peut refuser qu'un run démarre** (2026-09-28).
+
+    Le cœur borne la dépense par run et la concurrence par exécuteur ; il ne savait rien d'une
+    limite qui dépend d'autre chose — organisation suspendue, plafond mensuel, gel. Un greffon la
+    déclare (`choregos_core.admission.declarer_une_admission`) ; `prepare_stage` la joue avant
+    d'émettre la clé et de créer le run, et après le chemin de rejeu.
+
+    **Ce que ça prouve** : `test_admission.py`, greffon installé pour de vrai — le contrôle reçoit
+    organisation, projet, ticket, run et budget ; un refus arrête l'étape sans reprise
+    (`admission_refused`, non rejouable), sans clé ni run en base, avec une raison qui nomme le
+    contrôle ; un run déjà préparé n'est pas refusé au rejeu ; une panne du contrôle remonte et se
+    retente au lieu de passer pour un refus. En négatif : appel retiré → rouge ; appel placé avant
+    le chemin de rejeu → rouge.
+    **Ce que ça ne prouve pas** : aucun événement dédié sur le ticket (il faudrait un `EventType`,
+    donc une PR `contract-change`) — la raison passe par l'échec de l'activité, comme la garde
+    contre l'injection. Aucun greffon réel ne s'en sert encore.
