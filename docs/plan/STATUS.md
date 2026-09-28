@@ -833,3 +833,22 @@ les 492 tests ne disaient pas :
     **Ce que ça ne prouve pas** : aucun événement dédié sur le ticket (il faudrait un `EventType`,
     donc une PR `contract-change`) — la raison passe par l'échec de l'activité, comme la garde
     contre l'injection. Aucun greffon réel ne s'en sert encore.
+
+18. **La RLS couvre ce qui se rattache à un projet, et plus aucune table n'y échappe sans raison**
+    (2026-09-28, [ADR 0026](../adr/0026-ce-que-la-rls-du-coeur-couvre.md)).
+
+    `run_events`, `deployments` et `gateway_keys` portaient des données d'une organisation hors
+    RLS — le journal d'un agent, les mises en production, les plafonds de dépense. Elles passent
+    sous RLS forcée par leur projet. Les catalogues de l'instance restent ouverts, par décision.
+    L'identité (`organizations`, `users`, `memberships`, `api_tokens`) reste hors RLS **à dessein** :
+    le principal est résolu avant que la portée soit posée, et `exiger_admin_de_plateforme`
+    compterait les seules organisations de l'appelant — l'administrateur d'une seule deviendrait
+    administrateur de l'instance. C'est le travail de l'édition entreprise.
+
+    **Ce que ça prouve** (PostgreSQL, rôle non superutilisateur) : une session bornée à `a` ne
+    voit que les lignes de `a` dans les trois tables, une session sans portée n'en voit aucune ;
+    elle ne peut pas écrire un événement sur le run de `b` ; et `test_chaque_table_est_sous_rls_ou_exemptee`
+    refuse toute table ni sous RLS forcée ni exemptée avec sa raison. Migration retirée : les
+    trois rougissent. Suites API et orchestrateur vertes avec PostgreSQL disponible.
+    **Ce que ça ne prouve pas** : la charge — une fonction par ligne sur `run_events`, dont les
+    lectures filtrent déjà par run ; aucune mesure de latence sur un gros journal.
