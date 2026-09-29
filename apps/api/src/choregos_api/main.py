@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from choregos_adapters import charger_les_greffons
-from fastapi import FastAPI, Request, Response
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -125,6 +125,33 @@ def _verifier_l_edition(settings: Any) -> None:
         )
 
 
+def _inclure_les_routeurs_des_greffons(app: FastAPI, routeurs_du_coeur: tuple[APIRouter, ...]) -> None:
+    """Les routeurs déclarés par les greffons (`greffons.declarer_un_routeur`), APRÈS ceux du cœur.
+
+    Un recouvrement d'une route du cœur arrête le démarrage : Starlette servirait l'une et
+    ignorerait l'autre sans un mot (voir `greffons.py`).
+
+    Ce que sert le cœur se lit sur SES routeurs, pas sur `app.routes` : depuis FastAPI 0.141, un
+    routeur inclus y apparaît comme un `_IncludedRouter` opaque, et la première version de cette
+    garde, qui parcourait `app.routes`, ne voyait aucun recouvrement.
+    """
+    from .greffons import routeurs_declares, signatures
+
+    servies: set[tuple[str, str]] = set()
+    for du_coeur in routeurs_du_coeur:
+        servies |= signatures(du_coeur, API_PREFIX)
+    for routeur in routeurs_declares():
+        recouvertes = signatures(routeur, API_PREFIX) & servies
+        if recouvertes:
+            liste = ", ".join(f"{m} {c}" for m, c in sorted(recouvertes))
+            raise RuntimeError(
+                f"un greffon déclare des routes déjà servies : {liste}. Un greffon AJOUTE des "
+                "routes ; remplacer celles du cœur se demande par une couture nommée."
+            )
+        app.include_router(routeur, prefix=API_PREFIX)
+        servies |= signatures(routeur, API_PREFIX)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     brancher_memoire_lexicale()
@@ -179,7 +206,7 @@ def create_app() -> FastAPI:
             logger.info("requête", status=response.status_code, duration_ms=duration_ms)
         return response
 
-    for router in (
+    routeurs_du_coeur = (
         auth.router,
         projects.router,
         connectors.router,
@@ -195,8 +222,10 @@ def create_app() -> FastAPI:
         admin.router,
         webhooks.router,
         internal.router,
-    ):
+    )
+    for router in routeurs_du_coeur:
         app.include_router(router, prefix=API_PREFIX)
+    _inclure_les_routeurs_des_greffons(app, routeurs_du_coeur)
 
     @app.get("/metrics", tags=["session"], operation_id="metrics", include_in_schema=False)
     async def metrics() -> Response:

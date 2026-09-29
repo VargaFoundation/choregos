@@ -779,3 +779,22 @@ les 492 tests ne disaient pas :
     publiées jusqu'à la 0.8.3 comprise ont le piège ; `docs/development.md` donne le contournement
     (`pip --python /app/.venv/bin/python`). La matrice de compatibilité EE↔CE et le dépôt
     `choregos-ee` restent à faire.
+15. **Couture des routes : un greffon peut servir des routes, et seulement en AJOUTER**
+    (2026-09-28).
+
+    Un greffon savait enregistrer un connecteur, une garantie, une édition, un mappeur de groupes —
+    pas servir une route : `create_app()` n'incluait que les siens. `greffons.declarer_un_routeur`
+    comble ce manque ; les routes sont incluses sous `/api/v1` après celles du cœur, et gardées par
+    les dépendances d'authentification du cœur comme n'importe quelle autre.
+
+    **Trouvé en route** : depuis FastAPI 0.141, `app.routes` ne montre plus les routes incluses (un
+    `_IncludedRouter` opaque). La première version de la garde de recouvrement les y cherchait et ne
+    voyait rien ; le test témoin « sans greffon, pas de route » était vert à vide. La garde lit
+    désormais les routeurs du cœur eux-mêmes, et le témoin l'OpenAPI.
+
+    **Ce que ça prouve** : `test_greffons_routes.py`, avec un greffon installé pour de vrai (un
+    `.dist-info` sur disque) — route servie, `401` anonyme et `200` connecté, présence dans
+    l'OpenAPI, recouvrement de `GET /api/v1/orgs` refusé au démarrage. Garde de recouvrement
+    retirée, puis inclusion retirée : rouge chaque fois.
+    **Ce que ça ne prouve pas** : un routeur imbriqué est refusé, pas pris en charge ; aucun
+    greffon réel ne s'en sert encore (l'édition entreprise, pour EE-1).
