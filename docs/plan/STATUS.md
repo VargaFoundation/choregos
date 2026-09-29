@@ -753,3 +753,29 @@ les 492 tests ne disaient pas :
     réseau, plus d'un backend, plus d'un modèle, et aucune garantie de périmètre (ce projet n'a pas
     de dépôt, donc pas de diff). Sept tickets restent en `needs_human` : les débris de la nuit de
     débogage, gardés exprès — ils portent chacun le message qui les a tués.
+
+14. **L'image EE construite FROM l'image CE : le geste évident tournait en `community`**
+    (2026-09-28).
+
+    La #129 s'arrêtait avant l'image, Docker ne répondant plus. Essayée sur
+    `choregos-api:0.8.3` : `RUN pip install --no-deps choregos_ee-*.whl` **réussit**, l'image
+    démarre, et `GET /edition` répond `community`. Le venv, créé par uv, n'a pas de `pip` ;
+    celui du PATH est celui du système, qui a posé la roue dans `~/.local`. Seule la garde de
+    démarrage l'attrape, et seulement si l'exploitant a écrit `global.edition: enterprise`.
+
+    L'étage commun de `docker/api.Dockerfile` déclare désormais `PIP_PYTHON` vers le python du
+    venv : le geste évident devient le geste juste pour les deux images (API et orchestrateur),
+    sans que le dépôt privé connaisse la disposition interne de l'image CE.
+
+    **Ce que ça prouve** : `tests/paquets/test_image_ee.py` lit le Dockerfile (dans `make ci`,
+    rouge sans la ligne — vérifié) ; et, avec Docker et `CHOREGOS_IMAGES_CE`, construit une vraie
+    image FROM une image CE, puis exerce `create_app()` et le chargement des activités de
+    l'orchestrateur avec `CHOREGOS_EDITION=enterprise`. Vert sur les deux cibles construites
+    depuis ce commit ; **rouge sur `choregos-api:0.8.3`**, avec la garde de démarrage pour message.
+    L'image CE démarre toujours en `community`.
+
+    **Ce que ça ne prouve pas** : la CI ne joue que la garde statique — sur `main` elle construit
+    en multi-plateforme et pousse sans charger, donc le test Docker n'y tourne pas. Les images
+    publiées jusqu'à la 0.8.3 comprise ont le piège ; `docs/development.md` donne le contournement
+    (`pip --python /app/.venv/bin/python`). La matrice de compatibilité EE↔CE et le dépôt
+    `choregos-ee` restent à faire.

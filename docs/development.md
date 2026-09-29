@@ -225,6 +225,27 @@ the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which w
 `packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
 rather than stubbing the discovery.
 
+### Adding a plugin to a published image
+
+A plugin that ships as an image is built **FROM** the community image, which already holds the
+core. The wheel declares no dependency on the core (its wheels are GitHub release artefacts, not
+on PyPI) and goes in with `--no-deps`:
+
+```dockerfile
+FROM ghcr.io/vargafoundation/choregos-api:<version>
+COPY choregos_ee-*.whl /tmp/
+RUN pip install --no-deps --no-index /tmp/choregos_ee-*.whl
+```
+
+That obvious gesture is correct **only since the images set `PIP_PYTHON`**. The virtualenv in
+`/app/.venv` is created by uv and has no `pip`; the one on the `PATH` belongs to the system. On
+`choregos-api:0.8.3` and earlier the build succeeds, the wheel lands in `~/.local`, outside the
+virtualenv, and the platform runs as `community` without a word — only the start-up guard catches
+it, and only if `global.edition: enterprise` was set. On those images, write
+`pip --python /app/.venv/bin/python install …`. `tests/paquets/test_image_ee.py` builds a real
+image FROM a community one and checks the edition the platform reports
+(`CHOREGOS_IMAGES_CE=choregos-api:local,choregos-orchestrator:local`).
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test

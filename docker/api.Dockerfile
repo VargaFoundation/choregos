@@ -45,7 +45,12 @@ RUN uv sync --frozen --no-dev --all-packages
 
 # Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
 FROM python:3.12-slim-bookworm AS commun
-ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH"
+# `PIP_PYTHON` : l'image de l'édition entreprise est construite FROM celle-ci et y ajoute sa roue
+# (ADR 0024). Le venv, créé par uv, n'a pas de `pip` ; celui du PATH est celui du système. Sans
+# cette ligne, `pip install --no-deps choregos_ee-*.whl` réussit, pose la roue dans `~/.local`,
+# hors du venv — l'image se construit, démarre, et tourne en `community` sans rien dire. Essayé
+# sur `choregos-api:0.8.3` le 2026-09-28 ; `tests/paquets/test_image_ee.py` le garde.
+ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" PIP_PYTHON=/app/.venv/bin/python
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --create-home --shell /usr/sbin/nologin choregos

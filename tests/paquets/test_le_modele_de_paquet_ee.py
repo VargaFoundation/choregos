@@ -21,7 +21,8 @@ DEUX CONTRAINTES DE FABRICATION, vérifiées ici parce qu'elles décident de la 
 Vérifié à la main le 2026-09-28 dans un environnement où le cœur est complet : la roue s'installe
 avec `--no-deps`, `charger_les_greffons()` la charge, l'édition devient `enterprise`, et la
 désinstallation rend `community`. Ce test garde la moitié qui peut se vérifier sans polluer
-l'environnement de la suite.
+l'environnement de la suite ; l'autre moitié — la roue posée dans une vraie image CE — est
+`test_image_ee.py`. La roue elle-même est construite dans `conftest.py`.
 """
 
 from __future__ import annotations
@@ -38,56 +39,6 @@ pytestmark = [
     pytest.mark.slow,
     pytest.mark.skipif(shutil.which("uv") is None, reason="uv absent"),
 ]
-
-PYPROJECT = """\
-[project]
-name = "choregos-ee"
-version = "0.1.0"
-requires-python = ">=3.12,<3.13"
-# Le cœur N'EST PAS une dépendance : l'image EE est construite FROM l'image CE.
-dependencies = []
-
-[project.entry-points."choregos.plugins"]
-choregos-ee = "choregos_ee:brancher"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-"""
-
-MODULE = '''\
-"""Édition entreprise, en miniature : elle se déclare, et rien d'autre."""
-
-from __future__ import annotations
-
-
-def brancher() -> None:
-    # L'import est DANS la fonction : une roue EE importée trop tôt casserait sur un cœur absent.
-    from choregos_api.edition import ENTREPRISE, declarer
-
-    declarer(ENTREPRISE, fonctions=frozenset({"multi_org"}))
-'''
-
-
-@pytest.fixture
-def roue_ee(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Construit une vraie roue avec `uv build`, comme le ferait la CI du dépôt privé."""
-    source = tmp_path / "src" / "choregos_ee"
-    source.mkdir(parents=True)
-    (source / "__init__.py").write_text(MODULE, encoding="utf-8")
-    (tmp_path / "pyproject.toml").write_text(PYPROJECT, encoding="utf-8")
-
-    fait = subprocess.run(
-        ["uv", "build", "--wheel", "-o", "dist"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert fait.returncode == 0, f"la roue ne se construit pas :\n{fait.stderr[-800:]}"
-    roues = list((tmp_path / "dist").glob("*.whl"))
-    assert len(roues) == 1, roues
-    return roues[0]
 
 
 def test_la_roue_porte_son_point_d_entree(roue_ee: pathlib.Path) -> None:
