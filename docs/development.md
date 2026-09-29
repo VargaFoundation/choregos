@@ -337,6 +337,27 @@ Three hooks in `choregos_api.edition`, next to the group mapper:
 
 `apps/api/tests/test_coutures_identite.py` proves each with a plugin installed for real.
 
+## Refusing a human gesture from a plugin
+
+Three routes consult plugin controls **after** the core's rights and **before** acting:
+`project.create`, `workitem.decision` and `release.approve`.
+
+```python
+from choregos_api.greffons import GesteRefuse, declarer_un_controle_de_geste
+
+def fraicheur(session, demande):           # DemandeDeGeste: geste, org, principal, cible
+    quand = demande.principal.authentifie_le
+    if quand is None or time.time() - quand > 300:
+        raise GesteRefuse("approving needs a login less than 5 minutes old", "reauth")
+
+def brancher() -> None:
+    declarer_un_controle_de_geste("release.approve", "fraicheur", fraicheur)
+```
+
+The nature picks the answer: `interdit` → 403, `conflit` → 409, `reauth` → 401 pointing at
+`/api/v1/auth/login?reauth=1`. A control can only refuse more than the core; an exception other
+than `GesteRefuse` propagates. `apps/api/tests/test_controle_des_gestes.py` proves the three routes.
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test

@@ -17,6 +17,7 @@ from ..audit import record
 from ..db.models import Project, Release
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import forbidden, not_found
+from ..greffons import DemandeDeGeste, controler
 from ..rbac import Permission
 from ..schemas import (
     AbortRequest,
@@ -181,6 +182,15 @@ async def approve(id: str, body: ApproveRequest, session: Db, principal: Me) -> 
     row, project, org_slug = await _release(session, id, principal)
     if not principal.can(Permission.TRAIN_APPROVE, org_slug, project.slug):
         raise forbidden("approuver une release demande le rôle release_captain")
+    await controler(
+        session,
+        DemandeDeGeste(
+            "release.approve",
+            org_slug,
+            principal,
+            {"project": project.slug, "release": row.id, "env": row.env},
+        ),
+    )
     await get_temporal().signal(
         train_id(project.slug, row.env),
         "approve",

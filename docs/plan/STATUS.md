@@ -869,3 +869,21 @@ les 492 tests ne disaient pas :
     coutures retirée : rouge.
     **Ce que ça ne prouve pas** : aucun IdP réel n'a honoré `prompt=login` devant nous ; le front
     ne propose pas encore le chemin de ré-authentification.
+
+20. **Contrôle des gestes humains : un greffon peut refuser un projet de trop, ou une approbation
+    sans authentification fraîche** (2026-09-29).
+
+    `greffons.declarer_un_controle_de_geste` sur `project.create`, `workitem.decision` et
+    `release.approve`, joué après les droits du cœur et avant que la route agisse. Réponse choisie par
+    la nature du refus : 403, 409, ou 401 qui renvoie vers `auth/login?reauth=1`.
+
+    **Ce que ça prouve** : `test_controle_des_gestes.py`, greffon installé — un projet de trop est
+    refusé en 409 et n'est pas créé ; une décision sans authentification fraîche est refusée en 401
+    et la demande n'est pas tranchée, puis acceptée avec une session récente (`iat` à quelques
+    secondes) ; l'approbation d'une release passe par le même contrôle et n'est pas enregistrée.
+    Chacun des trois appels retiré : rouge.
+    **Vérifié qu'il n'y a pas de contournement** : la route web est le SEUL chemin qui tranche une
+    demande. Les boutons Slack sont des liens vers elle ; les commentaires `/choregos approve` sont
+    analysés (`github_events.parse_command`) mais le workflow ne les traduit en rien (`_absorb`) —
+    une fonctionnalité annoncée et inerte, déposée en finding. Le jour où elle sera branchée, elle
+    devra passer par `controler`.
