@@ -968,3 +968,28 @@ les 492 tests ne disaient pas :
     **Ce que ça ne prouve pas** : la suite de l'orchestrateur tourne encore sur SQLite seulement ; ses
     sessions sont toutes de portée `*` (activités de la plateforme), ce qui réduit le risque sans
     l'exclure.
+
+25. **L'identité sous RLS : les 25 tables sont couvertes ou exemptées avec leur raison** (2026-09-29,
+    ADR 0026 mis à jour).
+
+    `organizations`, `memberships`, `users`, `api_tokens` passent sous RLS forcée : une organisation
+    ne voit ni le nom ni les membres d'une autre ; un utilisateur est visible des organisations dont
+    il est membre, et toujours de lui-même (`app.current_user`). Ce qui porte sur l'instance se lit
+    dans une portée de plateforme explicite et restaurée (`en_portee_de_plateforme`) : le compte des
+    organisations qui décide de l'administrateur de la plateforme, la recherche d'un invité par
+    e-mail. Créer une organisation passe en portée de plateforme une fois le droit établi.
+
+    Condition levée depuis l'ADR 0026 : le principal se résout en portée de plateforme (0.10.1), et
+    la suite entière de l'API tourne sous RLS en CI. Sans ce filet, ce changement aurait été une
+    fermeture à l'aveugle.
+
+    **Ce que ça prouve** (PostgreSQL, rôle non superutilisateur) : une session bornée à `a` ne voit
+    que le nom, les membres, les utilisateurs et les jetons de `a`, une session sans portée rien ;
+    l'admin d'une organisation sur deux ne crée pas d'organisation (rouge si le compte n'est pas fait
+    sur l'instance) ; inviter un membre d'ailleurs ne crée pas de doublon (rouge sans la portée de
+    plateforme) ; un utilisateur sans appartenance lit son compte et crée un jeton (rouge sans
+    `app.current_user`). Suite entière de l'API : 176 verts sur PostgreSQL.
+    **Ce que ça ne prouve pas** : le compte des organisations dans `/audit` n'a pas de test qui échoue
+    en son absence — la RLS d'`audit_log` masque déjà les lignes de plateforme ; il reste tel quel,
+    commenté, et aucun code non éprouvé n'a été ajouté pour lui. L'édition entreprise doit passer
+    SAML en portée de plateforme avant d'accepter la 0.11 (sa plage s'arrête à `<0.11`).

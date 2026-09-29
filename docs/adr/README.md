@@ -42,4 +42,4 @@ nine records did not exist.
 | [0023](0023-constructeur-visuel-de-workflow.md) | A visual builder: read-only map first, then edits that are YAML diffs | proposed |
 | [0024](0024-deux-editions.md) | Two editions: a single-organisation community core, a separate enterprise layer | accepted |
 | [0025](0025-le-moteur-pilote-l-it-de-la-plateforme.md) | The engine drives platform IT: healthcheck findings become governed changes, nodes last | accepted |
-| [0026](0026-ce-que-la-rls-du-coeur-couvre.md) | What the core's RLS covers — project-bound tables, every table checked — and what it leaves to the enterprise edition (identity) | accepted |
+| [0026](0026-ce-que-la-rls-du-coeur-couvre.md) | What the core's RLS covers — every table checked; identity included since 0.11 (update of 2026-09-29) | accepted |

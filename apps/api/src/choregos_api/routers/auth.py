@@ -36,7 +36,7 @@ from sqlalchemy import select
 from ..audit import record
 from ..config import Settings, get_settings
 from ..db.models import ApiToken, Membership, Organization, User
-from ..deps import Config, Db, Me
+from ..deps import Config, Db, DbPlateforme, Me
 from ..edition import mappeur_de_groupes
 from ..errors import not_found, unauthorized
 from ..logging import get_logger
@@ -293,7 +293,7 @@ async def callback(
     request: Request,
     code: Annotated[str, Query()],
     state: Annotated[str, Query()],
-    session: Db,
+    session: DbPlateforme,
     settings: Config,
 ) -> RedirectResponse:
     """Vérifie `state` et le nonce, échange le code (PKCE), ouvre la session, pose le cookie signé."""
