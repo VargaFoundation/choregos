@@ -376,6 +376,25 @@ Product code never opens an unscoped session, so this hides nothing; `test_rls_p
 real fail-closed behaviour. Three defects only showed there (webhooks routing nothing, `POST /orgs`
 answering 500, a project role becoming an organisation role).
 
+## Setting a project's namespace quota from a plugin
+
+Each project gets its namespaces and a `ResourceQuota`. The default is 32 CPU, 96 Gi, 40 pods; a
+plugin can set it per organisation:
+
+```python
+from choregos_core.quotas import Quota, declarer_un_quota
+
+async def quota(org: str, projet: str) -> Quota | None:
+    return Quota(cpu="8", memoire="16Gi", pods=10) if org == "small" else None   # None: default
+
+def brancher() -> None:
+    declarer_un_quota(quota)
+```
+
+It is written to the GitOps repository at provisioning, so it takes effect the next time the project
+is provisioned. A malformed quantity is refused at construction, not by Argo CD later. Why there is no
+Temporal queue per organisation: [ADR 0027](adr/0027-le-voisinage-se-regle-a-l-admission-et-au-quota.md).
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test

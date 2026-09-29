@@ -993,3 +993,18 @@ les 492 tests ne disaient pas :
     en son absence — la RLS d'`audit_log` masque déjà les lignes de plateforme ; il reste tel quel,
     commenté, et aucun code non éprouvé n'a été ajouté pour lui. L'édition entreprise doit passer
     SAML en portée de plateforme avant d'accepter la 0.11 (sa plage s'arrête à `<0.11`).
+
+26. **Le voisinage : un quota de namespace par organisation, et une file Temporal par organisation
+    écartée par décision** (2026-09-29, [ADR 0027](../adr/0027-le-voisinage-se-regle-a-l-admission-et-au-quota.md)).
+
+    Le `ResourceQuota` des namespaces d'un projet était figé (32 CPU, 96 Gi, 40 pods). Un greffon le
+    fixe désormais selon l'organisation (`choregos_core.quotas`), lu par l'étape de provisioning qui
+    écrit dans le dépôt GitOps. Avec l'admission (plafonds de runs simultanés et mensuel, 0.9), une
+    organisation ne dépasse ni ses runs, ni son budget, ni son quota. La file Temporal et le pool
+    PostgreSQL par organisation sont écartés : ce qui consomme, ce sont les runs, pas l'orchestration.
+
+    **Ce que ça prouve** : `test_quotas.py` — un greffon installé fixe le quota de SON organisation
+    dans les manifestes écrits, une autre garde le défaut, sans greffon le défaut historique ; un
+    quota mal écrit est refusé avant Argo CD. Lecture du quota retirée du provisioning : rouge.
+    **Ce que ça ne prouve pas** : le quota prend effet au prochain provisioning ; rien ne réécrit
+    ceux des projets existants.

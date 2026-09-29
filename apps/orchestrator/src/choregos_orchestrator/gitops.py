@@ -11,6 +11,7 @@ from typing import Any
 
 import yaml
 from choregos_contracts import Policy, ProjectConfig
+from choregos_core.quotas import DEFAUT, Quota
 
 
 def _dump(documents: list[dict[str, Any]]) -> str:
@@ -184,13 +185,21 @@ def render_egress_proxy(
 
 
 def render_project_manifests(
-    slug: str, config: ProjectConfig, policy: Policy, *, egress_image: str = EGRESS_IMAGE
+    slug: str,
+    config: ProjectConfig,
+    policy: Policy,
+    *,
+    egress_image: str = EGRESS_IMAGE,
+    quota: Quota = DEFAUT,
 ) -> dict[str, str]:
-    """Rend les fichiers d'un projet : namespaces, quotas, netpol, RBAC, egress, Tekton, Argo."""
+    """Rend les fichiers d'un projet : namespaces, quotas, netpol, RBAC, egress, Tekton, Argo.
+
+    `quota` vient de `choregos_core.quotas` : un greffon le fixe selon l'organisation ; il était figé.
+    """
     runners = f"proj-{slug}-runners"
     ci = f"proj-{slug}-ci"
-    quota_cpu = "32"
-    quota_memory = "96Gi"
+    quota_cpu = quota.cpu
+    quota_memory = quota.memoire
     gvisor = policy.sandbox.runtime == "gvisor"
 
     namespaces = _dump(
@@ -223,7 +232,7 @@ def render_project_manifests(
                         "requests.memory": quota_memory,
                         "limits.cpu": quota_cpu,
                         "limits.memory": quota_memory,
-                        "count/pods": "40",
+                        "count/pods": str(quota.pods),
                     }
                 },
             }
