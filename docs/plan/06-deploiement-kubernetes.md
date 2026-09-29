@@ -73,7 +73,7 @@ Sous-charts Choregos — points notables :
 
 | Chart | Contenu |
 | :-- | :-- |
-| `api` | Deployment ×2, HPA (CPU 70 %), PDB, `Service`, `HTTPRoute`, `ServiceAccount` (droits : lire `PipelineRun` status dans `proj-*`, rien d'autre), `ConfigMap` (OIDC, URLs), `ExternalSecret` (DB, JWT keys, webhook secrets, GitHub App key), `Job` pre-install/pre-upgrade `alembic upgrade head` (hook Helm `pre-upgrade`, `wait`) |
+| `api` | Deployment ×2, HPA (CPU 70 %), PDB, `Service`, `HTTPRoute`, `ServiceAccount` (droits : lire `PipelineRun` status dans `proj-*`, rien d'autre), `ConfigMap` (OIDC, URLs), `ExternalSecret` (DB, JWT keys, webhook secrets, GitHub App key), `Job` pre-install/pre-upgrade `python -m choregos_api.migrer` (cœur + branches des greffons) (hook Helm `pre-upgrade`, `wait`) |
 | `web` | Deployment ×2, `HTTPRoute`, CSP stricte, `NEXT_PUBLIC_*` |
 | `orchestrator` | Un Deployment par task queue (`orchestrator`, `executor`, `tracker`, `memory`), réplicas 2, `ServiceAccount executor` avec RBAC : créer/lister/supprimer `PipelineRun`, `Secret`, `ConfigMap` dans les namespaces `proj-*-runners` uniquement (Role par namespace généré par le provisioning) ; KEDA optionnel (scale sur `temporal_task_queue_backlog`) |
 | `tools` | Publie l'image `choregos-tools` et la `Task` Tekton `choregos-agent-stage` en `ClusterTask`-like (Task dans chaque namespace projet via Kustomize) |

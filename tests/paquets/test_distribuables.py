@@ -32,7 +32,7 @@ import pytest
 RACINE = pathlib.Path(__file__).resolve().parents[2]
 
 #: Extensions qui sont des DONNÉES : leur absence d'un wheel est un défaut silencieux.
-DONNEES = {".md", ".yaml", ".yml", ".json", ".lock", ".j2", ".sql", ".ini", ".txt"}
+DONNEES = {".md", ".yaml", ".yml", ".json", ".lock", ".j2", ".sql", ".ini", ".txt", ".mako"}
 
 pytestmark = [
     pytest.mark.slow,
@@ -139,3 +139,22 @@ def test_les_force_include_declares_arrivent_bien_dans_le_wheel(
             }
         manquants = sorted(attendus - noms)
         assert not manquants, f"{nom} : {source} → {destination}, absents du wheel : {manquants}"
+
+
+def test_les_migrations_partent_dans_le_wheel_de_l_api(wheels: dict[str, pathlib.Path]) -> None:
+    """Sans elles, personne ne migre une base avec le cœur PUBLIÉ : elles vivaient hors du paquet
+    (`apps/api/migrations`), et la roue `choregos-api` 0.8.3 n'en portait aucune. Une édition
+    entreprise testée contre les roues du cœur ne pouvait donc pas monter un vrai PostgreSQL.
+
+    Chaque révision est comptée : une migration oubliée casserait la chaîne à la montée."""
+    source = RACINE / "apps/api/src/choregos_api/migrations"
+    revisions = sorted(p.relative_to(RACINE / "apps/api/src") for p in (source / "versions").glob("*.py"))
+    assert revisions, f"aucune révision sous {source} : le test ne prouverait rien"
+    attendus = {str(p) for p in revisions} | {
+        "choregos_api/migrations/env.py",
+        "choregos_api/migrations/script.py.mako",
+        "choregos_api/migrer.py",
+    }
+    noms = set(zipfile.ZipFile(wheels["choregos-api"]).namelist())
+    manquants = sorted(attendus - noms)
+    assert not manquants, f"choregos-api : migrations absentes du wheel : {manquants}"

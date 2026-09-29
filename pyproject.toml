@@ -59,7 +59,7 @@ extend-exclude = [
   "packages/contracts/ts",
   "apps/web",
   "**/generated/**",
-  "apps/api/migrations/versions",
+  "apps/api/src/choregos_api/migrations/versions",
   # Dépôts jouets des évals : ils imitent du code de client, pas notre style maison.
   "tests/fixtures/repos",
 ]
@@ -88,7 +88,7 @@ max-statements = 80
 # Valeurs par défaut de développement, jamais des secrets réels.
 "apps/api/src/choregos_api/config.py" = ["S105"]
 "apps/api/src/choregos_api/security.py" = ["S105"]
-"apps/api/migrations/**" = ["E501", "W291", "I001"]
+"apps/api/src/choregos_api/migrations/**" = ["E501", "W291", "I001"]
 # Singletons de moteur/session et de bus : un seul par processus, assumé.
 "apps/api/src/choregos_api/db/session.py" = ["PLW0603"]
 "apps/api/src/choregos_api/temporal.py" = ["PLW0603"]

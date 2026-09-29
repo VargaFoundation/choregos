@@ -798,3 +798,22 @@ les 492 tests ne disaient pas :
     retirée, puis inclusion retirée : rouge chaque fois.
     **Ce que ça ne prouve pas** : un routeur imbriqué est refusé, pas pris en charge ; aucun
     greffon réel ne s'en sert encore (l'édition entreprise, pour EE-1).
+16. **Les migrations sont dans la roue, et un greffon peut apporter son schéma** (2026-09-28).
+
+    La roue `choregos-api` 0.8.3 ne portait **aucune** migration (`apps/api/migrations`, hors du
+    paquet) : personne ne pouvait migrer une base avec le cœur publié, et une édition entreprise
+    testée contre ses roues ne pouvait pas monter un vrai PostgreSQL. Elles vivent désormais dans
+    `choregos_api/migrations`, et `python -m choregos_api.migrer` — la commande du Job du chart et
+    du banc de cluster — les trouve où qu'on la lance, au lieu d'exiger `/app/apps/api`.
+
+    Un greffon déclare ses révisions dans le groupe `choregos.migrations` ; elles forment une
+    branche Alembic (`depends_on` une révision du cœur) jouée par `upgrade heads`. Il crée SES
+    tables et ne touche pas à celles du cœur.
+
+    **Ce que ça prouve** : `test_migrer.py` — le cœur migré depuis un répertoire quelconque ; la
+    branche d'un greffon installé pour de vrai jouée après le cœur, puis redescendue seule ; un
+    emplacement déclaré mais absent refusé. `test_distribuables.py` compte chaque révision dans la
+    roue (rouge quand on les exclut). La fixture PostgreSQL passe par la même configuration :
+    `test_rls_postgres.py` éprouve donc en CI la commande qu'on déploie.
+    **Ce que ça ne prouve pas** : le Job du chart n'a pas tourné sur un cluster avec la nouvelle
+    commande (`tests/cluster` le fera en nocturne) ; aucun greffon réel n'apporte encore de schéma.

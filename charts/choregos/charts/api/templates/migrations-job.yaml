@@ -85,11 +85,11 @@ spec:
       containers:
         - name: migrations
           image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
-          # `script_location = migrations` est RELATIF dans alembic.ini : sans le bon
-          # répertoire de travail, alembic répond « No 'script_location' key found in
-          # configuration » — un message qui accuse le fichier, pas le chemin.
-          workingDir: /app/apps/api
-          command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+          # `migrer` trouve les migrations DANS le paquet, où qu'on le lance, et joue aussi les
+          # branches que déclarent les greffons (`choregos.migrations`) : `upgrade heads`, pas
+          # `head`. L'ancien `alembic -c alembic.ini upgrade head` exigeait `/app/apps/api` comme
+          # répertoire de travail, et ne voyait que le cœur.
+          command: ["python", "-m", "choregos_api.migrer"]
           env: {{- include "choregos.commonEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
           resources:
