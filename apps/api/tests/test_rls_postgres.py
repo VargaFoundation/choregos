@@ -223,3 +223,113 @@ async def test_par_l_api_membre_des_deux_mais_audit_read_dans_une_seule(
         assert trois_traces["b"] not in ids, "l'audit de `b` fuit vers un simple lecteur de `b`"
         assert trois_traces["plateforme"] not in ids, "un événement de plateforme fuit"
         assert trois_traces["a"] in ids, "l'audit de `a` doit rester lisible par son administrateur"
+
+
+# ─────────── ce qui se rattache à un projet : événements de run, déploiements, clés ───────────
+
+
+@pytest.fixture
+async def rattachees(deux_organisations: dict[str, str]) -> None:
+    """Pour chaque organisation : un run et son événement, une release et son déploiement, une clé."""
+    from choregos_api.db.base import utcnow
+    from choregos_api.db.models import Deployment, GatewayKeyRow, Release, Run, RunEvent, WorkItem
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        for slug, projet in deux_organisations.items():
+            (ticket,) = (
+                await session.execute(select(WorkItem).where(WorkItem.project_id == projet))
+            ).scalars()
+            session.add(
+                Run(id=f"run-{slug}", work_item_id=ticket.id, project_id=projet, stage_role="implement")
+            )
+            release = Release(project_id=projet, env="prod")
+            session.add(release)
+            await session.flush()
+            session.add(RunEvent(run_id=f"run-{slug}", seq=1, type="agent/message", payload={}, ts=utcnow()))
+            session.add(Deployment(release_id=release.id, env="prod", status="succeeded"))
+            session.add(GatewayKeyRow(key_id=f"cle-{slug}", run_id=f"run-{slug}", project_id=projet))
+
+
+async def test_les_tables_rattachees_ne_montrent_que_l_organisation_de_la_session(rattachees: None) -> None:
+    from choregos_api.db.models import Deployment, GatewayKeyRow, Release, RunEvent
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(RunEvent.run_id))).scalars().all() == ["run-a"]
+        assert (await session.execute(select(GatewayKeyRow.key_id))).scalars().all() == ["cle-a"]
+        deploiements = (
+            (
+                await session.execute(
+                    select(Release.project_id).join(Deployment, Deployment.release_id == Release.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(deploiements) == 1
+        assert len((await session.execute(select(Deployment))).scalars().all()) == 1
+    async with session_scope() as session:
+        for modele in (RunEvent, Deployment, GatewayKeyRow):
+            assert (await session.execute(select(modele))).scalars().all() == [], modele.__tablename__
+    async with session_scope(orgs="*") as session:
+        assert len((await session.execute(select(RunEvent))).scalars().all()) == 2
+
+
+async def test_une_session_de_a_ne_peut_pas_ecrire_un_evenement_sur_le_run_de_b(rattachees: None) -> None:
+    """`USING` sert de `WITH CHECK` à l'INSERT : on n'attribue pas une ligne à l'autre organisation."""
+    from choregos_api.db.base import utcnow
+    from choregos_api.db.models import RunEvent
+    from choregos_api.db.session import session_scope
+    from sqlalchemy.exc import DBAPIError
+
+    with pytest.raises(DBAPIError, match="row-level security"):
+        async with session_scope(orgs=["a"]) as session:
+            session.add(RunEvent(run_id="run-b", seq=2, type="agent/message", payload={}, ts=utcnow()))
+
+
+#: Les tables HORS RLS, et pourquoi. Toute autre table doit être sous RLS forcée : une table
+#: ajoutée demain sans politique fait rougir `test_chaque_table_est_sous_rls_ou_exemptee`.
+EXEMPTEES = {
+    # Catalogues de l'instance, en lecture ouverte par décision (`test_routeurs_nus.py`) :
+    # aucune donnée d'organisation.
+    "agent_backends": "catalogue de l'instance",
+    "executors": "catalogue de l'instance",
+    "templates": "catalogue de l'instance",
+    "model_profiles": "catalogue de l'instance (seules des lignes `scope=platform` sont écrites)",
+    "webhook_deliveries": "empreintes de déduplication, sans contenu ni organisation",
+    "alembic_version": "table d'Alembic",
+    # L'IDENTITÉ. Elle est lue AVANT que la portée soit posée (`deps._principal_from_user` résout
+    # les organisations de l'appelant à partir de `memberships`), et `exiger_admin_de_plateforme`
+    # compte TOUTES les organisations : sous RLS, il ne compterait que celles de l'appelant, et
+    # l'administrateur d'une seule deviendrait administrateur de l'instance. Les isoler demande une
+    # résolution d'identité en portée de plateforme — l'édition entreprise (ADR 0024) — et non une
+    # politique posée ici.
+    "organizations": "identité — voir ci-dessus",
+    "users": "identité — voir ci-dessus",
+    "memberships": "identité — voir ci-dessus",
+    "api_tokens": "identité — appartient à un utilisateur, pas à une organisation",
+}
+
+
+async def test_chaque_table_est_sous_rls_ou_exemptee(pg_app: Any) -> None:
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import text
+
+    async with session_scope(orgs="*") as session:
+        lignes = (
+            await session.execute(
+                text(
+                    "SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class "
+                    "WHERE relkind = 'r' AND relnamespace = 'public'::regnamespace"
+                )
+            )
+        ).all()
+    tables = {nom: (rls, forcee) for nom, rls, forcee in lignes}
+    assert len(tables) >= 25, f"{len(tables)} tables seulement : les migrations ont-elles tourné ?"
+    sans = sorted(
+        nom for nom, (rls, forcee) in tables.items() if not (rls and forcee) and nom not in EXEMPTEES
+    )
+    assert not sans, f"tables ni sous RLS forcée ni exemptées avec leur raison : {sans}"
+    exemptees_sous_rls = sorted(nom for nom in EXEMPTEES if tables.get(nom, (False, False))[0])
+    assert not exemptees_sous_rls, f"exemptées mais sous RLS — retirer l'exemption : {exemptees_sous_rls}"
