@@ -43,3 +43,4 @@ nine records did not exist.
 | [0024](0024-deux-editions.md) | Two editions: a single-organisation community core, a separate enterprise layer | accepted |
 | [0025](0025-le-moteur-pilote-l-it-de-la-plateforme.md) | The engine drives platform IT: healthcheck findings become governed changes, nodes last | accepted |
 | [0026](0026-ce-que-la-rls-du-coeur-couvre.md) | What the core's RLS covers — every table checked; identity included since 0.11 (update of 2026-09-29) | accepted |
+| [0027](0027-le-voisinage-se-regle-a-l-admission-et-au-quota.md) | Noisy neighbours: bounded at admission and by a per-organisation namespace quota, not by a Temporal queue per organisation | accepted |
