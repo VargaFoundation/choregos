@@ -97,7 +97,7 @@ async def test_un_administrateur_cree_un_projet_dans_son_organisation(
                 "/api/v1/orgs/b/projects",
                 json={"slug": "intrus", "name": "Intrus", "config": {"slug": "intrus", "org": "b"}},
             )
-        ).status_code == 403
+        ).status_code in {403, 404}  # 404 sous la RLS de l'identité : `b` est invisible
 
 
 async def test_un_jeton_de_run_voit_son_run_quelle_que_soit_l_organisation(
@@ -299,16 +299,6 @@ EXEMPTEES = {
     "model_profiles": "catalogue de l'instance (seules des lignes `scope=platform` sont écrites)",
     "webhook_deliveries": "empreintes de déduplication, sans contenu ni organisation",
     "alembic_version": "table d'Alembic",
-    # L'IDENTITÉ. Elle est lue AVANT que la portée soit posée (`deps._principal_from_user` résout
-    # les organisations de l'appelant à partir de `memberships`), et `exiger_admin_de_plateforme`
-    # compte TOUTES les organisations : sous RLS, il ne compterait que celles de l'appelant, et
-    # l'administrateur d'une seule deviendrait administrateur de l'instance. Les isoler demande une
-    # résolution d'identité en portée de plateforme — l'édition entreprise (ADR 0024) — et non une
-    # politique posée ici.
-    "organizations": "identité — voir ci-dessus",
-    "users": "identité — voir ci-dessus",
-    "memberships": "identité — voir ci-dessus",
-    "api_tokens": "identité — appartient à un utilisateur, pas à une organisation",
 }
 
 
@@ -395,12 +385,13 @@ async def test_un_role_de_projet_ne_devient_pas_un_role_d_organisation(
         )
         secret_id = autre.id
 
-    # Directement, comme `current_principal` : une session SANS portée (c'est `get_db`), puis la
-    # résolution. Une connexion de développement donnerait en plus « developer » dans
-    # l'organisation par défaut, et brouillerait la preuve.
+    # Directement, comme `current_principal` : l'utilisateur lu en portée de plateforme, puis la
+    # résolution — qui pose elle-même `*` avant la jointure, et borne après. Une connexion de
+    # développement donnerait en plus « developer » dans l'organisation par défaut, et brouillerait
+    # la preuve.
     from choregos_api.deps import _principal_from_user
 
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:
         user = await session.get(User, invite.id)
         assert user is not None
         principal = await _principal_from_user(session, user)
@@ -441,3 +432,84 @@ async def test_creer_une_seconde_organisation_sous_rls(
             assert cree.status_code == 201, cree.text
     finally:
         reinitialiser()
+
+
+# ───────────────────────── l'identité sous RLS (0.11) ─────────────────────────
+
+
+async def test_une_organisation_ne_voit_ni_le_nom_ni_les_membres_de_l_autre(
+    pg_app: Any, deux_organisations: dict[str, str]
+) -> None:
+    from choregos_api.db.models import ApiToken, Membership, Organization, User
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        orgs = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for slug in ("a", "b"):
+            u = User(oidc_sub=f"dev|m@{slug}", email=f"membre@{slug}.test", display_name=slug)
+            session.add(u)
+            await session.flush()
+            session.add(Membership(user_id=u.id, org_id=orgs[slug], role="developer"))
+            session.add(ApiToken(user_id=u.id, name="ci", hash=f"{slug}" * 64, scopes=[]))
+
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(Organization.slug))).scalars().all() == ["a"]
+        assert {m.org_id for m in (await session.execute(select(Membership))).scalars()} == {orgs["a"]}
+        assert (await session.execute(select(User.email))).scalars().all() == ["membre@a.test"]
+        assert [t.name for t in (await session.execute(select(ApiToken))).scalars()] == ["ci"]
+    async with session_scope() as session:
+        for modele in (Organization, Membership, User, ApiToken):
+            assert (await session.execute(select(modele))).scalars().all() == [], modele.__tablename__
+
+
+async def test_inviter_un_utilisateur_deja_membre_ailleurs_ne_cree_pas_de_doublon(
+    pg_app: Any, deux_organisations: dict[str, str]
+) -> None:
+    """L'e-mail est unique à l'échelle de l'instance ; sous la RLS de `users`, un membre de `b` est
+    invisible depuis `a`, et l'invitation tentait un doublon."""
+    from choregos_api.db.models import Membership, Organization, User
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        b = (await session.execute(select(Organization).where(Organization.slug == "b"))).scalar_one()
+        ailleurs = User(oidc_sub="dev|x@b", email="partage@b.test", display_name="partagé")
+        session.add(ailleurs)
+        await session.flush()
+        session.add(Membership(user_id=ailleurs.id, org_id=b.id, role="developer"))
+        ailleurs_id = ailleurs.id
+    async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
+        await login(client, "admin@a.test")
+        reponse = await client.post(
+            "/api/v1/orgs/a/members", json={"email": "partage@b.test", "role": "viewer"}
+        )
+        assert reponse.status_code in {200, 201}, reponse.text
+    async with session_scope(orgs="*") as session:
+        (seul,) = (await session.execute(select(User).where(User.email == "partage@b.test"))).scalars()
+        assert seul.id == ailleurs_id
+
+
+async def test_un_utilisateur_sans_appartenance_se_lit_lui_meme(
+    pg_app: Any, deux_organisations: dict[str, str]
+) -> None:
+    """Portée vide, mais `app.current_user` : il lit son compte et ses jetons, rien d'autre."""
+    import time
+
+    from choregos_api.db.models import User
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import sign_session
+
+    async with session_scope(orgs="*") as session:
+        seul = User(oidc_sub="dev|seul", email="seul@nulle-part.test", display_name="seul")
+        session.add(seul)
+        await session.flush()
+        seul_id = seul.id
+    async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
+        maintenant = int(time.time())
+        client.cookies.set(
+            "choregos_session", sign_session({"sub": seul_id, "iat": maintenant, "exp": maintenant + 600})
+        )
+        moi = await client.get("/api/v1/me")
+        assert moi.status_code == 200 and moi.json()["email"] == "seul@nulle-part.test", moi.text
+        cree = await client.post("/api/v1/me/tokens", json={"name": "cli"})
+        assert cree.status_code == 201, cree.text
+        assert [t["name"] for t in (await client.get("/api/v1/me/tokens")).json()] == ["cli"]

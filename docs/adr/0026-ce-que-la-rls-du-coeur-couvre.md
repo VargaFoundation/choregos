@@ -1,6 +1,6 @@
 # 0026 — What the core's row-level security covers, and what it leaves to the enterprise edition
 
-- **Status**: accepted, 2026-09-28 — refines a consequence of [ADR 0024](0024-deux-editions.md)
+- **Status**: accepted, 2026-09-28 — refines a consequence of [ADR 0024](0024-deux-editions.md); decision 3 **superseded on 2026-09-29** (see the update at the end)
 - **Concerns**: `apps/api/src/choregos_api/migrations`, `apps/api/tests/test_rls_postgres.py`
 
 ## Context
@@ -49,3 +49,26 @@ policy on those tables would weaken security, not strengthen it.
 - The enterprise edition must define a platform-administrator role before multi-organisation
   `/platform/*` is usable: until then `exiger_admin_de_plateforme` refuses everyone once a second
   organisation exists, which is the right default.
+
+## Update — 2026-09-29: identity goes under RLS in the core
+
+Decision 3 rested on two facts: the principal was resolved before any scope was set, and nothing
+exercised the whole API under RLS. Both changed in 0.10.1. The principal is now resolved under the
+platform scope and only then narrowed — the fix of an actual privilege escalation found by running the
+whole API suite on PostgreSQL, which CI now does on every pull request.
+
+With that net in place, **0.11 puts `organizations`, `memberships`, `users` and `api_tokens` under
+forced RLS in the core**:
+
+- an organisation sees its own name and its own memberships, nothing of the others;
+- a user is visible to the organisations they belong to, and always to themselves
+  (`app.current_user`) — a user with no membership can still read their account and tokens;
+- whatever concerns the whole instance is read in an explicit, restoring platform scope
+  (`db.session.en_portee_de_plateforme`): counting organisations to decide who administers the
+  instance, finding an invitee by e-mail (unique instance-wide);
+- creating an organisation is an instance gesture: once the right is established, the rest of the
+  request runs in the platform scope.
+
+`EXEMPTEES` now holds only catalogues and plumbing. The enterprise edition keeps what is genuinely
+multi-organisation semantics — a platform-administrator role of its own, SCIM, SAML — and no longer
+has identity isolation to finish.

@@ -20,6 +20,7 @@ from ..db.models import (
     Project,
     User,
 )
+from ..db.session import en_portee_de_plateforme
 from ..deps import Db, Me, Pagination, exiger_admin_de_plateforme
 from ..errors import forbidden, not_found
 from ..schemas import (
@@ -215,7 +216,10 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
 
     if not principal.can(Permission.MEMBER_MANAGE, org, body.project_slug):
         raise forbidden("gérer les membres demande le rôle project_owner ou org_admin")
-    user = (await session.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
+    # L'e-mail est unique à l'échelle de l'INSTANCE : un utilisateur déjà membre d'une autre
+    # organisation est invisible sous la RLS de `users`, et la route tentait un doublon.
+    async with en_portee_de_plateforme(session):
+        user = (await session.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
     if user is None:
         user = User(email=body.email, display_name=body.email.split("@")[0])
         session.add(user)
@@ -288,6 +292,10 @@ async def list_audit(
     # jetons) ne sortent que si le droit couvre TOUTES les organisations de l'instance — ce qui
     # est le cas normal d'une installation à une seule organisation, et n'est jamais vrai chez
     # un locataire parmi d'autres.
+    # Sous la RLS de `organizations` (0.11), ce compte vaut le nombre d'organisations LISIBLES, et
+    # l'administrateur d'une organisation sur deux passerait pour couvrir l'instance. Sans effet :
+    # la RLS d'`audit_log` ne montre les lignes `org_id IS NULL` qu'en portée `*`. Le filtre ci-dessous
+    # reste utile sans RLS (SQLite, développement).
     total = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
     toute_l_instance = len(lisibles) >= int(total)
 

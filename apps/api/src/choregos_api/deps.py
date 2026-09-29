@@ -17,7 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import Settings, get_settings
 from .db.models import ApiToken, Membership, Organization, Project, User
-from .db.session import TOUT, get_sessionmaker, limiter_aux_organisations
+from .db.session import (
+    TOUT,
+    en_portee_de_plateforme,
+    get_sessionmaker,
+    limiter_aux_organisations,
+    nommer_l_utilisateur,
+)
 from .errors import forbidden, not_found, unauthorized
 from .logging import bind
 from .rbac import Permission, Principal
@@ -101,6 +107,7 @@ async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
     # que la RLS s'arme, parce que c'est ici qu'on sait qui parle.
     orgs = set(org_roles) | {qualified.split("/", 1)[0] for qualified in project_roles}
     await limiter_aux_organisations(session, sorted(orgs))
+    await nommer_l_utilisateur(session, user.id)
     return principal
 
 
@@ -110,7 +117,12 @@ async def current_principal(
     settings: Config,
     authorization: Annotated[str | None, Header()] = None,
 ) -> Principal:
-    """Identité de l'appelant : cookie de session OIDC, ou jeton d'API porteur."""
+    """Identité de l'appelant : cookie de session OIDC, ou jeton d'API porteur.
+
+    Le jeton et l'utilisateur se lisent en portée de PLATEFORME : `api_tokens` et `users` sont sous
+    RLS depuis la 0.11, et on ne sait pas encore qui parle. `_principal_from_user` borne ensuite.
+    """
+    await limiter_aux_organisations(session, TOUT)
     if authorization and authorization.lower().startswith("bearer "):
         raw = authorization.split(" ", 1)[1].strip()
         token = (
@@ -178,7 +190,10 @@ async def exiger_admin_de_plateforme(session: AsyncSession, principal: Principal
     """
     from .db.models import Organization
 
-    slugs = set((await session.execute(select(Organization.slug))).scalars().all())
+    # Sur l'instance ENTIÈRE : sous la RLS de `organizations`, le compte fait depuis la portée d'un
+    # administrateur d'une seule organisation vaudrait 1, et il passerait pour administrateur de tout.
+    async with en_portee_de_plateforme(session):
+        slugs = set((await session.execute(select(Organization.slug))).scalars().all())
     administrees = {org for org, role in principal.org_roles.items() if role == Role.ORG_ADMIN}
     if not slugs or not slugs <= administrees:
         if await _accorde_par_un_greffon(session, principal):

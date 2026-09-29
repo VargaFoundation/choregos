@@ -83,6 +83,36 @@ async def limiter_aux_organisations(session: AsyncSession, orgs: list[str] | str
     await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": valeur})
 
 
+async def nommer_l_utilisateur(session: AsyncSession, user_id: str | None) -> None:
+    """Pose `app.current_user` pour la RLS de `users` et `api_tokens` : l'appelant se lit toujours,
+    même sans appartenance. Transaction-locale, comme la portée."""
+    if get_settings().is_sqlite:
+        return
+    await session.execute(text("SELECT set_config('app.current_user', :u, true)"), {"u": user_id or ""})
+
+
+@asynccontextmanager
+async def en_portee_de_plateforme(session: AsyncSession) -> AsyncIterator[None]:
+    """Le temps d'un bloc, la session voit toute l'instance ; la portée précédente est RESTAURÉE.
+
+    Pour ce qui porte sur l'instance entière au milieu d'une requête bornée : compter les
+    organisations (qui administre la plateforme ?), retrouver un utilisateur par son e-mail, unique à
+    l'échelle de l'instance. Sous la RLS de l'identité, un compte fait depuis la portée d'un
+    administrateur d'une seule organisation vaudrait 1 — et il passerait pour administrateur de tout.
+    """
+    if get_settings().is_sqlite:
+        yield
+        return
+    avant = (await session.execute(text("SELECT current_setting('app.current_orgs', true)"))).scalar_one()
+    await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": TOUT})
+    try:
+        yield
+    finally:
+        await session.execute(
+            text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": avant or ""}
+        )
+
+
 @asynccontextmanager
 async def session_scope(
     org_slug: str | None = None, *, orgs: list[str] | str | None = None

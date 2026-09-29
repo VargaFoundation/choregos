@@ -452,6 +452,13 @@ The reverse is **not** refused: a deployment that announces nothing and loads th
 plugin is simply one that forgot to say so, and denying it start-up would help no one. `/edition`
 and the metric tell the truth either way.
 
+### Row-level security covers identity (0.11)
+
+Since 0.11, organisations, memberships, users and API tokens are under row-level security like the
+rest: a session scoped to one organisation reads neither the name nor the members of another. Nothing
+to configure — but the API must connect with a **non-superuser** role (a superuser ignores RLS), which
+the chart already assumes.
+
 ### Webhook secrets
 
 `CHOREGOS_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `CHOREGOS_GENERIC_WEBHOOK_SECRET` is
