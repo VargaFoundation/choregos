@@ -14,6 +14,7 @@ from ..audit import record
 from ..db.models import Event, Finding, HumanRequest, Project, Run, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import conflict, forbidden, not_found
+from ..greffons import DemandeDeGeste, controler
 from ..rbac import Permission
 from ..schemas import (
     DecisionRequest,
@@ -275,6 +276,22 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         raise conflict("aucune demande humaine en attente sur ce ticket")
     if request_row.decided_at is not None:
         raise conflict("cette demande a déjà été tranchée")
+    await controler(
+        session,
+        DemandeDeGeste(
+            "workitem.decision",
+            org_slug,
+            principal,
+            {
+                "project": project.slug,
+                "work_item": item.tracker_key,
+                "transition_id": request_row.transition_id,
+                "request_kind": request_row.kind,
+                "request_payload": request_row.payload,
+                "decision": body.kind,
+            },
+        ),
+    )
 
     kind_map = {
         "approve": HumanRequestKind.APPROVAL,

@@ -16,6 +16,7 @@ from ..db.models import Membership, Organization, Project
 from ..deps import Db, Me, Pagination, ProjectCtx, exiger_admin_de_plateforme
 from ..edition import est_entreprise
 from ..errors import conflict, forbidden, not_found
+from ..greffons import DemandeDeGeste, controler
 from ..rbac import Permission
 from ..schemas import (
     OrgCreate,
@@ -126,6 +127,7 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
     ).scalar_one_or_none()
     if existing is not None:
         raise conflict(f"le projet `{body.slug}` existe déjà dans {org}")
+    await controler(session, DemandeDeGeste("project.create", org, principal, {"slug": body.slug}))
     project = Project(
         org_id=organization.id,
         slug=body.slug,

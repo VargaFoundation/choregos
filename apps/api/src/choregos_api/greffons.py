@@ -20,6 +20,9 @@ nommée, comme le mappeur de groupes.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from typing import Any
+
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
 
@@ -58,5 +61,78 @@ def signatures(routeur: APIRouter, prefixe: str = "") -> set[tuple[str, str]]:
 
 
 def reinitialiser() -> None:
-    """Pour les tests : aucun routeur de greffon."""
+    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste."""
     _ROUTEURS.clear()
+    reinitialiser_les_controles()
+
+
+# ───────────────────────────── contrôle des gestes humains ─────────────────────────────
+#
+# Certains gestes humains portent une règle d'exploitation que le cœur ne connaît pas : un plafond
+# de projets par organisation, une authentification FRAÎCHE pour approuver une mise en production.
+# Un greffon déclare un contrôle, joué par la route AVANT qu'elle agisse — après les droits du
+# cœur, qui restent les premiers juges : un contrôle ne peut que refuser davantage.
+
+#: Les gestes contrôlables, et ce que la route passe dans `cible`.
+GESTES = {
+    "project.create": "slug du projet à créer",
+    "workitem.decision": "ticket, transition, nature de la demande et de la décision",
+    "release.approve": "release, environnement",
+}
+
+
+@dataclass(frozen=True)
+class DemandeDeGeste:
+    geste: str
+    org: str
+    principal: Any
+    cible: dict[str, Any] = field(default_factory=dict)
+
+
+class GesteRefuse(Exception):  # noqa: N818 - une décision, pas une erreur
+    """`nature` choisit la réponse : `interdit` (403), `conflit` (409), `reauth` (401 — refaire
+    `GET /api/v1/auth/login?reauth=1`, puis le geste)."""
+
+    def __init__(self, raison: str, nature: str = "interdit") -> None:
+        if nature not in {"interdit", "conflit", "reauth"}:
+            raise ValueError(f"nature inconnue : {nature!r}")
+        super().__init__(raison)
+        self.nature = nature
+
+
+_CONTROLES: dict[str, dict[str, Any]] = {geste: {} for geste in GESTES}
+
+
+def declarer_un_controle_de_geste(geste: str, nom: str, fonction: Any) -> None:
+    """`fonction(session_db, demande)`, synchrone ou asynchrone ; lève `GesteRefuse` pour refuser.
+    Toute autre exception remonte : un contrôle en panne n'est pas une autorisation."""
+    if geste not in GESTES:
+        raise ValueError(f"geste inconnu : {geste!r} (connus : {sorted(GESTES)})")
+    _CONTROLES[geste][nom] = fonction
+
+
+async def controler(session: Any, demande: DemandeDeGeste) -> None:
+    """Appelée par les routes du cœur. Traduit le premier refus en réponse HTTP, préfixée du nom."""
+    import inspect
+
+    from .errors import conflict, forbidden, unauthorized
+
+    for nom, fonction in _CONTROLES[demande.geste].items():
+        try:
+            resultat = fonction(session, demande)
+            if inspect.isawaitable(resultat):
+                await resultat
+        except GesteRefuse as refus:
+            raison = f"{nom} : {refus}"
+            if refus.nature == "conflit":
+                raise conflict(raison) from refus
+            if refus.nature == "reauth":
+                raise unauthorized(
+                    f"{raison} — se ré-authentifier (GET /api/v1/auth/login?reauth=1)"
+                ) from refus
+            raise forbidden(raison) from refus
+
+
+def reinitialiser_les_controles() -> None:
+    for controles in _CONTROLES.values():
+        controles.clear()
