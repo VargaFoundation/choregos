@@ -798,3 +798,54 @@ async def test_choregos_admin_frappe_un_jeton_et_rejoue_l_amorcage(
     assert (await invoque()).exit_code != 0, "sans commande, l'aide"
     db_session._engine = None
     db_session._sessionmaker = None
+
+
+async def test_le_webhook_tekton_exige_le_secret_partage_quand_il_existe(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Il n'avait aucune vérification. Le puits CloudEvents de Tekton n'ajoute pas d'en-tête : le
+    secret passe aussi dans l'URL (`?jeton=`)."""
+    from choregos_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_GENERIC_WEBHOOK_SECRET", "s3cret-tekton")
+    reset_settings_cache()
+    corps = {"pipelineRun": {"metadata": {"name": "r", "labels": {"choregos/project": "billing-api"}}}}
+    entetes = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1"}
+    try:
+        sans = await client.post("/api/v1/webhooks/tekton", json=corps, headers={**entetes, "ce-id": "t-1"})
+        faux = await client.post(
+            "/api/v1/webhooks/tekton",
+            json=corps,
+            headers={**entetes, "ce-id": "t-2", "x-choregos-secret": "non"},
+        )
+        assert sans.status_code == 401 and faux.status_code == 401
+        en_tete = await client.post(
+            "/api/v1/webhooks/tekton",
+            json=corps,
+            headers={**entetes, "ce-id": "t-3", "x-choregos-secret": "s3cret-tekton"},
+        )
+        dans_l_url = await client.post(
+            "/api/v1/webhooks/tekton",
+            params={"jeton": "s3cret-tekton"},
+            json=corps,
+            headers={**entetes, "ce-id": "t-4"},
+        )
+        assert en_tete.status_code == 202 and dans_l_url.status_code == 202
+    finally:
+        reset_settings_cache()
+
+
+async def test_sans_secret_le_webhook_tekton_est_refuse_hors_du_developpement(
+    client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api import config
+
+    reglages = config.get_settings()
+    monkeypatch.setattr(reglages, "env", "prod")
+    monkeypatch.setattr(reglages, "generic_webhook_secret", "")
+    refus = await client.post(
+        "/api/v1/webhooks/tekton",
+        json={},
+        headers={"ce-type": "dev.tekton.event.pipelinerun.started.v1", "ce-id": "p-1"},
+    )
+    assert refus.status_code == 401 and "CHOREGOS_GENERIC_WEBHOOK_SECRET" in refus.text

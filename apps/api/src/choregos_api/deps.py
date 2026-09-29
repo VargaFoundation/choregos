@@ -36,6 +36,28 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 
 
 Db = Annotated[AsyncSession, Depends(get_db)]
+
+
+async def get_db_plateforme() -> AsyncIterator[AsyncSession]:
+    """Session qui agit POUR la plateforme : elle voit toutes les organisations (`*`).
+
+    Pour les routes sans principal, authentifiées par une signature ou un secret partagé — les
+    webhooks. Elles utilisaient `get_db`, sans portée : sur PostgreSQL la RLS fail-closed leur
+    cachait tous les projets, et chaque événement de CI, de CD ou de tracker était jeté comme « sans
+    projet connu ». Les tests d'API tournent sur SQLite, où la RLS n'existe pas : personne ne l'a vu.
+    Une route qui prend cette session doit avoir vérifié qui l'appelle AVANT de lire.
+    """
+    async with get_sessionmaker()() as session:
+        await limiter_aux_organisations(session, TOUT)
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
+DbPlateforme = Annotated[AsyncSession, Depends(get_db_plateforme)]
 Config = Annotated[Settings, Depends(get_settings)]
 
 
