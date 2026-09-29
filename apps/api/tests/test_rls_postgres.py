@@ -333,3 +333,40 @@ async def test_chaque_table_est_sous_rls_ou_exemptee(pg_app: Any) -> None:
     assert not sans, f"tables ni sous RLS forcée ni exemptées avec leur raison : {sans}"
     exemptees_sous_rls = sorted(nom for nom in EXEMPTEES if tables.get(nom, (False, False))[0])
     assert not exemptees_sous_rls, f"exemptées mais sous RLS — retirer l'exemption : {exemptees_sous_rls}"
+
+
+# ───────────────────────── les webhooks, sur un VRAI PostgreSQL ─────────────────────────
+
+
+async def test_un_webhook_achemine_son_evenement_sous_rls(
+    pg_app: Any, deux_organisations: dict[str, str]
+) -> None:
+    """Un webhook n'a pas de principal : il est authentifié par sa signature, et agit POUR la
+    plateforme. Sa session doit donc voir les projets — la RLS fail-closed les cachait tous, et
+    chaque événement de CI, de CD ou de tracker était jeté comme « sans projet connu » sur
+    PostgreSQL, sans que les tests (SQLite) le voient."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        # `billing-api` existe dans `a` ET `b` : on donne un slug unique pour que le routage soit
+        # possible, comme le fait l'étiquette d'un vrai PipelineRun.
+        (ticket,) = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == "a-1"))).scalars()
+        from choregos_api.db.models import Project
+
+        projet = await session.get(Project, ticket.project_id)
+        assert projet is not None
+        projet.slug = "facturation-a"
+    corps = {
+        "pipelineRun": {
+            "metadata": {
+                "name": "run-1",
+                "labels": {"choregos/project": "facturation-a", "choregos/work-item": "a-1"},
+            }
+        }
+    }
+    entetes = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1", "ce-id": "ev-rls-1"}
+    async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
+        reponse = await client.post("/api/v1/webhooks/tekton", json=corps, headers=entetes)
+    assert reponse.status_code == 202, reponse.text
+    assert reponse.json()["events"] == 1, "l'événement n'a été acheminé vers aucun ticket"

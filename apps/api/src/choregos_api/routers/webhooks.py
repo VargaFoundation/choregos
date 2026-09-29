@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..config import get_settings
 from ..db.models import Project, WebhookDelivery, WorkItem
-from ..deps import Db
+from ..deps import DbPlateforme
 from ..errors import unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
@@ -162,7 +162,7 @@ async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
 )
 async def github_webhook(
     request: Request,
-    session: Db,
+    session: DbPlateforme,
     response: Response,
     x_github_event: Annotated[str, Header()] = "",
     x_github_delivery: Annotated[str, Header()] = "",
@@ -196,11 +196,26 @@ async def github_webhook(
 )
 async def tekton_webhook(
     request: Request,
-    session: Db,
+    session: DbPlateforme,
     ce_type: Annotated[str, Header()] = "",
     ce_id: Annotated[str, Header()] = "",
+    x_choregos_secret: Annotated[str, Header()] = "",
 ) -> WebhookAck:
-    """CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1`."""
+    """CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1`.
+
+    Authentifié par le secret partagé, en en-tête `X-Choregos-Secret` OU dans l'URL du puits
+    (`?jeton=`) : le puits CloudEvents de Tekton se règle par une URL et n'ajoute pas d'en-tête. Il
+    n'y avait AUCUNE vérification — sans conséquence tant que la RLS cachait tout à cette route sur
+    PostgreSQL, un chemin d'écriture anonyme dès qu'elle voit les projets (« CI réussie » sur
+    n'importe quel ticket).
+    """
+    settings = get_settings()
+    fourni = x_choregos_secret or request.query_params.get("jeton", "")
+    if not settings.generic_webhook_secret:
+        if settings.env in {"staging", "prod"}:
+            raise unauthorized("webhook Tekton non configuré : CHOREGOS_GENERIC_WEBHOOK_SECRET manque")
+    elif not verify_shared_secret(settings.generic_webhook_secret, fourni):
+        raise unauthorized("secret partagé invalide")
     body = await request.body()
     if await _already_seen(session, "tekton", ce_id or body_digest(body), ce_type, body):
         return WebhookAck(accepted=True, duplicate=True)
@@ -236,7 +251,7 @@ async def tekton_webhook(
 )
 async def argocd_webhook(
     request: Request,
-    session: Db,
+    session: DbPlateforme,
     x_choregos_secret: Annotated[str, Header()] = "",
 ) -> WebhookAck:
     body = await request.body()
@@ -280,7 +295,7 @@ async def argocd_webhook(
 )
 async def alertmanager_webhook(
     request: Request,
-    session: Db,
+    session: DbPlateforme,
     x_choregos_secret: Annotated[str, Header()] = "",
 ) -> WebhookAck:
     body = await request.body()
@@ -323,7 +338,7 @@ async def alertmanager_webhook(
 )
 async def jira_webhook(
     request: Request,
-    session: Db,
+    session: DbPlateforme,
     x_choregos_secret: Annotated[str, Header()] = "",
     x_atlassian_webhook_identifier: Annotated[str, Header()] = "",
 ) -> WebhookAck:
@@ -347,7 +362,7 @@ async def jira_webhook(
 )
 async def gitlab_webhook(
     request: Request,
-    session: Db,
+    session: DbPlateforme,
     x_gitlab_token: Annotated[str, Header()] = "",
     x_gitlab_event: Annotated[str, Header()] = "",
     x_gitlab_event_uuid: Annotated[str, Header()] = "",

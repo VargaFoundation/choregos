@@ -915,3 +915,28 @@ les 492 tests ne disaient pas :
     Le commentaire de demande humaine invitait à répondre par `/choregos approve` ; ces commentaires
     sont analysés mais jamais traduits en décision — l'humain répondait, et le ticket restait bloqué
     sans un signe. Il renvoie désormais vers l'interface, et S3-03 passe à 🟡.
+
+23. **Les webhooks n'acheminaient RIEN sur PostgreSQL — et celui de Tekton n'était pas authentifié**
+    (2026-09-29).
+
+    Trouvé en recensant les chemins qui lisent la base sans portée. Les routes de webhooks
+    (GitHub, Tekton, Argo CD, Alertmanager, Jira, GitLab) prenaient une session SANS portée ; la RLS
+    fail-closed leur cachait tous les projets, et chaque événement était jeté comme « sans projet
+    connu ». Les tests d'API tournent sur SQLite, sans RLS : personne ne l'a vu. Sur le locataire
+    dev (PostgreSQL), aucun événement de tracker, de CI ou de CD n'a donc jamais atteint un ticket —
+    la traversée du §13 passait par le tracker interne et l'API interne, pas par un webhook.
+
+    Correctif : `deps.DbPlateforme`, une session de portée `*`, pour les routes authentifiées par
+    signature ou secret. En l'écrivant, le webhook Tekton s'est révélé SANS aucune vérification :
+    inoffensif tant que la RLS lui cachait tout, un chemin d'écriture anonyme dès qu'il voit les
+    projets. Il exige désormais le secret partagé, en en-tête ou dans l'URL du puits (`?jeton=`,
+    Tekton n'ajoutant pas d'en-tête), et refuse hors développement quand il n'est pas configuré.
+
+    **Ce que ça prouve** : `test_rls_postgres.py::test_un_webhook_achemine_son_evenement_sous_rls`
+    — sur PostgreSQL, rôle non superutilisateur, un événement Tekton atteint son ticket (0 avant le
+    correctif) ; `test_routeurs_nus.py` — Tekton refuse sans secret ou avec un faux, accepte en
+    en-tête et dans l'URL, refuse en production sans secret configuré (rouge quand la vérification
+    est retirée).
+    **Ce que ça ne prouve pas** : seul Tekton est éprouvé sur PostgreSQL ; les autres routes prennent
+    la même session et vérifient leur secret avant de lire, sans test PostgreSQL chacune. Le puits
+    CloudEvents du locataire doit recevoir `?jeton=` à la mise à jour.

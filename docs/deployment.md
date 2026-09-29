@@ -452,6 +452,14 @@ The reverse is **not** refused: a deployment that announces nothing and loads th
 plugin is simply one that forgot to say so, and denying it start-up would help no one. `/edition`
 and the metric tell the truth either way.
 
+### Webhook secrets
+
+`CHOREGOS_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `CHOREGOS_GENERIC_WEBHOOK_SECRET` is
+the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, and **Tekton since
+0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
+the sink URL, `…/api/v1/webhooks/tekton?jeton=<secret>`. Outside development, a webhook whose secret
+is not configured is refused.
+
 ### When a secret is not a secret
 
 The API **refuses to start** if any setting holds the literal string `<no value>` (or `<nil>`).
