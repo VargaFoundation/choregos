@@ -89,6 +89,10 @@ class Principal:
     #: du 2026-09-24.
     project_roles: dict[str, Role] = field(default_factory=dict)
     groups: list[str] = field(default_factory=list)
+    #: Quand l'humain s'est authentifié (secondes epoch), lu dans la session. `None` pour un jeton
+    #: d'API ou une session antérieure à la 0.10.0 : une porte qui exige une authentification
+    #: récente les traite comme trop anciennes.
+    authentifie_le: int | None = None
 
     def role_for(self, org: str, project_slug: str | None = None) -> Role | None:
         if project_slug:

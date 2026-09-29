@@ -91,7 +91,52 @@ def est_entreprise() -> bool:
     return courante() == ENTREPRISE
 
 
+class SessionRefusee(Exception):  # noqa: N818 - une décision, pas une erreur
+    """Une validation de session refuse : `str()` est la raison, rendue en 401."""
+
+
+#: Les validations de session déclarées par les greffons, et les autorités qui désignent un
+#: administrateur de la plateforme. Deux coutures d'IDENTITÉ, comme le mappeur de groupes.
+_VALIDATIONS_DE_SESSION: list[Any] = []
+_ADMINISTRATEURS_DE_PLATEFORME: list[Any] = []
+
+
+def declarer_une_validation_de_session(fonction: Any) -> None:
+    """Une session signée est valable jusqu'à `exp` : le cœur ne sait pas la révoquer avant.
+
+    Un greffon qui le veut — révocation côté serveur, déprovisionnement SCIM — déclare ici
+    `fonction(session_db, user, payload)`, synchrone ou asynchrone, jouée à CHAQUE requête
+    authentifiée par cookie. Elle lève `SessionRefusee(raison)` pour refuser (401 avec la raison).
+    Toute autre exception remonte telle quelle : une validation en panne ne vaut pas acceptation.
+    """
+    if fonction not in _VALIDATIONS_DE_SESSION:
+        _VALIDATIONS_DE_SESSION.append(fonction)
+
+
+def validations_de_session() -> tuple[Any, ...]:
+    return tuple(_VALIDATIONS_DE_SESSION)
+
+
+def declarer_un_administrateur_de_plateforme(fonction: Any) -> None:
+    """Le cœur tient pour administrateur de la plateforme l'`org_admin` de TOUTES les
+    organisations (`deps.exiger_admin_de_plateforme`). En multi-organisation, un vrai rôle de
+    plateforme est plus juste : un greffon déclare ici `fonction(session_db, principal) -> bool`,
+    synchrone ou asynchrone.
+
+    ADDITIVE : elle peut ACCORDER le droit à qui la règle du cœur le refuse, jamais le retirer à qui
+    elle l'accorde — une installation qui charge un greffon garde au moins ses administrateurs.
+    """
+    if fonction not in _ADMINISTRATEURS_DE_PLATEFORME:
+        _ADMINISTRATEURS_DE_PLATEFORME.append(fonction)
+
+
+def administrateurs_de_plateforme() -> tuple[Any, ...]:
+    return tuple(_ADMINISTRATEURS_DE_PLATEFORME)
+
+
 def reinitialiser() -> None:
-    """Pour les tests : revient au défaut le plus restrictif, et au mappeur du cœur."""
+    """Pour les tests : revient au défaut le plus restrictif, et aux règles du cœur."""
     declarer(COMMUNAUTAIRE)
     _MAPPEUR.pop("fonction", None)
+    _VALIDATIONS_DE_SESSION.clear()
+    _ADMINISTRATEURS_DE_PLATEFORME.clear()

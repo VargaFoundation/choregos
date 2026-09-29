@@ -852,3 +852,20 @@ les 492 tests ne disaient pas :
     trois rougissent. Suites API et orchestrateur vertes avec PostgreSQL disponible.
     **Ce que ça ne prouve pas** : la charge — une fonction par ligne sur `run_events`, dont les
     lectures filtrent déjà par run ; aucune mesure de latence sur un gros journal.
+
+19. **Coutures d'identité : révoquer une session, accorder l'administration de la plateforme,
+    exiger une authentification fraîche** (2026-09-29).
+
+    Une session signée valait jusqu'à `exp`, sans recours ; un greffon peut désormais la refuser à
+    chaque requête (`declarer_une_validation_de_session`) — c'est le chemin de la révocation côté
+    serveur et du déprovisionnement SCIM. Il peut aussi ACCORDER l'administration de la plateforme
+    en plus de la règle du cœur, jamais la retirer. La session porte `iat`
+    (`Principal.authentifie_le`), et `auth/login?reauth=1` fait redemander l'IdP.
+
+    **Ce que ça prouve** : `test_coutures_identite.py`, greffon installé — `iat` posé ; session
+    révoquée → 401 avec la raison à la requête suivante ; validation en panne → l'exception remonte ;
+    un greffon accorde `/platform/*` à qui le cœur le refuse, sans retirer le droit à l'admin des
+    deux organisations ; `reauth=1` → `prompt=login&max_age=0`, absents sinon. Chacune des trois
+    coutures retirée : rouge.
+    **Ce que ça ne prouve pas** : aucun IdP réel n'a honoré `prompt=login` devant nous ; le front
+    ne propose pas encore le chemin de ré-authentification.
