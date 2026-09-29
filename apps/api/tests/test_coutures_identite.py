@@ -188,3 +188,95 @@ async def test_reauth_demande_a_l_idp_de_re_authentifier(
     finally:
         reset_settings_cache()
         oublier_la_decouverte()
+
+
+GREFFON_SAML = '''
+from fastapi import APIRouter
+
+from choregos_api.deps import Db
+from choregos_api.greffons import declarer_un_routeur
+from choregos_api.routers.auth import terminer_la_connexion
+
+routeur = APIRouter()
+
+
+@routeur.post("/greffon/acs")
+async def acs(session: Db, cible: str = "/"):
+    """Comme un service SAML, APRÈS avoir vérifié l'assertion (ici : rien à vérifier)."""
+    return await terminer_la_connexion(
+        session,
+        email="marie@varga.dev",
+        nom="Marie",
+        sujet="saml|marie",
+        groupes=["choregos:varga:org-admins"],
+        cible=cible,
+        canal="saml",
+    )
+
+
+def brancher():
+    declarer_un_routeur(routeur)
+'''
+
+
+@pytest.fixture
+async def client_saml(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
+    from choregos_api.greffons import reinitialiser
+
+    racine = tmp_path / "site-saml"
+    racine.mkdir()
+    (racine / "greffon_saml.py").write_text(GREFFON_SAML, encoding="utf-8")
+    info = racine / "greffon_saml-0.1.0.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: greffon_saml\nVersion: 0.1.0\n", encoding="utf-8"
+    )
+    (info / "entry_points.txt").write_text(
+        "[choregos.plugins]\ngreffon_saml = greffon_saml:brancher\n", encoding="utf-8"
+    )
+    sys.path.insert(0, str(racine))
+    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/saml.db"
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.db import session as db_session
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import create_all, session_scope
+    from choregos_api.main import create_app
+
+    reset_settings_cache()
+    await db_session.dispose_engine()
+    try:
+        application = create_app()
+        await create_all()
+        async with session_scope() as session:
+            session.add(Organization(slug="varga", name="Varga"))
+        async with AsyncClient(transport=ASGITransport(app=application), base_url="http://test") as http:
+            yield http
+    finally:
+        await db_session.dispose_engine()
+        reset_settings_cache()
+        sys.path.remove(str(racine))
+        sys.modules.pop("greffon_saml", None)
+        reinitialiser()
+
+
+async def test_un_autre_protocole_ouvre_une_session_exactement_comme_oidc(client_saml: AsyncClient) -> None:
+    from choregos_api.db.models import AuditLog
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import read_session
+    from sqlalchemy import select
+
+    reponse = await client_saml.post("/api/v1/greffon/acs", params={"cible": "https://evil.example/vol"})
+    assert reponse.status_code == 307
+    # La cible est bornée comme pour OIDC : pas de redirection ouverte par ce chemin.
+    assert not reponse.headers["location"].startswith("https://evil.example")
+    cookie = client_saml.cookies.get("choregos_session")
+    assert cookie, "aucune session posée"
+    charge = read_session(cookie)
+    assert charge is not None and isinstance(charge.get("iat"), int)
+
+    moi = (await client_saml.get("/api/v1/me")).json()
+    assert moi["email"] == "marie@varga.dev"
+    assert {(m["org"], m["role"]) for m in moi["memberships"]} == {("varga", "org_admin")}
+    async with session_scope(orgs="*") as session:
+        (trace,) = (await session.execute(select(AuditLog).where(AuditLog.action == "auth.login"))).scalars()
+    assert trace.payload == {"canal": "saml"}
