@@ -108,7 +108,26 @@ async def current_principal(
     user = await session.get(User, str(payload.get("sub", "")))
     if user is None:
         raise unauthorized("session périmée")
-    return await _principal_from_user(session, user)
+    await _valider_la_session(session, user, payload)
+    principal = await _principal_from_user(session, user)
+    iat = payload.get("iat")
+    principal.authentifie_le = int(iat) if isinstance(iat, int | float) else None
+    return principal
+
+
+async def _valider_la_session(session: AsyncSession, user: User, payload: dict[str, Any]) -> None:
+    """Les validations déclarées par les greffons (`edition.declarer_une_validation_de_session`)."""
+    import inspect
+
+    from .edition import SessionRefusee, validations_de_session
+
+    for validation in validations_de_session():
+        try:
+            resultat = validation(session, user, payload)
+            if inspect.isawaitable(resultat):
+                await resultat
+        except SessionRefusee as refus:
+            raise unauthorized(str(refus)) from refus
 
 
 Me = Annotated[Principal, Depends(current_principal)]
@@ -134,11 +153,28 @@ async def exiger_admin_de_plateforme(session: AsyncSession, principal: Principal
     slugs = set((await session.execute(select(Organization.slug))).scalars().all())
     administrees = {org for org, role in principal.org_roles.items() if role == Role.ORG_ADMIN}
     if not slugs or not slugs <= administrees:
+        if await _accorde_par_un_greffon(session, principal):
+            return
         manquantes = sorted(slugs - administrees)
         raise forbidden(
             "réservé aux administrateurs de la plateforme : ce droit porte sur l'instance "
             f"entière, et il manque {manquantes or 'toute organisation'}."
         )
+
+
+async def _accorde_par_un_greffon(session: AsyncSession, principal: Principal) -> bool:
+    """`edition.declarer_un_administrateur_de_plateforme` : additive, elle ne retire rien."""
+    import inspect
+
+    from .edition import administrateurs_de_plateforme
+
+    for autorite in administrateurs_de_plateforme():
+        verdict = autorite(session, principal)
+        if inspect.isawaitable(verdict):
+            verdict = await verdict
+        if verdict is True:
+            return True
+    return False
 
 
 @dataclass(slots=True)

@@ -318,6 +318,25 @@ name: write it so it says what to do. A check that raises anything else is an ou
 decision; it propagates and Temporal retries. `apps/orchestrator/tests/test_admission.py` proves it
 with a plugin installed for real.
 
+## Identity seams: revoking a session, granting platform administration
+
+Three hooks in `choregos_api.edition`, next to the group mapper:
+
+- **`declarer_une_validation_de_session(fn)`** — `fn(session_db, user, payload)`, sync or async,
+  runs on every cookie-authenticated request; raise `SessionRefusee(reason)` to answer 401 with
+  that reason. A signed session is otherwise valid until `exp`: this is how server-side revocation
+  and SCIM deprovisioning cut access at the next request. Any other exception propagates — a
+  validation that is down is not an acceptance.
+- **`declarer_un_administrateur_de_plateforme(fn)`** — `fn(session_db, principal) -> bool`. The
+  core's rule (org admin of *every* organisation) still applies; a plugin can only **grant** on top
+  of it, never take away.
+- The session now carries **`iat`**, surfaced as `Principal.authentifie_le`, and
+  `/api/v1/auth/login?reauth=1` asks the IdP to authenticate again (`prompt=login`, `max_age=0`) —
+  the path for a gate that requires a fresh authentication. Sessions issued before 0.10.0 have no
+  `iat` and read as too old.
+
+`apps/api/tests/test_coutures_identite.py` proves each with a plugin installed for real.
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test

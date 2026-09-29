@@ -172,8 +172,14 @@ async def login(
     request: Request,
     settings: Config,
     redirect_to: Annotated[str | None, Query()] = None,
+    reauth: Annotated[bool, Query()] = False,
 ) -> RedirectResponse:
-    """Redirige vers l'IdP. En dev, `?as=email` ouvre une session directement."""
+    """Redirige vers l'IdP. En dev, `?as=email` ouvre une session directement.
+
+    `reauth=1` demande à l'IdP de RE-authentifier l'utilisateur même s'il a déjà une session chez
+    lui (`prompt=login`, `max_age=0`) : c'est le chemin d'une porte qui exige une authentification
+    fraîche, sans quoi l'IdP rendrait la main sans rien demander et `iat` mentirait.
+    """
     target = redirection_sure(redirect_to, settings)
     state, cookie, challenge = _handshake(settings, target)
     as_user = request.query_params.get("as")
@@ -194,6 +200,8 @@ async def login(
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
+    if reauth:
+        params |= {"prompt": "login", "max_age": "0"}
     response = RedirectResponse(
         url=f"{endpoints['authorize']}?{urlencode(params)}", status_code=status.HTTP_307_TEMPORARY_REDIRECT
     )
@@ -329,7 +337,12 @@ async def callback(
 
     # une connexion précède la résolution d'organisation : événement de plateforme
     await record(session, None, "auth.login", org_id=None, target_type="user", target_id=user.id)
-    cookie = sign_session({"sub": user.id, "exp": int(time.time()) + settings.session_max_age_s}, settings)
+    # `iat` : l'heure d'authentification. C'est elle que lit une porte qui exige une authentification
+    # RÉCENTE (`reauth=1`), et une révocation côté serveur (« toute session antérieure à … »).
+    maintenant = int(time.time())
+    cookie = sign_session(
+        {"sub": user.id, "iat": maintenant, "exp": maintenant + settings.session_max_age_s}, settings
+    )
     response = RedirectResponse(url=target, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     response.set_cookie(
         settings.session_cookie,
