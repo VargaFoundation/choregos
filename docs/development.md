@@ -294,6 +294,29 @@ two owners for one table is how the next core migration breaks. A declared direc
 exist stops the command: a plugin whose schema silently did not run gives a platform that starts
 and fails at the first request touching its tables. `apps/api/tests/test_migrer.py` proves all of
 it with a plugin installed for real.
+## Refusing a run from a plugin
+
+The core caps spending per run and concurrency per executor. A rule that depends on something
+else — a suspended organisation, a monthly ceiling, a freeze window — is declared by a plugin:
+
+```python
+from choregos_core.admission import AdmissionRefusee, declarer_une_admission
+
+async def organisation_active(demande):          # a DemandeDeRun: org, project, work_item, budget_usd…
+    if await est_suspendue(demande.org):
+        raise AdmissionRefusee(f"{demande.org} is suspended — reactivate it, then relaunch")
+
+def brancher() -> None:
+    declarer_une_admission("suspension", organisation_active)
+```
+
+The orchestrator plays every declared check in `prepare_stage`, **before** minting the gateway key
+and creating the run, so a refusal costs nothing and leaves no key behind — and **after** the replay
+path, so a run already prepared is never refused afterwards (what is running finishes). A refusal
+stops the stage without retry and marks the ticket dead with the reason, prefixed by the check's
+name: write it so it says what to do. A check that raises anything else is an outage, not a
+decision; it propagates and Temporal retries. `apps/orchestrator/tests/test_admission.py` proves it
+with a plugin installed for real.
 
 ## Known pitfalls
 
