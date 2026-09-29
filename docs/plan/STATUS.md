@@ -52,7 +52,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S2-12 | S2 | ✅ | — | egress bloqué **vérifié** sur kind + Calico (7 tests) : internet fermé, DNS ouvert, API interne joignable, port non listé fermé, pod privilégié refusé |
 | S3-01 | S3 | ✅ | — | App GitHub : JWT, jetons d'installation scopés, cache, backoff |
 | S3-02 | S3 | ✅ | — | tracker Issues + Projects v2 (GraphQL), option Status créée si absente |
-| S3-03 | S3 | ✅ | — | webhooks → InboundEvent, HMAC, dédup, commandes `/choregos …` |
+| S3-03 | S3 | 🟡 | — | webhooks → InboundEvent, HMAC, dédup. Les commandes `/choregos …` sont analysées mais **l'orchestrateur ne les traduit en rien** (#138) ; le commentaire de demande humaine y invitait jusqu'au 2026-09-29 — il renvoie désormais vers l'interface |
 | S3-04 | S3 | ✅ | — | SCM : branche, PR, checks, reviews, merge queue, compare |
 | S3-05 | S3 | ✅ | — | check-runs `choregos/scope` et `choregos/evidence` alimentés par les gates |
 | S3-06 | S3 | ✅ | — | `TrackerReconciliation` : rattrapage toutes les 60 s, démarrage idempotent, runbook |
@@ -122,7 +122,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S13-05 | S13 | 🟡 | — | exécuteur ACA **vérifié contre un vrai abonnement Azure** (6 tests live : cycle complet, `start` rejoué sans double exécution, jeton absent d'ARM, annulation, 404, logs) — trois défauts trouvés et corrigés au passage ; template `github-aca` livré. `azure-devops-aca` complet attend une organisation Azure DevOps (Boards + Pipelines), qu'un abonnement ne fournit pas |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
 
-**Total** : 92 livrées, 10 partielles, 0 non commencée.
+**Total** : 91 livrées, 11 partielles, 0 non commencée.
 
 Depuis le 2026-09-23, le dépôt a reçu du matériel qui ne correspond à aucune story du backlog
 initial — il est venu de l'usage : dépendances embarquées en option, banc mono-nœud (`demo/`),
@@ -902,3 +902,16 @@ les 492 tests ne disaient pas :
     tests OIDC existants passent sur le callback refactoré.
     **Ce que ça ne prouve pas** : le cœur ne vérifie RIEN de l'identité qu'on lui passe — c'est à
     l'appelant (signature d'assertion, audience, fraîcheur), et c'est écrit dans la fonction.
+
+22. **Deux findings refermés : un test qui attendait un instant, un commentaire qui mentait**
+    (2026-09-29, #135, #138).
+
+    `test_hotfix_uses_express_lane` attendait l'état `collecting` après l'approbation ; il constate
+    désormais l'EFFET — la production promue dès le départ (hors horaire), aucun canary avant
+    l'approbation, le canary suivi après. Sans le signal d'approbation, il rougit. L'échec d'origine
+    n'a pas pu être reproduit (12 exécutions isolées, 12 en parallèle, deux suites complètes) : ce
+    correctif retire la course, il ne prouve pas l'avoir vue.
+
+    Le commentaire de demande humaine invitait à répondre par `/choregos approve` ; ces commentaires
+    sont analysés mais jamais traduits en décision — l'humain répondait, et le ticket restait bloqué
+    sans un signe. Il renvoie désormais vers l'interface, et S3-03 passe à 🟡.
