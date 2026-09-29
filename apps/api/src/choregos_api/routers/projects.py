@@ -13,6 +13,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from ..audit import record
 from ..db.models import Membership, Organization, Project
+from ..db.session import limiter_aux_organisations
 from ..deps import Db, Me, Pagination, ProjectCtx, exiger_admin_de_plateforme
 from ..edition import est_entreprise
 from ..errors import conflict, forbidden, not_found
@@ -77,6 +78,12 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     session.add(org)
     await session.flush()
     session.add(Membership(user_id=principal.user_id, org_id=org.id, role=str(Role.ORG_ADMIN)))
+    # La session est bornée aux organisations EXISTANTES de l'appelant : la trace de la nouvelle,
+    # attribuée à SON `org_id`, était refusée par la RLS d'`audit_log` — `POST /orgs` rendait 500 sur
+    # PostgreSQL, et c'est le geste même que l'édition entreprise déverrouille. L'appelant vient d'en
+    # devenir administrateur : la portée s'étend à elle.
+    portee = set(principal.org_roles) | {q.split("/", 1)[0] for q in principal.project_roles} | {org.slug}
+    await limiter_aux_organisations(session, sorted(portee))
     await record(
         session, principal, "org.create", org_id=org.id, target_type="org", target_id=org.id, slug=body.slug
     )

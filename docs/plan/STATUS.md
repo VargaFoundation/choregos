@@ -940,3 +940,31 @@ les 492 tests ne disaient pas :
     **Ce que ça ne prouve pas** : seul Tekton est éprouvé sur PostgreSQL ; les autres routes prennent
     la même session et vérifient leur secret avant de lire, sans test PostgreSQL chacune. Le puits
     CloudEvents du locataire doit recevoir `?jeton=` à la mise à jour.
+
+24. **Toute la suite de l'API sur PostgreSQL : deux défauts de plus, dont une élévation de privilège**
+    (2026-09-29).
+
+    Après les webhooks (§23), la question était « combien d'autres ? ». `CHOREGOS_TEST_SUITE_SUR_POSTGRES=1`
+    fait tourner les 171 tests de l'API sur PostgreSQL, schéma migré par `migrer`, rôle non
+    superutilisateur ; la CI le fait désormais à chaque PR, après la passe SQLite.
+
+    - **Un rôle de projet devenait un rôle d'organisation.** Le principal était résolu avant que la
+      portée soit posée ; la jointure sur `projects` (sous RLS) ne voyait aucun projet, et une
+      appartenance DE PROJET arrivait sans projet — donc comme un rôle sur toute l'organisation. Un
+      développeur invité sur un projet lisait les autres. L'identité se résout désormais en portée de
+      plateforme, puis la session est bornée.
+    - **`POST /orgs` rendait 500** : la trace d'audit de la nouvelle organisation était refusée par la
+      RLS d'`audit_log`, la session étant bornée aux organisations EXISTANTES de l'appelant — le geste
+      même que l'édition entreprise déverrouille.
+
+    Deux tests de sécurité attendaient des réponses propres à SQLite (403, « slug ambigu ») ; sous la
+    RLS, PostgreSQL répond 404 et ne voit que le projet de l'appelant — il ne révèle même pas l'autre.
+    Ils admettent désormais les deux, et exigent dans les deux cas de ne jamais rendre le projet d'une
+    autre organisation.
+
+    **Ce que ça prouve** : `test_rls_postgres.py` — un rôle de projet reste un rôle de projet ; une
+    seconde organisation se crée (201) ; chacun rouge quand son correctif est retiré. La suite entière
+    de l'API passe sur PostgreSQL (171) et sur SQLite.
+    **Ce que ça ne prouve pas** : la suite de l'orchestrateur tourne encore sur SQLite seulement ; ses
+    sessions sont toutes de portée `*` (activités de la plateforme), ce qui réduit le risque sans
+    l'exclure.

@@ -18,24 +18,50 @@ os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
 
 
+#: `CHOREGOS_TEST_SUITE_SUR_POSTGRES=1` (avec `CHOREGOS_TEST_DATABASE_URL`) : TOUTE la suite de l'API
+#: tourne sur PostgreSQL, schéma migré, rôle non superutilisateur — donc sous RLS. Sur SQLite la RLS
+#: n'existe pas : les webhooks n'acheminaient rien en production sans qu'un seul test le voie (#143).
+SUITE_SUR_POSTGRES = os.environ.get("CHOREGOS_TEST_SUITE_SUR_POSTGRES") == "1"
+
+
 @pytest.fixture
-async def app(tmp_path: Any) -> AsyncIterator[Any]:
-    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/test.db"
+async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
     from choregos_api.main import create_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
+    if SUITE_SUR_POSTGRES:
+        await _preparer_postgres()
+        # Dans les TESTS, `session_scope()` sans portée est un raccourci pour « en tant que la
+        # plateforme » (poser un décor). Le code produit ne l'appelle jamais ainsi — vérifié par
+        # `grep` — : le traduire ici ne masque aucun défaut du produit, et `test_rls_postgres.py`
+        # (fixture `pg_app`) garde le vrai comportement fail-closed.
+        origine = db_session.session_scope
+
+        def en_plateforme(org_slug: str | None = None, *, orgs: Any = None) -> Any:
+            if org_slug is None and orgs is None:
+                return origine(orgs="*")
+            return origine(org_slug, orgs=orgs)
+
+        monkeypatch.setattr(db_session, "session_scope", en_plateforme)
+    else:
+        os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/test.db"
     reset_settings_cache()
     await db_session.dispose_engine()
+    if SUITE_SUR_POSTGRES:
+        await _migrer()
     set_temporal(FakeTemporal())
     application = create_app()
-    from choregos_api.db.session import create_all
+    if not SUITE_SUR_POSTGRES:
+        from choregos_api.db.session import create_all
 
-    await create_all()
+        await create_all()
     yield application
     await db_session.dispose_engine()
     set_temporal(None)
+    if SUITE_SUR_POSTGRES:
+        await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
     reset_settings_cache()
 
 
@@ -127,6 +153,26 @@ async def _administrer(url: str, *ordres: str) -> None:
         await connexion.close()
 
 
+async def _preparer_postgres() -> None:
+    """Schéma vide, rôle applicatif NON superutilisateur, et l'URL qui le désigne."""
+    await _administrer(
+        PG_URL,
+        "DROP SCHEMA public CASCADE",
+        "CREATE SCHEMA public",
+        f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN "
+        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; END $$",
+        f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
+    )
+    os.environ["CHOREGOS_DATABASE_URL"] = _url_app(PG_URL)
+
+
+async def _migrer() -> None:
+    """Le schéma par `python -m choregos_api.migrer`, la commande du Job du chart."""
+    from choregos_api.migrer import configuration
+
+    await asyncio.to_thread(command.upgrade, configuration(), "heads")
+
+
 @pytest.fixture
 async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     """L'application sur un PostgreSQL migré par Alembic (et non `create_all`), en rôle
@@ -136,14 +182,7 @@ async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     from choregos_api.main import create_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
-    await _administrer(
-        PG_URL,
-        "DROP SCHEMA public CASCADE",
-        "CREATE SCHEMA public",
-        f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN "
-        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; END $$",
-        f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
-    )
+    await _preparer_postgres()
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "a")
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@a.test")
