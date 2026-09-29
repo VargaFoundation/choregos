@@ -67,6 +67,12 @@ def _aware(moment: datetime) -> datetime:
 
 
 async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
+    # L'identité se résout en portée de PLATEFORME, puis la session est bornée plus bas. Sans cette
+    # ligne, la jointure sur `projects` (sous RLS) ne voyait aucun projet sur PostgreSQL : une
+    # appartenance DE PROJET arrivait avec `project_slug = None`, et devenait un rôle sur TOUTE
+    # l'organisation — un développeur invité sur un projet lisait tous les autres. Invisible sur
+    # SQLite, où la RLS n'existe pas ; trouvé en faisant tourner la suite entière sur PostgreSQL.
+    await limiter_aux_organisations(session, TOUT)
     rows = (
         await session.execute(
             select(Membership, Organization.slug, Project.slug)

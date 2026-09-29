@@ -139,13 +139,20 @@ async def test_un_role_de_projet_ne_traverse_pas_les_organisations(
     assert ("autre", "billing-api") not in roles
 
     assert (await client.get(f"/api/v1/projects/{project['id']}")).status_code == 200
-    assert (await client.get(f"/api/v1/projects/{autre_id}")).status_code == 403
+    # 403 sur SQLite (la route voit le projet et refuse) ; 404 sous la RLS de PostgreSQL, qui ne
+    # révèle même pas qu'il existe — plus strict, et c'est ce qu'exige `test_rls_postgres.py`.
+    refus = {403, 404}
+    assert (await client.get(f"/api/v1/projects/{autre_id}")).status_code in refus
     # `org:slug` dans un segment d'URL (un `/` n'y passe pas) ; `org/slug` partout ailleurs
-    assert (await client.get("/api/v1/projects/autre:billing-api")).status_code == 403
-    # le slug seul est ambigu entre deux organisations : on le dit, on ne devine pas
-    ambigu = await client.get("/api/v1/projects/billing-api")
-    assert ambigu.status_code == 404
-    assert "ambigu" in ambigu.json()["detail"]
+    assert (await client.get("/api/v1/projects/autre:billing-api")).status_code in refus
+    # Le slug seul : sur SQLite la route voit les deux projets et refuse de deviner (404 « ambigu ») ;
+    # sous la RLS de PostgreSQL elle ne voit que celui de l'appelant et le rend. Dans les deux cas,
+    # JAMAIS le projet de l'autre organisation.
+    seul = await client.get("/api/v1/projects/billing-api")
+    if seul.status_code == 200:
+        assert seul.json()["id"] == project["id"], "le slug seul a rendu le projet d'une autre organisation"
+    else:
+        assert seul.status_code == 404 and "ambigu" in seul.json()["detail"]
     assert (await client.get("/api/v1/projects/varga:billing-api")).status_code == 200
     reset_settings_cache()
 

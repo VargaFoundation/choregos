@@ -370,3 +370,74 @@ async def test_un_webhook_achemine_son_evenement_sous_rls(
         reponse = await client.post("/api/v1/webhooks/tekton", json=corps, headers=entetes)
     assert reponse.status_code == 202, reponse.text
     assert reponse.json()["events"] == 1, "l'événement n'a été acheminé vers aucun ticket"
+
+
+async def test_un_role_de_projet_ne_devient_pas_un_role_d_organisation(
+    pg_app: Any, deux_organisations: dict[str, str]
+) -> None:
+    """Le principal était résolu AVANT que la portée soit posée ; la jointure sur `projects` (sous
+    RLS) ne voyait alors aucun projet, et une appartenance DE PROJET arrivait sans projet — donc
+    comme un rôle sur toute l'organisation. Un développeur invité sur un projet lisait les autres."""
+    from choregos_api.db.models import Membership, Organization, Project, User
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        a = (await session.execute(select(Organization).where(Organization.slug == "a"))).scalar_one()
+        autre = Project(
+            org_id=a.id, slug="secret", name="Secret", status="active", config={"slug": "secret", "org": "a"}
+        )
+        session.add(autre)
+        invite = User(oidc_sub="dev|invite@a.test", email="invite@a.test", display_name="invité")
+        session.add(invite)
+        await session.flush()
+        session.add(
+            Membership(user_id=invite.id, org_id=a.id, project_id=deux_organisations["a"], role="developer")
+        )
+        secret_id = autre.id
+
+    # Directement, comme `current_principal` : une session SANS portée (c'est `get_db`), puis la
+    # résolution. Une connexion de développement donnerait en plus « developer » dans
+    # l'organisation par défaut, et brouillerait la preuve.
+    from choregos_api.deps import _principal_from_user
+
+    async with session_scope() as session:
+        user = await session.get(User, invite.id)
+        assert user is not None
+        principal = await _principal_from_user(session, user)
+    assert principal.project_roles == {"a/billing-api": "developer"}, principal.project_roles
+    assert principal.org_roles == {}, (
+        f"le rôle de projet est devenu un rôle d'organisation : {principal.org_roles}"
+    )
+    assert not principal.can(
+        __import__("choregos_api.rbac", fromlist=["Permission"]).Permission.PROJECT_READ, "a", "secret"
+    )
+    assert secret_id
+
+
+async def test_creer_une_seconde_organisation_sous_rls(
+    pg_app: Any, deux_organisations: dict[str, str]
+) -> None:
+    """`POST /orgs` rendait 500 sur PostgreSQL : la trace d'audit de la nouvelle organisation était
+    refusée par la RLS, la session étant bornée aux organisations existantes de l'appelant."""
+    from choregos_api.edition import ENTREPRISE, declarer, reinitialiser
+
+    declarer(ENTREPRISE, fonctions=frozenset({"multi_org"}))
+    try:
+        async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
+            await login(client, "admin@a.test")
+            # l'admin de `a` n'administre pas `b` : la règle du cœur (admin de TOUTES) refuse.
+            refus = await client.post("/api/v1/orgs", json={"slug": "c", "name": "C"})
+            assert refus.status_code == 403
+        from choregos_api.db.models import Membership, Organization, User
+        from choregos_api.db.session import session_scope
+
+        async with session_scope(orgs="*") as session:
+            admin = (await session.execute(select(User).where(User.email == "admin@a.test"))).scalar_one()
+            b = (await session.execute(select(Organization).where(Organization.slug == "b"))).scalar_one()
+            session.add(Membership(user_id=admin.id, org_id=b.id, role="org_admin"))
+        async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
+            await login(client, "admin@a.test")
+            cree = await client.post("/api/v1/orgs", json={"slug": "c", "name": "C"})
+            assert cree.status_code == 201, cree.text
+    finally:
+        reinitialiser()

@@ -85,6 +85,14 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
+      # La suite de l'API ENTIÈRE, une seconde fois, sur PostgreSQL sous RLS (schéma migré, rôle non
+      # superutilisateur). La première la joue sur SQLite, où la RLS n'existe pas : trois défauts ne
+      # se voyaient que là — webhooks qui n'acheminaient rien, `POST /orgs` en 500, et un rôle de
+      # projet qui devenait un rôle d'organisation (2026-09-29).
+      - name: suite de l'API sur PostgreSQL
+        run: uv run pytest apps/api/tests -q
+        env:
+          CHOREGOS_TEST_SUITE_SUR_POSTGRES: "1"
 
   contracts:
     needs: changes

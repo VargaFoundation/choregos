@@ -358,6 +358,24 @@ The nature picks the answer: `interdit` → 403, `conflit` → 409, `reauth` →
 `/api/v1/auth/login?reauth=1`. A control can only refuse more than the core; an exception other
 than `GesteRefuse` propagates. `apps/api/tests/test_controle_des_gestes.py` proves the three routes.
 
+## Running the API suite on PostgreSQL
+
+SQLite has no row-level security. The API suite therefore runs twice in CI: on SQLite, then on
+PostgreSQL with the schema migrated by `python -m choregos_api.migrer` and a **non-superuser** role
+(a superuser ignores RLS whatever the policies say):
+
+```sh
+docker run -d --name pg -e POSTGRES_USER=choregos -e POSTGRES_PASSWORD=choregos \
+  -e POSTGRES_DB=choregos_test -p 5432:5432 postgres:16-alpine
+CHOREGOS_TEST_DATABASE_URL=postgresql+asyncpg://choregos:choregos@localhost:5432/choregos_test \
+CHOREGOS_TEST_SUITE_SUR_POSTGRES=1 uv run pytest apps/api/tests
+```
+
+In that mode, a test's bare `session_scope()` — a fixture setting up data — means "as the platform".
+Product code never opens an unscoped session, so this hides nothing; `test_rls_postgres.py` keeps the
+real fail-closed behaviour. Three defects only showed there (webhooks routing nothing, `POST /orgs`
+answering 500, a project role becoming an organisation role).
+
 ## Known pitfalls
 
 **`CHOREGOS_FAKES=1` makes `build()` return a fake, whatever type you asked for.** The API test
