@@ -887,3 +887,18 @@ les 492 tests ne disaient pas :
     analysés (`github_events.parse_command`) mais le workflow ne les traduit en rien (`_absorb`) —
     une fonctionnalité annoncée et inerte, déposée en finding. Le jour où elle sera branchée, elle
     devra passer par `controler`.
+
+21. **Terminer une connexion : un autre protocole ouvre une session exactement comme OIDC**
+    (2026-09-29).
+
+    La fin du callback OIDC (utilisateur, rôles par le mappeur en service, trace `auth.login`,
+    cookie signé avec `iat`, redirection bornée) devient `routers.auth.terminer_la_connexion` /
+    `ouvrir_la_session`, que le callback lui-même emploie. Un protocole apporté par un greffon —
+    SAML, pour l'édition entreprise — ouvre donc la même session, sans second chemin écrit à la main.
+
+    **Ce que ça prouve** : `test_coutures_identite.py` — une route de greffon qui appelle
+    `terminer_la_connexion` pose une session avec `iat`, donne le rôle tiré du groupe, trace
+    `auth.login` avec son canal, et borne une cible externe (rouge quand le bornage est retiré) ; les
+    tests OIDC existants passent sur le callback refactoré.
+    **Ce que ça ne prouve pas** : le cœur ne vérifie RIEN de l'identité qu'on lui passe — c'est à
+    l'appelant (signature d'assertion, audience, fraîcheur), et c'est écrit dans la fonction.

@@ -34,7 +34,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
 from ..audit import record
-from ..config import Settings
+from ..config import Settings, get_settings
 from ..db.models import ApiToken, Membership, Organization, User
 from ..deps import Config, Db, Me
 from ..edition import mappeur_de_groupes
@@ -335,15 +335,33 @@ async def callback(
         user = await _ensure_user(session, info["email"], info.get("name", ""), info.get("sub"))
         await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 
+    response = await ouvrir_la_session(session, user, target, settings, canal="oidc")
+    response.delete_cookie(OIDC_COOKIE)
+    return response
+
+
+async def ouvrir_la_session(
+    session: Any, user: User, cible: str, settings: Settings, *, canal: str
+) -> RedirectResponse:
+    """La fin de TOUTE connexion : trace d'audit, cookie signé avec `iat`, redirection bornée.
+
+    Publique pour qu'un autre protocole d'authentification — SAML, apporté par un greffon — ouvre
+    une session EXACTEMENT comme OIDC : mêmes clés, même durée, mêmes attributs de cookie, même
+    trace. Un second chemin écrit à la main finirait par diverger (un `iat` oublié, un `secure`
+    manquant) sans que rien ne le signale. `terminer_la_connexion` y ajoute l'utilisateur et ses
+    rôles.
+    """
     # une connexion précède la résolution d'organisation : événement de plateforme
-    await record(session, None, "auth.login", org_id=None, target_type="user", target_id=user.id)
+    await record(session, None, "auth.login", org_id=None, target_type="user", target_id=user.id, canal=canal)
     # `iat` : l'heure d'authentification. C'est elle que lit une porte qui exige une authentification
     # RÉCENTE (`reauth=1`), et une révocation côté serveur (« toute session antérieure à … »).
     maintenant = int(time.time())
     cookie = sign_session(
         {"sub": user.id, "iat": maintenant, "exp": maintenant + settings.session_max_age_s}, settings
     )
-    response = RedirectResponse(url=target, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    response = RedirectResponse(
+        url=redirection_sure(cible, settings), status_code=status.HTTP_307_TEMPORARY_REDIRECT
+    )
     response.set_cookie(
         settings.session_cookie,
         cookie,
@@ -352,8 +370,32 @@ async def callback(
         samesite="lax",
         secure=settings.env in {"staging", "prod"},
     )
-    response.delete_cookie(OIDC_COOKIE)
     return response
+
+
+async def terminer_la_connexion(
+    session: Any,
+    *,
+    email: str,
+    nom: str,
+    sujet: str | None,
+    groupes: list[str],
+    cible: str,
+    canal: str,
+    settings: Settings | None = None,
+) -> RedirectResponse:
+    """Pour un protocole d'authentification apporté par un greffon, APRÈS qu'il a vérifié
+    l'identité (signature d'assertion, audience, fraîcheur) : crée ou retrouve l'utilisateur,
+    traduit ses groupes en rôles par le mappeur en service, ouvre la session.
+
+    Le cœur ne vérifie RIEN de l'identité passée ici : c'est la responsabilité de l'appelant.
+    """
+    reglages = settings or get_settings()
+    if not email:
+        raise unauthorized("l'IdP n'a pas fourni d'e-mail")
+    user = await _ensure_user(session, email, nom, sujet)
+    await _map_groups_to_roles(session, user, list(groupes), reglages)
+    return await ouvrir_la_session(session, user, cible, reglages, canal=canal)
 
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="authLogout")
