@@ -1,8 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Normalisation des webhooks GitHub en `InboundEvent`, et commandes `/choregos …`.
 
-C'est ici que le tracker devient une interface : une carte déplacée, un label posé,
-un commentaire `/choregos approve` deviennent des événements que l'orchestrateur comprend.
+C'est ici que le tracker devient une interface : une carte déplacée, un label posé deviennent
+des événements que l'orchestrateur comprend.
+
+Les commentaires `/choregos …` sont ANALYSÉS en `HUMAN_DECISION`, mais l'orchestrateur ne les
+traduit en rien : aucune décision ne passe par eux (#138). Un login de tracker n'est pas un
+principal Choregos — ni droits, ni authentification récente, ni contrôles de geste. Les brancher
+demandera de résoudre ce login vers un utilisateur et de passer par `greffons.controler`.
 """
 
 from __future__ import annotations

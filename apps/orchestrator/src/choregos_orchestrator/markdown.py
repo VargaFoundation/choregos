@@ -147,7 +147,12 @@ def _duration(seconds: float) -> str:
 
 
 def render_human_request(kind: str, payload: dict[str, object], public_url: str, key: str) -> str:
-    """Commentaire posté quand la plateforme demande un arbitrage humain."""
+    """Commentaire posté quand la plateforme demande un arbitrage humain.
+
+    Il renvoie vers l'INTERFACE, seul chemin qui tranche une demande. Il invitait à répondre par
+    `/choregos approve` : ces commentaires sont analysés mais le workflow ne les traduit en rien
+    (#138) — l'humain répondait, et le ticket restait bloqué sans un signe.
+    """
     if kind == "question":
         options = payload.get("options") or []
         lines = [
@@ -159,8 +164,7 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
             lines += ["", *[f"- {option}" for option in options]]
         lines += [
             "",
-            "Répondez par un commentaire `/choregos answer <votre réponse>`, "
-            f"ou depuis l'interface : {public_url}",
+            f"Répondre depuis l'interface : {public_url}",
         ]
         return "\n".join(lines)
     if kind == "scope_change":
@@ -174,7 +178,7 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
                 "Chemins demandés :",
                 *[f"- `{path}`" for path in (paths if isinstance(paths, list) else [])],
                 "",
-                "`/choregos approve` pour accorder, `/choregos reject <motif>` pour refuser.",
+                f"Accorder ou refuser depuis l'interface : {public_url}",
             ]
         )
     return "\n".join(
@@ -183,6 +187,6 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
             "### Choregos — validation demandée",
             str(payload.get("summary", "Une décision humaine est nécessaire pour continuer.")),
             "",
-            f"`/choregos approve` ou `/choregos reject <motif>` · interface : {public_url}",
+            f"Approuver ou refuser depuis l'interface : {public_url}",
         ]
     )

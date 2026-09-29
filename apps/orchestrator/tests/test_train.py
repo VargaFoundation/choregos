@@ -143,11 +143,20 @@ async def test_hotfix_uses_express_lane(setup: Fixture, temporal_env: Any, worke
                 "merged", {"work_item_key": "varga/billing-api#6", "sha": "e1", "labels": ["hotfix"]}
             )
             await _wait(handle, lambda s: s["status"] == "awaiting_approval", 60)
+            # Le hotfix est parti hors horaire : la production est promue dès le départ.
+            assert [p for p in setup.adapters.cd.promotions if p[0] == "prod"]
+            assert not setup.adapters.cd.rollouts, "le canary a commencé avant l'approbation"
             await handle.signal("approve", {"by": "marie"})
-            await _wait(handle, lambda s: s["status"] == "collecting", 60)
+            # L'EFFET de l'approbation — le canary suivi — et non un état intermédiaire : le train
+            # peut repasser par `collecting` entre deux sondages, et attendre un état était une
+            # course (#135).
+            for _ in range(600):
+                if setup.adapters.cd.rollouts:
+                    break
+                await asyncio.sleep(0.1)
             await handle.signal("abort", {"by": "test"})
             await handle.result()
-    assert setup.adapters.cd.promotions
+    assert setup.adapters.cd.rollouts, "l'approbation n'a pas lancé le canary"
 
 
 async def test_auto_sync_env_has_no_train(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
