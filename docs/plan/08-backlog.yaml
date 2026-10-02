@@ -18,6 +18,7 @@ streams:
   S11: "Ecphoria (repo VargaFoundation/ecphoria)"
   S12: "Évals & conformité"
   S13: "Multi-backend & second écosystème"
+  S14: "Changement gouverné sur une plateforme data (ADR 0028)"
 
 stories:
 
@@ -1093,3 +1094,48 @@ stories:
     depends_on: []
     acceptance:
       - "Fichiers d'exemple dans templates/*/optional/ ; désactivés par défaut"
+
+  # ───────────── S14 — Changement gouverné sur une plateforme data (ADR 0028, 2026-10-02) ─────────────
+  - id: S14-01
+    title: "Entrées de catalogue pour une plateforme data (graal d'abord) : create_job, run_job, schedule_job appelés par la plateforme pour l'agent"
+    stream: S14
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "Les trois outils sont des entrées du catalogue (ADR 0014) : l'agent ne tient que son jeton de run, la clé de la plateforme reste côté serveur"
+      - "Chaque appel inscrit une ligne kind=tool au registre de coûts ; la garantie tool_called lit cette ligne"
+      - "Un faux scriptable couvre les trois outils (ADR 0005) ; un test live contre un environnement graal réel est marqué live"
+  - id: S14-02
+    title: "Garantie data_quality : un changement data est jugé sur un échantillon mesuré par la plateforme"
+    stream: S14
+    sprint: 6
+    priority: 2
+    size: M
+    depends_on: []
+    acceptance:
+      - "La garantie lit des faits mesurés (lignes, colonnes attendues, taux de valeurs nulles) depuis le run de la plateforme, jamais depuis le récit de l'agent"
+      - "Test vert sur un échantillon conforme ; test rouge : un Parquet vide ou un schéma inattendu est refusé"
+      - "Elle refuse quand la mesure est indisponible, comme scope_respected sans diff"
+  - id: S14-03
+    title: "Gabarit data-change : ticket → PR sur une définition de job, de pipeline ou de modèle dbt → garanties → validation → application par l'API de la plateforme"
+    stream: S14
+    sprint: 6
+    priority: 3
+    size: L
+    depends_on: [S14-01, S14-02]
+    acceptance:
+      - "Le gabarit passe la validation statique du DSL et la conformité de template"
+      - "Scénario e2e sur les faux : la plateforme n'est modifiée qu'après la validation humaine, et le ticket porte les evidence_facts du run"
+      - "Démonstration « charger et planifier chaque jour » rejouée contre un graal réel, avec son coût au registre"
+  - id: S14-04
+    title: "Rapport d'adoption par projet : coût par ticket, délai, taux d'acceptation des PR d'agents, reprises"
+    stream: S14
+    sprint: 6
+    priority: 4
+    size: M
+    depends_on: []
+    acceptance:
+      - "Exposé par l'API et affiché par un écran ; calculé une seule fois, au même endroit"
+      - "Test qui échoue si une reprise ou un refus n'est pas compté"
