@@ -121,8 +121,17 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S13-04 | S13 | ✅ | — | GitLab **vérifié contre gitlab.com** (cycle complet sur un projet bac à sable) et Jira **vérifié contre un vrai site** (`tests/live/test_jira_live.py`, projet `CHOTEST`) : la confrontation a trouvé qu'un Jira francophone appelle « In Progress » « En cours » — aucun ticket ne bougeait |
 | S13-05 | S13 | 🟡 | — | exécuteur ACA **vérifié contre un vrai abonnement Azure** (6 tests live : cycle complet, `start` rejoué sans double exécution, jeton absent d'ARM, annulation, 404, logs) — trois défauts trouvés et corrigés au passage ; template `github-aca` livré. `azure-devops-aca` complet attend une organisation Azure DevOps (Boards + Pipelines), qu'un abonnement ne fournit pas |
 | S13-06 | S13 | ✅ | — | add-ons GitHub optionnels, désactivés par défaut |
+| S14-01 | S14 | ⬜ | — | entrées de catalogue pour une plateforme data (graal d'abord) — ADR 0028 |
+| S14-02 | S14 | ⬜ | — | garantie `data_quality` sur un échantillon mesuré par la plateforme |
+| S14-03 | S14 | ⬜ | — | gabarit `data-change` : PR → garanties → validation → application par l'API de la plateforme |
+| S14-04 | S14 | ⬜ | — | rapport d'adoption par projet (coût par ticket, délai, acceptation, reprises) |
 
-**Total** : 91 livrées, 11 partielles, 0 non commencée.
+**Total** : 91 livrées, 11 partielles, 4 non commencées.
+
+**2026-10-02 — ADR 0028 : Choregos gouverne l'exécution du changement.** Le flux S14 ouvre le travail data par le
+catalogue et les garanties, sans fusion avec graal. Ce que cette PR prouve : rien de fonctionnel ; elle consigne une
+décision et ouvre quatre stories ⬜, chacune avec son critère vérifiable. Ce qu'elle ne prouve pas : qu'un agent ait
+déjà piloté une plateforme data sous ces garanties — c'est l'objet de S14-03.
 
 Depuis le 2026-09-23, le dépôt a reçu du matériel qui ne correspond à aucune story du backlog
 initial — il est venu de l'usage : dépendances embarquées en option, banc mono-nœud (`demo/`),
