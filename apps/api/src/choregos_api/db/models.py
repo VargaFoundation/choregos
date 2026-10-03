@@ -482,3 +482,21 @@ ALL_TABLES = [
     ExecutorRow,
     GatewayKeyRow,
 ]
+
+
+def objet_du_coeur(objet: Any, nom: str | None, type_: str, reflete: bool, compare_a: Any) -> bool:
+    """Filtre `include_object` d'Alembic : les migrations du cœur ne décrivent que SES tables.
+
+    Un greffon inscrit ses modèles dans le même `Base` — c'est ce qui les met dans `create_all()` —
+    et crée ses tables par sa propre branche de migrations (`choregos.migrations`). Sans ce filtre,
+    une autogénération lancée avec un greffon installé ferait entrer ses tables dans une migration
+    du cœur, et la comparaison modèles/migrations du cœur les verrait comme manquantes. Une table
+    est au cœur si sa classe est définie dans `choregos_api` ; celles d'un greffon ne le sont pas.
+    """
+    if type_ != "table":
+        return True
+    return nom in {
+        mapper.class_.__tablename__
+        for mapper in Base.registry.mappers
+        if mapper.class_.__module__.startswith("choregos_api.")
+    }
