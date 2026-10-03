@@ -1,0 +1,7 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Window
+metadata: {name: maintenance}
+spec:
+  timezone: Europe/Paris
+  schedule:
+    - {days: [tue, thu], from: "20:00", to: "23:00"}

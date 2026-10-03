@@ -1,0 +1,1309 @@
+{
+  "ir_version": "1",
+  "name": "core-ref",
+  "version": "0.1.0",
+  "checksum": "<checksum>",
+  "object_types": [
+    {
+      "name": "alert",
+      "display_name": "Alert",
+      "description": "A monitoring alert, read on demand from a connector.",
+      "datasource": {
+        "name": "alerts",
+        "type": "connector",
+        "table": null,
+        "sql": null,
+        "connector": "example",
+        "source": "alerts",
+        "cache": "5m",
+        "mapping": {
+          "id": "alert_id",
+          "host_id": "hostname",
+          "summary": "title",
+          "raised_at": "started_at"
+        }
+      },
+      "primary_key": "id",
+      "title_property": "summary",
+      "properties": [
+        {
+          "name": "host_id",
+          "type": "reference<host>",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "raised_at",
+          "type": "timestamp",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "summary",
+          "type": "string",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        }
+      ],
+      "derived": [],
+      "semantic": null,
+      "freshness_max_age": null,
+      "mcp_exposed": true
+    },
+    {
+      "name": "finding",
+      "display_name": "Finding",
+      "description": "A health finding, opened and resolved by the platform.",
+      "datasource": {
+        "name": "findings",
+        "type": "table",
+        "table": null,
+        "sql": null,
+        "connector": null,
+        "source": null,
+        "cache": null,
+        "mapping": null
+      },
+      "primary_key": "key",
+      "title_property": "check",
+      "properties": [
+        {
+          "name": "bucket",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "priority",
+            "todo",
+            "nice_to_have"
+          ],
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "check",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "evidence",
+          "type": "json",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "first_seen",
+          "type": "timestamp",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "last_seen",
+          "type": "timestamp",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "layer",
+          "type": "string",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "scopes",
+          "type": "array<string>",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "severity",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "open",
+            "resolved"
+          ],
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        }
+      ],
+      "derived": [],
+      "semantic": null,
+      "freshness_max_age": null,
+      "mcp_exposed": true
+    },
+    {
+      "name": "host",
+      "display_name": "Host",
+      "description": "A physical or virtual machine of the fleet.",
+      "datasource": {
+        "name": "hosts",
+        "type": "table",
+        "table": null,
+        "sql": null,
+        "connector": null,
+        "source": null,
+        "cache": null,
+        "mapping": null
+      },
+      "primary_key": "id",
+      "title_property": "name",
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "ip",
+          "type": "string",
+          "required": false,
+          "enum": null,
+          "format": "ipv4",
+          "sensitivity": "confidential",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "last_seen_at",
+          "type": "timestamp",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "os",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ubuntu",
+            "debian",
+            "rhel",
+            "windows"
+          ],
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "os_version",
+          "type": "string",
+          "required": false,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        }
+      ],
+      "derived": [],
+      "semantic": null,
+      "freshness_max_age": null,
+      "mcp_exposed": true
+    },
+    {
+      "name": "service",
+      "display_name": "Service",
+      "description": "A service running on a host.",
+      "datasource": {
+        "name": "services",
+        "type": "table",
+        "table": null,
+        "sql": null,
+        "connector": null,
+        "source": null,
+        "cache": null,
+        "mapping": null
+      },
+      "primary_key": "id",
+      "title_property": "id",
+      "properties": [
+        {
+          "name": "criticality",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "host_id",
+          "type": "reference<host>",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        }
+      ],
+      "derived": [],
+      "semantic": null,
+      "freshness_max_age": null,
+      "mcp_exposed": true
+    }
+  ],
+  "link_types": [
+    {
+      "name": "host_runs_service",
+      "from": {
+        "object_type": "host",
+        "name": "services",
+        "cardinality": "many"
+      },
+      "to": {
+        "object_type": "service",
+        "name": "host",
+        "cardinality": "one"
+      },
+      "join": {
+        "kind": "foreign_key",
+        "side": "to",
+        "property": "host_id"
+      }
+    }
+  ],
+  "action_types": [
+    {
+      "name": "escalate_finding",
+      "display_name": "Escalate a finding",
+      "description": "Raises a finding to critical and notifies the on-call team.",
+      "target_type": "finding",
+      "cardinality": "one",
+      "parameters": [],
+      "parameters_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "preconditions": [
+        {
+          "name": "finding_open",
+          "expr": "target.status == 'open'",
+          "message": "Only an open finding can be escalated."
+        }
+      ],
+      "facts_max_age": "24h",
+      "propose": [
+        "role:contributor",
+        "agent:platform"
+      ],
+      "approve_policy": "core_ref",
+      "risk": "high",
+      "reversibility": "irreversible",
+      "window": null,
+      "effects": [
+        {
+          "type": "object.update",
+          "with": {
+            "objectType": "finding",
+            "id": "${target.key}",
+            "properties": {
+              "severity": "critical"
+            }
+          }
+        },
+        {
+          "type": "notify",
+          "with": {
+            "channel": "on-call",
+            "to": [
+              "platform-team"
+            ],
+            "template": "finding-escalated",
+            "data": {
+              "key": "${target.key}"
+            }
+          }
+        }
+      ],
+      "sequencing": {
+        "mode": "all",
+        "between": []
+      },
+      "compensation": [],
+      "evidence": [
+        {
+          "name": "severity_raised",
+          "collect": {
+            "type": "object.reread",
+            "with": {}
+          },
+          "expect": "result.severity == 'critical'"
+        }
+      ],
+      "idempotency_key": null,
+      "idempotency_window": "24h",
+      "rate_limit": null,
+      "mcp_exposed": true
+    },
+    {
+      "name": "open_finding",
+      "display_name": "Open a finding",
+      "description": "Records a health finding.",
+      "target_type": "finding",
+      "cardinality": "none",
+      "parameters": [
+        {
+          "name": "check",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "severity",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        },
+        {
+          "name": "source",
+          "type": "string",
+          "required": true,
+          "enum": null,
+          "format": null,
+          "sensitivity": "internal",
+          "searchable": false,
+          "filterable": true,
+          "sortable": true
+        }
+      ],
+      "parameters_schema": {
+        "type": "object",
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "check",
+          "key",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "preconditions": [],
+      "facts_max_age": "24h",
+      "propose": [
+        "role:contributor",
+        "system"
+      ],
+      "approve_policy": "core_ref",
+      "risk": "low",
+      "reversibility": "reversible",
+      "window": null,
+      "effects": [
+        {
+          "type": "object.create",
+          "with": {
+            "objectType": "finding",
+            "properties": {
+              "key": "${params.key}",
+              "source": "${params.source}",
+              "check": "${params.check}",
+              "status": "open"
+            }
+          }
+        }
+      ],
+      "sequencing": {
+        "mode": "all",
+        "between": []
+      },
+      "compensation": [],
+      "evidence": [],
+      "idempotency_key": "${params.key}",
+      "idempotency_window": "24h",
+      "rate_limit": null,
+      "mcp_exposed": true
+    }
+  ],
+  "policies": [
+    {
+      "name": "core_ref",
+      "separation_of_duties": true,
+      "rules": [
+        {
+          "when": "action.risk == 'low'",
+          "approve": "auto",
+          "approvers": [],
+          "step_up": null,
+          "sla": null
+        },
+        {
+          "when": "true",
+          "approve": null,
+          "approvers": [
+            {
+              "role": "owner",
+              "min": 1
+            }
+          ],
+          "step_up": {
+            "maxAgeMinutes": 10
+          },
+          "sla": {
+            "remindAfter": "4h",
+            "escalateAfter": "24h",
+            "escalateTo": "platform-team",
+            "expireAfter": "72h"
+          }
+        }
+      ]
+    }
+  ],
+  "windows": [
+    {
+      "name": "maintenance",
+      "timezone": "Europe/Paris",
+      "schedule": [
+        {
+          "days": [
+            "tue",
+            "thu"
+          ],
+          "from": "20:00",
+          "to": "23:00"
+        }
+      ],
+      "freezes": []
+    }
+  ],
+  "tests": [
+    "escalation_refused_if_resolved",
+    "open_finding_auto"
+  ],
+  "mcp_tools": [
+    {
+      "name": "action_escalate_finding",
+      "kind": "action",
+      "source": "escalate_finding",
+      "description": "Propose `escalate_finding`: Raises a finding to critical and notifies the on-call team. Risk high, validated by policy 'core_ref'. This only creates a proposal; nothing runs before validation.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "justification": {
+            "type": "string",
+            "minLength": 1,
+            "description": "why the agent proposes it"
+          },
+          "params": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "target": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 1
+          }
+        },
+        "required": [
+          "target",
+          "justification",
+          "params"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "action_list",
+      "kind": "list",
+      "source": null,
+      "description": "Proposals of the project, filtered by status or action type.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "action_type": {
+            "type": "string"
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "action_open_finding",
+      "kind": "action",
+      "source": "open_finding",
+      "description": "Propose `open_finding`: Records a health finding. Risk low, validated by policy 'core_ref'. This only creates a proposal; nothing runs before validation.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "justification": {
+            "type": "string",
+            "minLength": 1,
+            "description": "why the agent proposes it"
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "check": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "low",
+                  "medium",
+                  "high",
+                  "critical"
+                ]
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "check",
+              "key",
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "justification",
+          "params"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "action_status",
+      "kind": "status",
+      "source": null,
+      "description": "State, decisions and evidence of a proposal.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "proposal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "alert_get",
+      "kind": "get",
+      "source": "alert",
+      "description": "Read one alert by its id. A monitoring alert, read on demand from a connector.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "alert_search",
+      "kind": "search",
+      "source": "alert",
+      "description": "Search alert objects. A monitoring alert, read on demand from a connector.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "property": {
+                  "type": "string",
+                  "enum": [
+                    "host_id",
+                    "id",
+                    "raised_at",
+                    "summary"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "in",
+                    "contains",
+                    "prefix",
+                    "is_null"
+                  ]
+                },
+                "value": {}
+              },
+              "required": [
+                "property",
+                "op"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sort": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "host_id",
+                  "id",
+                  "raised_at",
+                  "summary"
+                ]
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "required": [
+              "property"
+            ],
+            "additionalProperties": false
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "finding_get",
+      "kind": "get",
+      "source": "finding",
+      "description": "Read one finding by its id. A health finding, opened and resolved by the platform.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "finding_search",
+      "kind": "search",
+      "source": "finding",
+      "description": "Search finding objects. A health finding, opened and resolved by the platform.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "property": {
+                  "type": "string",
+                  "enum": [
+                    "bucket",
+                    "check",
+                    "evidence",
+                    "first_seen",
+                    "key",
+                    "last_seen",
+                    "layer",
+                    "resolved_at",
+                    "scopes",
+                    "severity",
+                    "source",
+                    "status"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "in",
+                    "contains",
+                    "prefix",
+                    "is_null"
+                  ]
+                },
+                "value": {}
+              },
+              "required": [
+                "property",
+                "op"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sort": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "bucket",
+                  "check",
+                  "evidence",
+                  "first_seen",
+                  "key",
+                  "last_seen",
+                  "layer",
+                  "resolved_at",
+                  "scopes",
+                  "severity",
+                  "source",
+                  "status"
+                ]
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "required": [
+              "property"
+            ],
+            "additionalProperties": false
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "host_get",
+      "kind": "get",
+      "source": "host",
+      "description": "Read one host by its id. A physical or virtual machine of the fleet.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "host_search",
+      "kind": "search",
+      "source": "host",
+      "description": "Search host objects. A physical or virtual machine of the fleet.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "property": {
+                  "type": "string",
+                  "enum": [
+                    "id",
+                    "ip",
+                    "last_seen_at",
+                    "name",
+                    "os",
+                    "os_version"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "in",
+                    "contains",
+                    "prefix",
+                    "is_null"
+                  ]
+                },
+                "value": {}
+              },
+              "required": [
+                "property",
+                "op"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sort": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "id",
+                  "ip",
+                  "last_seen_at",
+                  "name",
+                  "os",
+                  "os_version"
+                ]
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "required": [
+              "property"
+            ],
+            "additionalProperties": false
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "host_services",
+      "kind": "link",
+      "source": "host_runs_service",
+      "description": "service objects linked to a host (host_runs_service).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ontology_describe",
+      "kind": "describe",
+      "source": null,
+      "description": "Object types, links and actions visible to the caller, with their descriptions.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "service_get",
+      "kind": "get",
+      "source": "service",
+      "description": "Read one service by its id. A service running on a host.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "service_host",
+      "kind": "link",
+      "source": "host_runs_service",
+      "description": "host objects linked to a service (host_runs_service).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "service_search",
+      "kind": "search",
+      "source": "service",
+      "description": "Search service objects. A service running on a host.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "property": {
+                  "type": "string",
+                  "enum": [
+                    "criticality",
+                    "host_id",
+                    "id",
+                    "name"
+                  ]
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne",
+                    "lt",
+                    "lte",
+                    "gt",
+                    "gte",
+                    "in",
+                    "contains",
+                    "prefix",
+                    "is_null"
+                  ]
+                },
+                "value": {}
+              },
+              "required": [
+                "property",
+                "op"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sort": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "criticality",
+                  "host_id",
+                  "id",
+                  "name"
+                ]
+              },
+              "order": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
+              }
+            },
+            "required": [
+              "property"
+            ],
+            "additionalProperties": false
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

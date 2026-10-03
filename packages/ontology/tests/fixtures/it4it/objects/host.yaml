@@ -1,0 +1,14 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: host, displayName: Host, description: A physical or virtual machine of the fleet., owner: platform-team}
+spec:
+  datasource: hosts
+  primaryKey: id
+  titleProperty: name
+  properties:
+    id: {type: string, required: true}
+    name: {type: string, required: true}
+    os: {type: string, enum: [ubuntu, debian, rhel, windows]}
+    os_version: {type: string}
+    ip: {type: string, format: ipv4, sensitivity: confidential}
+    last_seen_at: {type: timestamp}

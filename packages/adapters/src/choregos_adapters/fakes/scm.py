@@ -23,6 +23,9 @@ class FakeScm:
         self._diffs: dict[tuple[str, str, str], DiffSummary] = {}
         self.check_runs: list[dict[str, Any]] = []
         self.comments: list[tuple[str, int, str]] = []
+        #: (dépôt, branche) → {chemin: contenu} écrit par `commit_files`, et les commits dans l'ordre.
+        self.files: dict[tuple[str, str], dict[str, str]] = {}
+        self.commits: list[tuple[str, str, str, list[str]]] = []
         # Crochets scriptables : un Atlantis simulé répond au commentaire `atlantis apply`.
         self.on_comment: list[Any] = []
 
@@ -69,7 +72,20 @@ class FakeScm:
     async def ensure_branch(self, repo: str, name: str, base: str) -> None:
         self.branches.setdefault(repo, {})[name] = base
 
+    async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
+        """Comme GitHub : un fichier déjà identique n'est pas réécrit, un rejeu ne crée aucun commit."""
+        arbre = self.files.setdefault((repo, branch), {})
+        changes = {chemin: contenu for chemin, contenu in files.items() if arbre.get(chemin) != contenu}
+        if changes:
+            arbre.update(changes)
+            self.commits.append((repo, branch, message, sorted(changes)))
+        return f"commit-{len(self.commits)}"
+
     async def open_pr(self, repo: str, head: str, base: str, title: str, body: str, draft: bool) -> PrRef:
+        # Comme GitHub (`GitHubScm.open_pr`) : une PR ouverte sur la même branche est réutilisée.
+        for pr in self.prs.values():
+            if pr.ref.repo == repo and pr.ref.head == head and not pr.merged:
+                return pr.ref
         number = self._next_number
         self._next_number += 1
         ref = PrRef(

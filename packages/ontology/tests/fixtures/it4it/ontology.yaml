@@ -1,0 +1,8 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Ontology
+metadata: {name: it4it-platform, version: 0.1.0}
+spec:
+  description: "IT4IT slice of the trial (elements 2 to 6): findings from the health collector, fixed by a pull request on the infrastructure repository."
+  defaults:
+    sensitivity: internal
+    mcp: {exposeObjects: true, exposeActions: true}

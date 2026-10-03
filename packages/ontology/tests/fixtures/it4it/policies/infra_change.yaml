@@ -1,0 +1,12 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ApprovalPolicy
+metadata: {name: infra_change}
+spec:
+  separationOfDuties: true
+  rules:
+    - when: "action.risk == 'low'"
+      approve: auto
+    - when: "true"
+      approvers: [{role: owner, min: 1}]
+      stepUp: {maxAgeMinutes: 10}
+      sla: {remindAfter: 4h, escalateAfter: 24h, escalateTo: platform-team, expireAfter: 72h}
