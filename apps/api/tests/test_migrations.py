@@ -16,7 +16,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from choregos_api.config import get_settings
-from choregos_api.db.models import Base
+from choregos_api.db.models import Base, objet_du_coeur
 from sqlalchemy import create_engine
 
 API = pathlib.Path(__file__).resolve().parents[1]
@@ -53,7 +53,9 @@ def test_les_migrations_produisent_le_schema_des_modeles(tmp_path: pathlib.Path)
 
     moteur = create_engine(url)
     with moteur.connect() as connexion:
-        contexte = MigrationContext.configure(connexion)
+        # Les tables d'un greffon chargé plus tôt dans la session sont dans `Base` : elles ne sont
+        # pas au cœur, et ses migrations à lui les créent (voir `objet_du_coeur`).
+        contexte = MigrationContext.configure(connexion, opts={"include_object": objet_du_coeur})
         ecarts = compare_metadata(contexte, Base.metadata)
 
     interessants = [
@@ -89,7 +91,8 @@ def test_les_migrations_redescendent_et_remontent(tmp_path: pathlib.Path) -> Non
         assert {t[0] for t in tables} <= {"alembic_version"}, "tout doit être redescendu"
         command.upgrade(config, "head")
         with moteur.connect() as connexion:
-            ecarts = compare_metadata(MigrationContext.configure(connexion), Base.metadata)
+            contexte = MigrationContext.configure(connexion, opts={"include_object": objet_du_coeur})
+            ecarts = compare_metadata(contexte, Base.metadata)
         assert not [d for d in ecarts if not (isinstance(d, tuple) and str(d[0]).startswith("modify_"))]
     finally:
         monkeypatch.undo()

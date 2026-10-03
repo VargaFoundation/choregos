@@ -61,9 +61,46 @@ def signatures(routeur: APIRouter, prefixe: str = "") -> set[tuple[str, str]]:
 
 
 def reinitialiser() -> None:
-    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste."""
+    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste, aucun outil."""
     _ROUTEURS.clear()
+    _FOURNISSEURS_D_OUTILS.clear()
     reinitialiser_les_controles()
+
+
+# ───────────────────────────── outils des runs ─────────────────────────────
+#
+# Le catalogue d'outils (`catalogue.py`) décrit des API tierces, déclarées par le déploiement dans
+# un fichier. Un greffon peut avoir les siens, qui dépendent du PROJET du run et non du
+# déploiement : les outils générés depuis l'ontologie d'un projet, par exemple. Ils passent par le
+# même chemin que ceux du catalogue — `GET /internal/runs/{id}/tools` les annonce au serveur MCP
+# `choregos-tools` de l'agent, `POST /internal/runs/{id}/tools/{nom}` les appelle sous le même
+# plafond d'appels par run, avec la même ligne au registre des coûts et le même événement. Le
+# jeton du run reste l'unique authentification : le fournisseur reçoit le run et son projet, déjà
+# vérifiés, jamais le jeton.
+
+
+@dataclass(frozen=True)
+class FournisseurDOutils:
+    """`lister(session, run, projet)` rend des outils au format MCP (`name`, `description`,
+    `inputSchema`) ; `appeler(session, run, projet, nom, arguments)` rend `(code HTTP, corps)`.
+    Un code ≥ 400 est une réponse que l'agent lit, pas une panne."""
+
+    lister: Any
+    appeler: Any
+
+
+_FOURNISSEURS_D_OUTILS: dict[str, FournisseurDOutils] = {}
+
+
+def declarer_un_fournisseur_d_outils(nom: str, lister: Any, appeler: Any) -> None:
+    """Appelée par un greffon à son chargement. Deux greffons ne déclarent pas le même nom."""
+    if nom in _FOURNISSEURS_D_OUTILS and _FOURNISSEURS_D_OUTILS[nom] != FournisseurDOutils(lister, appeler):
+        raise ValueError(f"fournisseur d'outils « {nom} » déjà déclaré")
+    _FOURNISSEURS_D_OUTILS[nom] = FournisseurDOutils(lister, appeler)
+
+
+def fournisseurs_d_outils() -> dict[str, FournisseurDOutils]:
+    return dict(_FOURNISSEURS_D_OUTILS)
 
 
 # ───────────────────────────── contrôle des gestes humains ─────────────────────────────

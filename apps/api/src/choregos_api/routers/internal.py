@@ -332,33 +332,52 @@ def _groupes_du_projet(project: Project) -> list[str]:
     return [str(g) for g in ((project.config or {}).get("groups") or [])]
 
 
+async def _outils_des_greffons(
+    session: Any, run: Run, project: Project, deja: set[str]
+) -> dict[str, tuple[str, dict[str, Any]]]:
+    """{nom: (greffon, outil MCP)} des fournisseurs déclarés par les greffons (`greffons.py`).
+
+    Un nom déjà pris — par le catalogue ou par un autre greffon — est refusé en 409 plutôt que
+    servi par l'un des deux : un outil masqué en silence, c'est un agent qui croit appeler l'un et
+    appelle l'autre.
+    """
+    from ..greffons import fournisseurs_d_outils
+
+    trouves: dict[str, tuple[str, dict[str, Any]]] = {}
+    for greffon, fournisseur in fournisseurs_d_outils().items():
+        for outil in await fournisseur.lister(session, run, project):
+            nom = str(outil["name"])
+            if nom in deja or nom in trouves:
+                autre = trouves[nom][0] if nom in trouves else "le catalogue"
+                raise conflict(f"outil « {nom} » déclaré par {autre} et par le greffon « {greffon} »")
+            trouves[nom] = (greffon, outil)
+    return trouves
+
+
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
 async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     """Les outils que CE run peut appeler, au format MCP (`name`, `description`, `inputSchema`)."""
-    _run, _item, project = await _run_and_item(session, id)
+    run, _item, project = await _run_and_item(session, id)
     outils = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
+    des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in outils})
     return {
         "tools": [
-            {"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils
+            *({"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils),
+            *(outil for _, outil in des_greffons.values()),
         ]
     }
 
 
 @router.post("/runs/{id}/tools/{name}", operation_id="callRunTool")
 async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claims: RunAuth) -> dict[str, Any]:
-    """Appelle un outil du catalogue pour le compte du run, et l'inscrit au registre de coûts."""
+    """Appelle un outil du catalogue ou d'un greffon pour le run, et l'inscrit au registre de coûts."""
     run, item, project = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("résultat déjà posté pour ce run")
-    outil = next(
-        (
-            o
-            for o in outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
-            if o.name == name
-        ),
-        None,
-    )
-    if outil is None:
+    du_catalogue = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
+    outil = next((o for o in du_catalogue if o.name == name), None)
+    des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
+    if outil is None and name not in des_greffons:
         # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
         # le catalogue du déploiement en essayant des noms.
         raise not_found("Outil", name)
@@ -379,7 +398,15 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             f"ce run a déjà appelé {deja} outils (plafond {plafond})",
         )
 
-    code, corps = await appeler_outil(outil, body or {})
+    if outil is not None:
+        code, corps = await appeler_outil(outil, body or {})
+        fournisseur, prix = outil.provider, outil.price_eur
+    else:
+        from ..greffons import fournisseurs_d_outils
+
+        greffon = des_greffons[name][0]
+        code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
+        fournisseur, prix = f"greffon:{greffon}", 0.0
     session.add(
         CostLedger(
             project_id=project.id,
@@ -389,9 +416,9 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             # fait échouer l'INSERT, pas la lecture.
             ts=utcnow(),
             kind="tool",
-            provider=outil.provider,
-            model=outil.name,
-            cost_eur=outil.price_eur,
+            provider=fournisseur,
+            model=name,
+            cost_eur=prix,
             stage_role=run.stage_role,
         )
     )
@@ -402,8 +429,8 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         work_item_id=item.id,
         project_slug=project.slug,
         subject=run.id,
-        tool=outil.name,
-        provider=outil.provider,
+        tool=name,
+        provider=fournisseur,
         status_code=code,
     )
     return {
