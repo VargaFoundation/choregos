@@ -15,86 +15,13 @@ sur PostgreSQL (`test_greffon_postgres.py`, joué quand une base est fournie).
 from __future__ import annotations
 
 import json
-import os
 import pathlib
-from collections.abc import AsyncIterator
 from typing import Any
 
-import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-os.environ.setdefault("CHOREGOS_ENV", "test")
-os.environ.setdefault("CHOREGOS_FAKES", "1")
-os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
-os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
-
-CORE_REF = pathlib.Path(__file__).parent / "fixtures" / "core-ref"
-
-
-@pytest.fixture
-async def app(
-    greffon: pathlib.Path, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> AsyncIterator[Any]:
-    from choregos_api.config import reset_settings_cache
-    from choregos_api.db import session as db_session
-    from choregos_api.db.session import create_all
-    from choregos_api.main import create_app
-    from choregos_api.temporal import FakeTemporal, set_temporal
-
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/greffon.db")
-    reset_settings_cache()
-    await db_session.dispose_engine()
-    set_temporal(FakeTemporal())
-    application = create_app()
-    await create_all()
-    yield application
-    await db_session.dispose_engine()
-    set_temporal(None)
-    reset_settings_cache()
-
-
-async def _connecter(http: AsyncClient, email: str) -> None:
-    debut = await http.get("/api/v1/auth/login", params={"as": email})
-    assert debut.status_code == 307, debut.text
-    assert (await http.get(debut.headers["location"])).status_code == 307
-
-
-@pytest.fixture
-async def client(app: Any) -> AsyncIterator[AsyncClient]:
-    from choregos_api.db.models import Organization
-    from choregos_api.db.session import session_scope
-
-    async with session_scope() as session:
-        session.add(Organization(slug="varga", name="Varga Foundation"))
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
-        await _connecter(http, "admin@varga.dev")
-        yield http
-
-
-async def _projet(http: AsyncClient, slug: str) -> dict[str, Any]:
-    reponse = await http.post(
-        "/api/v1/orgs/varga/projects",
-        json={
-            "slug": slug,
-            "name": slug,
-            "config": {"slug": slug, "org": "varga", "repo": {"url": f"https://github.com/varga/{slug}.git"}},
-        },
-    )
-    assert reponse.status_code == 201, reponse.text
-    return dict(reponse.json())
-
-
-@pytest.fixture
-async def projet(client: AsyncClient) -> dict[str, Any]:
-    return await _projet(client, "infra")
-
-
-def paquet(racine: pathlib.Path = CORE_REF) -> dict[str, str]:
-    return {
-        chemin.relative_to(racine).as_posix(): chemin.read_text(encoding="utf-8")
-        for chemin in sorted(racine.rglob("*.yaml"))
-    }
+from .aides import appeler_outil, connecter, creer_projet, creer_run, ligne, objets, paquet, poster, rapport
 
 
 @pytest.fixture
@@ -104,16 +31,6 @@ async def ontologie(client: AsyncClient, projet: dict[str, Any]) -> dict[str, An
     return dict(reponse.json())
 
 
-def rapport(*lignes: dict[str, Any], fin: dict[str, Any] | None = None) -> str:
-    corps = [json.dumps(ligne) for ligne in lignes]
-    corps.append(json.dumps(fin if fin is not None else {"_end": True, "lines": len(lignes)}))
-    return "\n".join(corps) + "\n"
-
-
-def ligne(check: str, scope: str, status: str, **extra: Any) -> dict[str, Any]:
-    return {"layer": "os", "check": check, "scope": scope, "status": status, **extra}
-
-
 SEMAINE_1 = rapport(
     ligne("reboot-required", "node-1", "finding", severity="medium", observed_at="2026-10-03T08:00:00Z"),
     ligne("reboot-required", "node-2", "finding", severity="high", observed_at="2026-10-03T08:00:01Z"),
@@ -121,29 +38,6 @@ SEMAINE_1 = rapport(
     ligne("ntp-drift", "node-1", "finding", severity="low", value=2.5, observed_at="2026-10-03T08:00:03Z"),
     ligne("disk-usage", "node-1", "ok", value=41.5, observed_at="2026-10-03T08:00:04Z"),
 )
-
-
-async def _poster(http: AsyncClient, projet: dict[str, Any], texte: str) -> httpx.Response:
-    return await http.post(
-        f"/api/v1/projects/{projet['id']}/observations",
-        content=texte.encode(),
-        headers={"Content-Type": "application/x-ndjson"},
-    )
-
-
-async def _objets(projet_id: str, type_: str = "finding") -> dict[str, tuple[int, dict[str, Any]]]:
-    """L'état en base, lu sous le greffon : {id: (row_version, propriétés)}."""
-    from choregos_api.db.session import session_scope
-    from choregos_ontology.service.store import ManagedObject
-    from sqlalchemy import select
-
-    async with session_scope() as session:
-        lignes = await session.execute(
-            select(ManagedObject).where(
-                ManagedObject.project_id == projet_id, ManagedObject.object_type == type_
-            )
-        )
-        return {o.id: (o.row_version, dict(o.properties)) for o in lignes.scalars()}
 
 
 # ───────────────────────────── le greffon dans le cœur ─────────────────────────────
@@ -196,17 +90,31 @@ async def test_un_nom_de_fichier_hors_du_paquet_est_refuse(
 async def test_un_rapport_ouvre_les_constats_et_son_rejeu_ne_change_rien(
     client: AsyncClient, projet: dict[str, Any], ontologie: dict[str, Any]
 ) -> None:
-    premier = await _poster(client, projet, SEMAINE_1)
+    premier = await poster(client, projet, SEMAINE_1)
     assert premier.status_code == 200, premier.text
-    assert premier.json() == {"lines": 5, "created": 2, "updated": 0, "resolved": 0, "unchanged": 0}
-    etat = await _objets(projet["id"])
+    assert premier.json() == {
+        "lines": 5,
+        "created": 2,
+        "updated": 0,
+        "resolved": 0,
+        "unchanged": 0,
+        "proposals_decided": [],
+    }
+    etat = await objets(projet["id"])
     assert set(etat) == {"os-reboot-required", "os-ntp-drift"}
     assert etat["os-reboot-required"][1]["scopes"] == ["node-1", "node-2"]
 
-    rejeu = await _poster(client, projet, SEMAINE_1)
+    rejeu = await poster(client, projet, SEMAINE_1)
     assert rejeu.status_code == 200, rejeu.text
-    assert rejeu.json() == {"lines": 5, "created": 0, "updated": 0, "resolved": 0, "unchanged": 2}
-    assert await _objets(projet["id"]) == etat, "le rejeu n'a rien écrit, pas même une version de ligne"
+    assert rejeu.json() == {
+        "lines": 5,
+        "created": 0,
+        "updated": 0,
+        "resolved": 0,
+        "unchanged": 2,
+        "proposals_decided": [],
+    }
+    assert await objets(projet["id"]) == etat, "le rejeu n'a rien écrit, pas même une version de ligne"
 
 
 @pytest.mark.parametrize(
@@ -228,26 +136,33 @@ async def test_un_rapport_ouvre_les_constats_et_son_rejeu_ne_change_rien(
 async def test_un_rapport_partiel_n_ecrit_rien(
     client: AsyncClient, projet: dict[str, Any], ontologie: dict[str, Any], texte: str
 ) -> None:
-    assert (await _poster(client, projet, SEMAINE_1)).status_code == 200
-    avant = await _objets(projet["id"])
-    refus = await _poster(client, projet, texte)
+    assert (await poster(client, projet, SEMAINE_1)).status_code == 200
+    avant = await objets(projet["id"])
+    refus = await poster(client, projet, texte)
     assert refus.status_code == 422, refus.text
     assert refus.json()["errors"][0]["code"] == "observations_partial_read"
-    assert await _objets(projet["id"]) == avant
+    assert await objets(projet["id"]) == avant
 
 
 async def test_un_ok_resout_sa_portee_et_unreachable_ne_resout_rien(
     client: AsyncClient, projet: dict[str, Any], ontologie: dict[str, Any]
 ) -> None:
-    await _poster(client, projet, SEMAINE_1)
+    await poster(client, projet, SEMAINE_1)
     semaine_2 = rapport(
         ligne("reboot-required", "node-1", "ok", observed_at="2026-10-10T08:00:00Z"),
         ligne("reboot-required", "node-2", "unreachable", observed_at="2026-10-10T08:00:01Z"),
         ligne("ntp-drift", "node-1", "ok", observed_at="2026-10-10T08:00:02Z"),
     )
-    reponse = await _poster(client, projet, semaine_2)
-    assert reponse.json() == {"lines": 3, "created": 0, "updated": 1, "resolved": 1, "unchanged": 0}
-    etat = await _objets(projet["id"])
+    reponse = await poster(client, projet, semaine_2)
+    assert reponse.json() == {
+        "lines": 3,
+        "created": 0,
+        "updated": 1,
+        "resolved": 1,
+        "unchanged": 0,
+        "proposals_decided": [],
+    }
+    etat = await objets(projet["id"])
     assert etat["os-reboot-required"][1]["scopes"] == ["node-2"]
     assert etat["os-reboot-required"][1]["status"] == "open"
     assert etat["os-ntp-drift"][1]["status"] == "resolved"
@@ -257,7 +172,7 @@ async def test_un_ok_resout_sa_portee_et_unreachable_ne_resout_rien(
 async def test_sans_ontologie_active_un_rapport_est_refuse(
     client: AsyncClient, projet: dict[str, Any]
 ) -> None:
-    refus = await _poster(client, projet, SEMAINE_1)
+    refus = await poster(client, projet, SEMAINE_1)
     assert refus.status_code == 409, refus.text
 
 
@@ -269,11 +184,11 @@ async def test_un_lecteur_ne_synchronise_pas(
     )
     assert ajout.status_code in {200, 201}, ajout.text
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as lecteur:
-        await _connecter(lecteur, "lecteur@varga.dev")
+        await connecter(lecteur, "lecteur@varga.dev")
         assert (await lecteur.get(f"/api/v1/projects/{projet['id']}/objects/finding")).status_code == 200
-        refus = await _poster(lecteur, projet, SEMAINE_1)
+        refus = await poster(lecteur, projet, SEMAINE_1)
     assert refus.status_code == 403, refus.text
-    assert await _objets(projet["id"]) == {}
+    assert await objets(projet["id"]) == {}
 
 
 # ───────────────────────────── élément 3 : les outils, par le jeton du run ─────────────────────────────
@@ -298,35 +213,15 @@ async def _decor(projet_id: str) -> None:
             )
 
 
-async def _run(projet: dict[str, Any], run_id: str) -> dict[str, str]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-
-    async with session_scope() as session:
-        item = WorkItem(project_id=projet["id"], tracker_key=f"varga/{run_id}#1", title="T", state="ready")
-        session.add(item)
-        await session.flush()
-        session.add(Run(id=run_id, work_item_id=item.id, project_id=projet["id"], stage_role="analyse_infra"))
-    jeton = mint_run_token(
-        run_id, project_slug=projet["slug"], work_item_key=f"varga/{run_id}#1", ttl_minutes=30
-    )
-    return {"Authorization": f"Bearer {jeton}"}
-
-
 @pytest.fixture
 async def run_infra(client: AsyncClient, projet: dict[str, Any], ontologie: dict[str, Any]) -> dict[str, str]:
-    assert (await _poster(client, projet, SEMAINE_1)).status_code == 200
+    assert (await poster(client, projet, SEMAINE_1)).status_code == 200
     await _decor(projet["id"])
-    return await _run(projet, "run-infra-1")
+    return await creer_run(projet, "run-infra-1")
 
 
 async def _appel(http: AsyncClient, entetes: dict[str, str], outil: str, arguments: dict[str, Any]) -> Any:
-    reponse = await http.post(
-        f"/api/v1/internal/runs/run-infra-1/tools/{outil}", headers=entetes, json=arguments
-    )
-    assert reponse.status_code == 200, reponse.text
-    return reponse.json()
+    return await appeler_outil(http, "run-infra-1", entetes, outil, arguments)
 
 
 async def test_le_run_voit_les_outils_generes_que_l_essai_sait_servir(
@@ -336,6 +231,9 @@ async def test_le_run_voit_les_outils_generes_que_l_essai_sait_servir(
     assert reponse.status_code == 200, reponse.text
     noms = sorted(t["name"] for t in reponse.json()["tools"])
     assert noms == [
+        "action_list",
+        "action_open_finding",
+        "action_status",
         "finding_get",
         "finding_search",
         "host_get",
@@ -345,7 +243,7 @@ async def test_le_run_voit_les_outils_generes_que_l_essai_sait_servir(
         "service_get",
         "service_host",
         "service_search",
-    ], "ni `alert_*` (datasource connector), ni les actions (élément 4)"
+    ], "ni `alert_*` (datasource connector), ni `action_escalate_finding` (effet `notify` non servi)"
     assert all(set(t) == {"name", "description", "inputSchema"} for t in reponse.json()["tools"])
 
 
@@ -407,23 +305,23 @@ async def test_sans_jeton_ou_avec_le_jeton_d_un_autre_run_l_outil_est_refuse(
 ) -> None:
     sans = await client.post("/api/v1/internal/runs/run-infra-1/tools/host_get", json={"id": "node-1"})
     assert sans.status_code == 401, sans.text
-    autre = await _run(projet, "run-infra-2")
+    autre = await creer_run(projet, "run-infra-2")
     croise = await client.post(
         "/api/v1/internal/runs/run-infra-1/tools/host_get", headers=autre, json={"id": "node-1"}
     )
     assert croise.status_code == 403, croise.text
 
 
-async def test_le_run_d_un_autre_projet_ne_voit_que_ses_objets(
+async def test_le_run_d_un_autre_projet_ne_voit_que_sesobjets(
     client: AsyncClient, projet: dict[str, Any], run_infra: dict[str, str]
 ) -> None:
-    autre = await _projet(client, "infra-b")
+    autre = await creer_projet(client, "infra-b")
     assert (
         await client.put(f"/api/v1/projects/{autre['id']}/ontology", json={"files": paquet()})
     ).status_code == 200
     seul = rapport(ligne("selinux", "node-b", "finding"))
-    assert (await _poster(client, autre, seul)).status_code == 200
-    entetes = await _run(autre, "run-b-1")
+    assert (await poster(client, autre, seul)).status_code == 200
+    entetes = await creer_run(autre, "run-b-1")
     reponse = await client.post(
         "/api/v1/internal/runs/run-b-1/tools/finding_search", headers=entetes, json={"limit": 100}
     )
@@ -491,11 +389,11 @@ def test_la_branche_du_greffon_cree_ses_tables_et_redescend_seule(
     try:
         main([])
         tables, versions = etat()
-        assert {"ontology_versions", "managed_objects", "projects"} <= tables
-        assert versions == {"onto0001"}
+        assert {"ontology_versions", "managed_objects", "action_proposals", "projects"} <= tables
+        assert versions == {"onto0002"}
         main(["downgrade", "ontology@base"])
         tables, versions = etat()
-        assert not {"ontology_versions", "managed_objects"} & tables
+        assert not {"ontology_versions", "managed_objects", "action_proposals"} & tables
         assert versions == {tete_du_coeur}
     finally:
         moteur.dispose()

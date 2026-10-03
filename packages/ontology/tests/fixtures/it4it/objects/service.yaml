@@ -1,0 +1,11 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: service, displayName: Service, description: A service running on a host.}
+spec:
+  datasource: services
+  primaryKey: id
+  properties:
+    id: {type: string, required: true}
+    name: {type: string, required: true}
+    host_id: {type: "reference<host>", required: true}
+    criticality: {type: string, enum: [low, medium, high, critical]}

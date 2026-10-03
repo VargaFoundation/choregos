@@ -9,8 +9,9 @@ du run, sous le plafond d'appels par run, avec une ligne au registre des coûts 
 Seuls les outils que l'essai sait servir sont annoncés — un outil annoncé qui répondrait « pas
 encore » serait une promesse fausse faite à l'agent :
 - `ontology_describe`, et `<type>_search`, `<type>_get` des types à datasource `table` ;
-- les liens à clé étrangère entre deux types `table`.
-Les outils d'action (`action_*`, `action_status`, `action_list`) arrivent avec l'élément 4.
+- les liens à clé étrangère entre deux types `table` ;
+- `action_<nom>` des actions dont tous les effets sont servis (`actions.SERVED_EFFECTS`), qui ne
+  font que **proposer** (élément 4), et `action_status`, `action_list`.
 """
 
 from __future__ import annotations
@@ -18,12 +19,15 @@ from __future__ import annotations
 from typing import Any
 
 import jsonschema
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from choregos_ontology.service import objects
+from choregos_ontology.service import actions, objects
 from choregos_ontology.service.objects import ToolRefusal
+from choregos_ontology.service.store import ActionProposal
 
-SERVED_KINDS = frozenset({"describe", "search", "get", "link"})
+SERVED_KINDS = frozenset({"describe", "search", "get", "link", "action", "status", "list"})
+PAGE = 20
 CLEARANCE = objects.DEFAULT_CLEARANCE
 
 
@@ -37,6 +41,13 @@ def _link_ends(ir: dict[str, Any], link_name: str) -> list[str]:
     return [link["from"]["object_type"], link["to"]["object_type"]] if link else []
 
 
+def _action_served(ir: dict[str, Any], name: str) -> bool:
+    action = next((a for a in ir.get("action_types", []) if a["name"] == name), None)
+    if action is None or not _is_table(ir, action["target_type"]):
+        return False
+    return all(effect["type"] in actions.SERVED_EFFECTS for effect in action["effects"])
+
+
 def served_tools(ir: dict[str, Any]) -> list[dict[str, Any]]:
     """Les outils générés que l'essai sert, dans le format de l'IR (`input_schema`)."""
     served = []
@@ -47,6 +58,8 @@ def served_tools(ir: dict[str, Any]) -> list[dict[str, Any]]:
         if kind in {"search", "get"} and not _is_table(ir, source):
             continue
         if kind == "link" and not all(_is_table(ir, end) for end in _link_ends(ir, source) or [""]):
+            continue
+        if kind == "action" and not _action_served(ir, source):
             continue
         served.append(tool)
     return served
@@ -107,9 +120,45 @@ async def appeler(
         where = "/".join(str(p) for p in error.absolute_path) or "(root)"
         return 400, {"error": f"argument refused by the schema of {name} at {where}: {error.message}"}
     try:
+        if tool["kind"] == "action":
+            agent = actions.Actor(kind="agent", id=f"agent:{actions.AGENT_IDENTITY}", run_id=run.id)
+            return await actions.propose(session, project, version, str(tool["source"]), arguments, agent)
+        if tool["kind"] in {"status", "list"}:
+            return 200, await _proposals(session, project, tool["kind"], arguments)
         return 200, await _dispatch(session, project.id, ir, tool, arguments)
     except ToolRefusal as refusal:
         return refusal.code, {"error": str(refusal)}
+    except actions.Refusal as refusal:
+        return refusal.code, refusal.body
+
+
+async def _proposals(
+    session: AsyncSession, project: Any, kind: str, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    if kind == "status":
+        proposal = await session.get(ActionProposal, str(arguments["proposal"]))
+        if proposal is None or proposal.project_id != project.id:
+            raise ToolRefusal(404, f"proposal {arguments['proposal']!r} not found")
+        await actions.expire(session, project, proposal)
+        return actions.describe(proposal)
+    query = select(ActionProposal).where(ActionProposal.project_id == project.id)
+    if arguments.get("status"):
+        query = query.where(ActionProposal.status == str(arguments["status"]))
+    if arguments.get("action_type"):
+        query = query.where(ActionProposal.action_type == str(arguments["action_type"]))
+    rows = list(
+        (await session.execute(query.order_by(ActionProposal.created_at, ActionProposal.id))).scalars()
+    )
+    start = int(arguments.get("cursor") or 0) if str(arguments.get("cursor") or "0").isdigit() else 0
+    window = rows[start : start + PAGE]
+    more = start + PAGE < len(rows)
+    return {
+        "proposals": [
+            {"proposal": p.id, "action_type": p.action_type, "status": p.status, "target": list(p.target_ids)}
+            for p in window
+        ],
+        "next_cursor": str(start + PAGE) if more else None,
+    }
 
 
 async def _dispatch(

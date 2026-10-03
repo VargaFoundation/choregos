@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(
     not PG_URL.startswith("postgresql"), reason="CHOREGOS_TEST_DATABASE_URL absent : pas de PostgreSQL"
 )
 
-TABLES = ("ontology_versions", "managed_objects")
+TABLES = ("ontology_versions", "managed_objects", "action_proposals")
 
 
 def _url_app(url: str) -> str:
