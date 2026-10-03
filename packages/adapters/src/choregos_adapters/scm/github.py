@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import quote
 
 from choregos_contracts import InboundEvent
 from choregos_core.domain import CheckRun, DiffFile, DiffSummary, PrRef, PrState, ReviewState
@@ -69,6 +71,40 @@ class GitHubScm:
             repo=repo,
             json={"ref": f"refs/heads/{name}", "sha": base_ref["object"]["sha"]},
         )
+
+    async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
+        """Écrit des fichiers sur une branche par l'API Contents, un commit par fichier modifié.
+
+        Pour que la PLATEFORME ouvre une PR avec des changements (effet `gitops.pull_request`) : le
+        jeton reste ici, l'agent ne le tient jamais. Idempotent : un fichier déjà identique sur la
+        branche n'est pas réécrit, donc un rejeu ne crée aucun commit. Rend le SHA du dernier commit
+        écrit (vide si rien n'a changé).
+        """
+        dernier = ""
+        for chemin, contenu in sorted(files.items()):
+            url = f"/repos/{repo}/contents/{quote(chemin)}"
+            sha_actuel = None
+            try:
+                actuel = await self.client.request("GET", url, repo=repo, params={"ref": branch})
+            except UpstreamError as exc:
+                if exc.status_code != 404:
+                    raise
+            else:
+                sha_actuel = actuel.get("sha")
+                if actuel.get("encoding") == "base64" and base64.b64decode(actuel.get("content", "")) == (
+                    contenu.encode()
+                ):
+                    continue
+            corps: dict[str, Any] = {
+                "message": message,
+                "content": base64.b64encode(contenu.encode()).decode(),
+                "branch": branch,
+            }
+            if sha_actuel:
+                corps["sha"] = sha_actuel
+            ecrit = await self.client.request("PUT", url, repo=repo, json=corps)
+            dernier = str((ecrit.get("commit") or {}).get("sha") or dernier)
+        return dernier
 
     async def open_pr(self, repo: str, head: str, base: str, title: str, body: str, draft: bool) -> PrRef:
         owner = repo.split("/", 1)[0]
