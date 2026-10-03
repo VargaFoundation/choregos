@@ -1,0 +1,40 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: open_infra_pr
+  displayName: Open an infrastructure pull request
+  description: "Proposes a change to the infrastructure repository that fixes an open finding. The platform opens the pull request after a human approval; the existing CI is the gate, a human merges, GitOps applies."
+spec:
+  target: {objectType: finding, cardinality: one}
+  parameters:
+    title: {type: string, required: true}
+    path: {type: string, required: true, description: "File to write, under platform/ or gitops/."}
+    content: {type: string, required: true}
+  preconditions:
+    - {name: finding_open, expr: "target.status == 'open'", message: "Only an open finding is fixed by a pull request."}
+  permissions:
+    propose: [agent:platform, role:contributor]
+    approve: policy:infra_change
+  risk: medium
+  reversibility: reversible  # une PR ouverte se ferme ; rien n'est appliqué avant la fusion
+  effects:
+    - type: gitops.pull_request
+      with:
+        connector: github
+        repo: example/infra
+        base: main
+        paths_allowed: ["platform/**", "gitops/**"]
+        branch: "${'choregos/' + proposal.id}"
+        title: "${params.title}"
+        body: "${'Fixes the finding ' + target.key + ', proposed by an agent and approved by a human.'}"
+        changes:
+          files:
+            - {path: "${params.path}", content: "${params.content}"}
+        labels: [healthcheck]
+  evidence:
+    - name: pull_request_open
+      collect:
+        type: connector.query
+        with: {connector: github, source: pull_requests, filters: {number: "${effects[0].pr}"}}
+      expect: "result.state == 'open' && result.head == 'choregos/' + proposal.id"
+  idempotencyKey: "${target.key + ':' + params.path}"

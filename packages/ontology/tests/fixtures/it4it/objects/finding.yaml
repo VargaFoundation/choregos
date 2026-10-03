@@ -1,0 +1,21 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: finding, displayName: Finding, description: "A health finding, opened and resolved by the observations sync."}
+spec:
+  datasource: findings
+  primaryKey: key
+  titleProperty: check
+  properties:
+    key: {type: string, required: true}
+    source: {type: string, required: true}
+    layer: {type: string}
+    check: {type: string, required: true}
+    scopes: {type: "array<string>"}
+    status: {type: string, enum: [open, resolved], required: true}
+    severity: {type: string, enum: [info, low, medium, high, critical]}
+    bucket: {type: string, enum: [priority, todo, nice_to_have]}
+    first_seen: {type: timestamp}
+    last_seen: {type: timestamp}
+    resolved_at: {type: timestamp}
+    evidence: {type: json}
+    verification_requested_at: {type: timestamp}

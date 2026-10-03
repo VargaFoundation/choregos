@@ -5,7 +5,9 @@
 - `GET /projects/{id}/ontology` : la version active ;
 - `POST /projects/{id}/observations` : un rapport au format observations NDJSON v1, synchronisé
   vers les objets `finding` — tout ou rien : un rapport partiel n'écrit rien ;
-- `GET /projects/{id}/objects/{type}` : les objets d'un type, vus avec l'habilitation par défaut.
+- `GET /projects/{id}/objects/{type}` : les objets d'un type, vus avec l'habilitation par défaut ;
+- `GET /projects/{id}/proposals[/{proposal_id}]` et `POST …/{proposal_id}/decision` : les
+  propositions d'action et la décision humaine, avec ré-authentification (éléments 4 et 5).
 
 Raccourcis de l'essai, à reprendre dans le socle : la synchronisation est une route et non l'action
 système `connector.sync` (R-SOC-CON-04), et un paquet devient actif sans plan ni application en
@@ -19,30 +21,40 @@ import asyncio
 import re
 import tempfile
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from choregos_api.db.base import utcnow
 from choregos_api.deps import Db, ProjectCtx
 from choregos_api.errors import ApiError, conflict, unprocessable
 from choregos_api.rbac import Permission
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from choregos_ontology.compiler import compile_directory
 from choregos_ontology.observations import PartialReportError, parse_report, plan_sync
-from choregos_ontology.service import objects
+from choregos_ontology.service import actions, objects
 from choregos_ontology.service.objects import ToolRefusal
-from choregos_ontology.service.store import ACTIVE, SUPERSEDED, ManagedObject, OntologyVersion
+from choregos_ontology.service.store import ACTIVE, SUPERSEDED, ActionProposal, ManagedObject, OntologyVersion
+from choregos_ontology.validator import CORE_EFFECTS, Registry
 
 router = APIRouter(tags=["ontology"])
+#: Ce que l'installation sait faire : les effets du socle, et `gitops.pull_request` (AGT-014), que le
+#: greffon exécute par l'adaptateur SCM du cœur.
+REGISTRY = Registry(effects=CORE_EFFECTS | {"gitops.pull_request"})
 
 FINDING = "finding"
 MAX_FILES = 300
 MAX_PACKAGE_BYTES = 2 * 1024 * 1024
 MAX_REPORT_BYTES = 16 * 1024 * 1024
 _PATH = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*\.ya?ml$")
+
+
+class Decision(BaseModel):
+    decision: Literal["approve", "reject"]
+    comment: str | None = Field(default=None, max_length=2000)
 
 
 class OntologyPackage(BaseModel):
@@ -83,7 +95,7 @@ async def put_ontology(package: OntologyPackage, ctx: ProjectCtx, session: Db) -
     with tempfile.TemporaryDirectory(prefix="ontology-") as directory:
         root = Path(directory)
         await asyncio.to_thread(_write_package, root, package.files)
-        compiled, validation = await asyncio.to_thread(compile_directory, root)
+        compiled, validation = await asyncio.to_thread(compile_directory, root, REGISTRY)
     if compiled is None:
         raise unprocessable(
             f"ontology_invalid: {len(validation.errors)} error(s)",
@@ -134,7 +146,7 @@ async def get_ontology(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
 
 
 @router.post("/projects/{id}/observations", operation_id="postObservations")
-async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> dict[str, Any]:
+async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> Any:
     """Synchronise un rapport complet vers les objets `finding` ; un rapport partiel n'écrit rien."""
     ctx.require(Permission.PROJECT_WRITE)
     body = await request.body()
@@ -150,10 +162,16 @@ async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> d
     try:
         observations = parse_report(body.decode("utf-8"))
     except (UnicodeDecodeError, PartialReportError) as error:
-        raise unprocessable(
+        # Aucun objet n'est écrit. Mais une preuve `collector.rerun` qui attendait CE rapport échoue :
+        # un rapport partiel la rend impossible à collecter. Elle s'écrit, donc pas d'exception ici.
+        await _serialize(session, "observations", ctx.project.id)
+        tranchees = await actions.on_report(session, ctx.project, None, str(error))
+        refus = unprocessable(
             f"observations_partial_read: {error}",
             errors=[{"code": "observations_partial_read", "message": str(error)}],
-        ) from error
+        )
+        probleme = {**refus.to_problem(str(request.url.path)), "proposals_decided": tranchees}
+        return JSONResponse(probleme, status_code=refus.status_code, media_type="application/problem+json")
     await _serialize(session, "observations", ctx.project.id)
     rows = {
         row.id: row
@@ -178,7 +196,8 @@ async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> d
         row.deleted_at = None
         row.row_version += 1
     await session.flush()
-    return {"lines": len(observations), **plan.summary()}
+    tranchees = await actions.on_report(session, ctx.project, observations, None)
+    return {"lines": len(observations), **plan.summary(), "proposals_decided": tranchees}
 
 
 @router.get("/projects/{id}/objects/{object_type}", operation_id="listObjects")
@@ -201,3 +220,45 @@ async def list_objects(
         )
     except ToolRefusal as refusal:
         raise ApiError(refusal.code, "Requête refusée", str(refusal)) from refusal
+
+
+# ───────────────────────────── propositions d'action ─────────────────────────────
+
+
+async def _proposal(session: AsyncSession, project_id: str, proposal_id: str) -> ActionProposal:
+    proposal = await session.get(ActionProposal, proposal_id)
+    if proposal is None or proposal.project_id != project_id:
+        raise ApiError(404, "Proposition introuvable", f"la proposition `{proposal_id}` n'existe pas")
+    return proposal
+
+
+@router.get("/projects/{id}/proposals", operation_id="listProposals")
+async def list_proposals(
+    ctx: ProjectCtx,
+    session: Db,
+    status: Annotated[str | None, Query()] = None,
+) -> list[dict[str, Any]]:
+    query = select(ActionProposal).where(ActionProposal.project_id == ctx.project.id)
+    if status:
+        query = query.where(ActionProposal.status == status)
+    lignes = (await session.execute(query.order_by(ActionProposal.created_at))).scalars().all()
+    return [actions.describe(p) for p in lignes]
+
+
+@router.get("/projects/{id}/proposals/{proposal_id}", operation_id="getProposal")
+async def get_proposal(proposal_id: str, ctx: ProjectCtx, session: Db) -> dict[str, Any]:
+    proposal = await _proposal(session, ctx.project.id, proposal_id)
+    await actions.expire(session, ctx.project, proposal)
+    return actions.describe(proposal)
+
+
+@router.post("/projects/{id}/proposals/{proposal_id}/decision", operation_id="decideProposal")
+async def decide_proposal(proposal_id: str, body: Decision, ctx: ProjectCtx, session: Db) -> Any:
+    """La décision humaine. `401` avec `reauth` : se ré-authentifier (`?reauth=1`), puis recommencer."""
+    proposal = await _proposal(session, ctx.project.id, proposal_id)
+    try:
+        return await actions.decide(
+            session, ctx.project, ctx.org_slug, proposal, ctx.principal, body.decision, body.comment
+        )
+    except actions.Refusal as refus:
+        raise ApiError(refus.code, "Décision refusée", str(refus), errors=[refus.body]) from refus

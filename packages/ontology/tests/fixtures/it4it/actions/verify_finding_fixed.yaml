@@ -1,0 +1,27 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: verify_finding_fixed
+  displayName: Verify that a finding is fixed
+  description: "After the merge, re-runs the collector that produced the finding and requires its key to be absent from the next complete report."
+spec:
+  target: {objectType: finding, cardinality: one}
+  permissions:
+    propose: [agent:platform, role:contributor]
+    approve: policy:infra_change
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.update
+      with: {objectType: finding, id: "${target.key}", properties: {verification_requested_at: "${now}"}}
+  evidence:
+    - name: finding_gone
+      collect:
+        type: collector.rerun
+        with:
+          connector: observations
+          trigger: {connector: healthcheck, operation: send}
+          layer: "${target.layer}"
+          check: "${target.check}"
+          within: 15m
+      expect: "!result.key_present"

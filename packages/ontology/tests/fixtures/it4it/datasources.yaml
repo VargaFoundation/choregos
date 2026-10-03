@@ -1,0 +1,14 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: hosts}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: services}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: findings}
+spec: {type: table}
