@@ -1,0 +1,21 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata: {name: escalate_finding, displayName: Escalate a finding, description: Raises a finding to critical and notifies the on-call team.}
+spec:
+  target: {objectType: finding, cardinality: one}
+  preconditions:
+    - {name: finding_open, expr: "target.status == 'open'", message: Only an open finding can be escalated.}
+  permissions:
+    propose: [role:contributor, agent:platform]
+    approve: policy:core_ref
+  risk: high
+  reversibility: irreversible
+  effects:
+    - type: object.update
+      with: {objectType: finding, id: "${target.key}", properties: {severity: critical}}
+    - type: notify
+      with: {channel: on-call, to: [platform-team], template: finding-escalated, data: {key: "${target.key}"}}
+  evidence:
+    - name: severity_raised
+      collect: {type: object.reread}
+      expect: "result.severity == 'critical'"
