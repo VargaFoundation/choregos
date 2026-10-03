@@ -160,3 +160,7 @@ class CompiledOntology(_Ir):
 
     def to_json(self) -> str:
         return self.model_dump_json(by_alias=True, indent=2) + "\n"
+
+    def to_dict(self) -> dict[str, Any]:
+        """The same document as :meth:`to_json`, as JSON-compatible Python values."""
+        return self.model_dump(mode="json", by_alias=True)
