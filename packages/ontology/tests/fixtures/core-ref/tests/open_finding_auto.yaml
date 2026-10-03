@@ -1,0 +1,7 @@
+apiVersion: choregos.dev/v1alpha1
+kind: OntologyTest
+metadata: {name: open_finding_auto}
+spec:
+  action: open_finding
+  params: {key: os-version, source: os, check: version, severity: low}
+  expect: {outcome: approved}

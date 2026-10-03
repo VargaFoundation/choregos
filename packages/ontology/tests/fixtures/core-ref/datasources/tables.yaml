@@ -1,0 +1,24 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: hosts}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: services}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: findings}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: alerts}
+spec:
+  type: connector
+  connector: example
+  source: alerts
+  cache: 5m
+  mapping: {id: alert_id, host_id: hostname, summary: title, raised_at: started_at}

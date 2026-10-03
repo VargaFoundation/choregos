@@ -1,0 +1,21 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata: {name: open_finding, displayName: Open a finding, description: Records a health finding.}
+spec:
+  target: {objectType: finding, cardinality: none}
+  parameters:
+    key: {type: string, required: true}
+    source: {type: string, required: true}
+    check: {type: string, required: true}
+    severity: {type: string, enum: [info, low, medium, high, critical]}
+  permissions:
+    propose: [role:contributor, system]
+    approve: policy:core_ref
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: finding
+        properties: {key: "${params.key}", source: "${params.source}", check: "${params.check}", status: open}
+  idempotencyKey: "${params.key}"

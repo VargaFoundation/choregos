@@ -1,0 +1,9 @@
+apiVersion: choregos.dev/v1alpha1
+kind: OntologyTest
+metadata: {name: escalation_refused_if_resolved}
+spec:
+  action: escalate_finding
+  fixtures:
+    finding: [{key: os-version, source: os, check: version, status: resolved}]
+  target: [os-version]
+  expect: {outcome: invalid, precondition: finding_open}

@@ -1,0 +1,12 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: alert, displayName: Alert, description: "A monitoring alert, read on demand from a connector."}
+spec:
+  datasource: alerts
+  primaryKey: id
+  titleProperty: summary
+  properties:
+    id: {type: string, required: true}
+    host_id: {type: "reference<host>"}
+    summary: {type: string}
+    raised_at: {type: timestamp}

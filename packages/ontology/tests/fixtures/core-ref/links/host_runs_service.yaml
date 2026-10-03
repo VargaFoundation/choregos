@@ -1,0 +1,7 @@
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: host_runs_service}
+spec:
+  from: {objectType: host, name: services, cardinality: many}
+  to: {objectType: service, name: host, cardinality: one}
+  foreignKey: {side: to, property: host_id}
