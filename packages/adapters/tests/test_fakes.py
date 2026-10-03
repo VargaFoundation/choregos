@@ -203,3 +203,15 @@ async def test_notifier() -> None:
     notifier = AdapterSet.fakes().notify
     await notifier.send("#choregos", Message(title="Approbation requise", severity="warning"))
     assert notifier.last().title == "Approbation requise"  # type: ignore[union-attr]
+
+
+async def test_scm_commit_files_and_pr_are_idempotent() -> None:
+    """Comme GitHub : un rejeu n'écrit aucun commit, et une PR ouverte sur la branche est réutilisée."""
+    scm = AdapterSet.fakes().scm
+    await scm.ensure_branch("acme/infra", "choregos/p-1", "main")
+    await scm.commit_files("acme/infra", "choregos/p-1", {"platform/a.yaml": "v: 1\n"}, "fix")
+    await scm.commit_files("acme/infra", "choregos/p-1", {"platform/a.yaml": "v: 1\n"}, "fix")
+    assert len(scm.commits) == 1  # type: ignore[attr-defined]
+    premiere = await scm.open_pr("acme/infra", "choregos/p-1", "main", "fix", "corps", False)
+    seconde = await scm.open_pr("acme/infra", "choregos/p-1", "main", "fix", "corps", False)
+    assert seconde == premiere
