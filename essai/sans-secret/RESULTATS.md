@@ -54,7 +54,7 @@ cas **retentable** :
   À reprendre dans les tests de cluster (SOC-122) tant que kind ne suit pas.
 - La source de l'adresse vue par l'API est bien l'adresse du pod pour un appel pod → Service dans le
   cluster (kube-proxy en iptables ne fait pas de SNAT ici). Derrière un proxy ou un maillage de services,
-  il faut l'en-tête de confiance (`KOINON_TRUSTED_PROXY_HEADER`) : non éprouvé par l'essai.
+  il faut l'en-tête de confiance (`CHOREGOS_TRUSTED_PROXY_HEADER`) : non éprouvé par l'essai.
 - Le code reste lisible dans la spécification du pod par qui peut lire les pods du namespace : c'est le
   prix connu du mécanisme (a), borné par l'usage unique, la liaison à l'adresse et la validité de
   10 minutes. Le rejeu est détecté et fait échouer le run (contrôle 2).

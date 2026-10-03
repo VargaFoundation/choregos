@@ -96,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
         if run["consumed_at"] is not None:
             run["revoked"], run["status"] = True, "failed"
             run["failure"] = "bootstrap_replayed"
-            print(f"api: event dev.koinon.run.bootstrap_replayed run={run_id} caller={caller}", flush=True)
+            print(f"api: event dev.choregos.run.bootstrap_replayed run={run_id} caller={caller}", flush=True)
             return self._send(409, {"error": "bootstrap_code_consumed"})
         if run["pod_ip"] is None or run["start_time"] is None:
             # The pod may call before the orchestrator has recorded its IP: retryable, never final.
