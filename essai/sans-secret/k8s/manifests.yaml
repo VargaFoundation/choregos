@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: Apache-2.0
+# Essai, élément 8 : deux namespaces en PSA restricted ; l'orchestrateur n'a aucun droit sur les Secrets
+# du namespace d'exécution.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: essai-control
+  labels: {pod-security.kubernetes.io/enforce: restricted}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: essai-run
+  labels: {pod-security.kubernetes.io/enforce: restricted}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: orchestrator, namespace: essai-control}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: orchestrator, namespace: essai-run}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: orchestrator, namespace: essai-run}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: orchestrator}
+subjects:
+  - {kind: ServiceAccount, name: orchestrator, namespace: essai-control}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: essai-control}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: api
+          image: essai-api:latest
+          imagePullPolicy: Never
+          ports: [{containerPort: 8080}]
+          env:
+            - name: ESSAI_INTERNAL_TOKEN
+              valueFrom: {secretKeyRef: {name: essai-internal, key: token}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: api, namespace: essai-control}
+spec:
+  selector: {app: api}
+  ports: [{port: 8080, targetPort: 8080}]

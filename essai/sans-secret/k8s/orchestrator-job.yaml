@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+apiVersion: batch/v1
+kind: Job
+metadata: {name: orchestrator, namespace: essai-control}
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: orchestrator
+      restartPolicy: Never
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: orchestrator
+          image: essai-orchestrator:latest
+          imagePullPolicy: Never
+          env:
+            - name: ESSAI_INTERNAL_TOKEN
+              valueFrom: {secretKeyRef: {name: essai-internal, key: token}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
