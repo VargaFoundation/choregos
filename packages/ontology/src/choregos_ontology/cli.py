@@ -27,7 +27,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("command", choices=["validate", "compile", "tools"])
     parser.add_argument("package", type=Path, help="directory of the ontology package")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
-    parser.add_argument("--sql-engine", action="store_true", help="a SqlEngine is registered (Thesauros)")
+    parser.add_argument(
+        "--sql-engine", action="store_true", help="a SqlEngine is registered (the data platform)"
+    )
     parser.add_argument("--embeddings", action="store_true", help="an embeddings model is configured")
     parser.add_argument("--out", type=Path, help="write the IR here (compile)")
     args = parser.parse_args(argv)

@@ -202,7 +202,7 @@ class _Checker:
     def datasource(self, resource: Resource) -> None:
         spec: DatasourceSpec = resource.spec
         if spec.type in {"iceberg", "sql"} and not self.registry.sql_engine:
-            message = f"datasource of type {spec.type!r} needs a registered SqlEngine (Thesauros)"
+            message = f"datasource of type {spec.type!r} needs a registered SqlEngine (the data platform)"
             self.error(resource, "ONT026", message, "spec", "type")
         if spec.type == "table" and spec.mapping:
             self.error(resource, "ONT012", "a `table` datasource has no mapping", "spec", "mapping")
