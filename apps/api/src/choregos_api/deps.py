@@ -41,7 +41,13 @@ async def get_db() -> AsyncIterator[AsyncSession]:
             raise
 
 
-Db = Annotated[AsyncSession, Depends(get_db)]
+#: `scope="function"` : la session se ferme — et la transaction se valide — AVANT l'envoi de la
+#: réponse. En portée « requête » (le défaut de FastAPI), le `commit` venait APRÈS : un client rapide
+#: lisait un état pas encore écrit (l'utilisateur que le callback de connexion venait de créer :
+#: « session périmée »), et un `commit` qui échouait laissait au client un 201 sur une écriture qui
+#: n'avait pas eu lieu. `ASGITransport` attend la fin de l'application : aucun test ne le voyait.
+#: Constaté sur la pile intégrée de l'essai du socle, servie par uvicorn.
+Db = Annotated[AsyncSession, Depends(get_db, scope="function")]
 
 
 async def get_db_plateforme() -> AsyncIterator[AsyncSession]:
@@ -63,7 +69,7 @@ async def get_db_plateforme() -> AsyncIterator[AsyncSession]:
             raise
 
 
-DbPlateforme = Annotated[AsyncSession, Depends(get_db_plateforme)]
+DbPlateforme = Annotated[AsyncSession, Depends(get_db_plateforme, scope="function")]
 Config = Annotated[Settings, Depends(get_settings)]
 
 
