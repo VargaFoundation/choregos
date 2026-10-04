@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import pathlib
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -47,7 +46,7 @@ async def _administrer(*ordres: str) -> Any:
 
 
 @pytest.fixture
-async def base_migree(greffon: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
+async def base_migree(greffon: None, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
     from alembic import command
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session

@@ -232,7 +232,6 @@ async def test_le_run_voit_les_outils_generes_que_l_essai_sait_servir(
     noms = sorted(t["name"] for t in reponse.json()["tools"])
     assert noms == [
         "action_list",
-        "action_open_finding",
         "action_status",
         "finding_get",
         "finding_search",
@@ -243,7 +242,7 @@ async def test_le_run_voit_les_outils_generes_que_l_essai_sait_servir(
         "service_get",
         "service_host",
         "service_search",
-    ], "ni `alert_*` (datasource connector), ni `action_escalate_finding` (effet `notify` non servi)"
+    ], "ni `alert_*` (connector), ni `escalate_finding` (`notify`), ni `open_finding` (pas un agent)"
     assert all(set(t) == {"name", "description", "inputSchema"} for t in reponse.json()["tools"])
 
 
@@ -368,7 +367,7 @@ async def test_par_le_serveur_mcp_de_l_agent(app: Any, run_infra: dict[str, str]
 
 
 def test_la_branche_du_greffon_cree_ses_tables_et_redescend_seule(
-    greffon: pathlib.Path, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    greffon: None, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from alembic.script import ScriptDirectory
     from choregos_api.config import reset_settings_cache
@@ -395,6 +394,52 @@ def test_la_branche_du_greffon_cree_ses_tables_et_redescend_seule(
         tables, versions = etat()
         assert not {"ontology_versions", "managed_objects", "action_proposals"} & tables
         assert versions == {tete_du_coeur}
+    finally:
+        moteur.dispose()
+        reset_settings_cache()
+
+
+# ───────────────────────────── inactif par défaut ─────────────────────────────
+
+
+async def test_sans_activation_le_greffon_est_inerte(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Livré dans chaque image, le greffon ne fait rien tant que `CHOREGOS_ESSAI_ONTOLOGIE` n'est pas posé."""
+    import os
+
+    from choregos_api.greffons import reinitialiser, routeurs_declares
+    from choregos_api.main import create_app
+    from choregos_ontology.service.plugin import MIGRATIONS
+
+    monkeypatch.delenv("CHOREGOS_ESSAI_ONTOLOGIE", raising=False)
+    reinitialiser()
+    try:
+        chemins = create_app().openapi()["paths"]
+        assert "/api/v1/projects/{id}/ontology" not in chemins
+        assert routeurs_declares() == ()
+        assert os.fspath(MIGRATIONS).endswith("inactif"), "inactif, la branche de migrations est vide"
+        monkeypatch.setenv("CHOREGOS_ESSAI_ONTOLOGIE", "1")
+        assert os.fspath(MIGRATIONS).endswith("versions")
+    finally:
+        reinitialiser()
+
+
+def test_sans_activation_aucune_table_du_greffon(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.migrer import main
+    from sqlalchemy import create_engine, inspect
+
+    monkeypatch.delenv("CHOREGOS_ESSAI_ONTOLOGIE", raising=False)
+    fichier = tmp_path / "sans-greffon.db"
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{fichier}")
+    reset_settings_cache()
+    moteur = create_engine(f"sqlite:///{fichier}")
+    try:
+        main([])
+        tables = set(inspect(moteur).get_table_names())
+        assert "projects" in tables
+        assert not {"ontology_versions", "managed_objects", "action_proposals"} & tables
     finally:
         moteur.dispose()
         reset_settings_cache()

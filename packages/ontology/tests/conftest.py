@@ -1,12 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Shared helpers: a copy of the reference package that a test may mutate, and the plugin installed
-in the core the way `pip` would do it."""
+"""Shared helpers: a copy of the reference package that a test may mutate, the plugin switched on
+in the core, and the core's application built after it."""
 
 from __future__ import annotations
 
 import os
 import shutil
-import sys
 from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -47,40 +46,21 @@ def mutate(core_ref: Path) -> Mutate:
     return apply
 
 
-ENTRY_POINTS = """[choregos.plugins]
-choregos-ontology = choregos_ontology.service.plugin:brancher
-
-[choregos.migrations]
-choregos-ontology = choregos_ontology.service.plugin:MIGRATIONS
-"""
-
-
-def install_plugin(root: Path) -> None:
-    """The `.dist-info` that `pip install` writes for a package declaring both entry points."""
-    info = root / "choregos_ontology_greffon-0.12.0.dist-info"
-    info.mkdir(parents=True)
-    metadata = "Metadata-Version: 2.1\nName: choregos-ontology-greffon\nVersion: 0.12.0\n"
-    (info / "METADATA").write_text(metadata, encoding="utf-8")
-    (info / "entry_points.txt").write_text(ENTRY_POINTS, encoding="utf-8")
-
-
 @pytest.fixture
-def greffon(tmp_path: Path) -> Iterator[Path]:
-    """The plugin, visible to `importlib.metadata` for the duration of the test."""
+def greffon(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The plugin, active for the duration of the test: its entry points come from the installed
+    package, and `CHOREGOS_ESSAI_ONTOLOGIE=1` switches it on — exactly as in a deployment."""
     from choregos_api.greffons import reinitialiser
 
-    root = tmp_path / "site"
-    install_plugin(root)
-    sys.path.insert(0, str(root))
+    monkeypatch.setenv("CHOREGOS_ESSAI_ONTOLOGIE", "1")
     try:
-        yield root
+        yield
     finally:
-        sys.path.remove(str(root))
         reinitialiser()
 
 
 @pytest.fixture
-async def app(greffon: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
+async def app(greffon: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     """The core's application, built AFTER the plugin is installed — as a pod would start."""
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session

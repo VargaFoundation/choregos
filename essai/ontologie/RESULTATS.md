@@ -19,8 +19,10 @@ greffon, branche de migrations, jeton de run, chemin d'outils de l'agent, adapta
 - `packages/ontology` : la partie sans I/O (modèle, chargement, validation, compilation, outils
   générés, observations, évaluation CEL) ; `choregos_ontology.service` : le **greffon**, servi par
   l'API du cœur (extra `service`).
-- Le greffon s'installe comme le ferait `pip` : un `.dist-info` qui déclare `choregos.plugins`
-  (`brancher()`) et `choregos.migrations` (sa branche Alembic). C'est `create_app()` qui le charge, et
+- Le greffon est déclaré par le `pyproject.toml` du paquet (`choregos.plugins` → `brancher()`,
+  `choregos.migrations` → sa branche Alembic), et **livré inactif** : il ne s'active qu'avec
+  `CHOREGOS_ESSAI_ONTOLOGIE=1` (dans le chart, `global.extraEnv`). Inactif, il ne sert aucune route,
+  n'annonce aucun outil, et sa branche de migrations est vide. C'est `create_app()` qui le charge, et
   `python -m choregos_api.migrer` qui joue sa branche.
 - Ses tables : `ontology_versions`, `managed_objects` (propriétés en JSON, clé projet + type + id) et
   `action_proposals`, **sous RLS forcée** sur PostgreSQL, rattachées à l'organisation par leur projet
@@ -76,6 +78,9 @@ greffon, branche de migrations, jeton de run, chemin d'outils de l'agent, adapta
 | 25 | Un rapport partiel fait échouer la preuve qui l'attendait, **sans écrire aucun objet** ; sans rapport dans les 15 minutes, `failed` | ✅ |
 | 26 | Par le vrai serveur MCP de l'agent, la proposition arrive `pending_approval` | ✅ |
 | 27 | Une décision exige une session humaine : un jeton d'API est refusé (403 `decision_requires_session`) ; un refus exige un motif (422) ; la séparation des rôles rend 422 ; une authentification trop ancienne rend 401 `step_up_required` (contrat 03 §12, R-SOC-ACT-04) | ✅ |
+| 29 | Une proposition humaine (`POST /projects/{id}/proposals`) suit les mêmes règles que celle d'un agent ; le droit vient des rôles (`role:contributor`), un lecteur est refusé (403), des paramètres hors schéma aussi (422) ; l'inventaire (`register_host`) s'écrit par le moteur d'actions | ✅ |
+| 30 | Une action que l'agent n'a pas le droit de proposer n'est pas dans sa liste d'outils, et l'appeler répond comme un outil inexistant (404) | ✅ |
+| 31 | Sans `CHOREGOS_ESSAI_ONTOLOGIE`, le greffon est inerte : aucune route, aucun outil, aucune table | ✅ |
 | 28 | **Contre la pile intégrée qui tourne** (PostgreSQL sous RLS, uvicorn, Temporal) : les éléments 1 à 6 de bout en bout — voir `essai/demarrage-local/RESULTATS.md` | ✅ |
 
 Rejouer : `uv run pytest packages/ontology apps/api/tests/test_greffons_outils.py

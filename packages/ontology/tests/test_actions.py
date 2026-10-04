@@ -378,3 +378,59 @@ async def test_un_jeton_d_api_ne_decide_pas_et_un_refus_exige_un_motif(
     assert sans_motif.status_code == 422, sans_motif.text
     assert scm.prs == {}
     assert (await _proposition(client, projet, proposition))["status"] == "pending_approval"
+
+
+# ───────────────────────────── une proposition faite par un humain ─────────────────────────────
+
+
+async def test_un_humain_enregistre_un_hote_par_le_moteur_d_actions(
+    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+) -> None:
+    """L'inventaire s'écrit par une action (`register_host`, risque faible : d'office), jamais en base."""
+    corps = {
+        "action_type": "register_host",
+        "params": {"id": "node-7", "name": "node-7", "os": "rhel", "ip": "10.0.0.17"},
+        "justification": "New node delivered by the infrastructure team.",
+    }
+    reponse = await client.post(f"/api/v1/projects/{projet['id']}/proposals", json=corps)
+    assert reponse.status_code == 201, reponse.text
+    assert reponse.json()["status"] == "succeeded"
+    assert reponse.json()["proposed_by"]["kind"] == "user"
+    assert (await objets(projet["id"], "host"))["node-7"][1]["os"] == "rhel"
+    rejeu = await client.post(f"/api/v1/projects/{projet['id']}/proposals", json=corps)
+    assert rejeu.status_code == 200, "même clé d'idempotence : la première proposition"
+
+
+async def test_une_proposition_humaine_respecte_les_parametres_et_les_roles(
+    app: Any, client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+) -> None:
+    chemin = f"/api/v1/projects/{projet['id']}/proposals"
+    mauvais = {"action_type": "register_host", "params": {"id": "x"}, "justification": "test"}
+    assert (await client.post(chemin, json=mauvais)).status_code == 422
+    membre = {"email": "lecteur@varga.dev", "role": "viewer"}
+    assert (await client.post("/api/v1/orgs/varga/members", json=membre)).status_code in {200, 201}
+    corps = {
+        "action_type": "register_host",
+        "params": {"id": "node-8", "name": "node-8", "os": "debian", "ip": "10.0.0.18"},
+        "justification": "test",
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as lecteur:
+        await connecter(lecteur, "lecteur@varga.dev")
+        refus = await lecteur.post(chemin, json=corps)
+    assert refus.status_code == 403, refus.text
+    assert "node-8" not in await objets(projet["id"], "host")
+
+
+async def test_l_agent_ne_voit_pas_une_action_qu_il_n_a_pas_le_droit_de_proposer(
+    client: AsyncClient, it4it: dict[str, str]
+) -> None:
+    outils = await client.get(f"/api/v1/internal/runs/{RUN}/tools", headers=it4it)
+    noms = {o["name"] for o in outils.json()["tools"]}
+    assert "action_open_infra_pr" in noms
+    assert "action_register_host" not in noms, "réservée aux humains et au système"
+    refus = await client.post(
+        f"/api/v1/internal/runs/{RUN}/tools/action_register_host",
+        headers=it4it,
+        json={"justification": "x", "params": {"id": "n", "name": "n", "os": "rhel", "ip": "10.0.0.1"}},
+    )
+    assert refus.status_code == 404, "un outil hors droits répond comme un outil inexistant"

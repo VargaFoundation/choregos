@@ -42,8 +42,12 @@ def _link_ends(ir: dict[str, Any], link_name: str) -> list[str]:
 
 
 def _action_served(ir: dict[str, Any], name: str) -> bool:
+    """Servie à l'agent : effets servis par l'essai, et l'agent a le droit de la proposer. Un outil
+    hors droits est absent de la liste et répond comme un outil inexistant (contrat 03 §9)."""
     action = next((a for a in ir.get("action_types", []) if a["name"] == name), None)
-    if action is None or not _is_table(ir, action["target_type"]):
+    if action is None or f"agent:{actions.AGENT_IDENTITY}" not in action["propose"]:
+        return False
+    if action["cardinality"] != "none" and not _is_table(ir, action["target_type"]):
         return False
     return all(effect["type"] in actions.SERVED_EFFECTS for effect in action["effects"])
 

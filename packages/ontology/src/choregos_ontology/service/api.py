@@ -23,6 +23,7 @@ import tempfile
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
+import jsonschema
 from choregos_api.db.base import utcnow
 from choregos_api.deps import Db, ProjectCtx
 from choregos_api.errors import ApiError, conflict, unprocessable
@@ -50,6 +51,13 @@ MAX_FILES = 300
 MAX_PACKAGE_BYTES = 2 * 1024 * 1024
 MAX_REPORT_BYTES = 16 * 1024 * 1024
 _PATH = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*\.ya?ml$")
+
+
+class ProposalIn(BaseModel):
+    action_type: str = Field(min_length=1, max_length=63)
+    target: list[str] = Field(default_factory=list)
+    params: dict[str, Any] = Field(default_factory=dict)
+    justification: str = Field(min_length=1, max_length=4000)
 
 
 class Decision(BaseModel):
@@ -243,6 +251,39 @@ async def list_proposals(
         query = query.where(ActionProposal.status == status)
     lignes = (await session.execute(query.order_by(ActionProposal.created_at))).scalars().all()
     return [actions.describe(p) for p in lignes]
+
+
+@router.post("/projects/{id}/proposals", status_code=201, operation_id="createProposal")
+async def create_proposal(body: ProposalIn, ctx: ProjectCtx, session: Db) -> Any:
+    """Une proposition faite par un humain (ou un jeton d'API) : mêmes règles que celle d'un agent —
+    paramètres, préconditions, chemins permis, politique — et le droit vient de ses rôles."""
+    version = await objects.active_version(session, ctx.project.id)
+    if version is None:
+        raise conflict("ce projet n'a pas d'ontologie active : PUT /projects/{id}/ontology d'abord")
+    action = next(
+        (a for a in version.compiled_ir.get("action_types", []) if a["name"] == body.action_type), None
+    )
+    if action is None:
+        raise ApiError(404, "Action introuvable", f"l'action `{body.action_type}` n'existe pas")
+    try:
+        jsonschema.validate(body.params, action["parameters_schema"])
+    except jsonschema.ValidationError as erreur:
+        raise unprocessable(f"paramètres refusés : {erreur.message}") from erreur
+    acteur = actions.Actor(kind="user", id=ctx.principal.email, user_id=ctx.principal.user_id)
+    try:
+        code, resultat = await actions.propose(
+            session,
+            ctx.project,
+            version,
+            body.action_type,
+            body.model_dump(),
+            acteur,
+            ctx.principal,
+            ctx.org_slug,
+        )
+    except actions.Refusal as refus:
+        raise ApiError(refus.code, "Proposition refusée", str(refus), errors=[refus.body]) from refus
+    return JSONResponse(resultat, status_code=code)
 
 
 @router.get("/projects/{id}/proposals/{proposal_id}", operation_id="getProposal")

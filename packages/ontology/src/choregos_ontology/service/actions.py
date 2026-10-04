@@ -260,12 +260,23 @@ async def propose(
     action_name: str,
     arguments: dict[str, Any],
     actor: Actor,
+    principal: Any = None,
+    org_slug: str = "",
 ) -> tuple[int, dict[str, Any]]:
-    """Crée une proposition, ou rend celle qui existe déjà pour la même clé d'idempotence."""
+    """Crée une proposition, ou rend celle qui existe déjà pour la même clé d'idempotence.
+
+    Un agent propose sous `agent:platform` ; un humain, s'il a l'un des rôles `role:<r>` de
+    `permissions.propose` (`principal` et `org_slug` sont alors exigés).
+    """
     ir = version.compiled_ir
     action = _action(ir, action_name)
     if actor.kind == "agent" and f"agent:{AGENT_IDENTITY}" not in action["propose"]:
         raise Refusal(403, {"error": f"agent:{AGENT_IDENTITY} may not propose {action_name}"})
+    if actor.kind == "user":
+        roles = [p.removeprefix("role:") for p in action["propose"] if p.startswith("role:")]
+        rang = _rank(principal, org_slug, project.slug)
+        if not any(rang >= ONTOLOGY_ROLES.get(r, 3) for r in roles):
+            raise Refusal(403, {"error": f"proposing {action_name} needs one of {action['propose']}"})
     ids = [str(i) for i in arguments.get("target") or []]
     targets = await _targets(session, project.id, action, ids)
     params = dict(arguments.get("params") or {})

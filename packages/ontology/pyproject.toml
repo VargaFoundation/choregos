@@ -13,6 +13,14 @@ service = ["choregos-api", "jsonschema>=4.23", "sqlalchemy>=2.0"]
 [project.scripts]
 choregos-ontology = "choregos_ontology.cli:main"
 
+# Le greffon de l'essai du socle, livré INACTIF : il ne s'active qu'avec CHOREGOS_ESSAI_ONTOLOGIE=1
+# (voir `choregos_ontology.service.plugin`).
+[project.entry-points."choregos.plugins"]
+choregos-ontology = "choregos_ontology.service.plugin:brancher"
+
+[project.entry-points."choregos.migrations"]
+choregos-ontology = "choregos_ontology.service.plugin:MIGRATIONS"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
