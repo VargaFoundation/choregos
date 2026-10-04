@@ -88,9 +88,11 @@ class Clock:
 
 @dataclass(slots=True)
 class ScmOverride:
-    """Pour les tests et la démo : un SCM partagé (un `FakeScm` neuf par appel oublierait ses PR)."""
+    """Le SCM de chaque projet, construit une fois par processus — un `FakeScm` neuf par appel
+    oublierait ses PR entre l'effet et sa preuve. `scm` remplace celui de tous les projets (tests)."""
 
     scm: Any = None
+    by_project: dict[str, Any] = field(default_factory=dict)
 
 
 CLOCK = Clock()
@@ -99,25 +101,22 @@ SCM_OVERRIDE = ScmOverride()
 
 def replace_scm(scm: Any) -> None:
     SCM_OVERRIDE.scm = scm
+    SCM_OVERRIDE.by_project.clear()
 
 
 async def project_scm(session: AsyncSession, project: Any) -> Any:
     """L'adaptateur SCM du projet, construit depuis son connecteur `scm` (GitHub par défaut)."""
     if SCM_OVERRIDE.scm is not None:
         return SCM_OVERRIDE.scm
-    from choregos_adapters import build
-    from choregos_api.db.models import Connector
+    if project.id not in SCM_OVERRIDE.by_project:
+        from choregos_adapters import build
+        from choregos_api.db.models import Connector
 
-    row = (
-        (
-            await session.execute(
-                select(Connector).where(Connector.project_id == project.id, Connector.kind == "scm")
-            )
-        )
-        .scalars()
-        .first()
-    )
-    return build("scm", row.type if row else "github", dict(row.config) if row else {})
+        du_projet = select(Connector).where(Connector.project_id == project.id, Connector.kind == "scm")
+        row = (await session.execute(du_projet)).scalars().first()
+        type_, config = (row.type, dict(row.config)) if row else ("github", {})
+        SCM_OVERRIDE.by_project[project.id] = build("scm", type_, config)
+    return SCM_OVERRIDE.by_project[project.id]
 
 
 def _duration(text: str) -> timedelta:
@@ -376,10 +375,16 @@ async def decide(
     proposal: ActionProposal,
     principal: Any,
     decision: str,
-    comment: str | None,
+    reason: str | None,
 ) -> dict[str, Any]:
     if decision not in {"approve", "reject"}:
         raise Refusal(400, {"error": "decision is `approve` or `reject`"})
+    if principal.authentifie_le is None:
+        # Seule une session humaine porte une heure d'authentification : un jeton d'API n'en a pas.
+        refus = {"error": "decision_requires_session", "message": "a decision needs a human session"}
+        raise Refusal(403, refus)
+    if decision == "reject" and not (reason or "").strip():
+        raise Refusal(422, {"error": "reason_required", "message": "a rejection needs a reason"})
     if proposal.status != PENDING:
         raise Refusal(409, {"error": f"the proposal is {proposal.status}, not {PENDING}"})
     approval = proposal.approval
@@ -394,7 +399,7 @@ async def decide(
         and proposer.get("kind") == "user"
         and proposer.get("id") == principal.email
     ):
-        raise Refusal(403, {"error": "separation of duties: the proposer does not decide"})
+        raise Refusal(422, {"error": "separation_of_duties", "message": "the proposer does not decide"})
     now = CLOCK.now()
     auth_time = principal.authentifie_le
     age = None if auth_time is None else int(now.timestamp()) - int(auth_time)
@@ -404,7 +409,7 @@ async def decide(
         raise Refusal(
             401,
             {
-                "error": "reauthentication_required",
+                "error": "step_up_required",
                 "message": f"approving needs an authentication less than {step_up} min old; "
                 f"yours is {since} old",
                 "reauth": REAUTH,
@@ -414,7 +419,7 @@ async def decide(
         "by": principal.email,
         "user_id": principal.user_id,
         "decision": decision,
-        "comment": comment,
+        "reason": reason,
         "at": now.isoformat(),
         "auth_time": auth_time,
         "auth_age_seconds": age,

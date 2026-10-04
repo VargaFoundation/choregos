@@ -75,7 +75,7 @@ async def _proposer(client: AsyncClient, entetes: dict[str, str], **correctif: A
 
 async def _decider(client: AsyncClient, projet: dict[str, Any], proposition: str, decision: str) -> Any:
     chemin = f"/api/v1/projects/{projet['id']}/proposals/{proposition}/decision"
-    return await client.post(chemin, json={"decision": decision, "comment": "checked the diff"})
+    return await client.post(chemin, json={"decision": decision, "reason": "checked the diff"})
 
 
 async def _proposition(client: AsyncClient, projet: dict[str, Any], proposition: str) -> dict[str, Any]:
@@ -159,6 +159,7 @@ async def test_valider_exige_une_authentification_recente_puis_la_plateforme_ouv
     actions.CLOCK.offset = timedelta(minutes=11)
     refus = await _decider(client, projet, proposition, "approve")
     assert refus.status_code == 401, refus.text
+    assert refus.json()["errors"][0]["error"] == "step_up_required"
     assert refus.json()["errors"][0]["reauth"] == "GET /api/v1/auth/login?reauth=1"
     assert scm.prs == {}
 
@@ -358,3 +359,22 @@ async def test_l_agent_propose_par_son_serveur_mcp(app: Any, it4it: dict[str, st
         await interne.aclose()
     assert appel is not None and not appel["result"].get("isError"), appel
     assert json.loads(appel["result"]["content"][0]["text"])["status"] == "pending_approval"
+
+
+async def test_un_jeton_d_api_ne_decide_pas_et_un_refus_exige_un_motif(
+    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], scm: Any
+) -> None:
+    """Une décision exige une session humaine (403 `decision_requires_session`), et un refus, un motif."""
+    proposition = (await _proposer(client, it4it))["result"]["proposal"]
+    emis = await client.post("/api/v1/me/tokens", json={"name": "automate", "expires_in_days": 1})
+    assert emis.status_code == 201, emis.text
+    chemin = f"/api/v1/projects/{projet['id']}/proposals/{proposition}/decision"
+    async with AsyncClient(transport=client._transport, base_url="http://test") as porteur:
+        jeton = {"Authorization": f"Bearer {emis.json()['token']}"}
+        refus = await porteur.post(chemin, headers=jeton, json={"decision": "approve", "reason": "ok"})
+    assert refus.status_code == 403, refus.text
+    assert refus.json()["errors"][0]["error"] == "decision_requires_session"
+    sans_motif = await client.post(chemin, json={"decision": "reject"})
+    assert sans_motif.status_code == 422, sans_motif.text
+    assert scm.prs == {}
+    assert (await _proposition(client, projet, proposition))["status"] == "pending_approval"

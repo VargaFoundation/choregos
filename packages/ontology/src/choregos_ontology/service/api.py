@@ -54,7 +54,7 @@ _PATH = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*
 
 class Decision(BaseModel):
     decision: Literal["approve", "reject"]
-    comment: str | None = Field(default=None, max_length=2000)
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 class OntologyPackage(BaseModel):
@@ -258,7 +258,7 @@ async def decide_proposal(proposal_id: str, body: Decision, ctx: ProjectCtx, ses
     proposal = await _proposal(session, ctx.project.id, proposal_id)
     try:
         return await actions.decide(
-            session, ctx.project, ctx.org_slug, proposal, ctx.principal, body.decision, body.comment
+            session, ctx.project, ctx.org_slug, proposal, ctx.principal, body.decision, body.reason
         )
     except actions.Refusal as refus:
         raise ApiError(refus.code, "Décision refusée", str(refus), errors=[refus.body]) from refus
