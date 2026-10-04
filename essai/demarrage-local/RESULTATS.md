@@ -1,38 +1,79 @@
-# Essai, élément 9 — démarrage local : mesure de référence du 2026-10-03
+# Essai, élément 9 — démarrage local : résultats du 2026-10-04
 
-**Question** : la pile locale tient-elle « ≤ 10 minutes et ≤ 6 Go » (élément 9 de l'essai) ?
+**Question** : la pile de l'essai démarre-t-elle par `docker compose up` sur un portable, en
+**10 minutes au plus et 6 Go au plus** ? Et la tranche IT4IT (éléments 1 à 6) tient-elle contre cette
+pile qui tourne, et pas seulement dans les tests ?
 
-**Réponse provisoire : oui pour la mémoire, à risque pour le temps sur une connexion lente.** Mesure de
-référence sur les briques existantes ; la pile intégrée de l'essai sera mesurée quand les éléments 2 à
-6 tourneront.
+**Réponse : oui aux deux, sur une machine de développement aux images en cache.** Le temps d'un
+poste neuf dépend du téléchargement (environ 1,5 Go d'images). Et la pile qui tourne a trouvé un
+défaut du cœur, invisible aux tests : la transaction d'une requête était validée **après** l'envoi de
+la réponse.
 
-## Mesures (images en cache, machine de développement)
+## La pile intégrée (`compose.yaml`, `run.sh`)
 
-| Pile | Démarrage (`up --wait`) | Mémoire au repos |
-|---|---|---|
-| Infrastructure de développement de Choregos (`dev/compose.yaml` : PostgreSQL + pgvector, Temporal et son interface, LiteLLM, Keycloak, MinIO, Ecphoria) | 8 s | 1,81 Gio (Keycloak 0,93 ; LiteLLM 0,53 ; PostgreSQL 0,15 ; Temporal 0,09) |
-| Lakehouse de l'essai (Lakekeeper, sa base, MinIO ; élément 7) | quelques secondes | 0,34 Gio |
-| API et orchestrateur (processus Python) | — | non mesurés ici ; de l'ordre de quelques centaines de Mio |
+- **PostgreSQL** (`postgres:16-alpine`) avec un **rôle applicatif non superutilisateur**
+  (`initdb/`) : migrations et API tournent sous ce rôle, donc sous RLS forcée ;
+- **migrations** par `python -m choregos_api.migrer`, la commande du Job du chart : le cœur, puis
+  la branche `ontology` du greffon ;
+- **API** (uvicorn) et **orchestrateur** (worker Temporal), images construites depuis
+  `docker/api.Dockerfile`, plus une couche de 238 octets qui déclare le greffon comme le ferait
+  `pip install` (`greffon.Dockerfile`) ;
+- **Temporal** (`auto-setup:1.26.2`) ;
+- le **lakehouse** de l'élément 7 (Lakekeeper, sa base, MinIO), inclus tel quel ;
+- la paire de clés des jetons de run, générée par `run.sh` et partagée par l'API, l'orchestrateur
+  et le décor.
 
-| Image | Taille |
+## Mesures (machine de développement, WSL2, images de base en cache)
+
+| Mesure | Résultat |
 |---|---|
-| `ghcr.io/berriai/litellm:main-stable` | 1 174 Mo |
-| `quay.io/keycloak/keycloak:26.0` | 442 Mo |
-| `pgvector/pgvector:pg16` | 438 Mo |
-| `temporalio/auto-setup:1.26.2` | 426 Mo |
-| les cinq autres (MinIO, Lakekeeper, PostgreSQL, Temporal UI, Ecphoria) | 834 Mo |
-| **Total à télécharger** | **3,3 Go** |
+| Construction des images de la plateforme (cache uv chaud) | 27 à 59 s |
+| Démarrage (`docker compose up -d --wait`) jusqu'à l'API saine | **18 à 21 s** |
+| Mémoire au repos, toute la pile (trois passages) | **572 à 854 Mio** (Temporal 73–202 ; orchestrateur 112–147 ; PostgreSQL 145–163 ; API 97–137 ; MinIO 74–130) |
+| Images à télécharger sur un poste neuf | environ 1,5 Go décompressés (Temporal 426 Mo, API et orchestrateur 321 Mo à eux deux, PostgreSQL 294 Mo, Lakekeeper 176 Mo, MinIO 175 Mo, mc 85 Mo) |
 
-## Ce qu'on en tire
+La mesure de référence du 2026-10-03 portait sur la pile de développement de Choregos : 3,3 Go
+d'images et 1,8 Gio, à cause de LiteLLM et de Keycloak, dont le mode local de l'essai se passe.
 
-- **La mémoire tient** : environ 2,5 à 3 Gio pour tout, sous l'objectif de 6 Go. Le profil `core` en
-  mode d'authentification local (ADR 0011 du cahier) se passe de Keycloak (−0,9 Gio) et de LiteLLM
-  (−0,5 Gio).
-- **Le temps dépend du téléchargement** : 3,3 Go, c'est environ 4 à 5 minutes à 100 Mbit/s, et le
-  double à 50 Mbit/s. L'image LiteLLM en fait plus du tiers. Parades : profil `core` sans passerelle,
-  images épinglées et allégées, et un essai mesuré sur une connexion lente avant le J0.
-- **L'image MinIO n'est plus téléchargeable sur Docker Hub** (voir l'élément 7) : un poste neuf ne
-  démarre ni cette pile ni `make dev-up` (issue `finding` ouverte).
-- **Sous WSL2, des plages de ports sont réservées par Windows** : un port libre pour `ss` peut être
-  refusé par Docker (« address already in use »). Les ports de `dev/compose.yaml` sont déjà
-  surchargeables ; il faut le dire dans le guide de démarrage.
+## Le scénario contre la pile qui tourne (`scenario.py`)
+
+| Étape | Résultat |
+|---|---|
+| Connexion de l'administrateur (connexion de développement), projet, connecteur SCM | ✅ |
+| Élément 1 : le paquet IT4IT est validé, compilé, actif (13 outils) | ✅ |
+| Élément 2 : synchronisation ; rejeu sans écriture ; rapport tronqué refusé (422) sans écriture | ✅ |
+| Élément 3 : avec le jeton du run, l'agent liste les outils, lit les constats ouverts et un hôte sans son adresse | ✅ |
+| Élément 4 : proposition `pending_approval`, avec justification | ✅ |
+| Élément 5 : validation après `?reauth=1` ; PR ouverte par la plateforme sur `choregos/<proposition>` ; décision consignée avec `auth_time` | ✅ |
+| Élément 6 : la relance du collecteur sans la clé rend la vérification `succeeded` ; fait `collector_clean` à `true` | ✅ |
+| En base : RLS forcée sur les trois tables du greffon ; rôle applicatif non superutilisateur | ✅ |
+
+Rejouer : `essai/demarrage-local/run.sh` (environ 2 minutes ; `GARDER=1` laisse la pile debout).
+
+## Le défaut trouvé : le `commit` après la réponse
+
+Premier passage : la connexion réussit, la requête suivante répond **401 « session périmée »**.
+FastAPI ferme par défaut les dépendances `yield` **après** l'envoi de la réponse ; `get_db` y validait
+sa transaction. Le client recevait sa redirection, puis la base écrivait l'utilisateur : une requête
+rapide arrivait avant. Mesuré sur la pile : **6 connexions neuves sur 10 échouent** sans attente,
+aucune avec une demi-seconde.
+
+La conséquence la plus grave n'est pas la course : un `commit` qui échoue après coup laisse au client
+une réponse de succès sur une écriture perdue. Les tests ne le voyaient pas, parce que
+`ASGITransport` attend la fin de l'application avant de rendre la réponse.
+
+Correctif dans la branche : `Depends(get_db, scope="function")`, qui valide la transaction avant
+l'envoi. Le test `apps/api/tests/test_commit_avant_la_reponse.py` appelle l'application ASGI
+directement et vérifie l'ordre des événements ; sans le correctif, il échoue. Issue `finding`
+ouverte pour la ligne principale.
+
+## Ce que l'élément 9 ne prouve pas
+
+- **Le temps sur un poste neuf** : environ 1,5 Go à télécharger, soit 2 à 3 minutes à 100 Mbit/s et
+  le double à 50 Mbit/s, sous l'objectif de 10 minutes ; non mesuré sur une vraie connexion lente.
+- **Un poste neuf tout court** : l'image `minio/minio` n'est plus publiée sur Docker Hub (issue #152,
+  Q22) ; cette pile utilise une copie en cache.
+- **Le mode local sans connexion de développement** : l'authentification passe par `?as=` ; le mode
+  local de la spec (mot de passe, ADR 0011) n'existe pas dans le cœur.
+- **L'agent, le collecteur et le SCM** : le scénario écrit les appels de l'agent, poste les rapports
+  du collecteur, et la PR s'ouvre sur le faux SCM du cœur, dans le processus de l'API.

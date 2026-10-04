@@ -75,6 +75,8 @@ greffon, branche de migrations, jeton de run, chemin d'outils de l'agent, adapta
 | 24 | **Clé encore présente, couche absente, couche `unreachable` : `failed`**, jamais « clé absente » | ✅ |
 | 25 | Un rapport partiel fait échouer la preuve qui l'attendait, **sans écrire aucun objet** ; sans rapport dans les 15 minutes, `failed` | ✅ |
 | 26 | Par le vrai serveur MCP de l'agent, la proposition arrive `pending_approval` | ✅ |
+| 27 | Une décision exige une session humaine : un jeton d'API est refusé (403 `decision_requires_session`) ; un refus exige un motif (422) ; la séparation des rôles rend 422 ; une authentification trop ancienne rend 401 `step_up_required` (contrat 03 §12, R-SOC-ACT-04) | ✅ |
+| 28 | **Contre la pile intégrée qui tourne** (PostgreSQL sous RLS, uvicorn, Temporal) : les éléments 1 à 6 de bout en bout — voir `essai/demarrage-local/RESULTATS.md` | ✅ |
 
 Rejouer : `uv run pytest packages/ontology apps/api/tests/test_greffons_outils.py
 apps/api/tests/test_authentification_fraiche.py packages/adapters/tests/test_github_scm.py`
