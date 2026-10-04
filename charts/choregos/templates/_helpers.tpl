@@ -26,6 +26,12 @@ app.kubernetes.io/part-of: choregos
 
 {{/* Variables d'environnement communes : configuration 12-factor, secrets par référence. */}}
 {{- define "choregos.commonEnv" -}}
+{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" }}
+{{- range (.Values.global.extraEnv | default list) }}
+{{- if has .name $poses }}
+{{- fail (printf "global.extraEnv : %s est déjà posé par le chart ; deux valeurs pour un même nom, Kubernetes garderait la dernière sans rien dire" .name) }}
+{{- end }}
+{{- end }}
 - name: CHOREGOS_ENV
   value: {{ .Values.global.environment | quote }}
 - name: CHOREGOS_EDITION
@@ -83,6 +89,10 @@ app.kubernetes.io/part-of: choregos
     secretKeyRef:
       name: {{ .Values.global.database.secretRef }}
       key: url
+{{- end }}
+{{- range (.Values.global.extraEnv | default list) }}
+- name: {{ .name }}
+  value: {{ .value | quote }}
 {{- end }}
 {{- end -}}
 

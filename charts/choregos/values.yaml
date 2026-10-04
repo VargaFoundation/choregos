@@ -24,6 +24,15 @@ global:
   # saine et de refuser la seconde organisation des semaines plus tard.
   edition: community
   fakes: false
+  # Variables d'environnement supplémentaires, données à l'API, à chaque worker et au Job de
+  # migration (par `choregos.commonEnv`). Pour activer un réglage que le chart ne connaît pas
+  # encore — par exemple un greffon livré inactif (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — sans fork du
+  # chart. Une variable déjà posée par le chart est REFUSÉE au rendu : deux valeurs pour un même
+  # nom, Kubernetes garde la dernière sans rien dire, et le réglage du chart serait remplacé en
+  # silence. Valeurs en clair seulement : un secret passe par un `Secret`, jamais par ici.
+  extraEnv: []
+  #   - name: CHOREGOS_ESSAI_ONTOLOGIE
+  #     value: "1"
   # Canary de la plateforme (S7-08). Désactivé par défaut : il exige Argo Rollouts dans le
   # cluster, et un chart qui suppose un opérateur absent est un chart qui ne s'installe pas.
   # Les environnements qui l'activent le font dans `values/staging.yaml` et `values/prod.yaml`.

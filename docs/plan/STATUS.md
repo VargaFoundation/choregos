@@ -1084,3 +1084,17 @@ les 492 tests ne disaient pas :
     identique sauté, panne en lecture sans écriture ; idempotence du faux.
     **Ce que ça ne prouve pas** : un commit unique pour plusieurs fichiers (API Git Data), ni un
     essai contre un vrai dépôt.
+
+31. **`global.extraEnv` : un réglage que le chart ne connaît pas encore, sans fork du chart**
+    (2026-10-04).
+
+    Pour activer, par exemple, un greffon livré inactif sur un seul environnement. La variable arrive
+    par `choregos.commonEnv` à l'API, à chaque worker et au Job de migration — un greffon activé dans
+    l'API mais pas dans les migrations démarrerait sans ses tables. Une variable déjà posée par le
+    chart est refusée au rendu : Kubernetes garderait la dernière des deux sans rien dire.
+
+    **Ce que ça prouve** : `tests/charts/test_variables_supplementaires.py` — la variable arrive à
+    chaque processus qui lit les réglages, Job de migration compris ; rien sans valeur ; un nom déjà
+    posé (`CHOREGOS_DATABASE_URL`) est refusé, rouge sans la garde.
+    **Ce que ça ne prouve pas** : la garde ne connaît que les variables de `commonEnv` ; une variable
+    posée par un seul gabarit (l'OIDC de l'API) peut encore être doublée.
