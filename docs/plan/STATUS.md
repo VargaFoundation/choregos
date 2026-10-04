@@ -1052,3 +1052,22 @@ les 492 tests ne disaient pas :
     comportement. Gardes retirées : trois rouges.
     **Ce que ça ne prouve pas** : une session SAML (édition entreprise) porte encore `iat` seulement ;
     il faudrait y passer l'`AuthnInstant`.
+
+29. **Les outils d'un greffon arrivent chez l'agent ; les migrations du cœur ne décrivent que ses
+    tables** (2026-10-04, essai du socle).
+
+    Un greffon pouvait servir des routes (`declarer_un_routeur`) mais aucun outil n'arrivait chez
+    l'agent : le catalogue ne se lisait que dans un fichier du déploiement. La couture
+    `declarer_un_fournisseur_d_outils(nom, lister, appeler)` les fait passer par le chemin du
+    catalogue : annoncés par `GET /internal/runs/{id}/tools` au serveur MCP `choregos-tools`,
+    appelés par `POST /internal/runs/{id}/tools/{nom}` sous le jeton du run, sous le même plafond,
+    avec une ligne au registre des coûts (`greffon:<nom>`) et l'événement `tool.called`. Un nom déjà
+    pris est refusé en 409, jamais masqué. Et `db.models.objet_du_coeur`, filtre `include_object`
+    d'Alembic : un greffon inscrit ses modèles dans le `Base` du cœur ; sans ce filtre,
+    `test_migrations.py` rougissait dès qu'un greffon avait été importé plus tôt dans la session de
+    tests, et une autogénération aurait fait entrer ses tables dans une migration du cœur.
+
+    **Ce que ça prouve** : `test_greffons_outils.py` (annonce, appel compté, 401 sans jeton, 409 sur
+    collision, rouge sans la garde) ; sans le filtre, `test_migrations.py` rougit après les tests
+    d'un greffon.
+    **Ce que ça ne prouve pas** : le prix d'un outil de greffon (0 € au registre, à trancher).
