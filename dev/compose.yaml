@@ -1,4 +1,4 @@
-# Pile de développement sans Kubernetes : Postgres, Temporal, LiteLLM, Keycloak, MinIO et
+# Pile de développement sans Kubernetes : Postgres, Temporal, LiteLLM, Keycloak, un stockage S3 et
 # la mémoire Ecphoria.
 #
 # Les ports hôte sont surchargeables — une machine de développement a souvent déjà un
@@ -7,7 +7,8 @@
 #
 #   CHOREGOS_PORT_POSTGRES=15432 docker compose -f dev/compose.yaml up -d
 #
-# Variables : CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}.
+# Variables : CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,S3,S3_CONSOLE,ECPHORIA}
+# (CHOREGOS_PORT_MINIO et CHOREGOS_PORT_MINIO_CONSOLE restent lus, pour les postes déjà réglés).
 
 # Tout ce dont la plateforme a besoin, sans Kubernetes : `docker compose -f dev/compose.yaml up -d`.
 name: choregos
@@ -70,14 +71,20 @@ services:
     volumes: ["./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro"]
     ports: ["${CHOREGOS_PORT_KEYCLOAK:-8080}:8080"]
 
-  minio:
-    image: minio/minio:latest
-    command: ["server", "/data", "--console-address", ":9001"]
+  # RustFS (Apache-2.0) : l'image du serveur MinIO n'est plus publiée, ni sur Docker Hub ni sur
+  # quay.io — un poste neuf ne démarrait plus cette pile (#152). RustFS délivre aussi des identifiants
+  # STS bornés par une politique de session, ce dont un lecteur sans clé S3 a besoin (essai du socle,
+  # élément 7). Mêmes identifiants et mêmes ports que l'ancien service.
+  s3:
+    image: rustfs/rustfs:1.0.1
+    command: ["/data"]
     environment:
-      MINIO_ROOT_USER: choregos
-      MINIO_ROOT_PASSWORD: choregos123
-    ports: ["${CHOREGOS_PORT_MINIO:-9000}:9000", "${CHOREGOS_PORT_MINIO_CONSOLE:-9001}:9001"]
-    volumes: ["miniodata:/data"]
+      RUSTFS_ACCESS_KEY: choregos
+      RUSTFS_SECRET_KEY: choregos123
+    ports:
+      - "${CHOREGOS_PORT_S3:-${CHOREGOS_PORT_MINIO:-9000}}:9000"
+      - "${CHOREGOS_PORT_S3_CONSOLE:-${CHOREGOS_PORT_MINIO_CONSOLE:-9001}}:9001"
+    volumes: ["s3data:/data"]
 
   ecphoria:
     # `:memory` n'existe pas — le tag de l'édition mémoire est suffixé, pas nommé :
@@ -108,5 +115,5 @@ services:
 
 volumes:
   pgdata:
-  miniodata:
+  s3data:
   ecphoriadata:

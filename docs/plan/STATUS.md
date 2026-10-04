@@ -1098,3 +1098,16 @@ les 492 tests ne disaient pas :
     posé (`CHOREGOS_DATABASE_URL`) est refusé, rouge sans la garde.
     **Ce que ça ne prouve pas** : la garde ne connaît que les variables de `commonEnv` ; une variable
     posée par un seul gabarit (l'OIDC de l'API) peut encore être doublée.
+
+32. **La pile de développement démarre sur un poste neuf : RustFS remplace MinIO** (2026-10-04, #152).
+
+    L'image du serveur MinIO n'est plus publiée, ni sur Docker Hub ni sur quay.io : `dev/compose.yaml`
+    ne démarrait que sur un poste qui l'avait en cache. RustFS (`rustfs/rustfs:1.0.1`, Apache-2.0) la
+    remplace, mêmes identifiants et mêmes ports ; il délivre aussi des identifiants STS bornés par une
+    politique de session (essai du socle, élément 7 : Lakekeeper, PyIceberg et DuckDB passent avec
+    lui).
+
+    **Ce que ça prouve** : `tests/dev/test_pile_de_developpement.py` — chaque image de la pile porte
+    une étiquette explicite, et aucune n'est le serveur MinIO ; les deux rouges sur l'ancienne pile.
+    **Ce que ça ne prouve pas** : la tenue de RustFS en charge et dans la durée ; les données d'un
+    volume MinIO existant ne sont pas reprises (nouveau volume `s3data`).

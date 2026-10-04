@@ -21,7 +21,7 @@ else
 fi
 kubectl config use-context "kind-$CLUSTER"
 
-echo "· dépendances (Postgres, Temporal, LiteLLM, Keycloak, MinIO) en docker compose"
+echo "· dépendances (Postgres, Temporal, LiteLLM, Keycloak, RustFS) en docker compose"
 docker compose -f dev/compose.yaml up -d
 
 echo "· namespaces de la plateforme"

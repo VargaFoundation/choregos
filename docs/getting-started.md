@@ -43,7 +43,7 @@ does, the single-node bench of [`demo/`](../demo/README.md): real agents, real T
 real gates — `make demo-up`, `make demo-images`, `make demo-seed`.
 
 Without Kubernetes, `docker compose -f dev/compose.yaml up -d` brings the dependencies
-(Postgres, Temporal, LiteLLM, Keycloak, MinIO) and the three processes start by hand — see
+(Postgres, Temporal, LiteLLM, Keycloak, RustFS for S3) and the three processes start by hand — see
 [development](development.md).
 
 ---
