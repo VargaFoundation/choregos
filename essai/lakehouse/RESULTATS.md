@@ -48,11 +48,33 @@ installation des paquets Python comprise).
 
 ## Risques relevés
 
-- **L'image MinIO n'est plus publiée sur Docker Hub** : `docker pull minio/minio` est refusé le
-  2026-10-03 ; l'essai a utilisé une copie en cache (septembre 2025). Le démarrage local par
-  `docker compose up` (D8) ne peut pas en dépendre. Candidats à éprouver : SeaweedFS (déjà prévu par
-  DAT-003, sans STS), Garage, ou une image MinIO construite depuis les sources. **À trancher au J0.**
+- **L'image MinIO n'est plus publiée**, ni sur Docker Hub ni sur quay.io (vérifié le 2026-10-04).
+  Le démarrage local par `docker compose up` (D8) ne peut pas en dépendre : voir la section suivante,
+  qui la remplace par RustFS.
 - Deux entrepôts ne peuvent pas partager un même bucket sans préfixe (`CreateWarehouseStorageProfileOverlap`) :
   un entrepôt par installation (ADR 0007) le permet, avec un préfixe par projet si besoin.
 - Lakekeeper tournait **sans authentification** dans l'essai. En production, il se branche sur l'IdP
   (OIDC) et sur un autorisateur (OpenFGA ou équivalent) ; c'est l'objet de DAT-001 et DAT-003.
+
+## Q22 : RustFS à la place de MinIO (2026-10-04)
+
+**Question** : quel stockage S3 remplace MinIO, dont l'image n'est plus publiée, sans perdre ce que
+l'élément 7 a montré nécessaire, des identifiants STS bornés par table ?
+
+**Réponse : RustFS** (`rustfs/rustfs:1.0.1`, Apache-2.0, image publiée). Désormais le stockage par
+défaut de cette pile (service `s3`).
+
+| Contrôle | Résultat |
+|---|---|
+| `AssumeRole` avec une politique de session limitée à `projet-a/*` | identifiants temporaires délivrés |
+| Lire `projet-a` avec ces identifiants | permis |
+| Lire ou écrire `projet-b` avec ces identifiants | refusé (`AccessDenied`) |
+| L'élément 7 complet en mode STS : écriture PyIceberg, lecture DuckDB par identifiants délivrés | 1 000 lignes écrites et relues |
+| Test de portée (`portee.py`) : sa table permise ; la racine du bucket, un autre préfixe, un autre bucket refusés | identique à MinIO |
+
+Écartés sans essai : SeaweedFS (pas de STS) ; Garage et une image MinIO construite depuis les sources
+(AGPL-3.0, incompatible avec un rapport de licences sans AGPL).
+
+Ce qui n'est pas prouvé : la tenue de RustFS en charge et dans la durée (projet jeune, 1.0 en 2026),
+la réplication et la reprise. Le client `mc` sert encore à créer les buckets : il est publié, mais
+c'est un outil de MinIO (AGPL), à remplacer par un client S3 générique dans la pile livrée.

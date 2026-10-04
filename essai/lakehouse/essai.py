@@ -20,7 +20,7 @@ CATALOG_URI = "http://lakekeeper:8181/catalog"
 WAREHOUSE = os.environ.get("WAREHOUSE", "essai")
 NAMESPACE = ("p_demo", "health")  # racine du projet, puis le schéma (règle de 03 §2.2)
 TABLE = "findings_history"
-S3 = {"endpoint": "minio:9000", "key": "essai", "secret": "essai-dev-only"}
+S3 = {"endpoint": "s3:9000", "key": "essai", "secret": "essai-dev-only"}
 
 
 def main() -> int:

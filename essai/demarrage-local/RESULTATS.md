@@ -19,7 +19,8 @@ la réponse.
   `docker/api.Dockerfile`, plus une couche de 238 octets qui déclare le greffon comme le ferait
   `pip install` (`greffon.Dockerfile`) ;
 - **Temporal** (`auto-setup:1.26.2`) ;
-- le **lakehouse** de l'élément 7 (Lakekeeper, sa base, MinIO), inclus tel quel ;
+- le **lakehouse** de l'élément 7 (Lakekeeper, sa base, et RustFS à la place de MinIO, Q22), inclus
+  tel quel ;
 - la paire de clés des jetons de run, générée par `run.sh` et partagée par l'API, l'orchestrateur
   et le décor.
 
@@ -29,8 +30,8 @@ la réponse.
 |---|---|
 | Construction des images de la plateforme (cache uv chaud) | 27 à 59 s |
 | Démarrage (`docker compose up -d --wait`) jusqu'à l'API saine | **18 à 21 s** |
-| Mémoire au repos, toute la pile (trois passages) | **572 à 854 Mio** (Temporal 73–202 ; orchestrateur 112–147 ; PostgreSQL 145–163 ; API 97–137 ; MinIO 74–130) |
-| Images à télécharger sur un poste neuf | environ 1,5 Go décompressés (Temporal 426 Mo, API et orchestrateur 321 Mo à eux deux, PostgreSQL 294 Mo, Lakekeeper 176 Mo, MinIO 175 Mo, mc 85 Mo) |
+| Mémoire au repos, toute la pile (quatre passages) | **572 à 854 Mio** (Temporal 73–202 ; orchestrateur 112–147 ; PostgreSQL 145–163 ; API 97–137 ; stockage S3 74–157). Avec RustFS : 812 Mio |
+| Images à télécharger sur un poste neuf | environ 1,6 Go décompressés (Temporal 426 Mo, API et orchestrateur 321 Mo à eux deux, PostgreSQL 294 Mo, RustFS 290 Mo, Lakekeeper 176 Mo, mc 85 Mo) ; toutes publiées, sauf celles de la plateforme, construites par `run.sh` |
 
 La mesure de référence du 2026-10-03 portait sur la pile de développement de Choregos : 3,3 Go
 d'images et 1,8 Gio, à cause de LiteLLM et de Keycloak, dont le mode local de l'essai se passe.
@@ -69,10 +70,10 @@ ouverte pour la ligne principale.
 
 ## Ce que l'élément 9 ne prouve pas
 
-- **Le temps sur un poste neuf** : environ 1,5 Go à télécharger, soit 2 à 3 minutes à 100 Mbit/s et
-  le double à 50 Mbit/s, sous l'objectif de 10 minutes ; non mesuré sur une vraie connexion lente.
-- **Un poste neuf tout court** : l'image `minio/minio` n'est plus publiée sur Docker Hub (issue #152,
-  Q22) ; cette pile utilise une copie en cache.
+- **Le temps sur un poste neuf** : environ 1,6 Go à télécharger, soit 2 à 3 minutes à 100 Mbit/s et
+  le double à 50 Mbit/s, sous l'objectif de 10 minutes ; non mesuré sur une vraie connexion lente. Le
+  blocage de MinIO est levé : RustFS le remplace (élément 7, section Q22), et la pile ne dépend plus
+  d'aucune image en cache.
 - **Le mode local sans connexion de développement** : l'authentification passe par `?as=` ; le mode
   local de la spec (mot de passe, ADR 0011) n'existe pas dans le cœur.
 - **L'agent, le collecteur et le SCM** : le scénario écrit les appels de l'agent, poste les rapports

@@ -16,11 +16,11 @@ BUCKET="warehouse"; ROLE=""
 if [ "${STS}" = true ]; then
   BUCKET="warehouse-sts"; ROLE=', "sts-role-arn": "arn:minio:iam:::role/essai"'
   docker run --rm --network essai-lakehouse_default --entrypoint sh quay.io/minio/mc:latest \
-    -c "mc alias set m http://minio:9000 essai essai-dev-only >/dev/null && mc mb -p m/${BUCKET}" >/dev/null
+    -c "mc alias set m http://s3:9000 essai essai-dev-only >/dev/null && mc mb -p m/${BUCKET}" >/dev/null
 fi
 curl -fs -X POST http://localhost:58181/management/v1/warehouse -H 'content-type: application/json' -d @- <<JSON >/dev/null || true
 {"warehouse-name": "${WAREHOUSE}",
- "storage-profile": {"type": "s3", "bucket": "${BUCKET}", "endpoint": "http://minio:9000", "region": "local-01",
+ "storage-profile": {"type": "s3", "bucket": "${BUCKET}", "endpoint": "http://s3:9000", "region": "local-01",
                      "path-style-access": true, "flavor": "s3-compat", "sts-enabled": ${STS}${ROLE}},
  "storage-credential": {"type": "s3", "credential-type": "access-key",
                         "aws-access-key-id": "essai", "aws-secret-access-key": "essai-dev-only"}}

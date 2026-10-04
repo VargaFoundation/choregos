@@ -14,7 +14,7 @@ table = catalog.load_table(("p_demo", "health", "findings_history"))
 props = table.io.properties
 s3 = fs.S3FileSystem(
     access_key=props["s3.access-key-id"], secret_key=props["s3.secret-access-key"],
-    session_token=props.get("s3.session-token"), endpoint_override="minio:9000", scheme="http", region="local-01",
+    session_token=props.get("s3.session-token"), endpoint_override="s3:9000", scheme="http", region="local-01",
 )
 location = table.metadata.location.removeprefix("s3://")
 bucket = location.split("/")[0]
