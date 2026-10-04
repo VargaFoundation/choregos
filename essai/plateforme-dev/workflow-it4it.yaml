@@ -1,0 +1,32 @@
+# Le flux de l'essai sur le locataire dev : l'agent instruit un constat et propose une PR ; la
+# proposition attend la décision d'un humain ré-authentifié, hors du flux (moteur d'actions du
+# greffon). Le ticket se clôt quand un humain l'accepte.
+apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: essai-it4it, version: 1 }
+actors:
+  analyste: { type: agent, role: analyse_infra, model: "profile:standard", max_turns: 30, max_minutes: 20 }
+  exploitant: { type: human, group: maintainers, sla_hours: 24 }
+states:
+  inbox: { display: À instruire, kind: wait }
+  propose: { display: PR proposée }
+  done: { display: Clos, terminal: true }
+  needs_human: { display: À reprendre, kind: wait }
+transitions:
+  - id: t-instruire
+    from: inbox
+    to: propose
+    by: analyste
+    outputs: [proposition, constat]
+    gates: [outputs_present]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-clore
+    from: propose
+    to: done
+    by: exploitant
+    timeout_hours: 72
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
