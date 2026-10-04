@@ -1017,3 +1017,19 @@ les 492 tests ne disaient pas :
     quota mal écrit est refusé avant Argo CD. Lecture du quota retirée du provisioning : rouge.
     **Ce que ça ne prouve pas** : le quota prend effet au prochain provisioning ; rien ne réécrit
     ceux des projets existants.
+
+27. **La transaction d'une requête est validée avant l'envoi de la réponse** (2026-10-04, #161).
+
+    FastAPI ferme par défaut les dépendances `yield` APRÈS l'envoi de la réponse ; `get_db` y validait
+    sa transaction. Mesuré sur une pile servie par uvicorn (essai du socle, élément 9) : juste après
+    une connexion de développement d'un utilisateur neuf, la requête suivante répondait 401 « session
+    périmée » six fois sur dix, l'utilisateur n'étant pas encore écrit. Plus grave : un `commit` qui
+    échoue après coup laissait au client un succès sur une écriture perdue. `Db` et `DbPlateforme`
+    passent en `Depends(..., scope="function")` : la session se ferme avant l'envoi.
+
+    **Ce que ça prouve** : `test_commit_avant_la_reponse.py` appelle l'application ASGI directement —
+    `ASGITransport` attend la fin de l'application et ne voyait rien — et exige que le `commit`
+    précède `http.response.start` ; rouge sans le correctif. Suite entière verte, y compris la suite
+    de l'API sur PostgreSQL.
+    **Ce que ça ne prouve pas** : le comportement derrière un proxy qui bufferise les réponses (il
+    masquerait la course, pas l'écriture perdue).
