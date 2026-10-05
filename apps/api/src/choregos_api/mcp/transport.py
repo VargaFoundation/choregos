@@ -37,7 +37,7 @@ from ..errors import ApiError
 from ..logging import get_logger
 from ..rbac import Permission
 from .appelant import Appelant, Refus, identifier
-from .garde_fous import LIMITEUR, tronquer
+from .garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour, tronquer
 from .outils import INSTRUCTIONS, Contexte, OutilRefuse, annonces
 
 router = APIRouter(include_in_schema=False)
@@ -176,6 +176,12 @@ async def _appeler(
         return erreur(identifiant, PARAMETRES_INVALIDES, f"Unknown tool: {nom}")
     issue = "ok"
     try:
+        if (
+            outil.ecriture
+            and await ecritures_du_jour(ctx.session, ctx.appelant.principal.user_id) >= ECRITURES_PAR_JOUR
+        ):
+            # Toute écriture compte : un ticket ouvert, une action proposée (ADR 0030).
+            raise OutilRefuse(f"budget_exhausted: {ECRITURES_PAR_JOUR} writes a day through MCP")
         texte, structure = await outil.executer(ctx, arguments)
         resultat = resultat_texte(tronquer(texte), structure=structure)
     except OutilRefuse as refus:

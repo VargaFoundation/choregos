@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import HumanRequest, Organization, Project, Run, WorkItem
 from ..deps import resolve_project
 from ..errors import ApiError
+from ..greffons import fournisseurs_humains
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
 from ..services import (
@@ -38,7 +39,6 @@ from ..services import (
     workflow_model,
 )
 from .appelant import Appelant
-from .garde_fous import ECRITURES_PAR_JOUR, ecritures_du_jour
 
 #: Ce que la porte dit au modèle, une fois, à l'initialisation.
 INSTRUCTIONS = (
@@ -256,8 +256,6 @@ async def _create_work_item(ctx: Contexte, arguments: dict[str, Any]) -> tuple[s
     principal = ctx.appelant.principal
     if not principal.can(Permission.ITEM_CONTROL, org, projet.slug):
         raise OutilRefuse(f"you cannot open work items in {_nom(org, projet)}")
-    if await ecritures_du_jour(ctx.session, principal.user_id) >= ECRITURES_PAR_JOUR:
-        raise OutilRefuse(f"budget_exhausted: {ECRITURES_PAR_JOUR} writes a day through MCP")
     champs: dict[str, Any] = {
         "title": arguments.get("title", ""),
         "start": bool(arguments.get("start", True)),
@@ -432,6 +430,23 @@ async def _list_pending_decisions(ctx: Contexte, arguments: dict[str, Any]) -> t
                     "decision_url": _url(ctx, projet, f"/items/{item.id}"),
                 }
             )
+    for projet, org in projets:
+        for fournisseur in fournisseurs_humains().values():
+            if fournisseur.en_attente is None:
+                continue
+            for attente in await fournisseur.en_attente(ctx.session, principal, projet, org):
+                attentes.append(
+                    {
+                        "project": _nom(org, projet),
+                        "key": attente["key"],
+                        "title": attente["title"],
+                        "kind": attente["kind"],
+                        "question": attente.get("question"),
+                        "requested_at": attente.get("requested_at"),
+                        "can_decide": bool(attente.get("can_decide")),
+                        "decision_url": f"{ctx.console}{attente['decision_path']}",
+                    }
+                )
     texte = _lignes(
         f"{len(attentes)} decision(s) waiting for a person — decide in the console, never here:",
         [f"{a['project']} {a['key']} ({a['kind']}): {a['title']} → {a['decision_url']}" for a in attentes],
@@ -549,6 +564,45 @@ def outils(ctx: Contexte) -> list[Outil]:
     ]
 
 
+def _executeur_de_greffon(fournisseur: Any, nom: str) -> Executeur:
+    async def executer(ctx: Contexte, arguments: dict[str, Any]) -> tuple[str, Any]:
+        assert ctx.projet is not None and ctx.org is not None  # annoncés sur la porte d'un projet seulement
+        ctx.org_id_vise = ctx.projet.org_id
+        code, corps = await fournisseur.appeler(
+            ctx.session, ctx.appelant.principal, ctx.projet, ctx.org, nom, arguments
+        )
+        texte = json.dumps(corps, ensure_ascii=False, indent=2, default=str)
+        if code >= 400:
+            raise OutilRefuse(texte)
+        return texte, corps if isinstance(corps, dict) else {"result": corps}
+
+    return executer
+
+
+async def _outils_des_greffons(ctx: Contexte) -> list[Outil]:
+    """Les outils qu'un greffon sert aux humains (l'ontologie), sur la porte d'un projet seulement."""
+    if ctx.projet is None or ctx.org is None:
+        return []
+    du_coeur = {outil.nom for outil in outils(ctx)}
+    trouves = []
+    for fournisseur in fournisseurs_humains().values():
+        for annonce in await fournisseur.lister(ctx.session, ctx.appelant.principal, ctx.projet, ctx.org):
+            nom = str(annonce["name"])
+            if nom in du_coeur:
+                continue  # un greffon ne masque jamais un outil du cœur
+            trouves.append(
+                Outil(
+                    nom,
+                    str(annonce.get("title") or nom),
+                    str(annonce.get("description") or ""),
+                    annonce.get("inputSchema") or {"type": "object"},
+                    bool(annonce.get("ecriture")),
+                    _executeur_de_greffon(fournisseur, nom),
+                )
+            )
+    return trouves
+
+
 async def annonces(ctx: Contexte) -> list[Outil]:
     """Ce que CET humain, avec CE jeton, voit : un outil hors de ses droits n'existe pas pour lui."""
     principal = ctx.appelant.principal
@@ -561,4 +615,6 @@ async def annonces(ctx: Contexte) -> list[Outil]:
             if not any(principal.can(Permission.ITEM_CONTROL, org, p.slug) for p, org in projets):
                 continue
         visibles.append(outil)
+    # Ceux des greffons ensuite (l'ontologie du projet) : une écriture n'apparaît qu'à `mcp:write`.
+    visibles += [o for o in await _outils_des_greffons(ctx) if ctx.appelant.ecrit or not o.ecriture]
     return visibles
