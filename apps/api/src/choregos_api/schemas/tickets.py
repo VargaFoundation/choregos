@@ -21,6 +21,10 @@ class WorkItemCreate(Dto):
     risk: Literal["low", "medium", "high"] | None = None
     #: Démarrer l'interpréteur tout de suite (l'équivalent de `mark_agent_ready`).
     start: bool = True
+    #: Le workflow où le ticket naît (ADR 0031) ; sinon le routage du projet, sinon son défaut.
+    workflow: str | None = None
+    #: Les étiquettes du ticket, que les règles de routage lisent.
+    labels: list[str] = Field(default_factory=list)
 
 
 class Totals(Dto):

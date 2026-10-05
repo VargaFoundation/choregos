@@ -36,8 +36,9 @@ from ..schemas import (
 )
 from ..temporal import get_temporal, interpreter_id
 from .couts import estimate_cost
-from .definitions import default_workflow, workflow_du_ticket, workflow_model
+from .definitions import workflow_du_ticket, workflow_model
 from .evenements import persist_event
+from .routage import Naissance, nouveau_ticket
 
 
 def totals_from(raw: dict[str, Any] | None) -> Totals:
@@ -267,26 +268,21 @@ async def creer_un_ticket(
     """
     if not await le_tracker_est_interne(session, project):
         raise conflict("ce projet reçoit ses tickets d'un tracker externe : créez la demande là-bas")
-    from choregos_core import WorkflowEngine
-
-    ligne = await default_workflow(session, project.id)
-    workflow = workflow_model(ligne)
     key = await cle_de_ticket_interne(session, project)
-    item = WorkItem(
-        project_id=project.id,
-        tracker_key=key,
-        title=demande.title,
-        body_snapshot=demande.body,
-        size=demande.size,
-        risk=demande.risk,
-        state=WorkflowEngine(workflow).initial_state,
-        # Épinglé à sa naissance (ADR 0031) : une version publiée ensuite ne le déplace pas.
-        workflow_def_id=ligne.id if ligne is not None else None,
-        created_by=principal.email,
-        allowed_paths=[],
+    item = await nouveau_ticket(
+        session,
+        project,
+        Naissance(
+            tracker_key=key,
+            title=demande.title,
+            body=demande.body,
+            size=demande.size,
+            risk=demande.risk,
+            created_by=principal.email,
+            workflow=demande.workflow,
+            labels=tuple(demande.labels),
+        ),
     )
-    session.add(item)
-    await session.flush()
     await persist_event(
         session,
         EventType.WORKITEM_CREATED,

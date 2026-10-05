@@ -102,3 +102,46 @@ async def test_un_routage_vers_un_workflow_inconnu_est_refuse(
         json={"default": "default-simple", "rules": [{"when": {"item_type": "Bug"}, "workflow": "fantome"}]},
     )
     assert reponse.status_code == 422, reponse.text
+
+
+# ───────────────────────────── la naissance d'un ticket (S16-03) ─────────────────────────────
+
+
+async def _deux_flux(client: AsyncClient, pid: str) -> None:
+    for nom, etat in (("onboarding", "arrivee"), ("offboarding", "depart")):
+        reponse = await client.put(f"/api/v1/projects/{pid}/workflows/{nom}", json={"yaml": _flux(nom, etat)})
+        assert reponse.status_code == 200, reponse.text
+
+
+async def _naitre(client: AsyncClient, pid: str, **champs: Any) -> Any:
+    return await client.post(
+        f"/api/v1/projects/{pid}/work-items", json={"title": "x", "start": False, **champs}
+    )
+
+
+async def test_un_ticket_nait_dans_le_workflow_demande(client: AsyncClient, project: dict[str, Any]) -> None:
+    pid = project["id"]
+    await _deux_flux(client, pid)
+    ticket = (await _naitre(client, pid, workflow="offboarding")).json()
+    assert (ticket["workflow_name"], ticket["state"]) == ("offboarding", "depart")
+
+
+async def test_le_routage_choisit_par_etiquette_et_le_defaut_sinon(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    pid = project["id"]
+    await _deux_flux(client, pid)
+    routage = {
+        "default": "onboarding",
+        "rules": [{"when": {"labels_any": ["depart"]}, "workflow": "offboarding"}],
+    }
+    assert (await client.put(f"/api/v1/projects/{pid}/workflow-routing", json=routage)).status_code == 200
+    route = (await _naitre(client, pid, labels=["rh", "depart"])).json()
+    assert (route["workflow_name"], route["state"]) == ("offboarding", "depart")
+    defaut = (await _naitre(client, pid, labels=["rh"])).json()
+    assert (defaut["workflow_name"], defaut["state"]) == ("onboarding", "arrivee")
+
+
+async def test_un_workflow_demande_inconnu_est_refuse(client: AsyncClient, project: dict[str, Any]) -> None:
+    reponse = await _naitre(client, project["id"], workflow="fantome")
+    assert reponse.status_code == 422, reponse.text

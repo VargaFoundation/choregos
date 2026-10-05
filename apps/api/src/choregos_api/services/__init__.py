@@ -42,6 +42,11 @@ from .projets import (
     project_dto,
     project_stats,
 )
+from .routage import (
+    Naissance,
+    choisir_workflow,
+    nouveau_ticket,
+)
 from .tickets import (
     DOCUMENTS_LOGICIELS,
     _statut_temporal,
@@ -63,11 +68,13 @@ __all__ = [
     "DEFAULT_WORKFLOW",
     "DOCUMENTS_LOGICIELS",
     "MIN_TICKETS_PAR_GROUPE",
+    "Naissance",
     "_ab_verdict",
     "_statut_temporal",
     "_window_stats",
     "active_policy",
     "active_workflow",
+    "choisir_workflow",
     "chronologie",
     "cle_de_ticket_interne",
     "creer_un_ticket",
@@ -78,6 +85,7 @@ __all__ = [
     "human_request_dto",
     "le_tracker_est_interne",
     "memory_ab_comparison",
+    "nouveau_ticket",
     "persist_event",
     "policy_engine",
     "policy_model",

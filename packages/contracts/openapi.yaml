@@ -1431,6 +1431,8 @@ components:
         size: { type: [string, "null"], enum: [S, M, L, XL, null] }
         risk: { type: [string, "null"], enum: [low, medium, high, null] }
         start: { type: boolean, default: true }
+        workflow: { type: [string, "null"], description: "Le workflow où le ticket naît ; sinon le routage, sinon le défaut (ADR 0031)." }
+        labels: { type: array, items: { type: string }, description: "Lues par les règles de routage." }
     Integrations:
       type: object
       required: [mcp_url, protocol_versions, oauth, version]

@@ -27,9 +27,9 @@ BANNER = """
 async def seed() -> tuple[str, str, Any]:
     """Crée l'organisation, le projet, le ticket et les adaptateurs simulés."""
     from choregos_adapters import AdapterSet
-    from choregos_api.db.models import Organization, Project, WorkItem
+    from choregos_api.db.models import Organization, Project
     from choregos_api.db.session import create_all, session_scope
-    from choregos_api.services import ensure_defaults
+    from choregos_api.services import Naissance, ensure_defaults, nouveau_ticket
     from choregos_contracts import Evidence, StageResult, StageStatus
     from choregos_core.domain import WorkItemData
 
@@ -71,18 +71,18 @@ async def seed() -> tuple[str, str, Any]:
         session.add(project)
         await session.flush()
         await ensure_defaults(session, project)
-        item = WorkItem(
-            project_id=project.id,
-            tracker_key="varga/billing-api#123",
-            title="Les avoirs ne sont pas déduits du total de la facture",
-            body_snapshot="Quand une commande a un avoir, le total affiché ignore la remise.",
-            state="inbox",
-            size="M",
-            risk="low",
-            allowed_paths=["src/orders/**", "tests/orders/**"],
+        item = await nouveau_ticket(
+            session,
+            project,
+            Naissance(
+                tracker_key="varga/billing-api#123",
+                title="Les avoirs ne sont pas déduits du total de la facture",
+                body="Quand une commande a un avoir, le total affiché ignore la remise.",
+                size="M",
+                risk="low",
+                allowed_paths=("src/orders/**", "tests/orders/**"),
+            ),
         )
-        session.add(item)
-        await session.flush()
         project_id, work_item_id, key = project.id, item.id, item.tracker_key
 
     tracker.items[key] = WorkItemData(key=key, title=item.title, state="Todo")
