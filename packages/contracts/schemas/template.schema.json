@@ -42,7 +42,35 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "workflow": { "type": "string" },
+        "workflow": { "type": "string", "description": "un seul workflow : la forme d'avant `workflows`" },
+        "workflows": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "les workflows livrés (ADR 0031) : `template:<nom>@<v>`, un gabarit du cœur, ou un chemin relatif au dossier du gabarit (`workflows/arrivee.yaml`)"
+        },
+        "default_workflow": { "type": "string", "description": "le nom du workflow par défaut ; sinon le premier livré" },
+        "routing": {
+          "type": "array",
+          "description": "les règles de routage du projet, comme PUT /projects/{id}/workflow-routing",
+          "items": {
+            "type": "object",
+            "required": ["when", "workflow"],
+            "additionalProperties": false,
+            "properties": {
+              "when": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "labels_any": { "type": "array", "items": { "type": "string" } },
+                  "labels_all": { "type": "array", "items": { "type": "string" } },
+                  "item_type": { "type": "string" }
+                }
+              },
+              "workflow": { "type": "string" }
+            }
+          }
+        },
         "policy": { "type": "string" },
         "models": { "type": "string" },
         "agent": { "type": "string" }

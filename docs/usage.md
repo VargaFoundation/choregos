@@ -128,6 +128,21 @@ curl         $API/projects/acme:hr/workflows                                    
   matches its labels or its tracker type, else the default — and **pinned to that version**:
   publishing a new version never moves a running item.
 - `PUT /projects/{id}/workflow` remains, as the alias of the default workflow.
+- A stack template ships them to every project born from it, in its `manifest.yaml`:
+
+  ```yaml
+  defaults:
+    workflows: [workflows/onboarding.yaml, workflows/offboarding.yaml]   # or template:<name>@<v>
+    default_workflow: onboarding
+    routing:
+      - { when: { labels_any: [leaver] }, workflow: offboarding }
+    policy: preset:team
+  ```
+
+  A path is read from the template's folder and may not leave it; a template published through
+  `POST /templates` has no folder, so it ships core workflows only (`template:<name>@<v>`). A
+  template that names a workflow it does not ship, or ships an invalid one, creates no project
+  (`422`). The singular `workflow:` of older manifests still works.
 - The default and a routing target cannot be deactivated; a deactivated workflow takes no new
   item, and its pinned items finish on their version.
 - **Moving a running item to another version** is explicit:
