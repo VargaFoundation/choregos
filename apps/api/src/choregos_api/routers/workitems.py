@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
 from ..audit import record
-from ..db.models import Event, Finding, HumanRequest, Project, Run, WorkItem
+from ..db.models import HumanRequest, Project, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import conflict, forbidden, not_found
 from ..greffons import DemandeDeGeste, controler
@@ -27,13 +27,11 @@ from ..schemas import (
     WorkItemPage,
 )
 from ..services import (
-    active_workflow,
-    cle_de_ticket_interne,
+    chronologie,
+    creer_un_ticket,
     human_request_dto,
-    le_tracker_est_interne,
     persist_event,
     work_item_dto,
-    workflow_model,
 )
 from ..temporal import deliver_control, deliver_decision, get_temporal, interpreter_id
 
@@ -95,51 +93,7 @@ async def create_work_item(ctx: ProjectCtx, body: WorkItemCreate, session: Db) -
     démarre tout de suite sauf `start: false`.
     """
     ctx.require(Permission.ITEM_CONTROL)
-    if not await le_tracker_est_interne(session, ctx.project):
-        raise conflict("ce projet reçoit ses tickets d'un tracker externe : créez la demande là-bas")
-    workflow = workflow_model(await active_workflow(session, ctx.id))
-    from choregos_core import WorkflowEngine
-
-    key = await cle_de_ticket_interne(session, ctx.project)
-    item = WorkItem(
-        project_id=ctx.id,
-        tracker_key=key,
-        title=body.title,
-        body_snapshot=body.body,
-        size=body.size,
-        risk=body.risk,
-        state=WorkflowEngine(workflow).initial_state,
-        created_by=ctx.principal.email,
-        allowed_paths=[],
-    )
-    session.add(item)
-    await session.flush()
-    await persist_event(
-        session,
-        EventType.WORKITEM_CREATED,
-        project_id=ctx.id,
-        work_item_id=item.id,
-        project_slug=ctx.slug,
-        subject=key,
-        key=key,
-        title=body.title,
-    )
-    if body.start:
-        workflow_id = interpreter_id(ctx.slug, key)
-        await get_temporal().start_interpreter(
-            workflow_id,
-            {"project_id": ctx.id, "project_slug": ctx.slug, "work_item_id": item.id, "tracker_key": key},
-        )
-        item.temporal_wf_id = workflow_id
-    await record(
-        session,
-        ctx.principal,
-        "workitem.create",
-        org_id=ctx.project.org_id,
-        target_type="work_item",
-        target_id=item.id,
-        key=key,
-    )
+    item = await creer_un_ticket(session, ctx.principal, ctx.project, body)
     return await work_item_dto(session, item, ctx.project)
 
 
@@ -162,93 +116,7 @@ async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
 
-    entries: list[TimelineEntry] = []
-    runs = (
-        (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
-        .scalars()
-        .all()
-    )
-    for run in runs:
-        summary = (run.result or {}).get("summary", "")
-        entries.append(
-            TimelineEntry(
-                ts=run.started_at or run.created_at,
-                kind="run",
-                title=f"{run.stage_role} — tentative {run.attempt}",
-                detail=summary or run.status,
-                actor=run.actor or run.backend,
-                actor_kind="agent",
-                ref_id=run.id,
-                cost_usd=run.cost_usd,
-            )
-        )
-    requests = (
-        (
-            await session.execute(
-                select(HumanRequest)
-                .where(HumanRequest.work_item_id == item.id)
-                .order_by(HumanRequest.requested_at)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    for req in requests:
-        entries.append(
-            TimelineEntry(
-                ts=req.requested_at,
-                kind="decision",
-                title=f"demande humaine : {req.kind}",
-                detail=str(req.payload.get("question") or req.payload.get("summary") or ""),
-                actor=req.decided_by,
-                actor_kind="user",
-                ref_id=req.id,
-            )
-        )
-        if req.decided_at:
-            entries.append(
-                TimelineEntry(
-                    ts=req.decided_at,
-                    kind="decision",
-                    title=f"décision : {(req.decision or {}).get('kind', 'répondu')}",
-                    detail=str((req.decision or {}).get("reason") or ""),
-                    actor=req.decided_by,
-                    actor_kind="user",
-                    ref_id=req.id,
-                )
-            )
-    events = (
-        (await session.execute(select(Event).where(Event.work_item_id == item.id).order_by(Event.ts)))
-        .scalars()
-        .all()
-    )
-    for event in events:
-        if event.type == str(EventType.WORKITEM_STATE_CHANGED):
-            entries.append(
-                TimelineEntry(
-                    ts=event.ts,
-                    kind="state_change",
-                    title=f"{event.payload.get('from', '?')} → {event.payload.get('to', '?')}",
-                    detail=str(event.payload.get("reason") or ""),
-                    actor=str(event.payload.get("by") or "orchestrateur"),
-                    actor_kind="system",
-                )
-            )
-    findings = (
-        (await session.execute(select(Finding).where(Finding.origin_work_item_id == item.id))).scalars().all()
-    )
-    for finding in findings:
-        entries.append(
-            TimelineEntry(
-                ts=finding.created_at,
-                kind="finding",
-                title=f"finding {finding.severity} : {finding.title}",
-                detail=finding.evidence[:300],
-                actor_kind="agent",
-                ref_id=finding.id,
-            )
-        )
-    return sorted(entries, key=lambda e: e.ts)
+    return await chronologie(session, item)
 
 
 @router.post(

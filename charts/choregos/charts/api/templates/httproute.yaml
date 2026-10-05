@@ -17,7 +17,8 @@ spec:
     - host: {{ . | quote }}
       http:
         paths:
-          {{- range list "/api" "/healthz" "/readyz" }}
+          {{- /* `/mcp` : la porte des clients MCP externes (ADR 0030), servie par l'API. */}}
+          {{- range list "/api" "/mcp" "/healthz" "/readyz" }}
           - path: {{ . }}
             pathType: Prefix
             backend:
@@ -41,6 +42,7 @@ spec:
   rules:
     - matches:
         - path: { type: PathPrefix, value: /api }
+        - path: { type: PathPrefix, value: /mcp }
         - path: { type: PathPrefix, value: /healthz }
         - path: { type: PathPrefix, value: /readyz }
       backendRefs:

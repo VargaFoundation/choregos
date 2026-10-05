@@ -51,7 +51,11 @@ def create_app(server: McpServer | None = None) -> FastAPI:
 
     @app.post("/mcp")
     async def mcp(request: Request) -> Response:
-        """Un message JSON-RPC par requête ; une notification ne rend rien (204)."""
+        """Un message JSON-RPC par requête ; une notification est acceptée sans corps (202).
+
+        Le transport Streamable HTTP veut 202 pour une notification ; le side-car rendait 204,
+        que les clients tolèrent sans que le protocole le permette.
+        """
         server: McpServer = _state["server"]
         message = await request.json()
         if isinstance(message, list):  # lot JSON-RPC
@@ -59,7 +63,7 @@ def create_app(server: McpServer | None = None) -> FastAPI:
             return JSONResponse(responses)
         response = await server.handle(message)
         if response is None:
-            return Response(status_code=204)
+            return Response(status_code=202)
         return JSONResponse(response)
 
     return app

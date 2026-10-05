@@ -55,7 +55,11 @@ tests:
           value: choregos-api.internal.dev.diametral.com
       - lengthEqual:
           path: spec.rules[0].http.paths
-          count: 3
+          count: 4
+      # La porte MCP (ADR 0030) sort par l'API : sans ce chemin, un client MCP tombe sur la console.
+      - equal:
+          path: spec.rules[0].http.paths[1].path
+          value: /mcp
 
   - it: sans Gateway API, le front sort par un Ingress
     template: charts/choregos-web/templates/deployment.yaml

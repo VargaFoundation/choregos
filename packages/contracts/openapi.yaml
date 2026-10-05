@@ -919,6 +919,14 @@ paths:
       parameters: [{ name: tail, in: query, schema: { type: integer, default: 500, maximum: 5000 } }]
       responses:
         "200": { description: Logs, content: { application/json: { schema: { type: object, properties: { logs: { type: string }, ref: { type: string } } } } } }
+  /integrations:
+    get:
+      tags: [session]
+      operationId: getIntegrations
+      summary: Où connecter un client MCP (Claude Code, Cursor…) à cette plateforme (ADR 0030)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Integrations" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /healthz:
     get: { tags: [session], security: [], operationId: healthz, responses: { "200": { description: OK } } }
   /edition:
@@ -1312,6 +1320,19 @@ components:
         size: { type: [string, "null"], enum: [S, M, L, XL, null] }
         risk: { type: [string, "null"], enum: [low, medium, high, null] }
         start: { type: boolean, default: true }
+    Integrations:
+      type: object
+      required: [mcp_url, protocol_versions, oauth, version]
+      properties:
+        mcp_url: { type: string, description: "L'URL de la porte MCP ; celle d'un projet y ajoute `/projects/{org}:{slug}`." }
+        protocol_versions: { type: array, items: { type: string } }
+        oauth:
+          type: object
+          required: [enabled]
+          properties:
+            enabled: { type: boolean, description: "Faux tant que la porte n'accepte que des jetons à portée." }
+            authorization_server: { type: [string, "null"] }
+        version: { type: string }
     TokenScope:
       type: string
       enum: ["*", "mcp:read", "mcp:write"]
