@@ -145,13 +145,13 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S16-10 | S16 | ⬜ | — | Un board par workflow ; la demande choisit son workflow et ses champs |
 | S16-11 | S16 | ✅ | — | `POST /workflows/edit` : douze opérations typées (états, transitions, garanties, acteurs) greffées dans le texte par `yaml.compose` (`choregos_core/dsl/edition.py`) — commentaires, guillemets, styles flow et bloc intacts ; un renommage suit chaque référence (initial, from/to, reprises, défauts) ; un élément en bloc emporte ses commentaires de tête ; la réponse porte le texte, le diff, la validation, le graphe, l'inverse et les avertissements (états à effet) ; rien n'est enregistré. `test_edition.py` (755 cas : chaque opération suivie de son inverse redonne les octets, sur un document mixte, sans fin de ligne, et sur les trois gabarits livrés ; refus motivés), `test_edition_de_workflow.py` (API) ; 7 mutants tués. Ne prouve pas l'édition depuis la carte (S16-12) ; le premier champ d'une transition écrite en bloc ne se retire pas (il partage la ligne du tiret) |
 | S16-12 | S16 | ⬜ | — | Modifier un workflow depuis la carte et la vue processus |
-| S16-13 | S16 | ⬜ | — | Historique des versions : diff et restauration |
+| S16-13 | S16 | ✅ | — | l'historique d'un workflow compare deux versions ligne à ligne (par défaut la précédente contre l'active ; `lib/diff.ts`, plus longue sous-suite commune, morceaux avec deux lignes de contexte, lecteur d'écran : « added » / « removed ») et restaure une version passée, après confirmation, en la republiant comme la suivante (`POST …/versions/{v}/restore`) : l'historique s'allonge, rien n'est réécrit. vitest `diff.test.ts` (relire le diff redonne chaque version), e2e `parcours` (comparaison et restauration). Ne prouve pas la restauration contre un vrai serveur depuis la console (l'API l'est, S16-02) |
 | S17-01 | S17 | ⬜ | — | la couture « sections d'administration » : manifeste validé au démarrage, `GET /ui/admin-sections` (ADR 0032) |
 | S17-02 | S17 | ⬜ | — | l'administration en sous-pages, un SchemaForm partagé, les sections déclarées rendues |
 | S17-03 | S17 | ⬜ | — | chart : registre et étiquette d'image par composant |
 | S17-04 | S17 | ⬜ | — | l'édition entreprise sur le cœur courant, ses sections, servie au dev par un projet Harbor privé |
 
-**Total** : 109 livrées, 11 partielles, 11 non commencées.
+**Total** : 110 livrées, 11 partielles, 10 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
