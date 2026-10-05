@@ -153,3 +153,66 @@ class TemplateUpsert(Dto):
     manifest: dict[str, Any]
     repo_url: str | None = None
     is_published: bool = False
+
+
+# ───────────── connecteurs de l'organisation et politique par opération (ADR 0034) ─────────────
+
+Politique = Literal["allowed", "approval", "forbidden"]
+
+
+class OperationDto(Dto):
+    name: str
+    access: str
+    policy: str
+    #: les groupes de projets qui y ont droit ; aucun : tous les projets de l'organisation
+    groups: list[str] = Field(default_factory=list)
+    price_usd: float | None = None
+    schema_digest: str | None = None
+    description: str | None = None
+
+
+class OrgConnectorDto(Dto):
+    name: str
+    kind: str
+    type: str
+    config: dict[str, Any] = Field(default_factory=dict)
+    secret_refs: dict[str, str] = Field(default_factory=dict)
+    status: str = "unknown"
+    last_check_at: datetime | None = None
+    last_error: str | None = None
+    created_by: str | None = None
+    operations: list[OperationDto] = Field(default_factory=list)
+
+    @field_validator("secret_refs", mode="before")
+    @classmethod
+    def _sans_references(cls, valeur: Any) -> Any:
+        return valeur or {}
+
+
+class OrgConnectorCreate(Dto):
+    name: str = Field(pattern=r"^[a-z][a-z0-9-]{1,62}$")
+    type: str
+    #: la capacité ; par défaut celle du type, s'il n'en déclare qu'une sorte
+    kind: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    secret_refs: dict[str, str] = Field(default_factory=dict)
+
+
+class OperationPatch(Dto):
+    policy: Politique | None = None
+    groups: list[str] | None = None
+    price_usd: float | None = Field(default=None, ge=0)
+
+
+class ProjectOperationDto(Dto):
+    connector: str
+    operation: str
+    access: str
+    org_policy: str
+    project_policy: str | None = None
+    effective_policy: str
+    description: str | None = None
+
+
+class ProjectOperationPut(Dto):
+    policy: Politique

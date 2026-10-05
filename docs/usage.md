@@ -63,6 +63,17 @@ The core reads `env:NAME`; a plugin declares other schemes (a vault) with
 `choregos_core.secrets.declarer_un_resolveur`. A reference the process cannot resolve fails the
 connector test with its name — never a silent fallback to a default value.
 
+**The organisation's connectors.** A directory, a device manager, an MCP server is declared once
+by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
+named, and shared by its projects. It is born with the operations its type declares — a read
+`allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-actions-gouvernees-dans-le-coeur.md)) —
+and each operation carries its **policy** (`allowed`, `approval`, `forbidden`), the **project
+groups** it opens to (none: every project) and a price. Only the administrator decides them
+(`tools:grant`). A project sees the operations its groups open (`GET /projects/{id}/operations`)
+and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operation}` refuses an
+`approval` turned into `allowed` (`422`); `DELETE` returns to the organisation's policy, which a
+later hardening by the organisation always overrides.
+
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still

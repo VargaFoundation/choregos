@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { use, useState } from "react";
 import { Connecteurs } from "@/components/connecteurs";
+import { OperationsDuProjet } from "@/components/operations-du-projet";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur } from "@/lib/format";
@@ -60,6 +61,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
       )}
 
       <Connecteurs slug={slug} />
+      <OperationsDuProjet slug={slug} />
 
       <Card title="policy" className="lg:col-span-2">
         <PolicyEditor
