@@ -120,3 +120,17 @@ test("historique d'un workflow : deux versions se comparent, une ancienne se rep
   await page.getByRole("button", { name: "restore v1" }).click();
   await expect(page.getByRole("button", { name: "republish v1" })).toBeVisible();
 });
+
+test("board par workflow : la demande choisit son workflow, et ses champs en viennent", async ({ page }) => {
+  await page.goto("/p/billing-api/board");
+  await expect(page.getByText("Les avoirs ne sont pas déduits du total")).toBeVisible();
+  await page.getByRole("button", { name: "new request" }).click();
+  await page.getByLabel("workflow of the request").selectOption("hotfix");
+  const champs = page.getByTestId("request-fields");
+  await expect(champs.getByLabel("incident id (required)")).toBeVisible();
+  await expect(champs.getByLabel("severity (required)")).toBeVisible();
+  await expect(champs.getByLabel("detected on")).toHaveAttribute("type", "date");
+  // Le board du flux d'incident : ses colonnes, pas celles du défaut.
+  await page.getByLabel("board workflow").selectOption("hotfix");
+  await expect(page).toHaveURL(/workflow=hotfix/);
+});
