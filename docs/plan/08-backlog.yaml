@@ -1145,3 +1145,87 @@ stories:
     acceptance:
       - "Exposé par l'API et affiché par un écran ; calculé une seule fois, au même endroit"
       - "Test qui échoue si une reprise ou un refus n'est pas compté"
+
+  # ───────────── S15 — Porte MCP pour les clients externes et page Integrations (ADR 0030, 2026-10-05) ─────────────
+  - id: S15-01
+    title: "Les jetons d'API ont une portée (*, mcp:read, mcp:write) et peuvent être liés à un projet"
+    stream: S15
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "Un jeton sans `*` reçoit 403 sur toute route REST, y compris /me, /me/tokens et les décisions"
+      - "Un projet lié exige une portée mcp:* ; un projet illisible par l'humain est refusé"
+      - "`choregos tokens create --scope --project` ; la liste montre la portée, le projet et le dernier client"
+  - id: S15-02
+    title: "Un serveur MCP pour les clients externes (/mcp, /mcp/projects/{P}), authentifié par jeton à portée"
+    stream: S15
+    sprint: 7
+    priority: 2
+    size: L
+    depends_on: [S15-01]
+    acceptance:
+      - "initialize, tools/list, tools/call, ping ; 202 pour une notification, 405 sur GET, 413 au-delà d'1 Mio, Origin étranger refusé"
+      - "Un outil hors des droits de l'humain n'est pas annoncé et son appel rend -32602 ; aucun outil ne décide"
+      - "Un client de référence (SDK mcp, en test) liste et appelle les outils ; chaque appel est audité"
+  - id: S15-03
+    title: "Les outils générés de l'ontologie passent la porte MCP avec les droits de l'humain"
+    stream: S15
+    sprint: 7
+    priority: 3
+    size: M
+    depends_on: [S15-02]
+    acceptance:
+      - "Une action réservée au propriétaire n'est pas annoncée à un développeur"
+      - "Une proposition faite par la porte porte proposed_by = l'humain, via mcp, et apparaît dans list_pending_decisions"
+  - id: S15-04
+    title: "Décider une proposition d'action dans la console, ré-authentifié"
+    stream: S15
+    sprint: 7
+    priority: 4
+    size: M
+    depends_on: []
+    acceptance:
+      - "Un 401 step_up_required mène à la reconnexion (reauth=1), pas à /login"
+      - "Un rejet sans motif est bloqué ; parcours Playwright et axe"
+  - id: S15-05
+    title: "La page Integrations : Claude Code, Claude Desktop, claude.ai, Cursor, VS Code, ChatGPT, autre client MCP, CLI, REST"
+    stream: S15
+    sprint: 7
+    priority: 5
+    size: M
+    depends_on: [S15-02]
+    acceptance:
+      - "Des extraits exacts, pré-remplis avec l'URL de la plateforme ; jamais de jeton * dans un extrait MCP"
+      - "Un jeton créé depuis la page pour ce client ; un indicateur « connecté » qui suit le dernier usage"
+      - "Le dépannage dit qui ne joint pas un hôte interne (claude.ai, ChatGPT) et pourquoi"
+  - id: S15-06
+    title: "Un plugin Claude Code et une skill Choregos, publiés depuis le dépôt"
+    stream: S15
+    sprint: 7
+    priority: 6
+    size: S
+    depends_on: [S15-02]
+    acceptance:
+      - "Aucun secret littéral ; le jeton est une valeur sensible de l'utilisateur"
+      - "Un zip de la skill est joint à la release"
+  - id: S15-07
+    title: "Essai : Claude Code se connecte au locataire dev, liste les outils, crée un ticket"
+    stream: S15
+    sprint: 7
+    priority: 7
+    size: S
+    depends_on: [S15-02, S15-05]
+    acceptance:
+      - "Le ticket existe, créé par l'humain, avec un audit mcp.call ; le dernier usage du jeton est récent"
+  - id: S15-08
+    title: "La porte MCP devient serveur de ressources OAuth (RFC 9728) ; l'IdP émet les jetons"
+    stream: S15
+    sprint: 7
+    priority: 8
+    size: L
+    depends_on: [S15-02]
+    acceptance:
+      - "401 avec WWW-Authenticate: Bearer resource_metadata ; métadonnées dont resource est exactement l'URL MCP"
+      - "Contre un faux IdP : audience étrangère, alg none, jeton expiré, kid tourné, sub inconnu sont refusés"

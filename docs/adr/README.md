@@ -46,3 +46,4 @@ nine records did not exist.
 | [0027](0027-le-voisinage-se-regle-a-l-admission-et-au-quota.md) | Noisy neighbours: bounded at admission and by a per-organisation namespace quota, not by a Temporal queue per organisation | accepted |
 | [0028](0028-l-execution-gouvernee-du-changement.md) | Choregos governs the execution of change, not agents in general; superseded by 0029 | superseded |
 | [0029](0029-une-plateforme-d-agents-gouvernes.md) | Choregos is a general-purpose platform for governed agents: several workflows per project, an agent registry, skills, MCP, connectors by capability | accepted |
+| [0030](0030-une-porte-mcp-pour-les-clients-externes.md) | A door for external MCP clients inside the API: `/mcp`, scoped tokens first, OAuth next, no decision through MCP | accepted |
