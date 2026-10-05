@@ -1,0 +1,15 @@
+[package]
+name = "choregos-runtime-essai"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Essai, élément 8 : amorçage d'un run sans Secret Kubernetes (binaire statique, ADR 0015)"
+
+[dependencies]
+ureq = { version = "2", default-features = false, features = ["json"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true

@@ -1,0 +1,621 @@
+[
+  {
+    "name": "action_escalate_finding",
+    "kind": "action",
+    "source": "escalate_finding",
+    "description": "Propose `escalate_finding`: Raises a finding to critical and notifies the on-call team. Risk high, validated by policy 'core_ref'. This only creates a proposal; nothing runs before validation.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "justification": {
+          "type": "string",
+          "minLength": 1,
+          "description": "why the agent proposes it"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "target",
+        "justification",
+        "params"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "action_list",
+    "kind": "list",
+    "source": null,
+    "description": "Proposals of the project, filtered by status or action type.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "action_type": {
+          "type": "string"
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "action_open_finding",
+    "kind": "action",
+    "source": "open_finding",
+    "description": "Propose `open_finding`: Records a health finding. Risk low, validated by policy 'core_ref'. This only creates a proposal; nothing runs before validation.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "justification": {
+          "type": "string",
+          "minLength": 1,
+          "description": "why the agent proposes it"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "check": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "info",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "check",
+            "key",
+            "source"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "justification",
+        "params"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "action_status",
+    "kind": "status",
+    "source": null,
+    "description": "State, decisions and evidence of a proposal.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "proposal": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "alert_get",
+    "kind": "get",
+    "source": "alert",
+    "description": "Read one alert by its id. A monitoring alert, read on demand from a connector.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "alert_search",
+    "kind": "search",
+    "source": "alert",
+    "description": "Search alert objects. A monitoring alert, read on demand from a connector.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "host_id",
+                  "id",
+                  "raised_at",
+                  "summary"
+                ]
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "ne",
+                  "lt",
+                  "lte",
+                  "gt",
+                  "gte",
+                  "in",
+                  "contains",
+                  "prefix",
+                  "is_null"
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "property",
+              "op"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sort": {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "string",
+              "enum": [
+                "host_id",
+                "id",
+                "raised_at",
+                "summary"
+              ]
+            },
+            "order": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          "required": [
+            "property"
+          ],
+          "additionalProperties": false
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "finding_get",
+    "kind": "get",
+    "source": "finding",
+    "description": "Read one finding by its id. A health finding, opened and resolved by the platform.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "finding_search",
+    "kind": "search",
+    "source": "finding",
+    "description": "Search finding objects. A health finding, opened and resolved by the platform.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "bucket",
+                  "check",
+                  "evidence",
+                  "first_seen",
+                  "key",
+                  "last_seen",
+                  "layer",
+                  "resolved_at",
+                  "scopes",
+                  "severity",
+                  "source",
+                  "status"
+                ]
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "ne",
+                  "lt",
+                  "lte",
+                  "gt",
+                  "gte",
+                  "in",
+                  "contains",
+                  "prefix",
+                  "is_null"
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "property",
+              "op"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sort": {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "string",
+              "enum": [
+                "bucket",
+                "check",
+                "evidence",
+                "first_seen",
+                "key",
+                "last_seen",
+                "layer",
+                "resolved_at",
+                "scopes",
+                "severity",
+                "source",
+                "status"
+              ]
+            },
+            "order": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          "required": [
+            "property"
+          ],
+          "additionalProperties": false
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "host_get",
+    "kind": "get",
+    "source": "host",
+    "description": "Read one host by its id. A physical or virtual machine of the fleet.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "host_search",
+    "kind": "search",
+    "source": "host",
+    "description": "Search host objects. A physical or virtual machine of the fleet.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "id",
+                  "ip",
+                  "last_seen_at",
+                  "name",
+                  "os",
+                  "os_version"
+                ]
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "ne",
+                  "lt",
+                  "lte",
+                  "gt",
+                  "gte",
+                  "in",
+                  "contains",
+                  "prefix",
+                  "is_null"
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "property",
+              "op"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sort": {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "string",
+              "enum": [
+                "id",
+                "ip",
+                "last_seen_at",
+                "name",
+                "os",
+                "os_version"
+              ]
+            },
+            "order": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          "required": [
+            "property"
+          ],
+          "additionalProperties": false
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "host_services",
+    "kind": "link",
+    "source": "host_runs_service",
+    "description": "service objects linked to a host (host_runs_service).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "ontology_describe",
+    "kind": "describe",
+    "source": null,
+    "description": "Object types, links and actions visible to the caller, with their descriptions.",
+    "input_schema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "service_get",
+    "kind": "get",
+    "source": "service",
+    "description": "Read one service by its id. A service running on a host.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "service_host",
+    "kind": "link",
+    "source": "host_runs_service",
+    "description": "host objects linked to a service (host_runs_service).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "service_search",
+    "kind": "search",
+    "source": "service",
+    "description": "Search service objects. A service running on a host.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "property": {
+                "type": "string",
+                "enum": [
+                  "criticality",
+                  "host_id",
+                  "id",
+                  "name"
+                ]
+              },
+              "op": {
+                "type": "string",
+                "enum": [
+                  "eq",
+                  "ne",
+                  "lt",
+                  "lte",
+                  "gt",
+                  "gte",
+                  "in",
+                  "contains",
+                  "prefix",
+                  "is_null"
+                ]
+              },
+              "value": {}
+            },
+            "required": [
+              "property",
+              "op"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sort": {
+          "type": "object",
+          "properties": {
+            "property": {
+              "type": "string",
+              "enum": [
+                "criticality",
+                "host_id",
+                "id",
+                "name"
+              ]
+            },
+            "order": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          "required": [
+            "property"
+          ],
+          "additionalProperties": false
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+]

@@ -1,0 +1,8 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Ontology
+metadata: {name: core-ref, version: 0.1.0}
+spec:
+  description: Reference package of the platform core (trial TRV-001, story SOC-019).
+  defaults:
+    sensitivity: internal
+    mcp: {exposeObjects: true, exposeActions: true}

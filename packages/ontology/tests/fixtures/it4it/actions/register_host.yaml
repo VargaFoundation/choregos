@@ -1,0 +1,24 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: register_host
+  displayName: Register a host
+  description: "Records a host of the fleet, as an inventory sync would. Proposed by a person or by the system, never by an agent."
+spec:
+  target: {objectType: host, cardinality: none}
+  parameters:
+    id: {type: string, required: true}
+    name: {type: string, required: true}
+    os: {type: string, required: true, enum: [ubuntu, debian, rhel, windows]}
+    ip: {type: string, required: true, format: ipv4}
+  permissions:
+    propose: [role:contributor, system]
+    approve: policy:infra_change
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: host
+        properties: {id: "${params.id}", name: "${params.name}", os: "${params.os}", ip: "${params.ip}"}
+  idempotencyKey: "${params.id}"

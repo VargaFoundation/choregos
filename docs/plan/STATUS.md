@@ -1111,3 +1111,21 @@ les 492 tests ne disaient pas :
     une étiquette explicite, et aucune n'est le serveur MinIO ; les deux rouges sur l'ancienne pile.
     **Ce que ça ne prouve pas** : la tenue de RustFS en charge et dans la durée ; les données d'un
     volume MinIO existant ne sont pas reprises (nouveau volume `s3data`).
+
+33. **L'essai de la phase 0 du socle est livré, inactif par défaut** (2026-10-04, #151).
+
+    L'essai prouve, sur le cœur de Choregos, la tranche fine qui porte le futur socle (cahier des
+    charges de la Varga Foundation) : une ontologie en YAML validée et compilée, des constats
+    synchronisés depuis un rapport observations NDJSON v1, lus par un agent au moyen des outils MCP
+    générés avec son jeton de run, une action `gitops.pull_request` proposée par l'agent, validée par
+    un humain ré-authentifié et ouverte par la plateforme, et une preuve par relance du collecteur.
+    Chaque élément a son rapport dans `essai/*/RESULTATS.md`. Le paquet `choregos-ontology` porte le
+    greffon, déclaré par ses points d'entrée et **livré inactif** : il ne s'active qu'avec
+    `CHOREGOS_ESSAI_ONTOLOGIE=1` (`global.extraEnv`).
+
+    **Ce que ça prouve** : `packages/ontology/tests` (109 tests, dont deux sur PostgreSQL), et les
+    éléments 1 à 6 rejoués contre une pile intégrée servie par uvicorn (`essai/demarrage-local`).
+    Inactif, le greffon ne sert aucune route, n'annonce aucun outil, et n'a aucune table (testé).
+    **Ce que ça ne prouve pas** : un modèle qui choisit ces outils, la décision dans la console, une
+    PR sur un vrai dépôt, la reprise sur panne (le moteur d'actions tourne dans la requête, pas dans
+    Temporal). C'est l'objet des tests sur le locataire dev, et du rapport de décision du J0.

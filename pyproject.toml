@@ -8,6 +8,7 @@ license = { text = "Apache-2.0" }
 dependencies = [
   "choregos-contracts",
   "choregos-core",
+  "choregos-ontology",
   "choregos-adapters",
   "choregos-runner",
   "choregos-tools-mcp",
@@ -43,6 +44,7 @@ exclude = ["packages/contracts/ts", "apps/web"]
 [tool.uv.sources]
 choregos-contracts = { workspace = true }
 choregos-core = { workspace = true }
+choregos-ontology = { workspace = true }
 choregos-adapters = { workspace = true }
 choregos-runner = { workspace = true }
 choregos-tools-mcp = { workspace = true }
@@ -114,10 +116,10 @@ plugins = ["pydantic.mypy"]
 exclude = ["(^|/)(\\.venv|node_modules|generated)/", "^apps/web/"]
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = "packages/contracts/src:packages/core/src:packages/adapters/src:packages/runner/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:apps/api/src:apps/orchestrator/src"
+mypy_path = "packages/contracts/src:packages/core/src:packages/ontology/src:packages/adapters/src:packages/runner/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:apps/api/src:apps/orchestrator/src"
 
 [[tool.mypy.overrides]]
-module = ["temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*"]
+module = ["celpy.*", "temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

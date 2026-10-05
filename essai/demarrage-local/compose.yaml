@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: Apache-2.0
+# Essai de la phase 0, élément 9 : la pile intégrée de l'essai, démarrée par `docker compose up`.
+#
+# Le cœur de Choregos avec le greffon de l'ontologie (migrations, API, orchestrateur), PostgreSQL,
+# Temporal, et le lakehouse de l'élément 7 (Lakekeeper, MinIO). Les images sont construites par
+# `run.sh`, qui génère aussi la paire de clés des jetons de run. Identifiants de développement
+# seulement, jamais ailleurs.
+name: essai-socle
+
+include:
+  - ../lakehouse/compose.yaml
+
+x-choregos: &choregos
+  CHOREGOS_ENV: dev
+  # Le rôle applicatif NON superutilisateur (initdb/) : la RLS s'applique à lui.
+  CHOREGOS_DATABASE_URL: postgresql+asyncpg://choregos_app:essai-dev-only@choregos-db:5432/choregos
+  CHOREGOS_TEMPORAL_ADDRESS: temporal:7233
+  CHOREGOS_DEV_LOGIN_ENABLED: "true"
+  CHOREGOS_DEV_ADMIN_EMAILS: admin@varga.dev
+  CHOREGOS_BOOTSTRAP_ORG: varga
+  CHOREGOS_SESSION_SECRET: essai-dev-only-not-a-secret
+  CHOREGOS_RUN_TOKEN_PRIVATE_KEY: ${CHOREGOS_RUN_TOKEN_PRIVATE_KEY:?générée par run.sh}
+  CHOREGOS_RUN_TOKEN_PUBLIC_KEY: ${CHOREGOS_RUN_TOKEN_PUBLIC_KEY:?générée par run.sh}
+  CHOREGOS_API_URL: http://localhost:${ESSAI_PORT_API:-18190}
+  CHOREGOS_PUBLIC_URL: http://localhost:${ESSAI_PORT_API:-18190}
+
+services:
+  choregos-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: choregos
+      POSTGRES_PASSWORD: essai-dev-only
+      POSTGRES_DB: choregos
+    volumes: ["./initdb:/docker-entrypoint-initdb.d:ro"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U choregos -d choregos"]
+      interval: 2s
+      retries: 30
+
+  temporal:
+    image: temporalio/auto-setup:1.26.2
+    depends_on:
+      choregos-db: {condition: service_healthy}
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: choregos
+      POSTGRES_PWD: essai-dev-only
+      POSTGRES_SEEDS: choregos-db
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 3s
+      retries: 60
+      start_period: 10s
+
+  choregos-migrate:
+    image: choregos-api:essai
+    command: ["python", "-m", "choregos_api.migrer"]
+    environment: *choregos
+    depends_on:
+      choregos-db: {condition: service_healthy}
+
+  api:
+    image: choregos-api:essai
+    environment: *choregos
+    ports: ["127.0.0.1:${ESSAI_PORT_API:-18190}:8000"]
+    depends_on:
+      choregos-migrate: {condition: service_completed_successfully}
+      temporal: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 2s
+      retries: 60
+
+  worker:
+    image: choregos-orchestrator:essai
+    environment: *choregos
+    depends_on:
+      choregos-migrate: {condition: service_completed_successfully}
+      temporal: {condition: service_healthy}

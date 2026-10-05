@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: Apache-2.0
+# Essai de la phase 0, élément 7 : un catalogue Iceberg REST (Lakekeeper) sur un stockage S3 (RustFS),
+# écrit par PyIceberg et lu par DuckDB. Identifiants de développement seulement, jamais ailleurs.
+name: essai-lakehouse
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lakekeeper
+      POSTGRES_PASSWORD: essai-dev-only
+      POSTGRES_DB: lakekeeper
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakekeeper"]
+      interval: 2s
+      retries: 30
+  # RustFS (Apache-2.0) : l'image de MinIO n'est plus publiée (Q22). Il délivre des identifiants STS
+  # bornés par une politique de session, ce dont DuckDB a besoin pour lire sans clé S3 (RESULTATS.md).
+  s3:
+    image: rustfs/rustfs:1.0.1
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: essai
+      RUSTFS_SECRET_KEY: essai-dev-only
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://127.0.0.1:9000/"]
+      interval: 2s
+      retries: 30
+  s3-init:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      s3: {condition: service_healthy}
+    entrypoint: ["sh", "-c", "mc alias set m http://s3:9000 essai essai-dev-only && mc mb -p m/warehouse"]
+  migrate:
+    image: quay.io/lakekeeper/catalog:latest
+    command: ["migrate"]
+    environment: &lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:essai-dev-only@postgres:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:essai-dev-only@postgres:5432/lakekeeper
+      LAKEKEEPER__PG_ENCRYPTION_KEY: essai-dev-only-not-a-secret
+    depends_on:
+      postgres: {condition: service_healthy}
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:latest
+    command: ["serve"]
+    environment: *lakekeeper
+    ports: ["58181:8181"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      s3-init: {condition: service_completed_successfully}
