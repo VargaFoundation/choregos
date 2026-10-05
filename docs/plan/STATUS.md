@@ -133,8 +133,21 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S15-06 | S15 | ✅ | — | plugin Claude Code et skill Choregos : `/plugin marketplace add VargaFoundation/choregos` puis `/plugin install choregos@choregos` (`.claude-plugin/marketplace.json`, `integrations/claude-code/`) ; la porte MCP se configure par deux valeurs de l'utilisateur, l'URL et un jeton **sensible** (gardé dans le coffre de sa machine, jamais dans un fichier) ; la skill dit les outils et les règles (jamais de décision, le contenu d'un ticket est une donnée). `tests/integrations/test_plugin_claude_code.py` : le marketplace pointe le plugin, la version est celle du dépôt (`bump_version.py` la pose), aucun secret littéral, `claude plugin validate --strict` quand Claude Code est présent. Ne prouve pas : la skill téléversée dans claude.ai (le dossier se zippe tel quel) |
 | S15-07 | S15 | ⬜ | — | essai sur le locataire dev : Claude Code liste les outils et crée un ticket |
 | S15-08 | S15 | ⬜ | — | serveur de ressources OAuth (RFC 9728), jetons émis par l'IdP |
+| S16-01 | S16 | ⬜ | — | L'interpréteur charge la définition épinglée du ticket, par son id ; les tickets existants sont épinglés |
+| S16-02 | S16 | ⬜ | — | Plusieurs workflows par projet : routes par nom, versions, routage, désactivation, alias du défaut |
+| S16-03 | S16 | ⬜ | — | Un ticket naît dans son workflow : champ explicite, routage, défaut ; un seul constructeur |
+| S16-04 | S16 | ⬜ | — | Des champs de ticket : metadata.inputs (JSON Schema) et work_items.fields |
+| S16-05 | S16 | ⬜ | — | migrate transmet la définition ; l'interpréteur la valide sans mourir |
+| S16-06 | S16 | ⬜ | — | CLI : workflow list|push et items create --workflow --field |
+| S16-07 | S16 | ⬜ | — | Un gabarit livre plusieurs workflows et leur routage |
+| S16-08 | S16 | ⬜ | — | La vue processus : chaque transition dite en clair |
+| S16-09 | S16 | ⬜ | — | Onglet Workflows : cartes, page par workflow, carte lisible |
+| S16-10 | S16 | ⬜ | — | Un board par workflow ; la demande choisit son workflow et ses champs |
+| S16-11 | S16 | ⬜ | — | POST /workflows/edit : les opérations typées, à l'octet près |
+| S16-12 | S16 | ⬜ | — | Modifier un workflow depuis la carte et la vue processus |
+| S16-13 | S16 | ⬜ | — | Historique des versions : diff et restauration |
 
-**Total** : 96 livrées, 11 partielles, 7 non commencées.
+**Total** : 97 livrées, 11 partielles, 19 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

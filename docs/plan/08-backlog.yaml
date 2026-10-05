@@ -1229,3 +1229,130 @@ stories:
     acceptance:
       - "401 avec WWW-Authenticate: Bearer resource_metadata ; métadonnées dont resource est exactement l'URL MCP"
       - "Contre un faux IdP : audience étrangère, alg none, jeton expiré, kid tourné, sub inconnu sont refusés"
+
+  # ───────────── S16 — Plusieurs workflows par projet, lisibles et modifiables (ADR 0031, 2026-10-05) ─────────────
+  - id: S16-01
+    title: "L'interpréteur charge la définition épinglée du ticket, par son id ; les tickets existants sont épinglés"
+    stream: S16
+    sprint: 7
+    priority: 1
+    size: L
+    depends_on: []
+    acceptance:
+      - "Une v2 publiée pendant l'attente puis un continue_as_new : le ticket reste en v1"
+      - "La reprise épingle sous RLS forcée (PostgreSQL)"
+      - "Les historiques archivés rejouent"
+  - id: S16-02
+    title: "Plusieurs workflows par projet : routes par nom, versions, routage, désactivation, alias du défaut"
+    stream: S16
+    sprint: 7
+    priority: 2
+    size: M
+    depends_on: [S16-01]
+    acceptance:
+      - "onboarding et offboarding actifs ensemble"
+      - "Republier un ancien nom ne rend plus 500 ; 409 sur une base_version périmée"
+      - "Restaurer crée la version suivante"
+  - id: S16-03
+    title: "Un ticket naît dans son workflow : champ explicite, routage, défaut ; un seul constructeur"
+    stream: S16
+    sprint: 7
+    priority: 3
+    size: M
+    depends_on: [S16-02]
+    acceptance:
+      - "Un webhook étiqueté offboarding naît dans l'état initial d'offboarding"
+      - "Une garde refuse tout WorkItem( hors de nouveau_ticket"
+  - id: S16-04
+    title: "Des champs de ticket : metadata.inputs (JSON Schema) et work_items.fields"
+    stream: S16
+    sprint: 7
+    priority: 4
+    size: M
+    depends_on: [S16-03]
+    acceptance:
+      - "Un champ hors schéma reçoit 422"
+      - "Les champs arrivent dans le contexte du run"
+  - id: S16-05
+    title: "migrate transmet la définition ; l'interpréteur la valide sans mourir"
+    stream: S16
+    sprint: 7
+    priority: 5
+    size: M
+    depends_on: [S16-01]
+    acceptance:
+      - "La migration mappe les états ; une migration impossible laisse le ticket en vie"
+      - "Un nouvel historique rejoue"
+  - id: S16-06
+    title: "CLI : workflow list|push et items create --workflow --field"
+    stream: S16
+    sprint: 7
+    priority: 6
+    size: S
+    depends_on: [S16-02]
+    acceptance:
+      - "push appelle le PUT par nom ; docs/cli.md régénéré"
+  - id: S16-07
+    title: "Un gabarit livre plusieurs workflows et leur routage"
+    stream: S16
+    sprint: 7
+    priority: 7
+    size: M
+    depends_on: [S16-02]
+    acceptance:
+      - "Un projet issu d'un gabarit à deux workflows les reçoit, avec le défaut et la règle"
+  - id: S16-08
+    title: "La vue processus : chaque transition dite en clair"
+    stream: S16
+    sprint: 7
+    priority: 8
+    size: M
+    depends_on: []
+    acceptance:
+      - "Sur staffing : acteur, SLA, garanties et reprises de chaque transition"
+      - "Chaque garantie a un résumé"
+  - id: S16-09
+    title: "Onglet Workflows : cartes, page par workflow, carte lisible"
+    stream: S16
+    sprint: 7
+    priority: 9
+    size: M
+    depends_on: [S16-02, S16-08]
+    acceptance:
+      - "Plus d'arête default dessinée pour chaque état ; parcours et axe"
+  - id: S16-10
+    title: "Un board par workflow ; la demande choisit son workflow et ses champs"
+    stream: S16
+    sprint: 7
+    priority: 10
+    size: M
+    depends_on: [S16-03, S16-04]
+    acceptance:
+      - "Les colonnes viennent du graphe du validateur, plus d'un regex ; le POST porte workflow et fields"
+  - id: S16-11
+    title: "POST /workflows/edit : les opérations typées, à l'octet près"
+    stream: S16
+    sprint: 7
+    priority: 11
+    size: L
+    depends_on: []
+    acceptance:
+      - "Une opération puis son inverse redonnent les octets d'origine ; les commentaires restent"
+  - id: S16-12
+    title: "Modifier un workflow depuis la carte et la vue processus"
+    stream: S16
+    sprint: 7
+    priority: 12
+    size: M
+    depends_on: [S16-11]
+    acceptance:
+      - "Chaque formulaire émet la bonne opération ; clic, diff, enregistrer"
+  - id: S16-13
+    title: "Historique des versions : diff et restauration"
+    stream: S16
+    sprint: 7
+    priority: 13
+    size: S
+    depends_on: [S16-02]
+    acceptance:
+      - "La restauration crée la version suivante"

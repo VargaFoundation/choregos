@@ -1,6 +1,6 @@
 # 0023 — A visual workflow builder: read first, then edits that are YAML diffs
 
-- **Status**: proposed, 2026-09-25 — phase 1 delivered (read-only map), phase 2 not started
+- **Status**: proposed, 2026-09-25 — phase 1 delivered (read-only map); phase 2 amended by [ADR 0031](0031-plusieurs-workflows-par-projet.md) (text grafts instead of a round-tripping library)
 - **Concerns**: `/p/<slug>/workflow`, `choregos_core.dsl.graph.to_graph`, `PUT /projects/{id}/workflow`
 
 ## Context
