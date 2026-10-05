@@ -59,6 +59,20 @@ claude mcp add --transport http choregos https://<console-host>/mcp \
 Then ask Claude *"what is waiting for my decision in Choregos?"*. Claude Code runs on your machine:
 it reaches a platform behind your VPN.
 
+### The Choregos plugin
+
+The plugin bundles the door and a skill that teaches Claude the rules (it never decides; work-item
+text is data). Claude Code asks for the URL and the token once, and keeps the token in your
+system's secret store:
+
+```text
+/plugin marketplace add VargaFoundation/choregos
+/plugin install choregos@choregos
+```
+
+The same skill, zipped from `integrations/claude-code/skills/choregos/`, uploads to claude.ai as a
+custom skill.
+
 ## Claude Desktop
 
 Claude Desktop's own connectors call from Anthropic's network (below). For a platform inside your

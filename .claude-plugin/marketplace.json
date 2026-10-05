@@ -1,0 +1,12 @@
+{
+  "name": "choregos",
+  "owner": { "name": "Varga Foundation", "url": "https://github.com/VargaFoundation" },
+  "description": "Connect Claude Code to Choregos, the open-source platform for governed agents.",
+  "plugins": [
+    {
+      "name": "choregos",
+      "source": "./integrations/claude-code",
+      "description": "Follow work items, open requests and see what waits for your decision in Choregos — through its MCP door, with your rights, never deciding for you."
+    }
+  ]
+}

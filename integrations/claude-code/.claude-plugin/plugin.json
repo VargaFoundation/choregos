@@ -1,0 +1,26 @@
+{
+  "name": "choregos",
+  "displayName": "Choregos",
+  "version": "0.13.1",
+  "description": "Connect Claude Code to Choregos: follow work items, open requests, see what waits for your decision.",
+  "author": { "name": "Varga Foundation", "url": "https://github.com/VargaFoundation" },
+  "homepage": "https://github.com/VargaFoundation/choregos/blob/main/docs/integrations.md",
+  "repository": "https://github.com/VargaFoundation/choregos",
+  "license": "Apache-2.0",
+  "keywords": ["choregos", "agents", "governance", "mcp"],
+  "userConfig": {
+    "mcp_url": {
+      "type": "string",
+      "title": "Choregos MCP URL",
+      "description": "The MCP door of your platform, such as https://choregos.example.com/mcp — shown in Integrations, in the console.",
+      "required": true
+    },
+    "token": {
+      "type": "string",
+      "title": "Choregos MCP token",
+      "description": "A token with scope mcp:read or mcp:write, created in Integrations. A full-access token is refused by the door.",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}
