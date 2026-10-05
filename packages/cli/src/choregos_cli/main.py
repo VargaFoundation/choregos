@@ -241,6 +241,20 @@ def items_list(project: str, state: Annotated[str | None, typer.Option()] = None
     console.print(table)
 
 
+def _champs(paires: list[str]) -> dict[str, Any]:
+    """`cle=valeur` ; la valeur est lue en JSON quand elle en est (nombre, booléen, liste), sinon texte."""
+    champs: dict[str, Any] = {}
+    for paire in paires:
+        cle, egal, valeur = paire.partition("=")
+        if not egal or not cle:
+            fail(f"--field {paire!r} : attendu `cle=valeur`")
+        try:
+            champs[cle] = json.loads(valeur)
+        except json.JSONDecodeError:
+            champs[cle] = valeur
+    return champs
+
+
 @items_app.command("create")
 def items_create(
     project: str,
@@ -248,12 +262,27 @@ def items_create(
     body: Annotated[str, typer.Option()] = "",
     size: Annotated[str | None, typer.Option(help="S, M, L ou XL")] = None,
     no_start: Annotated[bool, typer.Option("--no-start", help="poser sans démarrer l'interpréteur")] = False,
+    workflow: Annotated[
+        str | None,
+        typer.Option(help="le workflow où la demande naît ; sinon le routage du projet, sinon son défaut"),
+    ] = None,
+    label: Annotated[
+        list[str] | None, typer.Option("--label", help="une étiquette (répétable), lue par le routage")
+    ] = None,
+    field: Annotated[
+        list[str] | None,
+        typer.Option("--field", help="`cle=valeur` (répétable), validé par les `inputs` du workflow"),
+    ] = None,
 ) -> None:
     """Pose une demande dans Choregos (projet à tracker interne) et démarre son interpréteur."""
-    item = client().post(
-        f"/projects/{project}/work-items",
-        json={"title": title, "body": body, "size": size, "start": not no_start},
-    )
+    demande: dict[str, Any] = {"title": title, "body": body, "size": size, "start": not no_start}
+    if workflow:
+        demande["workflow"] = workflow
+    if label:
+        demande["labels"] = list(label)
+    if field:
+        demande["fields"] = _champs(list(field))
+    item = client().post(f"/projects/{project}/work-items", json=demande)
     console.print(
         f"[green]✓[/green] {item['tracker_key']} créé — état `{item['state']}`"
         + ("" if no_start else f", interpréteur {item.get('temporal_wf_id')}")
@@ -430,6 +459,55 @@ def findings_action(
 
 
 # ───────────────────────────── workflow ─────────────────────────────
+
+
+@workflow_app.command("list")
+def workflow_list(project: str) -> None:
+    """Les workflows d'un projet : la version active de chacun, le défaut, les tickets ouverts."""
+    workflows = client().get(f"/projects/{project}/workflows")
+    table = Table("workflow", "version", "défaut", "tickets ouverts", "publié par")
+    for flux in workflows:
+        table.add_row(
+            flux["name"],
+            f"v{flux['version']}",
+            "✓" if flux.get("is_default") else "",
+            str(flux.get("open_items", 0)),
+            flux.get("created_by") or "—",
+        )
+    console.print(table)
+
+
+@workflow_app.command("push")
+def workflow_push(
+    project: str,
+    path: Annotated[Path, typer.Argument()] = Path(".choregos/workflow.yaml"),
+    base_version: Annotated[
+        int | None,
+        typer.Option(
+            "--base-version", help="la version active que vous avez lue : 409 si une autre l'a remplacée"
+        ),
+    ] = None,
+) -> None:
+    """Publie la version suivante d'un workflow, sous le nom que dit son `metadata.name`.
+
+    Les autres workflows du projet ne bougent pas, et un ticket en cours finit sur sa version.
+    """
+    import yaml
+
+    source = path.read_text(encoding="utf-8")
+    try:
+        document = yaml.safe_load(source) or {}
+    except yaml.YAMLError as exc:
+        fail(f"{path} : YAML illisible ({exc})")
+        return
+    nom = (document.get("metadata") or {}).get("name") if isinstance(document, dict) else None
+    if not nom:
+        fail(f"{path} : `metadata.name` manquant — c'est le nom du workflow dans le projet")
+    corps: dict[str, Any] = {"yaml": source}
+    if base_version is not None:
+        corps["base_version"] = base_version
+    publie = client().put(f"/projects/{project}/workflows/{nom}", json=corps)
+    console.print(f"[green]✓[/green] {publie['name']} v{publie['version']} publié dans {project}")
 
 
 @workflow_app.command("validate")
