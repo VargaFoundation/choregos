@@ -469,6 +469,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const [route] = path.split("?");
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
+    [/^\/edition$/, { edition: "community", features: [], version: "0.13.1" }],
     [/^\/me\/tokens$/, []],
     [/^\/orgs$/, [{ slug: "varga", name: "Varga Foundation", role: "org_admin" }]],
     [/^\/orgs\/[^/]+\/members$/, me.memberships],

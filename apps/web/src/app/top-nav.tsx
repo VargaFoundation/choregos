@@ -4,6 +4,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navLinkClasses } from "@varga/design-system";
+import { useQuery } from "@tanstack/react-query";
+import { EditionBadge } from "@/components/edition";
+import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 const NAV = [
@@ -15,6 +18,8 @@ const NAV = [
 export function TopNav() {
   const pathname = usePathname();
   const { me, orgs, org, choisirOrg, deconnecter } = useSession();
+  // L'édition ne change pas pendant une session : une seule lecture suffit.
+  const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   return (
     <nav className="flex flex-1 items-center gap-8" aria-label="main navigation">
       {NAV.map((entry) => {
@@ -31,6 +36,7 @@ export function TopNav() {
         );
       })}
       <div className="ml-auto flex items-center gap-4 text-xs">
+        {edition.data && <EditionBadge edition={edition.data.edition} />}
         {orgs.length > 1 ? (
           <label className="flex items-center gap-2">
             <span className="text-ink-muted">organisation</span>

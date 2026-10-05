@@ -49,3 +49,8 @@ export type {
   WorkItem as WorkItemDto,
   WorkItemPage,
 } from "@choregos/contracts/api";
+
+import type { Operations } from "@choregos/contracts/api";
+
+/** L'édition qui tourne et ce qu'elle s'autorise (ADR 0024) : la réponse de `GET /edition`. */
+export type Edition = Operations["edition"]["response"];

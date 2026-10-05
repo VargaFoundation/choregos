@@ -236,7 +236,6 @@ def create_app() -> FastAPI:
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/edition", tags=["session"], operation_id="edition")
     async def edition_courante() -> dict[str, Any]:
         """Quelle édition tourne, et ce qu'elle s'autorise (ADR 0024).
 
@@ -246,6 +245,15 @@ def create_app() -> FastAPI:
         from .edition import courante, fonctions
 
         return {"edition": courante(), "features": sorted(fonctions()), "version": __version__}
+
+    # Le contrat la place sous `/api/v1` (`servers: /api/v1`) : c'est là que la console la
+    # demande, puisque Next ne relaie que ce préfixe. Elle n'était servie qu'à la racine, que
+    # l'Ingress envoie à la console : personne hors du cluster ne pouvait la lire. La racine reste
+    # servie, hors schéma, pour les sondes et la doc d'exploitation qui la citent.
+    app.add_api_route(
+        f"{API_PREFIX}/edition", edition_courante, methods=["GET"], tags=["session"], operation_id="edition"
+    )
+    app.add_api_route("/edition", edition_courante, methods=["GET"], include_in_schema=False)
 
     @app.get("/readyz", tags=["session"], operation_id="readyz")
     async def readyz() -> Any:

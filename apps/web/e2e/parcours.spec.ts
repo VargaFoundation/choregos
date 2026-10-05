@@ -6,6 +6,8 @@ test("liste des projets et accès à un projet", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "projects" })).toBeVisible();
   await expect(page.getByText("Billing API")).toBeVisible();
+  // La console dit sur quelle édition elle tourne (ADR 0024).
+  await expect(page.getByTestId("edition-badge")).toHaveText("community edition");
   await page.getByRole("link", { name: "Billing API" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api$/);
   await expect(page.getByText("prs merged on first pass")).toBeVisible();
