@@ -313,6 +313,20 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidateRequest" } } }
       responses:
         "200": { description: Rapport de validation, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidation" } } } }
+  /workflows/edit:
+    post:
+      tags: [workflows]
+      operationId: editWorkflow
+      description: >-
+        Applique des opérations typées à un YAML de workflow, greffées dans le texte : le reste du
+        document, commentaires et style compris, ne bouge pas. Rien n'est enregistré ; `inverse`
+        défait les opérations, dans l'ordre où le jouer (ADR 0031).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowEditRequest" } } }
+      responses:
+        "200": { description: Le texte édité, validé, et son inverse, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowEditResult" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /workflows/templates:
     get:
       tags: [workflows]
@@ -1320,6 +1334,35 @@ components:
         on_reject: { type: [string, "null"] }
         timeout_hours: { type: [integer, "null"] }
         sentence: { type: string }
+    WorkflowOperation:
+      type: object
+      required: [op]
+      description: >-
+        Une opération typée. `op` dit laquelle ; les autres champs dépendent d'elle (`name`, `spec`,
+        `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`).
+      properties:
+        op:
+          type: string
+          enum: [add_state, remove_state, rename_state, set_state, add_transition, remove_transition,
+                 set_transition, add_gate, remove_gate, add_actor, remove_actor, set_actor]
+      additionalProperties: true
+    WorkflowEditRequest:
+      type: object
+      required: [yaml, operations]
+      additionalProperties: false
+      properties:
+        yaml: { type: string }
+        operations: { type: array, minItems: 1, items: { $ref: "#/components/schemas/WorkflowOperation" } }
+    WorkflowEditResult:
+      allOf:
+        - $ref: "#/components/schemas/WorkflowValidation"
+        - type: object
+          required: [yaml, diff, inverse, notices]
+          properties:
+            yaml: { type: string }
+            diff: { type: string, description: diff unifié du texte d'origine au texte édité }
+            inverse: { type: array, items: { $ref: "#/components/schemas/WorkflowOperation" } }
+            notices: { type: array, items: { type: string }, description: "ce qu'une opération change au-delà du texte (un état à effet renommé…)" }
     WorkflowIssue:
       type: object
       required: [code, message]

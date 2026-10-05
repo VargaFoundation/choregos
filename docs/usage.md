@@ -159,6 +159,31 @@ curl         $API/projects/acme:hr/workflows                                    
   `workitem.migrated`; if its state changed in between, the migration is refused
   (`workitem.migration_refused`) and the item carries on, on its own version.
 
+### Editing a workflow without rewriting it
+
+The console's map and process view change a workflow through typed operations, grafted into the
+YAML text: everything else — comments, quoting, flow or block style — stays byte for byte
+([ADR 0031](adr/0031-plusieurs-workflows-par-projet.md)). The same call is open to any client:
+
+```bash
+curl -X POST $API/workflows/edit -d '{"yaml": "...", "operations": [
+  {"op": "add_gate", "transition": "t-implement", "gate": "ci_green"},
+  {"op": "rename_state", "from": "triage", "to": "intake"}]}'
+```
+
+| Operations | On |
+| :-- | :-- |
+| `add_state`, `remove_state`, `rename_state`, `set_state` | states — a rename follows every reference |
+| `add_transition`, `remove_transition`, `set_transition` | transitions, by `id` |
+| `add_gate`, `remove_gate` | a transition's guarantees |
+| `add_actor`, `remove_actor`, `set_actor` | actors |
+
+The answer carries the edited `yaml`, its unified `diff`, the validation and the graph, and the
+`inverse` operations, which give back the original bytes. Nothing is saved: the console saves
+with `PUT /projects/{id}/workflows/{name}` and the `base_version` it read. A state or an actor
+still named elsewhere cannot be removed (`422`); renaming a state whose name carries an effect
+(`pr_*`, `merged*`, `deployed_prod*`) is allowed, and said in `notices`.
+
 ### Workflows outside software
 
 The same engine carries work that has no repository. Name your own roles, bring your own
