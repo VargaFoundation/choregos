@@ -158,6 +158,19 @@ def preparer() -> None:
         attendre_l_agent(http, pid, ticket["id"])
 
 
+def attendre_la_proposition(
+    http: httpx.Client, pid: str, proposition: str, *statuts: str, secondes: int = 180
+) -> dict[str, Any]:
+    """Depuis S20-08, une proposition s'exécute dans Temporal, hors de la requête qui la décide : on
+    attend l'état qu'on veut lire (ou le dernier lu au délai)."""
+    fin = time.monotonic() + secondes
+    while True:
+        dossier = dict(verifier_reponse(http.get(f"/projects/{pid}/proposals/{proposition}"), 200))
+        if dossier["status"] in statuts or time.monotonic() > fin:
+            return dossier
+        time.sleep(2)
+
+
 def attendre_l_agent(http: httpx.Client, pid: str, ticket: str, minutes: int = 25) -> None:
     fin = time.monotonic() + minutes * 60
     while time.monotonic() < fin:
@@ -175,10 +188,7 @@ def attendre_l_agent(http: httpx.Client, pid: str, ticket: str, minutes: int = 2
     for p in propositions:
         print(f"\nproposition {p['proposal']} : {p['action_type']} sur {p['target']}")
         print(f"  justification de l'agent : {p['justification']}")
-        print(
-            "  à valider par un humain ré-authentifié : "
-            f"{URL}/api/v1/projects/{pid}/proposals/{p['proposal']}/decision"
-        )
+        print(f"  à décider dans la console, ré-authentifié : {URL}/p/{PROJET}/actions/{p['proposal']}")
     if not propositions:
         print("aucune proposition en attente : lire le journal du run dans la console")
 
@@ -194,7 +204,7 @@ def verifier() -> None:
             for decision in p["decisions"]:
                 print(
                     f"  décision : {decision['decision']} par {decision['by']}, "
-                    f"auth_time {decision['auth_time']}"
+                    f"authentifié {decision.get('auth_age_seconds')} s avant"
                 )
             for effet in p["effects"]:
                 print(f"  PR : {effet.get('url')} (branche {effet.get('head')})")
@@ -212,6 +222,10 @@ def verifier() -> None:
             ),
             201,
         )
+        # La relance ne tranche qu'une preuve DEMANDÉE avant elle : on attend que l'action l'attende.
+        verification = attendre_la_proposition(
+            http, pid, verification["proposal"], "awaiting_evidence", "failed"
+        )
         print(f"vérification {verification['proposal']} : {verification['status']}")
         relance = rapport(
             ligne("reboot-required", "node-1", "ok"),
@@ -227,7 +241,7 @@ def verifier() -> None:
             200,
         )
         print(f"relance du collecteur : {resume}")
-        finale = verifier_reponse(http.get(f"/projects/{pid}/proposals/{verification['proposal']}"), 200)
+        finale = attendre_la_proposition(http, pid, verification["proposal"], "succeeded", "failed")
         print(f"vérification : {finale['status']} ; fait {finale['evidence'][0].get('fact')}")
 
 

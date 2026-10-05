@@ -6,7 +6,7 @@
    justification. Rien n'est encore ouvert.
 5. Un humain valide avec une authentification récente (sinon 401 vers `?reauth=1`) ; la PLATEFORME
    écrit les fichiers et ouvre la PR sur `choregos/<proposition>` par l'adaptateur SCM du cœur. La
-   décision est consignée avec son `auth_time`.
+   décision est consignée avec l'âge de l'authentification (`auth_age_seconds`).
 6. La preuve : `verify_finding_fixed` attend le rapport suivant du collecteur ; `succeeded` seulement
    si la clé du constat en est absente. Une couche absente, une ligne `unreachable`, un rapport
    partiel ou un délai dépassé la font échouer — jamais « clé absente ».
