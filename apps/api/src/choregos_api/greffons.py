@@ -64,6 +64,7 @@ def reinitialiser() -> None:
     """Pour les tests : aucun routeur de greffon, aucun contrôle de geste, aucun outil."""
     _ROUTEURS.clear()
     _FOURNISSEURS_D_OUTILS.clear()
+    _FOURNISSEURS_HUMAINS.clear()
     reinitialiser_les_controles()
 
 
@@ -101,6 +102,46 @@ def declarer_un_fournisseur_d_outils(nom: str, lister: Any, appeler: Any) -> Non
 
 def fournisseurs_d_outils() -> dict[str, FournisseurDOutils]:
     return dict(_FOURNISSEURS_D_OUTILS)
+
+
+# ───────────────────────────── outils servis aux humains, par la porte MCP ─────────────────────────────
+
+
+@dataclass(frozen=True)
+class FournisseurHumain:
+    """Les outils qu'un greffon sert à la porte MCP des clients externes (ADR 0030), avec les droits
+    de l'HUMAIN qui a frappé le jeton — jamais ceux d'un agent de la plateforme.
+
+    - `lister(session, principal, projet, org)` rend des outils au format MCP (`name`,
+      `description`, `inputSchema`), plus `ecriture: bool` : un outil d'écriture n'est annoncé qu'à
+      un jeton `mcp:write` ;
+    - `appeler(session, principal, projet, org, nom, arguments)` rend `(code HTTP, corps)` ; un code
+      ≥ 400 est un refus que le modèle lit ;
+    - `en_attente(session, principal, projet, org)`, facultatif, rend ce qui attend une décision
+      humaine : `[{key, title, kind, question, requested_at, can_decide, decision_path}]`, où
+      `decision_path` est le chemin de la console où la décision se prend.
+
+    Un outil d'un greffon ne prend jamais le nom d'un outil du cœur : la porte l'écarterait.
+    """
+
+    lister: Any
+    appeler: Any
+    en_attente: Any = None
+
+
+_FOURNISSEURS_HUMAINS: dict[str, FournisseurHumain] = {}
+
+
+def declarer_des_outils_pour_les_humains(nom: str, lister: Any, appeler: Any, en_attente: Any = None) -> None:
+    """Appelée par un greffon à son chargement. Deux greffons ne déclarent pas le même nom."""
+    fournisseur = FournisseurHumain(lister, appeler, en_attente)
+    if nom in _FOURNISSEURS_HUMAINS and _FOURNISSEURS_HUMAINS[nom] != fournisseur:
+        raise ValueError(f"fournisseur d'outils pour les humains « {nom} » déjà déclaré")
+    _FOURNISSEURS_HUMAINS[nom] = fournisseur
+
+
+def fournisseurs_humains() -> dict[str, FournisseurHumain]:
+    return dict(_FOURNISSEURS_HUMAINS)
 
 
 # ───────────────────────────── contrôle des gestes humains ─────────────────────────────

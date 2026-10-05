@@ -189,3 +189,122 @@ async def _dispatch(
         if tool["name"] == f"{end['object_type']}_{end['name']}"
     )
     return await objects.linked(session, project_id, ir, source, owner, arguments, CLEARANCE)
+
+
+# ───────────────────────────── servis aux humains, par la porte MCP (ADR 0030) ─────────────────────────────
+#
+# La même ontologie, servie au client MCP d'une PERSONNE — Claude Code, Cursor… — avec SES droits :
+# une action se propose si l'un de ses rôles figure dans `permissions.propose`, pas parce que la
+# plateforme le permet à son agent. Elle ne décide jamais : la porte n'a pas d'heure
+# d'authentification, et `decide` le refuse par construction.
+
+
+def _proposable_par(ir: dict[str, Any], name: str, rang: int) -> bool:
+    action = next((a for a in ir.get("action_types", []) if a["name"] == name), None)
+    if action is None:
+        return False
+    roles = [p.removeprefix("role:") for p in action["propose"] if p.startswith("role:")]
+    if not any(rang >= actions.ONTOLOGY_ROLES.get(r, 3) for r in roles):
+        return False
+    if action["cardinality"] != "none" and not _is_table(ir, action["target_type"]):
+        return False
+    return all(effect["type"] in actions.SERVED_EFFECTS for effect in action["effects"])
+
+
+def served_tools_for(ir: dict[str, Any], rang: int) -> list[dict[str, Any]]:
+    """Les outils servis à un humain de ce rang : les lectures, et les actions qu'IL peut proposer."""
+    served = []
+    for tool in ir.get("mcp_tools", []):
+        kind, source = tool["kind"], tool.get("source")
+        if kind not in SERVED_KINDS:
+            continue
+        if kind in {"search", "get"} and not _is_table(ir, source):
+            continue
+        if kind == "link" and not all(_is_table(ir, end) for end in _link_ends(ir, source) or [""]):
+            continue
+        if kind == "action" and not _proposable_par(ir, str(source), rang):
+            continue
+        served.append(tool)
+    return served
+
+
+async def lister_pour_un_humain(
+    session: AsyncSession, principal: Any, project: Any, org_slug: str
+) -> list[dict[str, Any]]:
+    version = await objects.active_version(session, project.id)
+    if version is None:
+        return []
+    rang = actions._rank(principal, org_slug, project.slug)
+    return [
+        {
+            "name": t["name"],
+            "description": t["description"],
+            "inputSchema": t["input_schema"],
+            # Proposer une action est une écriture : seul un jeton `mcp:write` la voit.
+            "ecriture": t["kind"] == "action",
+        }
+        for t in served_tools_for(version.compiled_ir, rang)
+    ]
+
+
+async def appeler_pour_un_humain(
+    session: AsyncSession, principal: Any, project: Any, org_slug: str, name: str, arguments: dict[str, Any]
+) -> tuple[int, Any]:
+    version = await objects.active_version(session, project.id)
+    if version is None:
+        return 404, {"error": "this project has no active ontology"}
+    ir = version.compiled_ir
+    rang = actions._rank(principal, org_slug, project.slug)
+    tool = next((t for t in served_tools_for(ir, rang) if t["name"] == name), None)
+    if tool is None:
+        return 404, {"error": f"unknown tool {name!r}"}
+    try:
+        jsonschema.validate(arguments, tool["input_schema"])
+    except jsonschema.ValidationError as error:
+        where = "/".join(str(p) for p in error.absolute_path) or "(root)"
+        return 400, {"error": f"argument refused by the schema of {name} at {where}: {error.message}"}
+    try:
+        if tool["kind"] == "action":
+            acteur = actions.Actor(kind="user", id=principal.email, user_id=principal.user_id, via="mcp")
+            return await actions.propose(
+                session, project, version, str(tool["source"]), arguments, acteur, principal, org_slug
+            )
+        if tool["kind"] in {"status", "list"}:
+            return 200, await _proposals(session, project, tool["kind"], arguments)
+        return 200, await _dispatch(session, project.id, ir, tool, arguments)
+    except ToolRefusal as refusal:
+        return refusal.code, {"error": str(refusal)}
+    except actions.Refusal as refusal:
+        return refusal.code, refusal.body
+
+
+async def en_attente_pour_un_humain(
+    session: AsyncSession, principal: Any, project: Any, org_slug: str
+) -> list[dict[str, Any]]:
+    """Les propositions qui attendent une décision, avec la page de la console où elle se prend."""
+    rows = (
+        await session.execute(
+            select(ActionProposal)
+            .where(ActionProposal.project_id == project.id, ActionProposal.status == actions.PENDING)
+            .order_by(ActionProposal.created_at)
+        )
+    ).scalars()
+    rang = actions._rank(principal, org_slug, project.slug)
+    attentes = []
+    for proposal in rows:
+        approvers = (proposal.approval or {}).get("approvers") or []
+        requis = max((actions.ONTOLOGY_ROLES.get(str(a.get("role")), 3) for a in approvers), default=2)
+        proposant = proposal.proposed_by or {}
+        meme_personne = proposant.get("kind") == "user" and proposant.get("id") == principal.email
+        attentes.append(
+            {
+                "key": proposal.id,
+                "title": f"{proposal.action_type} on {', '.join(proposal.target_ids) or 'nothing'}",
+                "kind": "action proposal",
+                "question": proposal.justification,
+                "requested_at": proposal.created_at.isoformat() if proposal.created_at else None,
+                "can_decide": rang >= requis and not meme_personne,
+                "decision_path": f"/p/{project.slug}/proposals/{proposal.id}",
+            }
+        )
+    return attentes

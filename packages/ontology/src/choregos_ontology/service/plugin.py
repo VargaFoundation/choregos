@@ -50,11 +50,25 @@ def brancher() -> None:
     """Appelée par `charger_les_greffons()` au démarrage de l'API ; sans effet si l'essai est inactif."""
     if not actif():
         return
-    from choregos_api.greffons import declarer_un_fournisseur_d_outils, declarer_un_routeur
+    from choregos_api.greffons import (
+        declarer_des_outils_pour_les_humains,
+        declarer_un_fournisseur_d_outils,
+        declarer_un_routeur,
+    )
 
     from choregos_ontology.service import store  # noqa: F401 - inscrit les tables dans le Base du cœur
     from choregos_ontology.service.api import router
-    from choregos_ontology.service.outils import appeler, lister
+    from choregos_ontology.service.outils import (
+        appeler,
+        appeler_pour_un_humain,
+        en_attente_pour_un_humain,
+        lister,
+        lister_pour_un_humain,
+    )
 
     declarer_un_routeur(router)
     declarer_un_fournisseur_d_outils(NOM, lister, appeler)
+    # La porte MCP des clients externes (ADR 0030) : la même ontologie, avec les droits de l'humain.
+    declarer_des_outils_pour_les_humains(
+        NOM, lister_pour_un_humain, appeler_pour_un_humain, en_attente_pour_un_humain
+    )

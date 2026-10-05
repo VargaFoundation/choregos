@@ -71,9 +71,12 @@ class Actor:
     id: str
     run_id: str | None = None
     user_id: str | None = None
+    #: Par où la proposition est arrivée : `mcp` pour la porte des clients externes (ADR 0030).
+    via: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {k: v for k, v in {"kind": self.kind, "id": self.id, "run_id": self.run_id}.items() if v}
+        champs = {"kind": self.kind, "id": self.id, "run_id": self.run_id, "via": self.via}
+        return {k: v for k, v in champs.items() if v}
 
 
 @dataclass(slots=True)

@@ -16,6 +16,16 @@ from choregos_ontology.model import ActionTypeSpec, LinkTypeSpec, ObjectTypeSpec
 TOOL_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RESERVED_TOOLS = frozenset(
     {"ontology_describe", "action_status", "action_list", "sql_query", "dataset_search", "dataset_describe"}
+    # Les outils de la porte MCP du cœur (ADR 0030) : une ontologie ne les masque pas.
+    | {
+        "list_projects",
+        "describe_workflow",
+        "create_work_item",
+        "search_work_items",
+        "get_work_item",
+        "summarize_run",
+        "list_pending_decisions",
+    }
 )
 RESERVED_LINK_NAMES = frozenset({"search", "get", "aggregate", "describe"})
 FILTER_OPERATORS = ["eq", "ne", "lt", "lte", "gt", "gte", "in", "contains", "prefix", "is_null"]
