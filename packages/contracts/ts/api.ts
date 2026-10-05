@@ -337,6 +337,10 @@ export type WorkItemCreate = {
   size?: "S" | "M" | "L" | "XL" | null;
   risk?: "low" | "medium" | "high" | null;
   start?: boolean;
+  /** Le workflow où le ticket naît ; sinon le routage, sinon le défaut (ADR 0031). */
+  workflow?: string | null;
+  /** Lues par les règles de routage. */
+  labels?: Array<string>;
 };
 
 export type Integrations = {

@@ -58,6 +58,8 @@ class WorkItemData(Model):
     url: str | None = None
     state: str | None = None
     labels: list[str] = Field(default_factory=list)
+    #: Le type du ticket dans son tracker (Jira : `issuetype`) — le routage des workflows le lit (ADR 0031).
+    item_type: str | None = None
     size: Size | None = None
     risk: Risk | None = None
     assignees: list[str] = Field(default_factory=list)

@@ -55,6 +55,7 @@ def _body(payload: dict[str, Any]) -> dict[str, Any]:
         "body": text_of_adf(fields.get("description")),
         "url": issue.get("self"),
         "labels": list(fields.get("labels") or []),
+        "item_type": ((fields.get("issuetype") or {}).get("name")),
         "state": ((fields.get("status") or {}).get("name")),
     }
 
