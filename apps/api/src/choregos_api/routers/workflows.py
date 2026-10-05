@@ -6,6 +6,7 @@ from __future__ import annotations
 from choregos_core import checksum, parse_policy, parse_workflow, to_graph
 from choregos_core.dsl import TEMPLATE_NAMES, load_template, template_yaml
 from fastapi import APIRouter
+from sqlalchemy import func, select
 
 from ..audit import record
 from ..db.models import PolicyDef, WorkflowDef
@@ -99,11 +100,32 @@ async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> Workf
             ],
         )
     current = await active_workflow(session, ctx.id)
+    # La version suit la plus haute de CE nom, active ou non : republier un ancien workflow (revenir à
+    # `default-simple`, par exemple) heurtait l'unicité (projet, nom, version) et rendait 500.
+    deja = (
+        await session.execute(
+            select(func.max(WorkflowDef.version)).where(
+                WorkflowDef.project_id == ctx.id, WorkflowDef.name == workflow.metadata.name
+            )
+        )
+    ).scalar()
     version = workflow.metadata.version
-    if current is not None and current.name == workflow.metadata.name and current.version >= version:
-        version = current.version + 1
-    if body.activate and current is not None:
-        current.is_active = False
+    if deja is not None and deja >= version:
+        version = deja + 1
+    if body.activate:
+        # L'alias remplace le défaut ; et une seule version reste active par nom (ADR 0031).
+        actives = (
+            await session.execute(
+                select(WorkflowDef).where(
+                    WorkflowDef.project_id == ctx.id,
+                    WorkflowDef.is_active.is_(True),
+                    WorkflowDef.name.in_({workflow.metadata.name, current.name if current else ""}),
+                )
+            )
+        ).scalars()
+        for ancienne in actives:
+            ancienne.is_active = False
+        await session.flush()
     row = WorkflowDef(
         project_id=ctx.id,
         name=workflow.metadata.name,
@@ -115,6 +137,9 @@ async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> Workf
         is_active=body.activate,
     )
     session.add(row)
+    if body.activate:
+        # Cette route est l'alias du workflow PAR DÉFAUT (ADR 0031) : ce qu'elle publie le devient.
+        ctx.project.default_workflow = row.name
     await session.flush()
     await record(
         session,

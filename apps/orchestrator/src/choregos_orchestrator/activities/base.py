@@ -14,9 +14,10 @@ from typing import Any
 
 from choregos_adapters import AdapterSet, charger_les_greffons
 from choregos_api.adaptateurs import brancher_memoire_lexicale
-from choregos_api.db.models import Connector, Organization, PolicyDef, Project, WorkflowDef, WorkItem
+from choregos_api.db.models import Connector, Organization, PolicyDef, Project, WorkItem
 from choregos_api.db.session import TOUT, session_scope
-from choregos_api.services import policy_model, workflow_model
+from choregos_api.services import default_workflow, policy_model, workflow_model
+from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import PolicyEngine
 from sqlalchemy import select
@@ -35,9 +36,13 @@ class ProjectBundle:
     project: Project
     org_slug: str
     config: ProjectConfig
+    #: Le workflow PAR DÉFAUT du projet (ADR 0031) : celui où naît un ticket qui ne dit pas le sien.
+    #: Pour un ticket existant, c'est `workflow_du_ticket` qui fait foi — jamais celui-ci.
     workflow: Workflow
     policy: Policy
     adapters: AdapterSet
+    #: La version de ce défaut, pour épingler un ticket à sa naissance.
+    workflow_def_id: str | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -71,14 +76,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     if project is None:
         raise ValueError(f"projet inconnu : {project_id}")
     org = await session.get(Organization, project.org_id)
-    workflow_row = (
-        await session.execute(
-            select(WorkflowDef)
-            .where(WorkflowDef.project_id == project.id, WorkflowDef.is_active.is_(True))
-            .order_by(WorkflowDef.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    workflow_row = await default_workflow(session, project.id)
     policy_row = (
         await session.execute(
             select(PolicyDef)
@@ -95,6 +93,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         org_slug=org.slug if org else "",
         config=ProjectConfig.model_validate(project.config),
         workflow=workflow_model(workflow_row),
+        workflow_def_id=workflow_row.id if workflow_row is not None else None,
         policy=policy_model(policy_row),
         adapters=AdapterSet.from_connectors(
             {
@@ -126,6 +125,11 @@ async def cle_de_ticket_interne(session: AsyncSession, bundle: ProjectBundle) ->
     from choregos_api.services import cle_de_ticket_interne as attribuer
 
     return await attribuer(session, bundle.project)
+
+
+async def workflow_du_ticket(session: AsyncSession, item: WorkItem) -> Workflow:
+    """Le workflow où le ticket est né, à sa version (ADR 0031) — à défaut, celui du projet."""
+    return workflow_model(await _workflow_du_ticket(session, item))
 
 
 async def load_work_item(session: AsyncSession, work_item_id: str) -> WorkItem:

@@ -21,21 +21,40 @@ from ..db.models import (
     PolicyDef,
     Project,
     WorkflowDef,
+    WorkItem,
 )
 
 DEFAULT_WORKFLOW = "default-simple"
 DEFAULT_POLICY_PRESET = "solo"
 
 
+async def default_workflow(session: AsyncSession, project_id: str) -> WorkflowDef | None:
+    """La version active du workflow PAR DÉFAUT du projet (ADR 0031).
+
+    Avant, « le workflow du projet » était la version active la plus haute, quel que soit son nom :
+    avec deux workflows actifs, un ticket d'offboarding aurait tourné sous onboarding. Sans défaut
+    nommé (un projet d'avant la 0.14 non migré), on garde l'ancienne règle.
+    """
+    project = await session.get(Project, project_id)
+    requete = select(WorkflowDef).where(WorkflowDef.project_id == project_id, WorkflowDef.is_active.is_(True))
+    if project is not None and project.default_workflow:
+        requete = requete.where(WorkflowDef.name == project.default_workflow)
+    return (await session.execute(requete.order_by(WorkflowDef.version.desc()).limit(1))).scalar_one_or_none()
+
+
 async def active_workflow(session: AsyncSession, project_id: str) -> WorkflowDef | None:
-    return (
-        await session.execute(
-            select(WorkflowDef)
-            .where(WorkflowDef.project_id == project_id, WorkflowDef.is_active.is_(True))
-            .order_by(WorkflowDef.version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    """Déprécié : `default_workflow`, ou `workflow_du_ticket` pour un ticket. Gardé une mineure, pour
+    l'édition entreprise et les greffons qui l'appellent."""
+    return await default_workflow(session, project_id)
+
+
+async def workflow_du_ticket(session: AsyncSession, item: WorkItem) -> WorkflowDef | None:
+    """La version où le ticket est né — jamais celle d'un autre projet ; à défaut, le défaut."""
+    if item.workflow_def_id:
+        epingle = await session.get(WorkflowDef, item.workflow_def_id)
+        if epingle is not None and epingle.project_id == item.project_id:
+            return epingle
+    return await default_workflow(session, item.project_id)
 
 
 async def active_policy(session: AsyncSession, project_id: str) -> PolicyDef | None:
@@ -66,6 +85,8 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
             is_active=True,
         )
         session.add(workflow)
+    if not project.default_workflow:
+        project.default_workflow = workflow.name
     policy = await active_policy(session, project.id)
     if policy is None:
         from choregos_core import preset_yaml

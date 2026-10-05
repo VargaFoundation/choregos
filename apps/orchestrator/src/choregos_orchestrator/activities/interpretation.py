@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_api.services import persist_event
+from choregos_api.services import persist_event, workflow_du_ticket, workflow_model
 from choregos_contracts import EventType
 from choregos_core import utcnow
 from temporalio import activity
@@ -29,8 +29,16 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
         # Un interpréteur qui (re)démarre n'est plus mort : la marque tombe ici, et nulle
         # part ailleurs — c'est la seule activité que tout démarrage traverse.
         item.failure = None
+        # La version où le ticket est né (ADR 0031). Un ticket d'avant l'épingle la reçoit ici, une
+        # fois : rejouer l'activité relit la même. Seul le CORPS de l'activité change — aucune
+        # commande nouvelle dans l'historique, et les historiques archivés rejouent.
+        ligne = await workflow_du_ticket(session, item)
+        if item.workflow_def_id is None and ligne is not None:
+            item.workflow_def_id = ligne.id
+        workflow = workflow_model(ligne)
         return {
-            "workflow": bundle.workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
+            "workflow": workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
+            "workflow_def_id": item.workflow_def_id,
             "state": item.state,
             "ticket_budget_usd": bundle.engine.budget_ticket(item.size),
             "tracker_key": item.tracker_key,
