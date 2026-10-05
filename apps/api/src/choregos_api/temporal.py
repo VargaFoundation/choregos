@@ -34,6 +34,11 @@ def findings_id(project_slug: str) -> str:
     return f"findings-{project_slug}"
 
 
+def action_id(action: str) -> str:
+    """L'identifiant Temporal d'une action gouvernée : un seul workflow par action (ADR 0035)."""
+    return f"action-{action}"
+
+
 def provisioning_id(project_slug: str) -> str:
     return f"prov-{project_slug}"
 
@@ -44,6 +49,7 @@ class TemporalGateway(Protocol):
     async def query(self, workflow_id: str, name: str) -> Any: ...
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def cancel(self, workflow_id: str) -> None: ...
     async def describe(self, workflow_id: str) -> WorkflowState | None: ...
 
@@ -89,6 +95,10 @@ class FakeTemporal:
 
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started[workflow_id] = payload
+        return workflow_id
+
+    async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        self.started.setdefault(workflow_id, payload)  # `action-<id>` : un seul démarrage
         return workflow_id
 
     async def cancel(self, workflow_id: str) -> None:
@@ -138,6 +148,9 @@ class RealTemporal:
 
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("ReleaseTrain", workflow_id, payload)
+
+    async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        return await self._start("ActionWorkflow", workflow_id, payload)
 
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("ProjectProvisioning", workflow_id, payload)

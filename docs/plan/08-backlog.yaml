@@ -1570,3 +1570,12 @@ stories:
     depends_on: [S20-02, S20-03, S20-04, S20-05, S20-06]
     acceptance:
       - "Retirer n'importe quelle brique fait rougir l'e2e"
+  - id: S20-08
+    title: "L'ontologie passe sur les actions du cœur : onto0003 copie action_proposals puis la retire"
+    stream: S20
+    sprint: 11
+    priority: 8
+    size: M
+    depends_on: [S20-01]
+    acceptance:
+      - "Une proposition d'ontologie s'exécute par l'ActionWorkflow ; action_proposals n'existe plus après onto0003, et ses lignes sont dans actions"

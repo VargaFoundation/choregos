@@ -15,6 +15,8 @@ from typing import Any
 import yaml
 
 from .enums import (
+    ActionOrigin,
+    ActionStatus,
     ActorType,
     ApiFormat,
     ConnectorKind,
@@ -150,6 +152,8 @@ def load_openapi() -> dict[str, Any]:
 __all__ = [
     "STAGE_INPUT_SCHEMA",
     "STAGE_RESULT_SCHEMA",
+    "ActionOrigin",
+    "ActionStatus",
     "ActorType",
     "AgentActor",
     "AgentConfig",

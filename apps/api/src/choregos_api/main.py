@@ -26,6 +26,7 @@ from .events import RelaisPostgres
 from .logging import bind, clear, configure_logging, get_logger
 from .metriques import boucle_de_rafraichissement, exposer, requetes_http
 from .routers import (
+    actions,
     admin,
     agents,
     auth,
@@ -253,6 +254,7 @@ def create_app() -> FastAPI:
         projects.router,
         connectors.router,
         org_connectors.router,
+        actions.router,
         workflows.router,
         models.router,
         workitems.router,

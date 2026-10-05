@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from ..activities.interpretation import load_context, record_migration, record_workflow_failure, signal_train
+from .action import ActionWorkflow
 from .evals import EvalMatrix
 from .findings import FindingsTriage
 from .interpreter import WorkflowInterpreter
@@ -14,6 +15,7 @@ from .train import ReleaseTrain
 
 ALL_WORKFLOWS = [
     WorkflowInterpreter,
+    ActionWorkflow,
     ReleaseTrain,
     FindingsTriage,
     ProjectProvisioning,
@@ -27,6 +29,7 @@ WORKFLOW_ACTIVITIES = [load_context, record_workflow_failure, record_migration, 
 __all__ = [
     "ALL_WORKFLOWS",
     "WORKFLOW_ACTIVITIES",
+    "ActionWorkflow",
     "EvalMatrix",
     "FindingsTriage",
     "MemoryIngestion",

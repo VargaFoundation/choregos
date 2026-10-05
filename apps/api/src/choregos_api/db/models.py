@@ -553,6 +553,62 @@ class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):
     policy: Mapped[str] = mapped_column(String(16))
 
 
+class Action(Base, PkMixin, TimestampMixin):
+    """Une action gouvernée (ADR 0035) : proposée, décidée par des humains ré-authentifiés,
+    exécutée par Temporal (`action-<id>`) — jamais dans la requête qui l'approuve. Ses effets
+    sont consignés un à un (`action_effects`) : une reprise ne refait pas ce qui est fait."""
+
+    __tablename__ = "actions"
+    __table_args__ = (Index("ix_actions_project_status", "project_id", "status"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    work_item_id: Mapped[str | None] = mapped_column(
+        ForeignKey("work_items.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    origin: Mapped[str] = mapped_column(String(16))
+    #: ce qu'elle fait, en un nom (`entra.create_user`, `arrivee.comptes`)
+    kind: Mapped[str] = mapped_column(String(128))
+    title: Mapped[str] = mapped_column(String(300))
+    justification: Mapped[str | None] = mapped_column(Text, nullable=True)
+    params: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: [{effect, with, compensate?}] — joués dans l'ordre, compensés à rebours
+    effects: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    #: {kind: user|agent|system, id, via?}
+    proposed_by: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: {approvers: [{role, min}], step_up_minutes, separation_of_duties}
+    approval: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    decisions: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    status: Mapped[str] = mapped_column(String(24), default="pending_approval")
+    result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    temporal_wf_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ActionEffect(Base, PkMixin, TimestampMixin):
+    """Un effet d'une action, sous sa CLÉ (`<action>:<n>`) : consigné AVANT d'être tenté,
+    confirmé après. Une activité rejouée voit la clé faite et ne refait rien ; un effet commencé
+    et non confirmé (un worker tué) est retenté — les effets sont idempotents par construction."""
+
+    __tablename__ = "action_effects"
+    __table_args__ = (UniqueConstraint("action_id", "position", name="uq_action_effects_action_position"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    action_id: Mapped[str] = mapped_column(ForeignKey("actions.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer)
+    key: Mapped[str] = mapped_column(String(128), unique=True)
+    effect: Mapped[str] = mapped_column(String(128))
+    params: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: started | done | compensated | compensation_failed
+    status: Mapped[str] = mapped_column(String(24), default="started")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Agent(Base, PkMixin, TimestampMixin):
     """Un agent de l'organisation : interne (la plateforme le fait tourner) ou externe (un client
     de la porte MCP). Ce qu'il EST vit dans ses versions, immuables ; ici, son identité et son

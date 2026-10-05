@@ -316,6 +316,53 @@ paths:
       description: Retire ce que le projet resserrait ; l'opération revient à la politique de l'organisation.
       responses:
         "204": { description: Retiré }
+  /projects/{id}/actions:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [actions]
+      operationId: listActions
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string } }
+      responses:
+        "200": { description: Les actions du projet et le journal de leurs effets, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Action" } } } } }
+    post:
+      tags: [actions]
+      operationId: proposeAction
+      description: Une action gouvernée en attente de décision (ADR 0035). Ses effets doivent être déclarés (`declarer_un_effet`) ; rien ne s'exécute avant l'approbation.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActionCreate" } } }
+      responses:
+        "201": { description: Proposée, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/actions/{action_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: action_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [actions]
+      operationId: getAction
+      responses:
+        "200": { description: L'action et son journal, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/actions/{action_id}/decision:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: action_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [actions]
+      operationId: decideAction
+      description: Approuver (session humaine récente — 401 `step_up_required` sinon) ou rejeter (avec une raison). Qui propose ne décide pas ; de deux approbations simultanées une seule démarre `action-<id>` dans Temporal, et rien ne s'exécute dans cette requête.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActionDecision" } } }
+      responses:
+        "200": { description: Décidée, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
+        "401": { description: "Authentification trop ancienne : `errors[0].error` vaut `step_up_required`" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/workflow:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1676,6 +1723,79 @@ components:
       required: [policy]
       properties:
         policy: { type: string, enum: [allowed, approval, forbidden] }
+    ActionEffectSpec:
+      type: object
+      required: [effect]
+      properties:
+        effect: { type: string, description: "un effet déclaré : connector.call, ou celui d'un greffon" }
+        with: { type: object, additionalProperties: true, description: "ses paramètres, rendus en Jinja isolé avec `params` et `effects`" }
+        compensate: { type: [object, "null"], additionalProperties: true, description: "{effect, with} : ce qui le défait si une suite échoue (`result` y cite sa réponse)" }
+    ActionApproval:
+      type: object
+      properties:
+        approvers:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string, enum: [developer, release_captain, project_owner, org_admin] }
+              min: { type: integer, minimum: 1, maximum: 5 }
+        step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10 }
+        separation_of_duties: { type: boolean, default: true }
+    ActionCreate:
+      type: object
+      required: [kind, title, effects]
+      properties:
+        kind: { type: string }
+        title: { type: string }
+        justification: { type: [string, "null"] }
+        params: { type: object, additionalProperties: true }
+        effects: { type: array, minItems: 1, items: { $ref: "#/components/schemas/ActionEffectSpec" } }
+        approval: { $ref: "#/components/schemas/ActionApproval" }
+        work_item_id: { type: [string, "null"] }
+    ActionDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        reason: { type: [string, "null"] }
+    ActionEffect:
+      type: object
+      required: [position, key, effect, status]
+      description: Un effet sous sa clé (`<action>:<n>`) — consigné avant d'être tenté, confirmé après.
+      properties:
+        position: { type: integer }
+        key: { type: string }
+        effect: { type: string }
+        status: { type: string, enum: [started, done, compensated, compensation_failed] }
+        attempts: { type: integer }
+        result: { type: [object, "null"], additionalProperties: true }
+        error: { type: [string, "null"] }
+        finished_at: { type: [string, "null"], format: date-time }
+    Action:
+      type: object
+      required: [id, origin, kind, title, status]
+      description: Une action gouvernée (ADR 0035) et le journal de ses effets.
+      properties:
+        id: { type: string }
+        origin: { type: string, enum: [ontology, tool, transition] }
+        kind: { type: string }
+        title: { type: string }
+        justification: { type: [string, "null"] }
+        params: { type: object, additionalProperties: true }
+        effects: { type: array, items: { type: object, additionalProperties: true } }
+        proposed_by: { type: object, additionalProperties: true }
+        approval: { type: object, additionalProperties: true }
+        decisions: { type: array, items: { type: object, additionalProperties: true } }
+        status: { type: string, enum: [pending_approval, rejected, approved, running, succeeded, failed] }
+        result: { type: [object, "null"], additionalProperties: true }
+        error: { type: [string, "null"] }
+        temporal_wf_id: { type: [string, "null"] }
+        work_item_id: { type: [string, "null"] }
+        run_id: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        journal: { type: array, items: { $ref: "#/components/schemas/ActionEffect" } }
     ProjectRequirement:
       type: object
       required: [capability, reasons]

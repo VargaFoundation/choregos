@@ -284,6 +284,28 @@ the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which w
 `packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
 rather than stubbing the discovery.
 
+A plugin also brings the **effects** a governed action can run
+([ADR 0035](adr/0035-actions-gouvernees-dans-le-coeur.md)):
+
+```python
+from choregos_api.effets import EffetRefuse, declarer_un_effet
+
+async def activer_badge(ctx, params):          # ctx: session, action, project
+    badge = await lecteur.activer(params["uid"])   # idempotent: activating twice is one badge
+    if badge.refuse:
+        raise EffetRefuse("badge unknown to the reader")  # final: no retry, the action compensates
+    return {"uid": badge.uid, "active": True}      # recorded under the effect's key
+
+def brancher() -> None:
+    declarer_un_effet("badge.activate", activer_badge)
+```
+
+An effect runs in an activity of `ActionWorkflow`, never in the request that approved the action.
+It **must be idempotent**: a worker may die after the call and before the confirmation, and the
+effect is then attempted again. Raise `EffetRefuse` for what no retry will change; any other
+exception is retried with backoff. Declaring the same function twice is harmless; another under
+the same name stops start-up.
+
 ### Adding a plugin to a published image
 
 A plugin that ships as an image is built **FROM** the community image, which already holds the
