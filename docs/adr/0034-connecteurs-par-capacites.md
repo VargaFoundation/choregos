@@ -22,7 +22,7 @@ a device manager, a carrier, badge readers, a supplier's agent — would do with
 ## Decision
 
 1. **A connector type declares capabilities, not a kind.** `register(..., spec=…)` names its
-   capabilities (`scm`, `tracker`, `identity`, `device_management`, `shipping`, `access_control`,
+   capabilities (`scm`, `tracker`, `identity`, `mdm` (device management), `shipping`, `access_control`,
    `mcp`…), the JSON Schema of its configuration, its secret fields, its operations and its fake.
    `GET /connectors/types` reads the registry; the console renders the configuration from the schema
    (the `SchemaForm` of ADR 0032). A project may hold several connectors, named.
