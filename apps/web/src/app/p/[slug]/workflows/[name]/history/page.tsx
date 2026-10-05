@@ -161,7 +161,15 @@ function Diff({ avant, apres }: { avant?: WorkflowDef; apres?: WorkflowDef }) {
           {morceau.map((ligne, rang) => (
             <div
               key={rang}
-              className={ligne.kind === "add" ? "bg-ok/10 text-ok" : ligne.kind === "del" ? "bg-danger/10 text-danger" : "text-ink-muted"}
+              // Le texte reste à l'encre : la couleur n'est qu'un repère en marge (contraste AA), le
+              // signe et le texte pour lecteur d'écran portent le sens.
+              className={
+                ligne.kind === "add"
+                  ? "border-l-2 border-ok bg-ok/10 pl-1 text-ink"
+                  : ligne.kind === "del"
+                    ? "border-l-2 border-danger bg-danger/10 pl-1 text-ink"
+                    : "pl-1.5 text-ink-muted"
+              }
             >
               <span aria-hidden>{ligne.kind === "add" ? "+ " : ligne.kind === "del" ? "- " : "  "}</span>
               <span className="sr-only">{ligne.kind === "add" ? "added: " : ligne.kind === "del" ? "removed: " : ""}</span>
