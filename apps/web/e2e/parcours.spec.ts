@@ -64,3 +64,21 @@ test("administration : membres et jetons ont un écran", async ({ page }) => {
   await expect(page.getByText(/members of/)).toBeVisible();
   await expect(page.getByRole("button", { name: /mint a token/ })).toBeVisible();
 });
+
+test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async ({ page }) => {
+  await page.goto("/integrations");
+  await expect(page.getByRole("heading", { name: "integrations" })).toBeVisible();
+  await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp");
+  await expect(page.getByTestId("snippet")).toContainText("claude mcp add --transport http choregos");
+  await page.getByRole("button", { name: "create a token for Claude Code" }).click();
+  await expect(page.getByTestId("snippet")).toContainText("chg_demo_jeton_affiche_une_fois");
+  await expect(page.getByTestId("connection-status")).toBeVisible();
+});
+
+test("integrations d'un projet : la porte du projet, et claude.ai dit pourquoi il ne la joint pas", async ({ page }) => {
+  await page.goto("/p/billing-api/integrations/cursor");
+  await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp/projects/varga:billing-api");
+  await page.getByRole("link", { name: "claude.ai" }).click();
+  await expect(page.getByText("not reachable from here yet")).toBeVisible();
+});
+

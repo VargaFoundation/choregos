@@ -465,11 +465,27 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
   if (method === "POST" && path === "/workflows/validate") return workflowValidation as T;
+  if (method === "POST" && path === "/me/tokens") {
+    // Le jeton n'est rendu qu'une fois, à la création : la page Integrations le glisse dans ses extraits.
+    const corps = JSON.parse(String(init.body ?? "{}")) as { name?: string; scopes?: string[]; project?: string | null };
+    return {
+      id: "tok-demo",
+      name: corps.name ?? "demo",
+      created_at: new Date().toISOString(),
+      scopes: corps.scopes ?? ["*"],
+      project: corps.project ?? null,
+      token: "chg_demo_jeton_affiche_une_fois",
+    } as T;
+  }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
     [/^\/edition$/, { edition: "community", features: [], version: "0.13.1" }],
+    [
+      /^\/integrations$/,
+      { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
+    ],
     [/^\/me\/tokens$/, []],
     [/^\/orgs$/, [{ slug: "varga", name: "Varga Foundation", role: "org_admin" }]],
     [/^\/orgs\/[^/]+\/members$/, me.memberships],

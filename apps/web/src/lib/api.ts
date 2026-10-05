@@ -30,6 +30,7 @@ import type {
   CostReport,
   DoraReport,
   Edition,
+  Integrations,
   FindingPage,
   MeDto,
   Memory,
@@ -120,6 +121,8 @@ export const api = {
   me: () => request<MeDto>("/me"),
   /** L'édition qui tourne (ADR 0024) : la console montre ce qu'elle s'autorise. */
   edition: () => request<Edition>("/edition"),
+  /** Où brancher un client MCP (ADR 0030) : l'URL de la porte, pour la page Integrations. */
+  integrations: () => request<Integrations>("/integrations"),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
   loginUrl: (next?: string, as?: string) => {
     const params = new URLSearchParams();

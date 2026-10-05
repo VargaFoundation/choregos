@@ -11,6 +11,7 @@ import { useSession } from "@/lib/session";
 
 const NAV = [
   { href: "/", label: "projects" },
+  { href: "/integrations", label: "integrations" },
   { href: "/admin", label: "administration" },
 ];
 
