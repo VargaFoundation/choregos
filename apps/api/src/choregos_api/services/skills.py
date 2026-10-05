@@ -13,7 +13,6 @@ Ce qui entre est vérifié ICI, une fois, avant d'être une version :
 
 from __future__ import annotations
 
-import hashlib
 import io
 import posixpath
 import re
@@ -22,6 +21,7 @@ import zipfile
 from dataclasses import dataclass
 
 import yaml
+from choregos_contracts import empreinte_de_skill
 
 MAX_FICHIERS = 64
 MAX_OCTETS = 512 * 1024
@@ -127,7 +127,4 @@ def valider(fichiers: dict[str, str], slug: str | None = None) -> Entete:
 
 def empreinte(fichiers: dict[str, str]) -> str:
     """L'empreinte d'une version : le runner la recalcule avant de poser les fichiers."""
-    condense = hashlib.sha256()
-    for chemin in sorted(fichiers):
-        condense.update(chemin.encode("utf-8") + b"\0" + fichiers[chemin].encode("utf-8") + b"\0")
-    return "sha256:" + condense.hexdigest()
+    return empreinte_de_skill(fichiers)

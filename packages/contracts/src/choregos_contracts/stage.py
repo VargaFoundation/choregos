@@ -122,6 +122,27 @@ class Callbacks(Strict):
     run_token: str
 
 
+class SkillRef(Strict):
+    """Une skill que l'agent porte (ADR 0033) : son nom, sa version, son empreinte. Les fichiers
+    viennent de `GET /internal/runs/{id}/skills`, et le runner vérifie l'empreinte avant de les
+    poser — une empreinte fausse arrête le run."""
+
+    slug: str
+    version: int = Field(ge=1)
+    digest: str
+
+
+def empreinte_de_skill(fichiers: dict[str, str]) -> str:
+    """L'empreinte d'une version de skill : l'API la calcule à la publication, le runner la
+    recalcule avant de poser les fichiers. Un seul calcul pour les deux côtés."""
+    import hashlib
+
+    condense = hashlib.sha256()
+    for chemin in sorted(fichiers):
+        condense.update(chemin.encode("utf-8") + b"\0" + fichiers[chemin].encode("utf-8") + b"\0")
+    return "sha256:" + condense.hexdigest()
+
+
 class StageInput(Strict):
     """Ce que l'orchestrateur remet au runner (docs/plan/01 §1.5)."""
 
@@ -144,6 +165,8 @@ class StageInput(Strict):
     context_pack_url: str | None = None
     playbook: PlaybookRef
     tools: ToolsRef = Field(default_factory=ToolsRef)
+    #: Les skills de l'agent du registre (ADR 0033) ; vide pour un playbook.
+    skills: list[SkillRef] = Field(default_factory=list)
     permissions: Permissions = Field(default_factory=Permissions)
     callbacks: Callbacks
 

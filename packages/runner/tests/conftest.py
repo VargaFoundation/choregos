@@ -117,6 +117,11 @@ class FakeInternalClient:
         self.scope_decision = {"decision": "granted", "allowed_paths": []}
         self.ticket = {"key": stage_input.work_item.key, "title": stage_input.work_item.title, "body": ""}
         self.ci_logs = ""
+        #: Les skills que l'API interne livrerait (ADR 0033).
+        self.skills: list[dict[str, Any]] = []
+
+    async def fetch_skills(self) -> list[dict[str, Any]]:
+        return list(self.skills)
 
     async def fetch_input(self) -> StageInput:
         return self.stage_input

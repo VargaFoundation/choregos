@@ -18,6 +18,7 @@ from .base import Backend, LaunchPlan
 
 class CodexBackend(Backend):
     name: ClassVar[str] = "codex"
+    skills_dir: ClassVar[str | None] = ".agents/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp", "agents_md"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
@@ -35,7 +36,11 @@ class CodexBackend(Backend):
         return LaunchPlan(
             command=command,
             env=dict(stage_input.agent.launch.env),
-            files={".codex/config.toml": config, ".mcp.json": self.mcp_config_json(stage_input)},
+            files={
+                ".codex/config.toml": config,
+                ".mcp.json": self.mcp_config_json(stage_input),
+                **stage_input.agent.launch.files,
+            },
             mcp_servers=self.mcp_servers(stage_input),
         )
 
@@ -45,6 +50,7 @@ class CodexBackend(Backend):
 
 class GeminiCliBackend(Backend):
     name: ClassVar[str] = "gemini-cli"
+    skills_dir: ClassVar[str | None] = ".gemini/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
@@ -59,7 +65,10 @@ class GeminiCliBackend(Backend):
         return LaunchPlan(
             command=command,
             env=dict(stage_input.agent.launch.env),
-            files={".gemini/settings.json": json.dumps(settings, indent=2, ensure_ascii=False)},
+            files={
+                ".gemini/settings.json": json.dumps(settings, indent=2, ensure_ascii=False),
+                **stage_input.agent.launch.files,
+            },
             mcp_servers=self.mcp_servers(stage_input),
         )
 
@@ -74,6 +83,7 @@ class GeminiCliBackend(Backend):
 
 class GooseBackend(Backend):
     name: ClassVar[str] = "goose"
+    skills_dir: ClassVar[str | None] = ".goose/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
@@ -88,7 +98,11 @@ class GooseBackend(Backend):
         return LaunchPlan(
             command=command,
             env=dict(stage_input.agent.launch.env),
-            files={".config/goose/config.yaml": config, ".mcp.json": self.mcp_config_json(stage_input)},
+            files={
+                ".config/goose/config.yaml": config,
+                ".mcp.json": self.mcp_config_json(stage_input),
+                **stage_input.agent.launch.files,
+            },
             mcp_servers=self.mcp_servers(stage_input),
         )
 
@@ -102,6 +116,7 @@ class GooseBackend(Backend):
 
 class OpenCodeBackend(Backend):
     name: ClassVar[str] = "opencode"
+    skills_dir: ClassVar[str | None] = ".opencode/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
@@ -134,7 +149,10 @@ class OpenCodeBackend(Backend):
         return LaunchPlan(
             command=command,
             env=dict(stage_input.agent.launch.env),
-            files={"opencode.json": json.dumps(config, indent=2, ensure_ascii=False)},
+            files={
+                "opencode.json": json.dumps(config, indent=2, ensure_ascii=False),
+                **stage_input.agent.launch.files,
+            },
             mcp_servers=self.mcp_servers(stage_input),
         )
 
@@ -181,6 +199,7 @@ class OpenCodeBackend(Backend):
 
 class CopilotCliBackend(Backend):
     name: ClassVar[str] = "copilot-cli"
+    skills_dir: ClassVar[str | None] = ".github/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
@@ -188,7 +207,7 @@ class CopilotCliBackend(Backend):
         return LaunchPlan(
             command=command,
             env=dict(stage_input.agent.launch.env),
-            files={},
+            files=dict(stage_input.agent.launch.files),
             mcp_servers=self.mcp_servers(stage_input),
         )
 

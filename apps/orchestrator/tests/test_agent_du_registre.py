@@ -211,3 +211,36 @@ async def test_un_agent_qui_a_epuise_son_budget_du_jour_ne_lance_plus_de_run(set
     with pytest.raises(ApplicationError, match="budget du jour") as refus:
         await prepare_stage(_plan(setup, agent="coordinateur"))
     assert refus.value.non_retryable and refus.value.type == "admission_refused"
+
+
+async def test_les_skills_de_l_agent_partent_dans_le_stage_input_avec_leur_empreinte(setup: Fixture) -> None:
+    from choregos_api.db.models import AgentVersion, Project, Skill, SkillVersion
+    from choregos_api.db.session import session_scope
+    from choregos_contracts import empreinte_de_skill
+    from choregos_orchestrator.activities.stage import prepare_stage
+    from sqlalchemy import select
+
+    fichiers = {"SKILL.md": "---\nname: procedure-onboarding\ndescription: x\n---\n"}
+    await _agent(setup)
+    async with session_scope() as session:
+        projet = await session.get(Project, setup.project_id)
+        assert projet is not None
+        skill = Skill(org_id=projet.org_id, slug="procedure-onboarding", status="active")
+        session.add(skill)
+        await session.flush()
+        for version in (1, 2):
+            session.add(
+                SkillVersion(
+                    skill_id=skill.id,
+                    org_id=projet.org_id,
+                    version=version,
+                    files=fichiers,
+                    digest=empreinte_de_skill(fichiers),
+                )
+            )
+        version_de_l_agent = (await session.execute(select(AgentVersion))).scalar_one()
+        version_de_l_agent.spec = {**version_de_l_agent.spec, "skills": [{"slug": "procedure-onboarding"}]}
+    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    assert entree["skills"] == [
+        {"slug": "procedure-onboarding", "version": 2, "digest": empreinte_de_skill(fichiers)}
+    ], "la dernière version, à défaut d'une version dite"

@@ -120,3 +120,50 @@ async def test_une_skill_dit_quels_agents_la_portent(client: AsyncClient, admin:
     assert agent.status_code == 201, agent.text
     skill = (await client.get("/api/v1/orgs/varga/skills/procedure-onboarding")).json()
     assert skill["used_by"] == ["coordinateur-onboarding@1"]
+
+
+async def test_le_runner_lit_les_skills_de_son_run_et_d_aucun_autre(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """`GET /internal/runs/{id}/skills` : les fichiers que le `StageInput` nomme, au jeton du run."""
+    from choregos_api.db.models import Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import mint_run_token
+
+    cree = (await client.post("/api/v1/orgs/varga/skills", json={"files": FICHIERS})).json()
+    digest = cree["versions"][0]["digest"]
+    async with session_scope() as session:
+        item = WorkItem(project_id=project["id"], tracker_key="BILLING-9", title="T", state="ready")
+        session.add(item)
+        await session.flush()
+        for run_id, skills in (
+            ("run-avec", [{"slug": "procedure-onboarding", "version": 1, "digest": digest}]),
+            ("run-sans", []),
+        ):
+            session.add(
+                Run(
+                    id=run_id,
+                    work_item_id=item.id,
+                    project_id=project["id"],
+                    stage_role="implement",
+                    status="running",
+                    stage_input={"skills": skills},
+                )
+            )
+    client.cookies.clear()
+    jeton = mint_run_token("run-avec", project_slug="billing-api", work_item_key="BILLING-9", ttl_minutes=30)
+    lues = await client.get(
+        "/api/v1/internal/runs/run-avec/skills", headers={"Authorization": f"Bearer {jeton}"}
+    )
+    assert lues.status_code == 200, lues.text
+    (skill,) = lues.json()
+    assert (skill["slug"], skill["version"], skill["digest"], skill["files"]) == (
+        "procedure-onboarding",
+        1,
+        digest,
+        FICHIERS,
+    )
+    autre = await client.get(
+        "/api/v1/internal/runs/run-sans/skills", headers={"Authorization": f"Bearer {jeton}"}
+    )
+    assert autre.status_code in {401, 403}, "le jeton d'un run ne lit pas un autre run"

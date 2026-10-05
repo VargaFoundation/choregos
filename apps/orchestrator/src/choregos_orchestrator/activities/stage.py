@@ -29,6 +29,7 @@ from choregos_contracts import (
     PlaybookRef,
     ProjectRef,
     RepoRef,
+    SkillRef,
     StageInput,
     StageRole,
     ToolsRef,
@@ -243,6 +244,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
             tools=ToolsRef(mcp=_serveurs_mcp(settings)),
+            skills=await _skills_de_l_agent(session, bundle, agent),
             permissions=Permissions(
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
@@ -416,6 +418,36 @@ async def _budget_du_jour(session: Any, bundle: Any, agent: Any) -> None:
             type="admission_refused",
             non_retryable=True,
         )
+
+
+async def _skills_de_l_agent(session: Any, bundle: Any, agent: Any) -> list[SkillRef]:
+    """Les skills que la version de l'agent porte : leur version (dite, sinon la dernière) et son
+    empreinte, que le runner vérifiera. Une skill absente de la bibliothèque arrête le run."""
+    if agent is None or not agent.spec.skills:
+        return []
+    from choregos_api.db.models import Skill, SkillVersion
+    from temporalio.exceptions import ApplicationError
+
+    refs: list[SkillRef] = []
+    for demandee in agent.spec.skills:
+        requete = (
+            select(SkillVersion)
+            .join(Skill, Skill.id == SkillVersion.skill_id)
+            .where(Skill.org_id == bundle.project.org_id, Skill.slug == demandee.slug)
+        )
+        if demandee.version is not None:
+            requete = requete.where(SkillVersion.version == demandee.version)
+        ligne = (
+            await session.execute(requete.order_by(SkillVersion.version.desc()).limit(1))
+        ).scalar_one_or_none()
+        if ligne is None:
+            raise ApplicationError(
+                f"l'agent `{agent.agent.slug}` porte la skill `{demandee.slug}`, absente de la bibliothèque",
+                type="SkillAbsente",
+                non_retryable=True,
+            )
+        refs.append(SkillRef(slug=demandee.slug, version=ligne.version, digest=ligne.digest))
+    return refs
 
 
 def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:

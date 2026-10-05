@@ -285,6 +285,38 @@ async def get_context(id: str, session: Db, claims: RunAuth) -> ContextPack:
     return ContextPack.empty("")
 
 
+@router.get("/runs/{id}/skills", response_model=list[dict[str, Any]], operation_id="getRunSkills")
+async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, Any]]:
+    """Les fichiers des skills que le `StageInput` du run nomme (ADR 0033).
+
+    Le runner les lit ici, avec son jeton de run, puis recalcule leur empreinte : celle du
+    `StageInput`, posée quand le run a été préparé, fait foi. Une skill de l'organisation du projet,
+    et d'elle seule.
+    """
+    from ..db.models import Skill, SkillVersion
+
+    run, _, project = await _run_and_item(session, id)
+    rendues: list[dict[str, Any]] = []
+    for ref in (run.stage_input or {}).get("skills", []):
+        ligne = (
+            await session.execute(
+                select(SkillVersion)
+                .join(Skill, Skill.id == SkillVersion.skill_id)
+                .where(
+                    Skill.org_id == project.org_id,
+                    Skill.slug == ref["slug"],
+                    SkillVersion.version == ref["version"],
+                )
+            )
+        ).scalar_one_or_none()
+        if ligne is None:
+            raise not_found("Skill du run", f"{ref['slug']}@{ref['version']}")
+        rendues.append(
+            {"slug": ref["slug"], "version": ligne.version, "digest": ligne.digest, "files": ligne.files}
+        )
+    return rendues
+
+
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
 async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
     _run, item, _project = await _run_and_item(session, id)

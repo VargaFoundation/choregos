@@ -49,6 +49,9 @@ class Backend:
     name: ClassVar[str] = "base"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp"})
     model_constraint: ClassVar[tuple[str, ...]] = ()
+    #: Où le backend lit les skills d'un agent (ADR 0033) ; `None` : il n'en lit pas, et le runner
+    #: les pose sous `.choregos/skills` avec leur index dans le prompt.
+    skills_dir: ClassVar[str | None] = None
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
         raise NotImplementedError
