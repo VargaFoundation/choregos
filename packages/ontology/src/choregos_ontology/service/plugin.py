@@ -19,6 +19,8 @@ import os
 from pathlib import Path
 
 NOM = "choregos-ontology"
+#: Le nom sous lequel un gabarit livre une ontologie : `defaults.extensions.ontology`.
+INSTALLATEUR = "ontology"
 ACTIVATION = "CHOREGOS_ESSAI_ONTOLOGIE"
 _ICI = Path(__file__).resolve().parent
 VERSIONS = _ICI / "migrations" / "versions"
@@ -55,12 +57,13 @@ def brancher() -> None:
     from choregos_api.greffons import (
         declarer_des_outils_pour_les_humains,
         declarer_un_fournisseur_d_outils,
+        declarer_un_installateur_de_gabarit,
         declarer_un_routeur,
     )
 
     from choregos_ontology.service import store  # noqa: F401 - inscrit les tables dans le Base du cœur
     from choregos_ontology.service.actions import EFFET, PREUVE, effet_de_l_ontologie, preuve_de_l_ontologie
-    from choregos_ontology.service.api import router
+    from choregos_ontology.service.api import installer_depuis_un_gabarit, router
     from choregos_ontology.service.outils import (
         appeler,
         appeler_pour_un_humain,
@@ -79,3 +82,6 @@ def brancher() -> None:
     declarer_des_outils_pour_les_humains(
         NOM, lister_pour_un_humain, appeler_pour_un_humain, en_attente_pour_un_humain
     )
+    # Un gabarit qui livre une ontologie (`defaults.extensions.ontology`) : elle devient celle du
+    # projet qui naît (S20-09). Sans l'essai actif, le projet naît sans, et l'audit le dit.
+    declarer_un_installateur_de_gabarit(INSTALLATEUR, installer_depuis_un_gabarit)

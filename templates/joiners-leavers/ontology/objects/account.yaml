@@ -1,0 +1,14 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: account, displayName: Compte, description: "Le compte de l'annuaire ouvert pour une personne, et ses groupes.", owner: it}
+spec:
+  datasource: comptes
+  primaryKey: upn
+  titleProperty: upn
+  properties:
+    upn: {type: string, required: true}
+    matricule: {type: string, required: true}
+    actif: {type: boolean, required: true}
+    groupes: {type: "array<string>"}
+    ouvert_le: {type: timestamp}
+    ferme_le: {type: timestamp}

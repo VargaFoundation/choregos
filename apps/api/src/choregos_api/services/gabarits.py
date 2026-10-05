@@ -44,6 +44,8 @@ class Livraison:
     #: l'organisation (S20-07).
     agents: list[dict[str, Any]] = field(default_factory=list)
     skills: list[dict[str, str]] = field(default_factory=list)
+    #: Ce que des greffons installent (S20-09) : nom de l'installateur → fichiers de son dossier.
+    extensions: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 async def manifeste_du_gabarit(
@@ -82,6 +84,10 @@ def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
         routage=list(defauts.get("routing") or []),
         agents=[_document_de_l_agent(str(ref), dossier) for ref in defauts.get("agents") or []],
         skills=[_fichiers_de_la_skill(str(ref), dossier) for ref in defauts.get("skills") or []],
+        extensions={
+            str(nom): _fichiers_du_dossier(str(ref), dossier, f"extension `{nom}`")
+            for nom, ref in (defauts.get("extensions") or {}).items()
+        },
     )
 
 
@@ -107,11 +113,15 @@ def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:
 
 
 def _fichiers_de_la_skill(ref: str, dossier: Path | None) -> dict[str, str]:
-    """Les fichiers d'une skill du gabarit, chemin relatif → texte ; un lien symbolique est refusé,
-    comme dans une archive (la skill ne doit rien lire hors d'elle)."""
+    return _fichiers_du_dossier(ref, dossier, "skill")
+
+
+def _fichiers_du_dossier(ref: str, dossier: Path | None, quoi: str) -> dict[str, str]:
+    """Les fichiers d'un dossier du gabarit, chemin relatif → texte ; un lien symbolique est refusé,
+    comme dans une archive (rien ne doit se lire hors du dossier)."""
     racine = _chemin_du_gabarit(ref, dossier)
     if not racine.is_dir():
-        raise unprocessable(f"`{ref}` : skill absente du gabarit")
+        raise unprocessable(f"`{ref}` : {quoi} absente du gabarit")
     fichiers: dict[str, str] = {}
     for chemin in sorted(racine.rglob("*")):
         if chemin.is_symlink():

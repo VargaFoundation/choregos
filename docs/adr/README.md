@@ -52,3 +52,4 @@ nine records did not exist.
 | [0033](0033-registre-d-agents-et-bibliotheque-de-skills.md) | Agents are registered, versioned objects (internal and external, rights intersected with the human's); skills are a library they carry, declaring no permission | accepted |
 | [0034](0034-connecteurs-par-capacites.md) | Connectors by capability, a policy per operation; a discovered MCP tool is born closed (amends 0014) | accepted |
 | [0035](0035-actions-gouvernees-dans-le-coeur.md) | Governed actions move into the core and run in Temporal; each effect is recorded by key and compensated on failure | accepted |
+| [0036](0036-un-gabarit-livre-ce-qu-un-greffon-installe.md) | A template ships what a plugin installs (`defaults.extensions`); without the plugin the project is born without it, and the audit says so | accepted |

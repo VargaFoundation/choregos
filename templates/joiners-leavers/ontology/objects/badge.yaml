@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: badge, displayName: Badge, description: "Le badge NFC remis en main propre, actif jusqu'au départ.", owner: services-generaux}
+spec:
+  datasource: badges
+  primaryKey: uid
+  titleProperty: uid
+  properties:
+    uid: {type: string, required: true}
+    matricule: {type: string, required: true}
+    actif: {type: boolean, required: true}
+    remis_le: {type: timestamp}
+    coupe_le: {type: timestamp}

@@ -1,0 +1,12 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Ontology
+metadata: {name: rh-arrivees-departs, version: 1.0.0}
+spec:
+  description: >-
+    Le registre de ce qu'une arrivée ouvre et de ce qu'un départ doit fermer : la personne et son
+    contrat, son compte et ses groupes, son poste, son badge. Les workflows agissent sur l'annuaire,
+    le parc et les lecteurs ; ce registre garde ce qu'ils ont ouvert, et le Claude d'une RH
+    l'interroge à la porte MCP — qui détient encore un badge actif parmi les partants ?
+  defaults:
+    sensitivity: internal
+    mcp: {exposeObjects: true, exposeActions: true}

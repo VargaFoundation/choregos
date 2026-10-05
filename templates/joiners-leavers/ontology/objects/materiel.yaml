@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: materiel, displayName: Poste, description: "Le poste confié à une personne, du bon de commande à l'effacement.", owner: it}
+spec:
+  datasource: materiels
+  primaryKey: numero_de_serie
+  titleProperty: modele
+  properties:
+    numero_de_serie: {type: string, required: true}
+    matricule: {type: string, required: true}
+    modele: {type: string}
+    statut: {type: string, enum: [commande, expedie, inscrit, repris, efface], required: true}
+    suivi: {type: string}

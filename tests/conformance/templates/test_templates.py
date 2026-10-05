@@ -207,6 +207,45 @@ def test_les_agents_et_les_skills_du_gabarit_sont_installables(path: Path) -> No
                 )
 
 
+#: Les extensions qu'un gabarit peut livrer (S20-09) : une autre n'aurait personne pour la valider
+#: avant un client — ni, sans doute, pour l'installer.
+EXTENSIONS_CONNUES = {"ontology"}
+#: Ce qu'une preuve de l'ontologie sait collecter hors du SCM (`connector.query` ne lit que ses PR).
+PREUVES_SERVIES = {"object.reread", "collector.rerun"}
+
+
+@pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
+def test_les_extensions_du_gabarit_sont_valides_pour_leur_greffon(path: Path, tmp_path: Path) -> None:
+    """Une ontologie livrée compile sans erreur NI avertissement avec ce que le greffon sait jouer ; ses
+    effets et ses preuves sont servis ; un agent qu'elle autorise à proposer est livré par le gabarit."""
+    from choregos_api.schemas.agents import AgentCreate
+    from choregos_api.services.gabarits import livraison
+
+    livree = livraison(manifest(path), path.parent)
+    inconnues = set(livree.extensions) - EXTENSIONS_CONNUES
+    assert not inconnues, f"extensions que personne ne valide : {sorted(inconnues)}"
+    if "ontology" not in livree.extensions:
+        return
+    from choregos_ontology.compiler import compile_directory
+    from choregos_ontology.service.actions import SERVED_EFFECTS
+    from choregos_ontology.service.api import REGISTRY, _check_package, _write_package
+
+    fichiers = livree.extensions["ontology"]
+    _check_package(fichiers)
+    _write_package(tmp_path, fichiers)
+    compilee, validation = compile_directory(tmp_path, REGISTRY)
+    assert compilee is not None and validation.valid, [i.format() for i in validation.errors]
+    assert not validation.warnings, [i.format() for i in validation.warnings]
+    agents = {AgentCreate.model_validate(document).slug for document in livree.agents}
+    for action in compilee.to_dict()["action_types"]:
+        effets = {e["type"] for e in action["effects"]} - SERVED_EFFECTS
+        assert not effets, f"{action['name']} : effets que le greffon n'exécute pas : {sorted(effets)}"
+        preuves = {p["collect"]["type"] for p in action["evidence"]} - PREUVES_SERVIES
+        assert not preuves, f"{action['name']} : preuves que le greffon ne collecte pas : {sorted(preuves)}"
+        absents = {p.removeprefix("agent:") for p in action["propose"] if p.startswith("agent:")} - agents
+        assert not absents, f"{action['name']} : agents que le gabarit ne livre pas : {sorted(absents)}"
+
+
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_les_entrees_obligatoires_sont_nommees_et_decrites(path: Path) -> None:
     for entry in manifest(path).get("inputs", []):

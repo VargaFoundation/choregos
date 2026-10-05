@@ -1579,3 +1579,12 @@ stories:
     depends_on: [S20-01]
     acceptance:
       - "Une proposition d'ontologie s'exécute par l'ActionWorkflow ; action_proposals n'existe plus après onto0003, et ses lignes sont dans actions"
+  - id: S20-09
+    title: "Un gabarit livre ce qu'un greffon installe : joiners-leavers et son registre"
+    stream: S20
+    sprint: 11
+    priority: 9
+    size: S
+    depends_on: [S20-07, S20-08]
+    acceptance:
+      - "Un projet né de joiners-leavers, greffon actif, a son ontologie ; sans le greffon il naît sans, et l'audit le dit"

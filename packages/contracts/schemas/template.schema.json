@@ -88,6 +88,12 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "les skills installées de même : des dossiers du gabarit, chacun avec son SKILL.md (S20-07)"
+        },
+        "extensions": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+          "additionalProperties": { "type": "string" },
+          "description": "ce qu'un GREFFON installe dans le projet à sa naissance : un nom d'installateur → un dossier du gabarit (`ontology: ./ontology`). Sans greffon pour l'installer, le projet naît sans, et le journal d'audit le dit (S20-09)"
         }
       }
     },

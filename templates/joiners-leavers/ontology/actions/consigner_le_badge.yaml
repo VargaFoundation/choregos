@@ -1,0 +1,33 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: consigner_le_badge
+  displayName: Consigner le badge
+  description: "Inscrit au registre le badge remis en main propre et activé, sous l'UID que la tâche a saisi."
+spec:
+  target: {objectType: collaborateur, cardinality: one}
+  parameters:
+    uid: {type: string, required: true}
+  preconditions:
+    - {name: pas_parti, expr: "target.statut != 'parti'", message: "On n'active pas de badge pour une personne partie."}
+  permissions:
+    propose: [agent:coordinateur-onboarding, role:contributor]
+    approve: policy:rh
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: badge
+        id: "${params.uid}"
+        properties:
+          uid: "${params.uid}"
+          matricule: "${target.matricule}"
+          actif: true
+          remis_le: "${now}"
+    - type: object.update
+      with:
+        objectType: collaborateur
+        id: "${target.matricule}"
+        properties: {statut: present}
+  idempotencyKey: "${params.uid}"

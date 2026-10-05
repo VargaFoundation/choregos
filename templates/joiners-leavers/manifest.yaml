@@ -32,5 +32,9 @@ defaults:
   # Installés dans l'organisation quand un projet naît du gabarit — jamais réécrits s'ils y sont.
   skills: [./skills/procedure-onboarding, ./skills/profils-d-acces]
   agents: [./agents/coordinateur-onboarding.yaml, ./agents/coordinateur-offboarding.yaml]
+  # Installée dans le PROJET par le greffon de l'ontologie, quand il est actif : le registre de ce
+  # qu'une arrivée ouvre et de ce qu'un départ ferme. Sans lui, le projet naît sans (l'audit le dit).
+  extensions:
+    ontology: ./ontology
 inputs: []
 steps: []

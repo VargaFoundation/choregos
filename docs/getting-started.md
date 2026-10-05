@@ -81,6 +81,13 @@ organisation when a project is born from it, in version 1 — never rewritten wh
 there, so what the organisation changed since stays. And it names the organisation connectors its
 workflows call (`requires.org_connectors`: `annuaire: identity`…), for the administrator to declare.
 
+What only a plugin understands, a template ships as an **extension** (`defaults.extensions`, a name →
+a folder of the template): `joiners-leavers` ships its ontology as `ontology: ./ontology`. When the
+project is born, the plugin that declared an installer under that name installs it — an invalid
+package fails the creation, like an invalid workflow. Without such a plugin (the ontology plugin is a
+trial, off unless `CHOREGOS_ESSAI_ONTOLOGIE=1`), the project is born without it, and the audit log
+says so (`template.extension.skip`).
+
 ### Create the project
 
 ```bash
