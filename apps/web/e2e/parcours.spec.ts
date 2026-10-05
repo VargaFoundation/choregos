@@ -266,3 +266,12 @@ test("connecteurs de l'organisation : chaque opération porte sa politique ; un 
   const choix = page.getByLabel("this project's policy for creer_compte");
   await expect(choix.locator("option")).toHaveText(["as the organisation", "approval", "forbidden"]);
 });
+
+test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", async ({ page }) => {
+  await page.goto("/admin/connectors");
+  await expect(page.getByLabel("policy of commander_poste")).toHaveValue("forbidden");
+  await page.getByRole("button", { name: "discover" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "1 new (closed until you open them), 1 changed their schema (closed again)",
+  );
+});

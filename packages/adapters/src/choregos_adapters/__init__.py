@@ -269,6 +269,18 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("master_key",),
     ),
+    ("mcp", "mcp"): ConnectorTypeSpec(
+        "MCP server (Streamable HTTP)",
+        ("mcp",),
+        _objet(
+            {
+                "url": {"type": "string", "description": "the server's MCP endpoint, https"},
+                "timeout_s": {"type": "number", "default": 30},
+            },
+            ("url",),
+        ),
+        ("token",),
+    ),
     ("notify", "slack"): ConnectorTypeSpec(
         "Slack",
         ("notify",),
@@ -276,6 +288,22 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("webhook_url", "bot_token"),
     ),
 }
+
+
+#: Le serveur MCP des faux (`CHOREGOS_FAKES=1`) : un seul, que les tests et la démo scriptent.
+FAUX_MCP: Any = None
+
+
+def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
+    from .fakes.mcp import FakeMcpServer
+    from .mcp import ClientMcp
+
+    global FAUX_MCP  # noqa: PLW0603 - un faux partagé, comme les autres faux de la plateforme
+    if FAUX_MCP is None:
+        FAUX_MCP = FakeMcpServer()
+    return ClientMcp(
+        cfg.get("url", "http://fake-mcp.test/mcp"), token=cfg.get("token", ""), transport=FAUX_MCP.transport()
+    )
 
 
 def _register_builtins() -> None:
@@ -299,6 +327,7 @@ def _register_builtins() -> None:
     register("memory", "fake")(lambda cfg: FakeMemory())
     register("gateway", "fake")(lambda cfg: FakeGateway())
     register("notify", "fake")(lambda cfg: FakeNotifier())
+    register("mcp", "fake")(_client_du_faux_mcp)
 
     # ───────────────── implémentations réelles (jour 1) ─────────────────
     from .cd.argocd import ArgoCdAdapter
@@ -439,6 +468,14 @@ def _register_builtins() -> None:
             team_id=cfg.get("team_id"),
             internal_prices=cfg.get("internal_prices", {}),
             enterprise_tags=cfg.get("enterprise_tags", False),
+        )
+    )
+    # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
+    from .mcp import ClientMcp
+
+    register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(
+        lambda cfg: ClientMcp(
+            cfg["url"], token=cfg.get("token", ""), timeout_s=float(cfg.get("timeout_s", 30))
         )
     )
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(

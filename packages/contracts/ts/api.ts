@@ -190,6 +190,13 @@ export type ConnectorOperation = {
   description?: string | null;
 };
 
+export type ConnectorDiscovery = {
+  added?: Array<string>;
+  changed?: Array<string>;
+  removed?: Array<string>;
+  unchanged?: number;
+};
+
 export type OrgConnector = {
   name: string;
   kind: string;
@@ -1167,6 +1174,7 @@ export interface Operations {
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
+  discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";

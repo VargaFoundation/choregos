@@ -19,9 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..db.models import ConnectorOperation, Organization, OrgConnector, ProjectOperationPolicy
 from ..deps import Db, Me, ProjectCtx
-from ..errors import conflict, forbidden, not_found, unprocessable
+from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
 from ..schemas import (
+    ConnectorDiscovery,
     OperationDto,
     OperationPatch,
     OrgConnectorCreate,
@@ -224,6 +225,89 @@ async def update_operation(
         **body.model_dump(exclude_unset=True),
     )
     return OperationDto.model_validate(ligne)
+
+
+@router.post(
+    "/orgs/{org}/connectors/{name}/discover",
+    response_model=ConnectorDiscovery,
+    operation_id="discoverConnectorOperations",
+)
+async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -> ConnectorDiscovery:
+    """Demande au serveur ses outils et en tire le diff (ADR 0034).
+
+    Un outil NOUVEAU naît fermé (`forbidden`) : un serveur n'ajoute pas une capacité dans le dos de
+    l'administrateur. Un outil dont le schéma d'entrée DÉRIVE est refermé : un `commander_poste`
+    qui accepte soudain une quantité n'est plus l'opération qu'on avait ouverte. Un outil que le
+    serveur ne propose plus disparaît, avec ce que les projets en resserraient."""
+    import httpx
+    from choregos_adapters import build, configuration_resolue
+    from choregos_adapters.mcp import ErreurMcp, empreinte_du_schema
+    from choregos_core import utcnow
+    from choregos_core.secrets import SecretIntrouvable
+
+    _administrer(principal, org)
+    organisation = await _organisation(session, org)
+    instance = await _instance(session, organisation, name)
+    try:
+        config = configuration_resolue(instance.kind, instance.type, instance.config, instance.secret_refs)
+        lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
+        if lister is None:
+            raise unprocessable(f"`{instance.type}` ne découvre pas ses opérations : son type les déclare")
+        outils = await lister()
+    except (ErreurMcp, SecretIntrouvable, httpx.HTTPError) as panne:
+        instance.status, instance.last_check_at, instance.last_error = "error", utcnow(), str(panne)[:1000]
+        # La réponse est une erreur, et la requête serait annulée avec elle : l'état du connecteur,
+        # lui, doit rester — l'écran dit pourquoi il est en panne. Rien ne suit cette validation.
+        await session.commit()
+        raise upstream(instance.name, str(panne)[:500]) from panne
+    existantes = {
+        op.name: op
+        for op in (
+            await session.execute(
+                select(ConnectorOperation).where(ConnectorOperation.connector_id == instance.id)
+            )
+        ).scalars()
+    }
+    diff = ConnectorDiscovery()
+    for outil in outils:
+        empreinte = empreinte_du_schema(outil.input_schema)
+        acces = "read" if outil.read_only else "write"
+        operation = existantes.pop(outil.name, None)
+        if operation is None:
+            session.add(
+                ConnectorOperation(
+                    org_id=organisation.id,
+                    connector_id=instance.id,
+                    name=outil.name,
+                    access=acces,
+                    policy="forbidden",
+                    groups=[],
+                    schema_digest=empreinte,
+                    description=outil.description or None,
+                )
+            )
+            diff.added.append(outil.name)
+        elif operation.schema_digest != empreinte or operation.access != acces:
+            operation.policy, operation.schema_digest, operation.access = "forbidden", empreinte, acces
+            operation.description = outil.description or operation.description
+            diff.changed.append(outil.name)
+        else:
+            diff.unchanged += 1
+    for nom, operation in existantes.items():
+        await session.delete(operation)
+        diff.removed.append(nom)
+    instance.status, instance.last_check_at, instance.last_error = "ok", utcnow(), None
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "org.connector.discover",
+        org_id=organisation.id,
+        target_type="org_connector",
+        target_id=instance.id,
+        **diff.model_dump(),
+    )
+    return diff
 
 
 # ───────────────────────────── ce qu'un projet en voit, et resserre ─────────────────────────────
