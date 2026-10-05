@@ -1,5 +1,8 @@
 enabled: true
 image:
+  # Vide : `global.imageRegistry`. Un autre registre — les images `-ee` de l'édition entreprise,
+  # servies par un projet privé — se pose ici, composant par composant.
+  registry: ""
   repository: choregos-orchestrator
   tag: ""
   digest: ""
