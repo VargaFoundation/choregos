@@ -238,15 +238,16 @@ async def _prevenir_le_ticket(session: AsyncSession, projet: Project, action: Ac
     l'attend (`action_settled`) ; celle qui réussit ou échoue le fait depuis l'`ActionWorkflow`."""
     if action.origin != ActionOrigin.TRANSITION.value or action.work_item_id is None:
         return
-    item = await session.get(WorkItem, action.work_item_id)
-    if item is None:
-        return
     from ..temporal import get_temporal, interpreter_id
 
+    cible = (action.proposed_by or {}).get("workflow_id")
+    if not cible:
+        item = await session.get(WorkItem, action.work_item_id)
+        if item is None:
+            return
+        cible = interpreter_id(projet.slug, item.tracker_key)
     await get_temporal().signal(
-        interpreter_id(projet.slug, item.tracker_key),
-        "action_settled",
-        {"action_id": action.id, "status": action.status},
+        str(cible), "action_settled", {"action_id": action.id, "status": action.status}
     )
 
 

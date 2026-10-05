@@ -68,6 +68,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           <DecisionBar
             itemId={id}
             kind={data.pending_request.kind}
+            request={data.pending_request}
             onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
           />
         </Card>

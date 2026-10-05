@@ -2363,10 +2363,12 @@ components:
       required: [kind]
       properties:
         request_id: { type: [string, "null"] }
-        kind: { type: string, enum: [approve, reject, answer, scope_change] }
+        kind: { type: string, enum: [approve, reject, answer, scope_change, complete] }
         answer: { type: [string, "null"] }
         reason: { type: [string, "null"] }
         granted_paths: { type: array, items: { type: string } }
+        values: { type: object, additionalProperties: true, description: "`complete` : les valeurs du formulaire de la tâche, versées dans les champs du ticket." }
+        attested: { type: boolean, default: false, description: "`complete` : la personne atteste la phrase de la tâche." }
     HumanRequest:
       type: object
       required: [id, kind, requested_at]
@@ -2374,7 +2376,7 @@ components:
         id: { type: string }
         work_item_id: { type: string }
         transition_id: { type: [string, "null"] }
-        kind: { type: string, enum: [approval, question, scope_change] }
+        kind: { type: string, enum: [approval, question, scope_change, task] }
         payload: { type: object, additionalProperties: true }
         requested_at: { type: string, format: date-time }
         due_at: { type: [string, "null"], format: date-time }

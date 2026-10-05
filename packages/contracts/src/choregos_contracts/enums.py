@@ -128,6 +128,9 @@ class HumanRequestKind(StrEnum):
     APPROVAL = "approval"
     QUESTION = "question"
     SCOPE_CHANGE = "scope_change"
+    #: Un geste qu'une personne FAIT — remettre un badge, déballer un poste —, avec ses valeurs et
+    #: ce qu'elle atteste (S20-06).
+    TASK = "task"
 
 
 class MemoryKind(StrEnum):

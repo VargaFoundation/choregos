@@ -156,6 +156,37 @@ async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
     return await chronologie(session, item)
 
 
+async def _completer_la_tache(
+    session: Any, item: WorkItem, demande: HumanRequest, body: DecisionRequest
+) -> tuple[dict[str, Any], str | None]:
+    """Une tâche faite (S20-06) : ses valeurs validées par SON formulaire — rien qui n'y soit —,
+    l'attestation quand elle en demande une, puis les valeurs versées dans les champs du ticket,
+    validés à leur tour par le workflow épinglé. La décision les garde, avec la phrase attestée telle
+    qu'elle a été montrée : c'est la preuve."""
+    import jsonschema
+
+    payload = dict(demande.payload or {})
+    formulaire = dict(payload.get("form") or {})
+    hors = sorted(set(body.values) - set(formulaire.get("properties") or {}))
+    if hors:
+        raise unprocessable(f"hors du formulaire de la tâche : {', '.join(hors)}")
+    erreurs = sorted(
+        jsonschema.Draft202012Validator(formulaire).iter_errors(body.values), key=lambda e: list(e.path)
+    )
+    if erreurs:
+        raise unprocessable(
+            "la tâche n'est pas remplie", [{"loc": ["values", *e.path], "msg": e.message} for e in erreurs]
+        )
+    attest = payload.get("attest")
+    if attest and not body.attested:
+        raise unprocessable(f"la tâche demande d'attester : « {attest} »")
+    workflow = workflow_model(await workflow_du_ticket(session, item))
+    champs = {**(item.fields or {}), **body.values}
+    valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
+    item.fields = champs
+    return dict(body.values), (str(attest) if attest else None)
+
+
 @router.post(
     "/work-items/{id}/decisions",
     response_model=HumanRequestDto,
@@ -198,19 +229,31 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         ),
     )
 
+    tache = request_row.kind == HumanRequestKind.TASK.value
+    if body.kind == "complete" and not tache:
+        raise unprocessable("seule une tâche se complète (`complete`) ; ici : approve, reject ou answer")
+    if tache and body.kind not in {"complete", "reject"}:
+        raise unprocessable("une tâche se complète (`complete`, avec ses valeurs) ou se renvoie (`reject`)")
+    valeurs, attestation = (
+        await _completer_la_tache(session, item, request_row, body) if body.kind == "complete" else ({}, None)
+    )
+
     kind_map = {
         "approve": HumanRequestKind.APPROVAL,
         "reject": HumanRequestKind.APPROVAL,
         "answer": HumanRequestKind.QUESTION,
         "scope_change": HumanRequestKind.SCOPE_CHANGE,
+        "complete": HumanRequestKind.TASK,
     }
     decision = HumanDecision(
         request_id=request_row.id,
-        kind=kind_map[body.kind],
-        approved=body.kind in {"approve", "scope_change"} if body.kind != "reject" else False,
+        kind=HumanRequestKind.TASK if tache else kind_map[body.kind],
+        approved=body.kind in {"approve", "scope_change", "complete"} if body.kind != "reject" else False,
         answer=body.answer,
         granted_paths=body.granted_paths,
         reason=body.reason,
+        values=valeurs,
+        attestation=attestation,
         decided_by=principal.email,
         channel="web",
     )
@@ -228,6 +271,7 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         subject=item.tracker_key,
         kind=body.kind,
         by=principal.email,
+        **({"fields": sorted(valeurs), "attestation": attestation} if tache else {}),
     )
     await record(
         session,

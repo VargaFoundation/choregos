@@ -59,6 +59,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_roles_connus(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
+    _check_tasks(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -141,6 +142,49 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 [*chemin, "action", "not_before"],
                 source,
             )
+
+
+def _check_tasks(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """Une tâche (S20-06) est faite par une PERSONNE ; son formulaire est un JSON Schema d'objet, et
+    chacune de ses propriétés est un champ que le workflow déclare : les valeurs y sont versées, et
+    une action suivante les lit."""
+    champs = dict((wf.metadata.inputs or {}).get("properties") or {})
+    for index, t in enumerate(wf.transitions):
+        if t.task is None:
+            continue
+        chemin: list[str | int] = ["transitions", index, "task"]
+        if not isinstance(wf.actors.get(t.by) if t.by else None, HumanActor):
+            report.error(
+                "task.not_human",
+                "une tâche se fait par une personne : `by:` un acteur `human`",
+                chemin,
+                source,
+            )
+        import jsonschema
+
+        try:
+            jsonschema.Draft202012Validator.check_schema(t.task.form)
+        except jsonschema.SchemaError as erreur:
+            report.error("task.form_invalid", f"le formulaire n'est pas un JSON Schema : {erreur.message}",
+                         [*chemin, "form"], source)  # fmt: skip
+            continue
+        proprietes = t.task.form.get("properties") or {}
+        if t.task.form.get("type", "object") != "object" or not proprietes:
+            report.error(
+                "task.form_invalid",
+                "le formulaire décrit un objet, et au moins un champ à remplir",
+                [*chemin, "form"],
+                source,
+            )
+            continue
+        for nom in proprietes:
+            if nom not in champs:
+                report.error(
+                    "task.field_unknown",
+                    f"le formulaire remplit `fields.{nom}`, que `metadata.inputs` ne déclare pas",
+                    [*chemin, "form", "properties", nom],
+                    source,
+                )
 
 
 def _check_references(

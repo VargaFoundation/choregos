@@ -136,10 +136,13 @@ class TimelineEntry(Dto):
 
 class DecisionRequest(Dto):
     request_id: str | None = None
-    kind: Literal["approve", "reject", "answer", "scope_change"]
+    kind: Literal["approve", "reject", "answer", "scope_change", "complete"]
     answer: str | None = None
     reason: str | None = None
     granted_paths: list[str] = Field(default_factory=list)
+    #: `complete` : les valeurs du formulaire de la tâche, et l'attestation (S20-06).
+    values: dict[str, Any] = Field(default_factory=dict)
+    attested: bool = False
 
 
 class WorkItemAction(Dto):

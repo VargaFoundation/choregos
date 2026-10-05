@@ -41,6 +41,19 @@ from .evenements import persist_event
 from .routage import Naissance, nouveau_ticket
 
 
+def _detail_de_la_decision(decision: dict[str, Any]) -> str:
+    """Ce qu'une décision dit d'elle-même ; une tâche, sa preuve : la phrase attestée et les valeurs."""
+    morceaux = []
+    if decision.get("attestation"):
+        morceaux.append(f"attesté : « {decision['attestation']} »")
+    valeurs = dict(decision.get("values") or {})
+    if valeurs:
+        morceaux.append(", ".join(f"{nom} = {valeur}" for nom, valeur in sorted(valeurs.items())))
+    if decision.get("reason"):
+        morceaux.append(str(decision["reason"]))
+    return " — ".join(morceaux)
+
+
 def totals_from(raw: dict[str, Any] | None) -> Totals:
     return Totals.model_validate(raw or {})
 
@@ -371,7 +384,7 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
                     ts=req.decided_at,
                     kind="decision",
                     title=f"décision : {(req.decision or {}).get('kind', 'répondu')}",
-                    detail=str((req.decision or {}).get("reason") or ""),
+                    detail=_detail_de_la_decision(req.decision or {}),
                     actor=req.decided_by,
                     actor_kind="user",
                     ref_id=req.id,

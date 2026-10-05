@@ -267,7 +267,7 @@ def test_un_gabarit_qui_sort_du_bac_a_sable_est_un_refus_pas_une_panne() -> None
 async def test_un_rejet_previent_le_ticket_qui_attend(
     client: AsyncClient, project: dict[str, Any], graph: Any
 ) -> None:
-    from choregos_api.temporal import get_temporal, interpreter_id
+    from choregos_api.temporal import get_temporal
 
     pid = project["id"]
     await _annuaire(client)
@@ -279,9 +279,6 @@ async def test_un_rejet_previent_le_ticket_qui_attend(
         json={"decision": "reject", "reason": "Léa ne vient plus"},
     )
     assert rejet.status_code == 200 and rejet.json()["status"] == "rejected", rejet.text
-    attendu = (
-        interpreter_id(project["slug"], ticket["tracker_key"]),
-        "action_settled",
-        {"action_id": identifiant, "status": "rejected"},
-    )
+    # L'interpréteur que la proposition a consigné : c'est lui qui attend (S20-06).
+    attendu = ("wi-x", "action_settled", {"action_id": identifiant, "status": "rejected"})
     assert attendu in get_temporal().signals  # type: ignore[attr-defined]
