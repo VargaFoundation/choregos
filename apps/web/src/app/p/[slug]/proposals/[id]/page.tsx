@@ -54,7 +54,7 @@ export default function ProposalPage({ params }: { params: Promise<{ slug: strin
             <dd>{p.target.length ? p.target.map((t) => <Code key={t}>{t}</Code>) : "—"}</dd>
             <dt className="text-ink-muted">parameters</dt>
             <dd>
-              <pre className="overflow-x-auto text-xs">{JSON.stringify(p.params, null, 2)}</pre>
+              <pre className="whitespace-pre-wrap break-all text-xs">{JSON.stringify(p.params, null, 2)}</pre>
             </dd>
           </dl>
         </Card>
