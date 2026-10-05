@@ -375,6 +375,12 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     scopes: Mapped[list[str]] = mapped_column(Json, default=list)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Un jeton MCP peut être lié à un projet : il ne voit alors que lui (ADR 0030).
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: Le client du dernier appel (`User-Agent`, tronqué) : la page Integrations dit « connecté ».
+    last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class MemoryFact(Base, PkMixin, TimestampMixin):

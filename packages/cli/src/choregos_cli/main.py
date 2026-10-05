@@ -108,23 +108,39 @@ def orgs_create(slug: str, name: Annotated[str | None, typer.Option()] = None) -
 def tokens_create(
     name: Annotated[str, typer.Option(prompt=True)],
     expires_in_days: Annotated[int, typer.Option()] = 90,
+    scope: Annotated[
+        list[str] | None,
+        typer.Option(help="`*` (API REST et CLI, par défaut), ou `mcp:read` / `mcp:write` (porte MCP)"),
+    ] = None,
+    project: Annotated[str | None, typer.Option(help="`org:slug` : borne un jeton MCP à un projet")] = None,
 ) -> None:
     """Émet un jeton d'API pour l'appelant. Le clair n'est affiché qu'ICI, une fois."""
-    token = client().post("/me/tokens", json={"name": name, "expires_in_days": expires_in_days})
-    console.print(f"[green]✓[/green] jeton `{token['name']}` (expire {token.get('expires_at') or 'jamais'})")
+    corps: dict[str, object] = {"name": name, "expires_in_days": expires_in_days, "scopes": scope or ["*"]}
+    if project:
+        corps["project"] = project
+    token = client().post("/me/tokens", json=corps)
+    portee = ", ".join(token.get("scopes") or ["*"])
+    console.print(
+        f"[green]✓[/green] jeton `{token['name']}` ({portee}"
+        f"{', projet ' + token['project'] if token.get('project') else ''}"
+        f", expire {token.get('expires_at') or 'jamais'})"
+    )
     console.print(token["token"])
 
 
 @tokens_app.command("list")
 def tokens_list() -> None:
-    table = Table("id", "nom", "créé", "expire", "dernier usage")
+    table = Table("id", "nom", "portée", "projet", "créé", "expire", "dernier usage", "client")
     for token in client().get("/me/tokens"):
         table.add_row(
             token["id"],
             token["name"],
+            ", ".join(token.get("scopes") or ["*"]),
+            token.get("project") or "—",
             token["created_at"],
             token.get("expires_at") or "—",
             token.get("last_used_at") or "—",
+            token.get("last_client") or "—",
         )
     console.print(table)
 
