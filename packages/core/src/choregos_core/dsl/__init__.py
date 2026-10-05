@@ -12,6 +12,7 @@ from choregos_contracts import Workflow
 from .engine import Decision, WorkflowEngine
 from .graph import to_graph, to_mermaid
 from .parser import checksum, dump_workflow, parse_workflow, parse_workflow_file
+from .process import RESUMES, to_process
 from .validator import ValidationReport, validate_workflow
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -79,6 +80,7 @@ def template_yaml(name: str) -> str:
 
 
 __all__ = [
+    "RESUMES",
     "TEMPLATES_DIR",
     "TEMPLATE_NAMES",
     "Decision",
@@ -96,5 +98,6 @@ __all__ = [
     "template_yaml",
     "to_graph",
     "to_mermaid",
+    "to_process",
     "validate_workflow",
 ]

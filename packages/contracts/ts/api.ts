@@ -223,6 +223,28 @@ export type WorkflowValidation = {
   errors: Array<WorkflowIssue>;
   warnings: Array<WorkflowIssue>;
   graph?: WorkflowGraph;
+  process?: Array<ProcessStep>;
+};
+
+/** Une transition dite en clair — la vue « processus » (ADR 0031). */
+export type ProcessStep = {
+  id: string;
+  from: string;
+  from_display?: string;
+  to: string;
+  to_display?: string;
+  actor: string;
+  actor_type: "agent" | "human" | "system" | "release_train";
+  who: string;
+  outputs?: Array<string>;
+  gates?: Array<{
+    name?: string;
+    summary?: string;
+  }>;
+  on_fail?: string | null;
+  on_reject?: string | null;
+  timeout_hours?: number | null;
+  sentence: string;
 };
 
 export type WorkflowIssue = {

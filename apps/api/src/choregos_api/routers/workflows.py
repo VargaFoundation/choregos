@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core import parse_policy, parse_workflow, to_graph
+from choregos_core import parse_policy, parse_workflow, to_graph, to_process
 from choregos_core.dsl import TEMPLATE_NAMES, load_template, template_yaml
 from fastapi import APIRouter, Response, status
 from sqlalchemy import func, select
@@ -70,6 +70,7 @@ async def validate(body: WorkflowValidateRequest) -> WorkflowValidation:
         errors=[WorkflowIssue(**issue.to_dict()) for issue in report.errors],
         warnings=[WorkflowIssue(**issue.to_dict()) for issue in report.warnings],
         graph=to_graph(workflow),
+        process=to_process(workflow),
     )
 
 

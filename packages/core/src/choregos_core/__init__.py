@@ -60,6 +60,7 @@ from .dsl import (
     template_yaml,
     to_graph,
     to_mermaid,
+    to_process,
     validate_workflow,
 )
 from .errors import (
@@ -174,6 +175,7 @@ __all__ = [
     "template_yaml",
     "to_graph",
     "to_mermaid",
+    "to_process",
     "utcnow",
     "validate_workflow",
 ]

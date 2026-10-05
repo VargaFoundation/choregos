@@ -81,6 +81,8 @@ class WorkflowValidation(Dto):
     errors: list[WorkflowIssue] = Field(default_factory=list)
     warnings: list[WorkflowIssue] = Field(default_factory=list)
     graph: dict[str, Any] | None = None
+    #: La vue « processus » : chaque transition dite en clair (ADR 0031).
+    process: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class WorkflowTemplateDto(Dto):
