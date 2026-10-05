@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/ui-manifest.schema.json",
+  "title": "AdminSection",
+  "description": "Une section d'administration déclarée par un greffon, en DONNÉES : la console la rend avec ses propres blocs, aucun code du greffon n'y tourne (ADR 0032). Les chemins sont relatifs à /api/v1 ; `{org}` vaut l'organisation courante, `{id}` l'identifiant de la ligne.",
+  "type": "object",
+  "required": ["id", "title", "scope", "permission", "blocks"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,62}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "scope": { "enum": ["platform", "organisation"] },
+    "permission": { "type": "string", "description": "une permission du cœur, ex. member:manage ; platform:admin pour la portée plateforme" },
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/form" },
+          { "$ref": "#/$defs/table" },
+          { "$ref": "#/$defs/action" },
+          { "$ref": "#/$defs/secret_once" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "path": { "type": "string", "pattern": "^/[A-Za-z0-9_{}/.:-]*$" },
+    "form": {
+      "type": "object",
+      "required": ["kind", "title", "schema", "read", "write"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "form" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "schema": { "type": "object", "description": "le JSON Schema des valeurs ; la console en tire le formulaire" },
+        "read": { "$ref": "#/$defs/path" },
+        "write": { "$ref": "#/$defs/path" },
+        "write_method": { "enum": ["PUT", "PATCH", "POST"], "default": "PUT" }
+      }
+    },
+    "column": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string" },
+        "label": { "type": "string" },
+        "format": { "enum": ["text", "date", "badge", "code"], "default": "text" }
+      }
+    },
+    "table": {
+      "type": "object",
+      "required": ["kind", "title", "list", "columns"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "table" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "list": { "$ref": "#/$defs/path" },
+        "row_key": { "type": "string", "default": "id" },
+        "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/column" } },
+        "row_actions": { "type": "array", "items": { "$ref": "#/$defs/action" } }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["kind", "label", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "action" },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "path": { "$ref": "#/$defs/path" },
+        "method": { "enum": ["POST", "PUT", "PATCH", "DELETE"], "default": "POST" },
+        "confirm": { "type": "string", "description": "la phrase à confirmer avant d'agir" },
+        "danger": { "type": "boolean", "default": false },
+        "reauth": { "type": "boolean", "default": false, "description": "le geste exige une authentification fraîche" },
+        "params": { "type": "object", "description": "le JSON Schema des paramètres demandés avant d'agir" }
+      }
+    },
+    "secret_once": {
+      "type": "object",
+      "required": ["kind", "label", "path", "secret_field"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "secret_once" },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "path": { "$ref": "#/$defs/path" },
+        "method": { "enum": ["POST", "PUT"], "default": "POST" },
+        "confirm": { "type": "string" },
+        "params": { "type": "object" },
+        "secret_field": { "type": "string", "description": "le champ de la réponse qui porte le secret, montré une fois et jamais gardé" }
+      }
+    }
+  }
+}

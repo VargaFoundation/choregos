@@ -327,6 +327,18 @@ paths:
       responses:
         "200": { description: Le texte édité, validé, et son inverse, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowEditResult" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /ui/admin-sections:
+    get:
+      tags: [ui]
+      operationId: listAdminSections
+      description: >-
+        Les sections d'administration que les greffons déclarent (ADR 0032), filtrées par la
+        permission et la portée de l'appelant ; `org` restreint celles d'organisation à celle-là.
+      parameters:
+        - { name: org, in: query, required: false, schema: { type: string } }
+      responses:
+        "200": { description: Les sections visibles, content: { application/json: { schema: { type: array, items: { $ref: "./schemas/ui-manifest.schema.json" } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /workflows/templates:
     get:
       tags: [workflows]

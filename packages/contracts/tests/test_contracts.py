@@ -64,6 +64,7 @@ def test_all_declared_schemas_exist() -> None:
         ("human-decision.example.json", "human-decision.schema.json"),
         ("context-pack.example.json", "context-pack.schema.json"),
         ("event.example.json", "event.schema.json"),
+        ("ui-manifest.example.json", "ui-manifest.schema.json"),
     ],
 )
 def test_example_matches_json_schema(example: str, schema_name: str) -> None:
