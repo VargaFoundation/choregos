@@ -141,11 +141,16 @@ Arguments:
   project  [required]
 
 Options:
-  --title <str>  [required]
+  --title <str>     [required]
   --body <str>
-  --size <str>   S, M, L ou XL
-  --no-start     poser sans démarrer l'interpréteur
-  --help         Show this message and exit.
+  --size <str>      S, M, L ou XL
+  --no-start        poser sans démarrer l'interpréteur
+  --workflow <str>  le workflow où la demande naît ; sinon le routage du
+                    projet, sinon son défaut
+  --label <str>     une étiquette (répétable), lue par le routage
+  --field <str>     `cle=valeur` (répétable), validé par les `inputs` du
+                    workflow
+  --help            Show this message and exit.
 ```
 
 ### `choregos items list`
@@ -453,6 +458,42 @@ Options:
 ## `choregos workflow`
 
 Workflows
+
+### `choregos workflow list`
+
+```text
+Usage: choregos workflow list [OPTIONS] {project}
+
+  Les workflows d'un projet : la version active de chacun, le défaut, les
+  tickets ouverts.
+
+Arguments:
+  project  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos workflow push`
+
+```text
+Usage: choregos workflow push [OPTIONS] {project} [path]
+
+  Publie la version suivante d'un workflow, sous le nom que dit son
+  `metadata.name`.
+
+  Les autres workflows du projet ne bougent pas, et un ticket en cours finit
+  sur sa version.
+
+Arguments:
+  project  [required]
+  path     [default: .choregos/workflow.yaml]
+
+Options:
+  --base-version <int>  la version active que vous avez lue : 409 si une autre
+                        l'a remplacée
+  --help                Show this message and exit.
+```
 
 ### `choregos workflow show`
 
