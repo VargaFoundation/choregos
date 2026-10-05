@@ -261,7 +261,8 @@ async def _create_work_item(ctx: Contexte, arguments: dict[str, Any]) -> tuple[s
         "start": bool(arguments.get("start", True)),
     }
     # Un champ absent garde le défaut du schéma : `None` n'en est pas un pour tous.
-    champs.update({cle: arguments[cle] for cle in ("body", "size", "risk") if arguments.get(cle) is not None})
+    cles = ("body", "size", "risk", "workflow", "labels", "fields")
+    champs.update({cle: arguments[cle] for cle in cles if arguments.get(cle) is not None})
     try:
         demande = WorkItemCreate(**champs)
     except ValidationError as erreur:
@@ -495,6 +496,15 @@ def outils(ctx: Contexte) -> list[Outil]:
                     "size": {"type": "string", "enum": ["S", "M", "L", "XL"]},
                     "risk": {"type": "string", "enum": ["low", "medium", "high"]},
                     "start": {"type": "boolean", "default": True},
+                    "workflow": {
+                        "type": "string",
+                        "description": "The workflow it is born in; else routing, else the default.",
+                    },
+                    "labels": {"type": "array", "items": {"type": "string"}},
+                    "fields": {
+                        "type": "object",
+                        "description": "Its fields, as the workflow's `metadata.inputs` describes them.",
+                    },
                 },
                 "required": [*requis_projet, "title"],
                 "additionalProperties": False,

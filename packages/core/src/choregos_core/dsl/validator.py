@@ -56,8 +56,35 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_retries(wf, report, source)
     _check_gates_ont_de_la_matiere(wf, report, source)
     _check_roles_connus(wf, report, source)
+    _check_inputs(wf, report, source)
     _check_warnings(wf, report, source)
     return report
+
+
+def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """Les champs d'un ticket se décrivent par un JSON Schema d'OBJET valide (ADR 0031)."""
+    schema = wf.metadata.inputs
+    if schema is None:
+        return
+    import jsonschema
+
+    try:
+        jsonschema.Draft202012Validator.check_schema(schema)
+    except jsonschema.SchemaError as erreur:
+        report.error(
+            "inputs.invalid",
+            f"`metadata.inputs` n'est pas un JSON Schema valide : {erreur.message}",
+            ["metadata", "inputs"],
+            source,
+        )
+        return
+    if schema.get("type", "object") != "object":
+        report.error(
+            "inputs.not_object",
+            "`metadata.inputs` décrit un objet : les champs du ticket",
+            ["metadata", "inputs"],
+            source,
+        )
 
 
 def _check_references(

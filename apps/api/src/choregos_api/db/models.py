@@ -192,6 +192,8 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     #: Posé par le workflow lui-même en mourant, effacé quand il redémarre.
     failure: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     allowed_paths: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: Les champs du ticket, validés à sa naissance par `metadata.inputs` de son workflow (ADR 0031).
+    fields: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     pr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     totals: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)

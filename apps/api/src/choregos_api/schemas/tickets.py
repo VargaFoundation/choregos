@@ -25,6 +25,8 @@ class WorkItemCreate(Dto):
     workflow: str | None = None
     #: Les étiquettes du ticket, que les règles de routage lisent.
     labels: list[str] = Field(default_factory=list)
+    #: Les champs du ticket, validés par `metadata.inputs` de son workflow.
+    fields: dict[str, Any] = Field(default_factory=dict)
 
 
 class Totals(Dto):
@@ -79,6 +81,7 @@ class WorkflowFailure(Dto):
 
 class WorkItemDto(Dto):
     id: str
+    fields: dict[str, Any] = Field(default_factory=dict)
     project_slug: str
     tracker_key: str
     title: str
@@ -224,6 +227,8 @@ class RunTicket(Dto):
     key: str
     title: str
     body: str = ""
+    #: Les champs du ticket (ADR 0031) : la date d'arrivée, le poste — ce que l'agent doit savoir.
+    fields: dict[str, Any] = Field(default_factory=dict)
     url: str | None = None
     spec_markdown: str | None = None
     plan_markdown: str | None = None

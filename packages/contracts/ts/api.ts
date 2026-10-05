@@ -341,6 +341,10 @@ export type WorkItemCreate = {
   workflow?: string | null;
   /** Lues par les règles de routage. */
   labels?: Array<string>;
+  /** Les champs du ticket, validés par `metadata.inputs` de son workflow. */
+  fields?: {
+    [key: string]: unknown;
+  };
 };
 
 export type Integrations = {
@@ -393,6 +397,10 @@ export type WorkflowFailure = {
 };
 
 export type WorkItem = {
+  /** Les champs du ticket (ADR 0031). */
+  fields?: {
+    [key: string]: unknown;
+  };
   id: string;
   project_slug: string;
   tracker_key: string;
@@ -817,6 +825,10 @@ export type RunTicket = {
   key: string;
   title: string;
   body?: string;
+  /** Les champs du ticket (ADR 0031). */
+  fields?: {
+    [key: string]: unknown;
+  };
   url?: string | null;
   spec_markdown?: string | null;
   plan_markdown?: string | null;
