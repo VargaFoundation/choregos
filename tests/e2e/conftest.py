@@ -45,6 +45,20 @@ class BridgedTemporal:
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("ProjectProvisioning", workflow_id, payload)
 
+    async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """Une action approuvée part VRAIMENT (ADR 0035) : c'est l'API qui la démarre quand une
+        personne la décide, pas le scénario — sur la file des workers du banc."""
+        import contextlib
+
+        from temporalio.exceptions import WorkflowAlreadyStartedError
+
+        with contextlib.suppress(WorkflowAlreadyStartedError):
+            await self.client.start_workflow("ActionWorkflow", payload, id=workflow_id, task_queue="e2e")
+        return workflow_id
+
+    async def describe(self, workflow_id: str) -> Any:
+        return None
+
     async def _start(self, workflow: str, workflow_id: str, payload: dict[str, Any]) -> str:
         # Les scénarios démarrent eux-mêmes leurs workflows sur leur task queue ; ici on
         # se contente de noter l'intention, comme le ferait un worker non encore démarré.
