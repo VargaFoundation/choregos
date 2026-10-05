@@ -139,7 +139,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S16-04 | S16 | ✅ | — | des champs de ticket (ADR 0031) : un workflow déclare le JSON Schema de ses champs (`metadata.inputs`, contrôlé par le validateur : un schéma d'objet valide) ; `work_items.fields`, validés à la naissance par `nouveau_ticket` (champ requis absent, champ étranger : 422 avec le chemin), rendus dans la vue du ticket et dans le contexte du run (`get_ticket` de l'agent) ; la porte MCP les accepte (`fields`, `workflow`, `labels`). `test_champs_de_ticket.py` (4 tests). Ne prouve pas encore une transition à date (S20) |
 | S16-05 | S16 | ✅ | — | `migrate` : l'API lit et vérifie la cible (définition du projet, état courant présent ou mappé — 422 ; ticket occupé, décision attendue ou run en cours — 409) et l'envoie dans `Control.workflow` ; l'interpréteur, sous `workflow.patched("migration-par-definition")`, remappe l'état, consigne `workitem.migrated` par l'activité `record_migration` (clé `<workflow>/<run>/<n>`, rejouable) et l'épingle suit ; un ticket garé se réveille pour migrer ; une migration devenue impossible consigne `workitem.migration_refused` et laisse le ticket en vie. `test_migration.py` (orchestrateur, 3), `test_migration_de_ticket.py` (API, 4) ; deux historiques archivés rejouent : `wi-migration-S16-05` (nouveau chemin, marqueur) et `wi-migration-ancien-code` (enregistré avec l'interpréteur d'avant : ticket garé, migration appliquée à l'événement suivant) ; 9 mutants tués, dont chaque `patched`. Le schéma des événements connaît enfin `workflow_failed` et `tool.called`. Ne prouve pas la migration d'un ticket qui attend une décision (refusée, 409) ni un ticket déjà tué par l'ancien `migrate` (à réinitialiser) |
 | S16-06 | S16 | ⬜ | — | CLI : workflow list|push et items create --workflow --field |
-| S16-07 | S16 | ⬜ | — | Un gabarit livre plusieurs workflows et leur routage |
+| S16-07 | S16 | ✅ | — | un gabarit livre ses workflows (`defaults.workflows` : fichiers du gabarit ou `template:<nom>@<v>`), le défaut (`default_workflow`), le routage (`routing`, rangé comme le PUT) et sa politique (`policy: preset:<nom>`) ; `ensure_defaults` lit enfin le manifeste (`services/gabarits.py`, un gabarit publié en base l'emporte sur le disque) ; un chemin qui sort du dossier, un fichier absent, un workflow désigné mais non livré, une politique hors `preset:` : 422 et aucun projet ; `defaults.workflow` au singulier reste lu. `test_gabarit_plusieurs_workflows.py` (8 tests, dont une demande étiquetée `leaver` qui naît au départ) ; 5 mutants tués. Ne livre pas encore de gabarit RH (lot 6, `joiners-leavers`) |
 | S16-08 | S16 | ⬜ | — | La vue processus : chaque transition dite en clair |
 | S16-09 | S16 | ⬜ | — | Onglet Workflows : cartes, page par workflow, carte lisible |
 | S16-10 | S16 | ⬜ | — | Un board par workflow ; la demande choisit son workflow et ses champs |
@@ -147,7 +147,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S16-12 | S16 | ⬜ | — | Modifier un workflow depuis la carte et la vue processus |
 | S16-13 | S16 | ⬜ | — | Historique des versions : diff et restauration |
 
-**Total** : 104 livrées, 11 partielles, 12 non commencées.
+**Total** : 105 livrées, 11 partielles, 11 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

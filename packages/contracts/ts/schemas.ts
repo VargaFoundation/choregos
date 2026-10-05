@@ -488,7 +488,21 @@ export type Template = {
     azure_capabilities?: Array<string>;
   };
   defaults: {
+    /** un seul workflow : la forme d'avant `workflows` */
     workflow?: string;
+    /** les workflows livrés (ADR 0031) : `template:<nom>@<v>`, un gabarit du cœur, ou un chemin relatif au dossier du gabarit (`workflows/arrivee.yaml`) */
+    workflows?: Array<string>;
+    /** le nom du workflow par défaut ; sinon le premier livré */
+    default_workflow?: string;
+    /** les règles de routage du projet, comme PUT /projects/{id}/workflow-routing */
+    routing?: Array<{
+      when: {
+        labels_any?: Array<string>;
+        labels_all?: Array<string>;
+        item_type?: string;
+      };
+      workflow: string;
+    }>;
     policy?: string;
     models?: string;
     agent?: string;

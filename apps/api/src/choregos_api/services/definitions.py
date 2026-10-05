@@ -13,7 +13,6 @@ from choregos_core import (
     load_template,
     parse_policy,
     parse_workflow,
-    template_yaml,
 )
 from choregos_core.dsl import dump_workflow
 from sqlalchemy import func, select
@@ -159,14 +158,57 @@ async def active_policy(session: AsyncSession, project_id: str) -> PolicyDef | N
 
 
 async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[WorkflowDef, PolicyDef]:
-    """Un projet neuf reçoit `default-simple` et le preset `solo` (D14)."""
+    """Un projet neuf reçoit ce que livre son gabarit (ADR 0031) : ses workflows, le défaut, le routage
+    et la politique — sans gabarit, `default-simple` et le preset `solo` (D14).
+
+    Rien n'est réécrit chez un projet qui a déjà un workflow actif ou une politique.
+    """
+    from .gabarits import livraison, manifeste_du_gabarit
+
     workflow = await active_workflow(session, project.id)
+    policy = await active_policy(session, project.id)
+    livree = None
+    if workflow is None or policy is None:
+        livree = livraison(*await manifeste_du_gabarit(session, project.template_ref))
     if workflow is None:
-        source = template_yaml(DEFAULT_WORKFLOW)
-        parsed, _ = parse_workflow(source)
-        workflow = WorkflowDef(
+        assert livree is not None
+        workflow = await _publier_ce_que_livre_le_gabarit(session, project, livree)
+    if not project.default_workflow:
+        project.default_workflow = workflow.name
+    if policy is None:
+        assert livree is not None
+        parsed_policy = parse_policy(livree.politique)
+        policy = PolicyDef(
             project_id=project.id,
-            name=parsed.metadata.name,
+            name=parsed_policy.metadata.name,
+            version=parsed_policy.metadata.version,
+            yaml=livree.politique,
+            json_doc=parsed_policy.model_dump(mode="json", exclude_none=True),
+            is_active=True,
+        )
+        session.add(policy)
+    await session.flush()
+    return workflow, policy
+
+
+async def _publier_ce_que_livre_le_gabarit(
+    session: AsyncSession, project: Project, livree: Any
+) -> WorkflowDef:
+    """Les workflows du gabarit, actifs ensemble ; rend celui du défaut."""
+    lignes: dict[str, WorkflowDef] = {}
+    for source in livree.workflows:
+        parsed, report = parse_workflow(source, strict=False)
+        if not report.valid:
+            raise unprocessable(
+                f"le gabarit `{project.template_ref}` livre un workflow invalide",
+                [{"loc": [i.path or ""], "msg": i.message, "code": i.code} for i in report.errors],
+            )
+        nom = parsed.metadata.name
+        if nom in lignes:
+            raise unprocessable(f"le gabarit `{project.template_ref}` livre deux fois le workflow `{nom}`")
+        lignes[nom] = WorkflowDef(
+            project_id=project.id,
+            name=nom,
             version=parsed.metadata.version,
             source="template",
             yaml=source,
@@ -174,26 +216,21 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
             checksum=checksum(parsed),
             is_active=True,
         )
-        session.add(workflow)
-    if not project.default_workflow:
-        project.default_workflow = workflow.name
-    policy = await active_policy(session, project.id)
-    if policy is None:
-        from choregos_core import preset_yaml
-
-        source = preset_yaml(DEFAULT_POLICY_PRESET)
-        parsed_policy = parse_policy(source)
-        policy = PolicyDef(
-            project_id=project.id,
-            name=parsed_policy.metadata.name,
-            version=parsed_policy.metadata.version,
-            yaml=source,
-            json_doc=parsed_policy.model_dump(mode="json", exclude_none=True),
-            is_active=True,
+    defaut = livree.defaut or next(iter(lignes))
+    inconnus = ({defaut} | {str(r.get("workflow")) for r in livree.routage}) - set(lignes)
+    if inconnus:
+        gabarit = project.template_ref
+        raise unprocessable(
+            f"le gabarit `{gabarit}` désigne des workflows qu'il ne livre pas : {sorted(inconnus)}"
         )
-        session.add(policy)
-    await session.flush()
-    return workflow, policy
+    session.add_all(lignes.values())
+    if not project.default_workflow:
+        project.default_workflow = defaut
+    # La forme que stocke `PUT /workflow-routing` : un manifeste ne passe pas par une autre porte.
+    from ..schemas import RoutingRule
+
+    project.workflow_routing = [RoutingRule.model_validate(r).model_dump(mode="json") for r in livree.routage]
+    return lignes[defaut]
 
 
 def workflow_model(row: WorkflowDef | None) -> Workflow:
