@@ -3,15 +3,17 @@
 
 from __future__ import annotations
 
-from choregos_core import checksum, parse_policy, parse_workflow, to_graph
+from typing import Any
+
+from choregos_core import parse_policy, parse_workflow, to_graph
 from choregos_core.dsl import TEMPLATE_NAMES, load_template, template_yaml
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, status
 from sqlalchemy import func, select
 
 from ..audit import record
-from ..db.models import PolicyDef, WorkflowDef
+from ..db.models import PolicyDef, Project, WorkflowDef, WorkItem
 from ..deps import Db, ProjectCtx
-from ..errors import unprocessable
+from ..errors import conflict, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
     PolicyDto,
@@ -19,11 +21,13 @@ from ..schemas import (
     WorkflowDefDto,
     WorkflowIssue,
     WorkflowPut,
+    WorkflowRoutingDto,
+    WorkflowSummaryDto,
     WorkflowTemplateDto,
     WorkflowValidateRequest,
     WorkflowValidation,
 )
-from ..services import active_policy, active_workflow, ensure_defaults
+from ..services import active_policy, default_workflow, ensure_defaults, publier_workflow, workflow_actif
 
 router = APIRouter(tags=["workflows"])
 
@@ -69,11 +73,7 @@ async def validate(body: WorkflowValidateRequest) -> WorkflowValidation:
     )
 
 
-@router.get("/projects/{id}/workflow", response_model=WorkflowDefDto, operation_id="getWorkflow")
-async def get_workflow(ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
-    row = await active_workflow(session, ctx.id)
-    if row is None:
-        row, _ = await ensure_defaults(session, ctx.project)
+def _dto(row: WorkflowDef, project: Project) -> WorkflowDefDto:
     return WorkflowDefDto(
         id=row.id,
         name=row.name,
@@ -83,84 +83,209 @@ async def get_workflow(ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
         json_doc=row.json_doc,
         checksum=row.checksum,
         is_active=row.is_active,
+        is_default=row.name == project.default_workflow,
+        created_by=row.created_by,
+        created_at=row.created_at,
     )
+
+
+@router.get("/projects/{id}/workflow", response_model=WorkflowDefDto, operation_id="getWorkflow")
+async def get_workflow(ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
+    """L'alias du workflow PAR DÉFAUT (ADR 0031)."""
+    row = await default_workflow(session, ctx.id)
+    if row is None:
+        row, _ = await ensure_defaults(session, ctx.project)
+    return _dto(row, ctx.project)
 
 
 @router.put("/projects/{id}/workflow", response_model=WorkflowDefDto, operation_id="putWorkflow")
 async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> WorkflowDefDto:
-    """Un workflow invalide est refusé en 422 avec la ligne et la colonne fautives."""
+    """L'alias du défaut : ce qu'il publie DEVIENT le défaut. Un workflow invalide reçoit 422, localisé."""
     ctx.require(Permission.WORKFLOW_WRITE)
-    workflow, report = parse_workflow(body.yaml, strict=False)
-    if not report.valid:
-        raise unprocessable(
-            "workflow invalide",
-            [
-                {"loc": [i.path or ""], "msg": i.message, "code": i.code, "line": i.line, "column": i.column}
-                for i in report.errors
-            ],
-        )
-    current = await active_workflow(session, ctx.id)
-    # La version suit la plus haute de CE nom, active ou non : republier un ancien workflow (revenir à
-    # `default-simple`, par exemple) heurtait l'unicité (projet, nom, version) et rendait 500.
-    deja = (
-        await session.execute(
-            select(func.max(WorkflowDef.version)).where(
-                WorkflowDef.project_id == ctx.id, WorkflowDef.name == workflow.metadata.name
-            )
-        )
-    ).scalar()
-    version = workflow.metadata.version
-    if deja is not None and deja >= version:
-        version = deja + 1
-    if body.activate:
-        # L'alias remplace le défaut ; et une seule version reste active par nom (ADR 0031).
-        actives = (
-            await session.execute(
-                select(WorkflowDef).where(
-                    WorkflowDef.project_id == ctx.id,
-                    WorkflowDef.is_active.is_(True),
-                    WorkflowDef.name.in_({workflow.metadata.name, current.name if current else ""}),
-                )
-            )
-        ).scalars()
-        for ancienne in actives:
-            ancienne.is_active = False
-        await session.flush()
-    row = WorkflowDef(
-        project_id=ctx.id,
-        name=workflow.metadata.name,
-        version=version,
+    row = await publier_workflow(
+        session,
+        ctx.principal,
+        ctx.project,
+        body.yaml,
         source=body.source,
-        yaml=body.yaml,
-        json_doc=workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
-        checksum=checksum(workflow),
-        is_active=body.activate,
+        activate=body.activate,
+        base_version=body.base_version,
+        devient_le_defaut=True,
     )
-    session.add(row)
-    if body.activate:
-        # Cette route est l'alias du workflow PAR DÉFAUT (ADR 0031) : ce qu'elle publie le devient.
-        ctx.project.default_workflow = row.name
-    await session.flush()
+    return _dto(row, ctx.project)
+
+
+@router.get("/projects/{id}/workflows", response_model=list[WorkflowSummaryDto], operation_id="listWorkflows")
+async def list_workflows(ctx: ProjectCtx, session: Db) -> list[WorkflowSummaryDto]:
+    actifs = (
+        await session.execute(
+            select(WorkflowDef)
+            .where(WorkflowDef.project_id == ctx.id, WorkflowDef.is_active.is_(True))
+            .order_by(WorkflowDef.name)
+        )
+    ).scalars()
+    # Un `Result` a une méthode `keys()` (ses colonnes) : `dict(result)` l'indicerait. On le parcourt.
+    comptes = await session.execute(
+        select(WorkflowDef.name, func.count(WorkItem.id))
+        .join(WorkItem, WorkItem.workflow_def_id == WorkflowDef.id)
+        .where(WorkflowDef.project_id == ctx.id, WorkItem.closed_at.is_(None))
+        .group_by(WorkflowDef.name)
+    )
+    ouverts: dict[str, int] = {str(nom): int(n) for nom, n in comptes.tuples()}
+    return [
+        WorkflowSummaryDto(
+            name=row.name,
+            version=row.version,
+            description=(row.json_doc or {}).get("metadata", {}).get("description"),
+            is_default=row.name == ctx.project.default_workflow,
+            open_items=int(ouverts.get(row.name, 0)),
+            created_by=row.created_by,
+            updated_at=row.created_at,
+        )
+        for row in actifs
+    ]
+
+
+async def _actif(session: Any, ctx: Any, name: str) -> WorkflowDef:
+    row = await workflow_actif(session, ctx.id, name)
+    if row is None:
+        raise not_found("Workflow", name)
+    return row
+
+
+@router.get("/projects/{id}/workflows/{name}", response_model=WorkflowDefDto, operation_id="getNamedWorkflow")
+async def get_named_workflow(name: str, ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
+    return _dto(await _actif(session, ctx, name), ctx.project)
+
+
+@router.put("/projects/{id}/workflows/{name}", response_model=WorkflowDefDto, operation_id="putNamedWorkflow")
+async def put_named_workflow(name: str, ctx: ProjectCtx, body: WorkflowPut, session: Db) -> WorkflowDefDto:
+    """Publie la version suivante de CE workflow, sans toucher aux autres (ADR 0031)."""
+    ctx.require(Permission.WORKFLOW_WRITE)
+    row = await publier_workflow(
+        session,
+        ctx.principal,
+        ctx.project,
+        body.yaml,
+        source=body.source,
+        activate=body.activate,
+        base_version=body.base_version,
+        nom_attendu=name,
+    )
+    return _dto(row, ctx.project)
+
+
+def _cibles_du_routage(project: Project) -> set[str]:
+    return {str(regle.get("workflow")) for regle in (project.workflow_routing or [])}
+
+
+@router.post(
+    "/projects/{id}/workflows/{name}/deactivate",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="deactivateWorkflow",
+)
+async def deactivate_workflow(name: str, ctx: ProjectCtx, session: Db) -> Response:
+    """Un workflow désactivé ne reçoit plus de ticket ; ses tickets épinglés finissent sur leur version."""
+    ctx.require(Permission.WORKFLOW_WRITE)
+    row = await _actif(session, ctx, name)
+    if name == ctx.project.default_workflow:
+        raise conflict(f"`{name}` est le workflow par défaut : choisissez-en un autre avant de le désactiver")
+    if name in _cibles_du_routage(ctx.project):
+        raise conflict(f"`{name}` est la cible d'une règle de routage : retirez-la d'abord")
+    row.is_active = False
     await record(
         session,
         ctx.principal,
-        "workflow.put",
+        "workflow.deactivate",
         org_id=ctx.project.org_id,
         target_type="workflow",
         target_id=row.id,
-        name=row.name,
-        version=row.version,
+        name=name,
     )
-    return WorkflowDefDto(
-        id=row.id,
-        name=row.name,
-        version=row.version,
-        source=row.source,
-        yaml=row.yaml,
-        json_doc=row.json_doc,
-        checksum=row.checksum,
-        is_active=row.is_active,
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/projects/{id}/workflows/{name}/versions",
+    response_model=list[WorkflowDefDto],
+    operation_id="listWorkflowVersions",
+)
+async def list_versions(name: str, ctx: ProjectCtx, session: Db) -> list[WorkflowDefDto]:
+    rows = (
+        await session.execute(
+            select(WorkflowDef)
+            .where(WorkflowDef.project_id == ctx.id, WorkflowDef.name == name)
+            .order_by(WorkflowDef.version.desc())
+        )
+    ).scalars()
+    return [_dto(row, ctx.project) for row in rows]
+
+
+@router.post(
+    "/projects/{id}/workflows/{name}/versions/{version}/restore",
+    response_model=WorkflowDefDto,
+    operation_id="restoreWorkflowVersion",
+)
+async def restore_version(name: str, version: int, ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
+    """Restaurer, c'est republier : l'ancienne version devient la suivante. Rien n'est écrasé."""
+    ctx.require(Permission.WORKFLOW_WRITE)
+    ancienne = (
+        await session.execute(
+            select(WorkflowDef).where(
+                WorkflowDef.project_id == ctx.id, WorkflowDef.name == name, WorkflowDef.version == version
+            )
+        )
+    ).scalar_one_or_none()
+    if ancienne is None:
+        raise not_found("Version", f"{name} v{version}")
+    row = await publier_workflow(
+        session, ctx.principal, ctx.project, ancienne.yaml, source=ancienne.source, nom_attendu=name
     )
+    return _dto(row, ctx.project)
+
+
+@router.get(
+    "/projects/{id}/workflow-routing", response_model=WorkflowRoutingDto, operation_id="getWorkflowRouting"
+)
+async def get_routing(ctx: ProjectCtx, session: Db) -> WorkflowRoutingDto:
+    defaut = ctx.project.default_workflow
+    if not defaut:
+        row = await default_workflow(session, ctx.id)
+        defaut = row.name if row is not None else ""
+    return WorkflowRoutingDto(default=defaut, rules=list(ctx.project.workflow_routing or []))
+
+
+@router.put(
+    "/projects/{id}/workflow-routing", response_model=WorkflowRoutingDto, operation_id="putWorkflowRouting"
+)
+async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) -> WorkflowRoutingDto:
+    """Le défaut et les règles qui choisissent le workflow d'un ticket venu d'un tracker."""
+    ctx.require(Permission.WORKFLOW_WRITE)
+    actifs = set(
+        (
+            await session.execute(
+                select(WorkflowDef.name).where(
+                    WorkflowDef.project_id == ctx.id, WorkflowDef.is_active.is_(True)
+                )
+            )
+        ).scalars()
+    )
+    inconnus = sorted({body.default, *(r.workflow for r in body.rules)} - actifs)
+    if inconnus:
+        raise unprocessable(f"workflow(s) inconnu(s) ou inactif(s) : {', '.join(inconnus)}")
+    ctx.project.default_workflow = body.default
+    ctx.project.workflow_routing = [r.model_dump(mode="json") for r in body.rules]
+    await record(
+        session,
+        ctx.principal,
+        "workflow.routing",
+        org_id=ctx.project.org_id,
+        target_type="project",
+        target_id=ctx.id,
+        default=body.default,
+        rules=len(body.rules),
+    )
+    return body
 
 
 @router.get("/projects/{id}/policy", response_model=PolicyDto, operation_id="getPolicy")
