@@ -4,19 +4,31 @@
 import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { columnsFromGraph, itemsOf } from "@/components/workflows/board";
+import { champsDepuisSchema, valeursPourLApi, type Champ } from "@/components/workflows/champs";
+import { useWorkflow } from "@/components/workflows/use-workflow";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
-import type { WorkItemDto } from "@/lib/types";
 
-/** Le board reprend les états du workflow : les colonnes sont celles du DSL, pas les nôtres. */
+/**
+ * Un board par workflow (ADR 0031, S16-10) : ses colonnes sont les états du workflow, lus par le
+ * validateur ; ses tickets, ceux qui y sont épinglés. `?workflow=` garde le choix dans l'URL.
+ */
 export default function BoardPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
   const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.workItems(slug) });
-  const workflow = useQuery({ queryKey: ["workflow", slug], queryFn: () => api.workflow(slug) });
+  const workflows = useQuery({ queryKey: ["workflows", slug], queryFn: () => api.workflows(slug) });
+  const defaut = workflows.data?.find((w) => w.is_default)?.name ?? workflows.data?.[0]?.name ?? "";
+  const choisi = search.get("workflow") ?? defaut;
+  const { definition, validation } = useWorkflow(slug, choisi);
   const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   // Quand le tracker est interne, la demande se pose ICI — sinon elle vient de GitHub/Jira.
   const trackerInterne = (connectors.data ?? []).some((c) => c.kind === "tracker" && ["internal", "fake"].includes(c.type));
@@ -24,16 +36,34 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
 
   if (items.error) return <ErrorNote>{(items.error as Error).message}</ErrorNote>;
 
-  const columns = columnsFrom(workflow.data?.yaml, items.data?.items ?? []);
+  const columns = columnsFromGraph(validation.data?.graph, itemsOf(items.data?.items ?? [], choisi, choisi === defaut));
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Heading as="h2" size="md">
           board
         </Heading>
+        {(workflows.data?.length ?? 0) > 1 ? (
+          <label className="flex items-center gap-2 text-sm text-ink-muted">
+            workflow
+            <select
+              aria-label="board workflow"
+              value={choisi}
+              onChange={(event) => router.replace(`${pathname}?workflow=${encodeURIComponent(event.target.value)}`)}
+              className="rounded border border-line bg-surface px-2 py-1 text-ink"
+            >
+              {workflows.data?.map((w) => (
+                <option key={w.name} value={w.name}>
+                  {w.name}
+                  {w.is_default ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <span className="text-sm text-ink-muted">
-          workflow {workflow.data?.name ?? "—"} v{workflow.data?.version ?? "?"}
+          {choisi || "—"} v{definition.data?.version ?? "?"}
         </span>
         {trackerInterne && (
           <span className="ml-auto">
@@ -46,6 +76,8 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
       {nouvelle && (
         <NouvelleDemande
           slug={slug}
+          workflows={workflows.data?.map((w) => w.name) ?? []}
+          initial={choisi}
           onDone={() => {
             setNouvelle(false);
             void queryClient.invalidateQueries({ queryKey: ["items", slug] });
@@ -102,71 +134,43 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   );
 }
 
-interface Column {
-  state: string;
-  display: string;
-  /** Absent quand le workflow ne le dit pas : le badge le déduit alors du nom de l'état. */
-  kind?: string;
-  items: WorkItemDto[];
-}
-
-/** Colonnes = états déclarés dans le workflow, dans l'ordre du YAML ; le reste suit. */
-function columnsFrom(yaml: string | undefined, items: WorkItemDto[]): Column[] {
-  const declared: Array<{ state: string; display: string; kind?: string }> = [];
-  if (yaml) {
-    const lines = yaml.split("\n");
-    let inStates = false;
-    for (const line of lines) {
-      if (/^states:/.test(line)) {
-        inStates = true;
-        continue;
-      }
-      if (inStates && /^\S/.test(line)) break;
-      const match = inStates ? /^\s{2}([a-z0-9_-]+):\s*\{?(.*)$/.exec(line) : null;
-      if (match) {
-        const [, state, rest] = match;
-        const display = /display:\s*([^,}]+)/.exec(rest ?? "")?.[1]?.trim() ?? state ?? "";
-        // Ce que le YAML dit explicitement ; sinon rien, et le badge déduit le genre du nom de
-        // l'état plutôt que de peindre tout en « travail d'agent ».
-        const kind = /terminal:\s*true/.test(rest ?? "")
-          ? "terminal"
-          : /kind:\s*wait/.test(rest ?? "")
-            ? "wait"
-            : undefined;
-        declared.push({ state: state ?? "", display, kind });
-      }
-    }
-  }
-  const byState = new Map<string, WorkItemDto[]>();
-  for (const item of items) {
-    byState.set(item.state, [...(byState.get(item.state) ?? []), item]);
-  }
-  const columns: Column[] = declared.map((entry) => ({
-    ...entry,
-    items: byState.get(entry.state) ?? [],
-  }));
-  for (const [state, stateItems] of byState) {
-    if (!columns.some((column) => column.state === state)) {
-      columns.push({ state, display: stateItems[0]?.state_display ?? state, items: stateItems });
-    }
-  }
-  return columns.filter((column) => column.items.length > 0 || declared.length <= 12);
-}
-
-
-/** Poser une demande dans Choregos : titre, corps, taille. L'interpréteur démarre tout de suite. */
-function NouvelleDemande({ slug, onDone }: { slug: string; onDone: () => void }) {
+/**
+ * Poser une demande dans Choregos : son workflow, ses champs (lus dans `metadata.inputs`), un titre,
+ * un corps, une taille. L'interpréteur démarre tout de suite ; l'API valide les champs.
+ */
+function NouvelleDemande({
+  slug,
+  workflows,
+  initial,
+  onDone,
+}: {
+  slug: string;
+  workflows: string[];
+  initial: string;
+  onDone: () => void;
+}) {
+  const [workflow, setWorkflow] = useState(initial);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [size, setSize] = useState<"S" | "M" | "L" | "XL" | "">("");
+  const [saisies, setSaisies] = useState<Record<string, string | boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { definition } = useWorkflow(slug, workflow);
+  const champs = champsDepuisSchema(definition.data?.json?.metadata?.inputs as Record<string, unknown> | undefined);
 
   async function poser() {
     setBusy(true);
     setError(null);
     try {
-      await api.createWorkItem(slug, { title, body, size: size || null, start: true });
+      await api.createWorkItem(slug, {
+        title,
+        body,
+        size: size || null,
+        start: true,
+        workflow: workflow || null,
+        fields: valeursPourLApi(champs, saisies),
+      });
       onDone();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "request refused");
@@ -183,6 +187,36 @@ function NouvelleDemande({ slug, onDone }: { slug: string; onDone: () => void })
           void poser();
         }}
       >
+        {workflows.length > 1 && (
+          <select
+            aria-label="workflow of the request"
+            value={workflow}
+            onChange={(event) => {
+              setWorkflow(event.target.value);
+              setSaisies({});
+            }}
+            className="rounded border border-line bg-surface px-2 py-1"
+          >
+            {workflows.map((nom) => (
+              <option key={nom} value={nom}>
+                {nom}
+              </option>
+            ))}
+          </select>
+        )}
+        {champs.length > 0 && (
+          <fieldset className="grid gap-2 md:grid-cols-2" data-testid="request-fields">
+            <legend className="sr-only">fields of the request</legend>
+            {champs.map((champ) => (
+              <ChampDeDemande
+                key={champ.name}
+                champ={champ}
+                valeur={saisies[champ.name]}
+                onChange={(valeur) => setSaisies((avant) => ({ ...avant, [champ.name]: valeur }))}
+              />
+            ))}
+          </fieldset>
+        )}
         <input
           aria-label="request title"
           value={title}
@@ -219,5 +253,52 @@ function NouvelleDemande({ slug, onDone }: { slug: string; onDone: () => void })
         {error && <ErrorNote>{error}</ErrorNote>}
       </form>
     </Card>
+  );
+}
+
+/** Un champ de la demande, au contrôle que son type appelle. */
+function ChampDeDemande({
+  champ,
+  valeur,
+  onChange,
+}: {
+  champ: Champ;
+  valeur: string | boolean | undefined;
+  onChange: (valeur: string | boolean) => void;
+}) {
+  const libelle = `${champ.label}${champ.required ? " (required)" : ""}`;
+  const classes = "w-full rounded border border-line bg-surface px-2 py-1.5";
+  if (champ.control === "boolean") {
+    return (
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={Boolean(valeur)} onChange={(event) => onChange(event.target.checked)} />
+        {libelle}
+      </label>
+    );
+  }
+  if (champ.control === "choice") {
+    return (
+      <select aria-label={libelle} value={String(valeur ?? "")} onChange={(event) => onChange(event.target.value)} className={classes}>
+        <option value="">{libelle}</option>
+        {champ.choices?.map((choix) => (
+          <option key={choix} value={choix}>
+            {choix}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  const type = champ.control === "date" ? "date" : champ.control === "number" || champ.control === "integer" ? "number" : "text";
+  return (
+    <input
+      aria-label={libelle}
+      title={champ.hint}
+      type={type}
+      required={champ.required}
+      value={String(valeur ?? "")}
+      placeholder={champ.control === "list" ? `${champ.label}, comma separated` : champ.label}
+      onChange={(event) => onChange(event.target.value)}
+      className={classes}
+    />
   );
 }

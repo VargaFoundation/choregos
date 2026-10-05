@@ -512,6 +512,29 @@ export const workflowRouting: WorkflowRouting = {
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
 };
 
+/** Le flux d'incident : ses demandes portent des champs, que le formulaire déduit de `inputs`. */
+export const hotfix: WorkflowDef = {
+  ...workflow,
+  name: "hotfix",
+  version: 2,
+  is_default: false,
+  json: {
+    metadata: {
+      name: "hotfix",
+      version: 2,
+      inputs: {
+        type: "object",
+        required: ["incident_id", "severity"],
+        properties: {
+          incident_id: { type: "string", title: "incident id" },
+          severity: { type: "string", enum: ["sev1", "sev2", "sev3"] },
+          detected_on: { type: "string", format: "date", title: "detected on" },
+        },
+      },
+    },
+  } as unknown as WorkflowDef["json"],
+};
+
 /** Deux versions : la v2, active, ajoute une garantie au passage en revue. */
 export const workflowVersions: WorkflowDef[] = [
   {
@@ -591,12 +614,14 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflow$/, workflow],
     [/^\/projects\/[^/]+\/workflows$/, workflowSummaries],
     [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
+    [/^\/projects\/[^/]+\/workflows\/hotfix$/, hotfix],
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
-    [/^\/projects\/[^/]+\/connectors$/, []],
+    // Un tracker interne : la demande se pose dans la console (le board offre « new request »).
+    [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, enabled: true }]],
     [/^\/projects\/[^/]+\/proposals\/[^/]+$/, proposition],
     [/^\/projects\/[^/]+\/proposals$/, [proposition]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
