@@ -1066,6 +1066,7 @@ export interface Operations {
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
+  removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };

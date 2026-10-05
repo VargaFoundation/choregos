@@ -11,6 +11,7 @@ import type {
   ApiTokenCreate,
   ApiTokenCreated,
   ArtifactRef,
+  AdminSection,
   AuditPage,
   ConnectorType,
   ExecutorInfo,
@@ -169,6 +170,20 @@ export const api = {
   orgs: () => request<Org[]>("/orgs"),
   createOrg: (body: OrgCreate) => request<Org>("/orgs", { method: "POST", body: JSON.stringify(body) }),
   members: (org: string) => request<Membership[]>(`/orgs/${org}/members`),
+  /** Retire une appartenance — à l'organisation, ou au seul projet nommé. */
+  removeMember: (org: string, userId: string, project?: string | null) =>
+    request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
+      method: "DELETE",
+    }),
+  /** Les sections d'administration que les greffons déclarent, filtrées par l'API (ADR 0032). */
+  adminSections: (org: string) => request<AdminSection[]>(`/ui/admin-sections?org=${encodeURIComponent(org)}`),
+  /**
+   * Un chemin qu'une section déclare (relatif à `/api/v1`, `{org}` et `{id}` déjà remplis). La
+   * console n'appelle que les chemins que l'API lui a rendus — et l'API a vérifié au démarrage
+   * qu'une route les sert.
+   */
+  sectionCall: <T>(method: string, path: string, body?: unknown) =>
+    request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
   addMember: (org: string, body: MembershipUpsert) =>
     request<Membership>(`/orgs/${org}/members`, { method: "POST", body: JSON.stringify(body) }),
   myTokens: () => request<ApiToken[]>("/me/tokens"),
@@ -299,7 +314,10 @@ export const api = {
   costsCsvUrl: (id: string, groupBy = "day") =>
     `${API_BASE}/projects/${id}/costs.csv${query({ group_by: groupBy })}`,
   modelMatrix: (id: string) => request<ModelMatrix>(`/projects/${qualify(id)}/models/matrix`),
-  audit: () => request<AuditPage>("/audit"),
+  audit: (params?: { actor?: string; target_type?: string; cursor?: string; limit?: number }) => {
+    const filtres = Object.entries(params ?? {}).filter(([, valeur]) => valeur !== undefined && valeur !== "");
+    return request<AuditPage>(`/audit${filtres.length ? `?${new URLSearchParams(filtres.map(([k, v]) => [k, String(v)]))}` : ""}`);
+  },
 };
 
 function query(params?: Record<string, string>): string {

@@ -58,6 +58,15 @@ import type { Operations } from "@choregos/contracts/api";
 
 export type { Integrations } from "@choregos/contracts/api";
 
+/** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */
+export type {
+  UiManifest as AdminSection,
+  UiManifestAction as AdminAction,
+  UiManifestForm as AdminForm,
+  UiManifestSecretOnce as AdminSecretOnce,
+  UiManifestTable as AdminTable,
+} from "@choregos/contracts/schemas";
+
 /** L'édition qui tourne et ce qu'elle s'autorise (ADR 0024) : la réponse de `GET /edition`. */
 export type Edition = Operations["edition"]["response"];
 

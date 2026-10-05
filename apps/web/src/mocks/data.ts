@@ -549,6 +549,56 @@ export const workflowVersions: WorkflowDef[] = [
   { ...workflow, version: 1, is_active: false, created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) },
 ];
 
+/** Une section qu'un greffon déclarerait (ADR 0032) : l'exemple SCIM du contrat. */
+export const sectionScim = {
+  id: "scim",
+  title: "SCIM provisioning",
+  description: "Your identity provider creates and removes members through SCIM.",
+  scope: "organisation",
+  permission: "member:manage",
+  blocks: [
+    {
+      kind: "form",
+      title: "settings",
+      schema: {
+        type: "object",
+        properties: {
+          enabled: { type: "boolean", title: "accept SCIM requests" },
+          default_role: { type: "string", enum: ["viewer", "developer"], title: "role of a provisioned member" },
+        },
+      },
+      read: "/orgs/{org}/scim/settings",
+      write: "/orgs/{org}/scim/settings",
+    },
+    {
+      kind: "table",
+      title: "tokens",
+      list: "/orgs/{org}/scim/tokens",
+      columns: [
+        { key: "name", label: "name" },
+        { key: "created_at", label: "created", format: "date" },
+      ],
+      row_actions: [
+        {
+          kind: "action",
+          label: "revoke",
+          path: "/orgs/{org}/scim/tokens/{id}",
+          method: "DELETE",
+          confirm: "The identity provider stops provisioning with this token.",
+          danger: true,
+        },
+      ],
+    },
+    {
+      kind: "secret_once",
+      label: "create a token",
+      path: "/orgs/{org}/scim/tokens",
+      secret_field: "token",
+      params: { type: "object", required: ["name"], properties: { name: { type: "string" } } },
+    },
+  ],
+};
+
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 const proposition = {
   proposal: "pr1",
@@ -570,6 +620,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
   if (method === "POST" && path === "/workflows/validate") return workflowValidation as T;
+  if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
+    // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
+    return { id: "t2", name: "okta", token: "scim_demo_shown_once" } as T;
+  }
   if (method === "POST" && path === "/me/tokens") {
     // Le jeton n'est rendu qu'une fois, à la création : la page Integrations le glisse dans ses extraits.
     const corps = JSON.parse(String(init.body ?? "{}")) as { name?: string; scopes?: string[]; project?: string | null };
@@ -592,6 +646,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
     [/^\/me\/tokens$/, []],
+    [/^\/ui\/admin-sections$/, [sectionScim]],
+    [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
+    [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
     [/^\/orgs$/, [{ slug: "varga", name: "Varga Foundation", role: "org_admin" }]],
     [/^\/orgs\/[^/]+\/members$/, me.memberships],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
