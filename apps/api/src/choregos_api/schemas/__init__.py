@@ -99,6 +99,7 @@ from .plateforme import (
 )
 from .projets import (
     ConnectorCheck,
+    ConnectorDiscovery,
     ConnectorDto,
     ConnectorTestResult,
     ConnectorType,
@@ -173,6 +174,7 @@ __all__ = [
     "CiLogs",
     "ConformanceReport",
     "ConnectorCheck",
+    "ConnectorDiscovery",
     "ConnectorDto",
     "ConnectorTestResult",
     "ConnectorType",

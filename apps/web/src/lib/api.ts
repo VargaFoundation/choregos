@@ -7,6 +7,7 @@
  */
 import type {
   Agent,
+  ConnectorDiscovery,
   ConnectorOperation,
   OperationPatch,
   OrgConnector,
@@ -304,6 +305,9 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+  /** Un serveur MCP dit ses outils ; un nouveau naît fermé, un schéma qui dérive le referme. */
+  discoverConnectorOperations: (org: string, name: string) =>
+    request<ConnectorDiscovery>(`/orgs/${org}/connectors/${name}/discover`, { method: "POST" }),
   projectOperations: (id: string) => request<ProjectOperation[]>(`/projects/${qualify(id)}/operations`),
   tightenProjectOperation: (id: string, connector: string, operation: string, policy: string) =>
     request<ProjectOperation>(

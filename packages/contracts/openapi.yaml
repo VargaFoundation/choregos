@@ -257,6 +257,19 @@ paths:
       responses:
         "204": { description: Retiré, avec ses opérations }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/connectors/{name}/discover:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [connectors]
+      operationId: discoverConnectorOperations
+      description: Demande au serveur MCP ses outils et en tire le diff — un outil nouveau naît fermé (forbidden), un schéma qui dérive referme l'opération, un outil retiré disparaît (ADR 0034).
+      responses:
+        "200": { description: Le diff, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorDiscovery" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: Le serveur n'a pas répondu, ou a refusé la clé du connecteur }
   /orgs/{org}/connectors/{name}/operations/{operation}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1610,6 +1623,13 @@ components:
         price_usd: { type: [number, "null"] }
         schema_digest: { type: [string, "null"] }
         description: { type: [string, "null"] }
+    ConnectorDiscovery:
+      type: object
+      properties:
+        added: { type: array, items: { type: string } }
+        changed: { type: array, items: { type: string } }
+        removed: { type: array, items: { type: string } }
+        unchanged: { type: integer }
     OrgConnector:
       type: object
       required: [name, kind, type, status]

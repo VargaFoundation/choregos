@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@varga/design-system";
 import { estUneReference } from "@/components/connecteurs";
+import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -45,10 +46,43 @@ export default function OrgConnectorsPage() {
 }
 
 function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
+  const client = useQueryClient();
+  const [diff, setDiff] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  async function decouvrir() {
+    setErreur(null);
+    setDiff(null);
+    try {
+      setDiff(resumeDeLaDecouverte(await api.discoverConnectorOperations(org, instance.name)));
+      await client.invalidateQueries({ queryKey: ["org-connectors", org] });
+    } catch (cause) {
+      setErreur(cause instanceof Error ? cause.message : "discovery failed");
+    }
+  }
+  const action = (
+    <span className="inline-flex items-center gap-2">
+      <Badge tone="neutral">{instance.kind}</Badge>
+      {instance.kind === "mcp" && (
+        <Button size="sm" onClick={() => void decouvrir()}>
+          discover
+        </Button>
+      )}
+    </span>
+  );
   return (
-    <Card title={`${instance.name} — ${instance.type}`} action={<Badge tone="neutral">{instance.kind}</Badge>}>
+    <Card title={`${instance.name} — ${instance.type}`} action={action}>
+      {diff && (
+        <p className="mb-2 text-sm" role="status">
+          {diff}
+        </p>
+      )}
+      {erreur && <ErrorNote>{erreur}</ErrorNote>}
       {(instance.operations ?? []).length === 0 ? (
-        <p className="text-sm text-ink-muted">this type declares no operation an agent can call.</p>
+        <p className="text-sm text-ink-muted">
+          {instance.kind === "mcp"
+            ? "no tool known yet: discover asks the server; each new tool is born closed."
+            : "this type declares no operation an agent can call."}
+        </p>
       ) : (
         <table className="w-full text-sm" data-testid={`operations-${instance.name}`}>
           <thead className="text-left text-xs text-ink-muted">

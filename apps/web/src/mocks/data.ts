@@ -825,6 +825,19 @@ export const orgConnectors: OrgConnector[] = [
   },
 ];
 
+orgConnectors.push({
+  name: "fournisseur",
+  kind: "mcp",
+  type: "mcp",
+  config: { url: "https://fournisseur.example/mcp" },
+  secret_refs: { token: "env:CLE_FOURNISSEUR" },
+  status: "ok",
+  operations: [
+    { name: "suivi_commande", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
+    { name: "commander_poste", access: "write", policy: "forbidden", groups: [], schema_digest: "sha256:a07c", description: "commande un PC" },
+  ],
+});
+
 export const projectOperations: ProjectOperation[] = [
   { connector: "entra-acme", operation: "lire_utilisateur", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
   { connector: "entra-acme", operation: "creer_compte", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
@@ -923,6 +936,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { agent: chemin?.split("/").at(-1), version: corps.version, overrides: corps.overrides ?? {}, effective: {} } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import$/.test(chemin ?? "")) return skills[0] as T;
+  if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
+    return { added: ["annuler_commande"], changed: ["commander_poste"], removed: [], unchanged: 1 } as T;
+  }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");

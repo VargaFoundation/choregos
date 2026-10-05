@@ -216,3 +216,13 @@ class ProjectOperationDto(Dto):
 
 class ProjectOperationPut(Dto):
     policy: Politique
+
+
+class ConnectorDiscovery(Dto):
+    """Ce que la découverte a changé (ADR 0034) : un outil nouveau naît fermé, un schéma qui dérive
+    referme l'opération, un outil retiré par le serveur l'est ici aussi."""
+
+    added: list[str] = Field(default_factory=list)
+    changed: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    unchanged: int = 0

@@ -74,6 +74,18 @@ and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operat
 `approval` turned into `allowed` (`422`); `DELETE` returns to the organisation's policy, which a
 later hardening by the organisation always overrides.
 
+**An MCP server** is a connector of type `mcp`: its URL, and its key by reference
+(`secret_refs: {"token": "env:SUPPLIER_KEY"}`). It declares no operation — they are
+**discovered**: `POST /orgs/{org}/connectors/{name}/discover` (or *discover* in the console) runs
+`initialize` and `tools/list` over Streamable HTTP — JSON or SSE answers, the session the server
+gives, every page of the list — and returns the diff. **A new tool is born closed**
+(`forbidden`): a server does not add a capability behind the administrator's back. A tool whose
+input schema **drifts** — `order_laptop` suddenly taking a quantity — is closed again; one the
+server stops offering is removed, with what projects tightened of it. A tool annotated
+`readOnlyHint` is a read; any other is a write. Only the connector's key reaches the server —
+never a person's token, never a run's; a key the process cannot resolve answers `502` naming it,
+and the connector shows the error.
+
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still
