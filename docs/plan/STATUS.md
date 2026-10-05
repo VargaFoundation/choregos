@@ -1129,3 +1129,17 @@ les 492 tests ne disaient pas :
     **Ce que ça ne prouve pas** : un modèle qui choisit ces outils, la décision dans la console, une
     PR sur un vrai dépôt, la reprise sur panne (le moteur d'actions tourne dans la requête, pas dans
     Temporal). C'est l'objet des tests sur le locataire dev, et du rapport de décision du J0.
+
+34. **La console du locataire dev répondait 404 depuis son installation : les Ingress s'annotent**
+    (2026-10-05).
+
+    Le contrôleur d'ingress du locataire dev (NGINX Inc.) refusait l'Ingress de la console : celui de
+    l'API avait pris l'hôte, et ce contrôleur n'admet pas deux Ingress sur un même hôte (« All hosts
+    are taken by other resources »). Toute page de la console rendait le 404 de nginx ; seule l'API
+    (`/api`) répondait. Son remède est l'Ingress fusionnable (un maître, des minions), qui exige
+    d'annoter les deux : `choregos-api.ingress.annotations` et `choregos-web.ingress.annotations`.
+
+    **Ce que ça prouve** : `tests/charts/test_annotations_d_ingress.py` — les deux Ingress portent les
+    annotations demandées, aucune sans valeur ; rouge sans le changement.
+    **Ce que ça ne prouve pas** : l'Ingress maître est posé par le déploiement (`choregos-deploy`),
+    pas par ce chart ; la console servie sur le locataire se constate après la montée.
