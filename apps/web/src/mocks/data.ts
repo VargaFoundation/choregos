@@ -19,6 +19,8 @@ import type {
   TimelineEntry,
   TrainStatus,
   WorkflowDef,
+  WorkflowRouting,
+  WorkflowSummary,
   WorkflowValidation,
   WorkItemDto,
   WorkItemPage,
@@ -442,7 +444,8 @@ transitions:
 `,
 };
 
-/** Ce que l'API répond à la validation du workflow ci-dessus : la carte de `default-simple`. */
+/** Ce que l'API répond à la validation du workflow ci-dessus : la carte de `default-simple`, et sa
+ * vue processus. Les arêtes `default` partent de chaque état d'agent : la carte les dit une fois. */
 export const workflowValidation: WorkflowValidation = {
   valid: true,
   errors: [],
@@ -451,14 +454,67 @@ export const workflowValidation: WorkflowValidation = {
     nodes: [
       { id: "inbox", display: "À trier", kind: "wait", lane: "agent" },
       { id: "ready", display: "Prêt", kind: "normal", lane: "agent" },
+      { id: "needs_human", display: "Besoin d'un humain", kind: "wait", lane: "human" },
       { id: "done", display: "Fini", kind: "normal", terminal: true, lane: "terminal" },
     ],
     edges: [
       { id: "t-refine", from: "inbox", to: "ready", kind: "nominal", label: "t-refine", actor: "refiner", gates: [] },
       { id: "t-implement", from: "ready", to: "done", kind: "nominal", label: "t-implement", actor: "dev", gates: ["scope_respected"] },
+      { id: "inbox->needs_human:default:question", from: "inbox", to: "needs_human", kind: "default", label: "question" },
+      { id: "ready->needs_human:default:question", from: "ready", to: "needs_human", kind: "default", label: "question" },
+      { id: "ready->needs_human:default:budget", from: "ready", to: "needs_human", kind: "default", label: "budget dépassé" },
     ],
   },
+  process: [
+    {
+      id: "t-refine",
+      from: "inbox",
+      from_display: "À trier",
+      to: "ready",
+      to_display: "Prêt",
+      actor: "refiner",
+      actor_type: "agent",
+      who: "l'agent refiner (rôle refine)",
+      outputs: ["spec_markdown"],
+      gates: [],
+      on_fail: null,
+      on_reject: null,
+      timeout_hours: null,
+      sentence: "De « À trier » à « Prêt » : l'agent refiner (rôle refine) rédige la spec.",
+    },
+    {
+      id: "t-implement",
+      from: "ready",
+      from_display: "Prêt",
+      to: "done",
+      to_display: "Fini",
+      actor: "dev",
+      actor_type: "agent",
+      who: "l'agent dev (rôle implement)",
+      outputs: [],
+      gates: [{ name: "scope_respected", summary: "le diff reste dans le périmètre permis" }],
+      on_fail: "réessaie deux fois, puis remonte à un humain",
+      on_reject: null,
+      timeout_hours: 72,
+      sentence: "De « Prêt » à « Fini » : l'agent dev (rôle implement), si le diff reste dans le périmètre permis.",
+    },
+  ],
 };
+
+/** Les workflows du projet de démonstration : le défaut, et un flux d'incident routé par étiquette. */
+export const workflowSummaries: WorkflowSummary[] = [
+  { name: "default-simple", version: 1, is_default: true, open_items: 2, created_by: "lea@varga.dev", updated_at: iso(60 * 24 * 3) },
+  { name: "hotfix", version: 2, is_default: false, open_items: 0, created_by: "marc@varga.dev", updated_at: iso(60 * 5) },
+];
+
+export const workflowRouting: WorkflowRouting = {
+  default: "default-simple",
+  rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
+};
+
+export const workflowVersions: WorkflowDef[] = [
+  { ...workflow, version: 1, is_active: true, created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) },
+];
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 const proposition = {
@@ -523,6 +579,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/costs$/, costs],
     [/^\/projects\/[^/]+\/metrics\/dora$/, dora],
     [/^\/projects\/[^/]+\/workflow$/, workflow],
+    [/^\/projects\/[^/]+\/workflows$/, workflowSummaries],
+    [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
+    [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
+    [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
+    [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
     [/^\/projects\/[^/]+\/connectors$/, []],

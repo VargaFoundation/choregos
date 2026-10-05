@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { layout, navigation } from "@/components/workflow-graph";
+import { defaults, layout, navigation } from "@/components/workflow-graph";
+import { renommer } from "@/components/workflows/renommer";
 
 const graph = {
   nodes: [
@@ -13,7 +14,9 @@ const graph = {
     { id: "t1", from: "inbox", to: "ready", kind: "nominal", actor: "refiner", gates: [] },
     { id: "t2", from: "ready", to: "in_progress", kind: "nominal", actor: "owner", gates: ["spec_ok"] },
     { id: "t3", from: "in_progress", to: "done", kind: "nominal", actor: "ci", gates: [] },
-    { id: "d1", from: "in_progress", to: "needs_human", kind: "default", label: "question" },
+    // Une arête secondaire dessinée (en pointillés) : une escalade. Les arêtes `default`, elles, ne
+    // se dessinent plus (voir plus bas).
+    { id: "d1", from: "in_progress", to: "needs_human", kind: "escalate", label: "question" },
   ],
 };
 
@@ -130,5 +133,47 @@ describe("parcours du graphe au clavier", () => {
       "En cours, agent lane, 2 outgoing transitions",
     );
     expect(nodes.find((node) => node.id === "done")?.ariaLabel).toBe("Fait, terminal lane, 0 outgoing transitions");
+  });
+});
+
+describe("les arêtes par défaut (ADR 0031, S16-09)", () => {
+  // `from_any_agent_state` : une arête par état d'agent vers le même état — la carte s'y noyait.
+  const avecDefauts = {
+    nodes: graph.nodes,
+    edges: [
+      ...graph.edges.filter((edge) => edge.id !== "d1"),
+      { id: "a", from: "inbox", to: "needs_human", kind: "default", label: "question" },
+      { id: "b", from: "in_progress", to: "needs_human", kind: "default", label: "question" },
+      { id: "c", from: "in_progress", to: "needs_human", kind: "default", label: "budget dépassé" },
+    ],
+  };
+
+  it("ne se dessinent plus, mais placent encore l'état d'escalade", () => {
+    const { nodes, edges } = layout(avecDefauts);
+    expect(edges.map((edge) => edge.id)).toEqual(["t1", "t2", "t3"]);
+    const x = (id: string) => nodes.find((node) => node.id === id)?.position.x ?? -1;
+    expect(x("needs_human")).toBeGreaterThan(x("inbox"));
+  });
+
+  it("se disent une fois, en légende", () => {
+    expect(defaults(avecDefauts)).toEqual([
+      { label: "question", to: "Question", from: ["Inbox", "En cours"] },
+      { label: "budget dépassé", to: "Question", from: ["En cours"] },
+    ]);
+  });
+
+  it("ne s'énumèrent pas dans la description d'un état", () => {
+    expect(navigation(avecDefauts).describe("in_progress")).toBe("En cours (agent lane): → Fait (by ci).");
+  });
+});
+
+describe("un workflow neuf, depuis un gabarit", () => {
+  it("prend son nom dans `metadata.name`, en flow comme en bloc, sans toucher au reste", () => {
+    expect(renommer("metadata: { name: default-simple, version: 1 }\nstates: {}\n", "offboarding")).toBe(
+      "metadata: { name: offboarding, version: 1 }\nstates: {}\n",
+    );
+    expect(renommer("metadata:\n  name: default-simple\n  version: 1\n", "offboarding")).toBe(
+      "metadata:\n  name: offboarding\n  version: 1\n",
+    );
   });
 });

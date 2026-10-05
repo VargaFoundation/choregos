@@ -94,3 +94,20 @@ test("propositions : la décision se prend ici, un rejet exige un motif", async 
   await expect(page.getByRole("button", { name: "approve" })).toBeEnabled();
 });
 
+test("workflows : un projet en porte plusieurs, chacun se lit en processus et en carte", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows");
+  await expect(page.getByTestId("workflow-card-default-simple")).toContainText("whatever no rule claims");
+  await expect(page.getByTestId("workflow-card-hotfix")).toContainText("labelled incident");
+  await page.getByRole("link", { name: "default-simple" }).click();
+  await expect(page).toHaveURL(/\/p\/billing-api\/workflows\/default-simple$/);
+  await expect(page.getByTestId("process-step-t-implement")).toContainText("le diff reste dans le périmètre permis");
+  await page.getByRole("link", { name: "map" }).click();
+  // Les défauts partent de chaque état d'agent : la légende les dit une fois, la carte ne les dessine pas.
+  await expect(page.getByTestId("workflow-defaults").getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByTestId("workflow-graph").locator(".react-flow__edge")).toHaveCount(2);
+});
+
+test("l'ancienne page du workflow mène à la liste", async ({ page }) => {
+  await page.goto("/p/billing-api/workflow");
+  await expect(page).toHaveURL(/\/p\/billing-api\/workflows$/);
+});

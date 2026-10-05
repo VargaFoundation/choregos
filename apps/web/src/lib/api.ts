@@ -44,6 +44,9 @@ import type {
   Run,
   TrainStatus,
   WorkflowDef,
+  WorkflowRouting,
+  WorkflowSummary,
+  WorkflowTemplate,
   WorkflowValidation,
   WorkItemDto,
   WorkItemPage,
@@ -228,6 +231,20 @@ export const api = {
   workflow: (id: string) => request<WorkflowDef>(`/projects/${qualify(id)}/workflow`),
   putWorkflow: (id: string, yaml: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflow`, { method: "PUT", body: JSON.stringify({ yaml }) }),
+  // Plusieurs workflows par projet, chacun par son nom (ADR 0031).
+  workflows: (id: string) => request<WorkflowSummary[]>(`/projects/${qualify(id)}/workflows`),
+  workflowNamed: (id: string, name: string) =>
+    request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`),
+  /** Publie la version suivante ; `baseVersion` est celle qu'on a lue — périmée, l'API répond 409. */
+  putWorkflowNamed: (id: string, name: string, yaml: string, baseVersion?: number) =>
+    request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ yaml, base_version: baseVersion ?? null }),
+    }),
+  workflowVersions: (id: string, name: string) =>
+    request<WorkflowDef[]>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions`),
+  workflowRouting: (id: string) => request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`),
+  workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
   validateWorkflow: (yaml: string) =>
     request<WorkflowValidation>("/workflows/validate", { method: "POST", body: JSON.stringify({ yaml }) }),
   policy: (id: string) => request<PolicyDef>(`/projects/${qualify(id)}/policy`),
