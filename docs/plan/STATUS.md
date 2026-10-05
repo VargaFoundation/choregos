@@ -26,7 +26,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S0-05 | S0 | ✅ | — | policy engine (budgets, approbations, tentatives, périmètre) + 3 presets |
 | S0-06 | S0 | ✅ | — | 9 Protocol + fakes scriptables ; `CHOREGOS_FAKES=1` |
 | S0-07 | S0 | ✅ | — | kind, compose, Tiltfile, seed ; `make dev-up` / `dev-down` / `dev-seed` |
-| S0-08 | S0 | 🟡 | — | ci.yml ciblé par chemins, nightly.yml, release.yml (cosign, chart OCI). **Pas de SBOM** malgré ce que disait cette ligne et `SECURITY.md` ; pas de Trivy sur les images de release ; scan nocturne non bloquant (état des lieux du 2026-09-24, P1-2) |
+| S0-08 | S0 | 🟡 | — | ci.yml ciblé par chemins, nightly.yml, release.yml (cosign, chart OCI). **Pas de SBOM** malgré ce que disait cette ligne et `SECURITY.md` ; pas de Trivy sur les images de release ; scan nocturne non bloquant (état des lieux du 2026-09-24, P1-2). La porte `ci-ok` n'accepte que `success` et `skipped` : un job `abandoned` (aucun runner hébergé ne l'a pris, 2026-10-05) la laissait verte sans que les tests Python aient tourné — `tests/ci/test_porte_de_la_ci.py` joue son script contre chaque résultat |
 | S0-09 | S0 | 🟡 | — | 14 ADR, 11 runbooks, guide contributeur, dev.md, securite.md, SECURITY.md — en français ; l'anglais devient la référence le 2026-09-24 (P1-1). `SECURITY.md` promettait un SBOM et un blocage CRITICAL nocturne qui n'existent pas |
 | S1-01 | S1 | ✅ | — | worker multi-queues, répartition des activités, OTel via structlog |
 | S1-02 | S1 | ✅ | — | `WorkflowInterpreter` : boucle d'états, tentatives bornées, `continue_as_new` |

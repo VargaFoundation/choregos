@@ -303,14 +303,20 @@ jobs:
     # `changes` en fait partie aussi : quand le calcul des filtres échoue, tous les jobs qui en
     # dépendent sont *sautés*, et une porte qui ne regarde que des jobs sautés est verte. Une PR
     # Dependabot est passée comme ça, sans qu'une seule ligne n'ait été testée.
+    #
+    # La porte n'accepte que `success` et `skipped`. Elle refusait `failure` et `cancelled` : le
+    # 2026-10-05, les runners hébergés n'acquéraient plus les jobs, `python` est revenu
+    # `abandoned`, et la porte d'une PR était verte sans qu'un seul test Python ait tourné. Ce que
+    # GitHub inventera demain fermera la porte aussi : on énumère ce qui passe, pas ce qui casse.
     needs: [changes, python, contracts, web, charts, conformance-backends, images, secrets, dco]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: vérifier qu'aucun job requis n'a échoué
+      - name: vérifier que chaque job requis a réussi ou a été sauté
         run: |
           results='${{ toJSON(needs) }}'
           echo "$results"
-          echo "$results" | grep -q '"result": "failure"' && exit 1
-          echo "$results" | grep -q '"result": "cancelled"' && exit 1
+          if echo "$results" | grep -o '"result": "[a-z_]*"' | grep -qvE '"result": "(success|skipped)"'; then
+            exit 1
+          fi
           exit 0
