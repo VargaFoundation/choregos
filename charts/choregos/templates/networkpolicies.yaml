@@ -31,6 +31,11 @@ spec:
       ports: [{ protocol: TCP, port: 8432 }]
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
       ports: [{ protocol: TCP, port: 4318 }]
+    {{- if .Values.demoFakes.enabled }}
+    # Les faux servis pour une démonstration (S20-07) : l'API et l'orchestrateur les joignent.
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: choregos-demo-fakes } } }]
+      ports: [{ protocol: TCP, port: {{ .Values.demoFakes.port }} }]
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -117,7 +117,10 @@ it) are declared like a directory, with `kind` and the key by reference (`api_ke
 refused, named: a device enrolled for someone else, a reference already taken by another parcel, a
 badge the readers do not know — a mistyped UID would leave the real badge opening doors. These
 families have **no real type yet**: type `demo` keeps them in memory, each process its own — a
-demonstration, refused in staging and prod. A supplier's agent needs no family: it is an MCP
+demonstration, refused in staging and prod. Where the API and the orchestrator are several
+processes, give the `demo` connector a `url`: it then reaches the fakes served by **one** pod
+(`demoFakes.enabled` in the chart, `python -m choregos_adapters.fakes.serveur`), which also serves a
+fake Microsoft Graph for an `entra` connector whose `graph_url` and `login_url` point to it. A supplier's agent needs no family: it is an MCP
 server like any other, its tools discovered and born closed.
 
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,

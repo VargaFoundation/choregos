@@ -424,6 +424,18 @@ The migration job follows the API's image. An image from another registry is ano
 `global.imageDigest` does not apply to it — pin it with its own `image.digest`.
 `tests/charts/test_image_par_composant.py` renders both.
 
+### Demonstration fakes (`demoFakes`)
+
+`demoFakes.enabled: true` deploys **one** pod — the API image, `python -m
+choregos_adapters.fakes.serveur` — serving the fakes of the HR scenario: MCP endpoints for the device
+manager, the carrier, the badge readers and the supplier's agent
+(`http://choregos-demo-fakes:8090/{mdm,shipping,access_control,fournisseur}/mcp`), and a fake
+Microsoft Graph (`…/graph/v1.0`, `…/login`). One replica is the point: the API runs two and the
+orchestrator is apart, and in-memory fakes would show each process its own directory. The network
+policy opens that pod to the platform; `demoFakes.tokenSecret` (a secret reference) protects it
+further. A demonstration: the chart refuses it in `staging` and `prod`. `essai/rh/` plays the HR
+scenario against it.
+
 ### Which edition am I running?
 
 ```bash
@@ -506,7 +518,7 @@ What the chart does for a multi-node installation, and the knobs behind it:
 | A node drain must not take the API, the front or a worker queue down | one `PodDisruptionBudget` per component, and per orchestrator queue — rendered only when there is more than one replica (a budget on a single replica blocks the drain and protects nothing) | `choregos-api.podDisruptionBudget`, `choregos-web.podDisruptionBudget`, `choregos-orchestrator.podDisruptionBudget` |
 | Two replicas must not share a node | pod anti-affinity on `kubernetes.io/hostname`: `soft` (preferred, the default — a one-node bench still schedules), `hard` (one replica per node, or no pod), `none` | `global.antiAffinity` |
 | The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
-| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets` or `devLogin` is on, and names the value | `templates/garde.yaml` |
+| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin` or `demoFakes` is on, and names the value | `templates/garde.yaml` |
 | A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
 | An agent must not reach the Internet except where the policy says | the runners namespace denies egress by default; the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains`, and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest |
 | Temporal must be restorable | it holds the position of every ticket in flight; `docs/runbooks/temporal-backup.md` says what to copy and how to reconcile afterwards | — |

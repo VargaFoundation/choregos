@@ -27,6 +27,7 @@ réseau. On le dit ici, où la valeur est écrite.
 {{- if $g.memory.embedded }}{{ $fautes = append $fautes "global.memory.embedded" }}{{ end }}
 {{- if $g.devSecrets }}{{ $fautes = append $fautes "global.devSecrets" }}{{ end }}
 {{- if ($g.devLogin | default dict).enabled }}{{ $fautes = append $fautes "global.devLogin.enabled" }}{{ end }}
+{{- if ($.Values.demoFakes | default dict).enabled }}{{ $fautes = append $fautes "demoFakes.enabled" }}{{ end }}
 {{- if $fautes }}
 {{- fail (printf "global.environment=%s refuse : %s. Ces valeurs sont celles d'un banc (values/local.yaml) ; un environnement sérieux apporte ses dépendances et ses secrets." $g.environment (join ", " $fautes)) }}
 {{- end }}
