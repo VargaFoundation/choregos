@@ -7,6 +7,15 @@
  * avance sans l'API — c'est ce que demande la section 3.4 du plan.
  */
 import type {
+  Agent,
+  AgentCreate,
+  AgentCredential,
+  AgentMetrics,
+  ApiToken,
+  ProjectAgent,
+  ProjectAgentPut,
+  Skill,
+  SkillVersion,
   CostReport,
   DoraReport,
   FindingPage,
@@ -444,6 +453,14 @@ transitions:
   - { id: t-refine, from: inbox, to: ready, by: refiner }
   - { id: t-implement, from: ready, to: done, by: dev, gates: [scope_respected] }
 `,
+  json: {
+    metadata: { name: "default-simple", version: 1 },
+    actors: {
+      refiner: { type: "agent", role: "refine", model: "profile:standard" },
+      owner: { type: "human", group: "product-owners", sla_hours: 24 },
+      dev: { type: "agent", role: "implement", model: "profile:by_size" },
+    },
+  } as unknown as WorkflowDef["json"],
 };
 
 /** Ce que l'API répond à la validation du workflow ci-dessus : la carte de `default-simple`, et sa
@@ -637,6 +654,134 @@ function editionSimulee(yaml: string, operations: WorkflowOperation[]): Workflow
   };
 }
 
+/** Le registre de démonstration (ADR 0033) : un agent interne qui porte une skill, et un Claude Code. */
+export const agents: Agent[] = [
+  {
+    slug: "coordinateur-onboarding",
+    kind: "internal",
+    display_name: "Coordinateur onboarding",
+    description: "Prépare le plan d'accès d'une arrivée et suit chaque étape jusqu'au badge.",
+    status: "active",
+    owner: "lea@varga.dev",
+    latest_version: 2,
+    created_at: iso(60 * 24 * 9),
+    versions: [
+      {
+        version: 2,
+        spec: {
+          instructions: "Tu prépares le plan d'accès d'une arrivée : comptes, groupes, poste, badge.\nCite le profil d'accès retenu.",
+          model: "profile:standard",
+          limits: { max_turns: 40, max_minutes: 20 },
+          budget: { run_usd: 1.5, daily_usd: 5 },
+          skills: [{ slug: "procedure-onboarding", version: 1 }],
+          mcp_servers: [],
+        },
+        checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
+        created_by: "lea@varga.dev",
+        created_at: iso(60 * 24 * 2),
+      },
+      {
+        version: 1,
+        spec: { instructions: "Tu prépares le plan d'accès d'une arrivée.", model: "profile:standard" },
+        checksum: "sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+        created_by: "lea@varga.dev",
+        created_at: iso(60 * 24 * 9),
+      },
+    ],
+  },
+  {
+    slug: "claude-de-lea",
+    kind: "external",
+    display_name: "Le Claude Code de Léa",
+    status: "active",
+    owner: "lea@varga.dev",
+    latest_version: 1,
+    created_at: iso(60 * 24),
+    versions: [
+      {
+        version: 1,
+        spec: { mcp_servers: [{ connector: "choregos", tools: ["list_*", "search_*", "get_*", "create_work_item"] }] },
+        checksum: "sha256:5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+        created_by: "lea@varga.dev",
+        created_at: iso(60 * 24),
+      },
+    ],
+  },
+];
+
+export const agentMetrics: AgentMetrics = {
+  agent: "coordinateur-onboarding",
+  days: 30,
+  runs: 14,
+  succeeded: 12,
+  failed: 2,
+  success_rate: 12 / 14,
+  cost_usd: 6.42,
+  cost_by_kind: { model: 5.9, tool: 0.52 },
+  by_project: [{ project: "billing-api", runs: 14, cost_usd: 6.42 }],
+  spent_today_usd: 0.8,
+  daily_budget_usd: 5,
+};
+
+/** Le Claude Code de Léa a appelé la porte il y a trois minutes : la console le dit connecté. */
+export const agentCredentials: AgentCredential[] = [
+  {
+    id: "cred-1",
+    kind: "token",
+    token_id: "tok-claude",
+    token_name: "claude-code",
+    created_by: "lea@varga.dev",
+    created_at: iso(60 * 24),
+    last_used_at: iso(3),
+    last_client: "claude-code/2.1.0",
+  },
+];
+
+export const myTokens: ApiToken[] = [
+  {
+    id: "tok-claude",
+    name: "claude-code",
+    created_at: iso(60 * 24),
+    last_used_at: iso(3),
+    last_client: "claude-code/2.1.0",
+    scopes: ["mcp:write"],
+    project: null,
+  },
+  { id: "tok-cursor", name: "cursor", created_at: iso(60 * 2), last_used_at: null, scopes: ["mcp:read"], project: null },
+  { id: "tok-ci", name: "ci", created_at: iso(60 * 24 * 30), last_used_at: iso(60), scopes: ["*"], project: null },
+];
+
+export const projectAgents: ProjectAgent[] = [
+  {
+    agent: "coordinateur-onboarding",
+    version: 2,
+    overrides: { budget: { daily_usd: 3 } },
+    effective: { ...agents[0]!.versions![0]!.spec, budget: { run_usd: 1.5, daily_usd: 3 } },
+  },
+];
+
+export const skills: Skill[] = [
+  {
+    slug: "procedure-onboarding",
+    description: "La procédure d'arrivée : comptes, groupes, poste, badge, et qui valide quoi.",
+    status: "active",
+    latest_version: 1,
+    used_by: ["coordinateur-onboarding@2"],
+    versions: [{ version: 1, digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c", created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) }],
+  },
+];
+
+export const skillVersion: SkillVersion = {
+  version: 1,
+  digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c",
+  created_by: "lea@varga.dev",
+  created_at: iso(60 * 24 * 3),
+  files: {
+    "SKILL.md": "---\nname: procedure-onboarding\ndescription: La procédure d'arrivée.\n---\n\n# Arrivée\n\n1. Comptes Entra à J-10.\n2. Groupes selon le profil d'accès.\n",
+    "profils.md": "| poste | groupes |\n|---|---|\n| développeur | devs, vpn |\n",
+  },
+};
+
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 const proposition = {
   proposal: "pr1",
@@ -683,8 +828,45 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const corps = JSON.parse(String(init.body ?? "{}")) as { yaml: string; base_version?: number | null };
     return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
   }
+  const [chemin] = path.split("?");
+  const agentEcrit = /^\/orgs\/[^/]+\/agents\/([^/]+)(\/[a-z]+)?$/.exec(chemin ?? "");
+  if (method === "POST" && /^\/orgs\/[^/]+\/agents$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as AgentCreate;
+    return {
+      slug: corps.slug,
+      kind: corps.kind ?? "internal",
+      display_name: corps.display_name,
+      description: corps.description ?? null,
+      status: "active",
+      owner: me.email,
+      latest_version: 1,
+      versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
+    } as T;
+  }
+  if (method === "POST" && agentEcrit?.[2] === "/versions") {
+    const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
+    return { version: agent.latest_version + 1, spec: JSON.parse(String(init.body ?? "{}")), checksum: "sha256:suivante" } as T;
+  }
+  if (method === "POST" && agentEcrit?.[2] === "/credentials") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { token_id?: string };
+    const jeton = myTokens.find((t) => t.id === corps.token_id);
+    return { id: "cred-2", kind: "token", token_id: corps.token_id, token_name: jeton?.name, created_by: me.email } as T;
+  }
+  if (method === "PATCH" && agentEcrit && !agentEcrit[2]) {
+    const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
+    return { ...agent, ...(JSON.parse(String(init.body ?? "{}")) as object) } as T;
+  }
+  if (method === "PUT" && /^\/projects\/[^/]+\/agents\/[^/]+$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as ProjectAgentPut;
+    return { agent: chemin?.split("/").at(-1), version: corps.version, overrides: corps.overrides ?? {}, effective: {} } as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import$/.test(chemin ?? "")) return skills[0] as T;
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
+  const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
+  if (agentLu) return (agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
+  const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
+  if (credentials) return (credentials[1] === "claude-de-lea" ? agentCredentials : []) as T;
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
     [/^\/edition$/, { edition: "community", features: [], version: "0.13.1" }],
@@ -692,7 +874,13 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       /^\/integrations$/,
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
-    [/^\/me\/tokens$/, []],
+    [/^\/me\/tokens$/, myTokens],
+    [/^\/orgs\/[^/]+\/agents$/, agents],
+    [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
+    [/^\/projects\/[^/]+\/agents$/, projectAgents],
+    [/^\/orgs\/[^/]+\/skills$/, skills],
+    [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
+    [/^\/orgs\/[^/]+\/skills\/[^/]+$/, skills[0]],
     [/^\/ui\/admin-sections$/, [sectionScim]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],

@@ -25,6 +25,12 @@ const PAGES = [
   "/admin/edition",
   "/admin/x/scim",
   "/integrations",
+  "/agents",
+  "/agents/coordinateur-onboarding",
+  "/agents/claude-de-lea",
+  "/skills",
+  "/skills/procedure-onboarding",
+  "/p/billing-api/agents",
   "/p/billing-api/integrations/claude-desktop",
   "/p/billing-api/proposals/pr1",
 ];

@@ -6,6 +6,17 @@
  * pour que le front avance sans l'API — `NEXT_PUBLIC_API_MODE=mock`).
  */
 import type {
+  Agent,
+  AgentCreate,
+  AgentCredential,
+  AgentMetrics,
+  AgentPatch,
+  AgentSpec,
+  AgentVersion,
+  ProjectAgent,
+  ProjectAgentPut,
+  Skill,
+  SkillVersion,
   AgentBackendInfo,
   ApiToken,
   ApiTokenCreate,
@@ -188,6 +199,42 @@ export const api = {
     request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
   addMember: (org: string, body: MembershipUpsert) =>
     request<Membership>(`/orgs/${org}/members`, { method: "POST", body: JSON.stringify(body) }),
+  /** Le registre d'agents de l'organisation (ADR 0033) : une version ne se modifie jamais. */
+  agents: (org: string) => request<Agent[]>(`/orgs/${org}/agents`),
+  agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
+  createAgent: (org: string, body: AgentCreate) =>
+    request<Agent>(`/orgs/${org}/agents`, { method: "POST", body: JSON.stringify(body) }),
+  updateAgent: (org: string, slug: string, body: AgentPatch) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
+    request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
+  agentMetrics: (org: string, slug: string, days = 30) =>
+    request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
+  agentCredentials: (org: string, slug: string) =>
+    request<AgentCredential[]>(`/orgs/${org}/agents/${slug}/credentials`),
+  attachAgentToken: (org: string, slug: string, tokenId: string) =>
+    request<AgentCredential>(`/orgs/${org}/agents/${slug}/credentials`, {
+      method: "POST",
+      body: JSON.stringify({ kind: "token", token_id: tokenId }),
+    }),
+  detachAgentCredential: (org: string, slug: string, id: string) =>
+    request<void>(`/orgs/${org}/agents/${slug}/credentials/${id}`, { method: "DELETE" }),
+  projectAgents: (id: string) => request<ProjectAgent[]>(`/projects/${qualify(id)}/agents`),
+  pinProjectAgent: (id: string, slug: string, body: ProjectAgentPut) =>
+    request<ProjectAgent>(`/projects/${qualify(id)}/agents/${slug}`, { method: "PUT", body: JSON.stringify(body) }),
+  unpinProjectAgent: (id: string, slug: string) =>
+    request<void>(`/projects/${qualify(id)}/agents/${slug}`, { method: "DELETE" }),
+  /** La bibliothèque de skills : un dossier, importé en zip, versionné, jamais réécrit. */
+  skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
+  skill: (org: string, slug: string) => request<Skill>(`/orgs/${org}/skills/${slug}`),
+  skillVersion: (org: string, slug: string, version: number) =>
+    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}`),
+  importSkill: (org: string, archive: Blob) =>
+    request<Skill>(`/orgs/${org}/skills/import`, {
+      method: "POST",
+      body: archive,
+      headers: { "Content-Type": "application/zip" },
+    }),
   myTokens: () => request<ApiToken[]>("/me/tokens"),
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),

@@ -174,3 +174,7 @@ class AgentCredentialDto(Dto):
     created_by: str | None = None
     created_at: datetime | None = None
     revoked_at: datetime | None = None
+    #: Ce que le jeton rattaché dit de son dernier appel : la console montre un client « connecté ».
+    token_name: str | None = None
+    last_used_at: datetime | None = None
+    last_client: str | None = None

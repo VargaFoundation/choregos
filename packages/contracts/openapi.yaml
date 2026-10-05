@@ -1711,6 +1711,9 @@ components:
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
         revoked_at: { type: [string, "null"], format: date-time }
+        token_name: { type: [string, "null"], description: le nom du jeton rattaché }
+        last_used_at: { type: [string, "null"], format: date-time, description: "le dernier appel du jeton à la porte MCP : la console dit « connecté »" }
+        last_client: { type: [string, "null"], description: "le client de ce dernier appel (`User-Agent`, tronqué)" }
     AgentOverrides:
       type: object
       description: Ce qu'un projet change d'une version — seulement resserrer.
