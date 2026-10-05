@@ -461,6 +461,22 @@ export const workflowValidation: WorkflowValidation = {
 };
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
+const proposition = {
+  proposal: "pr1",
+  action_type: "open_infra_pr",
+  status: "pending_approval",
+  target: ["os-reboot-required"],
+  params: { file: "platform/maintenance/os-reboot-required.yaml" },
+  justification: "Deux nœuds attendent un redémarrage depuis une semaine : une PR planifie la fenêtre.",
+  proposed_by: { kind: "user", id: "lea@varga.dev", via: "mcp" },
+  approval: { approvers: [{ role: "owner", min: 1 }], step_up_minutes: 10, separation_of_duties: true },
+  decisions: [],
+  effects: [],
+  evidence: [],
+  created_at: iso(42),
+  finished_at: null,
+};
+
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -510,6 +526,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
     [/^\/projects\/[^/]+\/connectors$/, []],
+    [/^\/projects\/[^/]+\/proposals\/[^/]+$/, proposition],
+    [/^\/projects\/[^/]+\/proposals$/, [proposition]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
     [/^\/work-items\/[^/]+\/runs$/, runs],
     [/^\/work-items\/[^/]+$/, workItems.items[0]],

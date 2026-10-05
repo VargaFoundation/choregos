@@ -38,6 +38,7 @@ import type {
   PolicyDef,
   ProjectDto,
   ProjectPage,
+  Proposal,
   ProvisionStatus,
   ReleasePage,
   Run,
@@ -90,6 +91,22 @@ function versLaConnexion(): void {
   window.location.assign(new URL(`/login?next=${next}`, window.location.origin).toString());
 }
 
+/**
+ * Un 401 `step_up_required` n'est pas une session morte : le geste demande une authentification
+ * RÉCENTE (une décision d'action, ADR 0030). On repasse par l'IdP avec `reauth=1`, et l'on revient
+ * ici — envoyer vers `/login` faisait boucler, puisque la session, elle, est vivante.
+ */
+function demandeUneReauthentification(problem: { errors?: unknown[] }): boolean {
+  const premier = (problem.errors ?? [])[0] as { error?: string } | undefined;
+  return premier?.error === "step_up_required";
+}
+
+function versLaReauthentification(): void {
+  if (typeof window === "undefined") return;
+  const ici = window.location.pathname + window.location.search;
+  window.location.assign(new URL(api.loginUrl(ici, undefined, true), window.location.origin).toString());
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (IS_MOCK) {
     // Les fixtures ne partent dans le bundle que si le mode démo est demandé : importées
@@ -104,13 +121,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     cache: "no-store",
   });
   if (!response.ok) {
-    let problem: { title?: string; detail?: string } = {};
+    let problem: { title?: string; detail?: string; errors?: unknown[] } = {};
     try {
       problem = await response.json();
     } catch {
       problem = { title: response.statusText };
     }
-    if (response.status === 401) versLaConnexion();
+    if (response.status === 401) {
+      if (demandeUneReauthentification(problem as { errors?: unknown[] })) versLaReauthentification();
+      else versLaConnexion();
+    }
     throw new ApiError(response.status, problem);
   }
   if (response.status === 204) return undefined as T;
@@ -123,11 +143,22 @@ export const api = {
   edition: () => request<Edition>("/edition"),
   /** Où brancher un client MCP (ADR 0030) : l'URL de la porte, pour la page Integrations. */
   integrations: () => request<Integrations>("/integrations"),
+  /** Les propositions d'action de l'ontologie (greffon `choregos-ontology`). */
+  proposals: (projectId: string, status?: string) =>
+    request<Proposal[]>(`/projects/${qualify(projectId)}/proposals${status ? `?status=${status}` : ""}`),
+  proposal: (projectId: string, id: string) => request<Proposal>(`/projects/${qualify(projectId)}/proposals/${id}`),
+  /** Une décision exige une session RÉCENTE : un 401 `step_up_required` repasse par l'IdP. */
+  decideProposal: (projectId: string, id: string, body: { decision: "approve" | "reject"; reason?: string }) =>
+    request<Proposal>(`/projects/${qualify(projectId)}/proposals/${id}/decision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
-  loginUrl: (next?: string, as?: string) => {
+  loginUrl: (next?: string, as?: string, reauth = false) => {
     const params = new URLSearchParams();
     if (next) params.set("redirect_to", next);
     if (as) params.set("as", as);
+    if (reauth) params.set("reauth", "1");
     const q = params.toString();
     return `${API_BASE}/auth/login${q ? `?${q}` : ""}`;
   },

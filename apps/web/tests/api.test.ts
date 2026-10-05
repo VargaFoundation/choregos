@@ -35,3 +35,39 @@ describe("client API", () => {
     expect(report.lead_time.level).toBe("elite");
   });
 });
+
+describe("décision qui demande une authentification récente", () => {
+  it("un 401 step_up_required repasse par l'IdP avec reauth=1, et revient ici", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", {
+      location: { pathname: "/p/infra/proposals/pr1", search: "", origin: "http://c", assign },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ title: "Décision refusée", errors: [{ error: "step_up_required", reauth: "GET …" }] }),
+            { status: 401 },
+          ),
+      ),
+    );
+    const { api } = await import("@/lib/api");
+    await expect(api.decideProposal("infra", "pr1", { decision: "approve" })).rejects.toThrow();
+    expect(assign).toHaveBeenCalledWith("http://c/api/v1/auth/login?redirect_to=%2Fp%2Finfra%2Fproposals%2Fpr1&reauth=1");
+    vi.unstubAllGlobals();
+  });
+
+  it("un 401 ordinaire mène toujours à la page de connexion", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", { location: { pathname: "/p/infra", search: "", origin: "http://c", assign } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ title: "Non authentifié" }), { status: 401 })),
+    );
+    const { api } = await import("@/lib/api");
+    await expect(api.me()).rejects.toThrow();
+    expect(assign).toHaveBeenCalledWith("http://c/login?next=%2Fp%2Finfra");
+    vi.unstubAllGlobals();
+  });
+});
