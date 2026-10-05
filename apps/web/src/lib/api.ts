@@ -243,6 +243,12 @@ export const api = {
     }),
   workflowVersions: (id: string, name: string) =>
     request<WorkflowDef[]>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions`),
+  /** Republie une version passée comme la suivante : rien n'est réécrit, l'historique s'allonge. */
+  restoreWorkflowVersion: (id: string, name: string, version: number) =>
+    request<WorkflowDef>(
+      `/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions/${version}/restore`,
+      { method: "POST" },
+    ),
   workflowRouting: (id: string) => request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
   validateWorkflow: (yaml: string) =>

@@ -111,3 +111,12 @@ test("l'ancienne page du workflow mène à la liste", async ({ page }) => {
   await page.goto("/p/billing-api/workflow");
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows$/);
 });
+
+test("historique d'un workflow : deux versions se comparent, une ancienne se republie", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/default-simple/history");
+  await expect(page.getByRole("table", { name: "versions of default-simple" }).getByRole("row")).toHaveCount(3);
+  // Par défaut, la version d'avant contre l'active : la garantie ajoutée en v2.
+  await expect(page.getByTestId("workflow-diff")).toContainText("gates: [scope_respected, ci_green]");
+  await page.getByRole("button", { name: "restore v1" }).click();
+  await expect(page.getByRole("button", { name: "republish v1" })).toBeVisible();
+});

@@ -512,8 +512,18 @@ export const workflowRouting: WorkflowRouting = {
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
 };
 
+/** Deux versions : la v2, active, ajoute une garantie au passage en revue. */
 export const workflowVersions: WorkflowDef[] = [
-  { ...workflow, version: 1, is_active: true, created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) },
+  {
+    ...workflow,
+    version: 2,
+    is_active: true,
+    checksum: "sha256:v2demo",
+    created_by: "marc@varga.dev",
+    created_at: iso(60 * 5),
+    yaml: workflow.yaml.replace("gates: [scope_respected]", "gates: [scope_respected, ci_green]"),
+  },
+  { ...workflow, version: 1, is_active: false, created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) },
 ];
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
