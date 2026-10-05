@@ -11,13 +11,21 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: choregos
 {{- end -}}
 
-{{/* Référence d'image : par digest dès que `global.imageDigest` est fourni (exigence Kyverno). */}}
+{{/*
+Référence d'image : par digest dès que `global.imageDigest` est fourni (exigence Kyverno).
+
+Un composant peut venir d'un AUTRE registre (`image.registry`) : l'édition entreprise sert ses
+images de l'API et de l'orchestrateur depuis un projet privé, le reste vient du cœur (ADR 0032,
+S17-03). Une image d'un autre registre est une autre image : le digest global ne la désigne pas,
+seuls son `image.digest` ou son étiquette comptent.
+*/}}
 {{- define "choregos.image" -}}
 {{- $global := .global -}}
-{{- $repo := printf "%s/%s" $global.imageRegistry .image.repository -}}
+{{- $ailleurs := and .image.registry (ne .image.registry $global.imageRegistry) -}}
+{{- $repo := printf "%s/%s" (default $global.imageRegistry .image.registry) .image.repository -}}
 {{- if .image.digest -}}
 {{ $repo }}@{{ .image.digest }}
-{{- else if $global.imageDigest -}}
+{{- else if and $global.imageDigest (not $ailleurs) -}}
 {{ $repo }}@{{ $global.imageDigest }}
 {{- else -}}
 {{ $repo }}:{{ default $global.imageTag .image.tag }}

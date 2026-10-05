@@ -409,6 +409,21 @@ tenant's base layer that creates it from a secret store, not this chart.
 Without the value, no pod declares one. A test renders the chart both ways and fails if a new
 pod is added without it.
 
+A component can come from **another registry** than `global.imageRegistry` — the enterprise
+edition serves its API and orchestrator images from a private project, the rest comes from the
+core:
+
+```yaml
+choregos-api:
+  image: { registry: harbor.example.org/choregos-ee, repository: choregos-api-ee }
+choregos-orchestrator:
+  image: { registry: harbor.example.org/choregos-ee, repository: choregos-orchestrator-ee }
+```
+
+The migration job follows the API's image. An image from another registry is another image:
+`global.imageDigest` does not apply to it — pin it with its own `image.digest`.
+`tests/charts/test_image_par_composant.py` renders both.
+
 ### Which edition am I running?
 
 ```bash

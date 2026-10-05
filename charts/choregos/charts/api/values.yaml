@@ -1,6 +1,9 @@
 enabled: true
 replicaCount: 2
 image:
+  # Vide : `global.imageRegistry`. Un autre registre — les images `-ee` de l'édition entreprise,
+  # servies par un projet privé — se pose ici, composant par composant.
+  registry: ""
   repository: choregos-api
   tag: ""
   digest: ""
