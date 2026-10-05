@@ -25,6 +25,9 @@ async def test_une_garantie_ajoutee_se_relit_en_diff_et_s_annule(client: AsyncCl
     assert reponse.status_code == 200, reponse.text
     corps = reponse.json()
     assert corps["valid"] is True and corps["graph"]["nodes"]
+    # La vue processus du texte édité (S16-08) : la garantie ajoutée y est dite.
+    (etape,) = [e for e in corps["process"] if e["id"] == "t-implement"]
+    assert "ci_green" in {g["name"] for g in etape["gates"]}
     modifiees = [
         ligne
         for ligne in corps["diff"].splitlines()
