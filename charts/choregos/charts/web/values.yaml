@@ -11,6 +11,10 @@ resources:
   limits: { cpu: 500m, memory: 512Mi }
 ingress:
   enabled: true
+  # Annotations de l'Ingress (`kind: ingress`). Pour un contrôleur qui refuse deux Ingress sur un même
+  # hôte — NGINX Inc. : « All hosts are taken by other resources » — l'API et la console sur un seul
+  # hôte se déclarent en minions d'un Ingress maître : `nginx.org/mergeable-ingress-type: minion`.
+  annotations: {}
   hostnames: ["app.choregos.local"]
   gateway: choregos-gateway
   gatewayNamespace: gateway
