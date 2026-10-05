@@ -1622,6 +1622,7 @@ components:
         groups: { type: array, items: { type: string }, description: "les groupes de projets qui y ont droit ; aucun : tous" }
         price_usd: { type: [number, "null"] }
         schema_digest: { type: [string, "null"] }
+        input_schema: { type: [object, "null"], additionalProperties: true, description: "le schéma d'entrée que le courtier annonce à l'agent et vérifie avant l'appel" }
         description: { type: [string, "null"] }
     ConnectorDiscovery:
       type: object

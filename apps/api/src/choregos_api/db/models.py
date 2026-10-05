@@ -534,6 +534,8 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     groups: Mapped[list[str]] = mapped_column(Json, default=list)
     price_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     schema_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: Ce que le courtier annonce à l'agent, et vérifie avant de joindre le serveur.
+    input_schema: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

@@ -86,6 +86,19 @@ server stops offering is removed, with what projects tightened of it. A tool ann
 never a person's token, never a run's; a key the process cannot resolve answers `502` naming it,
 and the connector shows the error.
 
+**Runs reach these servers through the platform.** An agent's version names the servers it uses
+and the tools it takes from each — `mcp_servers: [{"connector": "supplier", "tools": ["track_*"]}]`
+(`["*"]` for all; a server named without patterns opens nothing). A run of that agent sees, as
+`supplier__track_order`, the tools that are **in its selection, `allowed`** for its project
+(after the project's tightening) and open to its groups — an `approval` operation is a governed
+action, not a tool. The agent calls it through `choregos-tools`; the platform checks the
+arguments against the tool's schema (`400`, nothing billed), counts the call against the run's
+`tool_calls_per_run` (`429`), calls the server **with the connector's key, resolved in the API**
+— the run's pod holds only its run token — records the cost (`provider: mcp:<connector>`,
+the operation's price) and a `tool.called` event, and passes what the server returns through the
+injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
+outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
+
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still
