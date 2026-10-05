@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { Badge, TabList, tabClasses } from "@varga/design-system";
+import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
+import { BrouillonProvider } from "@/components/workflows/brouillon";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 
 const VUES = [
@@ -63,7 +65,12 @@ export default function WorkflowLayout({
           );
         })}
       </TabList>
-      {children}
+      {/* Le brouillon est commun à la carte et à la vue processus : un geste sur l'une se voit sur
+          l'autre, et rien n'est publié avant « publish ». */}
+      <BrouillonProvider slug={slug} name={name}>
+        <BarreDuBrouillon />
+        {children}
+      </BrouillonProvider>
     </div>
   );
 }

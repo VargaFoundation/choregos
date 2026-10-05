@@ -41,6 +41,21 @@ for (const path of PAGES) {
   });
 }
 
+/** La carte en cours d'édition (S16-12) : le panneau d'un état et le brouillon passent axe aussi. */
+test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/default-simple/map");
+  await page.getByTestId("workflow-graph").locator('.react-flow__node[data-id="inbox"]').click();
+  const panneau = page.getByTestId("panneau-etat");
+  await panneau.getByLabel("label").fill("Nouvelles demandes");
+  await panneau.getByRole("button", { name: "set label" }).click();
+  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  const bloquantes = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+  expect(
+    bloquantes.map((v) => `${v.id} (${v.impact}) : ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
+  ).toEqual([]);
+});
+
 /**
  * Le graphe de workflow se parcourt au clavier : Tab atteint les états, les flèches suivent
  * les transitions, et l'état sous le curseur est décrit (aria-live) sous la carte.
@@ -69,4 +84,8 @@ test("graphe de workflow : parcours au clavier et description de l'état", async
   await page.keyboard.press("Home");
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "inbox");
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("aria-label", /À trier, agent lane, 1 outgoing transition/);
+
+  // Entrée sur un état ouvre son panneau : la carte se modifie au clavier aussi (S16-12).
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("panneau-etat")).toBeVisible();
 });

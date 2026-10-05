@@ -8,7 +8,9 @@ les commentaires restent.
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -289,3 +291,24 @@ def test_plusieurs_operations_s_annulent_dans_l_ordre_contraire() -> None:
     assert "controle" in yaml.safe_load(edition.yaml)["states"]
     inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
     assert editer(edition.yaml, inverse).yaml == MELANGE
+
+
+# La console (S16-12) émet ces opérations : chacun de ses gestes doit passer la porte du cœur. Le même
+# fichier est lu par `apps/web/tests/workflow-edition.test.tsx`, qui vérifie que la console les émet.
+GESTES = json.loads(
+    (Path(__file__).parents[3] / "apps/web/tests/fixtures/gestes-de-la-console.json").read_text("utf-8")
+)
+
+
+@pytest.mark.parametrize(
+    "geste", GESTES["gestes"], ids=[f"{g['geste']}-{i}" for i, g in enumerate(GESTES["gestes"])]
+)
+def test_chaque_geste_de_la_console_se_greffe_et_se_defait(geste: dict[str, Any]) -> None:
+    texte = GESTES["workflow"]
+    edition = editer(texte, [geste["operation"]])
+    # Greffé, pas forcément valide (retirer la seule transition vers un état le laisse orphelin) :
+    # la validité, l'API la dit à côté du texte, sans refuser le geste.
+    assert edition.yaml != texte
+    assert isinstance(yaml.safe_load(edition.yaml), dict)
+    inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
+    assert editer(edition.yaml, inverse).yaml == texte

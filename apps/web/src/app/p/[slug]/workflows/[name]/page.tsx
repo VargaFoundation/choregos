@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { use } from "react";
-import { ActorIcon, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
-import { useWorkflow } from "@/components/workflows/use-workflow";
+import { useState } from "react";
+import { ActorIcon, Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { useBrouillon } from "@/components/workflows/brouillon";
+import { PanneauDeTransition } from "@/components/workflows/panneaux";
 
 const GENRE: Record<string, string> = {
   agent: "agent",
@@ -17,19 +18,14 @@ const GENRE: Record<string, string> = {
  * état au suivant, à quelles conditions, et ce qui arrive quand ça rate. C'est ce qu'un métier lit ;
  * la carte en montre la forme.
  */
-export default function ProcessPage({
-  params,
-}: {
-  params: Promise<{ slug: string; name: string }>;
-}) {
-  const { slug, name } = use(params);
-  const { definition, validation } = useWorkflow(
-    slug,
-    decodeURIComponent(name),
-  );
-  if (definition.error)
-    return <ErrorNote>{String(definition.error)}</ErrorNote>;
-  const etapes = validation.data?.process;
+export default function ProcessPage() {
+  const brouillon = useBrouillon();
+  const [ouverte, setOuverte] = useState<string | null>(null);
+  if (brouillon.definition.error)
+    return <ErrorNote>{String(brouillon.definition.error)}</ErrorNote>;
+  // Le brouillon : les gestes pas encore publiés se lisent ici aussi (S16-12).
+  const etapes = brouillon.process;
+  const acteurs = Object.keys(brouillon.definition.data?.json?.actors ?? {});
   if (!etapes) return <Empty>reading the workflow…</Empty>;
   if (etapes.length === 0)
     return <Empty title="no transition">this workflow has no step yet.</Empty>;
@@ -39,10 +35,15 @@ export default function ProcessPage({
         <li key={etape.id}>
           <Card>
             <div className="space-y-3" data-testid={`process-step-${etape.id}`}>
-              <p className="text-sm">
-                <span className="mr-2 text-ink-muted">{index + 1}.</span>
-                {etape.sentence}
-              </p>
+              <div className="flex items-start gap-2">
+                <p className="flex-1 text-sm">
+                  <span className="mr-2 text-ink-muted">{index + 1}.</span>
+                  {etape.sentence}
+                </p>
+                <Button size="sm" onClick={() => setOuverte(ouverte === etape.id ? null : etape.id)}>
+                  {ouverte === etape.id ? "close" : `edit ${etape.id}`}
+                </Button>
+              </div>
               <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5 text-xs">
                 <dt className="text-ink-muted">from → to</dt>
                 <dd className="flex flex-wrap items-center gap-2">
@@ -98,6 +99,20 @@ export default function ProcessPage({
                   </>
                 )}
               </dl>
+              {ouverte === etape.id && (
+                <PanneauDeTransition
+                  arete={{
+                    id: etape.id,
+                    from: etape.from,
+                    to: etape.to,
+                    kind: "nominal",
+                    actor: etape.actor,
+                    gates: (etape.gates ?? []).map((g) => g.name ?? "").filter(Boolean),
+                    timeout_hours: etape.timeout_hours,
+                  }}
+                  acteurs={acteurs}
+                />
+              )}
             </div>
           </Card>
         </li>

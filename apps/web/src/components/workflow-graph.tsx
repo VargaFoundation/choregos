@@ -55,7 +55,14 @@ const COLUMN_WIDTH = 210;
  * l'autre, Début/Fin sautent aux extrémités. L'état sous le curseur est décrit sous la
  * carte, avec ses transitions sortantes — c'est cette phrase qu'un lecteur d'écran lit.
  */
-export function WorkflowGraph({ graph }: { graph: { nodes: unknown[]; edges: unknown[] } }) {
+export function WorkflowGraph({
+  graph,
+  onSelect,
+}: {
+  graph: { nodes: unknown[]; edges: unknown[] };
+  /** Un état ou une transition choisis (clic, ou Entrée sur un état) : la carte devient éditable. */
+  onSelect?: (kind: "node" | "edge", id: string) => void;
+}) {
   const { nodes, edges } = useMemo(() => layout(graph), [graph]);
   const nav = useMemo(() => navigation(graph), [graph]);
   const [focused, setFocused] = useState<string | null>(null);
@@ -71,6 +78,11 @@ export function WorkflowGraph({ graph }: { graph: { nodes: unknown[]; edges: unk
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const current = (event.target as HTMLElement).closest<HTMLElement>(".react-flow__node")?.dataset.id;
     if (!current) return;
+    if (event.key === "Enter" && onSelect) {
+      event.preventDefault();
+      onSelect("node", current);
+      return;
+    }
     const target = nav.move(current, event.key);
     if (target === undefined) return;
     event.preventDefault();
@@ -100,6 +112,8 @@ export function WorkflowGraph({ graph }: { graph: { nodes: unknown[]; edges: unk
           nodesDraggable={false}
           nodesConnectable={false}
           edgesFocusable={false}
+          onNodeClick={onSelect ? (_, node) => onSelect("node", node.id) : undefined}
+          onEdgeClick={onSelect ? (_, edge) => onSelect("edge", edge.id) : undefined}
         >
           <Background gap={20} />
           <MiniMap pannable zoomable className="!bg-surface-muted" />
@@ -107,7 +121,9 @@ export function WorkflowGraph({ graph }: { graph: { nodes: unknown[]; edges: unk
         </ReactFlow>
       </div>
       <p className="text-xs text-ink-muted" aria-live="polite" data-testid="workflow-graph-focus">
-        {focused ? nav.describe(focused) : "Tab reaches the states; ← → follow transitions, ↑ ↓ change state, Home/End jump to the ends."}
+        {focused
+          ? nav.describe(focused)
+          : `Tab reaches the states; ← → follow transitions, ↑ ↓ change state, Home/End jump to the ends${onSelect ? "; Enter edits the state" : ""}.`}
       </p>
     </div>
   );
@@ -119,6 +135,14 @@ export function WorkflowGraph({ graph }: { graph: { nodes: unknown[]; edges: unk
  * ne se dessinent plus — la légende les dit une fois (`defaults`).
  */
 const isDefault = (edge: GraphEdge) => edge.kind === "default";
+
+/** L'identifiant d'une flèche dessinée : celui de la transition, ou sa place parmi les flèches. */
+const idDessine = (edge: GraphEdge, index: number) => edge.id ?? `${edge.from}->${edge.to}-${index}`;
+
+/** La transition derrière une flèche de la carte : les défauts ne se dessinent pas (voir `layout`). */
+export function areteDessinee(graph: { nodes: unknown[]; edges: unknown[] }, id: string): GraphEdge | undefined {
+  return (graph.edges as GraphEdge[]).filter((edge) => !isDefault(edge)).find((edge, index) => idDessine(edge, index) === id);
+}
 
 export function layout(graph: { nodes: unknown[]; edges: unknown[] }): { nodes: Node[]; edges: Edge[] } {
   const raw = graph.nodes as GraphNode[];
@@ -155,7 +179,7 @@ export function layout(graph: { nodes: unknown[]; edges: unknown[] }): { nodes: 
   const edges: Edge[] = rawEdges.map((edge, index) => {
     const secondary = Boolean(edge.kind && edge.kind !== "nominal");
     return {
-      id: edge.id ?? `${edge.from}->${edge.to}-${index}`,
+      id: idDessine(edge, index),
       source: edge.from,
       target: edge.to,
       label: secondary ? edge.label : [edge.actor, edge.gates?.join(", ")].filter(Boolean).join(" · "),
