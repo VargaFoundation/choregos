@@ -16,6 +16,7 @@ const PAGES = [
   "/admin",
   "/integrations",
   "/p/billing-api/integrations/claude-desktop",
+  "/p/billing-api/proposals/pr1",
 ];
 
 for (const path of PAGES) {

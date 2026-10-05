@@ -82,3 +82,15 @@ test("integrations d'un projet : la porte du projet, et claude.ai dit pourquoi i
   await expect(page.getByText("not reachable from here yet")).toBeVisible();
 });
 
+test("propositions : la décision se prend ici, un rejet exige un motif", async ({ page }) => {
+  await page.goto("/p/billing-api/proposals");
+  await expect(page.getByRole("link", { name: "open_infra_pr" })).toBeVisible();
+  await page.getByRole("link", { name: "open_infra_pr" }).click();
+  await expect(page).toHaveURL(/\/p\/billing-api\/proposals\/pr1$/);
+  await expect(page.getByText("you may be asked to sign in again")).toBeVisible();
+  await expect(page.getByRole("button", { name: "reject" })).toBeDisabled();
+  await page.getByLabel("reason").fill("la fenêtre de maintenance est gelée");
+  await expect(page.getByRole("button", { name: "reject" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "approve" })).toBeEnabled();
+});
+
