@@ -19,7 +19,6 @@ from ..db.models import (
     Project,
     Release,
     Run,
-    WorkflowDef,
     WorkItem,
 )
 from ..errors import conflict
@@ -37,7 +36,7 @@ from ..schemas import (
 )
 from ..temporal import get_temporal, interpreter_id
 from .couts import estimate_cost
-from .definitions import active_workflow, workflow_model
+from .definitions import default_workflow, workflow_du_ticket, workflow_model
 from .evenements import persist_event
 
 
@@ -105,7 +104,9 @@ def human_request_dto(row: HumanRequest) -> HumanRequestDto:
 async def work_item_dto(
     session: AsyncSession, item: WorkItem, project: Project, *, with_temporal: bool = False
 ) -> WorkItemDto:
-    workflow_row = await session.get(WorkflowDef, item.workflow_def_id) if item.workflow_def_id else None
+    # Le workflow DU TICKET : sa version épinglée, sinon le défaut du projet — plus le gabarit
+    # `default-simple`, qui faisait afficher un workflow que le projet n'avait jamais eu.
+    workflow_row = await workflow_du_ticket(session, item)
     workflow = workflow_model(workflow_row)
     state = workflow.states.get(item.state)
     current = (
@@ -268,7 +269,8 @@ async def creer_un_ticket(
         raise conflict("ce projet reçoit ses tickets d'un tracker externe : créez la demande là-bas")
     from choregos_core import WorkflowEngine
 
-    workflow = workflow_model(await active_workflow(session, project.id))
+    ligne = await default_workflow(session, project.id)
+    workflow = workflow_model(ligne)
     key = await cle_de_ticket_interne(session, project)
     item = WorkItem(
         project_id=project.id,
@@ -278,6 +280,8 @@ async def creer_un_ticket(
         size=demande.size,
         risk=demande.risk,
         state=WorkflowEngine(workflow).initial_state,
+        # Épinglé à sa naissance (ADR 0031) : une version publiée ensuite ne le déplace pas.
+        workflow_def_id=ligne.id if ligne is not None else None,
         created_by=principal.email,
         allowed_paths=[],
     )

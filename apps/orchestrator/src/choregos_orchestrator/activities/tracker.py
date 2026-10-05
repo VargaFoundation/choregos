@@ -15,7 +15,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..markdown import STATUS_MARKER, StageLine, StatusComment, render_human_request
-from .base import db, load_work_item, project_bundle, tracker_possede_les_tickets
+from .base import db, load_work_item, project_bundle, tracker_possede_les_tickets, workflow_du_ticket
 
 
 @activity.defn(name="mirror_state")
@@ -25,7 +25,7 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         state_name = payload["state"]
-        state = bundle.workflow.states.get(state_name)
+        state = (await workflow_du_ticket(session, item)).states.get(state_name)
         previous = item.state
         item.state = state_name
         if state is not None and state.terminal and item.closed_at is None:
@@ -55,6 +55,8 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
+        # Le workflow DU TICKET (ADR 0031) : le commentaire nomme celui où il est né.
+        workflow = await workflow_du_ticket(session, item)
         runs = (
             (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
             .scalars()
@@ -93,7 +95,7 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
             if kind == "run":
                 tokens = entry.tokens or {}
                 state = (
-                    bundle.workflow.states.get(entry.stage_input.get("transition", {}).get("to", ""))
+                    workflow.states.get(entry.stage_input.get("transition", {}).get("to", ""))
                     if entry.stage_input
                     else None
                 )
@@ -136,11 +138,11 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
         totals = item.totals or {}
         engine = bundle.engine
         budget_usd = engine.budget_ticket(item.size)
-        state = bundle.workflow.states.get(item.state)
+        state = workflow.states.get(item.state)
         estimate = payload.get("estimate_eur")
         comment = StatusComment(
-            workflow=bundle.workflow.metadata.name,
-            workflow_version=bundle.workflow.metadata.version,
+            workflow=workflow.metadata.name,
+            workflow_version=workflow.metadata.version,
             size=item.size,
             risk=item.risk,
             state_display=state.display if state else item.state,
@@ -372,11 +374,13 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                     size=str(data.size) if data.size else None,
                     risk=str(data.risk) if data.risk else None,
                     state=bundle.workflow.initial_state,
+                    # Né dans le workflow par défaut, épinglé à sa version (ADR 0031).
+                    workflow_def_id=bundle.workflow_def_id,
                 )
                 session.add(item)
                 await session.flush()
                 created.append(key)
-            state = bundle.workflow.states.get(item.state)
+            state = (await workflow_du_ticket(session, item)).states.get(item.state)
             if item.paused or item.closed_at is not None or (state is not None and state.terminal):
                 continue
             workflow_id = interpreter_id(bundle.slug, key)

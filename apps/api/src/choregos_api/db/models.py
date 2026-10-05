@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -71,6 +72,9 @@ class Project(Base, PkMixin, TimestampMixin):
     config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
     provision_state: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: Le nom du workflow par défaut (ADR 0031) : celui d'un ticket qui ne dit pas le sien et
+    #: qu'aucune règle de routage ne désigne. Le défaut appartient au projet, pas à une version.
+    default_workflow: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     org: Mapped[Organization] = relationship(back_populates="projects")
     connectors: Mapped[list[Connector]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -94,7 +98,18 @@ class Connector(Base, PkMixin, TimestampMixin):
 
 class WorkflowDef(Base, PkMixin, TimestampMixin):
     __tablename__ = "workflow_defs"
-    __table_args__ = (UniqueConstraint("project_id", "name", "version", name="project_name_version"),)
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", "version", name="project_name_version"),
+        # ADR 0031 : un projet porte plusieurs workflows, mais une seule version active par nom.
+        Index(
+            "uq_workflow_defs_actif_par_nom",
+            "project_id",
+            "name",
+            unique=True,
+            sqlite_where=text("is_active"),
+            postgresql_where=text("is_active"),
+        ),
+    )
 
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(64))
@@ -156,8 +171,10 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     size: Mapped[str | None] = mapped_column(String(4), nullable=True)
     risk: Mapped[str | None] = mapped_column(String(8), nullable=True)
     state: Mapped[str] = mapped_column(String(64), default="inbox", index=True)
+    #: La VERSION du workflow où le ticket est né (ADR 0031) : publier une version nouvelle ne le
+    #: déplace jamais ; seul `migrate` le fait, exprès.
     workflow_def_id: Mapped[str | None] = mapped_column(
-        ForeignKey("workflow_defs.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("workflow_defs.id", ondelete="SET NULL"), nullable=True, index=True
     )
     policy_id: Mapped[str | None] = mapped_column(
         ForeignKey("policies.id", ondelete="SET NULL"), nullable=True

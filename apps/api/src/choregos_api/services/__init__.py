@@ -17,10 +17,12 @@ from .definitions import (
     DEFAULT_WORKFLOW,
     active_policy,
     active_workflow,
+    default_workflow,
     ensure_defaults,
     policy_engine,
     policy_model,
     project_config,
+    workflow_du_ticket,
     workflow_model,
     workflow_yaml,
 )
@@ -67,6 +69,7 @@ __all__ = [
     "chronologie",
     "cle_de_ticket_interne",
     "creer_un_ticket",
+    "default_workflow",
     "ensure_defaults",
     "estimate_cost",
     "first_pass_merge_rate",
@@ -86,6 +89,7 @@ __all__ = [
     "run_summary",
     "totals_from",
     "work_item_dto",
+    "workflow_du_ticket",
     "workflow_model",
     "workflow_yaml",
 ]
