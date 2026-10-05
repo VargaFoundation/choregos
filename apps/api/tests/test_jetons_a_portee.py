@@ -15,8 +15,7 @@ from .conftest import login
 
 
 async def _frapper(client: AsyncClient, **corps: Any) -> Any:
-    reponse = await client.post("/api/v1/me/tokens", json={"name": "test", **corps})
-    return reponse
+    return await client.post("/api/v1/me/tokens", json={"name": "test", **corps})
 
 
 async def test_par_defaut_un_jeton_ouvre_l_api_rest(client: AsyncClient, admin: str) -> None:
@@ -61,7 +60,9 @@ async def test_un_jeton_mcp_lie_a_un_projet(client: AsyncClient, project: dict[s
     assert [(t["scopes"], t["project"]) for t in listes] == [(["mcp:write"], "varga:billing-api")]
 
 
-async def test_un_projet_inconnu_ou_illisible_ne_se_lie_pas(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_un_projet_inconnu_ou_illisible_ne_se_lie_pas(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
     reponse = await _frapper(client, scopes=["mcp:read"], project="varga:nexiste-pas")
     assert reponse.status_code == 404, reponse.text
 
@@ -70,7 +71,8 @@ async def test_le_dernier_client_est_note(client: AsyncClient, admin: str) -> No
     cree = (await _frapper(client)).json()
     jeton = cree["token"]
     client.cookies.clear()
-    await client.get("/api/v1/me", headers={"Authorization": f"Bearer {jeton}", "User-Agent": "claude-code/2.1"})
+    entetes = {"Authorization": f"Bearer {jeton}", "User-Agent": "claude-code/2.1"}
+    await client.get("/api/v1/me", headers=entetes)
     # Relu par une session : relire avec le jeton noterait le client de la relecture.
     await login(client, admin)
     listes = (await client.get("/api/v1/me/tokens")).json()
