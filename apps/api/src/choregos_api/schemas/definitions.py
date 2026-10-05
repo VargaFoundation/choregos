@@ -85,6 +85,19 @@ class WorkflowValidation(Dto):
     process: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class WorkflowEditRequest(Dto):
+    yaml: str
+    #: Validées par `choregos_core.dsl.edition.OPERATIONS` : un refus dit laquelle et pourquoi.
+    operations: list[dict[str, Any]] = Field(min_length=1)
+
+
+class WorkflowEditResult(WorkflowValidation):
+    yaml: str
+    diff: str
+    inverse: list[dict[str, Any]] = Field(default_factory=list)
+    notices: list[str] = Field(default_factory=list)
+
+
 class WorkflowTemplateDto(Dto):
     name: str
     version: int

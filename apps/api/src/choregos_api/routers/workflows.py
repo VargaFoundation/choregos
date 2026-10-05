@@ -19,6 +19,8 @@ from ..schemas import (
     PolicyDto,
     PolicyPut,
     WorkflowDefDto,
+    WorkflowEditRequest,
+    WorkflowEditResult,
     WorkflowIssue,
     WorkflowPut,
     WorkflowRoutingDto,
@@ -71,6 +73,42 @@ async def validate(body: WorkflowValidateRequest) -> WorkflowValidation:
         warnings=[WorkflowIssue(**issue.to_dict()) for issue in report.warnings],
         graph=to_graph(workflow),
         process=to_process(workflow),
+    )
+
+
+@router.post("/workflows/edit", response_model=WorkflowEditResult, operation_id="editWorkflow")
+async def edit(body: WorkflowEditRequest) -> WorkflowEditResult:
+    """Des opérations typées, greffées dans le texte ; rien n'est enregistré (ADR 0031).
+
+    La carte et la vue processus de la console l'appellent à chaque geste : le texte rendu se relit
+    en diff, s'annule par `inverse`, et s'enregistre par le PUT du workflow, avec `base_version`.
+    """
+    import difflib
+
+    from choregos_core.dsl.edition import EditionRefusee, editer
+    from pydantic import ValidationError as ErreurDeModele
+
+    try:
+        edition = editer(body.yaml, body.operations)
+    except ErreurDeModele as erreur:
+        raise unprocessable(
+            "opération mal formée",
+            [{"loc": ["operations", *e["loc"]], "msg": e["msg"]} for e in erreur.errors()],
+        ) from erreur
+    except EditionRefusee as refus:
+        raise unprocessable(str(refus)) from refus
+    rapport = await validate(WorkflowValidateRequest(yaml=edition.yaml))
+    diff = "".join(
+        difflib.unified_diff(
+            body.yaml.splitlines(keepends=True), edition.yaml.splitlines(keepends=True), "avant", "après"
+        )
+    )
+    return WorkflowEditResult(
+        **rapport.model_dump(),
+        yaml=edition.yaml,
+        diff=diff,
+        inverse=[o.model_dump(mode="json", by_alias=True, exclude_none=True) for o in edition.inverse],
+        notices=edition.avertissements,
     )
 
 

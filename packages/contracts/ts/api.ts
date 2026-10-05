@@ -247,6 +247,26 @@ export type ProcessStep = {
   sentence: string;
 };
 
+/** Une opération typée. `op` dit laquelle ; les autres champs dépendent d'elle (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
+export type WorkflowOperation = {
+  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor";
+  [key: string]: unknown;
+};
+
+export type WorkflowEditRequest = {
+  yaml: string;
+  operations: Array<WorkflowOperation>;
+};
+
+export type WorkflowEditResult = WorkflowValidation & {
+  yaml: string;
+  /** diff unifié du texte d'origine au texte édité */
+  diff: string;
+  inverse: Array<WorkflowOperation>;
+  /** ce qu'une opération change au-delà du texte (un état à effet renommé…) */
+  notices: Array<string>;
+};
+
 export type WorkflowIssue = {
   code: string;
   message: string;
@@ -908,6 +928,7 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
+  editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";
   features: Array<string>;

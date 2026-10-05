@@ -143,11 +143,11 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S16-08 | S16 | ✅ | — | la vue « processus » (ADR 0031) : `choregos_core.dsl.to_process` dit chaque transition en clair — qui agit (l'agent et son rôle, une personne de quel groupe et sous quel délai, la plateforme, le train), de quel état vers lequel, ce qui doit être produit, les garanties résumées, les reprises, le rejet, le délai ; `POST /workflows/validate` la rend (`process`), `choregos workflow show --process` l'imprime. `packages/core/tests/test_process.py` (chaque garantie connue a un résumé ; agent, sorties, garanties, reprises ; personne, délai, rejet), `apps/api/tests/test_vue_processus.py`. L'écran vient avec S16-09 |
 | S16-09 | S16 | ⬜ | — | Onglet Workflows : cartes, page par workflow, carte lisible |
 | S16-10 | S16 | ⬜ | — | Un board par workflow ; la demande choisit son workflow et ses champs |
-| S16-11 | S16 | ⬜ | — | POST /workflows/edit : les opérations typées, à l'octet près |
+| S16-11 | S16 | ✅ | — | `POST /workflows/edit` : douze opérations typées (états, transitions, garanties, acteurs) greffées dans le texte par `yaml.compose` (`choregos_core/dsl/edition.py`) — commentaires, guillemets, styles flow et bloc intacts ; un renommage suit chaque référence (initial, from/to, reprises, défauts) ; un élément en bloc emporte ses commentaires de tête ; la réponse porte le texte, le diff, la validation, le graphe, l'inverse et les avertissements (états à effet) ; rien n'est enregistré. `test_edition.py` (755 cas : chaque opération suivie de son inverse redonne les octets, sur un document mixte, sans fin de ligne, et sur les trois gabarits livrés ; refus motivés), `test_edition_de_workflow.py` (API) ; 7 mutants tués. Ne prouve pas l'édition depuis la carte (S16-12) ; le premier champ d'une transition écrite en bloc ne se retire pas (il partage la ligne du tiret) |
 | S16-12 | S16 | ⬜ | — | Modifier un workflow depuis la carte et la vue processus |
 | S16-13 | S16 | ⬜ | — | Historique des versions : diff et restauration |
 
-**Total** : 106 livrées, 11 partielles, 10 non commencées.
+**Total** : 107 livrées, 11 partielles, 9 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
