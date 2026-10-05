@@ -250,6 +250,94 @@ export type ProjectOperationPut = {
   policy: "allowed" | "approval" | "forbidden";
 };
 
+export type ActionEffectSpec = {
+  /** un effet déclaré : connector.call, ou celui d'un greffon */
+  effect: string;
+  /** ses paramètres, rendus en Jinja isolé avec `params` et `effects` */
+  with?: {
+    [key: string]: unknown;
+  };
+  /** {effect, with} : ce qui le défait si une suite échoue (`result` y cite sa réponse) */
+  compensate?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+export type ActionApproval = {
+  approvers?: Array<{
+    role?: "developer" | "release_captain" | "project_owner" | "org_admin";
+    min?: number;
+  }>;
+  step_up_minutes?: number;
+  separation_of_duties?: boolean;
+};
+
+export type ActionCreate = {
+  kind: string;
+  title: string;
+  justification?: string | null;
+  params?: {
+    [key: string]: unknown;
+  };
+  effects: Array<ActionEffectSpec>;
+  approval?: ActionApproval;
+  work_item_id?: string | null;
+};
+
+export type ActionDecision = {
+  decision: "approve" | "reject";
+  reason?: string | null;
+};
+
+/** Un effet sous sa clé (`<action>:<n>`) — consigné avant d'être tenté, confirmé après. */
+export type ActionEffect = {
+  position: number;
+  key: string;
+  effect: string;
+  status: "started" | "done" | "compensated" | "compensation_failed";
+  attempts?: number;
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  error?: string | null;
+  finished_at?: string | null;
+};
+
+/** Une action gouvernée (ADR 0035) et le journal de ses effets. */
+export type Action = {
+  id: string;
+  origin: "ontology" | "tool" | "transition";
+  kind: string;
+  title: string;
+  justification?: string | null;
+  params?: {
+    [key: string]: unknown;
+  };
+  effects?: Array<{
+    [key: string]: unknown;
+  }>;
+  proposed_by?: {
+    [key: string]: unknown;
+  };
+  approval?: {
+    [key: string]: unknown;
+  };
+  decisions?: Array<{
+    [key: string]: unknown;
+  }>;
+  status: "pending_approval" | "rejected" | "approved" | "running" | "succeeded" | "failed";
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  error?: string | null;
+  temporal_wf_id?: string | null;
+  work_item_id?: string | null;
+  run_id?: string | null;
+  created_at?: string | null;
+  finished_at?: string | null;
+  journal?: Array<ActionEffect>;
+};
+
 /** Une capacité que les workflows du projet exigent, et pourquoi (ADR 0034). */
 export type ProjectRequirement = {
   capability: string;
@@ -1173,6 +1261,7 @@ export interface Operations {
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
+  decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
@@ -1189,6 +1278,7 @@ export interface Operations {
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
 }; response: void };
+  getAction: { method: "GET"; path: "/projects/{id}/actions/{action_id}"; body: never; response: Action };
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
@@ -1282,6 +1372,7 @@ export interface Operations {
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  listActions: { method: "GET"; path: "/projects/{id}/actions"; body: never; response: Array<Action> };
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
@@ -1327,6 +1418,7 @@ export interface Operations {
   justification: string;
 }; response: ScopeChangeDecision };
   postWorkItemAction: { method: "POST"; path: "/work-items/{id}/actions"; body: WorkItemAction; response: void };
+  proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
   publishAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions"; body: AgentSpec; response: AgentVersion };
   publishSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions"; body: SkillFiles; response: SkillVersion };

@@ -196,6 +196,34 @@ class EventType(StrEnum):
     PROVISIONING_STEP = "choregos.project.provisioning.step"
     PROVISIONING_COMPLETED = "choregos.project.provisioning.completed"
     PROVISIONING_FAILED = "choregos.project.provisioning.failed"
+    #: Les actions gouvernées (ADR 0035) : proposée, décidée, chaque effet fait ou compensé,
+    #: et sa fin — le dossier de preuves d'une arrivée ou d'un départ se lit dans ces événements.
+    ACTION_PROPOSED = "choregos.action.proposed"
+    ACTION_DECIDED = "choregos.action.decided"
+    ACTION_EFFECT_DONE = "choregos.action.effect_done"
+    ACTION_EFFECT_COMPENSATED = "choregos.action.effect_compensated"
+    ACTION_SUCCEEDED = "choregos.action.succeeded"
+    ACTION_FAILED = "choregos.action.failed"
+
+
+class ActionStatus(StrEnum):
+    """Le cycle d'une action gouvernée (ADR 0035)."""
+
+    PENDING_APPROVAL = "pending_approval"
+    REJECTED = "rejected"
+    APPROVED = "approved"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ActionOrigin(StrEnum):
+    """D'où vient une action : une opération d'ontologie, un outil sous validation (ADR 0034), un
+    effet d'étape de workflow."""
+
+    ONTOLOGY = "ontology"
+    TOOL = "tool"
+    TRANSITION = "transition"
 
 
 class InboundEventType(StrEnum):

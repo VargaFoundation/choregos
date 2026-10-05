@@ -6,9 +6,26 @@ Elles sont idempotentes, typées, et n'appellent jamais un modèle directement.
 
 from __future__ import annotations
 
-from . import bilan, evals, execution, findings, gates, memory, provisioning, scm, stage, tracker, train
+from . import (
+    actions,
+    bilan,
+    evals,
+    execution,
+    findings,
+    gates,
+    memory,
+    provisioning,
+    scm,
+    stage,
+    tracker,
+    train,
+)
 
 ALL_ACTIVITIES = [
+    actions.charger_l_action,
+    actions.executer_l_effet,
+    actions.compenser_l_effet,
+    actions.cloturer_l_action,
     stage.prepare_stage,
     execution.start_run,
     execution.await_run,

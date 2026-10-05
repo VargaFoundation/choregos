@@ -410,6 +410,52 @@ sandbox:
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.
 
+## 4 bis. Governed actions
+
+A write into a system that is not ours — create an account, order a laptop, deactivate a badge —
+is a **governed action** ([ADR 0035](adr/0035-actions-gouvernees-dans-le-coeur.md)): proposed,
+decided by people, then run by the platform in Temporal, **never inside the request that
+approves it**.
+
+```bash
+curl -X POST $API/projects/acme:hr/actions -d '{"kind": "entra.create_user",
+  "title": "Account for Léa", "params": {"upn": "lea@acme.example"},
+  "effects": [
+    {"effect": "connector.call",
+     "with": {"connector": "entra-acme", "operation": "create_user",
+              "arguments": {"upn": "{{ params.upn }}", "display_name": "Léa Martin"}},
+     "compensate": {"effect": "connector.call",
+                    "with": {"connector": "entra-acme", "operation": "disable_user",
+                             "arguments": {"upn": "{{ params.upn }}"}}}},
+    {"effect": "connector.call",
+     "with": {"connector": "entra-acme", "operation": "add_to_group",
+              "arguments": {"upn": "{{ params.upn }}", "group_id": "devs"}}}],
+  "approval": {"approvers": [{"role": "project_owner", "min": 1}], "step_up_minutes": 10}}'
+curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "approve"}'
+```
+
+- **Deciding** takes a human session (an API token or an MCP client proposes, never decides), at
+  least the rank an approver rule asks for, and — to approve — an authentication younger than
+  `step_up_minutes` (else `401 step_up_required`, and the console re-authenticates). Whoever
+  proposed, or owns the agent that proposed, does not decide. A rejection gives its reason. With
+  `min: 2`, two different people approve. Of two concurrent approvals, one starts the action; the
+  other gets `409`.
+- **Running**: the approval starts `ActionWorkflow` (`action-<id>`) and answers at once. Each effect
+  is recorded under its key (`<action>:<n>`) **before** it is attempted and confirmed after: a
+  retried effect finds its key done and does nothing twice; one left started by a dead worker is
+  attempted again — effects are idempotent by construction. A transient failure (`429`, `503`,
+  network) is retried with backoff; a refusal (an account outside the administrative unit, a
+  forbidden operation) stops the action, and what was done is **compensated in reverse** — the
+  action says what it could not undo. Parameters are Jinja (sandboxed) over `params` and the results
+  of earlier `effects`; a compensation also sees its own effect's `result`.
+- **Reading**: `GET /projects/{id}/actions/{id}` gives the decisions (who, when, how fresh their
+  authentication was) and the **journal** — every effect's key, attempts, answer or error. Events
+  `choregos.action.*` tell the same story on the ticket.
+
+The core ships one effect, `connector.call`: an operation of a connector of the organisation,
+its key resolved by the platform, its arguments checked against the operation's schema. An
+`approval` operation runs here — the action was approved; a `forbidden` one never does.
+
 ## 5. Let a ticket run
 
 Label a ticket `agent-ready` in your tracker (or create it in Choregos with
