@@ -26,6 +26,10 @@ class Permission(StrEnum):
     FINDING_TRIAGE = "finding:triage"
     MEMORY_WRITE = "memory:write"
     MEMBER_MANAGE = "member:manage"
+    #: Changer les groupes d'un projet, donc ce que le catalogue lui ouvre (ADR 0014, second
+    #: verrou). L'administrateur de l'organisation seul : un projet choisit ce dont il se sert,
+    #: il ne choisit pas ce à quoi il a droit.
+    TOOLS_GRANT = "tools:grant"
     PLATFORM_ADMIN = "platform:admin"
     AUDIT_READ = "audit:read"
 
