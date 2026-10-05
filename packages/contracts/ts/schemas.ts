@@ -615,6 +615,8 @@ export type WorkflowAgentActor = {
   max_minutes?: number;
   /** Nom du playbook (défaut : le rôle). */
   playbook?: string;
+  /** Un agent du registre (ADR 0033) : `slug`, ou `slug@version`. Sa version — l'épinglée du projet, sinon la dernière — fixe instructions, modèle, limites et budget ; ses instructions priment sur le playbook. */
+  agent?: string;
 };
 
 export type WorkflowHumanActor = {

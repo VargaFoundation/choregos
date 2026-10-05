@@ -108,6 +108,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             return {"run_id": run_id, "stage_input": existing.stage_input, "reused": True}
 
         engine = bundle.engine
+        # Un agent du registre (ADR 0033) : sa version effective — l'épinglée du projet, surcharges
+        # appliquées — fixe modèle, backend, limites et budget, et ses instructions remplacent le
+        # playbook. Un agent révoqué, suspendu ou expiré ne part pas.
+        agent = await _agent_du_plan(session, bundle, plan)
+        if agent is not None:
+            plan = _plan_de_l_agent(plan, agent.spec)
         resolver = ModelResolver(gateway_url=settings.gateway_url)
         backend = plan.backend or bundle.config.agent.default_backend
         if plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
@@ -120,6 +126,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             budget = Budget(usd=budget.usd, max_turns=plan.max_turns, max_minutes=budget.max_minutes)
         if plan.max_minutes:
             budget = Budget(usd=budget.usd, max_turns=budget.max_turns, max_minutes=plan.max_minutes)
+        if agent is not None and agent.spec.budget.run_usd is not None:
+            budget = Budget(
+                usd=min(budget.usd, agent.spec.budget.run_usd),
+                max_turns=budget.max_turns,
+                max_minutes=budget.max_minutes,
+            )
 
         await _admettre(bundle, item, run_id, plan, backend, budget.usd)
 
@@ -162,9 +174,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
 
         context_pack = await _context_pack(bundle, item, plan)
         await garde_contre_l_injection(session, bundle, item, run_id, plan, context_pack)
-        playbook_prompt = _render_playbook(plan, bundle, item, context_pack)
+        playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
         digest = sha256(playbook_prompt.encode()).hexdigest()[:12]
-        playbook_ref = f"{plan.playbook or plan.role}@sha256:{digest}"
+        source = (
+            f"agent:{agent.agent.slug}@{agent.version}" if agent is not None else (plan.playbook or plan.role)
+        )
+        playbook_ref = f"{source}@sha256:{digest}"
         allowed_paths = list(item.allowed_paths or []) or ["**"]
         token = mint_run_token(
             run_id,
@@ -252,6 +267,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         run.context_pack = context_pack.model_dump(mode="json", by_alias=True)
         run.context_pack_url = stage_input.context_pack_url
         run.playbook_checksum = stage_input.playbook.ref
+        run.agent_slug = agent.agent.slug if agent is not None else None
+        run.agent_version = agent.version if agent is not None else None
         run.allowed_paths = allowed_paths
         run.started_at = utcnow()
         if existing is None:
@@ -333,21 +350,69 @@ async def _context_pack(bundle: Any, item: Any, plan: StagePlan) -> ContextPack:
         return ContextPack.empty(query)
 
 
-def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack) -> str:
-    from choregos_playbooks import render_playbook
+def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None) -> str:
+    from choregos_playbooks import cadrer, render_playbook
 
     documents = item.documents or {}
-    return render_playbook(
-        plan.playbook or plan.role,
-        ticket={"key": item.tracker_key, "title": item.title, "body": item.body_snapshot or ""},
-        spec=documents.get("spec_markdown", ""),
-        plan_markdown=documents.get("plan_markdown", ""),
+    variables = {
+        "ticket": {"key": item.tracker_key, "title": item.title, "body": item.body_snapshot or ""},
+        "spec": documents.get("spec_markdown", ""),
+        "plan_markdown": documents.get("plan_markdown", ""),
         # Les entrées que la transition déclare (`inputs: [profils]`), lues sous leur nom :
         # c'est ainsi qu'une étape métier reçoit ce que la précédente a produit.
-        inputs={nom: documents.get(nom, "") for nom in (plan.inputs or [])},
-        allowed_paths=list(item.allowed_paths or []),
-        context=context,
-        project=bundle.config,
+        "inputs": {nom: documents.get(nom, "") for nom in (plan.inputs or [])},
+        "allowed_paths": list(item.allowed_paths or []),
+        "context": context,
+        "project": bundle.config,
+    }
+    if agent is not None and agent.spec.instructions.strip():
+        from choregos_core.instructions import rendre_les_instructions
+        from jinja2 import TemplateError
+        from temporalio.exceptions import ApplicationError
+
+        # Rendues dans le bac à sable, puis cadrées : le contrat de sortie n'est pas à l'auteur. Un
+        # gabarit qui ne rend pas — une évasion refusée par le bac à sable comprise — ne se
+        # réessaie pas : il ne rendra pas mieux la cinquième fois.
+        try:
+            return cadrer(rendre_les_instructions(agent.spec.instructions, **variables))
+        except TemplateError as erreur:
+            qui = f"{agent.agent.slug}@{agent.version}"
+            raise ApplicationError(
+                f"les instructions de l'agent `{qui}` ne se rendent pas : {erreur}",
+                type="InstructionsInvalides",
+                non_retryable=True,
+            ) from erreur
+    return render_playbook(plan.playbook or plan.role, **variables)
+
+
+async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:
+    """L'agent que l'acteur nomme, résolu pour ce projet ; `None` si l'acteur n'en nomme pas."""
+    if not plan.agent:
+        return None
+    from choregos_api.services.agents import AgentIndisponible, resoudre_l_agent
+    from temporalio.exceptions import ApplicationError
+
+    try:
+        return await resoudre_l_agent(session, bundle.project.org_id, bundle.project.id, plan.agent)
+    except AgentIndisponible as refus:
+        raise ApplicationError(str(refus), type="AgentIndisponible", non_retryable=True) from refus
+
+
+def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
+    """Le plan, avec ce que la version de l'agent fixe : modèle, backend, et des limites qui ne font
+    que resserrer celles de l'acteur."""
+    from dataclasses import replace
+
+    def plus_strict(de_l_acteur: int | None, de_l_agent: int | None) -> int | None:
+        valeurs = [v for v in (de_l_acteur, de_l_agent) if v is not None]
+        return min(valeurs) if valeurs else None
+
+    return replace(
+        plan,
+        model_request=spec.model or plan.model_request,
+        backend=plan.backend or spec.backend,
+        max_turns=plus_strict(plan.max_turns, spec.limits.max_turns),
+        max_minutes=plus_strict(plan.max_minutes, spec.limits.max_minutes),
     )
 
 

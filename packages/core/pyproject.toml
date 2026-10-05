@@ -4,7 +4,7 @@ version = "0.14.0"
 description = "Cœur Choregos : DSL de workflow, politiques, résolution de modèles, gates"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["choregos-contracts", "pydantic>=2.9", "PyYAML>=6.0", "jsonschema>=4.23", "structlog>=24.4"]
+dependencies = ["choregos-contracts", "pydantic>=2.9", "PyYAML>=6.0", "jsonschema>=4.23", "structlog>=24.4", "jinja2>=3.1"]
 
 [build-system]
 requires = ["hatchling"]

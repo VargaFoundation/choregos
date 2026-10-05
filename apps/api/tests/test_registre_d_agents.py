@@ -130,3 +130,16 @@ async def test_un_agent_d_une_autre_organisation_ne_s_epingle_pas(
     reponse = await client.put(f"/api/v1/projects/{project['id']}/agents/espion", json={"version": 1})
     assert reponse.status_code == 404, reponse.text
     assert (await client.get("/api/v1/orgs/autre/agents")).status_code == 403, "pas membre de `autre`"
+
+
+async def test_des_instructions_qui_ne_rendent_pas_sont_refusees_a_la_publication(
+    client: AsyncClient, admin: str
+) -> None:
+    """Le bac à sable (ADR 0033) : une évasion, une variable inconnue, une syntaxe cassée."""
+    for instructions in ("{{ ''.__class__.__mro__ }}", "{{ inconnue }}", "{% for x in %}"):
+        refuse = await _creer(client, spec={**SPEC, "instructions": instructions})
+        assert refuse.status_code == 422, (instructions, refuse.text)
+    assert (await _creer(client)).status_code == 201
+    evasion = {**SPEC, "instructions": "{{ cycler.__init__.__globals__ }}"}
+    publier = await client.post("/api/v1/orgs/varga/agents/coordinateur-onboarding/versions", json=evasion)
+    assert publier.status_code == 422, publier.text

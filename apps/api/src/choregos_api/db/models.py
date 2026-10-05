@@ -221,6 +221,9 @@ class Run(Base, PkMixin, TimestampMixin):
     backend: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
     executor_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: L'agent du registre qui a fait ce run, et sa version (ADR 0033) ; vide pour un playbook.
+    agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     executor_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
