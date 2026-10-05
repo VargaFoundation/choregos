@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     oidc_client_id: str = "choregos"
     oidc_client_secret: str = ""
     oidc_scopes: str = "openid profile email groups"
+    #: La porte MCP accepte aussi les jetons OAuth émis par l'IdP (ADR 0030, RFC 9728) : claude.ai et
+    #: les clients hébergés ne savent pas présenter un jeton `chg_`. Éteint par défaut.
+    mcp_oauth_enabled: bool = False
+    #: L'émetteur des jetons de la porte ; vide : celui de la connexion OIDC de la console.
+    mcp_oauth_issuer: str = ""
+    #: L'audience OBLIGATOIRE d'un jeton de la porte : sur un realm partagé, un jeton obtenu par une
+    #: autre application ne doit pas l'ouvrir.
+    mcp_oauth_audience: str = "choregos-mcp"
     session_secret: str = "dev-session-secret-change-me"
     session_cookie: str = "choregos_session"
     session_max_age_s: int = 8 * 3600

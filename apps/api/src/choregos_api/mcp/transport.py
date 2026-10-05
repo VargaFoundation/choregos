@@ -38,6 +38,7 @@ from ..logging import get_logger
 from ..rbac import Permission
 from .appelant import Appelant, Refus, identifier
 from .garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour, tronquer
+from .oauth import metadonnees
 from .outils import INSTRUCTIONS, Contexte, OutilRefuse, annonces
 
 router = APIRouter(include_in_schema=False)
@@ -54,14 +55,35 @@ def _origines_admises(settings: Settings) -> set[str]:
     return {origine(settings.public_url), origine(settings.api_url)}
 
 
-def _refus_http(statut: int, message: str, *, erreur_oauth: str | None = None) -> JSONResponse:
+def _refus_http(
+    statut: int,
+    message: str,
+    *,
+    erreur_oauth: str | None = None,
+    settings: Settings | None = None,
+    chemin: str = "/mcp",
+) -> JSONResponse:
     entetes = {}
     if statut in {401, 403}:
         valeur = 'Bearer realm="choregos"'
+        if settings is not None and settings.mcp_oauth_enabled:
+            # Claude lit ce pointeur sur un 401 pour trouver l'IdP (RFC 9728). Le document est celui
+            # de la porte appelée : sa `resource` doit être l'URL que le client a saisie.
+            document = f"{settings.public_url.rstrip('/')}/.well-known/oauth-protected-resource{chemin}"
+            valeur += f', resource_metadata="{document}"'
         if erreur_oauth:
             valeur += f', error="{erreur_oauth}"'
         entetes["WWW-Authenticate"] = valeur
     return JSONResponse({"error": message}, status_code=statut, headers=entetes)
+
+
+@router.get("/.well-known/oauth-protected-resource")
+@router.get("/.well-known/oauth-protected-resource/{chemin:path}")
+async def metadonnees_de_la_ressource(settings: Config, chemin: str = "mcp") -> Response:
+    """Les métadonnées RFC 9728 de la porte ; 404 tant qu'OAuth n'est pas allumé."""
+    if not settings.mcp_oauth_enabled:
+        return Response(status_code=404)
+    return JSONResponse(metadonnees(settings, "/" + chemin.strip("/")))
 
 
 def _faute(identifiant: Any, code: int, message: str, statut: int = 200) -> JSONResponse:
@@ -98,10 +120,12 @@ async def _servir(request: Request, session: Any, settings: Settings, projet_dem
             400, f"version du protocole non prise en charge : {request.headers['mcp-protocol-version']}"
         )
     try:
-        appelant = await identifier(session, request)
+        appelant = await identifier(session, request, settings)
     except Refus as refus:
-        return _refus_http(refus.statut, str(refus), erreur_oauth=refus.erreur)
-    admis, attente = LIMITEUR.admet(f"jeton:{appelant.jeton.id}")
+        return _refus_http(
+            refus.statut, str(refus), erreur_oauth=refus.erreur, settings=settings, chemin=request.url.path
+        )
+    admis, attente = LIMITEUR.admet(appelant.cle)
     if not admis:
         return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Retry-After": str(attente)})
 
@@ -202,10 +226,10 @@ async def _auditer(ctx: Contexte, outil: str, ecriture: bool, issue: str, reques
         target_id=outil,
         ecriture=ecriture,
         issue=issue,
-        jeton=ctx.appelant.jeton.id,
+        jeton=ctx.appelant.cle,
         client=(request.headers.get("user-agent") or "")[:100] or None,
     )
-    log.info("mcp.call", outil=outil, issue=issue, jeton=ctx.appelant.jeton.id)
+    log.info("mcp.call", outil=outil, issue=issue, appelant=ctx.appelant.cle)
 
 
 __all__ = ["Appelant", "router"]
