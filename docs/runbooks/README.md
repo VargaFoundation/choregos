@@ -21,3 +21,4 @@ original names — alerts and other pages point at them.
 | `perte-de-noeud.md` | a node disappears (spot eviction, failure) and work does not resume |
 | `aca-live.md` | checking the Azure Container Apps executor against a real subscription |
 | `temporal-backup.md` | what Temporal holds, how to back it up, what a loss costs and how to reconcile after a restore |
+| `keycloak-mcp.md` | claude.ai or Claude Code over OAuth cannot connect to the MCP door |

@@ -127,10 +127,31 @@ Add `--allow-http` to the arguments if the platform is served over plain HTTP.
 ## claude.ai, Claude mobile, ChatGPT
 
 These clients call a remote MCP server **from their vendor's network** (Anthropic's is
-`160.79.104.0/21`) and sign in with OAuth. They need a public HTTPS address for `/mcp`, and the door
-as an OAuth resource server — the next step of ADR 0030. A platform reachable only through a VPN is
-out of their reach; Anthropic's MCP tunnels (Claude Enterprise, research preview) are the way in
-without exposing it.
+`160.79.104.0/21`) and sign in with **OAuth**: they cannot be handed a `chg_` token. The door is
+an OAuth resource server (RFC 9728) once the platform runs with:
+
+| Setting | Value |
+| :-- | :-- |
+| `CHOREGOS_MCP_OAUTH_ENABLED` | `true` |
+| `CHOREGOS_MCP_OAUTH_AUDIENCE` | the audience your IdP puts in the door's tokens — default `choregos-mcp` |
+| `CHOREGOS_MCP_OAUTH_ISSUER` | empty: the console's own OIDC issuer; set it only for another IdP |
+
+The door then publishes `/.well-known/oauth-protected-resource/mcp` (and one document per project
+door), and every `401` points at it in `WWW-Authenticate`. The client reads it, signs you in at the
+IdP, and presents the IdP's token. The door checks the signature against the IdP's published keys,
+the issuer, the expiry and the **audience** — on a shared realm, a token another application
+obtained does not open it. HS256 and `alg: none` are refused.
+
+- **Who you are.** The token's `sub` finds the person who signed in to the console with the same
+  IdP; failing that, a **verified** e-mail. The door creates nobody: sign in to the console once
+  first. When the door trusts another IdP than the console, only the verified e-mail links the two.
+- **What you may do.** The `mcp:read` and `mcp:write` scopes the IdP granted, `mcp:read` when it
+  granted neither; then your role, as with a token. Still no decision through the door.
+
+Setting up the IdP: [`runbooks/keycloak-mcp.md`](runbooks/keycloak-mcp.md). A platform reachable
+only through a VPN stays out of these clients' reach whatever its OAuth: they need a public HTTPS
+address for `/mcp` and `/.well-known/oauth-protected-resource`, or Anthropic's MCP tunnels
+(Claude Enterprise, research preview).
 
 ## Any other MCP client
 
@@ -151,6 +172,9 @@ allows.
 | :-- | :-- |
 | The client reaches the console's 404 page | The ingress does not route `/mcp` to the API (chart ≥ 0.14) |
 | `401` | The token is missing, unknown, revoked or expired |
+| `401 invalid_token` with OAuth | Wrong audience or issuer, an expired token, or keys the IdP no longer publishes |
+| `403` with OAuth, "sign in to the console once" | The IdP knows you, Choregos does not yet |
+| claude.ai never offers to sign in | `/.well-known/oauth-protected-resource` is not routed to the API, or OAuth is off (404) |
 | `403 insufficient_scope` | A full-access (`*`) token: mint an `mcp:read` or `mcp:write` one |
 | `403` on `/mcp/projects/…` | The token is bound to another project |
 | `403` with an `Origin` | A web page tried to call the door: only your client may |

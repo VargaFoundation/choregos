@@ -17,8 +17,9 @@ spec:
     - host: {{ . | quote }}
       http:
         paths:
-          {{- /* `/mcp` : la porte des clients MCP externes (ADR 0030), servie par l'API. */}}
-          {{- range list "/api" "/mcp" "/healthz" "/readyz" }}
+          {{- /* `/mcp` : la porte des clients MCP externes (ADR 0030), servie par l'API, et ses
+               métadonnées OAuth (RFC 9728) que claude.ai lit avant de se connecter. */}}
+          {{- range list "/api" "/mcp" "/healthz" "/readyz" "/.well-known/oauth-protected-resource" }}
           - path: {{ . }}
             pathType: Prefix
             backend:
@@ -45,6 +46,7 @@ spec:
         - path: { type: PathPrefix, value: /mcp }
         - path: { type: PathPrefix, value: /healthz }
         - path: { type: PathPrefix, value: /readyz }
+        - path: { type: PathPrefix, value: /.well-known/oauth-protected-resource }
       backendRefs:
         - name: choregos-api
           port: {{ .Values.service.port }}
