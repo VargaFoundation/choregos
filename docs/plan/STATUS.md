@@ -128,6 +128,15 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 **Total** : 91 livrées, 11 partielles, 4 non commencées.
 
+**2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
+remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
+entreprise visible, agents et serveurs MCP invisibles, réglages typés développement, aucune connexion depuis Claude) ;
+le product owner a choisi d'élargir le périmètre plutôt que de le resserrer. Six flux s'ouvrent, S15 à S20 : leurs
+stories entrent au tableau au début de chaque lot. Ce que cette PR prouve : rien de fonctionnel ; elle consigne la
+décision, ses invariants (aucun secret dans un pod, un outil découvert reste fermé, aucune décision par MCP) et ce
+qui nous ferait changer d'avis. Ce qu'elle ne prouve pas : qu'un seul de ces flux marche — chacun le prouvera par ses
+tests. Le flux S14 reste valable : le travail data entre toujours par le catalogue et les garanties.
+
 **2026-10-02 — ADR 0028 : Choregos gouverne l'exécution du changement.** Le flux S14 ouvre le travail data par le
 catalogue et les garanties, sans fusion avec graal. Ce que cette PR prouve : rien de fonctionnel ; elle consigne une
 décision et ouvre quatre stories ⬜, chacune avec son critère vérifiable. Ce qu'elle ne prouve pas : qu'un agent ait

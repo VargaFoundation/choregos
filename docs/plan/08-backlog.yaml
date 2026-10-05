@@ -19,6 +19,12 @@ streams:
   S12: "Évals & conformité"
   S13: "Multi-backend & second écosystème"
   S14: "Changement gouverné sur une plateforme data (ADR 0028)"
+  S15: "Porte MCP pour les clients externes et page Integrations (ADR 0029, 0030)"
+  S16: "Plusieurs workflows par projet, lisibles et modifiables (ADR 0031)"
+  S17: "Administration par manifestes et édition entreprise sur le dev (ADR 0032)"
+  S18: "Registre d'agents et bibliothèque de skills (ADR 0033)"
+  S19: "Connecteurs par capacités et serveurs MCP (ADR 0034)"
+  S20: "Actions gouvernées dans le cœur et scénario RH arrivées/départs (ADR 0035)"
 
 stories:
 

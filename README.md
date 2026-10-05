@@ -2,11 +2,13 @@
 
 > χορηγός — celui qui organise le chœur et lui donne les moyens de jouer.
 
-**Choregos** est la plateforme de delivery agentique de la [Varga Foundation](https://github.com/VargaFoundation) :
-un ticket entre, une mise en production maîtrisée sort. Elle dirige un chœur d'agents de code
-(Claude Code, Codex, Gemini CLI, Goose, OpenCode…) derrière un protocole unique (ACP),
-leur donne un workspace jetable, un modèle, un budget et une partition (le *workflow*), puis
-sérialise les déploiements derrière un *release train*.
+**Choregos** est la plateforme d'agents gouvernés de la [Varga Foundation](https://github.com/VargaFoundation)
+(ADR 0029) : des workflows de tout métier — livraison logicielle, exploitation, arrivées et départs,
+changement data — que des agents et des humains font avancer sous des garanties mesurées. Elle
+dirige un chœur d'agents (Claude Code, Codex, Gemini CLI, Goose, OpenCode…) derrière un protocole
+unique (ACP), leur donne un espace jetable, un modèle, un budget et une partition (le *workflow*),
+et fait attendre toute écriture vers un système tiers une validation humaine ré-authentifiée. Pour
+le logiciel, elle sérialise les déploiements derrière un *release train*.
 
 Licence : Apache 2.0. Plan d'exécution complet : [`docs/plan/00-index.md`](docs/plan/00-index.md).
 

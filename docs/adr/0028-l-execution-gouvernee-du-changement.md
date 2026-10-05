@@ -1,6 +1,6 @@
 # 0028 — Choregos governs the execution of change, not agents in general; data work enters through the catalogue and the gates
 
-- **Status**: accepted, 2026-10-02
+- **Status**: superseded by [ADR 0029](0029-une-plateforme-d-agents-gouvernes.md) on 2026-10-05 (accepted 2026-10-02)
 - **Concerns**: what Choregos builds and what it plugs into, the catalogue (ADR 0014), gates and
   evidence (ADR 0010, ADR 0012), the authorship attestation (ADR 0015), the bridge to a data
   platform (graal first)
