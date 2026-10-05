@@ -78,3 +78,17 @@ class OrgDto(Dto):
 class OrgCreate(Dto):
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
     name: str = Field(min_length=1, max_length=200)
+
+
+class OAuthDto(Dto):
+    enabled: bool
+    authorization_server: str | None = None
+
+
+class IntegrationsDto(Dto):
+    """Où connecter un client MCP (ADR 0030)."""
+
+    mcp_url: str
+    protocol_versions: list[str]
+    oauth: OAuthDto
+    version: str

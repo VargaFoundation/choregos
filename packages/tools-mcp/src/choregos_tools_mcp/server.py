@@ -9,9 +9,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from choregos_core.mcp import METHODE_INCONNUE, PARAMETRES_INVALIDES, negocier
+from choregos_core.mcp import erreur as _error
+from choregos_core.mcp import ok as _ok
+
 from .client import InternalClient
 from .tools import TOOL_SCHEMAS, ToolContext, finding_from, text_result
 
+#: La version que le side-car annonçait seule ; il répond désormais celle que le client demande,
+#: si elle est comprise (`choregos_core.mcp.VERSIONS`).
 PROTOCOL_VERSION = "2025-06-18"
 SERVER_INFO = {"name": "choregos-tools", "version": "1.0.0"}
 
@@ -35,7 +41,7 @@ class McpServer:
             return _ok(
                 request_id,
                 {
-                    "protocolVersion": PROTOCOL_VERSION,
+                    "protocolVersion": negocier(params.get("protocolVersion", PROTOCOL_VERSION)),
                     "serverInfo": SERVER_INFO,
                     "capabilities": {"tools": {"listChanged": False}},
                 },
@@ -50,13 +56,13 @@ class McpServer:
             try:
                 result = await self.call(name, arguments)
             except KeyError as exc:
-                return _error(request_id, -32602, f"argument manquant : {exc}")
+                return _error(request_id, PARAMETRES_INVALIDES, f"argument manquant : {exc}")
             except Exception as exc:  # une panne d'API ne doit pas tuer la session de l'agent
                 return _ok(request_id, text_result(f"erreur de l'outil `{name}` : {exc}", is_error=True))
             return _ok(request_id, result)
         if method == "ping":
             return _ok(request_id, {})
-        return _error(request_id, -32601, f"méthode inconnue : {method}")
+        return _error(request_id, METHODE_INCONNUE, f"méthode inconnue : {method}")
 
     async def _outils_du_catalogue(self) -> list[dict[str, Any]]:
         if self._catalogue is None:
@@ -205,11 +211,3 @@ class McpServer:
         return text_result(
             "fait proposé. Il n'est pas écrit directement : un humain (ou une règle) le validera."
         )
-
-
-def _ok(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": request_id, "result": result}
-
-
-def _error(request_id: Any, code: int, message: str) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}

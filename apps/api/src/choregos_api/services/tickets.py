@@ -6,11 +6,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from choregos_contracts import EventType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import record
 from ..db.models import (
     Connector,
+    Event,
+    Finding,
     HumanRequest,
     Project,
     Release,
@@ -18,18 +22,23 @@ from ..db.models import (
     WorkflowDef,
     WorkItem,
 )
+from ..errors import conflict
+from ..rbac import Principal
 from ..schemas import (
     HumanRequestDto,
     ReleaseDto,
     RunDto,
     RunSummary,
+    TimelineEntry,
     Totals,
     WorkflowFailure,
+    WorkItemCreate,
     WorkItemDto,
 )
-from ..temporal import get_temporal
+from ..temporal import get_temporal, interpreter_id
 from .couts import estimate_cost
-from .definitions import workflow_model
+from .definitions import active_workflow, workflow_model
+from .evenements import persist_event
 
 
 def totals_from(raw: dict[str, Any] | None) -> Totals:
@@ -238,3 +247,163 @@ def ranger_les_sorties(item: WorkItem, outputs: Any, declarees: list[str] | None
             documents[nom] = valeurs[nom]
     item.documents = documents
     return documents
+
+
+async def creer_un_ticket(
+    session: AsyncSession,
+    principal: Principal,
+    project: Project,
+    demande: WorkItemCreate,
+    *,
+    canal: str = "api",
+) -> WorkItem:
+    """Pose une demande dans Choregos — seulement quand le tracker est interne.
+
+    Le seul chemin de création d'un ticket interne : la route REST et la porte MCP (ADR 0030)
+    l'empruntent toutes deux, pour qu'un ticket créé depuis Claude ne diffère en rien d'un ticket
+    créé depuis la console. La clé est frappée par la plateforme (`<PRÉFIXE>-<n>`), l'état initial
+    est celui du workflow du projet, et l'interpréteur démarre tout de suite sauf `start=False`.
+    """
+    if not await le_tracker_est_interne(session, project):
+        raise conflict("ce projet reçoit ses tickets d'un tracker externe : créez la demande là-bas")
+    from choregos_core import WorkflowEngine
+
+    workflow = workflow_model(await active_workflow(session, project.id))
+    key = await cle_de_ticket_interne(session, project)
+    item = WorkItem(
+        project_id=project.id,
+        tracker_key=key,
+        title=demande.title,
+        body_snapshot=demande.body,
+        size=demande.size,
+        risk=demande.risk,
+        state=WorkflowEngine(workflow).initial_state,
+        created_by=principal.email,
+        allowed_paths=[],
+    )
+    session.add(item)
+    await session.flush()
+    await persist_event(
+        session,
+        EventType.WORKITEM_CREATED,
+        project_id=project.id,
+        work_item_id=item.id,
+        project_slug=project.slug,
+        subject=key,
+        key=key,
+        title=demande.title,
+    )
+    if demande.start:
+        workflow_id = interpreter_id(project.slug, key)
+        await get_temporal().start_interpreter(
+            workflow_id,
+            {
+                "project_id": project.id,
+                "project_slug": project.slug,
+                "work_item_id": item.id,
+                "tracker_key": key,
+            },
+        )
+        item.temporal_wf_id = workflow_id
+    await record(
+        session,
+        principal,
+        "workitem.create",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        key=key,
+        canal=canal,
+    )
+    return item
+
+
+async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]:
+    """États, runs, décisions, findings : l'histoire complète d'un ticket, dans l'ordre."""
+    entries: list[TimelineEntry] = []
+    runs = (
+        (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
+        .scalars()
+        .all()
+    )
+    for run in runs:
+        summary = (run.result or {}).get("summary", "")
+        entries.append(
+            TimelineEntry(
+                ts=run.started_at or run.created_at,
+                kind="run",
+                title=f"{run.stage_role} — tentative {run.attempt}",
+                detail=summary or run.status,
+                actor=run.actor or run.backend,
+                actor_kind="agent",
+                ref_id=run.id,
+                cost_usd=run.cost_usd,
+            )
+        )
+    requests = (
+        (
+            await session.execute(
+                select(HumanRequest)
+                .where(HumanRequest.work_item_id == item.id)
+                .order_by(HumanRequest.requested_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for req in requests:
+        entries.append(
+            TimelineEntry(
+                ts=req.requested_at,
+                kind="decision",
+                title=f"demande humaine : {req.kind}",
+                detail=str(req.payload.get("question") or req.payload.get("summary") or ""),
+                actor=req.decided_by,
+                actor_kind="user",
+                ref_id=req.id,
+            )
+        )
+        if req.decided_at:
+            entries.append(
+                TimelineEntry(
+                    ts=req.decided_at,
+                    kind="decision",
+                    title=f"décision : {(req.decision or {}).get('kind', 'répondu')}",
+                    detail=str((req.decision or {}).get("reason") or ""),
+                    actor=req.decided_by,
+                    actor_kind="user",
+                    ref_id=req.id,
+                )
+            )
+    events = (
+        (await session.execute(select(Event).where(Event.work_item_id == item.id).order_by(Event.ts)))
+        .scalars()
+        .all()
+    )
+    for event in events:
+        if event.type == str(EventType.WORKITEM_STATE_CHANGED):
+            entries.append(
+                TimelineEntry(
+                    ts=event.ts,
+                    kind="state_change",
+                    title=f"{event.payload.get('from', '?')} → {event.payload.get('to', '?')}",
+                    detail=str(event.payload.get("reason") or ""),
+                    actor=str(event.payload.get("by") or "orchestrateur"),
+                    actor_kind="system",
+                )
+            )
+    findings = (
+        (await session.execute(select(Finding).where(Finding.origin_work_item_id == item.id))).scalars().all()
+    )
+    for finding in findings:
+        entries.append(
+            TimelineEntry(
+                ts=finding.created_at,
+                kind="finding",
+                title=f"finding {finding.severity} : {finding.title}",
+                detail=finding.evidence[:300],
+                actor_kind="agent",
+                ref_id=finding.id,
+            )
+        )
+    return sorted(entries, key=lambda e: e.ts)

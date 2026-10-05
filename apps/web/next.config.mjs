@@ -19,7 +19,13 @@ const nextConfig = {
   transpilePackages: ["@varga/design-system"],
   experimental: { optimizePackageImports: ["@tanstack/react-query"] },
   async rewrites() {
-    return [{ source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` }];
+    return [
+      { source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` },
+      // La porte MCP des clients externes (ADR 0030). En production, l'Ingress l'envoie à l'API ;
+      // en développement, le relais évite d'avoir deux origines à configurer dans un client.
+      { source: "/mcp", destination: `${apiUrl}/mcp` },
+      { source: "/mcp/:path*", destination: `${apiUrl}/mcp/:path*` },
+    ];
   },
   async headers() {
     return [

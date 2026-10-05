@@ -126,7 +126,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S14-03 | S14 | ⬜ | — | gabarit `data-change` : PR → garanties → validation → application par l'API de la plateforme |
 | S14-04 | S14 | ⬜ | — | rapport d'adoption par projet (coût par ticket, délai, acceptation, reprises) |
 | S15-01 | S15 | ✅ | — | jetons d'API à portée (`*`, `mcp:read`, `mcp:write`), liés ou non à un projet — ADR 0030. Un jeton sans `*` reçoit 403 sur toute route REST (`/me`, `/me/tokens`, les projets) ; `*` ne se combine pas ; un projet ne borne qu'un jeton MCP et doit être lisible par l'humain ; le dernier client (`User-Agent`) est noté. `test_jetons_a_portee.py` (7 tests, rouge sans la garde de `deps.py`) ; `choregos tokens create --scope --project`. Ne prouve pas la porte MCP elle-même (S15-02) |
-| S15-02 | S15 | ⬜ | — | serveur MCP pour les clients externes, `/mcp` et `/mcp/projects/{P}`, par jeton à portée |
+| S15-02 | S15 | ✅ | — | porte MCP des clients externes, `/mcp` et `/mcp/projects/{org}:{slug}`, servie par l'API (ADR 0030) : protocole écrit à la main, partagé avec le side-car (`choregos_core.mcp`, 202 pour une notification) ; 7 outils adossés aux services de l'API REST (`creer_un_ticket`, `chronologie` extraits) ; un outil hors des droits n'est pas annoncé (-32602) ; aucun outil ne décide ; audit `mcp.call`, débit par jeton, 50 écritures par jour, troncature ; `GET /integrations` ; chemin `/mcp` dans l'Ingress et la HTTPRoute ; `docs/integrations.md`. `test_mcp_porte.py` (20 tests), `test_mcp_interop_sdk.py` (le client de référence du SDK `mcp`, en test seulement, initialise, liste et appelle à travers uvicorn), `tests/charts/test_porte_mcp_routee.py`, `packages/tools-mcp/tests/test_transport.py`. Ne prouve pas un vrai Claude Code contre le dev (S15-07), ni OAuth (S15-08) |
 | S15-03 | S15 | ⬜ | — | outils générés de l'ontologie à travers la porte, avec les droits de l'humain |
 | S15-04 | S15 | ⬜ | — | décider une proposition d'action dans la console, ré-authentifié |
 | S15-05 | S15 | ⬜ | — | page Integrations (neuf clients, jeton par client, indicateur « connecté », dépannage) |
@@ -134,7 +134,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S15-07 | S15 | ⬜ | — | essai sur le locataire dev : Claude Code liste les outils et crée un ticket |
 | S15-08 | S15 | ⬜ | — | serveur de ressources OAuth (RFC 9728), jetons émis par l'IdP |
 
-**Total** : 92 livrées, 11 partielles, 11 non commencées.
+**Total** : 93 livrées, 11 partielles, 10 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

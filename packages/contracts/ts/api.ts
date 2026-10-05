@@ -311,6 +311,18 @@ export type WorkItemCreate = {
   start?: boolean;
 };
 
+export type Integrations = {
+  /** L'URL de la porte MCP ; celle d'un projet y ajoute `/projects/{org}:{slug}`. */
+  mcp_url: string;
+  protocol_versions: Array<string>;
+  oauth: {
+    /** Faux tant que la porte n'accepte que des jetons à portée. */
+    enabled: boolean;
+    authorization_server?: string | null;
+  };
+  version: string;
+};
+
 /** `*` : l'API REST et la CLI. `mcp:read`, `mcp:write` : la porte MCP seulement (ADR 0030) — un tel jeton est refusé par l'API REST, et la porte refuse `*`. */
 export type TokenScope = "*" | "mcp:read" | "mcp:write";
 
@@ -838,6 +850,7 @@ export interface Operations {
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
 }; response: void };
+  getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };

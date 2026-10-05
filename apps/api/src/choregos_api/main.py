@@ -31,6 +31,7 @@ from .routers import (
     connectors,
     costs,
     findings,
+    integrations,
     internal,
     memory,
     models,
@@ -208,6 +209,7 @@ def create_app() -> FastAPI:
 
     routeurs_du_coeur = (
         auth.router,
+        integrations.router,
         projects.router,
         connectors.router,
         workflows.router,
@@ -226,6 +228,12 @@ def create_app() -> FastAPI:
     for router in routeurs_du_coeur:
         app.include_router(router, prefix=API_PREFIX)
     _inclure_les_routeurs_des_greffons(app, routeurs_du_coeur)
+
+    # La porte MCP des clients externes (ADR 0030) : à la racine, comme le veut R-SOC-MCP-01, hors
+    # du schéma OpenAPI — MCP est son propre protocole, et ses outils se testent où ils sont définis.
+    from .mcp import router as porte_mcp
+
+    app.include_router(porte_mcp)
 
     @app.get("/metrics", tags=["session"], operation_id="metrics", include_in_schema=False)
     async def metrics() -> Response:
