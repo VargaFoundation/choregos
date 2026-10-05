@@ -331,6 +331,26 @@ export type Agent = {
   versions?: Array<AgentVersion> | null;
 };
 
+export type AgentMetrics = {
+  agent: string;
+  days: number;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  success_rate?: number | null;
+  cost_usd?: number;
+  cost_by_kind?: {
+    [key: string]: number;
+  };
+  by_project?: Array<{
+    project: string;
+    runs: number;
+    cost_usd: number;
+  }>;
+  spent_today_usd?: number;
+  daily_budget_usd?: number | null;
+};
+
 /** Ce qu'un projet change d'une version — seulement resserrer. */
 export type AgentOverrides = {
   limits?: AgentLimits;
@@ -1050,6 +1070,7 @@ export interface Operations {
   reason: string;
 }; response: void };
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
+  getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };

@@ -178,3 +178,36 @@ async def test_l_interpreteur_transmet_l_agent_que_l_acteur_nomme(
             (await session.execute(select(Run).where(Run.work_item_id == setup.work_item_id))).scalars().all()
         )
         assert [(r.agent_slug, r.agent_version) for r in runs] == [("coordinateur", 1)]
+
+
+async def test_un_agent_qui_a_epuise_son_budget_du_jour_ne_lance_plus_de_run(setup: Fixture) -> None:
+    from choregos_api.db.models import CostLedger, Run
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _agent(setup)  # budget du jour : 5 $
+    async with session_scope() as session:
+        session.add(
+            Run(
+                id="run-hier",
+                work_item_id=setup.work_item_id,
+                project_id=setup.project_id,
+                stage_role="implement",
+                status="succeeded",
+                agent_slug="coordinateur",
+                agent_version=1,
+            )
+        )
+        await session.flush()
+        session.add(
+            CostLedger(
+                project_id=setup.project_id, run_id="run-hier", kind="model", cost_usd=4.0, ts=utcnow()
+            )
+        )
+        session.add(
+            CostLedger(project_id=setup.project_id, run_id="run-hier", kind="tool", cost_usd=1.5, ts=utcnow())
+        )
+    with pytest.raises(ApplicationError, match="budget du jour") as refus:
+        await prepare_stage(_plan(setup, agent="coordinateur"))
+    assert refus.value.non_retryable and refus.value.type == "admission_refused"

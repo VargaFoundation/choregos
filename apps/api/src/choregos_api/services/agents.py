@@ -125,9 +125,30 @@ async def resoudre_l_agent(
     return AgentResolu(agent=agent, version=version, spec=effective(spec, surcharges))
 
 
+async def depense_du_jour(session: AsyncSession, org_id: str, agent_slug: str) -> float:
+    """Ce que les runs de l'agent ont coûté depuis minuit (UTC), modèles ET outils."""
+    from datetime import datetime, time
+
+    from sqlalchemy import func
+
+    from ..db.models import CostLedger, Project, Run
+
+    minuit = datetime.combine(utcnow().date(), time.min, tzinfo=utcnow().tzinfo)
+    total = (
+        await session.execute(
+            select(func.coalesce(func.sum(CostLedger.cost_usd), 0.0))
+            .join(Run, Run.id == CostLedger.run_id)
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug == agent_slug, Project.org_id == org_id, CostLedger.ts >= minuit)
+        )
+    ).scalar_one()
+    return float(total)
+
+
 __all__ = [
     "AgentIndisponible",
     "AgentResolu",
+    "depense_du_jour",
     "effective",
     "elargissements",
     "erreurs_d_une_version",

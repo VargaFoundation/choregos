@@ -850,6 +850,19 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/metrics:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgentMetrics
+      description: Les runs de l'agent sur la période, leur issue et leur coût — modèles et outils —, par projet ; ce qu'il a dépensé aujourd'hui.
+      parameters:
+        - { name: days, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentMetrics" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/versions:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1612,6 +1625,21 @@ components:
         latest_version: { type: integer }
         created_at: { type: [string, "null"], format: date-time }
         versions: { type: [array, "null"], items: { $ref: "#/components/schemas/AgentVersion" } }
+    AgentMetrics:
+      type: object
+      required: [agent, days, runs, succeeded, failed]
+      properties:
+        agent: { type: string }
+        days: { type: integer }
+        runs: { type: integer }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        success_rate: { type: [number, "null"] }
+        cost_usd: { type: number }
+        cost_by_kind: { type: object, additionalProperties: { type: number } }
+        by_project: { type: array, items: { type: object, required: [project, runs, cost_usd], properties: { project: { type: string }, runs: { type: integer }, cost_usd: { type: number } } } }
+        spent_today_usd: { type: number }
+        daily_budget_usd: { type: [number, "null"] }
     AgentOverrides:
       type: object
       description: Ce qu'un projet change d'une version — seulement resserrer.

@@ -290,7 +290,9 @@ instructions **replace the playbook**: they are a Jinja template rendered in a *
 (`{{ ''.__class__ }}` is refused, at publication already), with the playbook's variables
 (`ticket`, `spec`, `inputs`…), and the platform appends a frame the author cannot remove — the output
 contract and the invariants. The run records the agent and its version; a revoked, suspended or
-expired agent does not start.
+expired agent does not start, and neither does one that has spent its `daily_usd` since midnight
+(UTC) — models **and** tool calls. `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
+their success rate, their cost by kind and by project, and what it spent today.
 
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). Creating, publishing and revoking need

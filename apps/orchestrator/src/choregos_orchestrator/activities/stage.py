@@ -113,6 +113,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # playbook. Un agent révoqué, suspendu ou expiré ne part pas.
         agent = await _agent_du_plan(session, bundle, plan)
         if agent is not None:
+            await _budget_du_jour(session, bundle, agent)
             plan = _plan_de_l_agent(plan, agent.spec)
         resolver = ModelResolver(gateway_url=settings.gateway_url)
         backend = plan.backend or bundle.config.agent.default_backend
@@ -396,6 +397,25 @@ async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:
         return await resoudre_l_agent(session, bundle.project.org_id, bundle.project.id, plan.agent)
     except AgentIndisponible as refus:
         raise ApplicationError(str(refus), type="AgentIndisponible", non_retryable=True) from refus
+
+
+async def _budget_du_jour(session: Any, bundle: Any, agent: Any) -> None:
+    """Un agent qui a dépensé son budget du jour — modèles et outils — ne lance plus de run avant
+    minuit (UTC). Le refus ne se réessaie pas : retenter ne rendrait pas le budget."""
+    plafond = agent.spec.budget.daily_usd
+    if plafond is None:
+        return
+    from choregos_api.services.agents import depense_du_jour
+    from temporalio.exceptions import ApplicationError
+
+    depense = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
+    if depense >= plafond:
+        raise ApplicationError(
+            f"run refusé avant démarrage — l'agent `{agent.agent.slug}` a dépensé {depense:.2f} $ "
+            f"aujourd'hui, pour un budget du jour de {plafond:.2f} $",
+            type="admission_refused",
+            non_retryable=True,
+        )
 
 
 def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:

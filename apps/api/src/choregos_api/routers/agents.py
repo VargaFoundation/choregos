@@ -13,7 +13,7 @@ import json
 from typing import Annotated
 
 from choregos_core import utcnow
-from fastapi import APIRouter, Path, Response, status
+from fastapi import APIRouter, Path, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,14 +25,16 @@ from ..rbac import Permission
 from ..schemas import (
     AgentCreate,
     AgentDto,
+    AgentMetrics,
     AgentOverrides,
     AgentPatch,
+    AgentProjectMetrics,
     AgentSpec,
     AgentVersionDto,
     ProjectAgentDto,
     ProjectAgentPut,
 )
-from ..services.agents import effective, elargissements, erreurs_d_une_version
+from ..services.agents import depense_du_jour, effective, elargissements, erreurs_d_une_version
 
 router = APIRouter(tags=["agents"])
 
@@ -228,6 +230,73 @@ async def get_version(org: str, slug: Slug, version: int, session: Db, principal
     if ligne is None:
         raise not_found("Version d'agent", f"{slug}@{version}")
     return _version_dto(ligne)
+
+
+FINIS = {"succeeded", "failed", "timed_out", "cancelled"}
+
+
+@router.get("/orgs/{org}/agents/{slug}/metrics", response_model=AgentMetrics, operation_id="getAgentMetrics")
+async def agent_metrics(
+    org: str, slug: Slug, session: Db, principal: Me, days: Annotated[int, Query(ge=1, le=365)] = 30
+) -> AgentMetrics:
+    """Les runs de l'agent sur la période, leur issue, leur coût — modèles et outils —, par projet."""
+    from datetime import timedelta
+
+    from ..db.models import CostLedger, Project, Run
+
+    _lire(principal, org)
+    organisation = await _organisation(session, org)
+    agent = await _agent(session, organisation, slug)
+    depuis = utcnow() - timedelta(days=days)
+    runs = (
+        await session.execute(
+            select(Run.id, Run.status, Project.slug)
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug == slug, Project.org_id == organisation.id, Run.created_at >= depuis)
+        )
+    ).all()
+    couts = (
+        await session.execute(
+            select(CostLedger.kind, Project.slug, func.sum(CostLedger.cost_usd))
+            .join(Run, Run.id == CostLedger.run_id)
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug == slug, Project.org_id == organisation.id, CostLedger.ts >= depuis)
+            .group_by(CostLedger.kind, Project.slug)
+        )
+    ).all()
+    reussis = sum(1 for _, statut, _ in runs if statut == "succeeded")
+    termines = sum(1 for _, statut, _ in runs if statut in FINIS)
+    par_sorte: dict[str, float] = {}
+    par_projet: dict[str, list[float]] = {}
+    for sorte, projet, montant in couts:
+        par_sorte[sorte] = par_sorte.get(sorte, 0.0) + float(montant or 0.0)
+        par_projet.setdefault(projet, [0, 0.0])[1] += float(montant or 0.0)
+    for _, _, projet in runs:
+        par_projet.setdefault(projet, [0, 0.0])[0] += 1
+    derniere = (
+        await session.execute(
+            select(AgentVersion.spec)
+            .where(AgentVersion.agent_id == agent.id)
+            .order_by(AgentVersion.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return AgentMetrics(
+        agent=slug,
+        days=days,
+        runs=len(runs),
+        succeeded=reussis,
+        failed=termines - reussis,
+        success_rate=round(reussis / termines, 4) if termines else None,
+        cost_usd=round(sum(par_sorte.values()), 6),
+        cost_by_kind={k: round(v, 6) for k, v in par_sorte.items()},
+        by_project=[
+            AgentProjectMetrics(project=projet, runs=int(n), cost_usd=round(c, 6))
+            for projet, (n, c) in sorted(par_projet.items())
+        ],
+        spent_today_usd=round(await depense_du_jour(session, organisation.id, slug), 6),
+        daily_budget_usd=AgentSpec.model_validate(derniere or {}).budget.daily_usd,
+    )
 
 
 @router.patch("/orgs/{org}/agents/{slug}", response_model=AgentDto, operation_id="updateAgent")

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 
 from .conftest import login
@@ -143,3 +144,43 @@ async def test_des_instructions_qui_ne_rendent_pas_sont_refusees_a_la_publicatio
     evasion = {**SPEC, "instructions": "{{ cycler.__init__.__globals__ }}"}
     publier = await client.post("/api/v1/orgs/varga/agents/coordinateur-onboarding/versions", json=evasion)
     assert publier.status_code == 422, publier.text
+
+
+async def test_les_mesures_d_un_agent_comptent_ses_echecs_et_ses_outils(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import CostLedger, Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+
+    await _creer(client)
+    async with session_scope() as session:
+        item = WorkItem(project_id=project["id"], tracker_key="BILLING-1", title="T", state="ready")
+        session.add(item)
+        await session.flush()
+        for rang, statut in enumerate(("succeeded", "succeeded", "failed")):
+            session.add(
+                Run(
+                    id=f"run-{rang}",
+                    work_item_id=item.id,
+                    project_id=project["id"],
+                    stage_role="implement",
+                    status=statut,
+                    agent_slug="coordinateur-onboarding",
+                    agent_version=1,
+                )
+            )
+        await session.flush()
+        for sorte, montant in (("model", 1.0), ("tool", 0.25)):
+            session.add(
+                CostLedger(
+                    project_id=project["id"], run_id="run-0", kind=sorte, cost_usd=montant, ts=utcnow()
+                )
+            )
+    mesures = (await client.get("/api/v1/orgs/varga/agents/coordinateur-onboarding/metrics")).json()
+    assert (mesures["runs"], mesures["succeeded"], mesures["failed"]) == (3, 2, 1)
+    assert mesures["success_rate"] == pytest.approx(2 / 3, abs=1e-3), "un run échoué fait baisser le taux"
+    assert mesures["cost_by_kind"] == {"model": 1.0, "tool": 0.25}, "un appel d'outil compte dans le coût"
+    assert mesures["cost_usd"] == pytest.approx(1.25)
+    assert mesures["by_project"] == [{"project": "billing-api", "runs": 3, "cost_usd": 1.25}]
+    assert mesures["spent_today_usd"] == pytest.approx(1.25) and mesures["daily_budget_usd"] == 20.0
