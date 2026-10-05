@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 
 /**
  * Un formulaire tiré d'un JSON Schema — celui d'une section d'administration déclarée par un
  * greffon (ADR 0032), demain celui d'un connecteur (ADR 0034). Fait ici plutôt qu'avec `@rjsf` :
- * le budget du bundle, et les seuls cas qui servent — un objet de scalaires, de choix et de listes.
+ * le budget du bundle, et les seuls cas qui servent — un objet de scalaires, de choix, de listes,
+ * de textes sur plusieurs lignes (`format: "multiline"` : un certificat PEM) et de correspondances
+ * (`type: "object"` de chaînes : un groupe de l'IdP → un groupe de rôle), une par ligne.
  *
  * L'API reste juge : ce formulaire ne refuse que ce qui manque, il ne revalide pas le schéma.
  */
@@ -17,6 +19,7 @@ export type JsonSchema = {
   format?: string;
   enum?: unknown[];
   items?: JsonSchema;
+  additionalProperties?: JsonSchema | boolean;
   properties?: Record<string, JsonSchema>;
   required?: string[];
   default?: unknown;
@@ -28,7 +31,9 @@ type Valeurs = Record<string, unknown>;
 export function champsManquants(schema: JsonSchema, valeurs: Valeurs): string[] {
   return (schema.required ?? []).filter((nom) => {
     const valeur = valeurs[nom];
-    return valeur === undefined || valeur === null || valeur === "" || (Array.isArray(valeur) && valeur.length === 0);
+    if (valeur === undefined || valeur === null || valeur === "") return true;
+    if (Array.isArray(valeur)) return valeur.length === 0;
+    return typeof valeur === "object" && Object.keys(valeur).length === 0;
   });
 }
 
@@ -147,6 +152,21 @@ function Champ({
         ))}
       </select>
     );
+  } else if (propriete.type === "object") {
+    controle = <Correspondance id={id} valeur={valeur} disabled={disabled} aide={aide} onChange={onChange} />;
+  } else if (propriete.format === "multiline") {
+    controle = (
+      <textarea
+        id={id}
+        className={`${classes} font-mono text-xs`}
+        rows={6}
+        value={typeof valeur === "string" ? valeur : ""}
+        required={requis}
+        disabled={disabled}
+        aria-describedby={aide}
+        onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.value)}
+      />
+    );
   } else if (propriete.type === "array") {
     controle = (
       <input
@@ -192,5 +212,81 @@ function Champ({
       {controle}
       {indication}
     </div>
+  );
+}
+
+/** `clé = valeur`, une par ligne : ce qu'on lit, et ce qu'on tape. */
+export function lireUneCorrespondance(texte: string): { valeurs: Record<string, string>; illisibles: number[] } {
+  const valeurs: Record<string, string> = {};
+  const illisibles: number[] = [];
+  texte.split("\n").forEach((ligne, index) => {
+    if (!ligne.trim()) return;
+    const egal = ligne.indexOf("=");
+    const cle = egal < 0 ? "" : ligne.slice(0, egal).trim();
+    if (!cle) {
+      illisibles.push(index + 1);
+      return;
+    }
+    valeurs[cle] = ligne.slice(egal + 1).trim();
+  });
+  return { valeurs, illisibles };
+}
+
+function ecrireUneCorrespondance(valeur: unknown): string {
+  if (!valeur || typeof valeur !== "object" || Array.isArray(valeur)) return "";
+  return Object.entries(valeur as Record<string, unknown>)
+    .map(([cle, contenu]) => `${cle} = ${String(contenu)}`)
+    .join("\n");
+}
+
+/**
+ * Une correspondance, une ligne par paire. Le texte tapé reste tel quel pendant la saisie — une
+ * ligne illisible est dite, jamais effacée — et suit la valeur quand elle change d'ailleurs (la
+ * lecture du formulaire arrive après son premier rendu).
+ */
+function Correspondance({
+  id,
+  valeur,
+  disabled,
+  aide,
+  onChange,
+}: {
+  id: string;
+  valeur: unknown;
+  disabled?: boolean;
+  aide?: string;
+  onChange: (valeur: unknown) => void;
+}) {
+  const [texte, setTexte] = useState(() => ecrireUneCorrespondance(valeur));
+  const [recue, setRecue] = useState(valeur);
+  if (valeur !== recue) {
+    // Une valeur venue d'ailleurs (la lecture) remplace le texte ; celle qu'on vient de taper, non.
+    setRecue(valeur);
+    const tapee = lireUneCorrespondance(texte).valeurs;
+    if (JSON.stringify(tapee) !== JSON.stringify(valeur ?? {})) setTexte(ecrireUneCorrespondance(valeur));
+  }
+  const { illisibles } = lireUneCorrespondance(texte);
+  return (
+    <>
+      <textarea
+        id={id}
+        className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-xs"
+        rows={4}
+        value={texte}
+        placeholder="key = value"
+        disabled={disabled}
+        aria-describedby={aide}
+        onChange={(event) => {
+          setTexte(event.target.value);
+          const { valeurs } = lireUneCorrespondance(event.target.value);
+          onChange(Object.keys(valeurs).length > 0 ? valeurs : undefined);
+        }}
+      />
+      {illisibles.length > 0 && (
+        <p className="text-xs text-danger" role="alert">
+          line{illisibles.length > 1 ? "s" : ""} {illisibles.join(", ")}: key = value expected
+        </p>
+      )}
+    </>
   );
 }

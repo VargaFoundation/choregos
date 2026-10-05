@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { remplir } from "@/components/admin/section";
-import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
+import { SchemaForm, champsManquants, lireUneCorrespondance, type JsonSchema } from "@/components/schema-form";
 import { versCsv } from "@/lib/csv";
 
 const schema: JsonSchema = {
@@ -50,6 +50,75 @@ describe("SchemaForm (ADR 0032, S17-02)", () => {
     fireEvent.change(screen.getByLabelText(/^domains/), { target: { value: "varga.dev, diametral.com" } });
     expect(derniere).toEqual({ name: "okta", seats: 12, enabled: true, domains: ["varga.dev", "diametral.com"] });
     expect(champsManquants(schema, derniere)).toEqual(["role"]);
+  });
+});
+
+/** Ce que demande le SAML de l'édition entreprise (S17-04) : un certificat, une correspondance. */
+const saml: JsonSchema = {
+  type: "object",
+  required: ["certificat_pem"],
+  properties: {
+    certificat_pem: { type: "string", format: "multiline", title: "certificate" },
+    correspondance: { type: "object", additionalProperties: { type: "string" }, title: "mapping" },
+  },
+};
+
+function FormulaireSaml({ initial, onValue }: { initial: Record<string, unknown>; onValue: (v: Record<string, unknown>) => void }) {
+  const [valeurs, setValeurs] = useState<Record<string, unknown>>(initial);
+  return (
+    <>
+      <button type="button" onClick={() => setValeurs({ correspondance: { lus: "viewer" } })}>
+        lire
+      </button>
+      <SchemaForm
+        schema={saml}
+        value={valeurs}
+        onChange={(v) => {
+          setValeurs(v);
+          onValue(v);
+        }}
+      />
+    </>
+  );
+}
+
+describe("SchemaForm : textes sur plusieurs lignes et correspondances (S17-04)", () => {
+  const PEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----";
+
+  it("un certificat garde ses fins de ligne : une ligne de saisie les aurait mangées", () => {
+    let derniere: Record<string, unknown> = {};
+    render(<FormulaireSaml initial={{}} onValue={(v) => (derniere = v)} />);
+    const certificat = screen.getByLabelText(/^certificate/);
+    expect(certificat.tagName).toBe("TEXTAREA");
+    fireEvent.change(certificat, { target: { value: PEM } });
+    expect(derniere.certificat_pem).toBe(PEM);
+  });
+
+  it("une correspondance se tape une paire par ligne, et se relit telle qu'elle a été écrite", () => {
+    let derniere: Record<string, unknown> = {};
+    render(<FormulaireSaml initial={{ correspondance: { admins: "org_admin" } }} onValue={(v) => (derniere = v)} />);
+    const correspondance = screen.getByLabelText(/^mapping/);
+    expect(correspondance).toHaveValue("admins = org_admin");
+    fireEvent.change(correspondance, { target: { value: "admins = org_admin\ndevs=developer\n" } });
+    expect(derniere.correspondance).toEqual({ admins: "org_admin", devs: "developer" });
+  });
+
+  it("une ligne illisible est dite, pas effacée ; une valeur lue après coup remplace le texte", () => {
+    let derniere: Record<string, unknown> = {};
+    render(<FormulaireSaml initial={{}} onValue={(v) => (derniere = v)} />);
+    const correspondance = screen.getByLabelText(/^mapping/);
+    fireEvent.change(correspondance, { target: { value: "admins = org_admin\nsans egal" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("line 2: key = value expected");
+    expect(correspondance).toHaveValue("admins = org_admin\nsans egal");
+    expect(derniere.correspondance).toEqual({ admins: "org_admin" });
+
+    fireEvent.click(screen.getByRole("button", { name: "lire" }));
+    expect(screen.getByLabelText(/^mapping/)).toHaveValue("lus = viewer");
+  });
+
+  it("une correspondance vide manque, si elle est exigée", () => {
+    expect(champsManquants({ required: ["m"], properties: { m: { type: "object" } } }, { m: {} })).toEqual(["m"]);
+    expect(lireUneCorrespondance(" = x\na = b = c").valeurs).toEqual({ a: "b = c" });
   });
 });
 
