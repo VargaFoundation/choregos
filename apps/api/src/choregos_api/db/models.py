@@ -486,6 +486,56 @@ class GatewayKeyRow(Base, PkMixin, TimestampMixin):
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+# ───────────────────────────── le registre d'agents (ADR 0033) ─────────────────────────────
+
+
+class Agent(Base, PkMixin, TimestampMixin):
+    """Un agent de l'organisation : interne (la plateforme le fait tourner) ou externe (un client
+    de la porte MCP). Ce qu'il EST vit dans ses versions, immuables ; ici, son identité et son
+    état — actif, suspendu, révoqué, expiré."""
+
+    __tablename__ = "agents"
+    __table_args__ = (UniqueConstraint("org_id", "slug", name="uq_agents_org_slug"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(16), default="internal")
+    display_name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    owner_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentVersion(Base, PkMixin, TimestampMixin):
+    """Une version d'agent — instructions, modèle, limites, skills, serveurs MCP, budget. Elle ne se
+    modifie jamais : un changement publie la suivante."""
+
+    __tablename__ = "agent_versions"
+    __table_args__ = (UniqueConstraint("agent_id", "version", name="uq_agent_versions_agent_version"),)
+
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    spec: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    checksum: Mapped[str] = mapped_column(String(80))
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class ProjectAgent(Base, PkMixin, TimestampMixin):
+    """L'épingle d'un projet sur une version d'agent, et ses surcharges — qui ne font que resserrer."""
+
+    __tablename__ = "project_agents"
+    __table_args__ = (UniqueConstraint("project_id", "agent_id", name="uq_project_agents_project_agent"),)
+
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    overrides: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+
+
 ALL_TABLES = [
     Organization,
     User,
@@ -512,6 +562,9 @@ ALL_TABLES = [
     BackendRegistryRow,
     ExecutorRow,
     GatewayKeyRow,
+    Agent,
+    AgentVersion,
+    ProjectAgent,
 ]
 
 

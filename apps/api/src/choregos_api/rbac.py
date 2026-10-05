@@ -32,6 +32,9 @@ class Permission(StrEnum):
     TOOLS_GRANT = "tools:grant"
     PLATFORM_ADMIN = "platform:admin"
     AUDIT_READ = "audit:read"
+    #: Créer un agent, publier ses versions, le suspendre ou le révoquer (ADR 0033) :
+    #: l'administrateur de l'organisation. Un projet n'épingle qu'une version existante.
+    AGENT_MANAGE = "agent:manage"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {

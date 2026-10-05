@@ -27,6 +27,7 @@ from .logging import bind, clear, configure_logging, get_logger
 from .metriques import boucle_de_rafraichissement, exposer, requetes_http
 from .routers import (
     admin,
+    agents,
     auth,
     connectors,
     costs,
@@ -259,6 +260,7 @@ def create_app() -> FastAPI:
         costs.router,
         templates.router,
         admin.router,
+        agents.router,
         webhooks.router,
         internal.router,
     )

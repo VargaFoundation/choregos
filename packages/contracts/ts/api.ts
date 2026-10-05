@@ -267,6 +267,89 @@ export type WorkflowEditResult = WorkflowValidation & {
   notices: Array<string>;
 };
 
+export type AgentLimits = {
+  max_turns?: number | null;
+  max_minutes?: number | null;
+};
+
+export type AgentBudget = {
+  run_usd?: number | null;
+  daily_usd?: number | null;
+};
+
+/** Ce qu'une version d'agent est ; elle ne se modifie jamais (ADR 0033). */
+export type AgentSpec = {
+  instructions?: string;
+  model?: string | null;
+  backend?: string | null;
+  limits?: AgentLimits;
+  budget?: AgentBudget;
+  skills?: Array<{
+    slug: string;
+    version?: number | null;
+  }>;
+  mcp_servers?: Array<{
+    connector: string;
+    tools?: Array<string>;
+  }>;
+};
+
+export type AgentCreate = {
+  slug: string;
+  kind?: "internal" | "external";
+  display_name: string;
+  description?: string | null;
+  spec?: AgentSpec;
+};
+
+export type AgentPatch = {
+  display_name?: string | null;
+  description?: string | null;
+  status?: "active" | "suspended" | "revoked" | null;
+  expires_at?: string | null;
+};
+
+export type AgentVersion = {
+  version: number;
+  spec: AgentSpec;
+  checksum: string;
+  created_by?: string | null;
+  created_at?: string | null;
+};
+
+export type Agent = {
+  slug: string;
+  kind: "internal" | "external";
+  display_name: string;
+  description?: string | null;
+  status: string;
+  owner?: string | null;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  latest_version: number;
+  created_at?: string | null;
+  versions?: Array<AgentVersion> | null;
+};
+
+/** Ce qu'un projet change d'une version — seulement resserrer. */
+export type AgentOverrides = {
+  limits?: AgentLimits;
+  budget?: AgentBudget;
+  tools?: Array<string> | null;
+};
+
+export type ProjectAgentPut = {
+  version: number;
+  overrides?: AgentOverrides;
+};
+
+export type ProjectAgent = {
+  agent: string;
+  version: number;
+  overrides: AgentOverrides;
+  effective: AgentSpec;
+};
+
 export type WorkflowIssue = {
   code: string;
   message: string;
@@ -919,6 +1002,7 @@ export interface Operations {
   result: unknown;
   remaining?: number;
 } };
+  createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
@@ -938,6 +1022,8 @@ export interface Operations {
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
 }; response: void };
+  getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
+  getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
@@ -1017,6 +1103,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
+  listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
   listConnectorTypes: { method: "GET"; path: "/connectors/types"; body: never; response: Array<ConnectorType> };
@@ -1029,6 +1116,7 @@ export interface Operations {
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
+  listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
@@ -1037,6 +1125,7 @@ export interface Operations {
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
+  pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
   postDecision: { method: "POST"; path: "/work-items/{id}/decisions"; body: DecisionRequest; response: HumanRequest };
   postFindingAction: { method: "POST"; path: "/findings/{id}/actions"; body: FindingAction; response: FindingRecord };
   postRunEvents: { method: "POST"; path: "/internal/runs/{id}/events"; body: {
@@ -1054,6 +1143,7 @@ export interface Operations {
 }; response: ScopeChangeDecision };
   postWorkItemAction: { method: "POST"; path: "/work-items/{id}/actions"; body: WorkItemAction; response: void };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
+  publishAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions"; body: AgentSpec; response: AgentVersion };
   putBackend: { method: "PUT"; path: "/platform/backends"; body: AgentBackendUpdate; response: AgentBackendInfo };
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
@@ -1076,6 +1166,8 @@ export interface Operations {
 }; response: WebhookAck };
   testConnector: { method: "POST"; path: "/projects/{id}/connectors/{kind}/test"; body: never; response: ConnectorTestResult };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
+  unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
+  updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   validateWorkflow: { method: "POST"; path: "/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
