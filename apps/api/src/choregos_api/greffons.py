@@ -86,7 +86,14 @@ def declarer_une_section_d_administration(manifeste: dict[str, Any]) -> None:
 
     if not isinstance(manifeste, dict):
         raise TypeError(f"un manifeste est un objet, pas {type(manifeste).__name__}")
-    if any(section.get("id") == manifeste.get("id") for section in _SECTIONS):
+    for section in _SECTIONS:
+        if section.get("id") != manifeste.get("id"):
+            continue
+        # Le même greffon chargé deux fois — par l'orchestrateur que l'API importe, puis par
+        # `create_app()` — redéclare la même section : rien à refaire, comme pour un routeur. Une
+        # AUTRE section sous le même identifiant, elle, en masquerait une.
+        if section == manifeste:
+            return
         raise ValueError(f"section d'administration déclarée deux fois : {manifeste.get('id')}")
     _SECTIONS.append(copy.deepcopy(manifeste))
 
