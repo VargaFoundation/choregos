@@ -54,7 +54,11 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
   async function enregistrer() {
     setMessage(null);
     try {
-      await api.sectionCall("" + (bloc.write_method ?? "PUT"), remplir(bloc.write, org), valeurs);
+      // Les seuls champs du schéma : la lecture peut rendre plus (un état complet), et une route
+      // d'écriture stricte refuserait le reste.
+      const champs = new Set(Object.keys(schema.properties ?? {}));
+      const corps = Object.fromEntries(Object.entries(valeurs).filter(([nom]) => champs.has(nom)));
+      await api.sectionCall(bloc.write_method ?? "PUT", remplir(bloc.write, org), corps);
       setMessage("saved");
       setSaisie(null);
       await lu.refetch();
