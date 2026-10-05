@@ -62,6 +62,20 @@ test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
   ).toEqual([]);
 });
 
+/** Les connecteurs d'un projet (S19-01) : la section seule — le reste des réglages a ses propres pages. */
+test("réglages : la section des connecteurs sans violation sérieuse", async ({ page }) => {
+  await page.goto("/p/billing-api/settings");
+  await page.getByTestId("connecteur-tracker").getByRole("button", { name: "edit" }).click();
+  const results = await new AxeBuilder({ page })
+    .include('[data-testid="connecteurs"]')
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+  const bloquantes = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+  expect(
+    bloquantes.map((v) => `${v.id} (${v.impact}) : ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
+  ).toEqual([]);
+});
+
 /**
  * Le graphe de workflow se parcourt au clavier : Tab atteint les états, les flèches suivent
  * les transitions, et l'état sous le curseur est décrit (aria-live) sous la carte.

@@ -71,16 +71,26 @@ GateFn = Callable[[GateContext, dict[str, Any]], GateOutcome]
 
 _REGISTRY: dict[str, GateFn] = {}
 _ASYNC_GATES: set[str] = set()
+_NEEDS: dict[str, frozenset[str]] = {}
 
 
-def gate(name: str, *, asynchronous: bool = False) -> Callable[[GateFn], GateFn]:
+def gate(name: str, *, asynchronous: bool = False, needs: tuple[str, ...] = ()) -> Callable[[GateFn], GateFn]:
+    """`needs` : les capacités de connecteur que la garantie lit (ADR 0034) — un diff vient du
+    `scm`, un statut de pipeline de la `ci`. Un workflow qui la pose les exige de son projet."""
+
     def decorator(fn: GateFn) -> GateFn:
         _REGISTRY[name] = fn
         if asynchronous:
             _ASYNC_GATES.add(name)
+        _NEEDS[name] = frozenset(needs)
         return fn
 
     return decorator
+
+
+def gate_needs(name: str) -> frozenset[str]:
+    """Les capacités qu'une garantie lit ; une garantie inconnue n'en exige aucune."""
+    return _NEEDS.get(name, frozenset())
 
 
 def known_gates() -> list[str]:
@@ -122,7 +132,7 @@ def _sans_diff(name: str) -> GateOutcome:
     )
 
 
-@gate("scope_respected")
+@gate("scope_respected", needs=("scm",))
 def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if not ctx.diff_available:
         return _sans_diff("scope_respected")
@@ -288,7 +298,7 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     return GateOutcome("evidence_facts", True, detail=f"faits vérifiés : {', '.join(sorted(required))}")
 
 
-@gate("diff_size_max")
+@gate("diff_size_max", needs=("scm",))
 def _diff_size_max(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if not ctx.diff_available:
         return _sans_diff("diff_size_max")
@@ -323,7 +333,7 @@ def scan_secrets(text: str) -> list[str]:
     return found
 
 
-@gate("no_secrets")
+@gate("no_secrets", needs=("scm",))
 def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if not ctx.diff_available:
         return _sans_diff("no_secrets")
@@ -336,7 +346,7 @@ def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-@gate("coverage_delta_min")
+@gate("coverage_delta_min", needs=("ci",))
 def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     threshold = float(params.get("x", params.get("min", 0.0)))
     if ctx.result is None or ctx.result.evidence.coverage_delta is None:
@@ -352,7 +362,7 @@ def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome
 # ───────────────────────────── gates asynchrones ─────────────────────────────
 
 
-@gate("ci_green", asynchronous=True)
+@gate("ci_green", asynchronous=True, needs=("ci",))
 def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.ci_status is None:
         return GateOutcome("ci_green", False, pending=True, detail="CI en attente")
@@ -360,7 +370,7 @@ def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     return GateOutcome("ci_green", ok, detail=f"CI {ctx.ci_status}")
 
 
-@gate("review_approved", asynchronous=True)
+@gate("review_approved", asynchronous=True, needs=("scm",))
 def _review_approved(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.review_state is None:
         return GateOutcome("review_approved", False, pending=True, detail="review en attente")
@@ -368,7 +378,7 @@ def _review_approved(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     return GateOutcome("review_approved", ok, detail=f"review {ctx.review_state}")
 
 
-@gate("scans_ok", asynchronous=True)
+@gate("scans_ok", asynchronous=True, needs=("ci",))
 def _scans_ok(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     required = list(params.get("scanners") or sorted(ctx.scans) or ["semgrep", "trivy", "gitleaks"])
     if not ctx.scans:
@@ -389,7 +399,7 @@ def _scans_ok(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-@gate("provenance_signed", asynchronous=True)
+@gate("provenance_signed", asynchronous=True, needs=("ci",))
 def _provenance_signed(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.signed is None:
         return GateOutcome("provenance_signed", False, pending=True, detail="signature en attente")
@@ -424,6 +434,7 @@ __all__ = [
     "GateOutcome",
     "evaluate",
     "gate",
+    "gate_needs",
     "is_async_gate",
     "known_gates",
     "matches_any",

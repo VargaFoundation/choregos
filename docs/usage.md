@@ -24,7 +24,7 @@ choregos projects list
 
 `--template <name>@<version>` on `create` also provisions the project: repository, board,
 GitOps manifests and scaffolding. Without it, the project is created empty and you attach
-its connectors yourself, from the UI (*Settings → connecteurs*: type and configuration, secrets referenced never typed) or the API (`PUT /projects/{id}/connectors/{kind}`).
+its connectors yourself, from the UI (*Settings → connectors*: type and configuration, secrets referenced never typed) or the API (`PUT /projects/{id}/connectors/{kind}`).
 
 A project needs, at minimum: a **tracker** (where humans look), a **workflow** and a
 **policy**. Everything else has a default or can be added later.
@@ -40,6 +40,28 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 | `gateway` | `litellm`, `direct`, `fake` |
 | `memory` | `ecphoria`, `lexical`, `fake` |
 | `notify` | `slack`, `fake` |
+
+A project only needs what its workflows read ([ADR 0034](adr/0034-connecteurs-par-capacites.md)).
+`GET /projects/{id}/requirements` derives it — a guarantee says what it reads (`ci_green` the CI,
+`scope_respected` a diff), an agent whose role works in a repository needs an `scm`, a release
+train or a `deployed_prod*` state needs a `cd` — and says why for each. An HR project shows
+neither `scm`, nor `ci`, nor `cd`; the settings page lists what is required, what is configured,
+and *add a connector* for the rest. `GET /connectors/types` reads the adapter registry, plugins
+included: each type gives its capabilities, the JSON Schema of its configuration (the console
+draws the form from it) and its **secret fields**.
+
+A secret is never written in `config` — a secret field there is refused (`422`). It is named by
+**reference**, field by field, and resolved when the adapter is built, in the process that uses it:
+
+```bash
+curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
+  "config": {"base_url": "https://acme.atlassian.net", "email": "bot@acme.test", "project_key": "RH"},
+  "secret_refs": {"api_token": "env:JIRA_TOKEN"}}'
+```
+
+The core reads `env:NAME`; a plugin declares other schemes (a vault) with
+`choregos_core.secrets.declarer_un_resolveur`. A reference the process cannot resolve fails the
+connector test with its name — never a silent fallback to a default value.
 
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called

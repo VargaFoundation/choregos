@@ -58,7 +58,7 @@ export type {
 
 import type { Operations } from "@choregos/contracts/api";
 
-export type { Integrations } from "@choregos/contracts/api";
+export type { Integrations, ProjectRequirement } from "@choregos/contracts/api";
 
 /** Le registre d'agents et la bibliothèque de skills (ADR 0033). */
 export type {

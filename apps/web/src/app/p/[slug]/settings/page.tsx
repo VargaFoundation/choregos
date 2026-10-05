@@ -4,17 +4,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Connecteurs } from "@/components/connecteurs";
+import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
-import { eur, shortDate } from "@/lib/format";
-import type { ConnectorType, ProjectModels } from "@/lib/types";
+import { eur } from "@/lib/format";
+import type { ProjectModels } from "@/lib/types";
 
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
   ssr: false,
   loading: () => <p className="text-sm text-ink-muted">loading the editor…</p>,
 });
 
-const KINDS = ["tracker", "scm", "ci", "cd", "runtime", "gateway", "memory", "notify"];
 const PROFILS = ["standard", "strong", "cheap", "by_size"];
 
 /**
@@ -23,14 +23,13 @@ const PROFILS = ["standard", "strong", "cheap", "by_size"];
  * Avant le 2026-09-24 cet écran listait les connecteurs sans pouvoir en poser un (la
  * documentation disait pourtant « Settings → Connectors »), montrait la politique dans un
  * `<pre>` et n'avait pas de réglage de modèles. Tout ce que l'API acceptait déjà se fait
- * maintenant d'ici : connecteur (type + configuration), politique (YAML, validée par le
- * serveur à l'enregistrement), profils de modèles.
+ * maintenant d'ici : connecteurs (ceux que les workflows exigent, formulaires tirés du schéma de
+ * leur type, secrets en références — ADR 0034), politique (YAML, validée par le serveur à
+ * l'enregistrement), profils de modèles.
  */
 export default function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const queryClient = useQueryClient();
-  const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
-  const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const policy = useQuery({ queryKey: ["policy", slug], queryFn: () => api.policy(slug) });
   const matrix = useQuery({ queryKey: ["matrix", slug], queryFn: () => api.modelMatrix(slug) });
   const tools = useQuery({ queryKey: ["project-tools", slug], queryFn: () => api.projectTools(slug) });
@@ -51,20 +50,6 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
     }
   }
 
-  async function test(kind: string) {
-    await faire(
-      async () => {
-        const result = await api.testConnector(slug, kind);
-        setMessage(
-          `${kind}: ${result.ok ? "connection OK" : "failed"} — ` +
-            result.checks.map((check) => `${check.name} ${check.ok ? "✓" : "✗"}`).join(", "),
-        );
-      },
-      "",
-      ["connectors"],
-    );
-  }
-
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {(message || error) && (
@@ -74,36 +59,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         </div>
       )}
 
-      <Card title="connectors" className="lg:col-span-2">
-        <table>
-          <thead>
-            <tr>
-              <th>kind</th>
-              <th>implementation</th>
-              <th>status</th>
-              <th>last test</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {KINDS.map((kind) => {
-              const connector = (connectors.data ?? []).find((c) => c.kind === kind);
-              return (
-                <ConnectorRow
-                  key={kind}
-                  kind={kind}
-                  current={connector}
-                  types={(types.data ?? []).filter((t) => t.kind === kind)}
-                  onSave={(type, config) =>
-                    faire(() => api.putConnector(slug, kind, { type, config }), `${kind} connector saved`, ["connectors"])
-                  }
-                  onTest={connector ? () => test(kind) : undefined}
-                />
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
+      <Connecteurs slug={slug} />
 
       <Card title="policy" className="lg:col-span-2">
         <PolicyEditor
@@ -196,116 +152,6 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         {(matrix.data?.entries ?? []).length === 0 && <Empty>no eval published yet</Empty>}
       </Card>
     </div>
-  );
-}
-
-function ConnectorRow({
-  kind,
-  current,
-  types,
-  onSave,
-  onTest,
-}: {
-  kind: string;
-  current?: { type: string; status: string; last_check_at?: string | null; config?: Record<string, unknown> | null };
-  types: ConnectorType[];
-  onSave: (type: string, config: Record<string, unknown>) => Promise<void>;
-  onTest?: () => Promise<void>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [type, setType] = useState(current?.type ?? types[0]?.type ?? "fake");
-  const [config, setConfig] = useState(JSON.stringify(current?.config ?? {}, null, 2));
-  const [invalide, setInvalide] = useState<string | null>(null);
-
-  async function save() {
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = config.trim() ? (JSON.parse(config) as Record<string, unknown>) : {};
-    } catch {
-      setInvalide("the configuration must be a JSON object");
-      return;
-    }
-    setInvalide(null);
-    await onSave(type, parsed);
-    setEditing(false);
-  }
-
-  return (
-    <>
-      <tr>
-        <td>{kind}</td>
-        <td className="font-mono text-xs">{current?.type ?? <span className="text-ink-muted">— not configured</span>}</td>
-        <td>
-          {current && (
-            <StateBadge
-              state={current.status}
-              display={current.status}
-              kind={current.status === "ok" ? "terminal" : current.status === "error" ? "blocked" : "wait"}
-            />
-          )}
-        </td>
-        <td className="text-xs text-ink-muted">{current?.last_check_at ? shortDate(current.last_check_at) : "—"}</td>
-        <td className="space-x-2 whitespace-nowrap">
-          {onTest && (
-            <Button size="sm" onClick={() => void onTest()}>
-              test
-            </Button>
-          )}
-          <Button size="sm" onClick={() => setEditing((e) => !e)}>
-            {current ? "edit" : "configure"}
-          </Button>
-        </td>
-      </tr>
-      {editing && (
-        <tr>
-          <td colSpan={5}>
-            <div className="space-y-2 border border-line bg-surface p-3 text-sm">
-              <label className="block space-y-1">
-                <span>implementation</span>
-                {types.length > 0 ? (
-                  <select
-                    value={type}
-                    onChange={(event) => setType(event.target.value)}
-                    className="w-full rounded border border-line bg-surface px-2 py-1.5"
-                  >
-                    {types.map((t) => (
-                      <option key={t.type} value={t.type} disabled={t.available === false}>
-                        {t.display}
-                        {t.available === false ? " (unavailable)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    value={type}
-                    onChange={(event) => setType(event.target.value)}
-                    className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-xs"
-                  />
-                )}
-              </label>
-              <label className="block space-y-1">
-                <span>configuration (JSON — never a secret: secrets are referenced, not typed)</span>
-                <textarea
-                  value={config}
-                  onChange={(event) => setConfig(event.target.value)}
-                  rows={5}
-                  className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-xs"
-                />
-              </label>
-              {invalide && <ErrorNote>{invalide}</ErrorNote>}
-              <div className="flex justify-end gap-2">
-                <Button size="sm" onClick={() => setEditing(false)}>
-                  cancel
-                </Button>
-                <Button size="sm" tone="primary" onClick={() => void save()}>
-                  save
-                </Button>
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
   );
 }
 

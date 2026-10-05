@@ -128,12 +128,17 @@ export type ProvisionStatus = {
 
 export type Connector = {
   id?: string;
-  kind: "tracker" | "scm" | "ci" | "cd" | "runtime" | "memory" | "notify" | "gateway";
+  /** une capacité (ADR 0034) : tracker, scm, ci, cd, runtime, memory, notify, gateway — ou celle qu'un type de greffon déclare (identity, mcp…) */
+  kind: string;
   type: string;
   config?: {
     [key: string]: unknown;
   };
   secret_ref?: string | null;
+  /** les secrets, champ par champ, en références (`env:NOM`) — jamais leur valeur (ADR 0034) */
+  secret_refs?: {
+    [key: string]: string;
+  };
   status: "unknown" | "ok" | "degraded" | "error";
   last_check_at?: string | null;
   last_error?: string | null;
@@ -141,10 +146,14 @@ export type Connector = {
 
 export type ConnectorUpsert = {
   type: string;
+  /** sans champ secret : un secret en clair reçoit 422 */
   config: {
     [key: string]: unknown;
   };
   secret_ref?: string | null;
+  secret_refs?: {
+    [key: string]: string;
+  };
 };
 
 export type ConnectorTestResult = {
@@ -164,6 +173,19 @@ export type ConnectorType = {
   config_schema: {
     [key: string]: unknown;
   };
+  /** ce que le type sait faire : tracker, scm, identity, mcp… */
+  capabilities?: Array<string>;
+  /** les clefs de configuration qui sont des secrets */
+  secret_fields?: Array<string>;
+};
+
+/** Une capacité que les workflows du projet exigent, et pourquoi (ADR 0034). */
+export type ProjectRequirement = {
+  capability: string;
+  reasons: Array<string>;
+  connector?: Connector | null;
+  /** le type que la plateforme prend quand aucun connecteur ne la couvre */
+  default_type?: string | null;
 };
 
 export type WorkflowDef = {
@@ -1201,6 +1223,7 @@ export interface Operations {
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
+  listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };

@@ -15,140 +15,36 @@ from ..db.models import Connector
 from ..deps import Db, ProjectCtx
 from ..errors import not_found, unprocessable
 from ..rbac import Permission
-from ..schemas import ConnectorCheck, ConnectorDto, ConnectorTestResult, ConnectorType, ConnectorUpsert
+from ..schemas import (
+    ConnectorCheck,
+    ConnectorDto,
+    ConnectorTestResult,
+    ConnectorType,
+    ConnectorUpsert,
+    ProjectRequirement,
+)
 
 router = APIRouter(tags=["connectors"])
-
-CONNECTOR_TYPES: list[ConnectorType] = [
-    ConnectorType(
-        kind="tracker",
-        type="github-issues",
-        display="GitHub Issues + Projects v2",
-        config_schema={
-            "type": "object",
-            "required": ["repo"],
-            "properties": {
-                "repo": {"type": "string", "description": "owner/repo"},
-                "project_number": {"type": "integer"},
-                "installation_id": {"type": "integer"},
-                "labels_prefix": {"type": "string", "default": "choregos:"},
-            },
-        },
-    ),
-    ConnectorType(
-        kind="tracker",
-        type="jira",
-        display="Jira Cloud",
-        available=False,
-        config_schema={
-            "type": "object",
-            "properties": {"site": {"type": "string"}, "project_key": {"type": "string"}},
-        },
-    ),
-    ConnectorType(
-        kind="tracker",
-        type="gitlab-issues",
-        display="GitLab Issues",
-        available=False,
-        config_schema={"type": "object", "properties": {"project": {"type": "string"}}},
-    ),
-    ConnectorType(
-        kind="scm",
-        type="github",
-        display="GitHub (App choregos-bot)",
-        config_schema={
-            "type": "object",
-            "required": ["repo"],
-            "properties": {
-                "repo": {"type": "string"},
-                "installation_id": {"type": "integer"},
-                "merge_queue": {"type": "boolean", "default": True},
-            },
-        },
-    ),
-    ConnectorType(
-        kind="ci",
-        type="tekton",
-        display="Tekton Pipelines",
-        config_schema={
-            "type": "object",
-            "properties": {"namespace": {"type": "string"}, "pipeline": {"type": "string", "default": "ci"}},
-        },
-    ),
-    ConnectorType(
-        kind="cd",
-        type="argocd",
-        display="Argo CD + Rollouts",
-        config_schema={
-            "type": "object",
-            "required": ["gitops_repo"],
-            "properties": {
-                "gitops_repo": {"type": "string"},
-                "base_url": {"type": "string"},
-                "app_pattern": {"type": "string", "default": "{app}-{env}"},
-            },
-        },
-    ),
-    ConnectorType(
-        kind="runtime",
-        type="tekton",
-        display="Tekton PipelineRun (exécuteur)",
-        config_schema={
-            "type": "object",
-            "properties": {"namespace": {"type": "string"}, "runner_image": {"type": "string"}},
-        },
-    ),
-    ConnectorType(
-        kind="runtime",
-        type="k8s_job",
-        display="Job Kubernetes (repli)",
-        config_schema={"type": "object", "properties": {"namespace": {"type": "string"}}},
-    ),
-    ConnectorType(
-        kind="runtime",
-        type="local_docker",
-        display="Docker local (dev)",
-        config_schema={"type": "object", "properties": {"image": {"type": "string"}}},
-    ),
-    ConnectorType(
-        kind="memory",
-        type="ecphoria",
-        display="Ecphoria (mémoire + base de connaissance)",
-        config_schema={
-            "type": "object",
-            "properties": {"base_url": {"type": "string"}, "tenant": {"type": "string"}},
-        },
-    ),
-    ConnectorType(
-        kind="memory",
-        type="lexical",
-        display="lexical (repli, sans service)",
-        config_schema={"type": "object", "properties": {}},
-    ),
-    ConnectorType(
-        kind="gateway",
-        type="litellm",
-        display="LiteLLM",
-        config_schema={
-            "type": "object",
-            "properties": {"base_url": {"type": "string"}, "team_id": {"type": "string"}},
-        },
-    ),
-    ConnectorType(
-        kind="notify",
-        type="slack",
-        display="Slack",
-        config_schema={
-            "type": "object",
-            "properties": {"channel": {"type": "string"}, "webhook_url": {"type": "string"}},
-        },
-    ),
-]
 
 
 @router.get("/connectors/types", response_model=list[ConnectorType], operation_id="listConnectorTypes")
 async def list_connector_types() -> list[ConnectorType]:
-    return CONNECTOR_TYPES
+    """Les types que le REGISTRE connaît — ceux du cœur et ceux des greffons (ADR 0034). La liste
+    vivait ici, en double du registre et en désaccord avec lui : jira y était « indisponible »
+    alors qu'il est enregistré, et un type ajouté par un greffon n'y apparaissait jamais."""
+    from choregos_adapters import connector_types
+
+    return [
+        ConnectorType(
+            kind=kind,
+            type=type_name,
+            display=spec.display,
+            config_schema=spec.config_schema,
+            capabilities=list(spec.capabilities),
+            secret_fields=list(spec.secret_fields),
+        )
+        for kind, type_name, spec in connector_types()
+    ]
 
 
 @router.get("/projects/{id}/connectors", response_model=list[ConnectorDto], operation_id="listConnectors")
@@ -183,6 +79,7 @@ async def put_connector(
             "passerelle `direct` refusée sur cet environnement : elle ne mesure aucun coût et "
             "n'applique aucun plafond. Utiliser `litellm`."
         )
+    _verifier_les_secrets(kind, body)
     row = (
         await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))
     ).scalar_one_or_none()
@@ -192,6 +89,7 @@ async def put_connector(
     row.type = body.type
     row.config = body.config
     row.secret_ref = body.secret_ref
+    row.secret_refs = dict(body.secret_refs) or None
     row.status = "unknown"
     await session.flush()
     await record(
@@ -207,6 +105,75 @@ async def put_connector(
     return ConnectorDto.model_validate(row)
 
 
+def _verifier_les_secrets(kind: str, body: ConnectorUpsert) -> None:
+    """Un type inconnu du registre, un secret écrit en clair, une référence illisible : 422.
+
+    Les champs secrets d'un type (`api_token` de Jira, `token` d'Argo CD…) partaient dans `config`,
+    en clair dans la base et dans chaque réponse de l'API. Ils s'écrivent désormais en
+    références (`secret_refs`), que l'orchestrateur résout quand il construit l'adaptateur."""
+    from choregos_adapters import available, spec_of
+    from choregos_core.secrets import ReferenceInvalide, verifier
+
+    spec = spec_of(kind, body.type)
+    if spec is None:
+        raise unprocessable(
+            f"aucun type `{body.type}` pour `{kind}` (connus : {', '.join(available(kind)) or 'aucun'})"
+        )
+    en_clair = sorted(set(body.config) & set(spec.secret_fields))
+    if en_clair:
+        raise unprocessable(
+            f"secret écrit en clair : {', '.join(en_clair)}. Un secret s'écrit en référence, dans "
+            f"`secret_refs` (`{en_clair[0]}: env:NOM_DE_VARIABLE`) — jamais sa valeur"
+        )
+    inconnus = sorted(set(body.secret_refs) - set(spec.secret_fields))
+    if inconnus:
+        raise unprocessable(
+            f"`{body.type}` n'a pas de champ secret {', '.join(inconnus)} "
+            f"(les siens : {', '.join(spec.secret_fields) or 'aucun'})"
+        )
+    for reference in [*body.secret_refs.values(), *([body.secret_ref] if body.secret_ref else [])]:
+        try:
+            verifier(reference)
+        except ReferenceInvalide as refus:
+            raise unprocessable(str(refus)) from refus
+
+
+@router.get(
+    "/projects/{id}/requirements",
+    response_model=list[ProjectRequirement],
+    operation_id="listProjectRequirements",
+)
+async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequirement]:
+    """Ce que les workflows actifs du projet exigent de ses connecteurs, et pourquoi (ADR 0034) :
+    un projet sans dépôt ni train n'a rien à faire d'un `scm`, d'une `ci` ou d'un `cd`."""
+    from choregos_adapters import type_par_defaut
+    from choregos_core.dsl.exigences import exigences
+
+    from ..db.models import WorkflowDef
+    from ..services.definitions import workflow_model
+
+    actifs = (
+        await session.execute(
+            select(WorkflowDef).where(WorkflowDef.project_id == ctx.id, WorkflowDef.is_active.is_(True))
+        )
+    ).scalars()
+    configures = {
+        c.kind: c
+        for c in (await session.execute(select(Connector).where(Connector.project_id == ctx.id))).scalars()
+    }
+    return [
+        ProjectRequirement(
+            capability=e.capacite,
+            reasons=list(e.raisons),
+            connector=ConnectorDto.model_validate(configures[e.capacite])
+            if e.capacite in configures
+            else None,
+            default_type=None if e.capacite in configures else type_par_defaut(e.capacite),
+        )
+        for e in exigences(workflow_model(row) for row in actifs)
+    ]
+
+
 @router.post(
     "/projects/{id}/connectors/{kind}/test", response_model=ConnectorTestResult, operation_id="testConnector"
 )
@@ -219,11 +186,14 @@ async def test_connector(ctx: ProjectCtx, kind: Annotated[str, Path()], session:
     if row is None:
         raise not_found("Connecteur", kind)
 
-    from choregos_adapters import build, fakes_enabled
+    from choregos_adapters import build, configuration_resolue, fakes_enabled
 
     checks: list[ConnectorCheck] = []
     try:
-        adapter = build(kind, row.type, row.config)
+        # Les secrets RÉSOLUS ici, dans ce processus : une référence qu'il ne sait pas lire est
+        # un échec de test qui la nomme, pas un adaptateur qui retombe sur sa valeur par défaut.
+        config = configuration_resolue(kind, row.type, row.config, row.secret_refs, row.secret_ref)
+        adapter = build(kind, row.type, config)
         checks.append(ConnectorCheck(name="construction", ok=True, detail=type(adapter).__name__))
         tester = getattr(adapter, "test", None)
         if tester is not None:

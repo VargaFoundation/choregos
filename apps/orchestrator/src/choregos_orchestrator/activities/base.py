@@ -103,6 +103,9 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
                 c.kind: {
                     "type": c.type,
                     "config": {**c.config, "org": TOUT} if c.kind == "memory" else c.config,
+                    # Des RÉFÉRENCES (ADR 0034) : `from_connectors` les résout en construisant.
+                    "secret_refs": c.secret_refs or {},
+                    "secret_ref": c.secret_ref,
                 }
                 for c in connectors
             }
