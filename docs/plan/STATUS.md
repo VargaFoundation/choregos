@@ -125,8 +125,16 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S14-02 | S14 | ⬜ | — | garantie `data_quality` sur un échantillon mesuré par la plateforme |
 | S14-03 | S14 | ⬜ | — | gabarit `data-change` : PR → garanties → validation → application par l'API de la plateforme |
 | S14-04 | S14 | ⬜ | — | rapport d'adoption par projet (coût par ticket, délai, acceptation, reprises) |
+| S15-01 | S15 | ⬜ | — | jetons d'API à portée (*, mcp:read, mcp:write) et liés à un projet — ADR 0030 |
+| S15-02 | S15 | ⬜ | — | serveur MCP pour les clients externes, `/mcp` et `/mcp/projects/{P}`, par jeton à portée |
+| S15-03 | S15 | ⬜ | — | outils générés de l'ontologie à travers la porte, avec les droits de l'humain |
+| S15-04 | S15 | ⬜ | — | décider une proposition d'action dans la console, ré-authentifié |
+| S15-05 | S15 | ⬜ | — | page Integrations (neuf clients, jeton par client, indicateur « connecté », dépannage) |
+| S15-06 | S15 | ⬜ | — | plugin Claude Code et skill Choregos |
+| S15-07 | S15 | ⬜ | — | essai sur le locataire dev : Claude Code liste les outils et crée un ticket |
+| S15-08 | S15 | ⬜ | — | serveur de ressources OAuth (RFC 9728), jetons émis par l'IdP |
 
-**Total** : 91 livrées, 11 partielles, 4 non commencées.
+**Total** : 91 livrées, 11 partielles, 12 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
