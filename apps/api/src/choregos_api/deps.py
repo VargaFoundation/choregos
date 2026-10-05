@@ -156,8 +156,10 @@ async def current_principal(
         raise unauthorized("session périmée")
     await _valider_la_session(session, user, payload)
     principal = await _principal_from_user(session, user)
-    iat = payload.get("iat")
-    principal.authentifie_le = int(iat) if isinstance(iat, int | float) else None
+    # L'heure d'authentification chez l'IdP (`auth_time`) quand la session la porte ; sinon l'heure
+    # d'ouverture de la session (`iat`), qui la surestime après une reconnexion SSO silencieuse.
+    quand = payload.get("auth_time", payload.get("iat"))
+    principal.authentifie_le = int(quand) if isinstance(quand, int | float) else None
     return principal
 
 

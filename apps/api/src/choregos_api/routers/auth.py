@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import secrets
 import time
 from datetime import timedelta
@@ -146,14 +147,38 @@ def _pkce() -> tuple[str, str]:
     return verifier, base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def _handshake(settings: Settings, redirect: str) -> tuple[str, str, str]:
-    """Rend (state signé, cookie signé, code_challenge). Le nonce lie les deux."""
+def _handshake(settings: Settings, redirect: str, *, reauth: bool = False) -> tuple[str, str, str]:
+    """Rend (state signé, cookie signé, code_challenge). Le nonce lie les deux.
+
+    `reauth` voyage dans le cookie signé : le retour de l'IdP doit savoir qu'une authentification
+    FRAÎCHE a été demandée, pour l'exiger (voir `callback`).
+    """
     nonce = secrets.token_urlsafe(24)
     verifier, challenge = _pkce()
     expiry = int(time.time()) + OIDC_HANDSHAKE_S
     state = sign_session({"n": nonce, "r": redirect, "exp": expiry}, settings)
-    cookie = sign_session({"n": nonce, "v": verifier, "exp": expiry}, settings)
+    poignee: dict[str, Any] = {"n": nonce, "v": verifier, "exp": expiry}
+    if reauth:
+        poignee["a"] = 1
+    cookie = sign_session(poignee, settings)
     return state, cookie, challenge
+
+
+def _auth_time(id_token: Any) -> int | None:
+    """La revendication `auth_time` de l'ID token : QUAND l'utilisateur s'est authentifié chez l'IdP.
+
+    Signature non vérifiée, et c'est permis : le jeton vient directement du point `token` de l'IdP,
+    en TLS, dans l'échange du code (OpenID Connect Core 1.0, §3.1.3.7). Rien d'autre n'en est lu.
+    """
+    if not isinstance(id_token, str) or id_token.count(".") != 2:
+        return None
+    try:
+        charge = id_token.split(".")[1]
+        revendications = json.loads(base64.urlsafe_b64decode(charge + "=" * (-len(charge) % 4)))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    valeur = revendications.get("auth_time") if isinstance(revendications, dict) else None
+    return int(valeur) if isinstance(valeur, int | float) and not isinstance(valeur, bool) else None
 
 
 def _poser_cookie_oidc(response: Response, cookie: str, settings: Settings) -> None:
@@ -181,7 +206,7 @@ async def login(
     fraîche, sans quoi l'IdP rendrait la main sans rien demander et `iat` mentirait.
     """
     target = redirection_sure(redirect_to, settings)
-    state, cookie, challenge = _handshake(settings, target)
+    state, cookie, challenge = _handshake(settings, target, reauth=reauth)
     as_user = request.query_params.get("as")
     if as_user and settings.dev_login_enabled:
         response = RedirectResponse(
@@ -302,12 +327,15 @@ async def callback(
     if not attendu or not poignee or attendu.get("n") != poignee.get("n"):
         raise unauthorized("état de connexion invalide ou périmé : recommencer la connexion")
     target = redirection_sure(str(attendu.get("r") or ""), settings)
+    reauth = bool(poignee.get("a"))
 
     if code.startswith("dev:") and settings.dev_login_enabled:
         email = code.removeprefix("dev:")
         user = await _ensure_user(session, email, email.split("@")[0], sub=f"dev|{email}")
         groupes = await _groupes_de_developpement(session, email, settings)
         await _map_groups_to_roles(session, user, groupes, settings, ecraser=False)
+        # La connexion de développement EST l'authentification : elle a lieu maintenant.
+        auth_time: int | None = int(time.time())
     else:
         import httpx
 
@@ -326,7 +354,18 @@ async def callback(
             )
             if token_response.status_code >= 400:
                 raise unauthorized(f"échange OIDC refusé : {token_response.text[:200]}")
-            access_token = token_response.json()["access_token"]
+            jetons = token_response.json()
+            access_token = jetons["access_token"]
+            auth_time = _auth_time(jetons.get("id_token"))
+            # `reauth=1` a demandé `prompt=login` et `max_age=0` : l'IdP DOIT alors rendre un
+            # `auth_time` (OIDC Core §3.1.2.1). Sans lui, ou s'il date d'avant la poignée de main,
+            # l'IdP a rendu la main sans redemander l'authentification — une reconnexion SSO
+            # silencieuse ne vaut pas une authentification fraîche.
+            if reauth and (auth_time is None or time.time() - auth_time > OIDC_HANDSHAKE_S):
+                raise unauthorized(
+                    "ré-authentification demandée, mais l'IdP ne l'a pas faite (`auth_time` absent ou "
+                    "ancien) : recommencer, ou vérifier que l'IdP honore `prompt=login`"
+                )
             info = (
                 await client.get(endpoints["userinfo"], headers={"Authorization": f"Bearer {access_token}"})
             ).json()
@@ -335,13 +374,13 @@ async def callback(
         user = await _ensure_user(session, info["email"], info.get("name", ""), info.get("sub"))
         await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 
-    response = await ouvrir_la_session(session, user, target, settings, canal="oidc")
+    response = await ouvrir_la_session(session, user, target, settings, canal="oidc", auth_time=auth_time)
     response.delete_cookie(OIDC_COOKIE)
     return response
 
 
 async def ouvrir_la_session(
-    session: Any, user: User, cible: str, settings: Settings, *, canal: str
+    session: Any, user: User, cible: str, settings: Settings, *, canal: str, auth_time: int | None = None
 ) -> RedirectResponse:
     """La fin de TOUTE connexion : trace d'audit, cookie signé avec `iat`, redirection bornée.
 
@@ -356,9 +395,13 @@ async def ouvrir_la_session(
     # `iat` : l'heure d'authentification. C'est elle que lit une porte qui exige une authentification
     # RÉCENTE (`reauth=1`), et une révocation côté serveur (« toute session antérieure à … »).
     maintenant = int(time.time())
-    cookie = sign_session(
-        {"sub": user.id, "iat": maintenant, "exp": maintenant + settings.session_max_age_s}, settings
-    )
+    fin = maintenant + settings.session_max_age_s
+    charge: dict[str, Any] = {"sub": user.id, "iat": maintenant, "exp": fin}
+    # `auth_time` : quand l'utilisateur s'est VRAIMENT authentifié, si l'IdP le dit. Une reconnexion
+    # SSO silencieuse ouvre une session neuve (`iat` frais) sur une authentification ancienne.
+    if auth_time is not None:
+        charge["auth_time"] = auth_time
+    cookie = sign_session(charge, settings)
     response = RedirectResponse(
         url=redirection_sure(cible, settings), status_code=status.HTTP_307_TEMPORARY_REDIRECT
     )

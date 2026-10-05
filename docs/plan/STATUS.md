@@ -1033,3 +1033,22 @@ les 492 tests ne disaient pas :
     de l'API sur PostgreSQL.
     **Ce que ça ne prouve pas** : le comportement derrière un proxy qui bufferise les réponses (il
     masquerait la course, pas l'écriture perdue).
+
+28. **L'heure d'authentification est celle de l'IdP, et `reauth=1` l'exige récente** (2026-10-04,
+    #153).
+
+    `Principal.authentifie_le` lisait l'`iat` de la session : l'heure où Choregos l'avait ouverte.
+    Après une reconnexion SSO silencieuse — l'IdP a encore une session et rend la main sans rien
+    demander — cette heure est neuve alors que l'utilisateur ne s'est pas authentifié depuis
+    longtemps. Toute porte « authentification récente » était donc satisfaite par un aller-retour
+    vers `/auth/login`, y compris le contrôle de fraîcheur de l'édition entreprise. La session porte
+    désormais l'`auth_time` de l'ID token (lu sans vérifier sa signature : il vient du point `token`
+    en TLS, OIDC Core §3.1.3.7) ; après `?reauth=1`, un `auth_time` absent ou antérieur à la poignée
+    de main est refusé (401) ; `authentifie_le` lit `auth_time`, et `iat` seulement à défaut.
+
+    **Ce que ça prouve** : `test_authentification_fraiche.py` — une reconnexion SSO garde l'heure de
+    l'IdP ; un `reauth` que l'IdP n'a pas honoré, ou sans `auth_time`, est refusé ; une
+    ré-authentification fraîche ouvre une session qui le dit ; sans `auth_time`, l'ancien
+    comportement. Gardes retirées : trois rouges.
+    **Ce que ça ne prouve pas** : une session SAML (édition entreprise) porte encore `iat` seulement ;
+    il faudrait y passer l'`AuthnInstant`.
