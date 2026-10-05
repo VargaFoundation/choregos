@@ -29,6 +29,7 @@ import type {
   ConnectorTestResult,
   CostReport,
   DoraReport,
+  Edition,
   FindingPage,
   MeDto,
   Memory,
@@ -117,6 +118,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   me: () => request<MeDto>("/me"),
+  /** L'édition qui tourne (ADR 0024) : la console montre ce qu'elle s'autorise. */
+  edition: () => request<Edition>("/edition"),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
   loginUrl: (next?: string, as?: string) => {
     const params = new URLSearchParams();

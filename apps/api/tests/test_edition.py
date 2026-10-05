@@ -39,6 +39,17 @@ async def test_l_edition_se_demande(client: AsyncClient) -> None:
     assert corps["version"] and corps["version"] != "1.0.0", "la version ne doit plus être en dur"
 
 
+async def test_l_edition_se_demande_sous_le_prefixe_du_contrat(client: AsyncClient) -> None:
+    """Le contrat la place sous `/api/v1` : c'est là que la console la demande.
+
+    Elle n'était servie qu'à la racine, que l'Ingress envoie à la console — la console ne pouvait
+    donc pas dire sur quelle édition elle tournait, et ne montrait rien de l'édition entreprise.
+    """
+    sous_le_prefixe = await client.get("/api/v1/edition")
+    assert sous_le_prefixe.status_code == 200, sous_le_prefixe.text
+    assert sous_le_prefixe.json() == (await client.get("/edition")).json()
+
+
 async def test_le_communautaire_refuse_une_seconde_organisation(
     client: AsyncClient, org: str, admin: str
 ) -> None:

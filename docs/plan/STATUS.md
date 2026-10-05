@@ -1160,3 +1160,18 @@ les 492 tests ne disaient pas :
     annotations demandées, aucune sans valeur ; rouge sans le changement.
     **Ce que ça ne prouve pas** : l'Ingress maître est posé par le déploiement (`choregos-deploy`),
     pas par ce chart ; la console servie sur le locataire se constate après la montée.
+
+35. **La console dit sur quelle édition elle tourne : `GET /edition` servie sous `/api/v1`**
+    (2026-10-05).
+
+    Le contrat place `/edition` sous `/api/v1` ; l'API ne la servait qu'à la racine, que l'Ingress
+    envoie à la console. La console ne pouvait donc pas savoir si elle tournait en édition
+    communautaire ou entreprise, et `/admin` ne montrait rien de l'édition entreprise. La route est
+    désormais servie sous le préfixe (la racine reste, hors schéma, pour les sondes) ; la barre du
+    haut porte un badge d'édition, et `/admin` une carte qui liste ce que l'édition s'autorise — ou,
+    en communautaire, ce que l'édition entreprise ajouterait, sans faux écran.
+
+    **Ce que ça prouve** : `test_l_edition_se_demande_sous_le_prefixe_du_contrat` (404 sans le
+    changement) ; trois tests Vitest de la carte et du badge ; le parcours Playwright voit le badge.
+    **Ce que ça ne prouve pas** : aucun écran des fonctions de l'édition entreprise — c'est le flux
+    S17 (sections d'administration déclarées par manifeste).

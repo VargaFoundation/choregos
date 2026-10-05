@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Acces } from "@/components/acces";
+import { EditionBadge, EditionCard, FONCTIONS_ENTREPRISE } from "@/components/edition";
 import { Garanties } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
 import { Preuves } from "@/components/preuves";
@@ -123,5 +124,26 @@ describe("garanties", () => {
   it("dit quand aucune garantie n'a été évaluée, plutôt qu'un ✓ à vide", () => {
     render(<Garanties events={[events[0]!]} />);
     expect(screen.getByText(/no gate evaluated/)).toBeInTheDocument();
+  });
+});
+
+describe("édition (ADR 0024)", () => {
+  it("en communautaire, dit ce que l'édition entreprise ajouterait", () => {
+    render(<EditionCard edition={{ edition: "community", features: [], version: "0.13.1" }} />);
+    const liste = screen.getByRole("list", { name: "what the enterprise edition adds" });
+    expect(liste.querySelectorAll("li").length).toBe(FONCTIONS_ENTREPRISE.length);
+    expect(screen.getByText("SCIM provisioning of users and groups")).toBeInTheDocument();
+  });
+
+  it("en entreprise, liste ce qu'elle s'autorise, et garde une clé inconnue lisible", () => {
+    render(<EditionCard edition={{ edition: "enterprise", features: ["saml", "nouveaute"], version: "0.14.0" }} />);
+    const liste = screen.getByRole("list", { name: "enterprise features" });
+    expect(liste.textContent).toContain("SAML sign-in, per organisation");
+    expect(liste.textContent).toContain("nouveaute");
+  });
+
+  it("le badge nomme l'édition", () => {
+    render(<EditionBadge edition="enterprise" />);
+    expect(screen.getByTestId("edition-badge")).toHaveTextContent("enterprise edition");
   });
 });

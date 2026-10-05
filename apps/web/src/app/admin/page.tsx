@@ -4,6 +4,7 @@
 import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { EditionCard } from "@/components/edition";
 import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
@@ -26,6 +27,7 @@ export default function AdminPage() {
   const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
   const backends = useQuery({ queryKey: ["backends"], queryFn: () => api.backends() });
   const executors = useQuery({ queryKey: ["executors"], queryFn: () => api.executors() });
+  const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   const [error, setError] = useState<string | null>(null);
   const [invite, setInvite] = useState({ email: "", role: "developer", project_slug: "" });
   const [tokenName, setTokenName] = useState("");
@@ -190,6 +192,8 @@ export default function AdminPage() {
           </table>
           {(members.data ?? []).length === 0 && <Empty>no member</Empty>}
         </Card>
+
+        <EditionCard edition={edition.data} />
 
         <Card title="agent backends">
           <ul className="space-y-1 text-xs">
