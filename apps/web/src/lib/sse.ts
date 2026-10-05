@@ -13,7 +13,10 @@ export interface StreamOptions<T> {
   enabled?: boolean;
   initial?: T[];
   parse?: (raw: string) => T;
-  mockEvents?: T[];
+  /** En mode démo seulement : CHARGE les événements à rejouer. Une fonction, pour que les
+   * fixtures restent hors du bundle réel — importées statiquement, elles partaient chez chaque
+   * utilisateur avec la page qui les cite (#179). */
+  mockEvents?: () => Promise<T[]>;
 }
 
 export function useEventStream<T>({
@@ -37,16 +40,24 @@ export function useEventStream<T>({
     if (IS_MOCK) {
       // En mode démo, les événements arrivent au fil de l'eau pour montrer le direct.
       let index = 0;
-      const timer = setInterval(() => {
-        const next = mockEvents?.[index];
-        if (next === undefined) {
-          clearInterval(timer);
-          return;
-        }
-        setEvents((current) => [...current, next]);
-        index += 1;
-      }, 700);
-      return () => clearInterval(timer);
+      let timer: ReturnType<typeof setInterval> | undefined;
+      let arrete = false;
+      void (mockEvents?.() ?? Promise.resolve([] as T[])).then((rejoues) => {
+        if (arrete) return;
+        timer = setInterval(() => {
+          const next = rejoues[index];
+          if (next === undefined) {
+            clearInterval(timer);
+            return;
+          }
+          setEvents((current) => [...current, next]);
+          index += 1;
+        }, 700);
+      });
+      return () => {
+        arrete = true;
+        clearInterval(timer);
+      };
     }
     const source = new EventSource(`${API_BASE}${path}`, { withCredentials: true });
     source.onopen = () => {

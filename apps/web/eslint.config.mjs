@@ -24,6 +24,25 @@ const config = [
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },
+  {
+    // Les fixtures du mode démo ne partent pas dans le bundle réel : on les CHARGE (`import()`), en
+    // mode démo seulement. Un import statique les embarquait avec la page qui les cite (#179).
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    ignores: ["src/mocks/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/mocks/*", "**/mocks/*"],
+              message: "fixtures du mode démo : les charger par import() derrière IS_MOCK, jamais statiquement (#179)",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 export default config;

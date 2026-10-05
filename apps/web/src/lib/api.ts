@@ -392,8 +392,9 @@ export const api = {
   costs: (id: string, groupBy = "day") => request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy })}`),
   dora: (id: string, env = "prod") => request<DoraReport>(`/projects/${qualify(id)}/metrics/dora${query({ env })}`),
   /** Lien de téléchargement direct : le navigateur l'ouvre, le CSV arrive avec sa session. */
+  /** Qualifié comme toute route de projet : deux organisations peuvent avoir un projet de même nom. */
   costsCsvUrl: (id: string, groupBy = "day") =>
-    `${API_BASE}/projects/${id}/costs.csv${query({ group_by: groupBy })}`,
+    `${API_BASE}/projects/${qualify(id)}/costs.csv${query({ group_by: groupBy })}`,
   modelMatrix: (id: string) => request<ModelMatrix>(`/projects/${qualify(id)}/models/matrix`),
   audit: (params?: { actor?: string; target_type?: string; cursor?: string; limit?: number }) => {
     const filtres = Object.entries(params ?? {}).filter(([, valeur]) => valeur !== undefined && valeur !== "");

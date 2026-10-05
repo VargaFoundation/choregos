@@ -12,7 +12,6 @@ import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { useEventStream } from "@/lib/sse";
-import { runEvents as mockRunEvents } from "@/mocks/data";
 import type { RunEventDto } from "@/lib/types";
 
 export default function RunPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
@@ -32,7 +31,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const live = useEventStream<RunEventDto>({
     path: `/runs/${id}/events`,
     enabled: run.data?.status === "running",
-    mockEvents: mockRunEvents,
+    mockEvents: () => import("@/mocks/data").then((fixtures) => fixtures.runEvents),
   });
 
   if (run.error) return <ErrorNote>{(run.error as Error).message}</ErrorNote>;
