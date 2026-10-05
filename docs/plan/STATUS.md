@@ -129,12 +129,12 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S15-02 | S15 | ✅ | — | porte MCP des clients externes, `/mcp` et `/mcp/projects/{org}:{slug}`, servie par l'API (ADR 0030) : protocole écrit à la main, partagé avec le side-car (`choregos_core.mcp`, 202 pour une notification) ; 7 outils adossés aux services de l'API REST (`creer_un_ticket`, `chronologie` extraits) ; un outil hors des droits n'est pas annoncé (-32602) ; aucun outil ne décide ; audit `mcp.call`, débit par jeton, 50 écritures par jour, troncature ; `GET /integrations` ; chemin `/mcp` dans l'Ingress et la HTTPRoute ; `docs/integrations.md`. `test_mcp_porte.py` (20 tests), `test_mcp_interop_sdk.py` (le client de référence du SDK `mcp`, en test seulement, initialise, liste et appelle à travers uvicorn), `tests/charts/test_porte_mcp_routee.py`, `packages/tools-mcp/tests/test_transport.py`. Ne prouve pas un vrai Claude Code contre le dev (S15-07), ni OAuth (S15-08) |
 | S15-03 | S15 | ⬜ | — | outils générés de l'ontologie à travers la porte, avec les droits de l'humain |
 | S15-04 | S15 | ⬜ | — | décider une proposition d'action dans la console, ré-authentifié |
-| S15-05 | S15 | ⬜ | — | page Integrations (neuf clients, jeton par client, indicateur « connecté », dépannage) |
+| S15-05 | S15 | ✅ | — | page Integrations, dans la barre du haut (`/integrations/[client]`) et dans chaque projet (`/p/[slug]/integrations/[client]`, porte du projet, jeton lié) : neuf clients (Claude Code, Claude Desktop par `mcp-remote`, claude.ai, Cursor, VS Code, ChatGPT, autre client MCP, CLI, REST), un jeton `mcp:read` ou `mcp:write` frappé pour le client (7, 30 ou 90 jours) et glissé dans l'extrait, l'indicateur « connecté » (dernier usage et client du jeton), une matrice de ce que chaque client joint, le dépannage (claude.ai et ChatGPT appellent depuis le cloud de leur éditeur). `tests/integrations.test.ts` (9 tests : extraits exacts, JSON valide, `--allow-http` seulement en `http:`, jamais le jeton MCP pour la CLI ou REST, ni dans les fichiers de VS Code et Cursor) ; deux parcours Playwright ; axe sur deux pages. Ne prouve pas un client réel connecté au dev (S15-07) |
 | S15-06 | S15 | ⬜ | — | plugin Claude Code et skill Choregos |
 | S15-07 | S15 | ⬜ | — | essai sur le locataire dev : Claude Code liste les outils et crée un ticket |
 | S15-08 | S15 | ⬜ | — | serveur de ressources OAuth (RFC 9728), jetons émis par l'IdP |
 
-**Total** : 93 livrées, 11 partielles, 10 non commencées.
+**Total** : 94 livrées, 11 partielles, 9 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
