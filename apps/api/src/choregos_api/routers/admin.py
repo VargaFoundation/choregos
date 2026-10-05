@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from choregos_contracts import Role
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
 
 from ..audit import record
@@ -22,7 +22,7 @@ from ..db.models import (
 )
 from ..db.session import en_portee_de_plateforme
 from ..deps import Db, Me, Pagination, exiger_admin_de_plateforme
-from ..errors import forbidden, not_found
+from ..errors import conflict, forbidden, not_found
 from ..schemas import (
     AgentBackendInfo,
     AgentBackendUpdate,
@@ -266,6 +266,78 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
     return MembershipDto(
         user_id=user.id, email=user.email, org=org, project_slug=body.project_slug, role=body.role
     )
+
+
+@router.delete(
+    "/orgs/{org}/members/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="removeMember",
+)
+async def remove_member(
+    org: str, user_id: str, session: Db, principal: Me, project: Annotated[str | None, Query()] = None
+) -> Response:
+    """Retire une appartenance — à l'organisation, ou au seul projet nommé.
+
+    Le dernier `org_admin` ne se retire pas : une organisation sans administrateur ne se gère plus
+    que par la base. Un administrateur qui se retire lui-même le peut, s'il en reste un autre.
+    """
+    from ..rbac import Permission
+
+    organization = (
+        await session.execute(select(Organization).where(Organization.slug == org))
+    ).scalar_one_or_none()
+    if organization is None:
+        raise not_found("Organisation", org)
+    if not principal.can(Permission.MEMBER_MANAGE, org, project):
+        raise forbidden("gérer les membres demande le rôle project_owner ou org_admin")
+    projet_id = None
+    if project:
+        projet = (
+            await session.execute(
+                select(Project).where(Project.slug == project, Project.org_id == organization.id)
+            )
+        ).scalar_one_or_none()
+        if projet is None:
+            raise not_found("Projet", f"{org}/{project}")
+        projet_id = projet.id
+    appartenance = (
+        await session.execute(
+            select(Membership).where(
+                Membership.user_id == user_id,
+                Membership.org_id == organization.id,
+                Membership.project_id == projet_id if projet_id else Membership.project_id.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if appartenance is None:
+        raise not_found("Appartenance", f"{user_id} dans {org}" + (f"/{project}" if project else ""))
+    if appartenance.role == str(Role.ORG_ADMIN) and projet_id is None:
+        administrateurs = (
+            await session.execute(
+                select(func.count())
+                .select_from(Membership)
+                .where(
+                    Membership.org_id == organization.id,
+                    Membership.project_id.is_(None),
+                    Membership.role == str(Role.ORG_ADMIN),
+                )
+            )
+        ).scalar_one()
+        if administrateurs <= 1:
+            raise conflict(
+                f"le dernier administrateur de {org} ne se retire pas : nommez-en un autre d'abord"
+            )
+    await session.delete(appartenance)
+    await record(
+        session,
+        principal,
+        "member.remove",
+        org_id=organization.id,
+        target_type="user",
+        target_id=user_id,
+        project=project,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/audit", response_model=AuditPage, operation_id="listAudit")

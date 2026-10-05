@@ -61,8 +61,37 @@ test("connexion : la page existe et dit ce qu'elle attend", async ({ page }) => 
 
 test("administration : membres et jetons ont un écran", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page.getByText(/members of/)).toBeVisible();
   await expect(page.getByRole("button", { name: /mint a token/ })).toBeVisible();
+  await page.getByRole("link", { name: "members" }).click();
+  await expect(page.getByText(/members of/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /^remove / }).first()).toBeVisible();
+});
+
+test("administration : une section déclarée par un greffon se rend, et son secret ne se montre qu'une fois", async ({
+  page,
+}) => {
+  await page.goto("/admin");
+  await page.getByRole("link", { name: "SCIM provisioning" }).click();
+  await expect(page).toHaveURL(/\/admin\/x\/scim$/);
+  const section = page.getByTestId("admin-section-scim");
+  await expect(section.getByLabel(/accept SCIM requests/)).toBeChecked();
+  await expect(section.getByRole("table", { name: "tokens" })).toContainText("okta");
+  await section.getByRole("button", { name: "revoke" }).click();
+  await expect(section.getByText("The identity provider stops provisioning with this token.")).toBeVisible();
+  await section.getByRole("button", { name: "cancel" }).click();
+  await section.getByLabel(/^name/).fill("okta");
+  await section.getByRole("button", { name: "create a token" }).click();
+  await expect(page.getByTestId("secret-once").getByRole("textbox")).toHaveValue("scim_demo_shown_once");
+  await page.getByRole("button", { name: "I have copied it" }).click();
+  await expect(page.getByTestId("secret-once")).toHaveCount(0);
+});
+
+test("administration : en communautaire, ce que l'édition entreprise ajoute, sans faux écran", async ({ page }) => {
+  await page.goto("/admin/edition");
+  await expect(page.getByText(/runs the community core/)).toBeVisible();
+  await expect(page.getByRole("list", { name: "what the enterprise edition adds" })).toContainText(
+    "SCIM provisioning of users and groups",
+  );
 });
 
 test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async ({ page }) => {

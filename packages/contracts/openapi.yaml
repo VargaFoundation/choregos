@@ -792,6 +792,23 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/MembershipUpsert" } } }
       responses:
         "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/Membership" } } } }
+  /orgs/{org}/members/{user_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [admin]
+      operationId: removeMember
+      description: >-
+        Retire l'appartenance d'une personne à l'organisation — ou au seul projet nommé par
+        `project`. Le dernier administrateur de l'organisation ne se retire pas (409).
+      parameters:
+        - { name: project, in: query, required: false, schema: { type: string } }
+      responses:
+        "204": { description: Retirée }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /audit:
     get:
       tags: [admin]
