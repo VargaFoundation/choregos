@@ -156,3 +156,21 @@ class AgentMetrics(Dto):
     by_project: list[AgentProjectMetrics] = Field(default_factory=list)
     spent_today_usd: float = 0.0
     daily_budget_usd: float | None = None
+
+
+class AgentCredentialCreate(Dto):
+    """Un jeton `mcp:*` de la porte (son id), ou un client OAuth (son `client_id`, l'`azp` du jeton)."""
+
+    kind: Literal["token", "oauth_client"]
+    token_id: str | None = None
+    client_id: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class AgentCredentialDto(Dto):
+    id: str
+    kind: str
+    token_id: str | None = None
+    client_id: str | None = None
+    created_by: str | None = None
+    created_at: datetime | None = None
+    revoked_at: datetime | None = None

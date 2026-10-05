@@ -155,7 +155,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S18-03 | S18 | ✅ | — | `GET /orgs/{org}/agents/{slug}/metrics?days=30` : runs de l'agent, issue, taux de réussite (sur les runs terminés), coût par sorte — un appel d'outil compte — et par projet, dépense du jour ; un agent qui a dépensé son `daily_usd` depuis minuit (UTC), modèles et outils, ne lance plus de run (admission, sans reprise). `test_registre_d_agents.py` (un run échoué fait baisser le taux, l'outil compte), `test_agent_du_registre.py` (budget du jour). Ne prouve pas les pages Agents (S18-07) |
 | S18-04 | S18 | ✅ | — | la bibliothèque de skills (ADR 0033) : tables `skills`, `skill_versions` sous RLS forcée ; une skill est un dossier dont le SKILL.md porte un `name` (celui de la skill) et une `description` ; `allowed-tools` refusé (une skill ne déclare aucune permission) ; l'import zip refuse le zip-slip, les liens symboliques, plus de 64 fichiers ou 512 Kio, un fichier non UTF-8, et retire un dossier racine commun ; versions immuables, désignées par une empreinte ; une skill dit quels agents la portent. `test_bibliotheque_de_skills.py`, `test_rls_postgres.py`. Ne prouve pas une skill posée dans un run (S18-05) |
 | S18-05 | S18 | ✅ | — | `StageInput.skills` (nom, version, empreinte ; contrat) résolues par `prepare_stage` depuis la version de l'agent ; `GET /internal/runs/{id}/skills` (jeton du run seul) ; le runner recalcule l'empreinte (calcul partagé `empreinte_de_skill`) et s'arrête sur une skill altérée ou manquante (sortie 50), puis la pose là où le backend la lit (`.claude/skills`, `.agents/skills`, `.gemini/skills`, `.goose/skills`, `.opencode/skills`, `.github/skills`) — sinon `.choregos/skills` et un index dans le prompt —, hors du diff ; les cinq backends secondaires fusionnent enfin `launch.files`. `packages/runner/tests/test_skills.py` (18), API et orchestrateur. Ne prouve pas une skill lue par un vrai agent sur le dev |
-| S18-06 | S18 | ⬜ | — | les agents externes : jeton MCP ou client OAuth, droits intersectés |
+| S18-06 | S18 | ✅ | — | les agents externes : `agent_credentials` (RLS forcée) rattache un jeton `mcp:*` ou un client OAuth (`azp`) à un agent `external` ; à chaque appel de la porte MCP le client incarne son agent — l'audit le nomme, ses outils sont ceux de l'humain intersectés avec ce que la version nomme (`mcp_servers` d'un connecteur `choregos`), un agent révoqué, suspendu ou expiré reçoit 401 dès l'appel suivant ; un humain sans droit donne un agent sans droit. `test_agents_externes.py` (9). Ne prouve pas les pages Agents (S18-07) |
 | S18-07 | S18 | ⬜ | — | les pages Agents |
 | S19-01 | S19 | ⬜ | — | sortes de connecteurs ouvertes : capacités, types tirés du registre, formulaires générés, exigences du projet |
 | S19-02 | S19 | ⬜ | — | instances d'organisation et politique par opération |
@@ -169,7 +169,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S20-06 | S20 | ⬜ | — | la tâche humaine : un formulaire, une preuve |
 | S20-07 | S20 | ⬜ | — | le gabarit joiners-leavers et le scénario RH de bout en bout |
 
-**Total** : 119 livrées, 11 partielles, 19 non commencées.
+**Total** : 120 livrées, 11 partielles, 18 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

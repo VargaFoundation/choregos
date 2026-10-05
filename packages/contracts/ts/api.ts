@@ -351,6 +351,22 @@ export type AgentMetrics = {
   daily_budget_usd?: number | null;
 };
 
+export type AgentCredentialCreate = {
+  kind: "token" | "oauth_client";
+  token_id?: string | null;
+  client_id?: string | null;
+};
+
+export type AgentCredential = {
+  id: string;
+  kind: string;
+  token_id?: string | null;
+  client_id?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  revoked_at?: string | null;
+};
+
 /** Ce qu'un projet change d'une version — seulement resserrer. */
 export type AgentOverrides = {
   limits?: AgentLimits;
@@ -1038,6 +1054,7 @@ export interface Operations {
   argocdWebhook: { method: "POST"; path: "/webhooks/argocd"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  attachAgentCredential: { method: "POST"; path: "/orgs/{org}/agents/{slug}/credentials"; body: AgentCredentialCreate; response: AgentCredential };
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
@@ -1059,6 +1076,7 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
+  detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";
@@ -1162,6 +1180,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
+  listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };

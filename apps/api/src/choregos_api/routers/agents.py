@@ -18,12 +18,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..db.models import Agent, AgentVersion, Organization, ProjectAgent, User
+from ..db.models import Agent, AgentCredential, AgentVersion, ApiToken, Organization, ProjectAgent, User
 from ..deps import Db, Me, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
     AgentCreate,
+    AgentCredentialCreate,
+    AgentCredentialDto,
     AgentDto,
     AgentMetrics,
     AgentOverrides,
@@ -429,5 +431,116 @@ async def unpin_agent(slug: Slug, ctx: ProjectCtx, session: Db) -> Response:
         target_type="agent",
         target_id=agent.id,
         project=ctx.project.slug,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ───────────────────────────── les agents externes ─────────────────────────────
+
+
+def _credential_dto(ligne: AgentCredential) -> AgentCredentialDto:
+    return AgentCredentialDto(
+        id=ligne.id,
+        kind=ligne.kind,
+        token_id=ligne.api_token_id,
+        client_id=ligne.client_id,
+        created_by=ligne.created_by,
+        created_at=ligne.created_at,
+        revoked_at=ligne.revoked_at,
+    )
+
+
+@router.get(
+    "/orgs/{org}/agents/{slug}/credentials",
+    response_model=list[AgentCredentialDto],
+    operation_id="listAgentCredentials",
+)
+async def list_credentials(org: str, slug: Slug, session: Db, principal: Me) -> list[AgentCredentialDto]:
+    _gerer(principal, org)
+    agent = await _agent(session, await _organisation(session, org), slug)
+    lignes = await session.execute(select(AgentCredential).where(AgentCredential.agent_id == agent.id))
+    return [_credential_dto(ligne) for ligne in lignes.scalars()]
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/credentials",
+    response_model=AgentCredentialDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="attachAgentCredential",
+)
+async def attach_credential(
+    org: str, slug: Slug, body: AgentCredentialCreate, session: Db, principal: Me
+) -> AgentCredentialDto:
+    """Rattache un client de la porte MCP à un agent `external` : ses appels portent alors l'agent,
+    et ses droits sont ceux de l'humain intersectés avec ceux de la version de l'agent."""
+    from ..db.session import en_portee_de_plateforme
+
+    _gerer(principal, org)
+    organisation = await _organisation(session, org)
+    agent = await _agent(session, organisation, slug)
+    if agent.kind != "external":
+        raise unprocessable(f"`{slug}` est un agent interne : seul un agent `external` porte un client MCP")
+    if body.kind == "token":
+        if not body.token_id:
+            raise unprocessable("`token_id` manque")
+        async with en_portee_de_plateforme(session):
+            jeton = await session.get(ApiToken, body.token_id)
+        if jeton is None or not set(jeton.scopes or []) & {"mcp:read", "mcp:write"}:
+            raise unprocessable("un jeton `mcp:read` ou `mcp:write` existant est attendu")
+        existant = (
+            await session.execute(select(AgentCredential.id).where(AgentCredential.api_token_id == jeton.id))
+        ).first()
+    else:
+        if not body.client_id:
+            raise unprocessable("`client_id` manque")
+        existant = (
+            await session.execute(
+                select(AgentCredential.id).where(
+                    AgentCredential.org_id == organisation.id, AgentCredential.client_id == body.client_id
+                )
+            )
+        ).first()
+    if existant is not None:
+        raise conflict("ce client est déjà rattaché à un agent")
+    ligne = AgentCredential(
+        org_id=organisation.id,
+        agent_id=agent.id,
+        kind=body.kind,
+        api_token_id=body.token_id if body.kind == "token" else None,
+        client_id=body.client_id if body.kind == "oauth_client" else None,
+        created_by=principal.email,
+    )
+    session.add(ligne)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "agent.credential.attach",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=agent.id,
+    )
+    return _credential_dto(ligne)
+
+
+@router.delete(
+    "/orgs/{org}/agents/{slug}/credentials/{credential_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="detachAgentCredential",
+)
+async def detach_credential(org: str, slug: Slug, credential_id: str, session: Db, principal: Me) -> Response:
+    _gerer(principal, org)
+    agent = await _agent(session, await _organisation(session, org), slug)
+    ligne = await session.get(AgentCredential, credential_id)
+    if ligne is None or ligne.agent_id != agent.id:
+        raise not_found("Client de l'agent", credential_id)
+    await session.delete(ligne)
+    await record(
+        session,
+        principal,
+        "agent.credential.detach",
+        org_id=agent.org_id,
+        target_type="agent",
+        target_id=agent.id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

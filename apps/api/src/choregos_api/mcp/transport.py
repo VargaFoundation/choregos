@@ -221,12 +221,18 @@ async def _auditer(ctx: Contexte, outil: str, ecriture: bool, issue: str, reques
         ctx.session,
         ctx.appelant.principal,
         "mcp.call",
-        org_id=ctx.org_id_vise or (ctx.projet.org_id if ctx.projet is not None else None),
+        # Un appel qui ne vise ni organisation ni projet (`list_projects`) s'inscrit dans celle de
+        # l'agent qu'incarne le client : sans organisation, sous RLS, la ligne n'était lisible par
+        # personne — l'audit d'un agent externe disparaissait sur PostgreSQL.
+        org_id=ctx.org_id_vise
+        or (ctx.projet.org_id if ctx.projet is not None else None)
+        or ctx.appelant.agent_org_id,
         target_type="mcp_tool",
         target_id=outil,
         ecriture=ecriture,
         issue=issue,
         jeton=ctx.appelant.cle,
+        agent=ctx.appelant.agent,
         client=(request.headers.get("user-agent") or "")[:100] or None,
     )
     log.info("mcp.call", outil=outil, issue=issue, appelant=ctx.appelant.cle)

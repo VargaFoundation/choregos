@@ -40,6 +40,12 @@ class Appelant:
     cle: str = ""
     projet_lie: Project | None = None
     org_du_projet_lie: str | None = None
+    #: L'agent externe que ce client incarne (ADR 0033), s'il est rattaché à l'un.
+    agent: str | None = None
+    #: Son organisation : un appel qui ne vise aucun projet s'y inscrit au journal d'audit.
+    agent_org_id: str | None = None
+    #: Les outils de la porte que la version de l'agent permet (motifs) ; `None` : ceux de l'humain.
+    motifs: tuple[str, ...] | None = None
 
     @property
     def ecrit(self) -> bool:
@@ -77,6 +83,7 @@ async def identifier(session: AsyncSession, request: Request, settings: Settings
     noter_l_usage(jeton, request)
     principal = await _principal_from_user(session, user)
     appelant = Appelant(principal=principal, jeton=jeton, portees=portees, cle=f"jeton:{jeton.id}")
+    await incarner_l_agent(session, appelant, jeton_id=jeton.id)
     if jeton.project_id:
         projet = await session.get(Project, jeton.project_id)
         if projet is None:
@@ -113,10 +120,64 @@ async def _par_oauth(session: AsyncSession, brut: str, settings: Settings) -> Ap
     demandees = set(str(revendications.get("scope") or "").split()) & PORTEES_MCP
     principal = await _principal_from_user(session, user)
     client = str(revendications.get("azp") or revendications.get("client_id") or "?")
-    return Appelant(
+    appelant = Appelant(
         principal=principal,
         jeton=None,
         # Sans portée MCP demandée, la lecture : écrire se demande explicitement.
         portees=frozenset(demandees or {"mcp:read"}),
         cle=f"oauth:{client}:{sub}",
+    )
+    await incarner_l_agent(session, appelant, client_id=client)
+    return appelant
+
+
+async def incarner_l_agent(
+    session: AsyncSession, appelant: Appelant, *, jeton_id: str | None = None, client_id: str | None = None
+) -> None:
+    """Un client rattaché à un agent externe (ADR 0033) en porte l'identité et les limites.
+
+    La révocation se relit ICI, à chaque appel : un agent révoqué, suspendu ou expiré reçoit 401 au
+    suivant. Ses droits sont ceux de l'humain — le principal ne change pas — intersectés avec les
+    outils de la porte que sa version nomme (`mcp_servers` d'un connecteur `choregos`).
+    """
+    from ..db.models import Agent, AgentCredential, AgentVersion
+
+    condition = (
+        AgentCredential.api_token_id == jeton_id
+        if jeton_id is not None
+        else (AgentCredential.kind == "oauth_client") & (AgentCredential.client_id == client_id)
+    )
+    rattachement = (
+        await session.execute(select(AgentCredential).where(condition, AgentCredential.revoked_at.is_(None)))
+    ).scalar_one_or_none()
+    if rattachement is None:
+        return
+    agent = await session.get(Agent, rattachement.agent_id)
+    if agent is None:
+        return
+    if agent.status != "active" or (agent.expires_at is not None and _aware(agent.expires_at) <= utcnow()):
+        from ..services.agents import ETATS
+
+        etat = ETATS.get(agent.status, agent.status) if agent.status != "active" else "expiré"
+        raise Refus(
+            401, f"l'agent `{agent.slug}` est {etat} : ce client ne passe plus", erreur="invalid_token"
+        )
+    spec = (
+        await session.execute(
+            select(AgentVersion.spec)
+            .where(AgentVersion.agent_id == agent.id)
+            .order_by(AgentVersion.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none() or {}
+    motifs = [
+        outil
+        for serveur in spec.get("mcp_servers", [])
+        if serveur.get("connector") == "choregos"
+        for outil in serveur.get("tools", [])
+    ]
+    appelant.agent = agent.slug
+    appelant.agent_org_id = agent.org_id
+    appelant.motifs = (
+        tuple(motifs) if any(s.get("connector") == "choregos" for s in spec.get("mcp_servers", [])) else None
     )

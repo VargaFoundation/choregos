@@ -627,4 +627,9 @@ async def annonces(ctx: Contexte) -> list[Outil]:
         visibles.append(outil)
     # Ceux des greffons ensuite (l'ontologie du projet) : une écriture n'apparaît qu'à `mcp:write`.
     visibles += [o for o in await _outils_des_greffons(ctx) if ctx.appelant.ecrit or not o.ecriture]
+    # Un agent externe (ADR 0033) : les droits de l'humain, intersectés avec ce que sa version nomme.
+    if ctx.appelant.motifs is not None:
+        from fnmatch import fnmatchcase
+
+        visibles = [o for o in visibles if any(fnmatchcase(o.nom, motif) for motif in ctx.appelant.motifs)]
     return visibles
