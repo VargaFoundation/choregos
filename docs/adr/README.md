@@ -50,3 +50,5 @@ nine records did not exist.
 | [0031](0031-plusieurs-workflows-par-projet.md) | A project runs several workflows; each work item is pinned to the version it was born in; typed edits are text grafts (amends 0023) | accepted |
 | [0032](0032-sections-d-administration-par-manifeste.md) | Administration sections are declared by manifest; the console renders them, no plugin code runs in it | accepted |
 | [0033](0033-registre-d-agents-et-bibliotheque-de-skills.md) | Agents are registered, versioned objects (internal and external, rights intersected with the human's); skills are a library they carry, declaring no permission | accepted |
+| [0034](0034-connecteurs-par-capacites.md) | Connectors by capability, a policy per operation; a discovered MCP tool is born closed (amends 0014) | accepted |
+| [0035](0035-actions-gouvernees-dans-le-coeur.md) | Governed actions move into the core and run in Temporal; each effect is recorded by key and compensated on failure | accepted |

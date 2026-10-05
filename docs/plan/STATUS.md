@@ -157,8 +157,19 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S18-05 | S18 | ⬜ | — | le runner pose les skills selon le backend, vérifiées par digest |
 | S18-06 | S18 | ⬜ | — | les agents externes : jeton MCP ou client OAuth, droits intersectés |
 | S18-07 | S18 | ⬜ | — | les pages Agents |
+| S19-01 | S19 | ⬜ | — | sortes de connecteurs ouvertes : capacités, types tirés du registre, formulaires générés, exigences du projet |
+| S19-02 | S19 | ⬜ | — | instances d'organisation et politique par opération |
+| S19-03 | S19 | ⬜ | — | le type « mcp » : initialize, tools/list, tools/call ; un outil découvert naît fermé |
+| S19-04 | S19 | ⬜ | — | les runs atteignent les serveurs MCP par la plateforme : le courtier |
+| S20-01 | S20 | ⬜ | — | les actions gouvernées dans le cœur, exécutées par Temporal : effet consigné par clé, compensation |
+| S20-02 | S20 | ⬜ | — | un outil « avec validation » devient une action ; la boîte des validations |
+| S20-03 | S20 | ⬜ | — | le type « entra » (Microsoft Graph) et son faux |
+| S20-04 | S20 | ⬜ | — | les faux du scénario RH : MDM, transporteur, badges, l'agent du fournisseur en serveur MCP |
+| S20-05 | S20 | ⬜ | — | une transition système déclenche une action, à date |
+| S20-06 | S20 | ⬜ | — | la tâche humaine : un formulaire, une preuve |
+| S20-07 | S20 | ⬜ | — | le gabarit joiners-leavers et le scénario RH de bout en bout |
 
-**Total** : 114 livrées, 11 partielles, 13 non commencées.
+**Total** : 114 livrées, 11 partielles, 24 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
