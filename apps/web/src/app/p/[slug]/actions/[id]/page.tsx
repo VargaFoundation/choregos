@@ -6,6 +6,7 @@ import Link from "next/link";
 import { use } from "react";
 import { Heading } from "@varga/design-system";
 import { DecisionDAction } from "@/components/actions/decision";
+import { DetailOntologie } from "@/components/actions/ontologie";
 import { Statut, propose } from "@/components/actions/statut";
 import { Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -37,6 +38,7 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         {a.created_at ? ` · ${relative(a.created_at)}` : ""}
         {a.justification ? ` — ${a.justification}` : ""}
       </p>
+      <DetailOntologie action={a} />
       <Card title="decision">
         {a.status === "pending_approval" ? (
           <DecisionDAction projet={slug} action={a} />

@@ -11,7 +11,6 @@ const TABS = [
   { suffix: "/board", label: "board" },
   { suffix: "/trains", label: "trains" },
   { suffix: "/findings", label: "findings" },
-  { suffix: "/proposals", label: "proposals" },
   { suffix: "/memory", label: "memory" },
   { suffix: "/workflows", label: "workflows" },
   { suffix: "/agents", label: "agents" },
@@ -42,7 +41,7 @@ export default function ProjectLayout({
           const href = `/p/${slug}${tab.suffix}`;
           // Les intégrations (un sous-onglet par client), les propositions (une page par proposition)
           // et les workflows (une page par workflow) gardent leur onglet actif sous elles.
-          const active = ["/integrations", "/proposals", "/workflows"].includes(tab.suffix)
+          const active = ["/integrations", "/workflows"].includes(tab.suffix)
             ? pathname.startsWith(href)
             : pathname === href;
           return (

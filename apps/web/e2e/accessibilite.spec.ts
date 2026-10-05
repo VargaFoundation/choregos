@@ -37,7 +37,7 @@ const PAGES = [
   "/skills/procedure-onboarding",
   "/p/billing-api/agents",
   "/p/billing-api/integrations/claude-desktop",
-  "/p/billing-api/proposals/pr1",
+  "/p/billing-api/actions/pr1",
 ];
 
 for (const path of PAGES) {

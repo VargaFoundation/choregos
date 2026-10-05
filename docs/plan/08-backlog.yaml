@@ -1588,3 +1588,12 @@ stories:
     depends_on: [S20-07, S20-08]
     acceptance:
       - "Un projet né de joiners-leavers, greffon actif, a son ontologie ; sans le greffon il naît sans, et l'audit le dit"
+  - id: S20-10
+    title: "Les propositions de l'ontologie se lisent et se décident dans les actions"
+    stream: S20
+    sprint: 11
+    priority: 10
+    size: S
+    depends_on: [S20-02, S20-08]
+    acceptance:
+      - "Un ancien lien de proposition mène à la page de l'action, qui dit ce qu'elle touche ; l'onglet proposals n'existe plus"

@@ -46,7 +46,7 @@ describe("décision qui demande une authentification récente", () => {
   it("un 401 step_up_required repasse par l'IdP avec reauth=1, et revient ici", async () => {
     const assign = vi.fn();
     vi.stubGlobal("window", {
-      location: { pathname: "/p/infra/proposals/pr1", search: "", origin: "http://c", assign },
+      location: { pathname: "/p/infra/actions/pr1", search: "", origin: "http://c", assign },
     });
     vi.stubGlobal(
       "fetch",
@@ -59,8 +59,8 @@ describe("décision qui demande une authentification récente", () => {
       ),
     );
     const { api } = await import("@/lib/api");
-    await expect(api.decideProposal("infra", "pr1", { decision: "approve" })).rejects.toThrow();
-    expect(assign).toHaveBeenCalledWith("http://c/api/v1/auth/login?redirect_to=%2Fp%2Finfra%2Fproposals%2Fpr1&reauth=1");
+    await expect(api.decideAction("infra", "pr1", { decision: "approve" })).rejects.toThrow();
+    expect(assign).toHaveBeenCalledWith("http://c/api/v1/auth/login?redirect_to=%2Fp%2Finfra%2Factions%2Fpr1&reauth=1");
     vi.unstubAllGlobals();
   });
 
