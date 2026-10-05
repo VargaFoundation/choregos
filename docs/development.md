@@ -263,12 +263,21 @@ def brancher() -> None:
     })
 ```
 
-Paths are relative to `/api/v1`; `{org}` is the current organisation, `{id}` a row's key. At
-start-up the core validates every manifest against `ui-manifest.schema.json`, checks the permission
-exists, and checks that **every path it names is served** by a route with that method — otherwise
-start-up stops, naming the section. `GET /api/v1/ui/admin-sections` returns the sections the caller
-holds the permission for (`platform:admin` sections to platform administrators only).
+Paths are relative to `/api/v1`; `{org}` is the current organisation, any other `{…}` a row's
+key. At start-up the core validates every manifest against `ui-manifest.schema.json`, checks the
+permission exists, and checks that **every path it names is served** by a route with that method —
+otherwise start-up stops, naming the section. Declaring the same manifest twice is harmless (the API
+loads plugins twice: through the orchestrator it imports, then in `create_app()`); another manifest
+under the same `id` stops start-up. `GET /api/v1/ui/admin-sections` returns the sections the caller
+holds the permission for; a section asking for `platform:admin` goes to platform administrators
+only, whatever its scope — an `org_admin` holds every permission in their own organisation.
 `apps/api/tests/test_sections_d_administration.py` proves it.
+
+A `form` block reads its `read` path and writes back, to `write`, **only the fields of its schema**:
+give it exactly the fields of the model its route writes, or a forgotten one goes back to its default
+on every save. The console draws a field from its JSON Schema: `string` (with `format: date`,
+`password` or `multiline`, the last for a PEM certificate), `number`, `integer`, `boolean`, `enum`,
+an `array` of strings (comma separated) and an `object` of strings (one `key = value` per line).
 
 This is how the enterprise edition attaches ([ADR 0024](adr/0024-deux-editions.md)), and it is
 the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which was the model.

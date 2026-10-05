@@ -28,7 +28,10 @@ async def admin_sections(
     visibles: list[dict[str, Any]] = []
     plateforme: bool | None = None
     for section in sections_declarees():
-        if section["scope"] == "platform":
+        # `platform:admin` est un droit sur l'INSTANCE, quelle que soit la portée de la section : un
+        # `org_admin` a toutes les permissions dans SON organisation, celle-là comprise, et ce n'est
+        # pas administrer la plateforme dès qu'il y a deux organisations.
+        if section["scope"] == "platform" or section["permission"] == Permission.PLATFORM_ADMIN.value:
             if plateforme is None:
                 plateforme = await _admin_de_plateforme(session, principal)
             if plateforme:

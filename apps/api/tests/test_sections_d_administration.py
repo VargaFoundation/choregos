@@ -123,3 +123,52 @@ def test_une_section_qui_ne_tient_pas_arrete_le_demarrage(alteration: Any, motif
             create_app()
     finally:
         greffons.reinitialiser()
+
+
+def test_le_meme_greffon_charge_deux_fois_ne_declare_qu_une_section() -> None:
+    """L'orchestrateur que l'API importe charge les greffons, puis `create_app()` les recharge : la
+    même section revient, et ne doit pas arrêter le démarrage. Une AUTRE sous le même nom, si."""
+    from choregos_api import greffons
+
+    try:
+        greffons.declarer_une_section_d_administration(SCIM)
+        greffons.declarer_une_section_d_administration(copy.deepcopy(SCIM))
+        assert [s["id"] for s in greffons.sections_declarees()] == ["scim"]
+        autre = copy.deepcopy(SCIM)
+        autre["title"] = "une autre section"
+        with pytest.raises(ValueError, match="deux fois"):
+            greffons.declarer_une_section_d_administration(autre)
+    finally:
+        greffons.reinitialiser()
+
+
+async def test_une_section_d_organisation_qui_demande_la_plateforme_ne_se_montre_qu_a_elle(
+    greffon: Any, client: AsyncClient, admin: str
+) -> None:
+    """`org_admin` a toutes les permissions dans son organisation, `platform:admin` comprise : sans
+    garde, la section des plafonds d'une organisation — que seule la plateforme peut écrire — se
+    montrait à l'administrateur de n'importe quel locataire, et chaque enregistrement rendait 403."""
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+
+    greffon.declarer_une_section_d_administration(
+        {
+            "id": "limites",
+            "title": "limits",
+            "scope": "organisation",
+            "permission": "platform:admin",
+            "blocks": [
+                {"kind": "table", "title": "t", "list": "/orgs", "columns": [{"key": "slug", "label": "s"}]}
+            ],
+        }
+    )
+    ids = [s["id"] for s in (await client.get("/api/v1/ui/admin-sections")).json()]
+    assert ids == ["scim", "organisations", "limites"], (
+        "une seule organisation : son administrateur a l'instance"
+    )
+
+    # Une seconde organisation : l'administrateur de `varga` n'administre plus l'instance.
+    async with session_scope() as session:
+        session.add(Organization(slug="autre", name="Autre"))
+    ids = [s["id"] for s in (await client.get("/api/v1/ui/admin-sections")).json()]
+    assert ids == ["scim"], "member:manage dans son organisation, rien de la plateforme"
