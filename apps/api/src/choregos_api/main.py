@@ -39,6 +39,7 @@ from .routers import (
     runs,
     templates,
     trains,
+    ui,
     webhooks,
     workflows,
     workitems,
@@ -126,7 +127,9 @@ def _verifier_l_edition(settings: Any) -> None:
         )
 
 
-def _inclure_les_routeurs_des_greffons(app: FastAPI, routeurs_du_coeur: tuple[APIRouter, ...]) -> None:
+def _inclure_les_routeurs_des_greffons(
+    app: FastAPI, routeurs_du_coeur: tuple[APIRouter, ...]
+) -> set[tuple[str, str]]:
     """Les routeurs déclarés par les greffons (`greffons.declarer_un_routeur`), APRÈS ceux du cœur.
 
     Un recouvrement d'une route du cœur arrête le démarrage : Starlette servirait l'une et
@@ -151,6 +154,39 @@ def _inclure_les_routeurs_des_greffons(app: FastAPI, routeurs_du_coeur: tuple[AP
             )
         app.include_router(routeur, prefix=API_PREFIX)
         servies |= signatures(routeur, API_PREFIX)
+    return servies
+
+
+def _verifier_les_sections(servies: set[tuple[str, str]]) -> None:
+    """Les sections d'administration des greffons (ADR 0032) : un manifeste invalide, une permission
+    inconnue, ou un chemin qu'aucune route ne sert, arrête le démarrage — une section qui ne mène
+    nulle part est un écran cassé, découvert par un administrateur au pire moment."""
+    import re
+
+    import choregos_contracts as contracts
+    from jsonschema import Draft202012Validator
+
+    from .greffons import chemins_d_une_section, sections_declarees
+    from .rbac import Permission
+
+    def forme(chemin: str) -> str:
+        return re.sub(r"\{[^}]*\}", "{}", chemin)
+
+    valideur = Draft202012Validator(contracts.load_schema("ui-manifest.schema.json"))
+    connues = {(methode, forme(chemin)) for methode, chemin in servies}
+    for section in sections_declarees():
+        nom = section.get("id", "?")
+        erreurs = sorted(valideur.iter_errors(section), key=lambda e: list(e.path))
+        if erreurs:
+            detail = "; ".join(
+                f"{'.'.join(str(p) for p in e.path) or '(racine)'} : {e.message}" for e in erreurs
+            )
+            raise RuntimeError(f"section d'administration `{nom}` invalide : {detail}")
+        if section["permission"] not in {p.value for p in Permission}:
+            raise RuntimeError(f"section `{nom}` : permission inconnue `{section['permission']}`")
+        for methode, chemin in chemins_d_une_section(section):
+            if (methode, forme(API_PREFIX + chemin)) not in connues:
+                raise RuntimeError(f"section `{nom}` : `{methode} {chemin}` n'est servi par aucune route")
 
 
 def create_app() -> FastAPI:
@@ -209,6 +245,7 @@ def create_app() -> FastAPI:
 
     routeurs_du_coeur = (
         auth.router,
+        ui.router,
         integrations.router,
         projects.router,
         connectors.router,
@@ -227,7 +264,7 @@ def create_app() -> FastAPI:
     )
     for router in routeurs_du_coeur:
         app.include_router(router, prefix=API_PREFIX)
-    _inclure_les_routeurs_des_greffons(app, routeurs_du_coeur)
+    _verifier_les_sections(_inclure_les_routeurs_des_greffons(app, routeurs_du_coeur))
 
     # La porte MCP des clients externes (ADR 0030) : à la racine, comme le veut R-SOC-MCP-01, hors
     # du schéma OpenAPI — MCP est son propre protocole, et ses outils se testent où ils sont définis.

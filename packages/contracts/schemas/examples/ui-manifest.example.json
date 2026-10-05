@@ -1,0 +1,41 @@
+{
+  "id": "scim",
+  "title": "SCIM provisioning",
+  "description": "Your identity provider creates and removes members through SCIM.",
+  "scope": "organisation",
+  "permission": "member:manage",
+  "blocks": [
+    {
+      "kind": "form",
+      "title": "settings",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "title": "accept SCIM requests" },
+          "default_role": { "type": "string", "enum": ["viewer", "developer"], "title": "role of a provisioned member" }
+        }
+      },
+      "read": "/orgs/{org}/scim/settings",
+      "write": "/orgs/{org}/scim/settings"
+    },
+    {
+      "kind": "table",
+      "title": "tokens",
+      "list": "/orgs/{org}/scim/tokens",
+      "columns": [
+        { "key": "name", "label": "name" },
+        { "key": "created_at", "label": "created", "format": "date" }
+      ],
+      "row_actions": [
+        { "kind": "action", "label": "revoke", "path": "/orgs/{org}/scim/tokens/{id}", "method": "DELETE", "confirm": "The identity provider stops provisioning with this token.", "danger": true }
+      ]
+    },
+    {
+      "kind": "secret_once",
+      "label": "create a token",
+      "path": "/orgs/{org}/scim/tokens",
+      "secret_field": "token",
+      "params": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }
+    }
+  ]
+}

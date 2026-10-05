@@ -109,6 +109,7 @@ SCHEMA_FILES = (
     "context-pack.schema.json",
     "template.schema.json",
     "event.schema.json",
+    "ui-manifest.schema.json",
 )
 
 

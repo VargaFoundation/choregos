@@ -61,11 +61,59 @@ def signatures(routeur: APIRouter, prefixe: str = "") -> set[tuple[str, str]]:
 
 
 def reinitialiser() -> None:
-    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste, aucun outil."""
+    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste, aucun outil, aucune section."""
     _ROUTEURS.clear()
     _FOURNISSEURS_D_OUTILS.clear()
     _FOURNISSEURS_HUMAINS.clear()
+    _SECTIONS.clear()
     reinitialiser_les_controles()
+
+
+# ───────────────────────────── sections d'administration ─────────────────────────────
+#
+# Un greffon qui sert des routes d'administration — l'édition entreprise : organisations, SAML,
+# SCIM, sessions — n'a pas d'écran à lui. Il déclare ses sections comme des DONNÉES (un manifeste :
+# formulaire, table, action, secret montré une fois), et la console les rend avec ses propres
+# blocs : aucun code de greffon ne s'exécute dans la page qui porte la session et les décisions
+# (ADR 0032). `create_app()` valide chaque manifeste et vérifie que chacun de ses chemins est servi.
+
+_SECTIONS: list[dict[str, Any]] = []
+
+
+def declarer_une_section_d_administration(manifeste: dict[str, Any]) -> None:
+    """Appelée par un greffon à son chargement ; la validation se fait au démarrage de l'API."""
+    import copy
+
+    if not isinstance(manifeste, dict):
+        raise TypeError(f"un manifeste est un objet, pas {type(manifeste).__name__}")
+    if any(section.get("id") == manifeste.get("id") for section in _SECTIONS):
+        raise ValueError(f"section d'administration déclarée deux fois : {manifeste.get('id')}")
+    _SECTIONS.append(copy.deepcopy(manifeste))
+
+
+def sections_declarees() -> tuple[dict[str, Any], ...]:
+    return tuple(_SECTIONS)
+
+
+def chemins_d_une_section(manifeste: dict[str, Any]) -> list[tuple[str, str]]:
+    """{(méthode, chemin)} qu'une section appelle : la console n'en appellera pas d'autre."""
+    chemins: list[tuple[str, str]] = []
+
+    def action(bloc: dict[str, Any], defaut: str = "POST") -> None:
+        chemins.append((str(bloc.get("method") or defaut), str(bloc["path"])))
+
+    for bloc in manifeste.get("blocks", []):
+        sorte = bloc.get("kind")
+        if sorte == "form":
+            chemins.append(("GET", str(bloc["read"])))
+            chemins.append((str(bloc.get("write_method") or "PUT"), str(bloc["write"])))
+        elif sorte == "table":
+            chemins.append(("GET", str(bloc["list"])))
+            for ligne in bloc.get("row_actions", []):
+                action(ligne)
+        elif sorte in {"action", "secret_once"}:
+            action(bloc)
+    return chemins
 
 
 # ───────────────────────────── outils des runs ─────────────────────────────

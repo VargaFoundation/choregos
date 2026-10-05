@@ -244,6 +244,32 @@ authentication route included. Nested routers are refused for the same reason: F
 only through a private object, and a route nobody can see is a route nobody can check.
 `apps/api/tests/test_greffons_routes.py` proves both with a plugin installed for real.
 
+A plugin that serves administration routes gives them **screens without shipping code to the
+console** ([ADR 0032](adr/0032-sections-d-administration-par-manifeste.md)): it declares each
+section as data — `form` (a JSON Schema, a read path, a write path), `table` (a list path, columns,
+row actions), `action` (a confirmation, `danger`, `reauth`), `secret_once` (a secret shown once,
+never kept) — and the console renders it under `/admin/x/{section}`:
+
+```python
+from choregos_api.greffons import declarer_une_section_d_administration
+
+def brancher() -> None:
+    declarer_un_routeur(routeur)
+    declarer_une_section_d_administration({
+        "id": "scim", "title": "SCIM provisioning", "scope": "organisation",
+        "permission": "member:manage",
+        "blocks": [{"kind": "table", "title": "tokens", "list": "/orgs/{org}/scim/tokens",
+                    "columns": [{"key": "name", "label": "name"}]}],
+    })
+```
+
+Paths are relative to `/api/v1`; `{org}` is the current organisation, `{id}` a row's key. At
+start-up the core validates every manifest against `ui-manifest.schema.json`, checks the permission
+exists, and checks that **every path it names is served** by a route with that method — otherwise
+start-up stops, naming the section. `GET /api/v1/ui/admin-sections` returns the sections the caller
+holds the permission for (`platform:admin` sections to platform administrators only).
+`apps/api/tests/test_sections_d_administration.py` proves it.
+
 This is how the enterprise edition attaches ([ADR 0024](adr/0024-deux-editions.md)), and it is
 the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which was the model.
 `packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk

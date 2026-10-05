@@ -523,6 +523,79 @@ export type Template = {
   scaffold?: string;
 };
 
+export type UiManifestPath = string;
+
+export type UiManifestForm = {
+  kind: "form";
+  title: string;
+  description?: string;
+  /** le JSON Schema des valeurs ; la console en tire le formulaire */
+  schema: {
+    [key: string]: unknown;
+  };
+  read: UiManifestPath;
+  write: UiManifestPath;
+  write_method?: "PUT" | "PATCH" | "POST";
+};
+
+export type UiManifestColumn = {
+  key: string;
+  label: string;
+  format?: "text" | "date" | "badge" | "code";
+};
+
+export type UiManifestTable = {
+  kind: "table";
+  title: string;
+  description?: string;
+  list: UiManifestPath;
+  row_key?: string;
+  columns: Array<UiManifestColumn>;
+  row_actions?: Array<UiManifestAction>;
+};
+
+export type UiManifestAction = {
+  kind: "action";
+  label: string;
+  description?: string;
+  path: UiManifestPath;
+  method?: "POST" | "PUT" | "PATCH" | "DELETE";
+  /** la phrase à confirmer avant d'agir */
+  confirm?: string;
+  danger?: boolean;
+  /** le geste exige une authentification fraîche */
+  reauth?: boolean;
+  /** le JSON Schema des paramètres demandés avant d'agir */
+  params?: {
+    [key: string]: unknown;
+  };
+};
+
+export type UiManifestSecretOnce = {
+  kind: "secret_once";
+  label: string;
+  description?: string;
+  path: UiManifestPath;
+  method?: "POST" | "PUT";
+  confirm?: string;
+  params?: {
+    [key: string]: unknown;
+  };
+  /** le champ de la réponse qui porte le secret, montré une fois et jamais gardé */
+  secret_field: string;
+};
+
+/** Une section d'administration déclarée par un greffon, en DONNÉES : la console la rend avec ses propres blocs, aucun code du greffon n'y tourne (ADR 0032). Les chemins sont relatifs à /api/v1 ; `{org}` vaut l'organisation courante, `{id}` l'identifiant de la ligne. */
+export type UiManifest = {
+  id: string;
+  title: string;
+  description?: string;
+  scope: "platform" | "organisation";
+  /** une permission du cœur, ex. member:manage ; platform:admin pour la portée plateforme */
+  permission: string;
+  blocks: Array<UiManifestForm | UiManifestTable | UiManifestAction | UiManifestSecretOnce>;
+};
+
 export type WorkflowSlug = string;
 
 export type WorkflowIdentifier = string;
@@ -629,4 +702,5 @@ export type ChoregosContract =
   | StageInput
   | StageResult
   | Template
+  | UiManifest
   | Workflow;
