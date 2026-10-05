@@ -97,7 +97,7 @@ async def test_la_proposition_porte_le_nom_de_la_personne_et_attend_dans_la_cons
     attentes = (await _rpc(client, jeton, "tools/call", {"name": "list_pending_decisions"}))["result"]
     (attente,) = [a for a in attentes["structuredContent"]["pending"] if a["key"] == proposition]
     assert attente["kind"] == "action proposal"
-    assert attente["decision_url"].endswith(f"/p/infra/proposals/{proposition}")
+    assert attente["decision_url"].endswith(f"/p/infra/actions/{proposition}"), "la page des actions du cœur"
     assert attente["can_decide"] is False, "qui propose ne décide pas (séparation des rôles)"
 
     await connecter(client, "admin@varga.dev")

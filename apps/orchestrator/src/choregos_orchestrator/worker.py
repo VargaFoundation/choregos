@@ -72,9 +72,14 @@ async def start_reconciliation_loops() -> list[str]:
 
 
 async def run_worker(queues: list[str]) -> None:
+    from choregos_adapters import charger_les_greffons
     from temporalio.client import Client
     from temporalio.worker import Worker
 
+    # Les greffons déclarent aussi des EFFETS d'actions gouvernées (ADR 0035) : l'API les connaît
+    # pour proposer, le worker doit les connaître pour les JOUER. Il ne les chargeait pas — un effet
+    # de greffon était « inconnu » là même où il devait s'exécuter (S20-08).
+    charger_les_greffons()
     settings = get_settings()
     client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
     workers = [

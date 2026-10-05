@@ -100,3 +100,67 @@ async def projet(client: AsyncClient) -> dict[str, Any]:
     from .aides import creer_projet
 
     return await creer_projet(client, "infra")
+
+
+class PasserelleDeTest:
+    """La passerelle Temporal de l'API branchée sur le serveur de test (S20-08) : une action approuvée
+    part VRAIMENT dans un `ActionWorkflow`, et une preuve remise atteint le workflow qui l'attend."""
+
+    def __init__(self, client: Any) -> None:
+        self.client = client
+        self.signals: list[tuple[str, str, Any]] = []
+
+    async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        import contextlib
+
+        from temporalio.exceptions import WorkflowAlreadyStartedError
+
+        with contextlib.suppress(WorkflowAlreadyStartedError):
+            await self.client.start_workflow("ActionWorkflow", payload, id=workflow_id, task_queue="test")
+        return workflow_id
+
+    async def signal(self, workflow_id: str, name: str, payload: Any) -> None:
+        self.signals.append((workflow_id, name, payload))
+        await self.client.get_workflow_handle(workflow_id).signal(name, payload)
+
+    async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        return workflow_id
+
+    async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        return workflow_id
+
+    async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        return workflow_id
+
+    async def query(self, workflow_id: str, name: str) -> Any:
+        return None
+
+    async def cancel(self, workflow_id: str) -> None:
+        return None
+
+    async def describe(self, workflow_id: str) -> Any:
+        return None
+
+
+@pytest.fixture
+async def temporal(app: Any) -> AsyncIterator[Any]:
+    """Un serveur Temporal de test et les workers de la plateforme : l'`ActionWorkflow` joue les
+    effets de l'ontologie, comme dans un déploiement."""
+    from choregos_api.temporal import set_temporal
+    from choregos_orchestrator.activities import ALL_ACTIVITIES
+    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
+    from temporalio.testing import WorkflowEnvironment
+
+    environnement = await WorkflowEnvironment.start_time_skipping()
+    set_temporal(PasserelleDeTest(environnement.client))
+    try:
+        async with workers_repartis(
+            environnement.client,
+            activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+            workflows=ALL_WORKFLOWS,
+            file_du_workflow="test",
+        ):
+            yield environnement
+    finally:
+        await environnement.shutdown()

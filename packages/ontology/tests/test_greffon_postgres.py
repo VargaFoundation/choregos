@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(
     not PG_URL.startswith("postgresql"), reason="CHOREGOS_TEST_DATABASE_URL absent : pas de PostgreSQL"
 )
 
-TABLES = ("ontology_versions", "managed_objects", "action_proposals")
+TABLES = ("ontology_versions", "managed_objects")
 
 
 def _url_app(url: str) -> str:
@@ -131,3 +131,73 @@ async def test_une_organisation_ne_voit_ni_les_objets_ni_l_ontologie_de_l_autre(
             session.add(
                 ManagedObject(project_id=projets["b"], object_type="finding", id="intrus", properties={})
             )
+
+
+async def test_onto0003_copie_les_propositions_sous_rls_forcee(
+    greffon: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La copie de onto0003 tourne sous le rôle de l'application, tables en RLS forcée : sans
+    `set_config('app.current_orgs', '*', true)`, elle ne lirait aucune proposition — en silence."""
+    import json
+
+    from alembic import command
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.db import session as db_session
+    from choregos_api.migrer import configuration
+
+    await _administrer(
+        "DROP SCHEMA public CASCADE",
+        "CREATE SCHEMA public",
+        f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN "
+        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; END $$",
+        f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
+    )
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
+    reset_settings_cache()
+    await db_session.dispose_engine()
+    ir = json.dumps({"action_types": [{"name": "open_infra_pr", "effects": [{}], "evidence": []}]})
+    try:
+        await asyncio.to_thread(command.upgrade, configuration(), "f8a0b2c4d6e9")
+        await asyncio.to_thread(command.upgrade, configuration(), "onto0002")
+        from choregos_api.db.models import Organization, Project
+        from choregos_api.db.session import session_scope
+        from choregos_ontology.service.store import OntologyVersion
+        from sqlalchemy import text
+
+        async with session_scope(orgs="*") as session:
+            session.add(Organization(id="o1", slug="varga", name="Varga"))
+            session.add(Project(id="p1", org_id="o1", slug="infra", name="Infra", status="active", config={}))
+            await session.flush()
+            session.add(
+                OntologyVersion(
+                    id="v1",
+                    project_id="p1",
+                    name="it4it",
+                    version="1",
+                    checksum="sha",
+                    compiled_ir=json.loads(ir),
+                )
+            )
+            await session.flush()
+            colonnes = (
+                "id, project_id, version_id, action_type, target_ids, params, justification, status, "
+                "proposed_by, approval, decisions, effects, evidence"
+            )
+            valeurs = (
+                "'a1', 'p1', 'v1', 'open_infra_pr', '[]', '{}', 'x', 'pending_approval', '{}', '{}', "
+                "'[]', '[]', '[]'"
+            )
+            await session.execute(text(f"INSERT INTO action_proposals ({colonnes}) VALUES ({valeurs})"))
+        await db_session.dispose_engine()
+        await asyncio.to_thread(command.upgrade, configuration(), "heads")
+        lignes = await _administrer("SELECT id, origin, status, effects FROM actions")
+        assert [(r["id"], r["origin"], r["status"]) for r in lignes] == [
+            ("a1", "ontology", "pending_approval")
+        ]
+        assert json.loads(lignes[0]["effects"]) == [{"effect": "ontology.effet", "with": {"index": 0}}]
+        restantes = await _administrer("SELECT to_regclass('public.action_proposals') AS table")
+        assert restantes[0]["table"] is None, "la table est retirée"
+    finally:
+        await db_session.dispose_engine()
+        await _administrer("DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+        reset_settings_cache()

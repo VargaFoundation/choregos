@@ -317,9 +317,12 @@ async def decider(
             )
     if any(d.get("by", "").lower() == principal.email.lower() for d in action.decisions or []):
         raise conflict("vous avez déjà décidé de cette action")
+    # `step_up_minutes` absent (`None`) : la règle n'exige pas d'authentification récente — ce que peut
+    # dire une politique d'un greffon (l'ontologie) ; une action proposée par l'API en a toujours une.
+    fraicheur = approbation.get("step_up_minutes", 10)
     age = (
-        exiger_une_authentification_fraiche(principal, int(approbation.get("step_up_minutes", 10)))
-        if decision == "approve"
+        exiger_une_authentification_fraiche(principal, int(fraicheur))
+        if decision == "approve" and fraicheur is not None
         else age_de_l_authentification(principal)
     )
     entree = {

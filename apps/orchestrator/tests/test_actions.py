@@ -269,3 +269,43 @@ async def test_une_action_approuvee_atteint_le_serveur_avec_la_cle_du_connecteur
     assert resultat["status"] == "succeeded", resultat
     assert serveur.appels == [("commander_poste", {"modele": "portable-14"})]
     assert {entetes["authorization"] for _, entetes, _ in serveur.recues} == {"Bearer cle-fournisseur"}
+
+
+async def test_une_action_demarree_avant_que_sa_ligne_soit_visible_attend_qu_elle_le_soit(
+    setup: Fixture, temporal_env: Any, worker_factory: Any, journal: Journal
+) -> None:
+    """La requête qui décide démarre `action-<id>` AVANT de valider sa transaction (S20-08) : la ligne
+    peut ne pas être encore visible quand le workflow la lit. Il retente, au lieu de mourir."""
+    import asyncio
+
+    from choregos_api.db.models import Action, Project
+    from choregos_api.db.session import session_scope
+
+    identifiant = "00000000-0000-7000-8000-00000000a7a1"
+    async with worker_factory():
+        handle = await temporal_env.client.start_workflow(
+            "ActionWorkflow", {"action_id": identifiant}, id=f"action-{identifiant}", task_queue="test"
+        )
+        await asyncio.sleep(0.3)
+        async with session_scope() as session:
+            projet = await session.get(Project, setup.project_id)
+            assert projet is not None
+            session.add(
+                Action(
+                    id=identifiant,
+                    org_id=projet.org_id,
+                    project_id=projet.id,
+                    origin="transition",
+                    kind="arrivee.comptes",
+                    title="Les comptes de Léa",
+                    params={"upn": "lea@acme.test"},
+                    effects=[CREER],
+                    proposed_by={"kind": "system", "id": "system"},
+                    approval={},
+                    decisions=[],
+                    status="approved",
+                )
+            )
+        resultat = await handle.result()
+    assert resultat["status"] == "succeeded"
+    assert journal.faits == [("creer", {"upn": "lea@acme.test"})]

@@ -121,7 +121,10 @@ rôle de l'approbateur, préconditions, couche absente, couche `unreachable`.
   tests d'adaptateur, pas d'essai contre un dépôt réel.
 - **La reprise sur panne** : le moteur s'exécute dans la requête, pas dans `ApprovalWorkflow` et
   `ActionWorkflow` (Temporal). Une panne entre l'ouverture de la PR et la preuve laisse la proposition
-  `running`.
+  `running`. *Levé le 2026-10-06 (S20-08)* : une proposition est une action du cœur, décidée par
+  `decider` et jouée par l'`ActionWorkflow` — effets et preuves sous leur clé, `collector.rerun` en
+  attente de sa preuve (`awaiting_evidence`) jusqu'au rapport suivant ou au délai ; `onto0003` a copié
+  `action_proposals` dans `actions`, puis l'a retirée.
 - **Le déclenchement du collecteur** : la preuve `collector.rerun` attend le rapport suivant, mais
   l'essai ne déclenche rien (pas de cadre de connecteurs) ; le rapport est posté par le test.
 - **La synchronisation par le moteur d'actions** : c'est une route, pas l'action système
