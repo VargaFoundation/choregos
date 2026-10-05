@@ -132,6 +132,7 @@ async def appeler(outil: OutilDuCourtier, arguments: dict[str, Any]) -> tuple[in
     """`tools/call` sur le serveur, avec la clé du connecteur résolue ICI — jamais dans le pod."""
     import httpx
     from choregos_adapters import build, configuration_resolue
+    from choregos_adapters.errors import AdapterError
     from choregos_adapters.mcp import ErreurMcp
     from choregos_core.secrets import SecretIntrouvable
 
@@ -139,12 +140,26 @@ async def appeler(outil: OutilDuCourtier, arguments: dict[str, Any]) -> tuple[in
     try:
         config = configuration_resolue(instance.kind, instance.type, instance.config, instance.secret_refs)
         client = build(instance.kind, instance.type, config)
-        resultat = await client.call_tool(outil.operation.name, arguments)
+        if hasattr(client, "call_tool"):
+            resultat = await client.call_tool(outil.operation.name, arguments)
+        else:
+            # Un connecteur qui n'est pas MCP (un annuaire) : son opération déclarée, par son nom,
+            # rendue au format d'un résultat MCP — l'agent lit la même chose partout.
+            brut = await client.executer(outil.operation.name, arguments)
+            resultat = {"content": [{"type": "text", "text": _json(brut)}], "structuredContent": brut}
     except ErreurMcp as erreur:
         return 502, {"error": str(erreur)}
+    except AdapterError as refus:
+        return 422, {"error": str(refus)}
     except (SecretIntrouvable, httpx.HTTPError) as panne:
         return 502, {"error": f"{instance.name} injoignable : {panne}"}
     return (200 if not resultat.get("isError") else 422), resultat
+
+
+def _json(valeur: Any) -> str:
+    import json
+
+    return json.dumps(valeur, ensure_ascii=False, default=str)
 
 
 def texte_du_resultat(resultat: dict[str, Any]) -> str:
