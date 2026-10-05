@@ -48,3 +48,4 @@ nine records did not exist.
 | [0029](0029-une-plateforme-d-agents-gouvernes.md) | Choregos is a general-purpose platform for governed agents: several workflows per project, an agent registry, skills, MCP, connectors by capability | accepted |
 | [0030](0030-une-porte-mcp-pour-les-clients-externes.md) | A door for external MCP clients inside the API: `/mcp`, scoped tokens first, OAuth next, no decision through MCP | accepted |
 | [0031](0031-plusieurs-workflows-par-projet.md) | A project runs several workflows; each work item is pinned to the version it was born in; typed edits are text grafts (amends 0023) | accepted |
+| [0032](0032-sections-d-administration-par-manifeste.md) | Administration sections are declared by manifest; the console renders them, no plugin code runs in it | accepted |
