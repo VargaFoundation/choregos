@@ -283,6 +283,15 @@ call is decided by its version and its project, never by a file it reads. An arc
 its folder (`../`), holds a symbolic link, more than 64 files or 512 KiB, or a file that is not
 UTF-8 text is refused. Versions never change; a skill says which agents carry it.
 
+A workflow actor **names** an agent — `{type: agent, role: implement, agent: onboarding-coordinator}`,
+or `…@2` for a given version. The run then takes the project's pinned version (else the latest),
+overrides applied: its model, its limits and its budget, which only tighten the actor's own. Its
+instructions **replace the playbook**: they are a Jinja template rendered in a **sandbox**
+(`{{ ''.__class__ }}` is refused, at publication already), with the playbook's variables
+(`ticket`, `spec`, `inputs`…), and the platform appends a frame the author cannot remove — the output
+contract and the invariants. The run records the agent and its version; a revoked, suspended or
+expired agent does not start.
+
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). Creating, publishing and revoking need
 `agent:manage` (organisation administrators); a revocation is final. Agents are under the same

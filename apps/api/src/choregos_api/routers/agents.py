@@ -32,6 +32,7 @@ from ..schemas import (
     ProjectAgentDto,
     ProjectAgentPut,
 )
+from ..services.agents import effective, elargissements, erreurs_d_une_version
 
 router = APIRouter(tags=["agents"])
 
@@ -125,6 +126,7 @@ async def list_agents(org: str, session: Db, principal: Me) -> list[AgentDto]:
 )
 async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) -> AgentDto:
     _gerer(principal, org)
+    erreurs_d_une_version(body.spec)
     organisation = await _organisation(session, org)
     existant = (
         await session.execute(
@@ -180,6 +182,7 @@ async def publish_version(
 ) -> AgentVersionDto:
     """La version suivante ; aucune n'est jamais réécrite."""
     _gerer(principal, org)
+    erreurs_d_une_version(body)
     organisation = await _organisation(session, org)
     agent = await _agent(session, organisation, slug)
     if agent.status == "revoked":
@@ -255,43 +258,6 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
 
 
 # ───────────────────────────── l'épingle d'un projet ─────────────────────────────
-
-
-def _outils(spec: AgentSpec) -> set[str]:
-    return {outil for serveur in spec.mcp_servers for outil in serveur.tools}
-
-
-def elargissements(spec: AgentSpec, surcharges: AgentOverrides) -> list[str]:
-    """Ce qu'une surcharge ÉLARGIRAIT : un projet ne fait que resserrer une version."""
-    ecarts: list[str] = []
-    for groupe in ("limits", "budget"):
-        de_la_version = getattr(spec, groupe)
-        du_projet = getattr(surcharges, groupe)
-        for champ in type(de_la_version).model_fields:
-            plafond, demande = getattr(de_la_version, champ), getattr(du_projet, champ)
-            if demande is not None and plafond is not None and demande > plafond:
-                ecarts.append(f"{groupe}.{champ} : {demande} dépasse les {plafond} de la version")
-    if surcharges.tools is not None:
-        en_trop = sorted(set(surcharges.tools) - _outils(spec))
-        if en_trop:
-            ecarts.append(f"outils que la version n'accorde pas : {', '.join(en_trop)}")
-    return ecarts
-
-
-def effective(spec: AgentSpec, surcharges: AgentOverrides) -> AgentSpec:
-    """La version, surcharges appliquées : ce qui tournera."""
-    resultat = spec.model_copy(deep=True)
-    for groupe in ("limits", "budget"):
-        cible = getattr(resultat, groupe)
-        for champ in type(cible).model_fields:
-            demande = getattr(getattr(surcharges, groupe), champ)
-            if demande is not None:
-                setattr(cible, champ, demande)
-    if surcharges.tools is not None:
-        gardes = set(surcharges.tools)
-        for serveur in resultat.mcp_servers:
-            serveur.tools = [outil for outil in serveur.tools if outil in gardes]
-    return resultat
 
 
 async def _version_de(session: AsyncSession, agent: Agent, version: int) -> AgentVersion:

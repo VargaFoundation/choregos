@@ -103,6 +103,19 @@ def render_playbook(role: str, **variables: Any) -> str:
     return template.render({**defaults, **variables})
 
 
+def cadrer(instructions: str) -> str:
+    """Les instructions d'un agent du registre, suivies du cadre qu'il ne peut pas modifier (ADR 0033).
+
+    L'auteur d'un agent écrit ce qu'il faut FAIRE ; comment répondre à la plateforme — le contrat
+    de sortie, les invariants — n'est pas à lui.
+    """
+    return (
+        f"{instructions.rstrip()}\n\n---\n\n"
+        "## Ce que la plateforme exige (ce cadre ne se modifie pas)\n\n"
+        f"{INVARIANTS}\n\n{OUTPUT_CONTRACT}\n"
+    )
+
+
 def _template_name(path: Path, role: str) -> str:
     """Le nom que le chargeur Jinja attend, relatif à l'un des répertoires de recherche."""
     for directory in _search_dirs():
@@ -152,6 +165,7 @@ __all__ = [
     "INVARIANTS",
     "KNOWN_ROLES",
     "OUTPUT_CONTRACT",
+    "cadrer",
     "extra_roles_dirs",
     "playbook_path",
     "playbook_source",

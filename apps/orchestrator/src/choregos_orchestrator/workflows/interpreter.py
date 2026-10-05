@@ -292,6 +292,7 @@ class WorkflowInterpreter:
                 "max_turns": actor.max_turns,
                 "max_minutes": actor.max_minutes,
                 "playbook": actor.playbook,
+                "agent": actor.agent,
                 "outputs": list(transition.outputs),
                 "inputs": list(transition.inputs),
             },

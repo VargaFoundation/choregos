@@ -147,6 +147,11 @@
         "playbook": {
           "type": "string",
           "description": "Nom du playbook (défaut : le rôle)."
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$",
+          "description": "Un agent du registre (ADR 0033) : `slug`, ou `slug@version`. Sa version — l'épinglée du projet, sinon la dernière — fixe instructions, modèle, limites et budget ; ses instructions priment sur le playbook."
         }
       }
     },

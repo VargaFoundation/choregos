@@ -51,6 +51,9 @@ class AgentActor(Strict):
     max_turns: int | None = Field(default=None, ge=1, le=1000)
     max_minutes: int | None = Field(default=None, ge=1, le=480)
     playbook: str | None = None
+    #: Un agent du registre (ADR 0033) : `slug` ou `slug@version` ; ses instructions priment sur
+    #: le playbook.
+    agent: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$")
 
     @property
     def playbook_name(self) -> str:

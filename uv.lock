@@ -344,6 +344,7 @@ version = "0.14.0"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "choregos-contracts" },
+    { name = "jinja2" },
     { name = "jsonschema" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -353,6 +354,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "choregos-contracts", editable = "packages/contracts" },
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pyyaml", specifier = ">=6.0" },

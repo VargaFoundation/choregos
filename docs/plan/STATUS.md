@@ -151,7 +151,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S17-03 | S17 | ✅ | — | `image.registry` par composant (`choregos-api`, `choregos-orchestrator`), le job de migration suit l'API, et le digest global ne désigne pas une image d'un autre registre (#204). `tests/charts/test_image_par_composant.py` (3 tests). Ne prouve pas un déploiement réel de l'EE (S17-04) |
 | S17-04 | S17 | ⬜ | — | l'édition entreprise sur le cœur courant, ses sections, servie au dev par un projet Harbor privé |
 | S18-01 | S18 | ✅ | — | le registre d'agents de l'organisation (ADR 0033) : tables `agents`, `agent_versions`, `project_agents` sous RLS forcée ; un agent naît avec sa version 1, publier crée la suivante, aucune ne se réécrit, la révocation est définitive ; `agent:manage` (org_admin) crée, publie, suspend, révoque ; un projet épingle une version et ne peut que la resserrer (budget, limites, sous-ensemble des outils ; une surcharge qui élargit reçoit 422), la version effective est rendue. `test_registre_d_agents.py` (API), `test_rls_postgres.py` (un agent, ses versions et son épingle ne sortent pas de leur organisation). Ne prouve pas un agent dans un run (S18-02) |
-| S18-02 | S18 | ⬜ | — | un acteur nomme un agent ; instructions en bac à sable, priment sur le playbook |
+| S18-02 | S18 | ✅ | — | un acteur nomme un agent (`AgentActor.agent: slug[@version]`, contrat) : `prepare_stage` résout la version effective (l'épinglée du projet, sinon la dernière, surcharges appliquées), qui fixe modèle et backend et ne fait que resserrer limites et budget ; les instructions, gabarit Jinja rendu en bac à sable (`choregos_core.instructions`), remplacent le playbook, cadrées par le contrat de sortie et les invariants (`cadrer`) ; une évasion est refusée à la publication (422) et au run ; le run nomme son agent (`runs.agent_slug`, `agent_version`) ; un agent révoqué, suspendu, expiré ou inconnu ne part pas, sans être réessayé ; les historiques archivés rejouent. `test_agent_du_registre.py` (dont un run complet de l'interpréteur), `test_registre_d_agents.py`. Ne prouve pas un vrai agent sur le dev |
 | S18-03 | S18 | ⬜ | — | runs, coûts et taux de réussite par agent |
 | S18-04 | S18 | ✅ | — | la bibliothèque de skills (ADR 0033) : tables `skills`, `skill_versions` sous RLS forcée ; une skill est un dossier dont le SKILL.md porte un `name` (celui de la skill) et une `description` ; `allowed-tools` refusé (une skill ne déclare aucune permission) ; l'import zip refuse le zip-slip, les liens symboliques, plus de 64 fichiers ou 512 Kio, un fichier non UTF-8, et retire un dossier racine commun ; versions immuables, désignées par une empreinte ; une skill dit quels agents la portent. `test_bibliotheque_de_skills.py`, `test_rls_postgres.py`. Ne prouve pas une skill posée dans un run (S18-05) |
 | S18-05 | S18 | ⬜ | — | le runner pose les skills selon le backend, vérifiées par digest |
@@ -169,7 +169,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S20-06 | S20 | ⬜ | — | la tâche humaine : un formulaire, une preuve |
 | S20-07 | S20 | ⬜ | — | le gabarit joiners-leavers et le scénario RH de bout en bout |
 
-**Total** : 116 livrées, 11 partielles, 22 non commencées.
+**Total** : 117 livrées, 11 partielles, 21 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
