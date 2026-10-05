@@ -1208,6 +1208,28 @@ paths:
       operationId: getRunTicket
       responses:
         "200": { description: Ticket et documents liés, content: { application/json: { schema: { $ref: "#/components/schemas/RunTicket" } } } }
+  /internal/runs/{id}/skills:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunSkills
+      description: Les fichiers des skills que le StageInput du run nomme (ADR 0033) ; le runner recalcule leur empreinte avant de les poser.
+      responses:
+        "200":
+          description: Une entrée par skill
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [slug, version, digest, files]
+                  properties:
+                    slug: { type: string }
+                    version: { type: integer }
+                    digest: { type: string }
+                    files: { type: object, additionalProperties: { type: string } }
   /internal/runs/{id}/ci-logs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:

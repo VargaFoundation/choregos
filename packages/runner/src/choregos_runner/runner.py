@@ -35,6 +35,7 @@ from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
+from .skills import SkillInvalide, poser
 from .workspace import Workspace, workspace_env
 
 MAX_RESULT_REPAIRS = 2
@@ -93,6 +94,8 @@ class Runner:
         self.settings = settings or get_settings()
         self.client = client
         self.started = time.monotonic()
+        #: L'index des skills qu'un backend ne lit pas lui-même, ajouté au prompt.
+        self.index_des_skills = ""
 
     async def run(self) -> RunOutcome:
         client = self.client or InternalClient(
@@ -162,6 +165,10 @@ class Runner:
         plan = backend.launch_plan(stage_input, workspace.path)
         written = plan.materialize(workspace.path)
         workspace.exclude(written)
+        if (
+            refus := await self._poser_les_skills(client, journal, stage_input, backend, workspace)
+        ) is not None:
+            return refus
         guards = GuardRails(
             stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
         )
@@ -272,12 +279,32 @@ class Runner:
 
     # ───────────────────────── étapes internes ─────────────────────────
 
+    async def _poser_les_skills(
+        self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any
+    ) -> RunOutcome | None:
+        """Les skills de l'agent du registre (ADR 0033) : vérifiées par leur empreinte, puis posées
+        là où le backend les lit — hors du diff. Une skill manquante ou altérée arrête le run."""
+        if not stage_input.skills:
+            return None
+        try:
+            ecrites, self.index_des_skills = poser(
+                await client.fetch_skills(), stage_input.skills, workspace.path, backend.skills_dir
+            )
+        except SkillInvalide as exc:
+            await journal.record("run.failed", {"phase": "skills", "error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.SKILLS_INVALID, detail=str(exc))
+        workspace.exclude(ecrites)
+        return None
+
     def _prompt(self, stage_input: StageInput, workspace: Path) -> str:
         """Playbook rendu + tâche. Le playbook vient de l'orchestrateur, jamais du dépôt."""
         playbook = stage_input.playbook.prompt or ""
         if not playbook and stage_input.playbook.prompt_url:
             playbook = f"(playbook : {stage_input.playbook.ref})"
         task = (workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
+        if self.index_des_skills:
+            playbook = f"{playbook}\n\n{self.index_des_skills}"
         return f"{playbook}\n\n---\n\n{task}"
 
     def _remaining(self, budget_seconds: int) -> float:

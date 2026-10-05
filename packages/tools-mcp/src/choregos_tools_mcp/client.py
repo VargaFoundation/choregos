@@ -88,6 +88,10 @@ class InternalClient:
     async def fetch_context(self) -> ContextPack:
         return ContextPack.model_validate(await self._request("GET", "/context"))
 
+    async def fetch_skills(self) -> list[dict[str, Any]]:
+        """Les fichiers des skills que le `StageInput` nomme (ADR 0033) ; l'empreinte s'y vérifie."""
+        return list(await self._request("GET", "/skills") or [])
+
     async def fetch_ticket(self) -> dict[str, Any]:
         return dict(await self._request("GET", "/ticket"))
 

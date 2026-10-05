@@ -14,6 +14,7 @@ from .base import Backend, LaunchPlan
 
 class ClaudeCodeBackend(Backend):
     name: ClassVar[str] = "claude-code"
+    skills_dir: ClassVar[str | None] = ".claude/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp", "agents_md", "structured_output"})
     model_constraint: ClassVar[tuple[str, ...]] = ("claude", "anthropic")
 

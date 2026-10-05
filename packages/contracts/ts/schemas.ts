@@ -401,6 +401,12 @@ export type StageInput = {
     api_url: string;
     run_token: string;
   };
+  /** Les skills de l'agent du registre (ADR 0033) : nom, version, empreinte. Le runner lit les fichiers par l'API interne et vérifie l'empreinte avant de les poser. */
+  skills?: Array<{
+    slug: string;
+    version: number;
+    digest: string;
+  }>;
 };
 
 /** Contrat runner → orchestrateur (docs/plan/01 §1.6). L'agent écrit .choregos/result.json ; le runner complète artifacts/evidence/diagnostics. */

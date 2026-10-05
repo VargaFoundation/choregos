@@ -16,6 +16,8 @@ class Exit(IntEnum):
     CLONE_FAILED = 20
     AGENT_UNREACHABLE = 30
     INVALID_RESULT = 40
+    #: Une skill de l'agent manque, ou n'a pas l'empreinte que le run attend (ADR 0033).
+    SKILLS_INVALID = 50
 
     @property
     def explanation(self) -> str:
@@ -25,4 +27,5 @@ class Exit(IntEnum):
             Exit.CLONE_FAILED: "clone du dépôt impossible",
             Exit.AGENT_UNREACHABLE: "backend agent injoignable",
             Exit.INVALID_RESULT: "résultat invalide après tentatives de réparation",
+            Exit.SKILLS_INVALID: "skill absente ou d'empreinte fausse",
         }[self]

@@ -418,6 +418,31 @@
           "type": "string"
         }
       }
+    },
+    "skills": {
+      "type": "array",
+      "description": "Les skills de l'agent du registre (ADR 0033) : nom, version, empreinte. Le runner lit les fichiers par l'API interne et vérifie l'empreinte avant de les poser.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "version",
+          "digest"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

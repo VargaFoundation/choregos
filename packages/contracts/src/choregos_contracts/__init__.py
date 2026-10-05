@@ -74,6 +74,7 @@ from .stage import (
     RelatedItem,
     RepoRef,
     ScopeChangeRequest,
+    SkillRef,
     StageInput,
     StageOutputs,
     StageResult,
@@ -81,6 +82,7 @@ from .stage import (
     TransitionRef,
     WorkItemLinks,
     WorkItemRef,
+    empreinte_de_skill,
 )
 from .workflow import (
     AgentActor,
@@ -210,6 +212,7 @@ __all__ = [
     "ScopePolicy",
     "Severity",
     "Size",
+    "SkillRef",
     "StageInput",
     "StageOutputs",
     "StageResult",
@@ -228,6 +231,7 @@ __all__ = [
     "WorkflowDefaults",
     "WorkflowMetadata",
     "contracts_dir",
+    "empreinte_de_skill",
     "load_openapi",
     "load_schema",
     "openapi_path",
