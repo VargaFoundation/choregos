@@ -223,6 +223,48 @@ export type WorkflowValidation = {
   errors: Array<WorkflowIssue>;
   warnings: Array<WorkflowIssue>;
   graph?: WorkflowGraph;
+  process?: Array<ProcessStep>;
+};
+
+/** Une transition dite en clair — la vue « processus » (ADR 0031). */
+export type ProcessStep = {
+  id: string;
+  from: string;
+  from_display?: string;
+  to: string;
+  to_display?: string;
+  actor: string;
+  actor_type: "agent" | "human" | "system" | "release_train";
+  who: string;
+  outputs?: Array<string>;
+  gates?: Array<{
+    name?: string;
+    summary?: string;
+  }>;
+  on_fail?: string | null;
+  on_reject?: string | null;
+  timeout_hours?: number | null;
+  sentence: string;
+};
+
+/** Une opération typée. `op` dit laquelle ; les autres champs dépendent d'elle (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
+export type WorkflowOperation = {
+  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor";
+  [key: string]: unknown;
+};
+
+export type WorkflowEditRequest = {
+  yaml: string;
+  operations: Array<WorkflowOperation>;
+};
+
+export type WorkflowEditResult = WorkflowValidation & {
+  yaml: string;
+  /** diff unifié du texte d'origine au texte édité */
+  diff: string;
+  inverse: Array<WorkflowOperation>;
+  /** ce qu'une opération change au-delà du texte (un état à effet renommé…) */
+  notices: Array<string>;
 };
 
 export type AgentLimits = {
@@ -1035,6 +1077,7 @@ export interface Operations {
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
+  editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";
   features: Array<string>;
