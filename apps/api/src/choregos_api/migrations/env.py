@@ -9,7 +9,7 @@ from logging.config import fileConfig
 from alembic import context
 from choregos_api.config import get_settings
 from choregos_api.db.base import Base
-from choregos_api.db.models import ALL_TABLES  # noqa: F401 - importe toutes les tables
+from choregos_api.db.models import ALL_TABLES, objet_du_coeur  # noqa: F401 - importe toutes les tables
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -25,13 +25,24 @@ def _url() -> str:
 
 
 def run_migrations_offline() -> None:
-    context.configure(url=_url(), target_metadata=target_metadata, literal_binds=True, compare_type=True)
+    context.configure(
+        url=_url(),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        compare_type=True,
+        include_object=objet_du_coeur,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        include_object=objet_du_coeur,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
