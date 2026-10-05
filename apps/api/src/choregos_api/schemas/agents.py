@@ -132,3 +132,27 @@ class SkillDto(Dto):
     #: Les agents dont une version porte la skill : `agent@version`.
     used_by: list[str] = Field(default_factory=list)
     versions: list[SkillVersionDto] | None = None
+
+
+class AgentProjectMetrics(Dto):
+    project: str
+    runs: int
+    cost_usd: float
+
+
+class AgentMetrics(Dto):
+    """Ce qu'un agent a fait sur la période : ses runs, leur issue, ce qu'ils ont coûté."""
+
+    agent: str
+    days: int
+    runs: int
+    succeeded: int
+    failed: int
+    #: Réussis / terminés ; vide tant qu'aucun run n'est terminé.
+    success_rate: float | None = None
+    cost_usd: float = 0.0
+    #: `model` et `tool` : un appel d'outil compte dans le coût d'un agent.
+    cost_by_kind: dict[str, float] = Field(default_factory=dict)
+    by_project: list[AgentProjectMetrics] = Field(default_factory=list)
+    spent_today_usd: float = 0.0
+    daily_budget_usd: float | None = None
