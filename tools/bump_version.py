@@ -71,6 +71,9 @@ def _fichiers() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
     # version qui ment est exactement ce que cet outil existe pour empêcher.
     openapi = RACINE / "packages" / "contracts" / "openapi.yaml"
     cibles.append((openapi, [(re.compile(r"^(  version: ).*$", re.M), r"\g<1>{v}")]))
+    # Le plugin Claude Code (ADR 0030) : sa version fige ce que les utilisateurs installent.
+    plugin = RACINE / "integrations" / "claude-code" / ".claude-plugin" / "plugin.json"
+    cibles.append((plugin, [(re.compile(r'^(  "version": ")[^"]+(",)$', re.M), r"\g<1>{v}\g<2>")]))
     return cibles
 
 

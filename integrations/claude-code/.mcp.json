@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "choregos": {
+      "type": "http",
+      "url": "${user_config.mcp_url}",
+      "headers": { "Authorization": "Bearer ${user_config.token}" }
+    }
+  }
+}
