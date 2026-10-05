@@ -42,6 +42,8 @@ class Appelant:
     org_du_projet_lie: str | None = None
     #: L'agent externe que ce client incarne (ADR 0033), s'il est rattaché à l'un.
     agent: str | None = None
+    #: Son organisation : un appel qui ne vise aucun projet s'y inscrit au journal d'audit.
+    agent_org_id: str | None = None
     #: Les outils de la porte que la version de l'agent permet (motifs) ; `None` : ceux de l'humain.
     motifs: tuple[str, ...] | None = None
 
@@ -175,6 +177,7 @@ async def incarner_l_agent(
         for outil in serveur.get("tools", [])
     ]
     appelant.agent = agent.slug
+    appelant.agent_org_id = agent.org_id
     appelant.motifs = (
         tuple(motifs) if any(s.get("connector") == "choregos" for s in spec.get("mcp_servers", [])) else None
     )
