@@ -1179,6 +1179,7 @@ export interface Operations {
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
@@ -1235,6 +1236,7 @@ export interface Operations {
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
+  removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
