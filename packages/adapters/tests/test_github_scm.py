@@ -198,3 +198,56 @@ async def test_le_jeton_du_runner_est_le_jeton_statique_ou_un_jeton_d_app_reduit
     sans = GitHubScm(GitHubClient(base_url=API, client=fil.client()))
     with pytest.raises(UpstreamError, match="aucune App"):
         await sans.mint_token(REPO, 900, [])
+
+
+# ───────────────────────── écrire des fichiers (effet gitops.pull_request) ─────────────────────────
+
+
+def _b64(texte: str) -> str:
+    import base64
+
+    return base64.b64encode(texte.encode()).decode()
+
+
+async def test_ecrire_des_fichiers_cree_met_a_jour_et_saute_l_identique() -> None:
+    contenu = f"/repos/{REPO}/contents/platform"
+    fil = Fil(
+        {
+            ("GET", f"{contenu}/a.yaml"): (404, {"message": "Not Found"}),
+            ("PUT", f"{contenu}/a.yaml"): (201, {"commit": {"sha": "c1"}}),
+            ("GET", f"{contenu}/b.yaml"): (
+                200,
+                {"sha": "s-b", "encoding": "base64", "content": _b64("ancien\n")},
+            ),
+            ("PUT", f"{contenu}/b.yaml"): (200, {"commit": {"sha": "c2"}}),
+            ("GET", f"{contenu}/c.yaml"): (
+                200,
+                {"sha": "s-c", "encoding": "base64", "content": _b64("pareil\n")},
+            ),
+        }
+    )
+    sha = await scm(fil).commit_files(
+        REPO,
+        "choregos/p-1",
+        {"platform/a.yaml": "nouveau\n", "platform/b.yaml": "neuf\n", "platform/c.yaml": "pareil\n"},
+        "fix: redémarrer les nœuds",
+    )
+    assert sha == "c2"
+    assert fil.envoyees("PUT") == [("PUT", f"{contenu}/a.yaml"), ("PUT", f"{contenu}/b.yaml")]
+    assert all(r.url.params["ref"] == "choregos/p-1" for r in fil.requetes if r.method == "GET")
+    index = next(
+        i for i, r in enumerate(fil.requetes) if (r.method, r.url.path) == ("PUT", f"{contenu}/b.yaml")
+    )
+    assert fil.corps(index) == {
+        "message": "fix: redémarrer les nœuds",
+        "content": _b64("neuf\n"),
+        "branch": "choregos/p-1",
+        "sha": "s-b",
+    }
+
+
+async def test_une_panne_en_lecture_n_ecrit_rien() -> None:
+    fil = Fil({("GET", f"/repos/{REPO}/contents/x.yaml"): (401, {"message": "Bad credentials"})})
+    with pytest.raises(UpstreamError):
+        await scm(fil).commit_files(REPO, "b", {"x.yaml": "y"}, "m")
+    assert fil.envoyees("PUT") == []

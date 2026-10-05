@@ -1071,3 +1071,16 @@ les 492 tests ne disaient pas :
     collision, rouge sans la garde) ; sans le filtre, `test_migrations.py` rougit après les tests
     d'un greffon.
     **Ce que ça ne prouve pas** : le prix d'un outil de greffon (0 € au registre, à trancher).
+
+30. **L'adaptateur SCM écrit des fichiers sur une branche** (2026-10-04, essai du socle).
+
+    Pour que la PLATEFORME ouvre une PR avec ses changements, jeton gardé — l'effet
+    `gitops.pull_request` du futur socle. `ScmAdapter` savait créer une branche et ouvrir une PR, pas
+    écrire un fichier. `commit_files(repo, branch, files, message)` : GitHub par l'API Contents (un
+    commit par fichier modifié), un fichier identique n'est pas réécrit ; le faux fait de même, et
+    son `open_pr` réutilise une PR ouverte sur la même branche, comme GitHub.
+
+    **Ce que ça prouve** : tests d'adaptateur — création, mise à jour avec le `sha`, fichier
+    identique sauté, panne en lecture sans écriture ; idempotence du faux.
+    **Ce que ça ne prouve pas** : un commit unique pour plusieurs fichiers (API Git Data), ni un
+    essai contre un vrai dépôt.
