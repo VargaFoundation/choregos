@@ -875,6 +875,71 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/skills:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listSkills
+      description: La bibliothèque de skills de l'organisation (ADR 0033).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skill" } } } } }
+    post:
+      tags: [agents]
+      operationId: createSkill
+      description: Une skill neuve, version 1, nommée par son SKILL.md ; aucune permission déclarée (`allowed-tools` refusé).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillFiles" } } }
+      responses:
+        "201": { description: Créée, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/skills/import:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: importSkill
+      description: Une archive zip ; zip-slip, liens symboliques, plus de 64 fichiers ou 512 Kio sont refusés.
+      requestBody:
+        required: true
+        content: { application/zip: { schema: { type: string, format: binary } } }
+      responses:
+        "201": { description: Publiée, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/skills/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getSkill
+      responses:
+        "200": { description: La skill et ses versions, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/skills/{slug}/versions:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: publishSkillVersion
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillFiles" } } }
+      responses:
+        "201": { description: Publiée, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/skills/{slug}/versions/{version}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [agents]
+      operationId: getSkillVersion
+      responses:
+        "200": { description: La version et ses fichiers, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/agents:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1568,6 +1633,30 @@ components:
         version: { type: integer }
         overrides: { $ref: "#/components/schemas/AgentOverrides" }
         effective: { $ref: "#/components/schemas/AgentSpec" }
+    SkillFiles:
+      type: object
+      required: [files]
+      properties:
+        files: { type: object, additionalProperties: { type: string }, description: chemin relatif → texte }
+    SkillVersion:
+      type: object
+      required: [version, digest]
+      properties:
+        version: { type: integer }
+        digest: { type: string }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        files: { type: [object, "null"], additionalProperties: { type: string } }
+    Skill:
+      type: object
+      required: [slug, status, latest_version]
+      properties:
+        slug: { type: string }
+        description: { type: [string, "null"] }
+        status: { type: string }
+        latest_version: { type: integer }
+        used_by: { type: array, items: { type: string } }
+        versions: { type: [array, "null"], items: { $ref: "#/components/schemas/SkillVersion" } }
     WorkflowIssue:
       type: object
       required: [code, message]

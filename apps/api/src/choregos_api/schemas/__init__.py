@@ -15,6 +15,9 @@ from .agents import (
     AgentVersionDto,
     ProjectAgentDto,
     ProjectAgentPut,
+    SkillDto,
+    SkillFiles,
+    SkillVersionDto,
 )
 from .base import (
     Dto,
@@ -224,6 +227,9 @@ __all__ = [
     "RunTicketComment",
     "ScopeChangeDecision",
     "ScopeChangeRequestIn",
+    "SkillDto",
+    "SkillFiles",
+    "SkillVersionDto",
     "TemplateDetail",
     "TemplateSummary",
     "TemplateUpsert",

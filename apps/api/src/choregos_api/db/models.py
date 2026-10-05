@@ -536,6 +536,37 @@ class ProjectAgent(Base, PkMixin, TimestampMixin):
     overrides: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
 
 
+# ───────────────────────────── la bibliothèque de skills (ADR 0033) ─────────────────────────────
+
+
+class Skill(Base, PkMixin, TimestampMixin):
+    """Une skill de l'organisation : un dossier (`SKILL.md` et ses fichiers) qu'un agent porte. Ce
+    qu'elle contient vit dans ses versions, immuables."""
+
+    __tablename__ = "skills"
+    __table_args__ = (UniqueConstraint("org_id", "slug", name="uq_skills_org_slug"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+
+
+class SkillVersion(Base, PkMixin, TimestampMixin):
+    """Les fichiers d'une version de skill — 64 au plus, 512 Kio en tout — et leur empreinte, que le
+    runner vérifie avant de les poser."""
+
+    __tablename__ = "skill_versions"
+    __table_args__ = (UniqueConstraint("skill_id", "version", name="uq_skill_versions_skill_version"),)
+
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"), index=True)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    files: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    digest: Mapped[str] = mapped_column(String(80))
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
 ALL_TABLES = [
     Organization,
     User,
@@ -565,6 +596,8 @@ ALL_TABLES = [
     Agent,
     AgentVersion,
     ProjectAgent,
+    Skill,
+    SkillVersion,
 ]
 
 
