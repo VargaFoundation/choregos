@@ -109,6 +109,17 @@ success, removing a missing member too. An account the platform creates enters t
 unit; a gesture on an account outside it is refused, named, before anything is written. Graph's
 `Retry-After` is honoured. With `CHOREGOS_FAKES=1`, a scriptable Graph answers instead.
 
+**Business families: `mdm`, `shipping`, `access_control`.** A device manager (enrol a device for
+its user, wipe it when it comes back, read it), a carrier (ship a parcel, book a collection — one
+per reference —, track it) and badge readers (activate a badge for its holder, deactivate it, read
+it) are declared like a directory, with `kind` and the key by reference (`api_key`). Reads are
+`allowed`, writes `approval`. Every write is **idempotent**, and one that contradicts the state is
+refused, named: a device enrolled for someone else, a reference already taken by another parcel, a
+badge the readers do not know — a mistyped UID would leave the real badge opening doors. These
+families have **no real type yet**: type `demo` keeps them in memory, each process its own — a
+demonstration, refused in staging and prod. A supplier's agent needs no family: it is an MCP
+server like any other, its tools discovered and born closed.
+
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still

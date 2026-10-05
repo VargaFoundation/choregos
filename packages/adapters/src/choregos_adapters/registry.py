@@ -51,6 +51,20 @@ class OperationSpec:
         return "allowed" if self.access == "read" else "approval"
 
 
+def schema_d_entree(*requis: str, **autres: dict[str, Any]) -> dict[str, Any]:
+    """Le schéma d'entrée d'une opération : des chaînes requises, d'autres propriétés facultatives,
+    et RIEN d'autre (`additionalProperties: false`) — le courtier et l'effet `connector.call` le
+    vérifient avant l'appel, un argument inattendu n'atteint jamais le système tiers."""
+    proprietes: dict[str, Any] = {nom: {"type": "string"} for nom in requis}
+    proprietes.update(autres)
+    return {
+        "type": "object",
+        "properties": proprietes,
+        "required": list(requis),
+        "additionalProperties": False,
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectorTypeSpec:
     """Ce qu'un type de connecteur déclare de lui-même (ADR 0034) : la console en tire son
