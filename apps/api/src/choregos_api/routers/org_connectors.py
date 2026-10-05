@@ -283,12 +283,14 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
                     policy="forbidden",
                     groups=[],
                     schema_digest=empreinte,
+                    input_schema=outil.input_schema,
                     description=outil.description or None,
                 )
             )
             diff.added.append(outil.name)
         elif operation.schema_digest != empreinte or operation.access != acces:
             operation.policy, operation.schema_digest, operation.access = "forbidden", empreinte, acces
+            operation.input_schema = outil.input_schema
             operation.description = outil.description or operation.description
             diff.changed.append(outil.name)
         else:

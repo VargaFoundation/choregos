@@ -390,13 +390,20 @@ async def _outils_des_greffons(
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
 async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     """Les outils que CE run peut appeler, au format MCP (`name`, `description`, `inputSchema`)."""
+    from ..services.courtier import outils_du_courtier
+
     run, _item, project = await _run_and_item(session, id)
     outils = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
     des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in outils})
+    # Le courtier (ADR 0034) : les opérations des connecteurs de l'organisation que l'agent du run
+    # sélectionne et que la politique permet. Leur nom (`connecteur__opération`) ne peut pas
+    # rencontrer celui d'un outil du catalogue.
+    du_courtier = await outils_du_courtier(session, run, project)
     return {
         "tools": [
             *({"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils),
             *(outil for _, outil in des_greffons.values()),
+            *(outil.annonce() for outil in du_courtier.values()),
         ]
     }
 
@@ -407,10 +414,13 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     run, item, project = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("résultat déjà posté pour ce run")
+    from ..services.courtier import outils_du_courtier
+
     du_catalogue = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
     outil = next((o for o in du_catalogue if o.name == name), None)
     des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
-    if outil is None and name not in des_greffons:
+    du_courtier = await outils_du_courtier(session, run, project)
+    if outil is None and name not in des_greffons and name not in du_courtier:
         # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
         # le catalogue du déploiement en essayant des noms.
         raise not_found("Outil", name)
@@ -431,9 +441,15 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             f"ce run a déjà appelé {deja} outils (plafond {plafond})",
         )
 
+    suspicions: list[dict[str, str]] = []
+    prix_usd = 0.0
     if outil is not None:
         code, corps = await appeler_outil(outil, body or {})
         fournisseur, prix = outil.provider, outil.price_eur
+    elif name in du_courtier:
+        code, corps, suspicions = await _par_le_courtier(session, run, project, du_courtier[name], body or {})
+        fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
+        prix_usd = du_courtier[name].operation.price_usd or 0.0
     else:
         from ..greffons import fournisseurs_d_outils
 
@@ -452,6 +468,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             provider=fournisseur,
             model=name,
             cost_eur=prix,
+            cost_usd=prix_usd,
             stage_role=run.stage_role,
         )
     )
@@ -470,4 +487,43 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         "status_code": code,
         "result": corps,
         "remaining": max(0, plafond - deja - 1) if plafond else None,
+        **({"suspicions": suspicions} if suspicions else {}),
     }
+
+
+async def _par_le_courtier(
+    session: Any, run: Run, project: Project, outil: Any, arguments: dict[str, Any]
+) -> tuple[int, Any, list[dict[str, str]]]:
+    """Un appel par le courtier : arguments vérifiés AVANT (400, rien de compté), clé du
+    connecteur résolue ICI, et ce que le serveur rend passé à la garde contre l'injection — un
+    serveur tiers écrit ce que l'agent lira. `warn` le dit, `block` le retient."""
+    from choregos_core.injection import suspicions as chercher
+
+    from ..services.courtier import ArgumentsRefuses, appeler, texte_du_resultat, verifier_les_arguments
+
+    try:
+        verifier_les_arguments(outil, arguments)
+    except ArgumentsRefuses as refus:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
+    code, corps = await appeler(outil, arguments)
+    mode = PolicyEngine(
+        policy_model(await active_policy(session, project.id))
+    ).policy.sandbox.prompt_injection
+    trouvees = [] if mode == "ignore" else chercher(texte_du_resultat(corps), source=f"tool.{outil.nom}")
+    if not trouvees:
+        return code, corps, []
+    await persist_event(
+        session,
+        EventType.SECURITY_INJECTION_SUSPECTED,
+        project_id=project.id,
+        work_item_id=run.work_item_id,
+        project_slug=project.slug,
+        subject=run.id,
+        run_id=run.id,
+        tool=outil.nom,
+        suspicions=[s.to_dict() for s in trouvees],
+    )
+    if mode == "block":
+        retenu = {"error": f"résultat de {outil.nom} retenu : injection suspectée — un humain relit"}
+        return 451, retenu, [s.to_dict() for s in trouvees]
+    return code, corps, [s.to_dict() for s in trouvees]

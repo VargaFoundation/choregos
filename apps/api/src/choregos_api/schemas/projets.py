@@ -168,6 +168,7 @@ class OperationDto(Dto):
     groups: list[str] = Field(default_factory=list)
     price_usd: float | None = None
     schema_digest: str | None = None
+    input_schema: dict[str, Any] | None = None
     description: str | None = None
 
 

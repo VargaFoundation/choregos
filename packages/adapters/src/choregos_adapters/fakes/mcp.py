@@ -23,6 +23,8 @@ class FakeMcpServer:
     recues: list[tuple[str, dict[str, str], dict[str, Any]]] = field(default_factory=list)
     appels: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     session: str = "session-1"
+    #: le texte que rend un outil ; par défaut « <outil> fait »
+    reponses: dict[str, str] = field(default_factory=dict)
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._repondre)
@@ -71,5 +73,6 @@ class FakeMcpServer:
                 return (-32602, f"outil inconnu : {nom}")
             arguments = dict(params.get("arguments") or {})
             self.appels.append((nom, arguments))
-            return {"content": [{"type": "text", "text": f"{nom} fait"}], "isError": False}
+            texte = self.reponses.get(nom, f"{nom} fait")
+            return {"content": [{"type": "text", "text": texte}], "isError": False}
         return (-32601, f"méthode inconnue : {methode}")

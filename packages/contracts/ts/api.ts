@@ -187,6 +187,10 @@ export type ConnectorOperation = {
   groups?: Array<string>;
   price_usd?: number | null;
   schema_digest?: string | null;
+  /** le schéma d'entrée que le courtier annonce à l'agent et vérifie avant l'appel */
+  input_schema?: {
+    [key: string]: unknown;
+  } | null;
   description?: string | null;
 };
 
