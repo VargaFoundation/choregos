@@ -419,12 +419,17 @@ paths:
     post:
       tags: [work-items]
       operationId: postWorkItemAction
+      description: >-
+        `migrate` exige `workflow_def_id`, une définition du projet ; l'état courant du ticket doit y
+        exister, ou être mappé par `state_mapping` — sinon 422, et rien n'est transmis.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemAction" } } }
       responses:
         "202": { description: Action transmise }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /work-items/{id}/runs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:

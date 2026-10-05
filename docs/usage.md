@@ -130,6 +130,19 @@ curl         $API/projects/acme:hr/workflows                                    
 - `PUT /projects/{id}/workflow` remains, as the alias of the default workflow.
 - The default and a routing target cannot be deactivated; a deactivated workflow takes no new
   item, and its pinned items finish on their version.
+- **Moving a running item to another version** is explicit:
+
+  ```bash
+  curl -X POST $API/work-items/ACME-12/actions \
+    -d '{"action": "migrate", "workflow_def_id": "<id>", "state_mapping": {"triage": "request"}}'
+  ```
+
+  The API checks that the version belongs to the project and that the item's current state exists
+  in it, or is mapped — `422` otherwise, and nothing is sent. An item waiting on a human decision
+  or running an agent answers `409`: pause it, let the run finish, then migrate. A parked or
+  paused item moves at once, its pin follows the new version, and its timeline shows
+  `workitem.migrated`; if its state changed in between, the migration is refused
+  (`workitem.migration_refused`) and the item carries on, on its own version.
 
 ### Workflows outside software
 

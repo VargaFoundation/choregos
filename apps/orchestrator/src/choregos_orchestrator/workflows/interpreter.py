@@ -39,6 +39,7 @@ with workflow.unsafe.imports_passed_through():
         activite_de,
         load_context,
         message_de,
+        record_migration,
         record_workflow_failure,
         signal_train,
     )
@@ -60,6 +61,11 @@ POLL_RETRY = RetryPolicy(
     maximum_attempts=20,
 )
 HISTORY_THRESHOLD = 20_000
+#: `migrate` reçoit la définition cible dans le signal, la consigne et ne tue plus le ticket
+#: (ADR 0031, S16-05). Les historiques d'avant ce marqueur rejouent l'ancien chemin.
+MIGRATION_PAR_DEFINITION = "migration-par-definition"
+#: Rendu par `_wait_external` quand une migration le réveille : l'état ne bouge pas, la boucle migre.
+_MIGRATION = "\x00migration"
 
 
 @dataclass
@@ -105,6 +111,9 @@ class WorkflowInterpreter:
         self.last_outcome: str | None = None
         self.workflow_override: dict[str, Any] | None = None
         self.state_mapping: dict[str, str] = {}
+        #: Le signal `migrate` entier : la définition, son identifiant, le mapping.
+        self.migration: dict[str, Any] = {}
+        self.migrations: int = 0
         self.findings_count: int = 0
 
     # ───────────────────────── signaux et requêtes ─────────────────────────
@@ -138,6 +147,7 @@ class WorkflowInterpreter:
         elif action == "migrate":
             self.workflow_override = message.get("workflow", message)
             self.state_mapping = dict(message.get("state_mapping", {}))
+            self.migration = dict(message)
 
     @workflow.query
     def status(self) -> dict[str, Any]:
@@ -200,13 +210,18 @@ class WorkflowInterpreter:
             if self.stopped:
                 break
             if self.workflow_override is not None:
-                engine = self._migrate(engine)
+                if workflow.patched(MIGRATION_PAR_DEFINITION):
+                    engine = await self._migrer(params, engine)
+                else:
+                    engine = self._migrate(engine)
                 continue
 
             transition = engine.select_transition(self.state, self.last_outcome)
             self.last_outcome = None
             if transition is None:
                 moved = await self._wait_external(engine, context)
+                if moved == _MIGRATION:
+                    continue
                 if moved is None:
                     break
                 self.state = moved
@@ -614,10 +629,52 @@ class WorkflowInterpreter:
 
     # ───────────────────────── utilitaires ─────────────────────────
 
+    async def _migrer(self, params: InterpreterInput, engine: WorkflowEngine) -> WorkflowEngine:
+        """`migrate` : la définition cible arrive dans le signal, lue et vérifiée par l'API.
+
+        L'épingle du ticket la suit (un `continue_as_new` la rechargera). Une migration devenue
+        impossible — l'état a bougé depuis la vérification de l'API — laisse le ticket en vie, sur
+        sa définition, et le consigne : `_migrate` le tuait en levant dans le workflow.
+        """
+        demande, self.migration, self.workflow_override = self.migration, {}, None
+        self.migrations += 1
+        info = workflow.info()
+        consigne = {
+            "project_id": params.project_id,
+            "work_item_id": params.work_item_id,
+            "cle": f"{info.workflow_id}/{info.run_id}/{self.migrations}",
+            "from_state": self.state,
+        }
+        try:
+            cible = Workflow.model_validate(demande.get("workflow") or {})
+            etat = engine.can_migrate_to(cible, self.state, dict(demande.get("state_mapping") or {}))
+        except ValueError as refus:  # une ValidationError de pydantic en est une
+            await executer_activite(
+                record_migration,
+                {**consigne, "refus": str(refus)[:2000]},
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=DEFAULT_RETRY,
+            )
+            return engine
+        await executer_activite(
+            record_migration,
+            {
+                **consigne,
+                "to_state": etat,
+                "workflow_def_id": demande.get("workflow_def_id"),
+                "workflow": f"{cible.metadata.name}@{cible.metadata.version}",
+            },
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=DEFAULT_RETRY,
+        )
+        self.state = etat
+        await self._mirror(params, f"migré vers {cible.metadata.name}@{cible.metadata.version}")
+        return WorkflowEngine(cible)
+
     def _migrate(self, engine: WorkflowEngine) -> WorkflowEngine:
-        """Migration vers une autre définition : l'état courant doit exister, ou être mappé."""
+        """Ancien chemin, gardé pour rejouer les historiques d'avant `MIGRATION_PAR_DEFINITION`."""
         override = self.workflow_override or {}
-        self.workflow_override = None
+        self.workflow_override, self.migration = None, {}
         definition = override.get("workflow") or override.get("json") or override
         target = Workflow.model_validate(definition)
         new_engine = WorkflowEngine(target)
@@ -625,9 +682,23 @@ class WorkflowInterpreter:
         return new_engine
 
     async def _wait_external(self, engine: WorkflowEngine, context: dict[str, Any]) -> str | None:
-        """État d'attente sans transition sortante : c'est le board humain qui décide."""
+        """État d'attente sans transition sortante : c'est le board humain qui décide.
+
+        Une migration demandée la réveille aussi (`_MIGRATION`) : un ticket garé n'a pas d'autre
+        point de décision, et attendrait sinon un événement qui ne viendra peut-être jamais. Un
+        historique d'avant `MIGRATION_PAR_DEFINITION` ne se réveillait pas : il rejoue en attendant
+        l'événement suivant, comme alors.
+        """
         while not self.stopped:
-            await workflow.wait_condition(lambda: bool(self.inbox) or bool(self.decisions) or self.stopped)
+            await workflow.wait_condition(
+                lambda: bool(self.inbox) or bool(self.decisions) or self.stopped or bool(self.migration)
+            )
+            if self.migration and not (self.inbox or self.decisions or self.stopped):
+                if workflow.patched(MIGRATION_PAR_DEFINITION):
+                    return _MIGRATION
+                await workflow.wait_condition(
+                    lambda: bool(self.inbox) or bool(self.decisions) or self.stopped
+                )
             while self.inbox:
                 event = self.inbox.popleft()
                 if event.get("type") == "tracker.item.moved":

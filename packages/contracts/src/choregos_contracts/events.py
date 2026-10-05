@@ -79,6 +79,9 @@ class Control(Strict):
 
     action: Literal["pause", "resume", "stop", "migrate", "rerun_stage"]
     workflow_def_id: str | None = None
+    #: `migrate` : la définition cible, lue et vérifiée par l'API. L'interpréteur ne fait aucune
+    #: entrée/sortie : un identifiant seul ne lui disait rien, et il mourait en le validant (ADR 0031).
+    workflow: dict[str, Any] | None = None
     state_mapping: dict[str, str] = Field(default_factory=dict)
     run_id: str | None = None
     reason: str | None = None

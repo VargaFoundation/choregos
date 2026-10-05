@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Les activités propres à l'interpréteur : charger le contexte d'un ticket, consigner la
-mort d'un interpréteur, annoncer un ticket au train — et lire une erreur Temporal.
+mort d'un interpréteur ou une migration, annoncer un ticket au train — et lire une erreur Temporal.
 
 Elles vivaient dans le module du workflow, sous un `import activity` en fin de fichier ;
 un workflow n'a pas à porter ses activités.
@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from choregos_api.db.models import Event, WorkflowDef
 from choregos_api.services import persist_event, workflow_du_ticket, workflow_model
 from choregos_contracts import EventType
 from choregos_core import utcnow
+from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ActivityError, ApplicationError
 
@@ -74,6 +76,52 @@ async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
             **failure,
         )
         return failure
+
+
+@activity.defn(name="record_migration")
+async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
+    """Consigne une migration (`migrate`, ADR 0031) : acceptée, l'épingle du ticket suit la
+    définition cible — un `continue_as_new` la rechargera ; refusée, le ticket reste sur la sienne,
+    et l'événement le dit.
+
+    Rejouable sans double effet (ADR 0008) : la clé de la migration (`<workflow>/<run>/<n>`) est
+    dans l'événement, et une clé déjà consignée ne l'est pas deux fois.
+    """
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_id"])
+        item = await load_work_item(session, payload["work_item_id"])
+        cle = str(payload["cle"])
+        types = (str(EventType.WORKITEM_MIGRATED), str(EventType.WORKITEM_MIGRATION_REFUSED))
+        consignes = (
+            await session.execute(select(Event).where(Event.work_item_id == item.id, Event.type.in_(types)))
+        ).scalars()
+        if any((e.payload or {}).get("cle") == cle for e in consignes):
+            return {"recorded": False}
+        commun = {
+            "project_id": bundle.project.id,
+            "work_item_id": item.id,
+            "project_slug": bundle.slug,
+            "subject": item.tracker_key,
+            "cle": cle,
+            "from_state": payload.get("from_state"),
+        }
+        if payload.get("refus"):
+            await persist_event(
+                session, EventType.WORKITEM_MIGRATION_REFUSED, **commun, reason=str(payload["refus"])
+            )
+            return {"recorded": True, "pinned": False}
+        cible = await session.get(WorkflowDef, str(payload.get("workflow_def_id") or ""))
+        if cible is not None and cible.project_id == bundle.project.id:
+            item.workflow_def_id = cible.id
+        await persist_event(
+            session,
+            EventType.WORKITEM_MIGRATED,
+            **commun,
+            to_state=payload.get("to_state"),
+            workflow_def_id=cible.id if cible is not None else None,
+            workflow=payload.get("workflow"),
+        )
+        return {"recorded": True, "pinned": cible is not None}
 
 
 #: Ce que Temporal met à la place d'un message absent, littéralement

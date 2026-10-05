@@ -6,14 +6,14 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from choregos_contracts import Control, EventType, HumanDecision, HumanRequestKind
-from choregos_core import utcnow
+from choregos_core import WorkflowEngine, utcnow
 from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
 from ..audit import record
-from ..db.models import HumanRequest, Project, WorkItem
+from ..db.models import HumanRequest, Project, Run, WorkflowDef, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
-from ..errors import conflict, forbidden, not_found
+from ..errors import conflict, forbidden, not_found, unprocessable
 from ..greffons import DemandeDeGeste, controler
 from ..rbac import Permission
 from ..schemas import (
@@ -32,6 +32,7 @@ from ..services import (
     human_request_dto,
     persist_event,
     work_item_dto,
+    workflow_model,
 )
 from ..temporal import deliver_control, deliver_decision, get_temporal, interpreter_id
 
@@ -204,6 +205,39 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
     return human_request_dto(request_row)
 
 
+async def _cible_de_migration(
+    session: Any, item: WorkItem, project: Project, body: WorkItemAction
+) -> dict[str, Any]:
+    """La définition cible d'un `migrate`, lue et vérifiée ICI (ADR 0031).
+
+    L'interpréteur ne fait aucune entrée/sortie : il reçoit la définition elle-même, pas son
+    identifiant. L'état courant du ticket doit exister dans la cible, ou y être mappé — sinon 422,
+    et rien n'est transmis. Un ticket occupé (décision humaine attendue, run en cours) changerait
+    d'état avant d'avoir migré, et le mapping vérifié ici ne vaudrait plus : 409.
+    """
+    if not body.workflow_def_id:
+        raise unprocessable("migrate exige workflow_def_id : la version vers laquelle migrer le ticket")
+    ligne = await session.get(WorkflowDef, body.workflow_def_id)
+    if ligne is None or ligne.project_id != project.id:
+        raise not_found("Définition de workflow", body.workflow_def_id)
+    attend = select(HumanRequest.id).where(
+        HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None)
+    )
+    if (await session.execute(attend.limit(1))).first() is not None:
+        raise conflict("le ticket attend une décision humaine : décidez, ou arrêtez-le, avant de le migrer")
+    tourne = select(Run.id).where(Run.work_item_id == item.id, Run.status.in_(("queued", "running")))
+    if (await session.execute(tourne.limit(1))).first() is not None:
+        raise conflict(
+            "un run du ticket est en cours : mettez le ticket en pause, laissez le run finir, puis migrez"
+        )
+    cible = workflow_model(ligne)
+    try:
+        WorkflowEngine(cible).can_migrate_to(cible, item.state, body.state_mapping)
+    except ValueError as erreur:
+        raise unprocessable(str(erreur)) from erreur
+    return cible.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
 @router.post(
     "/work-items/{id}/actions", status_code=status.HTTP_202_ACCEPTED, operation_id="postWorkItemAction"
 )
@@ -225,9 +259,11 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
         await get_temporal().start_interpreter(workflow_id, payload)
         item.temporal_wf_id = workflow_id
     else:
+        cible = await _cible_de_migration(session, item, project, body) if body.action == "migrate" else None
         control = Control(
             action=body.action,
             workflow_def_id=body.workflow_def_id,
+            workflow=cible,
             state_mapping=body.state_mapping,
             run_id=body.run_id,
             reason=body.reason,

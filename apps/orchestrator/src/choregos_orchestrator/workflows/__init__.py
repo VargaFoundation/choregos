@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from ..activities.interpretation import load_context, record_workflow_failure, signal_train
+from ..activities.interpretation import load_context, record_migration, record_workflow_failure, signal_train
 from .evals import EvalMatrix
 from .findings import FindingsTriage
 from .interpreter import WorkflowInterpreter
@@ -22,7 +22,7 @@ ALL_WORKFLOWS = [
     TrackerReconciliation,
 ]
 
-WORKFLOW_ACTIVITIES = [load_context, record_workflow_failure, signal_train]
+WORKFLOW_ACTIVITIES = [load_context, record_workflow_failure, record_migration, signal_train]
 
 __all__ = [
     "ALL_WORKFLOWS",
