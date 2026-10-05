@@ -1123,6 +1123,14 @@ export interface Operations {
   getRunDiff: { method: "GET"; path: "/runs/{id}/diff"; body: never; response: DiffSummary };
   getRunEvents: { method: "GET"; path: "/runs/{id}/events"; body: never; response: Array<RunEvent> };
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
+  getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: Array<{
+  slug: string;
+  version: number;
+  digest: string;
+  files: {
+    [key: string]: string;
+  };
+}> };
   getRunTicket: { method: "GET"; path: "/internal/runs/{id}/ticket"; body: never; response: RunTicket };
   getRunTools: { method: "GET"; path: "/internal/runs/{id}/tools"; body: never; response: {
   tools?: Array<{
