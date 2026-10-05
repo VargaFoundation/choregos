@@ -166,6 +166,11 @@ class EventType(StrEnum):
     #: bougera plus tant qu'on ne le redémarre pas. Vu sur le banc du 2026-09-24, où deux
     #: tickets RH sont restés « en attente » sans qu'aucun écran ne dise qu'ils étaient morts.
     WORKITEM_WORKFLOW_FAILED = "choregos.workitem.workflow_failed"
+    #: Le ticket a changé de définition (`migrate`) : l'épingle suit, l'état est remappé.
+    WORKITEM_MIGRATED = "choregos.workitem.migrated"
+    #: Une migration impossible (état absent de la cible, sans mapping) : le ticket reste en vie,
+    #: sur sa définition — c'est l'événement qui le dit.
+    WORKITEM_MIGRATION_REFUSED = "choregos.workitem.migration_refused"
     RUN_QUEUED = "choregos.run.queued"
     RUN_STARTED = "choregos.run.started"
     RUN_PROGRESS = "choregos.run.progress"

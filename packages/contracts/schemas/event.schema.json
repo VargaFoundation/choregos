@@ -15,6 +15,8 @@
       "enum": [
         "choregos.workitem.created", "choregos.workitem.state_changed", "choregos.workitem.closed",
         "choregos.workitem.human_requested", "choregos.workitem.human_decided",
+        "choregos.workitem.workflow_failed", "choregos.workitem.migrated",
+        "choregos.workitem.migration_refused",
         "choregos.run.queued", "choregos.run.started", "choregos.run.progress", "choregos.run.finished",
         "choregos.finding.reported", "choregos.finding.created", "choregos.finding.duplicate",
         "choregos.finding.dismissed",
@@ -24,7 +26,7 @@
         "choregos.cost.recorded", "choregos.cost.alert",
         "choregos.project.provisioning.step", "choregos.project.provisioning.completed",
         "choregos.project.provisioning.failed",
-        "choregos.security.injection_suspected"
+        "choregos.security.injection_suspected", "choregos.tool.called"
       ]
     },
     "subject": { "type": ["string", "null"] },

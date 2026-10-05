@@ -160,6 +160,18 @@ def test_le_schema_et_le_modele_declarent_les_memes_champs(schema_name: str, mod
     assert not ecarts, "\n".join(ecarts)
 
 
+def test_le_schema_des_evenements_connait_chaque_type_emis() -> None:
+    """`EventType` est ce que la plateforme ÉMET ; le schéma, ce qu'un consommateur accepte.
+
+    Ils avaient divergé sans que rien ne rougisse : `workflow_failed` et `tool.called` étaient
+    émis, et un consommateur validant contre le schéma les rejetait.
+    """
+    from choregos_contracts.enums import EventType
+
+    declares = set(contracts.load_schema("event.schema.json")["properties"]["type"]["enum"])
+    assert {t.value for t in EventType} == declares
+
+
 def test_openapi_is_coherent() -> None:
     spec = contracts.load_openapi()
     assert spec["openapi"].startswith("3.1")
