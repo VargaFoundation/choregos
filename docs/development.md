@@ -22,7 +22,7 @@ costs per stage and the finding turned into a linked ticket.
 ## Local services
 
 ```bash
-make compose-up                          # Postgres, Temporal, LiteLLM, Keycloak, MinIO
+make compose-up                          # Postgres, Temporal, LiteLLM, Keycloak, RustFS (S3)
 CHOREGOS_FAKES=1 make api                # API on :8000
 CHOREGOS_FAKES=1 make worker             # Temporal workers
 make dev-seed                            # organisation, project, 10 tickets, one batch
