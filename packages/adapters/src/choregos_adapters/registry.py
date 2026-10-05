@@ -43,6 +43,8 @@ class OperationSpec:
     name: str
     access: str = "read"
     description: str = ""
+    #: ce que l'opération attend : le courtier l'annonce à l'agent et le vérifie avant l'appel
+    input_schema: dict[str, Any] | None = None
 
     @property
     def default_policy(self) -> str:

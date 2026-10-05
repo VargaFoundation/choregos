@@ -99,6 +99,16 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
+**A directory: `entra`** (Microsoft Entra ID through Graph, kind `identity`) is declared like any
+connector of the organisation — tenant, application, the **administrative unit** the platform may
+touch, and the application secret by reference. Its six operations come with their input schema:
+`get_user` (a read, `allowed`), `create_user`, `add_to_group`, `remove_from_group`,
+`disable_user`, `revoke_sessions` (writes, `approval`). Each is **idempotent**, because a governed
+action replays: an account is looked up by UPN before it is created, "already a member" is a
+success, removing a missing member too. An account the platform creates enters the administrative
+unit; a gesture on an account outside it is refused, named, before anything is written. Graph's
+`Retry-After` is honoured. With `CHOREGOS_FAKES=1`, a scriptable Graph answers instead.
+
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still

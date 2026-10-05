@@ -142,6 +142,7 @@ async def create_org_connector(
                 access=operation.access,
                 policy=operation.default_policy,
                 groups=[],
+                input_schema=operation.input_schema,
                 description=operation.description or None,
             )
         )

@@ -122,6 +122,8 @@ def _objet(proprietes: dict[str, Any], requis: tuple[str, ...] = ()) -> dict[str
 _TEXTE: dict[str, Any] = {"type": "string"}
 _ENTIER: dict[str, Any] = {"type": "integer"}
 
+from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA  # noqa: E402 - après le registre
+
 #: Ce que chaque type livré déclare (ADR 0034) : son nom, ses capacités, le schéma de sa
 #: configuration — celui dont la console tire le formulaire — et ses champs SECRETS, qui ne
 #: s'écrivent qu'en référence. Ces schémas vivaient dans le routeur de l'API, en double du
@@ -269,6 +271,28 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("master_key",),
     ),
+    ("identity", "entra"): ConnectorTypeSpec(
+        "Microsoft Entra ID (Graph)",
+        ("identity",),
+        _objet(
+            {
+                "tenant_id": _TEXTE,
+                "client_id": _TEXTE,
+                "administrative_unit_id": {
+                    "type": "string",
+                    "description": "every account the platform creates enters it; any other is refused",
+                },
+                "graph_url": {"type": "string", "default": "https://graph.microsoft.com/v1.0"},
+                "login_url": {"type": "string", "default": "https://login.microsoftonline.com"},
+            },
+            ("tenant_id", "client_id"),
+        ),
+        ("client_secret",),
+        operations=tuple(
+            OperationSpec(nom, acces, description, schema)
+            for nom, acces, description, schema in _OPERATIONS_ENTRA
+        ),
+    ),
     ("mcp", "mcp"): ConnectorTypeSpec(
         "MCP server (Streamable HTTP)",
         ("mcp",),
@@ -306,6 +330,26 @@ def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
     )
 
 
+#: Le Graph des faux : un seul, que les tests et la démo scriptent.
+FAUX_ENTRA: Any = None
+
+
+def _annuaire_du_faux_entra(cfg: dict[str, Any]) -> Any:
+    from .fakes.entra import FakeEntra
+    from .identity import EntraIdentity
+
+    global FAUX_ENTRA  # noqa: PLW0603 - un faux partagé, comme les autres faux de la plateforme
+    if FAUX_ENTRA is None:
+        FAUX_ENTRA = FakeEntra()
+    return EntraIdentity(
+        tenant_id=cfg.get("tenant_id", "acme"),
+        client_id=cfg.get("client_id", "choregos"),
+        client_secret=cfg.get("client_secret", "faux"),
+        administrative_unit_id=cfg.get("administrative_unit_id", FAUX_ENTRA.unite),
+        transport=FAUX_ENTRA.transport(),
+    )
+
+
 def _register_builtins() -> None:
     """Enregistre les implémentations livrées (import paresseux pour éviter les cycles)."""
     from .fakes import (
@@ -328,6 +372,7 @@ def _register_builtins() -> None:
     register("gateway", "fake")(lambda cfg: FakeGateway())
     register("notify", "fake")(lambda cfg: FakeNotifier())
     register("mcp", "fake")(_client_du_faux_mcp)
+    register("identity", "fake")(_annuaire_du_faux_entra)
 
     # ───────────────── implémentations réelles (jour 1) ─────────────────
     from .cd.argocd import ArgoCdAdapter
@@ -468,6 +513,18 @@ def _register_builtins() -> None:
             team_id=cfg.get("team_id"),
             internal_prices=cfg.get("internal_prices", {}),
             enterprise_tags=cfg.get("enterprise_tags", False),
+        )
+    )
+    from .identity import EntraIdentity
+
+    register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(
+        lambda cfg: EntraIdentity(
+            tenant_id=cfg["tenant_id"],
+            client_id=cfg["client_id"],
+            client_secret=cfg.get("client_secret", ""),
+            administrative_unit_id=cfg.get("administrative_unit_id"),
+            graph_url=cfg.get("graph_url", "https://graph.microsoft.com/v1.0"),
+            login_url=cfg.get("login_url", "https://login.microsoftonline.com"),
         )
     )
     # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
