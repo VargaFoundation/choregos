@@ -213,6 +213,13 @@ async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> P
     if body.name is not None:
         ctx.project.name = body.name
     if body.config is not None:
+        avant = sorted({str(g) for g in ((ctx.project.config or {}).get("groups") or [])})
+        apres = sorted(set(body.config.groups))
+        if apres != avant:
+            # Le second verrou de l'ADR 0014 : les groupes décident de ce que le DÉPLOIEMENT
+            # ouvre au projet. Les laisser à l'équipe du projet ferait de sa propre liste le seul
+            # contrôle — un propriétaire de projet s'ouvrait ainsi les outils d'un autre métier.
+            ctx.require(Permission.TOOLS_GRANT)
         ctx.project.config = body.config.model_dump(mode="json", exclude_none=True)
     await record(
         session,

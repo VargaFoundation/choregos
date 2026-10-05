@@ -1175,3 +1175,19 @@ les 492 tests ne disaient pas :
     changement) ; trois tests Vitest de la carte et du badge ; le parcours Playwright voit le badge.
     **Ce que ça ne prouve pas** : aucun écran des fonctions de l'édition entreprise — c'est le flux
     S17 (sections d'administration déclarées par manifeste).
+
+36. **Les groupes d'un projet ne se changent que par l'administrateur de l'organisation**
+    (2026-10-05).
+
+    L'ADR 0014 tient l'accès aux outils du catalogue par deux verrous : le déploiement dit qui a le
+    droit (`groups` sur l'outil), le projet dit ce dont il se sert (`config.tools`). Mais
+    `config.groups` vivait dans la configuration du projet, que son propriétaire modifie : il
+    pouvait s'ajouter au groupe d'un autre métier et en obtenir les outils. Changer les groupes
+    exige désormais la permission `tools:grant`, que seul l'administrateur de l'organisation porte ;
+    changer `tools` à groupes égaux reste à l'équipe du projet.
+
+    **Ce que ça prouve** : `test_groupes_d_outils.py` — un propriétaire de projet qui s'ajoute un
+    groupe reçoit 403 (200 sans le changement) ; il garde la main sur ses outils ; l'administrateur
+    change les groupes. La matrice RBAC reste verte.
+    **Ce que ça ne prouve pas** : la politique par opération des connecteurs (flux S19), qui
+    remplacera ces deux listes.
