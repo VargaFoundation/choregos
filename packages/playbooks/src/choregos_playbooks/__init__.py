@@ -163,9 +163,9 @@ chaînes. Une liste vide vaut `[]`."""
 
 __all__ = [
     "INVARIANTS",
-    "cadrer",
     "KNOWN_ROLES",
     "OUTPUT_CONTRACT",
+    "cadrer",
     "extra_roles_dirs",
     "playbook_path",
     "playbook_source",
