@@ -19,11 +19,17 @@ describe("client API", () => {
     vi.unstubAllGlobals();
   });
 
-  it("construit un lien d'export CSV téléchargeable tel quel", async () => {
-    const { api } = await import("@/lib/api");
+  it("construit un lien d'export CSV téléchargeable tel quel, qualifié par l'organisation (#178)", async () => {
+    const { api, setCurrentOrg } = await import("@/lib/api");
     expect(api.costsCsvUrl("billing-api", "stage")).toBe(
-      "/api/v1/projects/billing-api/costs.csv?group_by=stage",
+      "/api/v1/projects/varga:billing-api/costs.csv?group_by=stage",
     );
+    setCurrentOrg("acme");
+    try {
+      expect(api.costsCsvUrl("billing-api")).toBe("/api/v1/projects/acme:billing-api/costs.csv?group_by=day");
+    } finally {
+      setCurrentOrg("");
+    }
   });
 
   it("sert les mesures DORA en mode maquette", async () => {

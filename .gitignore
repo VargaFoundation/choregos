@@ -10,8 +10,9 @@ __pycache__/
 htmlcov/
 .coverage
 coverage.xml
-# Node
-node_modules/
+# Node — sans barre finale : un `node_modules` en lien symbolique (worktree) est un fichier, que
+# `node_modules/` laissait passer dans un `git add -A`.
+node_modules
 .next/
 out/
 *.tsbuildinfo
