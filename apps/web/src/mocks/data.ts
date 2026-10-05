@@ -19,6 +19,8 @@ import type {
   TimelineEntry,
   TrainStatus,
   WorkflowDef,
+  WorkflowEditResult,
+  WorkflowOperation,
   WorkflowRouting,
   WorkflowSummary,
   WorkflowValidation,
@@ -598,6 +600,42 @@ export const sectionScim = {
     },
   ],
 };
+const ETAT_EN_LIGNE = /^( {2}([\w-]+): \{ display: )([^,}]+?)(\s*[,}])/gm;
+
+/**
+ * Une greffe simulée (S16-11) : la maquette sait changer le libellé d'un état, et laisse le reste du
+ * texte tel quel. Comme l'API, elle rend le texte, le diff, la carte relue et l'inverse du geste.
+ */
+function editionSimulee(yaml: string, operations: WorkflowOperation[]): WorkflowEditResult {
+  let texte = yaml;
+  const inverse: WorkflowOperation[] = [];
+  for (const op of operations) {
+    if (op.op !== "set_state" || op.field !== "display") continue;
+    texte = texte.replace(ETAT_EN_LIGNE, (ligne, debut: string, nom: string, ancien: string, fin: string) => {
+      if (nom !== op.name) return ligne;
+      inverse.unshift({ op: "set_state", name: nom, field: "display", value: ancien });
+      return `${debut}${String(op.value)}${fin}`;
+    });
+  }
+  const libelles = new Map([...texte.matchAll(ETAT_EN_LIGNE)].map((m) => [m[2], m[3]]));
+  const avant = yaml.split("\n");
+  const apres = texte.split("\n");
+  const changees = avant.flatMap((ligne, index) => (ligne === apres[index] ? [] : [`-${ligne}`, `+${apres[index]}`]));
+  const carte = workflowValidation.graph ?? { nodes: [], edges: [] };
+  return {
+    ...workflowValidation,
+    graph: { ...carte, nodes: carte.nodes.map((n) => ({ ...n, display: libelles.get(n.id) ?? n.display })) },
+    process: workflowValidation.process?.map((etape) => ({
+      ...etape,
+      from_display: libelles.get(etape.from) ?? etape.from_display,
+      to_display: libelles.get(etape.to) ?? etape.to_display,
+    })),
+    yaml: texte,
+    diff: changees.length ? `--- workflow.yaml\n+++ workflow.yaml\n${changees.join("\n")}\n` : "",
+    inverse,
+    notices: [],
+  };
+}
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 const proposition = {
@@ -635,6 +673,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       project: corps.project ?? null,
       token: "chg_demo_jeton_affiche_une_fois",
     } as T;
+  }
+  if (method === "POST" && path === "/workflows/edit") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { yaml: string; operations: WorkflowOperation[] };
+    return editionSimulee(corps.yaml, corps.operations) as T;
+  }
+  if (method === "PUT" && /^\/projects\/[^/]+\/workflows\/[^/]+$/.test(path)) {
+    // Publier crée la version suivante de celle qui a été lue (S16-02).
+    const corps = JSON.parse(String(init.body ?? "{}")) as { yaml: string; base_version?: number | null };
+    return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
   }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");

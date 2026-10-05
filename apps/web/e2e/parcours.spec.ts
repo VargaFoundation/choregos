@@ -136,6 +136,40 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await expect(page.getByTestId("workflow-graph").locator(".react-flow__edge")).toHaveCount(2);
 });
 
+test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/default-simple/map");
+  const carte = page.getByTestId("workflow-graph");
+  await carte.locator('.react-flow__node[data-id="inbox"]').click();
+  const panneau = page.getByTestId("panneau-etat");
+  await panneau.getByLabel("label").fill("Nouvelles demandes");
+  await panneau.getByRole("button", { name: "set label" }).click();
+
+  // Rien n'est publié : le brouillon dit le geste, son diff, et la carte se redessine depuis lui.
+  const brouillon = page.getByTestId("brouillon");
+  await expect(brouillon).toContainText("1 change not published yet");
+  await brouillon.getByText("last change").click();
+  await expect(page.getByTestId("dernier-diff")).toContainText("+  inbox: { display: Nouvelles demandes, kind: wait }");
+  await expect(carte.locator('.react-flow__node[data-id="inbox"]')).toContainText("Nouvelles demandes");
+
+  // La vue processus lit le même brouillon ; publier crée la version suivante de celle qui a été lue.
+  await page.getByRole("link", { name: "process" }).click();
+  await expect(page.getByTestId("process-step-t-refine")).toContainText("Nouvelles demandes");
+  await brouillon.getByRole("button", { name: "publish v2" }).click();
+  await expect(brouillon.getByRole("status")).toHaveText("default-simple v2 published");
+});
+
+test("workflows : la vue processus ouvre le panneau d'une étape, son délai prérempli", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/default-simple");
+  await page.getByRole("button", { name: "edit t-refine" }).click();
+  const panneau = page.getByTestId("panneau-transition");
+  await expect(panneau).toBeVisible();
+  // Le délai lu est prérempli : t-implement en a un, t-refine non.
+  await expect(panneau.getByLabel("at most (hours, empty: no limit)")).toHaveValue("");
+  await page.getByRole("button", { name: "close" }).click();
+  await page.getByRole("button", { name: "edit t-implement" }).click();
+  await expect(page.getByTestId("panneau-transition").getByLabel("at most (hours, empty: no limit)")).toHaveValue("72");
+});
+
 test("l'ancienne page du workflow mène à la liste", async ({ page }) => {
   await page.goto("/p/billing-api/workflow");
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows$/);

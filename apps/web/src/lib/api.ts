@@ -45,6 +45,8 @@ import type {
   Run,
   TrainStatus,
   WorkflowDef,
+  WorkflowEditResult,
+  WorkflowOperation,
   WorkflowRouting,
   WorkflowSummary,
   WorkflowTemplate,
@@ -266,6 +268,9 @@ export const api = {
     ),
   workflowRouting: (id: string) => request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
+  /** Des opérations typées, greffées dans le texte ; rien n'est enregistré (S16-11). */
+  editWorkflow: (yaml: string, operations: WorkflowOperation[]) =>
+    request<WorkflowEditResult>("/workflows/edit", { method: "POST", body: JSON.stringify({ yaml, operations }) }),
   validateWorkflow: (yaml: string) =>
     request<WorkflowValidation>("/workflows/validate", { method: "POST", body: JSON.stringify({ yaml }) }),
   policy: (id: string) => request<PolicyDef>(`/projects/${qualify(id)}/policy`),

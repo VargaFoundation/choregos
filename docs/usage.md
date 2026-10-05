@@ -104,11 +104,13 @@ The validator refuses more than syntax: an unreachable state, a retry that can l
 an unknown gate, or **a gate that would have nothing to check** — `outputs_present` on a
 transition that declares no `outputs:`. If you mean it, say so: `params: { allow_empty: true }`.
 
-The web editor (`/p/<slug>/workflow`) validates as you type and draws the workflow as a map,
-one lane per kind of actor. The map is keyboard-navigable: Tab reaches the states in reading
-order, ← and → follow transitions, ↑ and ↓ move between states, Home and End jump to the
-ends. The state under the cursor is described below the map, with its outgoing transitions,
-actors and gates — that sentence is what a screen reader announces.
+The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
+the process (each transition in plain words), the map (one lane per kind of actor), the YAML
+editor (it validates as you type) and the version history. The map is keyboard-navigable: Tab
+reaches the states in reading order, ← and → follow transitions, ↑ and ↓ move between states,
+Home and End jump to the ends, Enter opens the state for editing. The state under the cursor is
+described below the map, with its outgoing transitions, actors and gates — that sentence is what
+a screen reader announces.
 
 ### Several workflows in one project
 
@@ -183,6 +185,14 @@ The answer carries the edited `yaml`, its unified `diff`, the validation and the
 with `PUT /projects/{id}/workflows/{name}` and the `base_version` it read. A state or an actor
 still named elsewhere cannot be removed (`422`); renaming a state whose name carries an effect
 (`pr_*`, `merged*`, `deployed_prod*`) is allowed, and said in `notices`.
+
+In the console, a click on a state or a transition of the map — or **edit** on a step of the
+process view — opens its panel. A state has its label, its name, a new transition (to a state
+that exists, or to a new one) and its removal; a transition has who moves it, its guarantees, its
+time limit and its removal. Each change is one operation. The map and the process view redraw
+from the same draft, which shows its last diff and undoes change by change (undo replays the
+inverse). Nothing is saved before **publish**, which sends the text with the version that was
+read: if someone published meanwhile, the console says so (`409`) instead of overwriting.
 
 ### Workflows outside software
 

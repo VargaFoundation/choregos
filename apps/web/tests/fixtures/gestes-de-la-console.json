@@ -1,0 +1,203 @@
+{
+  "_": "Les gestes de la console (S16-12) et l'opération que chacun envoie à POST /workflows/edit. La console vérifie qu'elle les émet (tests/workflow-edition.test.tsx) ; le cœur, qu'il les greffe dans ce workflow (packages/core/tests/test_edition.py). Un champ renommé d'un côté fait rougir l'autre.",
+  "workflow": "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: default-simple, version: 1 }\nactors:\n  refiner: { type: agent, role: refine, model: \"profile:standard\" }\n  owner: { type: human, group: product-owners, sla_hours: 24 }\n  dev: { type: agent, role: implement, model: \"profile:by_size\" }\nstates:\n  inbox: { display: À trier, kind: wait }\n  ready: { display: Prêt }\n  archive: { display: Archivé }\n  done: { display: Fini, terminal: true }\ntransitions:\n  - { id: t-refine, from: inbox, to: ready, by: refiner }\n  - { id: t-implement, from: ready, to: done, by: dev, gates: [scope_respected], timeout_hours: 72 }\n",
+  "gestes": [
+    {
+      "geste": "libelle",
+      "args": [
+        "inbox",
+        "Nouvelles demandes"
+      ],
+      "operation": {
+        "op": "set_state",
+        "name": "inbox",
+        "field": "display",
+        "value": "Nouvelles demandes"
+      }
+    },
+    {
+      "geste": "genre",
+      "args": [
+        "ready",
+        "wait"
+      ],
+      "operation": {
+        "op": "set_state",
+        "name": "ready",
+        "field": "kind",
+        "value": "wait"
+      }
+    },
+    {
+      "geste": "renommer",
+      "args": [
+        "ready",
+        "pret"
+      ],
+      "operation": {
+        "op": "rename_state",
+        "from": "ready",
+        "to": "pret"
+      }
+    },
+    {
+      "geste": "retirerLEtat",
+      "args": [
+        "archive"
+      ],
+      "operation": {
+        "op": "remove_state",
+        "name": "archive"
+      }
+    },
+    {
+      "geste": "ajouterUnEtat",
+      "args": [
+        "revue",
+        "En revue"
+      ],
+      "operation": {
+        "op": "add_state",
+        "name": "revue",
+        "spec": {
+          "display": "En revue"
+        }
+      }
+    },
+    {
+      "geste": "ajouterUnEtat",
+      "args": [
+        "revue",
+        "En revue",
+        "wait"
+      ],
+      "operation": {
+        "op": "add_state",
+        "name": "revue",
+        "spec": {
+          "display": "En revue",
+          "kind": "wait"
+        }
+      }
+    },
+    {
+      "geste": "ajouterUneTransition",
+      "args": [
+        "ready",
+        "archive",
+        "owner"
+      ],
+      "operation": {
+        "op": "add_transition",
+        "transition": {
+          "from": "ready",
+          "to": "archive",
+          "by": "owner"
+        }
+      }
+    },
+    {
+      "geste": "ajouterUneTransition",
+      "args": [
+        "ready",
+        "archive",
+        "owner",
+        "t-archiver"
+      ],
+      "operation": {
+        "op": "add_transition",
+        "transition": {
+          "id": "t-archiver",
+          "from": "ready",
+          "to": "archive",
+          "by": "owner"
+        }
+      }
+    },
+    {
+      "geste": "retirerLaTransition",
+      "args": [
+        "t-refine"
+      ],
+      "operation": {
+        "op": "remove_transition",
+        "id": "t-refine"
+      }
+    },
+    {
+      "geste": "acteur",
+      "args": [
+        "t-implement",
+        "owner"
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "by",
+        "value": "owner"
+      }
+    },
+    {
+      "geste": "delai",
+      "args": [
+        "t-implement",
+        48
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "timeout_hours",
+        "value": 48
+      }
+    },
+    {
+      "geste": "delai",
+      "args": [
+        "t-implement",
+        null
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "timeout_hours",
+        "unset": true
+      }
+    },
+    {
+      "geste": "ajouterUneGarantie",
+      "args": [
+        "t-refine",
+        "outputs_present"
+      ],
+      "operation": {
+        "op": "add_gate",
+        "transition": "t-refine",
+        "gate": "outputs_present"
+      }
+    },
+    {
+      "geste": "ajouterUneGarantie",
+      "args": [
+        "t-implement",
+        "ci_green"
+      ],
+      "operation": {
+        "op": "add_gate",
+        "transition": "t-implement",
+        "gate": "ci_green"
+      }
+    },
+    {
+      "geste": "retirerUneGarantie",
+      "args": [
+        "t-implement",
+        "scope_respected"
+      ],
+      "operation": {
+        "op": "remove_gate",
+        "transition": "t-implement",
+        "name": "scope_respected"
+      }
+    }
+  ]
+}
