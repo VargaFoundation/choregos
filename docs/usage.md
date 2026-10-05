@@ -253,6 +253,29 @@ gates:
 Agents also get `validate_result`, which checks their `.choregos/result.json` against the
 contract *before* they finish — the same validator the runner applies afterwards.
 
+## 3 ter. Register your agents
+
+An agent is an object of the organisation ([ADR 0033](adr/0033-registre-d-agents-et-bibliotheque-de-skills.md)):
+`internal` when the platform runs it, `external` when it is a client of the MCP door. What it *is*
+— instructions, model, limits, budget, skills, MCP servers and the tools it may call — lives in
+**versions that never change**: a change publishes the next one.
+
+```bash
+curl -X POST $API/orgs/acme/agents -d '{"slug": "onboarding-coordinator",
+  "display_name": "Onboarding coordinator",
+  "spec": {"instructions": "Prepare the access plan of a newcomer…",
+           "budget": {"run_usd": 2, "daily_usd": 20},
+           "mcp_servers": [{"connector": "entra", "tools": ["entra_read_*"]}]}}'
+curl -X POST $API/orgs/acme/agents/onboarding-coordinator/versions -d '{...}'   # v2; v1 is kept as is
+curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
+  -d '{"version": 2, "overrides": {"budget": {"run_usd": 1}}}'
+```
+
+A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
+an override that widens is refused (`422`). Creating, publishing and revoking need
+`agent:manage` (organisation administrators); a revocation is final. Agents are under the same
+row-level security as everything else: an agent of another organisation does not exist for you.
+
 ## 4. Write the policy
 
 ```yaml

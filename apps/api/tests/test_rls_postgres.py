@@ -513,3 +513,33 @@ async def test_un_utilisateur_sans_appartenance_se_lit_lui_meme(
         cree = await client.post("/api/v1/me/tokens", json={"name": "cli"})
         assert cree.status_code == 201, cree.text
         assert [t["name"] for t in (await client.get("/api/v1/me/tokens")).json()] == ["cli"]
+
+
+async def test_un_agent_et_ses_versions_ne_sortent_pas_de_leur_organisation(
+    deux_organisations: dict[str, str],
+) -> None:
+    """Le registre d'agents (ADR 0033) : un agent de `b` n'existe pas pour une session bornée à `a`,
+    ni ses versions, ni son épingle sur un projet."""
+    from choregos_api.db.models import Agent, AgentVersion, Organization, ProjectAgent
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        for slug in ("a", "b"):
+            org = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one()
+            agent = Agent(
+                org_id=org.id, slug=f"agent-{slug}", kind="internal", display_name=slug, status="active"
+            )
+            session.add(agent)
+            await session.flush()
+            session.add(
+                AgentVersion(agent_id=agent.id, org_id=org.id, version=1, spec={}, checksum="sha256:x")
+            )
+            session.add(
+                ProjectAgent(project_id=deux_organisations[slug], org_id=org.id, agent_id=agent.id, version=1)
+            )
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(Agent.slug))).scalars().all() == ["agent-a"]
+        assert len((await session.execute(select(AgentVersion))).scalars().all()) == 1
+        assert len((await session.execute(select(ProjectAgent))).scalars().all()) == 1
+    async with session_scope() as session:
+        assert (await session.execute(select(Agent))).scalars().all() == [], "sans portée, rien"

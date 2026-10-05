@@ -28,6 +28,8 @@ tags:
   - { name: costs }
   - { name: templates }
   - { name: admin }
+  - { name: agents }
+  - { name: ui }
   - { name: webhooks }
   - { name: internal }
 paths:
@@ -809,6 +811,98 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listAgents
+      description: Le registre d'agents de l'organisation (ADR 0033).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
+    post:
+      tags: [agents]
+      operationId: createAgent
+      description: Crée un agent et sa version 1 ; `agent:manage` (org_admin).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentCreate" } } }
+      responses:
+        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgent
+      responses:
+        "200": { description: L'agent et ses versions, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAgent
+      description: Nom, description, expiration, état ; `revoked` est définitif.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentPatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/versions:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: publishAgentVersion
+      description: Publie la version suivante ; aucune n'est réécrite.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentSpec" } } }
+      responses:
+        "201": { description: Publiée, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/versions/{version}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [agents]
+      operationId: getAgentVersion
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/agents:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [agents]
+      operationId: listProjectAgents
+      responses:
+        "200": { description: Les versions épinglées, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectAgent" } } } } }
+  /projects/{id}/agents/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [agents]
+      operationId: pinProjectAgent
+      description: Épingle une version ; une surcharge qui élargit la version reçoit 422.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgent" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: unpinProjectAgent
+      responses:
+        "204": { description: Désépinglé }
+        "404": { $ref: "#/components/responses/NotFound" }
   /audit:
     get:
       tags: [admin]
@@ -1392,6 +1486,88 @@ components:
             diff: { type: string, description: diff unifié du texte d'origine au texte édité }
             inverse: { type: array, items: { $ref: "#/components/schemas/WorkflowOperation" } }
             notices: { type: array, items: { type: string }, description: "ce qu'une opération change au-delà du texte (un état à effet renommé…)" }
+    AgentLimits:
+      type: object
+      properties:
+        max_turns: { type: [integer, "null"], minimum: 1, maximum: 1000 }
+        max_minutes: { type: [integer, "null"], minimum: 1, maximum: 480 }
+    AgentBudget:
+      type: object
+      properties:
+        run_usd: { type: [number, "null"], exclusiveMinimum: 0 }
+        daily_usd: { type: [number, "null"], exclusiveMinimum: 0 }
+    AgentSpec:
+      type: object
+      description: Ce qu'une version d'agent est ; elle ne se modifie jamais (ADR 0033).
+      properties:
+        instructions: { type: string, maxLength: 65536 }
+        model: { type: [string, "null"] }
+        backend: { type: [string, "null"] }
+        limits: { $ref: "#/components/schemas/AgentLimits" }
+        budget: { $ref: "#/components/schemas/AgentBudget" }
+        skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
+        mcp_servers: { type: array, items: { type: object, required: [connector], properties: { connector: { type: string }, tools: { type: array, items: { type: string } } } } }
+    AgentCreate:
+      type: object
+      required: [slug, display_name]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        kind: { type: string, enum: [internal, external], default: internal }
+        display_name: { type: string }
+        description: { type: [string, "null"] }
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+    AgentPatch:
+      type: object
+      properties:
+        display_name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        status: { type: [string, "null"], enum: [active, suspended, revoked, null] }
+        expires_at: { type: [string, "null"], format: date-time }
+    AgentVersion:
+      type: object
+      required: [version, spec, checksum]
+      properties:
+        version: { type: integer }
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+        checksum: { type: string }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+    Agent:
+      type: object
+      required: [slug, kind, display_name, status, latest_version]
+      properties:
+        slug: { type: string }
+        kind: { type: string, enum: [internal, external] }
+        display_name: { type: string }
+        description: { type: [string, "null"] }
+        status: { type: string }
+        owner: { type: [string, "null"] }
+        expires_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        latest_version: { type: integer }
+        created_at: { type: [string, "null"], format: date-time }
+        versions: { type: [array, "null"], items: { $ref: "#/components/schemas/AgentVersion" } }
+    AgentOverrides:
+      type: object
+      description: Ce qu'un projet change d'une version — seulement resserrer.
+      properties:
+        limits: { $ref: "#/components/schemas/AgentLimits" }
+        budget: { $ref: "#/components/schemas/AgentBudget" }
+        tools: { type: [array, "null"], items: { type: string } }
+    ProjectAgentPut:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
+        overrides: { $ref: "#/components/schemas/AgentOverrides" }
+    ProjectAgent:
+      type: object
+      required: [agent, version, overrides, effective]
+      properties:
+        agent: { type: string }
+        version: { type: integer }
+        overrides: { $ref: "#/components/schemas/AgentOverrides" }
+        effective: { $ref: "#/components/schemas/AgentSpec" }
     WorkflowIssue:
       type: object
       required: [code, message]

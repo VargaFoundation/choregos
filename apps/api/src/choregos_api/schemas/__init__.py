@@ -6,6 +6,16 @@ Huit modules, un par domaine, réexportés : `choregos_api.schemas.X` reste l'ad
 
 from __future__ import annotations
 
+from .agents import (
+    AgentCreate,
+    AgentDto,
+    AgentOverrides,
+    AgentPatch,
+    AgentSpec,
+    AgentVersionDto,
+    ProjectAgentDto,
+    ProjectAgentPut,
+)
 from .base import (
     Dto,
     PageMeta,
@@ -129,6 +139,12 @@ __all__ = [
     "AbortRequest",
     "AgentBackendInfo",
     "AgentBackendUpdate",
+    "AgentCreate",
+    "AgentDto",
+    "AgentOverrides",
+    "AgentPatch",
+    "AgentSpec",
+    "AgentVersionDto",
     "ApiTokenCreate",
     "ApiTokenCreated",
     "ApiTokenDto",
@@ -181,6 +197,8 @@ __all__ = [
     "PageMeta",
     "PolicyDto",
     "PolicyPut",
+    "ProjectAgentDto",
+    "ProjectAgentPut",
     "ProjectCreate",
     "ProjectDto",
     "ProjectModelProfile",
