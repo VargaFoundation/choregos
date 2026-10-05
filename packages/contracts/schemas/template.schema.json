@@ -35,6 +35,11 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Fournisseurs de ressources Azure à enregistrer, ex. Microsoft.App/managedEnvironments"
+        },
+        "org_connectors": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "les connecteurs de l'ORGANISATION que les workflows appellent, par leur nom → leur capacité (S20-07), ex. annuaire: identity"
         }
       }
     },
@@ -73,7 +78,17 @@
         },
         "policy": { "type": "string" },
         "models": { "type": "string" },
-        "agent": { "type": "string" }
+        "agent": { "type": "string" },
+        "agents": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "les agents installés dans l'organisation à la naissance d'un projet, s'ils n'y sont pas : des fichiers du gabarit, au format de `POST /orgs/{org}/agents` (S20-07)"
+        },
+        "skills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "les skills installées de même : des dossiers du gabarit, chacun avec son SKILL.md (S20-07)"
+        }
       }
     },
     "inputs": {
@@ -95,7 +110,7 @@
     },
     "steps": {
       "type": "array",
-      "minItems": 1,
+      "description": "les étapes de provisioning ; aucune pour un projet sans dépôt (S20-07)",
       "items": {
         "oneOf": [
           { "type": "string" },

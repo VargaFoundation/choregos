@@ -1,0 +1,212 @@
+# Une arrivée, gouvernée de bout en bout — aucune ligne de logiciel.
+#
+# L'agent prépare le plan d'accès avec ses skills ; une personne des RH le valide. À J-10, la
+# plateforme crée le compte et l'ajoute à son groupe ; le groupe sensible attend une validation
+# ré-authentifiée. À J-7, le poste est commandé à l'agent du fournisseur (MCP), inscrit au parc et
+# expédié. Le badge est une TÂCHE : remis en main propre, son UID saisi et attesté. À J+1, la
+# plateforme vérifie que tout tient. Chaque écriture est une action gouvernée (ADR 0035) : proposée,
+# décidée — par la politique quand l'organisation l'a permise, par une personne sinon —, jouée par
+# Temporal, compensée si la suite échoue.
+#
+# Les connecteurs sont ceux de l'ORGANISATION, par leur nom : `annuaire` (identity), `parc` (mdm),
+# `transporteur` (shipping), `lecteurs` (access_control), `fournisseur` (mcp).
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: onboarding
+  version: 1
+  description: Une arrivée — plan d'accès, compte et groupes à J-10, poste à J-7, badge remis, contrôle à J+1.
+  inputs:
+    type: object
+    required: [nom, upn, date_arrivee, poste, groupe, groupe_sensible, adresse]
+    properties:
+      nom: { type: string, title: Nom complet }
+      upn: { type: string, title: Identifiant (UPN) }
+      date_arrivee: { type: string, format: date, title: Date d'arrivée }
+      poste: { type: string, title: Poste occupé }
+      groupe: { type: string, title: Groupe d'accès du poste }
+      groupe_sensible: { type: string, title: Groupe sensible (validation renforcée) }
+      adresse: { type: string, title: Adresse de livraison du poste }
+      modele: { type: string, title: Modèle de poste, default: portable-14 }
+      badge_uid: { type: string, title: UID du badge }
+initial: demande
+actors:
+  coordinateur: { type: agent, role: coordination, agent: coordinateur-onboarding, max_turns: 40, max_minutes: 20 }
+  rh: { type: human, group: rh, sla_hours: 24 }
+  accueil: { type: human, group: accueil, sla_hours: 8 }
+  plateforme: { type: system }
+states:
+  demande: { display: Demande reçue, kind: wait }
+  plan: { display: Plan d'accès proposé, kind: wait }
+  valide: { display: Plan validé, kind: wait }
+  comptes: { display: Compte et groupe créés, kind: wait }
+  sensible: { display: Groupe sensible décidé, kind: wait }
+  poste: { display: "Poste commandé, inscrit, expédié", kind: wait }
+  badge: { display: Badge remis, kind: wait }
+  actif: { display: Badge actif, kind: wait }
+  a_revoir: { display: À revoir, kind: wait }
+  pret: { display: Arrivée prête, terminal: true }
+transitions:
+  - id: t-plan
+    from: demande
+    to: plan
+    by: coordinateur
+    outputs: [plan_d_acces]
+    gates: [outputs_present]
+    on_fail: { to: demande, max_attempts: 2, escalate_to: a_revoir }
+
+  - id: t-validation
+    from: plan
+    to: valide
+    by: rh
+    on_reject: a_revoir
+
+  - id: t-comptes
+    from: valide
+    to: comptes
+    by: plateforme
+    action:
+      kind: arrivee.comptes
+      title: "Compte et groupe de {{ fields.nom }}"
+      justification: "arrivée le {{ fields.date_arrivee }}, poste {{ fields.poste }}"
+      params: { upn: "{{ fields.upn }}", nom: "{{ fields.nom }}", groupe: "{{ fields.groupe }}" }
+      effects:
+        - effect: connector.call
+          with:
+            connector: annuaire
+            operation: create_user
+            arguments: { upn: "{{ params.upn }}", display_name: "{{ params.nom }}" }
+          compensate:
+            effect: connector.call
+            with: { connector: annuaire, operation: disable_user, arguments: { upn: "{{ params.upn }}" } }
+        - effect: connector.call
+          with:
+            connector: annuaire
+            operation: add_to_group
+            arguments: { upn: "{{ params.upn }}", group_id: "{{ params.groupe }}" }
+          compensate:
+            effect: connector.call
+            with:
+              connector: annuaire
+              operation: remove_from_group
+              arguments: { upn: "{{ params.upn }}", group_id: "{{ params.groupe }}" }
+      not_before: fields.date_arrivee - 10d
+    on_fail: { to: valide, max_attempts: 2, escalate_to: a_revoir }
+
+  # Le groupe sensible : une validation ré-authentifiée, quoi que permette l'organisation. Rejetée,
+  # l'arrivée continue sans lui.
+  - id: t-sensible
+    from: comptes
+    to: sensible
+    by: plateforme
+    action:
+      kind: arrivee.groupe_sensible
+      title: "{{ fields.nom }} dans {{ fields.groupe_sensible }}"
+      params: { upn: "{{ fields.upn }}", groupe: "{{ fields.groupe_sensible }}" }
+      effects:
+        - effect: connector.call
+          with:
+            connector: annuaire
+            operation: add_to_group
+            arguments: { upn: "{{ params.upn }}", group_id: "{{ params.groupe }}" }
+      approval:
+        approvers: [{ role: project_owner, min: 1 }]
+        step_up_minutes: 5
+    on_fail: { to: comptes, max_attempts: 1, escalate_to: a_revoir }
+    on_reject: sensible
+
+  # Le poste : commandé à l'agent du fournisseur, inscrit au parc sous le numéro de série qu'il a
+  # attribué, expédié à l'adresse de l'arrivant. La preuve est le suivi du colis.
+  - id: t-poste
+    from: sensible
+    to: poste
+    by: plateforme
+    action:
+      kind: arrivee.poste
+      title: "Le poste de {{ fields.nom }} ({{ fields.modele | default('portable-14') }})"
+      params:
+        reference: "{{ work_item.key }}"
+        upn: "{{ fields.upn }}"
+        modele: "{{ fields.modele | default('portable-14') }}"
+        adresse: "{{ fields.adresse }}"
+      effects:
+        - effect: connector.call
+          with:
+            connector: fournisseur
+            operation: commander_poste
+            arguments: { reference: "{{ params.reference }}", modele: "{{ params.modele }}", upn: "{{ params.upn }}" }
+        - effect: connector.call
+          with:
+            connector: parc
+            operation: enroll_device
+            arguments: { serial: "{{ effects[0].serial }}", upn: "{{ params.upn }}" }
+          compensate:
+            effect: connector.call
+            with: { connector: parc, operation: wipe_device, arguments: { serial: "{{ result.serial }}" } }
+        - effect: connector.call
+          with:
+            connector: transporteur
+            operation: create_shipment
+            arguments:
+              reference: "{{ params.reference }}-poste"
+              address: "{{ params.adresse }}"
+              items: ["{{ effects[0].serial }}"]
+      not_before: fields.date_arrivee - 7d
+    on_fail: { to: sensible, max_attempts: 2, escalate_to: a_revoir }
+
+  - id: t-badge
+    from: poste
+    to: badge
+    by: accueil
+    task:
+      title: Remettre le badge
+      instructions: Remettre le badge en main propre à son porteur, puis le passer au lecteur pour lire son UID.
+      form:
+        type: object
+        required: [badge_uid]
+        properties:
+          badge_uid: { type: string, title: UID du badge, minLength: 8 }
+      attest: J'ai remis le badge en main propre à son porteur
+    on_reject: a_revoir
+
+  - id: t-activer
+    from: badge
+    to: actif
+    by: plateforme
+    action:
+      kind: arrivee.badge
+      title: "Activer le badge {{ fields.badge_uid }}"
+      params: { uid: "{{ fields.badge_uid }}", porteur: "{{ fields.upn }}" }
+      effects:
+        - effect: connector.call
+          with:
+            connector: lecteurs
+            operation: activate_badge
+            arguments: { uid: "{{ params.uid }}", holder: "{{ params.porteur }}" }
+          compensate:
+            effect: connector.call
+            with: { connector: lecteurs, operation: deactivate_badge, arguments: { uid: "{{ params.uid }}" } }
+    on_fail: { to: badge, max_attempts: 1, escalate_to: a_revoir }
+
+  # J+1 : la plateforme relit ce qu'elle a fait, et le vérifie. Des lectures, puis un contrôle.
+  - id: t-controle
+    from: actif
+    to: pret
+    by: plateforme
+    action:
+      kind: arrivee.controle
+      title: "Contrôle de l'arrivée de {{ fields.nom }}"
+      params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}", reference: "{{ work_item.key }}-poste" }
+      effects:
+        - effect: connector.call
+          with: { connector: annuaire, operation: get_user, arguments: { upn: "{{ params.upn }}" } }
+        - effect: connector.call
+          with: { connector: lecteurs, operation: badge_status, arguments: { uid: "{{ params.uid }}" } }
+        - effect: connector.call
+          with: { connector: transporteur, operation: shipment_status, arguments: { reference: "{{ params.reference }}" } }
+        - effect: verifier
+          with:
+            condition: "{{ effects[0].user is not none and effects[1].active and effects[2].state != 'unknown' }}"
+            motif: le compte, le badge actif et l'envoi du poste
+      not_before: fields.date_arrivee + 1d
+    on_fail: { to: actif, max_attempts: 2, escalate_to: a_revoir }

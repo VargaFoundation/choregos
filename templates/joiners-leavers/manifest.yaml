@@ -1,0 +1,36 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: joiners-leavers
+  version: 1.0.0
+  display: Arrivées et départs (RH)
+  description: >-
+    Deux workflows sans dépôt ni CI. L'arrivée : le plan d'accès préparé par un agent et validé par
+    les RH, le compte et son groupe à J-10, le groupe sensible sur validation ré-authentifiée, le
+    poste commandé à l'agent du fournisseur puis inscrit au parc et expédié à J-7, le badge remis en
+    main propre — une tâche, sa preuve —, le contrôle à J+1. Le départ : à J0 le compte désactivé,
+    ses sessions révoquées et le badge coupé ; le poste repris, reçu et effacé. Chaque écriture dans
+    l'annuaire, le parc, le transporteur ou les lecteurs de badges est une action gouvernée.
+requires:
+  # Le projet : ses tickets vivent dans Choregos.
+  connectors:
+    tracker: internal
+  # L'organisation : les connecteurs que les workflows appellent, par leur NOM, et leur capacité.
+  org_connectors:
+    annuaire: identity
+    parc: mdm
+    transporteur: shipping
+    lecteurs: access_control
+    fournisseur: mcp
+defaults:
+  workflows: [./workflows/onboarding.yaml, ./workflows/offboarding.yaml]
+  default_workflow: onboarding
+  routing:
+    - when: { labels_any: [offboarding, depart] }
+      workflow: offboarding
+  policy: preset:solo
+  # Installés dans l'organisation quand un projet naît du gabarit — jamais réécrits s'ils y sont.
+  skills: [./skills/procedure-onboarding, ./skills/profils-d-acces]
+  agents: [./agents/coordinateur-onboarding.yaml, ./agents/coordinateur-offboarding.yaml]
+inputs: []
+steps: []

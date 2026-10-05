@@ -79,16 +79,38 @@ def test_les_etapes_sont_implementees(path: Path) -> None:
         assert name in KNOWN_STEPS, f"étape inconnue dans {path.parent.name} : {name}"
 
 
-@pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
-def test_le_workflow_et_la_politique_par_defaut_existent(path: Path) -> None:
-    from choregos_core import load_preset
-    from choregos_core.dsl import load_template
+def _workflows(path: Path) -> list[Any]:
+    """Les workflows que livre le gabarit, lus et validés comme à la naissance d'un projet."""
+    from choregos_core.dsl import load_template, parse_workflow
 
     defaults = manifest(path)["defaults"]
-    workflow_ref = str(defaults["workflow"])
-    assert workflow_ref.startswith("template:")
-    name = workflow_ref.removeprefix("template:").split("@")[0]
-    assert load_template(name).metadata.name == name
+    refs = list(defaults.get("workflows") or [defaults["workflow"]])
+    livres = []
+    for ref in refs:
+        if str(ref).startswith("template:"):
+            livres.append(load_template(str(ref).removeprefix("template:").split("@")[0]))
+            continue
+        chemin = (path.parent / str(ref)).resolve()
+        assert chemin.is_relative_to(path.parent.resolve()), f"{ref} sort du dossier du gabarit"
+        workflow, rapport = parse_workflow(chemin.read_text(encoding="utf-8"), strict=False)
+        assert rapport.valid, f"{path.parent.name}/{ref} : {rapport.as_dict()['errors']}"
+        assert not rapport.warnings, f"{path.parent.name}/{ref} : {rapport.as_dict()['warnings']}"
+        livres.append(workflow)
+    return livres
+
+
+@pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
+def test_les_workflows_le_defaut_le_routage_et_la_politique_existent(path: Path) -> None:
+    from choregos_core import load_preset
+
+    defaults = manifest(path)["defaults"]
+    noms = [w.metadata.name for w in _workflows(path)]
+    assert len(set(noms)) == len(noms), f"deux workflows du même nom : {noms}"
+    assert defaults.get("default_workflow", noms[0]) in noms
+    for regle in defaults.get("routing") or []:
+        assert regle["workflow"] in noms, (
+            f"le routage vise `{regle['workflow']}`, que le gabarit ne livre pas"
+        )
 
     policy_ref = str(defaults["policy"])
     assert policy_ref.startswith("preset:")
@@ -98,16 +120,91 @@ def test_le_workflow_et_la_politique_par_defaut_existent(path: Path) -> None:
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_le_scaffold_existe_et_contient_ce_que_le_manifeste_annonce(path: Path) -> None:
     doc = manifest(path)
-    scaffold = (path.parent / str(doc.get("scaffold", "./scaffold")).lstrip("./")).resolve()
-    assert scaffold.is_dir(), f"dossier de scaffold absent : {scaffold}"
-
     annonces: list[str] = []
     for step in doc.get("steps", []):
         if isinstance(step, dict) and "repo.scaffold_pr" in step:
             annonces = list((step["repo.scaffold_pr"] or {}).get("files", []))
+    if not annonces and "scaffold" not in doc:
+        return  # un gabarit sans dépôt n'échafaude rien
+    scaffold = (path.parent / str(doc.get("scaffold", "./scaffold")).lstrip("./")).resolve()
+    assert scaffold.is_dir(), f"dossier de scaffold absent : {scaffold}"
     for fichier in annonces:
         candidats = [scaffold / fichier, scaffold / f"{fichier}.j2"]
         assert any(c.exists() for c in candidats), f"{fichier} annoncé mais absent du scaffold"
+
+
+@pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
+def test_les_actions_n_appellent_que_ce_que_le_gabarit_annonce(path: Path) -> None:
+    """Chaque `connector.call` nomme un connecteur que le manifeste annonce (`org_connectors`), une
+    opération que sa capacité déclare, avec les arguments que son schéma exige — et rien d'autre. Un
+    serveur `mcp` découvre ses outils : on n'en juge que le nom du connecteur. Un gabarit n'appelle
+    que des effets du cœur : ceux d'un greffon ne sont pas chez tous."""
+    from choregos_adapters import connector_types
+
+    annonces = dict(manifest(path)["requires"].get("org_connectors") or {})
+    operations = {
+        kind: {o.name: o for o in spec.operations} for kind, _, spec in connector_types() if spec.operations
+    }
+    for workflow in _workflows(path):
+        for transition in workflow.transitions:
+            action = transition.action
+            if action is None:
+                continue
+            for effet in action.effects:
+                specs = [effet.model_dump(by_alias=True), *([effet.compensate] if effet.compensate else [])]
+                for spec in specs:
+                    nom = str(spec["effect"])
+                    assert nom in {"connector.call", "verifier"}, (
+                        f"{transition.key} : effet `{nom}` hors du cœur"
+                    )
+                    if nom != "connector.call":
+                        continue
+                    appel = dict(spec.get("with") or {})
+                    connecteur = appel["connector"]
+                    ou = f"{workflow.metadata.name}/{transition.key} : {connecteur}"
+                    assert connecteur in annonces, f"{ou} n'est pas annoncé dans `requires.org_connectors`"
+                    capacite = annonces[connecteur]
+                    if capacite == "mcp":
+                        continue
+                    operation = operations.get(capacite, {}).get(appel["operation"])
+                    assert operation is not None, (
+                        f"{ou} : `{appel['operation']}` n'est pas une opération de `{capacite}`"
+                    )
+                    schema = operation.input_schema or {}
+                    arguments = set(dict(appel.get("arguments") or {}))
+                    manquants = set(schema.get("required", [])) - arguments
+                    assert not manquants, f"{ou}/{appel['operation']} : il manque {sorted(manquants)}"
+                    en_trop = arguments - set(schema.get("properties", {}))
+                    assert not en_trop, f"{ou}/{appel['operation']} : {sorted(en_trop)} hors du schéma"
+
+
+@pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
+def test_les_agents_et_les_skills_du_gabarit_sont_installables(path: Path) -> None:
+    from choregos_api.schemas.agents import AgentCreate
+    from choregos_api.services.agents import erreurs_d_une_version
+    from choregos_api.services.gabarits import livraison
+
+    livree = livraison(manifest(path), path.parent)
+    from choregos_api.services.skills import valider
+
+    skills = {valider(fichiers).name for fichiers in livree.skills}
+    agents = set()
+    for document in livree.agents:
+        agent = AgentCreate.model_validate(document)
+        erreurs_d_une_version(agent.spec)
+        agents.add(agent.slug)
+        orphelines = {s.slug for s in agent.spec.skills} - skills
+        assert not orphelines, (
+            f"{agent.slug} nomme des skills que le gabarit ne livre pas : {sorted(orphelines)}"
+        )
+    for workflow in _workflows(path):
+        for nom, acteur in workflow.actors.items():
+            reference = getattr(acteur, "agent", None)
+            if reference:
+                slug = reference.split("@")[0]
+                assert slug in agents, (
+                    f"{workflow.metadata.name}/{nom} nomme l'agent `{slug}`, que le gabarit ne livre pas"
+                )
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)

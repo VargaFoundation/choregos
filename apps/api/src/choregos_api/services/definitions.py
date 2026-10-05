@@ -186,7 +186,8 @@ async def active_policy(session: AsyncSession, project_id: str) -> PolicyDef | N
 
 async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[WorkflowDef, PolicyDef]:
     """Un projet neuf reçoit ce que livre son gabarit (ADR 0031) : ses workflows, le défaut, le routage
-    et la politique — sans gabarit, `default-simple` et le preset `solo` (D14).
+    et la politique — sans gabarit, `default-simple` et le preset `solo` (D14) ; ses skills et ses
+    agents entrent dans l'organisation quand ils n'y sont pas (S20-07).
 
     Rien n'est réécrit chez un projet qui a déjà un workflow actif ou une politique.
     """
@@ -200,6 +201,10 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
     if workflow is None:
         assert livree is not None
         workflow = await _publier_ce_que_livre_le_gabarit(session, project, livree)
+        if livree.agents or livree.skills:
+            from .installation import installer_ce_que_livre_le_gabarit
+
+            await installer_ce_que_livre_le_gabarit(session, project, livree, str(project.template_ref))
     if not project.default_workflow:
         project.default_workflow = workflow.name
     if policy is None:

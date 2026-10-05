@@ -72,9 +72,14 @@ it has a budget.
 | :-- | :-- |
 | `github-tekton-argo-k8s` | you have a cluster and run the agents there |
 | `github-aca` | you are on Azure and want no Kubernetes pool for agents: runs are Container Apps *jobs*, billed by the second |
+| `joiners-leavers` | HR, no repository: arrivals and departures, two workflows, two agents, two skills — every write into the directory, the device manager, the carrier or the badge readers is a governed action |
 | *none* | a project with no repository, or one whose connectors you attach yourself |
 
-`templates/<name>/manifest.yaml` lists a template's inputs, required connectors and steps.
+`templates/<name>/manifest.yaml` lists a template's inputs, required connectors and steps. A
+template can also ship **agents and skills** (`defaults.agents`, `defaults.skills`): they enter the
+organisation when a project is born from it, in version 1 — never rewritten when they are already
+there, so what the organisation changed since stays. And it names the organisation connectors its
+workflows call (`requires.org_connectors`: `annuaire: identity`…), for the administrator to declare.
 
 ### Create the project
 
