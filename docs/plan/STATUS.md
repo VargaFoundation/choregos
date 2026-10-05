@@ -150,8 +150,26 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S17-02 | S17 | ✅ | — | `/admin` en sous-pages — vue d'ensemble (session, jetons), membres (inviter, changer un rôle, retirer après confirmation ; `DELETE /orgs/{org}/members/{user_id}`, audité, le dernier administrateur ne se retire pas : 409), audit (filtres, pages, export CSV aux formules désarmées), plateforme, édition (en communautaire, ce que l'EE ajoute, sans faux écran) — et une page par section qu'un greffon déclare, `/admin/x/{section}` : formulaire tiré du JSON Schema (`components/schema-form.tsx`, fait maison), table et actions de ligne, action confirmée, secret montré une fois ; aucun code de greffon dans la console. vitest `admin.test.tsx` (formulaire typé, chemins, CSV), `test_retirer_un_membre.py` (4), e2e `parcours` (section SCIM, secret une fois, édition) et `accessibilite` (cinq pages de plus). Ne prouve pas une section de l'EE réelle (S17-04) |
 | S17-03 | S17 | ✅ | — | `image.registry` par composant (`choregos-api`, `choregos-orchestrator`), le job de migration suit l'API, et le digest global ne désigne pas une image d'un autre registre (#204). `tests/charts/test_image_par_composant.py` (3 tests). Ne prouve pas un déploiement réel de l'EE (S17-04) |
 | S17-04 | S17 | ⬜ | — | l'édition entreprise sur le cœur courant, ses sections, servie au dev par un projet Harbor privé |
+| S18-01 | S18 | ⬜ | — | le registre d'agents : versions immuables, épingle du projet qui ne fait que resserrer (ADR 0033) |
+| S18-02 | S18 | ⬜ | — | un acteur nomme un agent ; instructions en bac à sable, priment sur le playbook |
+| S18-03 | S18 | ⬜ | — | runs, coûts et taux de réussite par agent |
+| S18-04 | S18 | ⬜ | — | la bibliothèque de skills, aucune permission déclarée |
+| S18-05 | S18 | ⬜ | — | le runner pose les skills selon le backend, vérifiées par digest |
+| S18-06 | S18 | ⬜ | — | les agents externes : jeton MCP ou client OAuth, droits intersectés |
+| S18-07 | S18 | ⬜ | — | les pages Agents |
+| S19-01 | S19 | ⬜ | — | sortes de connecteurs ouvertes : capacités, types tirés du registre, formulaires générés, exigences du projet |
+| S19-02 | S19 | ⬜ | — | instances d'organisation et politique par opération |
+| S19-03 | S19 | ⬜ | — | le type « mcp » : initialize, tools/list, tools/call ; un outil découvert naît fermé |
+| S19-04 | S19 | ⬜ | — | les runs atteignent les serveurs MCP par la plateforme : le courtier |
+| S20-01 | S20 | ⬜ | — | les actions gouvernées dans le cœur, exécutées par Temporal : effet consigné par clé, compensation |
+| S20-02 | S20 | ⬜ | — | un outil « avec validation » devient une action ; la boîte des validations |
+| S20-03 | S20 | ⬜ | — | le type « entra » (Microsoft Graph) et son faux |
+| S20-04 | S20 | ⬜ | — | les faux du scénario RH : MDM, transporteur, badges, l'agent du fournisseur en serveur MCP |
+| S20-05 | S20 | ⬜ | — | une transition système déclenche une action, à date |
+| S20-06 | S20 | ⬜ | — | la tâche humaine : un formulaire, une preuve |
+| S20-07 | S20 | ⬜ | — | le gabarit joiners-leavers et le scénario RH de bout en bout |
 
-**Total** : 114 livrées, 11 partielles, 6 non commencées.
+**Total** : 114 livrées, 11 partielles, 24 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

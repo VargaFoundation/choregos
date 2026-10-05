@@ -1397,3 +1397,176 @@ stories:
     acceptance:
       - "GET /api/v1/edition rend enterprise sur le dev ; les sections apparaissent dans /admin"
       - "Une deuxième organisation se crée puis se suspend ; un jeton SCIM ne s'affiche qu'une fois"
+
+  # ───────────── S18 — Registre d'agents et bibliothèque de skills (ADR 0033, 2026-10-05) ─────────────
+  - id: S18-01
+    title: "Le registre d'agents de l'organisation : agents, versions immuables, épingle du projet qui ne fait que resserrer"
+    stream: S18
+    sprint: 9
+    priority: 1
+    size: L
+    depends_on: []
+    acceptance:
+      - "Un agent d'une autre organisation est invisible (PostgreSQL, RLS)"
+      - "Un PUT ne modifie jamais une version ; une surcharge qui élargit reçoit 422"
+  - id: S18-02
+    title: "Un acteur nomme un agent ; ses instructions priment sur le playbook, rendues dans un bac à sable"
+    stream: S18
+    sprint: 9
+    priority: 2
+    size: L
+    depends_on: [S18-01]
+    acceptance:
+      - "Un playbook de même nom perd ; le contrat de sortie est toujours là"
+      - "{{ ''.__class__.__mro__ }} est refusé ; les historiques archivés rejouent"
+  - id: S18-03
+    title: "Runs, coûts et taux de réussite par agent"
+    stream: S18
+    sprint: 9
+    priority: 3
+    size: M
+    depends_on: [S18-02]
+    acceptance:
+      - "Un run échoué fait baisser le taux ; un appel d'outil compte dans le coût"
+  - id: S18-04
+    title: "La bibliothèque de skills : versions immuables, import zip, aucune permission déclarée"
+    stream: S18
+    sprint: 9
+    priority: 4
+    size: M
+    depends_on: []
+    acceptance:
+      - "Zip-slip, liens symboliques, nom incohérent et allowed-tools sont refusés"
+  - id: S18-05
+    title: "Le runner pose les skills d'un agent là où son backend les lit, vérifiées par digest"
+    stream: S18
+    sprint: 9
+    priority: 5
+    size: L
+    depends_on: [S18-02, S18-04]
+    acceptance:
+      - "Chaque backend écrit au bon chemin ; un digest faux arrête le run ; le repli produit l'index"
+  - id: S18-06
+    title: "Les agents externes au registre : jeton MCP ou client OAuth, droits de l'agent ∩ droits de l'humain"
+    stream: S18
+    sprint: 9
+    priority: 6
+    size: M
+    depends_on: [S18-01]
+    acceptance:
+      - "Un agent révoqué reçoit 401 à l'appel suivant ; un humain sans droit donne un agent sans droit"
+  - id: S18-07
+    title: "Les pages Agents : registre, versions, runs et coûts, clients MCP connectés"
+    stream: S18
+    sprint: 9
+    priority: 7
+    size: M
+    depends_on: [S18-01, S18-03, S18-06]
+    acceptance:
+      - "Un agent du registre et un Claude Code connecté apparaissent ; parcours et axe"
+
+  # ───────────── S19 — Connecteurs par capacités et serveurs MCP (ADR 0034, 2026-10-05) ─────────────
+  - id: S19-01
+    title: "Sortes de connecteurs ouvertes : capacités, types tirés du registre, formulaires générés, exigences du projet"
+    stream: S19
+    sprint: 10
+    priority: 1
+    size: L
+    depends_on: []
+    acceptance:
+      - "Un projet sans dépôt ni train n'affiche ni scm, ni ci, ni cd ; jira apparaît disponible"
+      - "Un secret en clair reçoit 422 ; secret_ref est résolu"
+  - id: S19-02
+    title: "Instances d'organisation et politique par opération"
+    stream: S19
+    sprint: 10
+    priority: 2
+    size: M
+    depends_on: [S19-01]
+    acceptance:
+      - "Un projet ne passe pas approval en allowed"
+      - "Un project_owner qui écrit groups reçoit 403"
+  - id: S19-03
+    title: "Le type « mcp » : initialize, tools/list, tools/call ; un outil découvert naît fermé"
+    stream: S19
+    sprint: 10
+    priority: 3
+    size: L
+    depends_on: [S19-01]
+    acceptance:
+      - "Un outil nouveau reste fermé ; une dérive de schéma le referme ; le jeton de run ne sort jamais"
+  - id: S19-04
+    title: "Les runs atteignent les serveurs MCP par la plateforme : le courtier"
+    stream: S19
+    sprint: 10
+    priority: 4
+    size: L
+    depends_on: [S19-02, S19-03]
+    acceptance:
+      - "Un outil interdit répond 404 ; le plafond rend 429 ; la clé atteint le faux serveur, jamais le pod"
+
+  # ───────────── S20 — Actions gouvernées dans le cœur et scénario RH arrivées/départs (ADR 0035, 2026-10-05) ─────────────
+  - id: S20-01
+    title: "Les actions gouvernées dans le cœur, exécutées par Temporal : effet consigné par clé, compensation"
+    stream: S20
+    sprint: 11
+    priority: 1
+    size: L
+    depends_on: []
+    acceptance:
+      - "L'effet 2 échoue une fois : l'effet 1 n'est pas rejoué ; un worker tué reprend"
+      - "La réponse HTTP part avant tout effet ; historique rejoué"
+  - id: S20-02
+    title: "Un outil « avec validation » devient une action ; la boîte des validations"
+    stream: S20
+    sprint: 11
+    priority: 2
+    size: M
+    depends_on: [S20-01, S19-04]
+    acceptance:
+      - "Rien n'atteint le faux serveur avant la décision ; de deux approbations concurrentes, une seule s'exécute"
+  - id: S20-03
+    title: "Le type « entra » (Microsoft Graph) et son faux"
+    stream: S20
+    sprint: 11
+    priority: 3
+    size: M
+    depends_on: [S19-01]
+    acceptance:
+      - "Une double création donne un seul compte ; hors de l'unité administrative : refusé ; un 429 est respecté"
+  - id: S20-04
+    title: "Les faux du scénario RH : MDM, transporteur, badges, l'agent du fournisseur en serveur MCP"
+    stream: S20
+    sprint: 11
+    priority: 4
+    size: M
+    depends_on: [S19-03]
+    acceptance:
+      - "Suite de conformité commune : schémas, idempotence, aucun secret au journal"
+  - id: S20-05
+    title: "Une transition système déclenche une action, à date"
+    stream: S20
+    sprint: 11
+    priority: 5
+    size: L
+    depends_on: [S20-01]
+    acceptance:
+      - "J-10 respecté en temps accéléré ; modifier la date réarme le minuteur ; les anciens historiques rejouent"
+  - id: S20-06
+    title: "La tâche humaine : un formulaire, une preuve"
+    stream: S20
+    sprint: 11
+    priority: 6
+    size: M
+    depends_on: [S20-01]
+    acceptance:
+      - "Un champ manquant reçoit 422 ; l'UID du badge arrive dans les paramètres de l'action suivante"
+  - id: S20-07
+    title: "Le gabarit joiners-leavers et le scénario RH de bout en bout"
+    stream: S20
+    sprint: 11
+    priority: 7
+    size: L
+    depends_on: [S20-02, S20-03, S20-04, S20-05, S20-06]
+    acceptance:
+      - "Retirer n'importe quelle brique fait rougir l'e2e"
