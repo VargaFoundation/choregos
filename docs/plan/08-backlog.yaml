@@ -1356,3 +1356,44 @@ stories:
     depends_on: [S16-02]
     acceptance:
       - "La restauration crée la version suivante"
+
+  # ───────────── S17 — Administration par manifestes, édition entreprise sur le dev (ADR 0032, 2026-10-05) ─────────────
+  - id: S17-01
+    title: "La couture « sections d'administration » : manifeste validé au démarrage, GET /ui/admin-sections"
+    stream: S17
+    sprint: 8
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "Une section déclarée par un greffon de test apparaît ; filtrée par droit et par portée"
+      - "Un manifeste invalide, ou qui nomme un chemin qu'aucune route ne sert, arrête le démarrage"
+  - id: S17-02
+    title: "L'administration en sous-pages et un SchemaForm partagé ; les sections déclarées rendues"
+    stream: S17
+    sprint: 8
+    priority: 2
+    size: L
+    depends_on: [S17-01]
+    acceptance:
+      - "Une section se rend depuis une maquette : formulaire, table, action confirmée, secret montré une fois"
+      - "En communautaire, la liste honnête de ce que l'EE ajoute, sans faux écran ; axe"
+  - id: S17-03
+    title: "Chart : registre et étiquette d'image par composant"
+    stream: S17
+    sprint: 8
+    priority: 3
+    size: S
+    depends_on: []
+    acceptance:
+      - "Le rendu compose api et orchestrator depuis l'EE, et le reste depuis le cœur"
+  - id: S17-04
+    title: "L'édition entreprise sur le cœur courant, ses sections déclarées, servie au dev par un projet Harbor privé"
+    stream: S17
+    sprint: 8
+    priority: 4
+    size: L
+    depends_on: [S17-01, S17-03]
+    acceptance:
+      - "GET /api/v1/edition rend enterprise sur le dev ; les sections apparaissent dans /admin"
+      - "Une deuxième organisation se crée puis se suspend ; un jeton SCIM ne s'affiche qu'une fois"
