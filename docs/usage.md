@@ -271,6 +271,18 @@ curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
   -d '{"version": 2, "overrides": {"budget": {"run_usd": 1}}}'
 ```
 
+An agent carries **skills** — a folder with a `SKILL.md` whose header gives its `name` and
+`description` — from the organisation's library:
+
+```bash
+curl -X POST $API/orgs/acme/skills/import -H 'Content-Type: application/zip' --data-binary @onboarding.zip
+```
+
+A skill **declares no permission**: an `allowed-tools` field is refused, because what an agent may
+call is decided by its version and its project, never by a file it reads. An archive that leaves
+its folder (`../`), holds a symbolic link, more than 64 files or 512 KiB, or a file that is not
+UTF-8 text is refused. Versions never change; a skill says which agents carry it.
+
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). Creating, publishing and revoking need
 `agent:manage` (organisation administrators); a revocation is final. Agents are under the same

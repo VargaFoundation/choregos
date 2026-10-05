@@ -543,3 +543,24 @@ async def test_un_agent_et_ses_versions_ne_sortent_pas_de_leur_organisation(
         assert len((await session.execute(select(ProjectAgent))).scalars().all()) == 1
     async with session_scope() as session:
         assert (await session.execute(select(Agent))).scalars().all() == [], "sans portée, rien"
+
+
+async def test_une_skill_et_ses_versions_ne_sortent_pas_de_leur_organisation(
+    deux_organisations: dict[str, str],
+) -> None:
+    """La bibliothèque de skills (ADR 0033) : une skill de `b` n'existe pas pour `a`."""
+    from choregos_api.db.models import Organization, Skill, SkillVersion
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        for slug in ("a", "b"):
+            org = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one()
+            skill = Skill(org_id=org.id, slug=f"skill-{slug}", status="active")
+            session.add(skill)
+            await session.flush()
+            session.add(
+                SkillVersion(skill_id=skill.id, org_id=org.id, version=1, files={}, digest="sha256:x")
+            )
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(Skill.slug))).scalars().all() == ["skill-a"]
+        assert len((await session.execute(select(SkillVersion))).scalars().all()) == 1

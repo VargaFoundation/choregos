@@ -107,3 +107,28 @@ class ProjectAgentDto(Dto):
     overrides: AgentOverrides
     #: La version épinglée, surcharges appliquées : ce qui tournera.
     effective: AgentSpec
+
+
+class SkillFiles(Dto):
+    """Les fichiers d'une version de skill : chemin relatif → texte."""
+
+    files: dict[str, str]
+
+
+class SkillVersionDto(Dto):
+    version: int
+    digest: str
+    created_by: str | None = None
+    created_at: datetime | None = None
+    #: Rendus par la lecture d'UNE version ; la liste n'en porte pas.
+    files: dict[str, str] | None = None
+
+
+class SkillDto(Dto):
+    slug: str
+    description: str | None = None
+    status: str
+    latest_version: int
+    #: Les agents dont une version porte la skill : `agent@version`.
+    used_by: list[str] = Field(default_factory=list)
+    versions: list[SkillVersionDto] | None = None

@@ -38,6 +38,7 @@ from .routers import (
     models,
     projects,
     runs,
+    skills,
     templates,
     trains,
     ui,
@@ -261,6 +262,7 @@ def create_app() -> FastAPI:
         templates.router,
         admin.router,
         agents.router,
+        skills.router,
         webhooks.router,
         internal.router,
     )
