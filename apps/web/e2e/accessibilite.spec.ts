@@ -11,7 +11,12 @@ const PAGES = [
   "/p/billing-api",
   "/p/billing-api/board",
   "/p/billing-api/trains",
-  "/p/billing-api/workflow",
+  "/p/billing-api/workflows",
+  "/p/billing-api/workflows/new",
+  "/p/billing-api/workflows/default-simple",
+  "/p/billing-api/workflows/default-simple/map",
+  "/p/billing-api/workflows/default-simple/yaml",
+  "/p/billing-api/workflows/default-simple/history",
   "/login",
   "/admin",
   "/integrations",
@@ -36,9 +41,9 @@ for (const path of PAGES) {
  * les transitions, et l'état sous le curseur est décrit (aria-live) sous la carte.
  */
 test("graphe de workflow : parcours au clavier et description de l'état", async ({ page }) => {
-  await page.goto("/p/billing-api/workflow");
+  await page.goto("/p/billing-api/workflows/default-simple/map");
   const graph = page.getByTestId("workflow-graph");
-  await expect(graph.locator(".react-flow__node")).toHaveCount(3);
+  await expect(graph.locator(".react-flow__node")).toHaveCount(4);
   const focus = page.getByTestId("workflow-graph-focus");
   await expect(focus).toContainText("Tab reaches the states");
 

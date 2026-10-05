@@ -13,7 +13,7 @@ const TABS = [
   { suffix: "/findings", label: "findings" },
   { suffix: "/proposals", label: "proposals" },
   { suffix: "/memory", label: "memory" },
-  { suffix: "/workflow", label: "workflow" },
+  { suffix: "/workflows", label: "workflows" },
   { suffix: "/integrations", label: "integrations" },
   { suffix: "/settings", label: "settings" },
 ];
@@ -38,9 +38,11 @@ export default function ProjectLayout({
       <TabList aria-label="project sections">
         {TABS.map((tab) => {
           const href = `/p/${slug}${tab.suffix}`;
-          // Les intégrations (un sous-onglet par client) et les propositions (une page par proposition)
-          // gardent leur onglet actif sous elles.
-          const active = ["/integrations", "/proposals"].includes(tab.suffix) ? pathname.startsWith(href) : pathname === href;
+          // Les intégrations (un sous-onglet par client), les propositions (une page par proposition)
+          // et les workflows (une page par workflow) gardent leur onglet actif sous elles.
+          const active = ["/integrations", "/proposals", "/workflows"].includes(tab.suffix)
+            ? pathname.startsWith(href)
+            : pathname === href;
           return (
             <Link key={tab.suffix} href={href} aria-current={active ? "page" : undefined} className={tabClasses(active)}>
               {tab.label}

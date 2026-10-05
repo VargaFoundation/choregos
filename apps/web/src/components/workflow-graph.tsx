@@ -113,10 +113,18 @@ export function WorkflowGraph({ graph }: { graph: { nodes: unknown[]; edges: unk
   );
 }
 
+/**
+ * Les arêtes `default` partent de CHAQUE état d'agent vers le même état (une question, un budget
+ * dépassé) : dessinées, elles noyaient la carte. Elles placent encore les états d'escalade, mais
+ * ne se dessinent plus — la légende les dit une fois (`defaults`).
+ */
+const isDefault = (edge: GraphEdge) => edge.kind === "default";
+
 export function layout(graph: { nodes: unknown[]; edges: unknown[] }): { nodes: Node[]; edges: Edge[] } {
   const raw = graph.nodes as GraphNode[];
-  const rawEdges = graph.edges as GraphEdge[];
-  const columns = depths(raw, rawEdges);
+  const allEdges = graph.edges as GraphEdge[];
+  const rawEdges = allEdges.filter((edge) => !isDefault(edge));
+  const columns = depths(raw, allEdges);
   const perLane = new Map<string, number>();
 
   const nodes: Node[] = raw.map((node) => {
@@ -174,7 +182,7 @@ export function navigation(graph: { nodes: unknown[]; edges: unknown[] }): {
   describe: (id: string) => string;
 } {
   const raw = graph.nodes as GraphNode[];
-  const rawEdges = graph.edges as GraphEdge[];
+  const rawEdges = (graph.edges as GraphEdge[]).filter((edge) => !isDefault(edge));
   const order = layout(graph).nodes.map((node) => node.id);
   const byId = new Map(raw.map((node) => [node.id, node]));
 
@@ -267,4 +275,55 @@ function depths(nodes: GraphNode[], edges: GraphEdge[]): Map<string, number> {
   }
   for (const node of nodes) if (!depth.has(node.id)) depth.set(node.id, 0);
   return depth;
+}
+
+/** Ce qui arrive depuis n'importe quel état d'agent, dit une fois : `question → Besoin d'un humain`. */
+export function defaults(graph: { nodes: unknown[]; edges: unknown[] }): Array<{ label: string; to: string; from: string[] }> {
+  const byId = new Map((graph.nodes as GraphNode[]).map((node) => [node.id, node]));
+  const grouped = new Map<string, { label: string; to: string; from: string[] }>();
+  for (const edge of (graph.edges as GraphEdge[]).filter(isDefault)) {
+    const label = edge.label ?? "default";
+    const key = `${label}->${edge.to}`;
+    const entry = grouped.get(key) ?? { label, to: byId.get(edge.to)?.display ?? edge.to, from: [] };
+    entry.from.push(byId.get(edge.from)?.display ?? edge.from);
+    grouped.set(key, entry);
+  }
+  return [...grouped.values()];
+}
+
+/** La légende de la carte : les couloirs nommés, dans leur ordre de haut en bas, et les défauts. */
+export function WorkflowLegend({ graph }: { graph: { nodes: unknown[]; edges: unknown[] } }) {
+  const nodes = graph.nodes as GraphNode[];
+  const lanes = LANES.filter((lane) => nodes.some((node) => (node.lane ?? "system") === lane));
+  const fallbacks = defaults(graph);
+  return (
+    <div className="space-y-2 text-xs text-ink-muted" data-testid="workflow-legend">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label="lanes, top to bottom">
+        {lanes.map((lane) => (
+          <li key={lane} className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="inline-block h-2.5 w-2.5 rounded-sm border"
+              style={{ borderColor: LANE_COLOR[lane], background: LANE_COLOR[lane] }}
+            />
+            {lane} lane · {nodes.filter((node) => (node.lane ?? "system") === lane).length}
+          </li>
+        ))}
+        <li>solid: the nominal path · dashed: rejection, retry, escalation</li>
+      </ul>
+      {fallbacks.length > 0 && (
+        <div>
+          <p className="text-ink">from any agent state</p>
+          <ul className="mt-1 space-y-0.5" data-testid="workflow-defaults">
+            {fallbacks.map((fallback) => (
+              <li key={`${fallback.label}->${fallback.to}`}>
+                on {fallback.label} → {fallback.to}
+                <span className="sr-only"> (from {fallback.from.join(", ")})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }

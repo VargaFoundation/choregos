@@ -24,7 +24,7 @@ export default function ProjectsPage() {
           <Heading as="h1" size="xl">
             projects
           </Heading>
-          <Lead>each project ties a repository to a workflow: a ticket goes in, a controlled production release comes out.</Lead>
+          <Lead>each project runs its own workflows: a request comes in, agents and people move it on under the rules you set, and every step leaves its evidence.</Lead>
         </div>
         <Link href="/projects/new" className={buttonClasses("primary", "md")}>
           new project
@@ -42,7 +42,7 @@ export default function ProjectsPage() {
             </Link>
           }
         >
-          a project ties a repository, a tracker and a workflow. provisioning does the rest.
+          a project brings together its workflows, the tools they need and the people who decide. provisioning does the rest.
         </Empty>
       )}
 
