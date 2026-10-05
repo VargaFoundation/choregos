@@ -110,6 +110,27 @@ order, ← and → follow transitions, ↑ and ↓ move between states, Home and
 ends. The state under the cursor is described below the map, with its outgoing transitions,
 actors and gates — that sentence is what a screen reader announces.
 
+### Several workflows in one project
+
+A project runs as many workflows as it needs — onboarding and offboarding in an HR project, a
+delivery flow and a maintenance flow in a platform team ([ADR 0031](adr/0031-plusieurs-workflows-par-projet.md)):
+
+```bash
+curl -X PUT  $API/projects/acme:hr/workflows/onboarding  -d '{"yaml": "..."}'   # publishes the next version
+curl -X PUT  $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding",
+  "rules": [{"when": {"labels_any": ["leaver"]}, "workflow": "offboarding"}]}'
+curl         $API/projects/acme:hr/workflows                                    # one active version per name
+```
+
+- One version is active per name; every publication adds a version, none is overwritten, and
+  restoring an old version publishes it as the next one.
+- A work item is bound at birth — an explicit `workflow`, else the first routing rule that
+  matches its labels or its tracker type, else the default — and **pinned to that version**:
+  publishing a new version never moves a running item.
+- `PUT /projects/{id}/workflow` remains, as the alias of the default workflow.
+- The default and a routing target cannot be deactivated; a deactivated workflow takes no new
+  item, and its pinned items finish on their version.
+
 ### Workflows outside software
 
 The same engine carries work that has no repository. Name your own roles, bring your own

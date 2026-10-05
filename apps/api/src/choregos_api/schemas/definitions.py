@@ -20,6 +20,9 @@ class WorkflowDefDto(Dto):
     json_doc: dict[str, Any] | None = Field(default=None, alias="json")
     checksum: str
     is_active: bool = True
+    is_default: bool = False
+    created_by: str | None = None
+    created_at: datetime | None = None
 
     model_config = ConfigDict(extra="forbid", from_attributes=True, populate_by_name=True)
 
@@ -28,6 +31,34 @@ class WorkflowPut(Dto):
     yaml: str
     source: Literal["repo", "platform", "template"] = "platform"
     activate: bool = True
+    #: La version active que l'éditeur a lue : si une autre a été publiée depuis, 409.
+    base_version: int | None = None
+
+
+class WorkflowSummaryDto(Dto):
+    name: str
+    version: int
+    description: str | None = None
+    is_default: bool = False
+    open_items: int = 0
+    created_by: str | None = None
+    updated_at: datetime | None = None
+
+
+class RoutingCondition(Dto):
+    labels_any: list[str] = Field(default_factory=list)
+    labels_all: list[str] = Field(default_factory=list)
+    item_type: str | None = None
+
+
+class RoutingRule(Dto):
+    when: RoutingCondition
+    workflow: str
+
+
+class WorkflowRoutingDto(Dto):
+    default: str
+    rules: list[RoutingRule] = Field(default_factory=list)
 
 
 class WorkflowValidateRequest(Dto):

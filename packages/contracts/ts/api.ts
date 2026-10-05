@@ -175,12 +175,40 @@ export type WorkflowDef = {
   json?: S.Workflow;
   checksum: string;
   is_active: boolean;
+  is_default?: boolean;
+  created_by?: string | null;
+  created_at?: string | null;
 };
 
 export type WorkflowPut = {
   yaml: string;
   source?: "repo" | "platform" | "template";
   activate?: boolean;
+  /** La version active que l'éditeur a lue : périmée → 409. */
+  base_version?: number | null;
+};
+
+export type WorkflowSummary = {
+  name: string;
+  version: number;
+  description?: string | null;
+  is_default: boolean;
+  /** Tickets non clos épinglés à l'une de ses versions. */
+  open_items: number;
+  created_by?: string | null;
+  updated_at?: string | null;
+};
+
+export type WorkflowRouting = {
+  default: string;
+  rules: Array<{
+    workflow: string;
+    when: {
+      labels_any?: Array<string>;
+      labels_all?: Array<string>;
+      item_type?: string | null;
+    };
+  }>;
 };
 
 export type WorkflowValidateRequest = {
@@ -838,6 +866,7 @@ export interface Operations {
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
+  deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
@@ -854,6 +883,7 @@ export interface Operations {
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
+  getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
@@ -916,6 +946,7 @@ export interface Operations {
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
+  getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
   githubWebhook: { method: "POST"; path: "/webhooks/github"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -944,6 +975,8 @@ export interface Operations {
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
+  listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
+  listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
   postDecision: { method: "POST"; path: "/work-items/{id}/decisions"; body: DecisionRequest; response: HumanRequest };
   postFindingAction: { method: "POST"; path: "/findings/{id}/actions"; body: FindingAction; response: FindingRecord };
   postRunEvents: { method: "POST"; path: "/internal/runs/{id}/events"; body: {
@@ -964,13 +997,16 @@ export interface Operations {
   putBackend: { method: "PUT"; path: "/platform/backends"; body: AgentBackendUpdate; response: AgentBackendInfo };
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
+  putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
+  putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
+  restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };

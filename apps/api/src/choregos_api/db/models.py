@@ -75,6 +75,10 @@ class Project(Base, PkMixin, TimestampMixin):
     #: Le nom du workflow par défaut (ADR 0031) : celui d'un ticket qui ne dit pas le sien et
     #: qu'aucune règle de routage ne désigne. Le défaut appartient au projet, pas à une version.
     default_workflow: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Les règles qui choisissent le workflow d'un ticket venu d'un tracker (ADR 0031) : une liste
+    #: ordonnée de `{when: {labels_any, labels_all, item_type}, workflow}`. Hors de `config`, que
+    #: `PATCH /projects/{id}` remplace en entier.
+    workflow_routing: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
 
     org: Mapped[Organization] = relationship(back_populates="projects")
     connectors: Mapped[list[Connector]] = relationship(back_populates="project", cascade="all, delete-orphan")
@@ -119,6 +123,8 @@ class WorkflowDef(Base, PkMixin, TimestampMixin):
     json_doc: Mapped[dict[str, Any]] = mapped_column("json", Json, default=dict)
     checksum: Mapped[str] = mapped_column(String(80), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    #: Qui a publié cette version : l'historique des versions le montre (ADR 0031).
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class PolicyDef(Base, PkMixin, TimestampMixin):

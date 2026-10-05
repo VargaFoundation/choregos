@@ -226,6 +226,84 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/workflows:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [workflows]
+      operationId: listWorkflows
+      summary: Les workflows du projet — un actif par nom, le défaut marqué (ADR 0031)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowSummary" } } } } }
+  /projects/{id}/workflows/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [workflows]
+      operationId: getNamedWorkflow
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [workflows]
+      operationId: putNamedWorkflow
+      summary: Publie la version suivante de CE workflow ; `base_version` périmée → 409
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/workflows/{name}/deactivate:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [workflows]
+      operationId: deactivateWorkflow
+      summary: Désactive un workflow ; refusé pour le défaut ou une cible de routage. Les tickets épinglés finissent sur leur version
+      responses:
+        "204": { description: Désactivé }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /projects/{id}/workflows/{name}/versions:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [workflows]
+      operationId: listWorkflowVersions
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowDef" } } } } }
+  /projects/{id}/workflows/{name}/versions/{version}/restore:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [workflows]
+      operationId: restoreWorkflowVersion
+      summary: Republie une ancienne version comme la suivante — rien n'est écrasé
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/workflow-routing:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [workflows]
+      operationId: getWorkflowRouting
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowRouting" } } } }
+    put:
+      tags: [workflows]
+      operationId: putWorkflowRouting
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowRouting" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowRouting" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /workflows/validate:
     post:
       tags: [workflows]
@@ -1164,6 +1242,9 @@ components:
         json: { $ref: "./schemas/workflow.schema.json" }
         checksum: { type: string }
         is_active: { type: boolean }
+        is_default: { type: boolean }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
     WorkflowPut:
       type: object
       required: [yaml]
@@ -1171,6 +1252,36 @@ components:
         yaml: { type: string }
         source: { type: string, enum: [repo, platform, template], default: platform }
         activate: { type: boolean, default: true }
+        base_version: { type: [integer, "null"], description: "La version active que l'éditeur a lue : périmée → 409." }
+    WorkflowSummary:
+      type: object
+      required: [name, version, is_default, open_items]
+      properties:
+        name: { type: string }
+        version: { type: integer }
+        description: { type: [string, "null"] }
+        is_default: { type: boolean }
+        open_items: { type: integer, description: "Tickets non clos épinglés à l'une de ses versions." }
+        created_by: { type: [string, "null"] }
+        updated_at: { type: [string, "null"], format: date-time }
+    WorkflowRouting:
+      type: object
+      required: [default, rules]
+      properties:
+        default: { type: string }
+        rules:
+          type: array
+          items:
+            type: object
+            required: [when, workflow]
+            properties:
+              workflow: { type: string }
+              when:
+                type: object
+                properties:
+                  labels_any: { type: array, items: { type: string } }
+                  labels_all: { type: array, items: { type: string } }
+                  item_type: { type: [string, "null"] }
     WorkflowValidateRequest:
       type: object
       properties:

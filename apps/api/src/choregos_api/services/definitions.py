@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import (
     PolicyEngine,
@@ -14,15 +16,17 @@ from choregos_core import (
     template_yaml,
 )
 from choregos_core.dsl import dump_workflow
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import record
 from ..db.models import (
     PolicyDef,
     Project,
     WorkflowDef,
     WorkItem,
 )
+from ..errors import conflict, unprocessable
 
 DEFAULT_WORKFLOW = "default-simple"
 DEFAULT_POLICY_PRESET = "solo"
@@ -55,6 +59,92 @@ async def workflow_du_ticket(session: AsyncSession, item: WorkItem) -> WorkflowD
         if epingle is not None and epingle.project_id == item.project_id:
             return epingle
     return await default_workflow(session, item.project_id)
+
+
+async def workflow_actif(session: AsyncSession, project_id: str, nom: str) -> WorkflowDef | None:
+    """La version active du workflow `nom` du projet (une seule par nom, ADR 0031)."""
+    return (
+        await session.execute(
+            select(WorkflowDef).where(
+                WorkflowDef.project_id == project_id, WorkflowDef.name == nom, WorkflowDef.is_active.is_(True)
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses options sont nommées
+    session: AsyncSession,
+    principal: Any,
+    project: Project,
+    source_yaml: str,
+    *,
+    source: str = "platform",
+    activate: bool = True,
+    base_version: int | None = None,
+    nom_attendu: str | None = None,
+    devient_le_defaut: bool = False,
+) -> WorkflowDef:
+    """Le SEUL chemin d'écriture d'un workflow (ADR 0031) : l'alias, le PUT par nom, la restauration.
+
+    Chaque publication ajoute une version — aucune n'est écrasée — et ne désactive que la version
+    active du MÊME nom : publier `offboarding` ne touche pas à `onboarding`. Un ticket épinglé finit
+    sur sa version.
+    """
+    workflow, report = parse_workflow(source_yaml, strict=False)
+    if not report.valid:
+        raise unprocessable(
+            "workflow invalide",
+            [
+                {"loc": [i.path or ""], "msg": i.message, "code": i.code, "line": i.line, "column": i.column}
+                for i in report.errors
+            ],
+        )
+    nom = workflow.metadata.name
+    if nom_attendu is not None and nom != nom_attendu:
+        raise unprocessable(
+            f"le YAML s'appelle `{nom}`, la route `{nom_attendu}` : `metadata.name` doit coïncider"
+        )
+    actuelle = await workflow_actif(session, project.id, nom)
+    if base_version is not None and (actuelle is None or actuelle.version != base_version):
+        lue = actuelle.version if actuelle is not None else "aucune"
+        raise conflict(f"`{nom}` a changé : vous éditiez la version {base_version}, l'active est {lue}")
+    deja = (
+        await session.execute(
+            select(func.max(WorkflowDef.version)).where(
+                WorkflowDef.project_id == project.id, WorkflowDef.name == nom
+            )
+        )
+    ).scalar()
+    version = workflow.metadata.version if deja is None or deja < workflow.metadata.version else deja + 1
+    if activate and actuelle is not None:
+        actuelle.is_active = False
+        await session.flush()
+    row = WorkflowDef(
+        project_id=project.id,
+        name=nom,
+        version=version,
+        source=source,
+        yaml=source_yaml,
+        json_doc=workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
+        checksum=checksum(workflow),
+        is_active=activate,
+        created_by=getattr(principal, "email", None),
+    )
+    session.add(row)
+    if activate and (devient_le_defaut or not project.default_workflow):
+        project.default_workflow = nom
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "workflow.put",
+        org_id=project.org_id,
+        target_type="workflow",
+        target_id=row.id,
+        name=row.name,
+        version=row.version,
+    )
+    return row
 
 
 async def active_policy(session: AsyncSession, project_id: str) -> PolicyDef | None:
