@@ -1300,6 +1300,26 @@ components:
         errors: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" } }
         warnings: { type: array, items: { $ref: "#/components/schemas/WorkflowIssue" } }
         graph: { $ref: "#/components/schemas/WorkflowGraph" }
+        process: { type: array, items: { $ref: "#/components/schemas/ProcessStep" } }
+    ProcessStep:
+      type: object
+      description: Une transition dite en clair — la vue « processus » (ADR 0031).
+      required: [id, from, to, actor, actor_type, who, sentence]
+      properties:
+        id: { type: string }
+        from: { type: string }
+        from_display: { type: string }
+        to: { type: string }
+        to_display: { type: string }
+        actor: { type: string }
+        actor_type: { type: string, enum: [agent, human, system, release_train] }
+        who: { type: string }
+        outputs: { type: array, items: { type: string } }
+        gates: { type: array, items: { type: object, properties: { name: { type: string }, summary: { type: string } } } }
+        on_fail: { type: [string, "null"] }
+        on_reject: { type: [string, "null"] }
+        timeout_hours: { type: [integer, "null"] }
+        sentence: { type: string }
     WorkflowIssue:
       type: object
       required: [code, message]

@@ -459,13 +459,15 @@ Workflows
 ```text
 Usage: choregos workflow show [OPTIONS] [path]
 
-  Affiche le workflow : états, transitions, ou diagramme Mermaid.
+  Affiche le workflow : états, transitions, diagramme Mermaid, ou processus en
+  clair.
 
 Arguments:
   path  [default: .choregos/workflow.yaml]
 
 Options:
   --mermaid
+  --process  chaque transition dite en clair
   --help     Show this message and exit.
 ```
 

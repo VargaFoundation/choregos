@@ -470,13 +470,18 @@ def workflow_validate(
 def workflow_show(
     path: Annotated[Path, typer.Argument()] = Path(".choregos/workflow.yaml"),
     mermaid: Annotated[bool, typer.Option("--mermaid")] = False,
+    process: Annotated[bool, typer.Option("--process", help="chaque transition dite en clair")] = False,
 ) -> None:
-    """Affiche le workflow : états, transitions, ou diagramme Mermaid."""
-    from choregos_core import parse_workflow, to_mermaid
+    """Affiche le workflow : états, transitions, diagramme Mermaid, ou processus en clair."""
+    from choregos_core import parse_workflow, to_mermaid, to_process
 
     workflow, _ = parse_workflow(path.read_text(encoding="utf-8"), strict=False)
     if mermaid:
         console.print(to_mermaid(workflow))
+        return
+    if process:
+        for etape in to_process(workflow):
+            console.print(f"- {etape['sentence']}")
         return
     table = Table("état", "libellé", "acteur sortant", "gates")
     for name, state in workflow.states.items():
