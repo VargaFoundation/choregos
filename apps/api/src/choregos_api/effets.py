@@ -40,13 +40,29 @@ class ContexteEffet:
 Executer = Callable[[ContexteEffet, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 _EFFETS: dict[str, Executer] = {}
+#: La politique de chaque effet d'un greffon (ADR 0034) : `connector.call` n'en a pas — c'est
+#: l'OPÉRATION appelée qui en a une, dans l'organisation et le projet.
+_POLITIQUES: dict[str, str] = {}
 
 
-def declarer_un_effet(nom: str, executer: Executer) -> None:
-    """Appelée par un greffon à son chargement. Le même effet redéclaré passe ; un autre, non."""
+def declarer_un_effet(nom: str, executer: Executer, *, politique: str = "approval") -> None:
+    """Appelée par un greffon à son chargement. Le même effet redéclaré passe ; un autre, non.
+
+    `politique` : ce qu'il faut pour qu'une action de workflow le joue — `approval` (une personne
+    décide, par défaut), `allowed` (la transition suffit) ou `forbidden`."""
+    from choregos_adapters import POLITIQUES
+
+    if politique not in POLITIQUES:
+        raise ValueError(f"politique inconnue pour l'effet {nom} : {politique} (connues : {POLITIQUES})")
     if nom in _EFFETS and _EFFETS[nom] is not executer:
         raise ValueError(f"effet déjà déclaré : {nom}")
     _EFFETS[nom] = executer
+    _POLITIQUES[nom] = politique
+
+
+def politique_de_l_effet(nom: str) -> str:
+    """Ce qu'un effet de greffon exige ; un effet inconnu est interdit."""
+    return _POLITIQUES.get(nom, "forbidden")
 
 
 def effet(nom: str) -> Executer:
@@ -63,7 +79,7 @@ def effets_declares() -> frozenset[str]:
 def rendre(valeur: Any, contexte: dict[str, Any]) -> Any:
     """Les chaînes `{{ … }}` rendues en Jinja ISOLÉ, récursivement ; une variable absente est une
     erreur, pas une chaîne vide — un compte sans UPN ne doit pas partir."""
-    from jinja2 import StrictUndefined, UndefinedError
+    from jinja2 import StrictUndefined, TemplateError, UndefinedError
     from jinja2.sandbox import SandboxedEnvironment
 
     if isinstance(valeur, str):
@@ -73,6 +89,8 @@ def rendre(valeur: Any, contexte: dict[str, Any]) -> Any:
             return SandboxedEnvironment(undefined=StrictUndefined).from_string(valeur).render(**contexte)
         except UndefinedError as absente:
             raise EffetRefuse(f"paramètre introuvable : {absente}") from absente
+        except TemplateError as refus:  # une syntaxe fausse, une sortie du bac à sable
+            raise EffetRefuse(f"gabarit refusé : {refus}") from refus
     if isinstance(valeur, dict):
         return {cle: rendre(v, contexte) for cle, v in valeur.items()}
     if isinstance(valeur, list):
@@ -105,8 +123,15 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
             )
         )
     ).scalar_one_or_none()
-    if ligne is None or ligne.policy == "forbidden":
-        raise EffetRefuse(f"{nom}/{operation} est interdite ou inconnue")
+    from .services.connecteurs import politique_pour_le_projet
+
+    # Celle du PROJET : l'organisation, resserrée par le projet, bornée par ses groupes. Une action
+    # approuvée joue une opération `approval` ; une opération que ce projet s'interdit, jamais.
+    if (
+        ligne is None
+        or await politique_pour_le_projet(ctx.session, ctx.project, nom, operation) == "forbidden"
+    ):
+        raise EffetRefuse(f"{nom}/{operation} est interdite à ce projet, ou inconnue")
     if ligne.input_schema:
         import jsonschema
 
@@ -141,6 +166,7 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
 def reinitialiser() -> None:
     """Pour les tests : seuls les effets du cœur restent."""
     _EFFETS.clear()
+    _POLITIQUES.clear()
     _EFFETS["connector.call"] = _appel_de_connecteur
 
 

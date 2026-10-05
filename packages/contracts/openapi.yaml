@@ -585,6 +585,22 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [work-items]
+      operationId: updateWorkItem
+      summary: Changer les champs d'un ticket
+      description: >-
+        Les champs donnés remplacent les siens, `null` en retire un ; l'ensemble est validé par
+        `metadata.inputs` du workflow épinglé. L'interpréteur l'apprend (`fields_changed`) : une date
+        d'arrivée déplacée réarme l'action qui l'attend (S20-05).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemUpdate" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /work-items/{id}/timeline:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2211,6 +2227,12 @@ components:
         workflow: { type: [string, "null"], description: "Le workflow où le ticket naît ; sinon le routage, sinon le défaut (ADR 0031)." }
         labels: { type: array, items: { type: string }, description: "Lues par les règles de routage." }
         fields: { type: object, additionalProperties: true, description: "Les champs du ticket, validés par `metadata.inputs` de son workflow." }
+    WorkItemUpdate:
+      type: object
+      required: [fields]
+      additionalProperties: false
+      properties:
+        fields: { type: object, additionalProperties: true, description: "Les champs qui changent ; `null` en retire un." }
     Integrations:
       type: object
       required: [mcp_url, protocol_versions, oauth, version]

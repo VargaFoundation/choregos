@@ -7,7 +7,10 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_adapters import POLITIQUES, ConnectorTypeSpec
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..db.models import ConnectorOperation, OrgConnector, Project, ProjectOperationPolicy
 from ..errors import unprocessable
 
 #: Le rang de chaque politique : un projet ne peut que monter (ADR 0034).
@@ -60,3 +63,36 @@ def verifier_les_secrets(
             verifier(reference)
         except ReferenceInvalide as refus:
             raise unprocessable(str(refus)) from refus
+
+
+async def politique_pour_le_projet(
+    session: AsyncSession, projet: Project, connecteur: str, operation: str
+) -> str:
+    """La politique d'une opération pour CE projet (ADR 0034) : celle de l'organisation, resserrée
+    par le projet. Une opération inconnue, ou dont les groupes ne croisent pas ceux du projet, est
+    interdite — ce que le courtier cache à un run, une action ne le joue pas non plus."""
+    trouvee = (
+        await session.execute(
+            select(ConnectorOperation)
+            .join(OrgConnector, OrgConnector.id == ConnectorOperation.connector_id)
+            .where(
+                OrgConnector.org_id == projet.org_id,
+                OrgConnector.name == connecteur,
+                ConnectorOperation.name == operation,
+            )
+        )
+    ).scalar_one_or_none()
+    if trouvee is None:
+        return "forbidden"
+    groupes = {str(g) for g in ((projet.config or {}).get("groups") or [])}
+    if trouvee.groups and not groupes & set(trouvee.groups):
+        return "forbidden"
+    resserree = (
+        await session.execute(
+            select(ProjectOperationPolicy.policy).where(
+                ProjectOperationPolicy.project_id == projet.id,
+                ProjectOperationPolicy.operation_id == trouvee.id,
+            )
+        )
+    ).scalar_one_or_none()
+    return plus_stricte(trouvee.policy, resserree)

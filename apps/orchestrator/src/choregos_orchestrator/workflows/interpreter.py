@@ -30,7 +30,10 @@ FILE_MAX_MINUTES = 360
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus, Workflow
     from choregos_core import WorkflowEngine
+    from choregos_core.dsl.dates import DateIllisible, echeance
+    from choregos_core.gates import ACTION_REGLEE, GateOutcome
 
+    from ..activities import actions as action_activities
     from ..activities import gates as gate_activities
     from ..activities import scm as scm_activities
     from ..activities import stage as stage_activities
@@ -66,6 +69,11 @@ HISTORY_THRESHOLD = 20_000
 MIGRATION_PAR_DEFINITION = "migration-par-definition"
 #: Rendu par `_wait_external` quand une migration le réveille : l'état ne bouge pas, la boucle migre.
 _MIGRATION = "\x00migration"
+#: Une transition système propose une action gouvernée, à date (S20-05). Les historiques d'avant
+#: ce marqueur n'en avaient pas : leurs transitions système ne connaissent que des garanties.
+ACTIONS_DE_TRANSITION = "actions-de-transition"
+#: Le filet d'une action qui attend : relue en base à ce rythme, au cas où `action_settled` se perd.
+RELECTURE_D_UNE_ACTION = timedelta(hours=6)
 
 
 @dataclass
@@ -115,6 +123,14 @@ class WorkflowInterpreter:
         self.migration: dict[str, Any] = {}
         self.migrations: int = 0
         self.findings_count: int = 0
+        #: Les champs du ticket, que lit une date d'action ; `fields_changed` les remplace.
+        self.champs: dict[str, Any] = {}
+        self.version_des_champs: int = 0
+        #: Les actions réglées que leur `action_settled` a annoncées, par identifiant.
+        self.actions_reglees: dict[str, str] = {}
+        #: Ce que le ticket attend : la date d'une action, l'action elle-même.
+        self.attente: str | None = None
+        self.action_en_cours: str | None = None
 
     # ───────────────────────── signaux et requêtes ─────────────────────────
 
@@ -133,6 +149,17 @@ class WorkflowInterpreter:
     @workflow.signal
     def finding(self, payload: dict[str, Any]) -> None:
         self.findings_count += 1
+
+    @workflow.signal
+    def fields_changed(self, payload: dict[str, Any]) -> None:
+        """Les champs ont changé (S20-05) : une date d'action se recalcule, son minuteur se réarme."""
+        self.champs = dict(payload.get("fields") or {})
+        self.version_des_champs += 1
+
+    @workflow.signal
+    def action_settled(self, payload: dict[str, Any]) -> None:
+        """Une action de transition est réglée — réussie, échouée, rejetée (S20-05)."""
+        self.actions_reglees[str(payload.get("action_id"))] = str(payload.get("status"))
 
     @workflow.signal
     def control(self, message: dict[str, Any]) -> None:
@@ -160,6 +187,8 @@ class WorkflowInterpreter:
             "paused": self.paused,
             "stopped": self.stopped,
             "pending_request": self.pending_request,
+            "waiting_until": self.attente,
+            "action": self.action_en_cours,
         }
 
     # ───────────────────────── boucle principale ─────────────────────────
@@ -202,6 +231,8 @@ class WorkflowInterpreter:
         )
         engine = WorkflowEngine(Workflow.model_validate(context["workflow"]))
         self.state = params.resume_from or context.get("state") or engine.initial_state
+        if self.version_des_champs == 0:  # un `fields_changed` arrivé avant la lecture est plus récent
+            self.champs = dict(context.get("fields") or {})
 
         await self._mirror(params, "démarrage")
 
@@ -583,6 +614,9 @@ class WorkflowInterpreter:
         attempt = self.attempts[key]
         self.attempts[key] = attempt + 1
 
+        if transition.action is not None and workflow.patched(ACTIONS_DE_TRANSITION):
+            return await self._run_action(params, engine, transition, attempt + 1)
+
         if transition.to.startswith("pr_"):
             await executer_activite(
                 scm_activities.open_pull_request,
@@ -599,6 +633,88 @@ class WorkflowInterpreter:
                 retry_policy=DEFAULT_RETRY,
             )
         return engine.after_gates(transition, outcomes, self.attempts[key])
+
+    async def _run_action(
+        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, tentative: int
+    ) -> Any:
+        """Une transition à action (ADR 0035, S20-05) : attendre sa date, la proposer, attendre
+        qu'elle soit RÉGLÉE — décidée par une personne ou par la politique, puis jouée par son
+        `ActionWorkflow`, jamais ici —, et juger `action_succeeded` avec les autres garanties."""
+        spec = transition.action
+        if spec.not_before and not await self._attendre_la_date(spec.not_before):
+            return None  # arrêté, ou une migration à appliquer : la boucle s'en charge
+        proposee = await executer_activite(
+            action_activities.proposer_l_action_de_transition,
+            {
+                "project_id": params.project_id,
+                "work_item_id": params.work_item_id,
+                "transition": transition.key,
+                "attempt": tentative,
+                "workflow_id": workflow.info().workflow_id,
+                "action": spec.model_dump(mode="json", by_alias=True, exclude_none=True),
+            },
+            start_to_close_timeout=timedelta(minutes=1),
+            retry_policy=DEFAULT_RETRY,
+        )
+        if proposee.get("refus"):
+            refus = GateOutcome(
+                "action_succeeded", False, detail=f"action impossible à proposer : {proposee['refus']}"
+            )
+            return engine.after_gates(transition, [refus], self.attempts[transition.key])
+        action_id, statut = str(proposee["action_id"]), str(proposee["status"])
+        self.action_en_cours = action_id
+        while statut not in ACTION_REGLEE and not self.stopped:
+            await wait_signal(
+                lambda: action_id in self.actions_reglees or self.stopped, RELECTURE_D_UNE_ACTION
+            )
+            if action_id in self.actions_reglees:
+                statut = self.actions_reglees.pop(action_id)
+            elif not self.stopped:
+                relue = await executer_activite(
+                    action_activities.etat_de_l_action,
+                    action_id,
+                    start_to_close_timeout=timedelta(seconds=30),
+                    retry_policy=DEFAULT_RETRY,
+                )
+                statut = str(relue["status"])
+        self.action_en_cours = None
+        if self.stopped:
+            return None
+        autres = transition.model_copy(
+            update={"gates": [g for g in transition.gates if g.name != "action_succeeded"]}
+        )
+        outcomes = await self._gates(params, autres, self.last_run or "")
+        return engine.after_action(transition, statut, outcomes, self.attempts[transition.key])
+
+    async def _attendre_la_date(self, expression: str) -> bool:
+        """Attend `not_before`, RECALCULÉ à chaque changement des champs : déplacer la date
+        réarme le minuteur, l'avancer sous l'heure présente le fait partir. Un champ absent ou
+        illisible : on attend qu'il soit renseigné — on ne part pas sans date. Faux quand le
+        ticket s'arrête ou qu'une migration l'interrompt."""
+        while not self.stopped and self.workflow_override is None:
+            vue = self.version_des_champs
+            try:
+                cible = echeance(expression, self.champs)
+            except DateIllisible:
+                cible = None
+            maintenant = workflow.now()
+            if cible is not None and cible <= maintenant:
+                if self.paused:  # la date est passée pendant une pause : on attend la reprise
+                    await workflow.wait_condition(
+                        lambda: not self.paused or self.stopped or self.workflow_override is not None
+                    )
+                    continue
+                self.attente = None
+                return True
+            self.attente = cible.isoformat() if cible is not None else f"{expression} (unknown)"
+            await wait_signal(
+                lambda vue=vue: (
+                    self.version_des_champs != vue or self.stopped or self.workflow_override is not None
+                ),
+                (cible - maintenant) if cible is not None else None,
+            )
+        self.attente = None
+        return False
 
     async def _run_train(self, params: InterpreterInput, engine: WorkflowEngine, transition: Any) -> Any:
         env = transition.train.env if transition.train else "prod"

@@ -18,6 +18,21 @@ EFFETS = [
 ]  # fmt: skip
 
 
+@pytest.fixture(autouse=True)
+async def annuaire(client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    """L'annuaire que ces actions appellent, déclaré dans l'organisation : une action qui appelle
+    une opération inconnue — ou interdite à ce projet — est refusée dès sa proposition (S20-05)."""
+    import choregos_adapters
+    from choregos_adapters.fakes.entra import FakeEntra
+
+    monkeypatch.setattr(choregos_adapters, "FAUX_ENTRA", FakeEntra())
+    monkeypatch.setenv("ENTRA_CLIENT_SECRET", "secret-du-connecteur")
+    corps = {"name": "entra-acme", "type": "entra", "config": {"tenant_id": "acme", "client_id": "choregos"},
+             "secret_refs": {"client_secret": "env:ENTRA_CLIENT_SECRET"}}  # fmt: skip
+    cree = await client.post("/api/v1/orgs/varga/connectors", json=corps)
+    assert cree.status_code == 201, cree.text
+
+
 async def _membre(client: AsyncClient, email: str, role: str) -> None:
     reponse = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
     assert reponse.status_code in {200, 201}, reponse.text

@@ -15,6 +15,7 @@ from ..db.models import HumanRequest, Project, Run, WorkflowDef, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..greffons import DemandeDeGeste, controler
+from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas import (
     DecisionRequest,
@@ -25,6 +26,7 @@ from ..schemas import (
     WorkItemCreate,
     WorkItemDto,
     WorkItemPage,
+    WorkItemUpdate,
 )
 from ..services import (
     chronologie,
@@ -32,11 +34,14 @@ from ..services import (
     human_request_dto,
     persist_event,
     work_item_dto,
+    workflow_du_ticket,
     workflow_model,
 )
+from ..services.routage import valider_les_champs
 from ..temporal import deliver_control, deliver_decision, get_temporal, interpreter_id
 
 router = APIRouter(tags=["work-items"])
+logger = get_logger("choregos.work_items")
 
 
 async def _load(session: Any, item_id: str) -> tuple[WorkItem, Project]:
@@ -104,6 +109,37 @@ async def get_work_item(id: str, session: Db, principal: Me) -> WorkItemDto:
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
+    return await work_item_dto(session, item, project, with_temporal=True)
+
+
+@router.patch("/work-items/{id}", response_model=WorkItemDto, operation_id="updateWorkItem")
+async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal: Me) -> WorkItemDto:
+    """Les champs d'un ticket changent (ADR 0031, S20-05) : validés par SON workflow, celui où il est
+    épinglé, et l'interpréteur l'apprend — une date d'arrivée déplacée réarme l'action qui l'attend."""
+    item, project = await _load(session, id)
+    _, org_slug = await resolve_project(session, project.id)
+    if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
+        raise forbidden("changer les champs d'un ticket demande au moins le rôle developer")
+    workflow = workflow_model(await workflow_du_ticket(session, item))
+    champs = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
+    valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
+    item.fields = champs
+    await record(
+        session,
+        principal,
+        "workitem.fields",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        fields=sorted(body.fields),
+    )
+    if item.temporal_wf_id:
+        try:
+            await get_temporal().signal(
+                interpreter_id(project.slug, item.tracker_key), "fields_changed", {"fields": champs}
+            )
+        except Exception as erreur:  # un ticket fini n'a plus d'interpréteur : les champs restent
+            logger.warning("champs non transmis à l'interpréteur", work_item=item.id, erreur=str(erreur))
     return await work_item_dto(session, item, project, with_temporal=True)
 
 

@@ -10,11 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from choregos_contracts import AgentActor, HumanActor, Workflow
+from choregos_contracts import AgentActor, HumanActor, SystemActor, Workflow
 from choregos_contracts.workflow import AGENT_WILDCARD
 
 from ..errors import Issue
 from ..gates import known_gates
+from .dates import champ_de
 from .yamlsource import json_pointer, locate
 
 PROD_STATE_PREFIX = "deployed_prod"
@@ -57,6 +58,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_gates_ont_de_la_matiere(wf, report, source)
     _check_roles_connus(wf, report, source)
     _check_inputs(wf, report, source)
+    _check_actions(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -85,6 +87,60 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             ["metadata", "inputs"],
             source,
         )
+
+
+def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """Une action gouvernée (S20-05) se propose par une transition de la PLATEFORME, sa date se lit
+    dans un champ que le workflow déclare comme une date, et `action_succeeded` n'a de sens qu'avec
+    une action à juger."""
+    champs = dict((wf.metadata.inputs or {}).get("properties") or {})
+    for index, t in enumerate(wf.transitions):
+        chemin: list[str | int] = ["transitions", index]
+        if t.action is None:
+            for g_index, g in enumerate(t.gates):
+                if g.name == "action_succeeded":
+                    report.error(
+                        "gate.sans_matiere",
+                        "garantie `action_succeeded` sans `action:` : aucune action à juger",
+                        [*chemin, "gates", g_index],
+                        source,
+                    )
+            continue
+        if t.on_fail is None:
+            report.error(
+                "action.on_fail_missing",
+                "une action peut échouer ou être rejetée : `on_fail: {to, max_attempts, escalate_to}` dit "
+                "où va le ticket — sans lui, il proposerait la même action sans fin",
+                [*chemin, "action"],
+                source,
+            )
+        acteur = wf.actors.get(t.by) if t.by else None
+        if not isinstance(acteur, SystemActor):
+            report.error(
+                "action.not_system",
+                "seule une transition de la plateforme (`by:` un acteur `system`) propose une action : "
+                "un agent appelle des outils, un humain décide",
+                [*chemin, "action"],
+                source,
+            )
+        if t.action.not_before is None:
+            continue
+        nom = champ_de(t.action.not_before)
+        declare = champs.get(nom)
+        if not isinstance(declare, dict):
+            report.error(
+                "action.date_field_unknown",
+                f"`not_before` lit `fields.{nom}`, que `metadata.inputs` ne déclare pas",
+                [*chemin, "action", "not_before"],
+                source,
+            )
+        elif declare.get("format") not in {"date", "date-time"}:
+            report.error(
+                "action.date_field_not_date",
+                f"`fields.{nom}` n'est pas déclaré comme une date (`format: date` ou `date-time`)",
+                [*chemin, "action", "not_before"],
+                source,
+            )
 
 
 def _check_references(

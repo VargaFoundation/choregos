@@ -45,6 +45,9 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "ticket_budget_usd": bundle.engine.budget_ticket(item.size),
             "tracker_key": item.tracker_key,
             "project_slug": bundle.slug,
+            # Ce que lit une date d'action (`not_before`, S20-05) ; un changement arrive ensuite
+            # par le signal `fields_changed`.
+            "fields": dict(item.fields or {}),
         }
 
 

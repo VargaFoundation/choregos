@@ -26,6 +26,8 @@ ALL_ACTIVITIES = [
     actions.executer_l_effet,
     actions.compenser_l_effet,
     actions.cloturer_l_action,
+    actions.proposer_l_action_de_transition,
+    actions.etat_de_l_action,
     stage.prepare_stage,
     execution.start_run,
     execution.await_run,

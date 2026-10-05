@@ -673,6 +673,39 @@ export type WorkflowDefaults = {
   };
 };
 
+export type WorkflowActionEffect = {
+  effect: string;
+  with?: {
+    [key: string]: unknown;
+  };
+  compensate?: {
+    [key: string]: unknown;
+  };
+};
+
+export type WorkflowActionApproval = {
+  approvers?: Array<{
+    role?: "developer" | "release_captain" | "project_owner" | "org_admin";
+    min?: number;
+  }>;
+  step_up_minutes?: number;
+  separation_of_duties?: boolean;
+};
+
+/** titre, justification et paramètres rendus avec les champs du ticket ; une validation humaine quand une opération l'exige ou quand `approval` est déclaré */
+export type WorkflowTransitionAction = {
+  kind: string;
+  title: string;
+  justification?: string;
+  params?: {
+    [key: string]: unknown;
+  };
+  effects: Array<WorkflowActionEffect>;
+  approval?: WorkflowActionApproval;
+  /** pas avant cette date, tirée d'un champ du ticket : `fields.date_arrivee - 10d` */
+  not_before?: string;
+};
+
 /** DSL de workflow Choregos : machine à états déclarative par projet (docs/plan/01 §1.4). */
 export type Workflow = {
   apiVersion: "choregos/v1";
