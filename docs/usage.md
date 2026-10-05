@@ -309,6 +309,16 @@ an override that widens is refused (`422`). Creating, publishing and revoking ne
 `agent:manage` (organisation administrators); a revocation is final. Agents are under the same
 row-level security as everything else: an agent of another organisation does not exist for you.
 
+In the console, **agents** (top bar) lists the registry and **your MCP clients** — your `mcp:*`
+tokens, each with its last call and the client that made it. A Claude Code that has called the door
+shows as *connected*; **register as an external agent** creates the agent (with its human's tools,
+or read-only ones) and attaches the token, and its calls then carry the agent. An agent's page gives
+its last 30 days (runs, success rate, cost, today against its daily budget), its versions, a new
+version started from the latest, and — for an external agent — the clients acting as it. **skills**
+is the library: import a zip, read each version's files, see which agents carry it. A project's
+**agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
+without naming one, which you can register, then name in the workflow (`agent: <slug>`).
+
 ## 4. Write the policy
 
 ```yaml

@@ -438,7 +438,7 @@ async def unpin_agent(slug: Slug, ctx: ProjectCtx, session: Db) -> Response:
 # ───────────────────────────── les agents externes ─────────────────────────────
 
 
-def _credential_dto(ligne: AgentCredential) -> AgentCredentialDto:
+def _credential_dto(ligne: AgentCredential, jeton: ApiToken | None = None) -> AgentCredentialDto:
     return AgentCredentialDto(
         id=ligne.id,
         kind=ligne.kind,
@@ -447,6 +447,9 @@ def _credential_dto(ligne: AgentCredential) -> AgentCredentialDto:
         created_by=ligne.created_by,
         created_at=ligne.created_at,
         revoked_at=ligne.revoked_at,
+        token_name=jeton.name if jeton else None,
+        last_used_at=jeton.last_used_at if jeton else None,
+        last_client=jeton.last_client if jeton else None,
     )
 
 
@@ -456,10 +459,22 @@ def _credential_dto(ligne: AgentCredential) -> AgentCredentialDto:
     operation_id="listAgentCredentials",
 )
 async def list_credentials(org: str, slug: Slug, session: Db, principal: Me) -> list[AgentCredentialDto]:
+    from ..db.session import en_portee_de_plateforme
+
     _gerer(principal, org)
     agent = await _agent(session, await _organisation(session, org), slug)
-    lignes = await session.execute(select(AgentCredential).where(AgentCredential.agent_id == agent.id))
-    return [_credential_dto(ligne) for ligne in lignes.scalars()]
+    lignes = list(
+        (await session.execute(select(AgentCredential).where(AgentCredential.agent_id == agent.id))).scalars()
+    )
+    # Les jetons sont ceux de leurs humains, hors de la portée de l'organisation : lus comme au
+    # rattachement, pour dire quand et avec quel client chacun a appelé la porte pour la dernière fois.
+    ids = [ligne.api_token_id for ligne in lignes if ligne.api_token_id]
+    jetons: dict[str, ApiToken] = {}
+    if ids:
+        async with en_portee_de_plateforme(session):
+            trouves = await session.execute(select(ApiToken).where(ApiToken.id.in_(ids)))
+            jetons = {jeton.id: jeton for jeton in trouves.scalars()}
+    return [_credential_dto(ligne, jetons.get(ligne.api_token_id or "")) for ligne in lignes]
 
 
 @router.post(

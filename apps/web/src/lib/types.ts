@@ -60,6 +60,21 @@ import type { Operations } from "@choregos/contracts/api";
 
 export type { Integrations } from "@choregos/contracts/api";
 
+/** Le registre d'agents et la bibliothèque de skills (ADR 0033). */
+export type {
+  Agent,
+  AgentCreate,
+  AgentCredential,
+  AgentMetrics,
+  AgentPatch,
+  AgentSpec,
+  AgentVersion,
+  ProjectAgent,
+  ProjectAgentPut,
+  Skill,
+  SkillVersion,
+} from "@choregos/contracts/api";
+
 /** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */
 export type {
   UiManifest as AdminSection,

@@ -197,3 +197,36 @@ test("board par workflow : la demande choisit son workflow, et ses champs en vie
   await page.getByLabel("board workflow").selectOption("hotfix");
   await expect(page).toHaveURL(/workflow=hotfix/);
 });
+
+test("agents : le registre, et un Claude Code connecté qui agit comme agent externe", async ({ page }) => {
+  await page.goto("/agents");
+  await expect(page.getByRole("heading", { name: "agents" })).toBeVisible();
+  await expect(page.getByTestId("agent-coordinateur-onboarding")).toContainText("Coordinateur onboarding");
+  await expect(page.getByTestId("agent-coordinateur-onboarding")).toContainText("1 skill");
+  // Le jeton du Claude Code de Léa a appelé la porte : connecté, et rattaché à son agent externe.
+  const claude = page.getByTestId("client-tok-claude");
+  await expect(claude).toContainText("connected");
+  await expect(claude).toContainText("claude-code/2.1.0");
+  await expect(claude.getByRole("link", { name: "acts as Le Claude Code de Léa" })).toBeVisible();
+  // Un client jamais appelé ne se dit pas connecté, et s'enregistre.
+  await expect(page.getByTestId("client-tok-cursor")).toContainText("never called");
+  await expect(page.getByTestId("client-tok-cursor").getByRole("button", { name: "register as an external agent" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Coordinateur onboarding" }).click();
+  await expect(page.getByTestId("mesures")).toContainText("14 (12 succeeded, 2 failed)");
+  await expect(page.getByTestId("version")).toContainText("procedure-onboarding@1");
+  await page.getByRole("link", { name: "procedure-onboarding@1" }).click();
+  await expect(page.getByTestId("fichiers")).toContainText("Comptes Entra à J-10");
+});
+
+test("agents : un agent externe montre son client, et un projet ses agents implicites", async ({ page }) => {
+  await page.goto("/agents/claude-de-lea");
+  await expect(page.getByTestId("clients-de-l-agent")).toContainText("claude-code/2.1.0");
+  await page.goto("/p/billing-api/agents");
+  await expect(page.getByTestId("epingles")).toContainText("coordinateur-onboarding");
+  await expect(page.getByTestId("epingles")).toContainText("tightened");
+  await expect(page.getByTestId("implicites")).toContainText("refiner");
+  await expect(page.getByTestId("implicites")).toContainText("dev");
+  await page.getByTestId("implicites").getByRole("button", { name: "register" }).first().click();
+  await expect(page.getByTestId("implicites").getByRole("status")).toContainText("actors.refiner.agent: refiner");
+});

@@ -160,3 +160,27 @@ async def test_un_client_oauth_incarne_son_agent(client: AsyncClient, admin: str
     async with session_scope(orgs="*") as session:
         await incarner_l_agent(session, appelant, client_id="claude-ai")
     assert (appelant.agent, appelant.motifs) == ("claude-de-lea", ("list_projects",))
+
+
+async def test_un_client_rattache_dit_quand_il_a_appele_et_avec_quoi(client: AsyncClient, admin: str) -> None:
+    """La page Agents montre un Claude Code « connecté » (S18-07) : le dernier appel de son jeton à la
+    porte, et le client qui l'a fait. Avant tout appel, rien n'est inventé."""
+    await _agent_externe(client, None)
+    jeton_id, jeton = await _jeton(client)
+    assert (await _rattacher(client, jeton_id)).status_code == 201
+    (avant,) = (await client.get("/api/v1/orgs/varga/agents/claude-de-lea/credentials")).json()
+    assert avant["token_name"] == "claude-code"
+    assert avant["last_used_at"] is None and avant["last_client"] is None
+
+    cookies = dict(client.cookies)
+    client.cookies.clear()
+    appel = await client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        headers={"Authorization": f"Bearer {jeton}", "User-Agent": "claude-code/2.1.0"},
+    )
+    assert appel.status_code == 200, appel.text
+    client.cookies.update(cookies)
+    (apres,) = (await client.get("/api/v1/orgs/varga/agents/claude-de-lea/credentials")).json()
+    assert apres["last_used_at"] is not None
+    assert apres["last_client"] == "claude-code/2.1.0"

@@ -11,6 +11,8 @@ import { useSession } from "@/lib/session";
 
 const NAV = [
   { href: "/", label: "projects" },
+  // La bibliothèque de skills se range sous les agents : ce qu'ils savent faire.
+  { href: "/agents", label: "agents", aussi: "/skills" },
   { href: "/integrations", label: "integrations" },
   { href: "/admin", label: "administration" },
 ];
@@ -24,7 +26,10 @@ export function TopNav() {
   return (
     <nav className="flex flex-1 items-center gap-8" aria-label="main navigation">
       {NAV.map((entry) => {
-        const active = entry.href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(entry.href);
+        const active =
+          entry.href === "/"
+            ? pathname === "/" || pathname.startsWith("/p/")
+            : pathname.startsWith(entry.href) || Boolean(entry.aussi && pathname.startsWith(entry.aussi));
         return (
           <Link
             key={entry.href}

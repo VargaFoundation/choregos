@@ -14,6 +14,7 @@ const TABS = [
   { suffix: "/proposals", label: "proposals" },
   { suffix: "/memory", label: "memory" },
   { suffix: "/workflows", label: "workflows" },
+  { suffix: "/agents", label: "agents" },
   { suffix: "/integrations", label: "integrations" },
   { suffix: "/settings", label: "settings" },
 ];

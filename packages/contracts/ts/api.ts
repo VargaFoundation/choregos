@@ -365,6 +365,12 @@ export type AgentCredential = {
   created_by?: string | null;
   created_at?: string | null;
   revoked_at?: string | null;
+  /** le nom du jeton rattaché */
+  token_name?: string | null;
+  /** le dernier appel du jeton à la porte MCP : la console dit « connecté » */
+  last_used_at?: string | null;
+  /** le client de ce dernier appel (`User-Agent`, tronqué) */
+  last_client?: string | null;
 };
 
 /** Ce qu'un projet change d'une version — seulement resserrer. */
