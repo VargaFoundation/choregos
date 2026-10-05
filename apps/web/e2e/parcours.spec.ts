@@ -230,3 +230,24 @@ test("agents : un agent externe montre son client, et un projet ses agents impli
   await page.getByTestId("implicites").getByRole("button", { name: "register" }).first().click();
   await expect(page.getByTestId("implicites").getByRole("status")).toContainText("actors.refiner.agent: refiner");
 });
+
+test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un secret en référence", async ({ page }) => {
+  await page.goto("/p/billing-api/settings");
+  const connecteurs = page.getByTestId("connecteurs");
+  // Billing API livre du logiciel : un dépôt et une CI, chacun avec sa raison.
+  await expect(page.getByTestId("connecteur-scm")).toContainText("platform default: github");
+  await expect(page.getByTestId("connecteur-scm")).toContainText("the guarantee scope_respected on t-implement");
+  // Rien n'exige de notification : la ligne n'existe pas tant qu'on ne l'ajoute pas.
+  await expect(page.getByTestId("connecteur-notify")).toHaveCount(0);
+  await page.getByLabel("add a connector").selectOption("notify");
+  await page.getByRole("button", { name: "add", exact: true }).click();
+  await expect(page.getByTestId("connecteur-notify")).toBeVisible();
+  // Jira : le formulaire vient de son schéma, ses secrets se nomment par référence.
+  await page.getByTestId("connecteur-tracker").getByRole("button", { name: "edit" }).click();
+  await page.getByTestId("connecteur-tracker").getByRole("combobox").first().selectOption("jira");
+  await page.getByLabel("api token").fill("s3cr3t");
+  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("a reference is expected");
+  await page.getByLabel("api token").fill("env:JIRA_TOKEN");
+  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
+  await expect(connecteurs).toBeVisible();
+});

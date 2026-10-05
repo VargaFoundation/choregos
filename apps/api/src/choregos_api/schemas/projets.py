@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from choregos_contracts import ProjectConfig
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from .base import Dto, PageMeta
 
@@ -83,15 +83,23 @@ class ConnectorDto(Dto):
     type: str
     config: dict[str, Any] = Field(default_factory=dict)
     secret_ref: str | None = None
+    #: Les secrets, champ par champ, en références (`env:NOM`) — jamais leur valeur (ADR 0034).
+    secret_refs: dict[str, str] = Field(default_factory=dict)
     status: str = "unknown"
     last_check_at: datetime | None = None
     last_error: str | None = None
+
+    @field_validator("secret_refs", mode="before")
+    @classmethod
+    def _sans_references(cls, valeur: Any) -> Any:
+        return valeur or {}
 
 
 class ConnectorUpsert(Dto):
     type: str
     config: dict[str, Any] = Field(default_factory=dict)
     secret_ref: str | None = None
+    secret_refs: dict[str, str] = Field(default_factory=dict)
 
 
 class ConnectorCheck(Dto):
@@ -111,6 +119,21 @@ class ConnectorType(Dto):
     display: str
     available: bool = True
     config_schema: dict[str, Any] = Field(default_factory=dict)
+    #: Ce que le type sait faire (ADR 0034) : `tracker`, `scm`, `identity`, `mcp`…
+    capabilities: list[str] = Field(default_factory=list)
+    #: Les clefs de configuration qui sont des secrets : elles s'écrivent dans `secret_refs`.
+    secret_fields: list[str] = Field(default_factory=list)
+
+
+class ProjectRequirement(Dto):
+    """Une capacité que les workflows du projet exigent, et pourquoi (ADR 0034)."""
+
+    capability: str
+    reasons: list[str] = Field(default_factory=list)
+    #: le connecteur configuré qui la couvre
+    connector: ConnectorDto | None = None
+    #: sinon, le type que la plateforme prend par défaut
+    default_type: str | None = None
 
 
 class TemplateSummary(Dto):

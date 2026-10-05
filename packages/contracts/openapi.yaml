@@ -210,8 +210,17 @@ paths:
     get:
       tags: [connectors]
       operationId: listConnectorTypes
+      description: Les types que le registre connaît — ceux du cœur et ceux des greffons — avec leurs capacités, le schéma de leur configuration et leurs champs secrets (ADR 0034).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConnectorType" } } } } }
+  /projects/{id}/requirements:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [connectors]
+      operationId: listProjectRequirements
+      description: Ce que les workflows actifs du projet exigent de ses connecteurs, et pourquoi ; le connecteur qui couvre chaque capacité, sinon le type par défaut de la plateforme (ADR 0034).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectRequirement" } } } } }
   /projects/{id}/workflow:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1313,7 +1322,8 @@ components:
       name: kind
       in: path
       required: true
-      schema: { type: string, enum: [tracker, scm, ci, cd, runtime, memory, notify, gateway] }
+      description: une capacité ; le registre dit lesquelles existent (`GET /connectors/types`, ADR 0034)
+      schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
     Cursor: { name: cursor, in: query, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
   responses:
@@ -1466,10 +1476,11 @@ components:
       required: [kind, type, status]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [tracker, scm, ci, cd, runtime, memory, notify, gateway] }
+        kind: { type: string, description: "une capacité (ADR 0034) : tracker, scm, ci, cd, runtime, memory, notify, gateway — ou celle qu'un type de greffon déclare (identity, mcp…)" }
         type: { type: string }
         config: { type: object, additionalProperties: true }
         secret_ref: { type: [string, "null"] }
+        secret_refs: { type: object, additionalProperties: { type: string }, description: "les secrets, champ par champ, en références (`env:NOM`) — jamais leur valeur (ADR 0034)" }
         status: { type: string, enum: [unknown, ok, degraded, error] }
         last_check_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
@@ -1478,8 +1489,9 @@ components:
       required: [type, config]
       properties:
         type: { type: string }
-        config: { type: object, additionalProperties: true }
+        config: { type: object, additionalProperties: true, description: "sans champ secret : un secret en clair reçoit 422" }
         secret_ref: { type: [string, "null"] }
+        secret_refs: { type: object, additionalProperties: { type: string } }
     ConnectorTestResult:
       type: object
       required: [ok, checks]
@@ -1503,6 +1515,17 @@ components:
         display: { type: string }
         available: { type: boolean, default: true }
         config_schema: { type: object, additionalProperties: true }
+        capabilities: { type: array, items: { type: string }, description: "ce que le type sait faire : tracker, scm, identity, mcp…" }
+        secret_fields: { type: array, items: { type: string }, description: les clefs de configuration qui sont des secrets }
+    ProjectRequirement:
+      type: object
+      required: [capability, reasons]
+      description: Une capacité que les workflows du projet exigent, et pourquoi (ADR 0034).
+      properties:
+        capability: { type: string }
+        reasons: { type: array, items: { type: string } }
+        connector: { oneOf: [{ $ref: "#/components/schemas/Connector" }, { type: "null" }] }
+        default_type: { type: [string, "null"], description: "le type que la plateforme prend quand aucun connecteur ne la couvre" }
     WorkflowDef:
       type: object
       required: [name, version, source, yaml, checksum, is_active]

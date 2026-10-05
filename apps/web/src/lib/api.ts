@@ -7,6 +7,7 @@
  */
 import type {
   Agent,
+  ProjectRequirement,
   AgentCreate,
   AgentCredential,
   AgentMetrics,
@@ -287,6 +288,8 @@ export const api = {
         allowed: boolean;
       }[];
     }>(`/projects/${qualify(id)}/tools`),
+  /** Ce que les workflows du projet exigent de ses connecteurs, et pourquoi (ADR 0034). */
+  projectRequirements: (id: string) => request<ProjectRequirement[]>(`/projects/${qualify(id)}/requirements`),
   putConnector: (id: string, kind: string, body: unknown) =>
     request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}`, { method: "PUT", body: JSON.stringify(body) }),
   testConnector: (id: string, kind: string) =>

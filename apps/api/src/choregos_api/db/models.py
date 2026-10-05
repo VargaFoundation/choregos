@@ -93,6 +93,9 @@ class Connector(Base, PkMixin, TimestampMixin):
     type: Mapped[str] = mapped_column(String(64))
     config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     secret_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: Les secrets du connecteur, champ par champ, en RÉFÉRENCES (`env:NOM`) : résolues quand
+    #: l'adaptateur est construit, jamais stockées en clair (ADR 0034).
+    secret_refs: Mapped[dict[str, str] | None] = mapped_column(Json, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="unknown")
     last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

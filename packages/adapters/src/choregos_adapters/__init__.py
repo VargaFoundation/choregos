@@ -22,7 +22,18 @@ from .base import (
     TrackerAdapter,
 )
 from .errors import ConfigurationError
-from .registry import AdapterSet, available, build, fakes_enabled, register
+from .registry import (
+    AdapterSet,
+    ConnectorTypeSpec,
+    available,
+    build,
+    configuration_resolue,
+    connector_types,
+    fakes_enabled,
+    register,
+    spec_of,
+    type_par_defaut,
+)
 
 
 def _env(name: str, default: str = "") -> str:
@@ -38,6 +49,7 @@ __all__ = [
     "AgentBackend",
     "CdAdapter",
     "CiAdapter",
+    "ConnectorTypeSpec",
     "Executor",
     "GatewayAdapter",
     "MemoryAdapter",
@@ -47,8 +59,12 @@ __all__ = [
     "available",
     "build",
     "charger_les_greffons",
+    "configuration_resolue",
+    "connector_types",
     "fakes_enabled",
     "register",
+    "spec_of",
+    "type_par_defaut",
 ]
 
 
@@ -92,6 +108,172 @@ def _passerelle_directe(cfg: dict[str, Any]) -> Any:
     )
 
 
+def _objet(proprietes: dict[str, Any], requis: tuple[str, ...] = ()) -> dict[str, Any]:
+    schema: dict[str, Any] = {"type": "object", "properties": proprietes}
+    if requis:
+        schema["required"] = list(requis)
+    return schema
+
+
+_TEXTE: dict[str, Any] = {"type": "string"}
+_ENTIER: dict[str, Any] = {"type": "integer"}
+
+#: Ce que chaque type livré déclare (ADR 0034) : son nom, ses capacités, le schéma de sa
+#: configuration — celui dont la console tire le formulaire — et ses champs SECRETS, qui ne
+#: s'écrivent qu'en référence. Ces schémas vivaient dans le routeur de l'API, en double du
+#: registre et en désaccord avec lui (jira y était « indisponible » alors qu'il est enregistré).
+_SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
+    ("tracker", "github-issues"): ConnectorTypeSpec(
+        "GitHub Issues + Projects v2",
+        ("tracker",),
+        _objet(
+            {
+                "repo": {"type": "string", "description": "owner/repo"},
+                "project_number": _ENTIER,
+                "org": _TEXTE,
+                "installation_id": _ENTIER,
+            },
+            ("repo",),
+        ),
+        ("webhook_secret",),
+    ),
+    ("tracker", "internal"): ConnectorTypeSpec("internal (Choregos holds the work items)", ("tracker",)),
+    ("tracker", "jira"): ConnectorTypeSpec(
+        "Jira Cloud",
+        ("tracker",),
+        _objet(
+            {
+                "base_url": {"type": "string", "description": "https://<site>.atlassian.net"},
+                "email": _TEXTE,
+                "project_key": _TEXTE,
+                "field_names": {"type": "object", "additionalProperties": {"type": "string"}},
+            },
+            ("base_url", "email", "project_key"),
+        ),
+        ("api_token", "webhook_secret"),
+    ),
+    ("tracker", "gitlab-issues"): ConnectorTypeSpec(
+        "GitLab Issues",
+        ("tracker",),
+        _objet(
+            {"base_url": {"type": "string", "default": "https://gitlab.com"}, "project": _TEXTE}, ("project",)
+        ),
+        ("token", "webhook_secret"),
+    ),
+    ("scm", "github"): ConnectorTypeSpec(
+        "GitHub (App choregos-bot)",
+        ("scm",),
+        _objet(
+            {
+                "repo": _TEXTE,
+                "installation_id": _ENTIER,
+                "merge_queue": {"type": "boolean", "default": True},
+                "merge_method": {
+                    "type": "string",
+                    "enum": ["MERGE", "SQUASH", "REBASE"],
+                    "default": "SQUASH",
+                },
+            },
+            ("repo",),
+        ),
+    ),
+    ("ci", "tekton"): ConnectorTypeSpec(
+        "Tekton Pipelines",
+        ("ci",),
+        _objet({"namespace": _TEXTE, "pipeline": {"type": "string", "default": "choregos-ci"}}),
+    ),
+    ("cd", "argocd"): ConnectorTypeSpec(
+        "Argo CD + Rollouts",
+        ("cd",),
+        _objet(
+            {
+                "gitops_repo": _TEXTE,
+                "base_url": _TEXTE,
+                "app_pattern": {"type": "string", "default": "{app}-{env}"},
+                "path_prefix": {"type": "string", "default": "apps"},
+            },
+            ("gitops_repo",),
+        ),
+        ("token",),
+    ),
+    ("runtime", "tekton"): ConnectorTypeSpec(
+        "Tekton PipelineRun",
+        ("runtime",),
+        _objet({"pipeline": {"type": "string", "default": "choregos-agent"}, "service_account": _TEXTE}),
+    ),
+    ("runtime", "k8s_job"): ConnectorTypeSpec(
+        "Kubernetes Job",
+        ("runtime",),
+        _objet(
+            {
+                "service_account": _TEXTE,
+                "cpu_limit": _TEXTE,
+                "memory_limit": _TEXTE,
+                "max_active": _ENTIER,
+                "env_from_secrets": {"type": "array", "items": _TEXTE},
+            }
+        ),
+    ),
+    ("runtime", "aca"): ConnectorTypeSpec(
+        "Azure Container Apps jobs",
+        ("runtime",),
+        _objet(
+            {
+                "subscription_id": _TEXTE,
+                "resource_group": _TEXTE,
+                "tenant_id": _TEXTE,
+                "client_id": _TEXTE,
+                "environment_id": _TEXTE,
+                "location": {"type": "string", "default": "westeurope"},
+                "identity_id": _TEXTE,
+                "registry_server": _TEXTE,
+                "log_analytics_workspace_id": _TEXTE,
+            },
+            ("subscription_id", "resource_group", "environment_id"),
+        ),
+        ("client_secret", "token"),
+    ),
+    ("runtime", "local_docker"): ConnectorTypeSpec(
+        "local Docker (development)", ("runtime",), _objet({"network": _TEXTE})
+    ),
+    ("memory", "ecphoria"): ConnectorTypeSpec(
+        "Ecphoria (memory and knowledge base)",
+        ("memory",),
+        _objet({"base_url": _TEXTE, "tenant": _TEXTE, "read_timeout_ms": _ENTIER}),
+        ("token",),
+    ),
+    ("memory", "lexical"): ConnectorTypeSpec("lexical (fallback, no service)", ("memory",)),
+    ("memory", "pgvector"): ConnectorTypeSpec(
+        "pgvector (deprecated alias of lexical)", ("memory",), deprecated=True
+    ),
+    ("gateway", "direct"): ConnectorTypeSpec(
+        "direct (development only: no cost measured, no cap)",
+        ("gateway",),
+        _objet({"models": {"type": "array", "items": _TEXTE}}),
+        ("key",),
+    ),
+    ("gateway", "litellm"): ConnectorTypeSpec(
+        "LiteLLM",
+        ("gateway",),
+        _objet(
+            {
+                "base_url": _TEXTE,
+                "team_id": _TEXTE,
+                "internal_prices": {"type": "object", "additionalProperties": {"type": "string"}},
+                "enterprise_tags": {"type": "boolean", "default": False},
+            }
+        ),
+        ("master_key",),
+    ),
+    ("notify", "slack"): ConnectorTypeSpec(
+        "Slack",
+        ("notify",),
+        _objet({"channel": {"type": "string", "default": "#choregos"}, "public_url": _TEXTE}),
+        ("webhook_url", "bot_token"),
+    ),
+}
+
+
 def _register_builtins() -> None:
     """Enregistre les implémentations livrées (import paresseux pour éviter les cycles)."""
     from .fakes import (
@@ -132,7 +314,7 @@ def _register_builtins() -> None:
     from .tracker.interne import InternalTracker
     from .tracker.jira import JiraTracker
 
-    register("tracker", "github-issues")(
+    register("tracker", "github-issues", _SPECS_LIVREES[("tracker", "github-issues")])(
         lambda cfg: GitHubTracker(
             _github_client(cfg),
             cfg["repo"],
@@ -141,8 +323,8 @@ def _register_builtins() -> None:
             webhook_secret=cfg.get("webhook_secret", ""),
         )
     )
-    register("tracker", "internal")(lambda cfg: InternalTracker())
-    register("tracker", "jira")(
+    register("tracker", "internal", _SPECS_LIVREES[("tracker", "internal")])(lambda cfg: InternalTracker())
+    register("tracker", "jira", _SPECS_LIVREES[("tracker", "jira")])(
         lambda cfg: JiraTracker(
             RestClient(
                 cfg["base_url"],
@@ -156,7 +338,7 @@ def _register_builtins() -> None:
             field_names=cfg.get("field_names"),
         )
     )
-    register("tracker", "gitlab-issues")(
+    register("tracker", "gitlab-issues", _SPECS_LIVREES[("tracker", "gitlab-issues")])(
         lambda cfg: GitLabTracker(
             RestClient(
                 cfg.get("base_url", "https://gitlab.com"),
@@ -167,7 +349,7 @@ def _register_builtins() -> None:
             webhook_secret=cfg.get("webhook_secret", ""),
         )
     )
-    register("scm", "github")(
+    register("scm", "github", _SPECS_LIVREES[("scm", "github")])(
         lambda cfg: GitHubScm(
             _github_client(cfg),
             default_repo=cfg.get("repo", ""),
@@ -175,14 +357,14 @@ def _register_builtins() -> None:
             use_merge_queue=cfg.get("merge_queue", True),
         )
     )
-    register("ci", "tekton")(
+    register("ci", "tekton", _SPECS_LIVREES[("ci", "tekton")])(
         lambda cfg: TektonCi(
             KubernetesClient(**cfg.get("kubernetes", {})),
             namespace=cfg.get("namespace", "default"),
             pipeline=cfg.get("pipeline", "choregos-ci"),
         )
     )
-    register("cd", "argocd")(
+    register("cd", "argocd", _SPECS_LIVREES[("cd", "argocd")])(
         lambda cfg: ArgoCdAdapter(
             base_url=cfg.get("base_url", "http://argocd-server.argocd"),
             token=cfg.get("token", ""),
@@ -192,7 +374,7 @@ def _register_builtins() -> None:
             path_prefix=cfg.get("path_prefix", "apps"),
         )
     )
-    register("runtime", "tekton")(
+    register("runtime", "tekton", _SPECS_LIVREES[("runtime", "tekton")])(
         lambda cfg: TektonExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
             pipeline=cfg.get("pipeline", "choregos-agent"),
@@ -211,7 +393,7 @@ def _register_builtins() -> None:
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
         )
     )
-    register("runtime", "aca")(
+    register("runtime", "aca", _SPECS_LIVREES[("runtime", "aca")])(
         lambda cfg: AcaExecutor(
             AzureArmClient(
                 subscription_id=cfg["subscription_id"],
@@ -228,10 +410,10 @@ def _register_builtins() -> None:
             log_analytics_workspace_id=cfg.get("log_analytics_workspace_id"),
         )
     )
-    register("runtime", "local_docker")(
+    register("runtime", "local_docker", _SPECS_LIVREES[("runtime", "local_docker")])(
         lambda cfg: LocalDockerExecutor(network=cfg.get("network", "choregos_default"))
     )
-    register("memory", "ecphoria")(
+    register("memory", "ecphoria", _SPECS_LIVREES[("memory", "ecphoria")])(
         lambda cfg: EcphoriaMemory(
             # Comme la passerelle : l'URL et le jeton du déploiement, sauf surcharge par projet.
             # `CHOREGOS_MEMORY_URL` était posé par le chart et ignoré ici.
@@ -243,10 +425,10 @@ def _register_builtins() -> None:
     )
     # `pgvector` : alias déprécié de `lexical` — le nom promettait des vecteurs, le code fait
     # une similarité lexicale. Conservé pour les projets déjà configurés.
-    register("memory", "lexical")(lambda cfg: LexicalMemory())
-    register("memory", "pgvector")(lambda cfg: LexicalMemory())
-    register("gateway", "direct")(_passerelle_directe)
-    register("gateway", "litellm")(
+    register("memory", "lexical", _SPECS_LIVREES[("memory", "lexical")])(lambda cfg: LexicalMemory())
+    register("memory", "pgvector", _SPECS_LIVREES[("memory", "pgvector")])(lambda cfg: LexicalMemory())
+    register("gateway", "direct", _SPECS_LIVREES[("gateway", "direct")])(_passerelle_directe)
+    register("gateway", "litellm", _SPECS_LIVREES[("gateway", "litellm")])(
         lambda cfg: LiteLlmGateway(
             cfg.get("base_url", _env("CHOREGOS_GATEWAY_URL", "http://litellm.choregos-gateway:4000")),
             cfg.get("master_key", _env("CHOREGOS_GATEWAY_MASTER_KEY", "")),
@@ -255,7 +437,7 @@ def _register_builtins() -> None:
             enterprise_tags=cfg.get("enterprise_tags", False),
         )
     )
-    register("notify", "slack")(
+    register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(
         lambda cfg: SlackNotifier(
             webhook_url=cfg.get("webhook_url", _env("CHOREGOS_SLACK_WEBHOOK", "")),
             bot_token=cfg.get("bot_token", _env("CHOREGOS_SLACK_TOKEN", "")),

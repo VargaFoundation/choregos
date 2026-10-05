@@ -27,17 +27,100 @@ from .base import (
 
 Factory = Callable[[dict[str, Any]], Any]
 
+
+@dataclass(frozen=True, slots=True)
+class ConnectorTypeSpec:
+    """Ce qu'un type de connecteur déclare de lui-même (ADR 0034) : la console en tire son
+    formulaire, la plateforme ses refus. `secret_fields` : les clefs de configuration qui sont des
+    secrets — elles ne s'écrivent jamais en clair, seulement en référence (`env:NOM`…), résolue
+    quand l'adaptateur est construit."""
+
+    display: str
+    capabilities: tuple[str, ...] = ()
+    config_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}})
+    secret_fields: tuple[str, ...] = ()
+    #: Un ancien nom, gardé pour les projets qui le portent, jamais proposé à un nouveau.
+    deprecated: bool = False
+
+
 _REGISTRY: dict[tuple[str, str], Factory] = {}
+_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {}
+
+#: Le type qu'un projet obtient pour une sorte qu'il ne configure pas.
+TYPES_PAR_DEFAUT: dict[str, str] = {
+    "tracker": "github-issues",
+    "scm": "github",
+    "ci": "tekton",
+    "cd": "argocd",
+    "memory": "ecphoria",
+    "gateway": "litellm",
+    "notify": "slack",
+}
 
 
-def register(kind: ConnectorKind | str, type_name: str) -> Callable[[Factory], Factory]:
-    """Enregistre une implémentation pour un couple (kind, type)."""
+def register(
+    kind: ConnectorKind | str, type_name: str, spec: ConnectorTypeSpec | None = None
+) -> Callable[[Factory], Factory]:
+    """Enregistre une implémentation pour un couple (kind, type), et ce qu'elle déclare."""
 
     def decorator(factory: Factory) -> Factory:
-        _REGISTRY[(str(kind), type_name)] = factory
+        cle = (str(kind), type_name)
+        _REGISTRY[cle] = factory
+        # Remplacer l'implémentation ne retire pas la déclaration : l'API réenregistre la mémoire
+        # lexicale avec SA fabrique (adossée à ses tables), et l'alias `pgvector` redevenait
+        # proposable à la création.
+        _SPECS[cle] = (
+            spec or _SPECS.get(cle) or ConnectorTypeSpec(display=type_name, capabilities=(str(kind),))
+        )
         return factory
 
     return decorator
+
+
+def spec_of(kind: ConnectorKind | str, type_name: str) -> ConnectorTypeSpec | None:
+    return _SPECS.get((str(kind), type_name))
+
+
+def connector_types() -> list[tuple[str, str, ConnectorTypeSpec]]:
+    """Les types enregistrés — ceux du cœur et ceux des greffons —, sans les faux des tests ni
+    les anciens noms : un nouveau projet ne choisit pas un nom qui ment (`pgvector`)."""
+    return sorted((k, t, spec) for (k, t), spec in _SPECS.items() if t != "fake" and not spec.deprecated)
+
+
+def references_de_secret(
+    kind: str, type_name: str, secret_refs: dict[str, str] | None, secret_ref: str | None = None
+) -> dict[str, str]:
+    """Les références d'un connecteur, champ par champ. `secret_ref` (une seule, d'avant l'ADR 0034)
+    vaut pour le PREMIER champ secret de son type."""
+    references = dict(secret_refs or {})
+    spec = spec_of(kind, type_name)
+    if secret_ref and spec and spec.secret_fields:
+        references.setdefault(spec.secret_fields[0], secret_ref)
+    return references
+
+
+def configuration_resolue(
+    kind: str,
+    type_name: str,
+    config: dict[str, Any] | None,
+    secret_refs: dict[str, str] | None,
+    secret_ref: str | None = None,
+) -> dict[str, Any]:
+    """La configuration, ses secrets RÉSOLUS : de quoi construire l'adaptateur — jamais de quoi
+    enregistrer ni rendre. Une référence irrésoluble lève `SecretIntrouvable` : mieux vaut un
+    connecteur en erreur qu'un adaptateur qui retombe en silence sur sa valeur par défaut."""
+    from choregos_core.secrets import resoudre
+
+    resolue = dict(config or {})
+    for champ, reference in references_de_secret(kind, type_name, secret_refs, secret_ref).items():
+        resolue[champ] = resoudre(reference)
+    return resolue
+
+
+def type_par_defaut(kind: str) -> str | None:
+    if kind == "runtime":
+        return default_executor_kind()
+    return TYPES_PAR_DEFAUT.get(kind)
 
 
 def fakes_enabled() -> bool:
@@ -116,15 +199,20 @@ class AdapterSet:
 
         def get(kind: str, default_type: str) -> Any:
             spec = connectors.get(kind, {})
-            return build(kind, spec.get("type", default_type), spec.get("config", {}))
+            type_name = spec.get("type", default_type)
+            # Les secrets résolus ICI, dans le processus qui construit l'adaptateur (ADR 0034).
+            config = configuration_resolue(
+                kind, type_name, spec.get("config", {}), spec.get("secret_refs"), spec.get("secret_ref")
+            )
+            return build(kind, type_name, config)
 
         return cls(
-            tracker=get("tracker", "github-issues"),
-            scm=get("scm", "github"),
-            ci=get("ci", "tekton"),
-            cd=get("cd", "argocd"),
+            tracker=get("tracker", TYPES_PAR_DEFAUT["tracker"]),
+            scm=get("scm", TYPES_PAR_DEFAUT["scm"]),
+            ci=get("ci", TYPES_PAR_DEFAUT["ci"]),
+            cd=get("cd", TYPES_PAR_DEFAUT["cd"]),
             executor=get("runtime", default_executor_kind()),
-            memory=get("memory", "ecphoria"),
-            gateway=get("gateway", "litellm"),
-            notify=get("notify", "slack"),
+            memory=get("memory", TYPES_PAR_DEFAUT["memory"]),
+            gateway=get("gateway", TYPES_PAR_DEFAUT["gateway"]),
+            notify=get("notify", TYPES_PAR_DEFAUT["notify"]),
         )

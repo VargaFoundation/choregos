@@ -9,6 +9,8 @@
 import type {
   Agent,
   AgentCreate,
+  ConnectorType,
+  ProjectRequirement,
   AgentCredential,
   AgentMetrics,
   ApiToken,
@@ -782,6 +784,40 @@ export const skillVersion: SkillVersion = {
   },
 };
 
+/** Des types tirés du registre (ADR 0034) : jira est disponible, ses secrets se nomment. */
+const objet = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
+export const connectorTypes: ConnectorType[] = [
+  { kind: "tracker", type: "internal", display: "internal (Choregos holds the work items)", config_schema: objet({}), capabilities: ["tracker"], secret_fields: [] },
+  {
+    kind: "tracker",
+    type: "jira",
+    display: "Jira Cloud",
+    config_schema: objet({ base_url: { type: "string" }, email: { type: "string" }, project_key: { type: "string" } }, ["base_url", "email", "project_key"]),
+    capabilities: ["tracker"],
+    secret_fields: ["api_token", "webhook_secret"],
+  },
+  { kind: "scm", type: "github", display: "GitHub (App choregos-bot)", config_schema: objet({ repo: { type: "string" } }, ["repo"]), capabilities: ["scm"], secret_fields: [] },
+  { kind: "ci", type: "tekton", display: "Tekton Pipelines", config_schema: objet({ namespace: { type: "string" } }), capabilities: ["ci"], secret_fields: [] },
+  { kind: "cd", type: "argocd", display: "Argo CD + Rollouts", config_schema: objet({ gitops_repo: { type: "string" } }, ["gitops_repo"]), capabilities: ["cd"], secret_fields: ["token"] },
+  { kind: "runtime", type: "k8s_job", display: "Kubernetes Job", config_schema: objet({ service_account: { type: "string" } }), capabilities: ["runtime"], secret_fields: [] },
+  { kind: "gateway", type: "litellm", display: "LiteLLM", config_schema: objet({ base_url: { type: "string" } }), capabilities: ["gateway"], secret_fields: ["master_key"] },
+  { kind: "notify", type: "slack", display: "Slack", config_schema: objet({ channel: { type: "string" } }), capabilities: ["notify"], secret_fields: ["webhook_url", "bot_token"] },
+];
+
+/** Ce que les workflows de Billing API exigent : du logiciel, donc un dépôt, une CI, un train. */
+export const projectRequirements: ProjectRequirement[] = [
+  {
+    capability: "tracker",
+    reasons: ["work items live in a tracker: the internal one unless you connect another"],
+    connector: { id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" },
+    default_type: null,
+  },
+  { capability: "scm", reasons: ["default-simple: the guarantee scope_respected on t-implement"], connector: null, default_type: "github" },
+  { capability: "ci", reasons: ["hotfix: the guarantee ci_green on t-ship"], connector: null, default_type: "tekton" },
+  { capability: "runtime", reasons: ["default-simple: the agent dev runs somewhere"], connector: null, default_type: "k8s_job" },
+  { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
+];
+
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 const proposition = {
   proposal: "pr1",
@@ -887,7 +923,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs$/, [{ slug: "varga", name: "Varga Foundation", role: "org_admin" }]],
     [/^\/orgs\/[^/]+\/members$/, me.memberships],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
-    [/^\/connectors\/types$/, []],
+    [/^\/connectors\/types$/, connectorTypes],
+    [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/platform\/models$/, []],
     [/^\/platform\/backends$/, []],
     [/^\/platform\/executors$/, []],
@@ -913,7 +950,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
     // Un tracker interne : la demande se pose dans la console (le board offre « new request »).
-    [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, enabled: true }]],
+    [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
     [/^\/projects\/[^/]+\/proposals\/[^/]+$/, proposition],
     [/^\/projects\/[^/]+\/proposals$/, [proposition]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
