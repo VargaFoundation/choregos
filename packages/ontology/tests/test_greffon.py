@@ -389,7 +389,10 @@ def test_la_branche_du_greffon_cree_ses_tables_et_redescend_seule(
         main([])
         tables, versions = etat()
         assert {"ontology_versions", "managed_objects", "action_proposals", "projects"} <= tables
-        assert versions == {"onto0002"}
+        # La tête du greffon dépend d'une révision du cœur, pas de sa tête : dès que le cœur avance
+        # (jetons à portée, ADR 0030), les deux têtes coexistent dans `alembic_version`.
+        assert "onto0002" in versions
+        assert versions <= {"onto0002", tete_du_coeur}
         main(["downgrade", "ontology@base"])
         tables, versions = etat()
         assert not {"ontology_versions", "managed_objects", "action_proposals"} & tables
