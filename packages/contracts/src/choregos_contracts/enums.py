@@ -216,6 +216,9 @@ class ActionStatus(StrEnum):
     REJECTED = "rejected"
     APPROVED = "approved"
     RUNNING = "running"
+    #: Ses effets sont faits ; elle attend la PREUVE qu'ils ont servi — un rapport à venir, un
+    #: événement extérieur —, jusqu'à une échéance (S20-08).
+    AWAITING_EVIDENCE = "awaiting_evidence"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 

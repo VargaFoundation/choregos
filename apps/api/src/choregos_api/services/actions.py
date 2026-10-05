@@ -251,6 +251,18 @@ async def _prevenir_le_ticket(session: AsyncSession, projet: Project, action: Ac
     )
 
 
+async def signaler_une_preuve(action_id: str, position: int, ok: bool, detail: str) -> None:
+    """La couture d'une PREUVE (S20-08) : un effet a demandé qu'on l'attende (`attendre_une_preuve`) ;
+    ce qui la constate — un rapport du collecteur, un événement extérieur — la remet à l'action.
+    Favorable, l'action reprend ; contraire, elle échoue et ce qu'elle avait fait se compense."""
+    from ..temporal import action_id as identifiant
+    from ..temporal import get_temporal
+
+    await get_temporal().signal(
+        identifiant(action_id), "preuve", {"position": position, "ok": ok, "detail": detail}
+    )
+
+
 async def _proprietaire_de_l_agent(
     session: AsyncSession, propose_par: dict[str, Any], org_id: str
 ) -> str | None:

@@ -304,6 +304,20 @@ def brancher() -> None:
 the default), `allowed` (the transition is enough) or `forbidden`. `connector.call` has none of its
 own: the operation it calls carries the policy, in the organisation and in the project.
 
+An effect can ask the action to **wait for its proof** — the collector's next report, a delivery
+confirmed elsewhere: it returns `{"attendre_une_preuve": {"jusqu_a": "<iso datetime>"}}`. The action
+shows `awaiting_evidence` and waits for the signal `preuve` until that deadline; whatever observes
+the proof hands it over:
+
+```python
+from choregos_api.services.actions import signaler_une_preuve
+
+await signaler_une_preuve(action_id, position, ok=False, detail="the key is still in the report")
+```
+
+A favourable proof lets the action go on; a contrary one, or none before the deadline, makes it
+fail — and what it had done is compensated, in reverse, as for a refusal.
+
 An effect runs in an activity of `ActionWorkflow`, never in the request that approved the action.
 It **must be idempotent**: a worker may die after the call and before the confirmation, and the
 effect is then attempted again. Raise `EffetRefuse` for what no retry will change; any other

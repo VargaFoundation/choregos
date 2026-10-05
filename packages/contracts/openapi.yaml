@@ -1813,7 +1813,7 @@ components:
         proposed_by: { type: object, additionalProperties: true }
         approval: { type: object, additionalProperties: true }
         decisions: { type: array, items: { type: object, additionalProperties: true } }
-        status: { type: string, enum: [pending_approval, rejected, approved, running, succeeded, failed] }
+        status: { type: string, enum: [pending_approval, rejected, approved, running, awaiting_evidence, succeeded, failed] }
         result: { type: [object, "null"], additionalProperties: true }
         error: { type: [string, "null"] }
         temporal_wf_id: { type: [string, "null"] }

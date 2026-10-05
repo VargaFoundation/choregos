@@ -5,6 +5,7 @@ const TON: Record<string, "neutral" | "accent" | "ok" | "warn" | "danger"> = {
   pending_approval: "warn",
   approved: "accent",
   running: "accent",
+  awaiting_evidence: "warn",
   succeeded: "ok",
   rejected: "neutral",
   failed: "danger",

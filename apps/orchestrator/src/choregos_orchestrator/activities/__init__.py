@@ -28,6 +28,7 @@ ALL_ACTIVITIES = [
     actions.cloturer_l_action,
     actions.proposer_l_action_de_transition,
     actions.etat_de_l_action,
+    actions.marquer_l_attente,
     stage.prepare_stage,
     execution.start_run,
     execution.await_run,
