@@ -223,48 +223,6 @@ export type WorkflowValidation = {
   errors: Array<WorkflowIssue>;
   warnings: Array<WorkflowIssue>;
   graph?: WorkflowGraph;
-  process?: Array<ProcessStep>;
-};
-
-/** Une transition dite en clair — la vue « processus » (ADR 0031). */
-export type ProcessStep = {
-  id: string;
-  from: string;
-  from_display?: string;
-  to: string;
-  to_display?: string;
-  actor: string;
-  actor_type: "agent" | "human" | "system" | "release_train";
-  who: string;
-  outputs?: Array<string>;
-  gates?: Array<{
-    name?: string;
-    summary?: string;
-  }>;
-  on_fail?: string | null;
-  on_reject?: string | null;
-  timeout_hours?: number | null;
-  sentence: string;
-};
-
-/** Une opération typée. `op` dit laquelle ; les autres champs dépendent d'elle (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
-export type WorkflowOperation = {
-  op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor";
-  [key: string]: unknown;
-};
-
-export type WorkflowEditRequest = {
-  yaml: string;
-  operations: Array<WorkflowOperation>;
-};
-
-export type WorkflowEditResult = WorkflowValidation & {
-  yaml: string;
-  /** diff unifié du texte d'origine au texte édité */
-  diff: string;
-  inverse: Array<WorkflowOperation>;
-  /** ce qu'une opération change au-delà du texte (un état à effet renommé…) */
-  notices: Array<string>;
 };
 
 export type AgentLimits = {
@@ -349,6 +307,22 @@ export type AgentMetrics = {
   }>;
   spent_today_usd?: number;
   daily_budget_usd?: number | null;
+};
+
+export type AgentCredentialCreate = {
+  kind: "token" | "oauth_client";
+  token_id?: string | null;
+  client_id?: string | null;
+};
+
+export type AgentCredential = {
+  id: string;
+  kind: string;
+  token_id?: string | null;
+  client_id?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  revoked_at?: string | null;
 };
 
 /** Ce qu'un projet change d'une version — seulement resserrer. */
@@ -1038,6 +1012,7 @@ export interface Operations {
   argocdWebhook: { method: "POST"; path: "/webhooks/argocd"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  attachAgentCredential: { method: "POST"; path: "/orgs/{org}/agents/{slug}/credentials"; body: AgentCredentialCreate; response: AgentCredential };
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
@@ -1059,7 +1034,7 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
-  editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
+  detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";
   features: Array<string>;
@@ -1161,7 +1136,7 @@ export interface Operations {
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
-  listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
+  listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
@@ -1217,7 +1192,6 @@ export interface Operations {
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
-  removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };

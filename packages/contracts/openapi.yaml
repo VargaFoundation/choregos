@@ -863,6 +863,37 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentMetrics" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/credentials:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listAgentCredentials
+      responses:
+        "200": { description: Les clients de l'agent externe, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCredential" } } } } }
+    post:
+      tags: [agents]
+      operationId: attachAgentCredential
+      description: Rattache un jeton `mcp:*` ou un client OAuth à un agent `external` ; ses droits deviennent ceux de l'humain intersectés avec ceux de la version de l'agent (ADR 0033).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentCredentialCreate" } } }
+      responses:
+        "201": { description: Rattaché, content: { application/json: { schema: { $ref: "#/components/schemas/AgentCredential" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/credentials/{credential_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: credential_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [agents]
+      operationId: detachAgentCredential
+      responses:
+        "204": { description: Détaché }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/versions:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1662,6 +1693,24 @@ components:
         by_project: { type: array, items: { type: object, required: [project, runs, cost_usd], properties: { project: { type: string }, runs: { type: integer }, cost_usd: { type: number } } } }
         spent_today_usd: { type: number }
         daily_budget_usd: { type: [number, "null"] }
+    AgentCredentialCreate:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [token, oauth_client] }
+        token_id: { type: [string, "null"] }
+        client_id: { type: [string, "null"] }
+    AgentCredential:
+      type: object
+      required: [id, kind]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        token_id: { type: [string, "null"] }
+        client_id: { type: [string, "null"] }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
     AgentOverrides:
       type: object
       description: Ce qu'un projet change d'une version — seulement resserrer.

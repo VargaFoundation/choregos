@@ -227,6 +227,7 @@ async def _auditer(ctx: Contexte, outil: str, ecriture: bool, issue: str, reques
         ecriture=ecriture,
         issue=issue,
         jeton=ctx.appelant.cle,
+        agent=ctx.appelant.agent,
         client=(request.headers.get("user-agent") or "")[:100] or None,
     )
     log.info("mcp.call", outil=outil, issue=issue, appelant=ctx.appelant.cle)

@@ -570,6 +570,28 @@ class SkillVersion(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class AgentCredential(Base, PkMixin, TimestampMixin):
+    """Ce qui fait d'un client de la porte MCP un agent externe (ADR 0033) : un jeton `mcp:*` ou un
+    client OAuth (`azp`), rattaché à un agent `external`. Ses droits sont alors ceux de l'humain,
+    intersectés avec ceux de la version de l'agent ; sa révocation se relit à chaque appel."""
+
+    __tablename__ = "agent_credentials"
+    __table_args__ = (
+        UniqueConstraint("api_token_id", name="uq_agent_credentials_api_token_id"),
+        UniqueConstraint("org_id", "client_id", name="uq_agent_credentials_org_client"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[str] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    api_token_id: Mapped[str | None] = mapped_column(
+        ForeignKey("api_tokens.id", ondelete="CASCADE"), nullable=True
+    )
+    client_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 ALL_TABLES = [
     Organization,
     User,
@@ -601,6 +623,7 @@ ALL_TABLES = [
     ProjectAgent,
     Skill,
     SkillVersion,
+    AgentCredential,
 ]
 
 

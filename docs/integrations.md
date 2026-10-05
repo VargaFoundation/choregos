@@ -159,6 +159,24 @@ Point it at `https://<console-host>/mcp` with the header `Authorization: Bearer 
 Streamable HTTP. The door has no SSE stream and no session: a `GET` answers 405, which the protocol
 allows.
 
+## An external agent
+
+A client of the door can be **registered as an agent** of the organisation
+([ADR 0033](adr/0033-registre-d-agents-et-bibliotheque-de-skills.md)): an agent of kind `external`,
+to which an organisation administrator attaches the client's token — or its OAuth client id:
+
+```bash
+curl -X POST $API/orgs/acme/agents -d '{"slug": "claude-of-lea", "kind": "external",
+  "display_name": "Léa's Claude Code",
+  "spec": {"mcp_servers": [{"connector": "choregos", "tools": ["list_projects", "search_*"]}]}}'
+curl -X POST $API/orgs/acme/agents/claude-of-lea/credentials -d '{"kind": "token", "token_id": "<id>"}'
+```
+
+Its calls then carry the agent's name in the audit, and its rights are **the person's, intersected
+with the agent's**: a `choregos` entry in the version's `mcp_servers` names the door's tools it may
+call (patterns allowed); a person without a right gives an agent without it. The agent's state is
+read on **every call**: revoked, suspended or expired, the next call answers `401`.
+
 ## Limits
 
 - 120 calls a minute per token, per API replica (HTTP 429 with `Retry-After` beyond).

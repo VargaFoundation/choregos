@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from .agents import (
     AgentCreate,
+    AgentCredentialCreate,
+    AgentCredentialDto,
     AgentDto,
     AgentMetrics,
     AgentOverrides,
@@ -145,6 +147,8 @@ __all__ = [
     "AgentBackendInfo",
     "AgentBackendUpdate",
     "AgentCreate",
+    "AgentCredentialCreate",
+    "AgentCredentialDto",
     "AgentDto",
     "AgentMetrics",
     "AgentOverrides",

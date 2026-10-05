@@ -65,6 +65,10 @@ def effective(spec: AgentSpec, surcharges: AgentOverrides) -> AgentSpec:
     return resultat
 
 
+#: L'état d'un agent, dit en clair dans un refus.
+ETATS = {"revoked": "révoqué", "suspended": "suspendu", "active": "actif"}
+
+
 class AgentIndisponible(RuntimeError):  # noqa: N818 - un refus motivé, dit au run
     """L'agent qu'un acteur nomme n'existe pas, n'est pas actif, ou a expiré : le run ne part pas."""
 
@@ -88,7 +92,9 @@ async def resoudre_l_agent(
     if agent is None:
         raise AgentIndisponible(f"l'agent `{slug}` n'existe pas dans l'organisation du projet")
     if agent.status != "active":
-        raise AgentIndisponible(f"l'agent `{slug}` est {agent.status} : le run ne part pas")
+        raise AgentIndisponible(
+            f"l'agent `{slug}` est {ETATS.get(agent.status, agent.status)} : le run ne part pas"
+        )
     if agent.expires_at is not None and _aware(agent.expires_at) <= utcnow():
         raise AgentIndisponible(f"l'agent `{slug}` a expiré le {agent.expires_at:%Y-%m-%d}")
     epingle = (
@@ -146,6 +152,7 @@ async def depense_du_jour(session: AsyncSession, org_id: str, agent_slug: str) -
 
 
 __all__ = [
+    "ETATS",
     "AgentIndisponible",
     "AgentResolu",
     "depense_du_jour",
