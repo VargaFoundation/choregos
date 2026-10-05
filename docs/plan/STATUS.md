@@ -150,8 +150,15 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S17-02 | S17 | ✅ | — | `/admin` en sous-pages — vue d'ensemble (session, jetons), membres (inviter, changer un rôle, retirer après confirmation ; `DELETE /orgs/{org}/members/{user_id}`, audité, le dernier administrateur ne se retire pas : 409), audit (filtres, pages, export CSV aux formules désarmées), plateforme, édition (en communautaire, ce que l'EE ajoute, sans faux écran) — et une page par section qu'un greffon déclare, `/admin/x/{section}` : formulaire tiré du JSON Schema (`components/schema-form.tsx`, fait maison), table et actions de ligne, action confirmée, secret montré une fois ; aucun code de greffon dans la console. vitest `admin.test.tsx` (formulaire typé, chemins, CSV), `test_retirer_un_membre.py` (4), e2e `parcours` (section SCIM, secret une fois, édition) et `accessibilite` (cinq pages de plus). Ne prouve pas une section de l'EE réelle (S17-04) |
 | S17-03 | S17 | ✅ | — | `image.registry` par composant (`choregos-api`, `choregos-orchestrator`), le job de migration suit l'API, et le digest global ne désigne pas une image d'un autre registre (#204). `tests/charts/test_image_par_composant.py` (3 tests). Ne prouve pas un déploiement réel de l'EE (S17-04) |
 | S17-04 | S17 | ⬜ | — | l'édition entreprise sur le cœur courant, ses sections, servie au dev par un projet Harbor privé |
+| S18-01 | S18 | ⬜ | — | le registre d'agents : versions immuables, épingle du projet qui ne fait que resserrer (ADR 0033) |
+| S18-02 | S18 | ⬜ | — | un acteur nomme un agent ; instructions en bac à sable, priment sur le playbook |
+| S18-03 | S18 | ⬜ | — | runs, coûts et taux de réussite par agent |
+| S18-04 | S18 | ⬜ | — | la bibliothèque de skills, aucune permission déclarée |
+| S18-05 | S18 | ⬜ | — | le runner pose les skills selon le backend, vérifiées par digest |
+| S18-06 | S18 | ⬜ | — | les agents externes : jeton MCP ou client OAuth, droits intersectés |
+| S18-07 | S18 | ⬜ | — | les pages Agents |
 
-**Total** : 114 livrées, 11 partielles, 6 non commencées.
+**Total** : 114 livrées, 11 partielles, 13 non commencées.
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

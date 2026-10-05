@@ -1397,3 +1397,70 @@ stories:
     acceptance:
       - "GET /api/v1/edition rend enterprise sur le dev ; les sections apparaissent dans /admin"
       - "Une deuxième organisation se crée puis se suspend ; un jeton SCIM ne s'affiche qu'une fois"
+
+  # ───────────── S18 — Registre d'agents et bibliothèque de skills (ADR 0033, 2026-10-05) ─────────────
+  - id: S18-01
+    title: "Le registre d'agents de l'organisation : agents, versions immuables, épingle du projet qui ne fait que resserrer"
+    stream: S18
+    sprint: 9
+    priority: 1
+    size: L
+    depends_on: []
+    acceptance:
+      - "Un agent d'une autre organisation est invisible (PostgreSQL, RLS)"
+      - "Un PUT ne modifie jamais une version ; une surcharge qui élargit reçoit 422"
+  - id: S18-02
+    title: "Un acteur nomme un agent ; ses instructions priment sur le playbook, rendues dans un bac à sable"
+    stream: S18
+    sprint: 9
+    priority: 2
+    size: L
+    depends_on: [S18-01]
+    acceptance:
+      - "Un playbook de même nom perd ; le contrat de sortie est toujours là"
+      - "{{ ''.__class__.__mro__ }} est refusé ; les historiques archivés rejouent"
+  - id: S18-03
+    title: "Runs, coûts et taux de réussite par agent"
+    stream: S18
+    sprint: 9
+    priority: 3
+    size: M
+    depends_on: [S18-02]
+    acceptance:
+      - "Un run échoué fait baisser le taux ; un appel d'outil compte dans le coût"
+  - id: S18-04
+    title: "La bibliothèque de skills : versions immuables, import zip, aucune permission déclarée"
+    stream: S18
+    sprint: 9
+    priority: 4
+    size: M
+    depends_on: []
+    acceptance:
+      - "Zip-slip, liens symboliques, nom incohérent et allowed-tools sont refusés"
+  - id: S18-05
+    title: "Le runner pose les skills d'un agent là où son backend les lit, vérifiées par digest"
+    stream: S18
+    sprint: 9
+    priority: 5
+    size: L
+    depends_on: [S18-02, S18-04]
+    acceptance:
+      - "Chaque backend écrit au bon chemin ; un digest faux arrête le run ; le repli produit l'index"
+  - id: S18-06
+    title: "Les agents externes au registre : jeton MCP ou client OAuth, droits de l'agent ∩ droits de l'humain"
+    stream: S18
+    sprint: 9
+    priority: 6
+    size: M
+    depends_on: [S18-01]
+    acceptance:
+      - "Un agent révoqué reçoit 401 à l'appel suivant ; un humain sans droit donne un agent sans droit"
+  - id: S18-07
+    title: "Les pages Agents : registre, versions, runs et coûts, clients MCP connectés"
+    stream: S18
+    sprint: 9
+    priority: 7
+    size: M
+    depends_on: [S18-01, S18-03, S18-06]
+    acceptance:
+      - "Un agent du registre et un Claude Code connecté apparaissent ; parcours et axe"
