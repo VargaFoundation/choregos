@@ -495,6 +495,62 @@ class GatewayKeyRow(Base, PkMixin, TimestampMixin):
 # ───────────────────────────── le registre d'agents (ADR 0033) ─────────────────────────────
 
 
+class OrgConnector(Base, PkMixin, TimestampMixin):
+    """Une instance de connecteur de l'ORGANISATION (ADR 0034) : un annuaire Entra, un serveur MCP,
+    un gestionnaire de parc — déclarée une fois par l'administrateur, nommée, et dont chaque
+    opération porte sa politique. Les projets s'en servent ; ils n'en déclarent pas."""
+
+    __tablename__ = "org_connectors"
+    __table_args__ = (UniqueConstraint("org_id", "name", name="uq_org_connectors_org_name"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(32))
+    type: Mapped[str] = mapped_column(String(64))
+    config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: Des RÉFÉRENCES (`env:NOM`), jamais des valeurs.
+    secret_refs: Mapped[dict[str, str] | None] = mapped_column(Json, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="unknown")
+    last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class ConnectorOperation(Base, PkMixin, TimestampMixin):
+    """Une opération d'une instance, et sa politique dans l'organisation : `allowed`, `approval`
+    (une action gouvernée, ADR 0035) ou `forbidden` ; les groupes de projets qui y ont droit
+    (aucun : tous) ; son prix ; l'empreinte de son schéma (une dérive la referme, S19-03)."""
+
+    __tablename__ = "connector_operations"
+    __table_args__ = (
+        UniqueConstraint("connector_id", "name", name="uq_connector_operations_connector_name"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    connector_id: Mapped[str] = mapped_column(ForeignKey("org_connectors.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(128))
+    access: Mapped[str] = mapped_column(String(8), default="read")
+    policy: Mapped[str] = mapped_column(String(16), default="forbidden")
+    groups: Mapped[list[str]] = mapped_column(Json, default=list)
+    price_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    schema_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):
+    """Ce qu'un projet RESSERRE d'une opération de l'organisation — jamais ce qu'il élargit."""
+
+    __tablename__ = "project_operation_policies"
+    __table_args__ = (UniqueConstraint("project_id", "operation_id", name="uq_project_operation_policies"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    operation_id: Mapped[str] = mapped_column(
+        ForeignKey("connector_operations.id", ondelete="CASCADE"), index=True
+    )
+    policy: Mapped[str] = mapped_column(String(16))
+
+
 class Agent(Base, PkMixin, TimestampMixin):
     """Un agent de l'organisation : interne (la plateforme le fait tourner) ou externe (un client
     de la porte MCP). Ce qu'il EST vit dans ses versions, immuables ; ici, son identité et son

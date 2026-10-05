@@ -79,7 +79,11 @@ async def put_connector(
             "passerelle `direct` refusée sur cet environnement : elle ne mesure aucun coût et "
             "n'applique aucun plafond. Utiliser `litellm`."
         )
-    _verifier_les_secrets(kind, body)
+    from ..services.connecteurs import spec_du_type, verifier_les_secrets
+
+    verifier_les_secrets(
+        spec_du_type(kind, body.type), body.type, body.config, body.secret_refs, body.secret_ref
+    )
     row = (
         await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))
     ).scalar_one_or_none()
@@ -103,39 +107,6 @@ async def put_connector(
         type=body.type,
     )
     return ConnectorDto.model_validate(row)
-
-
-def _verifier_les_secrets(kind: str, body: ConnectorUpsert) -> None:
-    """Un type inconnu du registre, un secret écrit en clair, une référence illisible : 422.
-
-    Les champs secrets d'un type (`api_token` de Jira, `token` d'Argo CD…) partaient dans `config`,
-    en clair dans la base et dans chaque réponse de l'API. Ils s'écrivent désormais en
-    références (`secret_refs`), que l'orchestrateur résout quand il construit l'adaptateur."""
-    from choregos_adapters import available, spec_of
-    from choregos_core.secrets import ReferenceInvalide, verifier
-
-    spec = spec_of(kind, body.type)
-    if spec is None:
-        raise unprocessable(
-            f"aucun type `{body.type}` pour `{kind}` (connus : {', '.join(available(kind)) or 'aucun'})"
-        )
-    en_clair = sorted(set(body.config) & set(spec.secret_fields))
-    if en_clair:
-        raise unprocessable(
-            f"secret écrit en clair : {', '.join(en_clair)}. Un secret s'écrit en référence, dans "
-            f"`secret_refs` (`{en_clair[0]}: env:NOM_DE_VARIABLE`) — jamais sa valeur"
-        )
-    inconnus = sorted(set(body.secret_refs) - set(spec.secret_fields))
-    if inconnus:
-        raise unprocessable(
-            f"`{body.type}` n'a pas de champ secret {', '.join(inconnus)} "
-            f"(les siens : {', '.join(spec.secret_fields) or 'aucun'})"
-        )
-    for reference in [*body.secret_refs.values(), *([body.secret_ref] if body.secret_ref else [])]:
-        try:
-            verifier(reference)
-        except ReferenceInvalide as refus:
-            raise unprocessable(str(refus)) from refus
 
 
 @router.get(

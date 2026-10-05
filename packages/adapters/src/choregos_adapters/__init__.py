@@ -23,8 +23,10 @@ from .base import (
 )
 from .errors import ConfigurationError
 from .registry import (
+    POLITIQUES,
     AdapterSet,
     ConnectorTypeSpec,
+    OperationSpec,
     available,
     build,
     configuration_resolue,
@@ -45,6 +47,7 @@ def _env(name: str, default: str = "") -> str:
 __version__ = "0.1.0"
 
 __all__ = [
+    "POLITIQUES",
     "AdapterSet",
     "AgentBackend",
     "CdAdapter",
@@ -54,6 +57,7 @@ __all__ = [
     "GatewayAdapter",
     "MemoryAdapter",
     "Notifier",
+    "OperationSpec",
     "ScmAdapter",
     "TrackerAdapter",
     "available",

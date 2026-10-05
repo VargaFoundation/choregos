@@ -7,6 +7,11 @@
  */
 import type {
   Agent,
+  ConnectorOperation,
+  OperationPatch,
+  OrgConnector,
+  OrgConnectorCreate,
+  ProjectOperation,
   ProjectRequirement,
   AgentCreate,
   AgentCredential,
@@ -288,6 +293,27 @@ export const api = {
         allowed: boolean;
       }[];
     }>(`/projects/${qualify(id)}/tools`),
+  /** Les connecteurs de l'organisation et la politique de chaque opération (ADR 0034). */
+  orgConnectors: (org: string) => request<OrgConnector[]>(`/orgs/${org}/connectors`),
+  createOrgConnector: (org: string, body: OrgConnectorCreate) =>
+    request<OrgConnector>(`/orgs/${org}/connectors`, { method: "POST", body: JSON.stringify(body) }),
+  deleteOrgConnector: (org: string, name: string) =>
+    request<void>(`/orgs/${org}/connectors/${name}`, { method: "DELETE" }),
+  updateConnectorOperation: (org: string, name: string, operation: string, body: OperationPatch) =>
+    request<ConnectorOperation>(`/orgs/${org}/connectors/${name}/operations/${encodeURIComponent(operation)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  projectOperations: (id: string) => request<ProjectOperation[]>(`/projects/${qualify(id)}/operations`),
+  tightenProjectOperation: (id: string, connector: string, operation: string, policy: string) =>
+    request<ProjectOperation>(
+      `/projects/${qualify(id)}/operations/${connector}/${encodeURIComponent(operation)}`,
+      { method: "PUT", body: JSON.stringify({ policy }) },
+    ),
+  relaxProjectOperation: (id: string, connector: string, operation: string) =>
+    request<void>(`/projects/${qualify(id)}/operations/${connector}/${encodeURIComponent(operation)}`, {
+      method: "DELETE",
+    }),
   /** Ce que les workflows du projet exigent de ses connecteurs, et pourquoi (ADR 0034). */
   projectRequirements: (id: string) => request<ProjectRequirement[]>(`/projects/${qualify(id)}/requirements`),
   putConnector: (id: string, kind: string, body: unknown) =>

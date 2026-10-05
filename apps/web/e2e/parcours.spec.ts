@@ -251,3 +251,18 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
   await expect(connecteurs).toBeVisible();
 });
+
+test("connecteurs de l'organisation : chaque opération porte sa politique ; un projet ne fait que resserrer", async ({ page }) => {
+  await page.goto("/admin/connectors");
+  const operations = page.getByTestId("operations-entra-acme");
+  await expect(operations).toContainText("creer_compte");
+  await expect(page.getByLabel("policy of creer_compte")).toHaveValue("approval");
+  await expect(page.getByLabel("project groups of creer_compte")).toHaveValue("rh");
+
+  await page.goto("/p/billing-api/settings");
+  const projet = page.getByTestId("operations-du-projet");
+  await expect(projet).toContainText("lire_utilisateur");
+  // `creer_compte` est `approval` dans l'organisation : le choix ne propose pas `allowed`.
+  const choix = page.getByLabel("this project's policy for creer_compte");
+  await expect(choix.locator("option")).toHaveText(["as the organisation", "approval", "forbidden"]);
+});

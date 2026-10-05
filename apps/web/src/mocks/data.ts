@@ -10,6 +10,8 @@ import type {
   Agent,
   AgentCreate,
   ConnectorType,
+  OrgConnector,
+  ProjectOperation,
   ProjectRequirement,
   AgentCredential,
   AgentMetrics,
@@ -802,6 +804,30 @@ export const connectorTypes: ConnectorType[] = [
   { kind: "runtime", type: "k8s_job", display: "Kubernetes Job", config_schema: objet({ service_account: { type: "string" } }), capabilities: ["runtime"], secret_fields: [] },
   { kind: "gateway", type: "litellm", display: "LiteLLM", config_schema: objet({ base_url: { type: "string" } }), capabilities: ["gateway"], secret_fields: ["master_key"] },
   { kind: "notify", type: "slack", display: "Slack", config_schema: objet({ channel: { type: "string" } }), capabilities: ["notify"], secret_fields: ["webhook_url", "bot_token"] },
+  { kind: "identity", type: "entra", display: "Microsoft Entra ID", config_schema: objet({ tenant: { type: "string" } }, ["tenant"]), capabilities: ["identity"], secret_fields: ["client_secret"] },
+];
+
+/** Un annuaire de l'organisation (ADR 0034) : chaque opération porte sa politique. */
+export const orgConnectors: OrgConnector[] = [
+  {
+    name: "entra-acme",
+    kind: "identity",
+    type: "entra",
+    config: { tenant: "acme.onmicrosoft.com" },
+    secret_refs: { client_secret: "env:ENTRA_CLIENT_SECRET" },
+    status: "ok",
+    created_by: "lea@varga.dev",
+    operations: [
+      { name: "lire_utilisateur", access: "read", policy: "allowed", groups: [] },
+      { name: "creer_compte", access: "write", policy: "approval", groups: ["rh"], description: "crée un compte" },
+      { name: "desactiver_compte", access: "write", policy: "approval", groups: ["rh"] },
+    ],
+  },
+];
+
+export const projectOperations: ProjectOperation[] = [
+  { connector: "entra-acme", operation: "lire_utilisateur", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
+  { connector: "entra-acme", operation: "creer_compte", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
 ];
 
 /** Ce que les workflows de Billing API exigent : du logiciel, donc un dépôt, une CI, un train. */
@@ -925,6 +951,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
+    [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
+    [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, []],
     [/^\/platform\/backends$/, []],
     [/^\/platform\/executors$/, []],

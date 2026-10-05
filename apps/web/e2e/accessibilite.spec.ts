@@ -19,6 +19,7 @@ const PAGES = [
   "/p/billing-api/workflows/default-simple/history",
   "/login",
   "/admin",
+  "/admin/connectors",
   "/admin/members",
   "/admin/audit",
   "/admin/platform",

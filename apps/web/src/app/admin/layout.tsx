@@ -12,6 +12,7 @@ import { useSession } from "@/lib/session";
 const ONGLETS = [
   { href: "/admin", label: "overview" },
   { href: "/admin/members", label: "members" },
+  { href: "/admin/connectors", label: "connectors" },
   { href: "/admin/audit", label: "audit" },
   { href: "/admin/platform", label: "platform" },
   { href: "/admin/edition", label: "edition" },

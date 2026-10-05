@@ -221,6 +221,88 @@ paths:
       description: Ce que les workflows actifs du projet exigent de ses connecteurs, et pourquoi ; le connecteur qui couvre chaque capacité, sinon le type par défaut de la plateforme (ADR 0034).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectRequirement" } } } } }
+  /orgs/{org}/connectors:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [connectors]
+      operationId: listOrgConnectors
+      description: Les connecteurs de l'organisation et leurs opérations (ADR 0034) ; ses membres les lisent.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrgConnector" } } } } }
+    post:
+      tags: [connectors]
+      operationId: createOrgConnector
+      description: Une instance naît avec les opérations que son type déclare — une lecture permise, une écriture soumise à validation. L'administrateur de l'organisation seul.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnectorCreate" } } }
+      responses:
+        "201": { description: Déclaré, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/connectors/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [connectors]
+      operationId: getOrgConnector
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [connectors]
+      operationId: deleteOrgConnector
+      responses:
+        "204": { description: Retiré, avec ses opérations }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/connectors/{name}/operations/{operation}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+      - { name: operation, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [connectors]
+      operationId: updateConnectorOperation
+      description: La politique, les groupes de projets, le prix d'une opération — la décision de l'administrateur de l'organisation (le second verrou de l'ADR 0014).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OperationPatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorOperation" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/operations:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [connectors]
+      operationId: listProjectOperations
+      description: Les opérations ouvertes au projet (leurs groupes croisent les siens), avec la politique de l'organisation, la sienne et l'effective.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectOperation" } } } } }
+  /projects/{id}/operations/{connector}/{operation}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: connector, in: path, required: true, schema: { type: string } }
+      - { name: operation, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [connectors]
+      operationId: tightenProjectOperation
+      description: Un projet resserre une opération ; il ne l'élargit jamais (422).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectOperationPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectOperation" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [connectors]
+      operationId: relaxProjectOperation
+      description: Retire ce que le projet resserrait ; l'opération revient à la politique de l'organisation.
+      responses:
+        "204": { description: Retiré }
   /projects/{id}/workflow:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1517,6 +1599,62 @@ components:
         config_schema: { type: object, additionalProperties: true }
         capabilities: { type: array, items: { type: string }, description: "ce que le type sait faire : tracker, scm, identity, mcp…" }
         secret_fields: { type: array, items: { type: string }, description: les clefs de configuration qui sont des secrets }
+    ConnectorOperation:
+      type: object
+      required: [name, access, policy]
+      properties:
+        name: { type: string }
+        access: { type: string, enum: [read, write] }
+        policy: { type: string, enum: [allowed, approval, forbidden] }
+        groups: { type: array, items: { type: string }, description: "les groupes de projets qui y ont droit ; aucun : tous" }
+        price_usd: { type: [number, "null"] }
+        schema_digest: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+    OrgConnector:
+      type: object
+      required: [name, kind, type, status]
+      properties:
+        name: { type: string }
+        kind: { type: string }
+        type: { type: string }
+        config: { type: object, additionalProperties: true }
+        secret_refs: { type: object, additionalProperties: { type: string } }
+        status: { type: string }
+        last_check_at: { type: [string, "null"], format: date-time }
+        last_error: { type: [string, "null"] }
+        created_by: { type: [string, "null"] }
+        operations: { type: array, items: { $ref: "#/components/schemas/ConnectorOperation" } }
+    OrgConnectorCreate:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        type: { type: string }
+        kind: { type: [string, "null"] }
+        config: { type: object, additionalProperties: true }
+        secret_refs: { type: object, additionalProperties: { type: string } }
+    OperationPatch:
+      type: object
+      properties:
+        policy: { type: [string, "null"], enum: [allowed, approval, forbidden, null] }
+        groups: { type: [array, "null"], items: { type: string } }
+        price_usd: { type: [number, "null"], minimum: 0 }
+    ProjectOperation:
+      type: object
+      required: [connector, operation, access, org_policy, effective_policy]
+      properties:
+        connector: { type: string }
+        operation: { type: string }
+        access: { type: string }
+        org_policy: { type: string }
+        project_policy: { type: [string, "null"] }
+        effective_policy: { type: string }
+        description: { type: [string, "null"] }
+    ProjectOperationPut:
+      type: object
+      required: [policy]
+      properties:
+        policy: { type: string, enum: [allowed, approval, forbidden] }
     ProjectRequirement:
       type: object
       required: [capability, reasons]

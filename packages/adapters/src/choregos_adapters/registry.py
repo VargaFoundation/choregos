@@ -28,6 +28,27 @@ from .base import (
 Factory = Callable[[dict[str, Any]], Any]
 
 
+#: Du plus permissif au plus strict : un projet ne peut que monter dans cet ordre (ADR 0034).
+POLITIQUES = ("allowed", "approval", "forbidden")
+
+
+@dataclass(frozen=True, slots=True)
+class OperationSpec:
+    """Une opération qu'un type de connecteur expose — ce qu'un agent peut appeler par lui.
+
+    `access` dit si elle lit ou écrit. Sa politique par défaut en découle : une lecture est
+    permise, une écriture passe par une validation (ADR 0035), tant que l'administrateur de
+    l'organisation n'en décide pas autrement."""
+
+    name: str
+    access: str = "read"
+    description: str = ""
+
+    @property
+    def default_policy(self) -> str:
+        return "allowed" if self.access == "read" else "approval"
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectorTypeSpec:
     """Ce qu'un type de connecteur déclare de lui-même (ADR 0034) : la console en tire son
@@ -41,6 +62,8 @@ class ConnectorTypeSpec:
     secret_fields: tuple[str, ...] = ()
     #: Un ancien nom, gardé pour les projets qui le portent, jamais proposé à un nouveau.
     deprecated: bool = False
+    #: Ce qu'un agent peut appeler par ce type ; un serveur `mcp` découvre les siennes (S19-03).
+    operations: tuple[OperationSpec, ...] = ()
 
 
 _REGISTRY: dict[tuple[str, str], Factory] = {}
