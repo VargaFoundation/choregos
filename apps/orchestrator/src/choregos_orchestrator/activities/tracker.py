@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Any
 
 from choregos_api.db.models import Finding, HumanRequest, Run, WorkItem
-from choregos_api.services import persist_event
+from choregos_api.services import Naissance, nouveau_ticket, persist_event
 from choregos_contracts import EventType
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
 from sqlalchemy import select
@@ -365,20 +365,21 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
             ).scalar_one_or_none()
             if item is None:
                 data = await bundle.adapters.tracker.fetch_item(key)
-                item = WorkItem(
-                    project_id=bundle.project.id,
-                    tracker_key=key,
-                    title=data.title,
-                    body_snapshot=data.body,
-                    url=data.url,
-                    size=str(data.size) if data.size else None,
-                    risk=str(data.risk) if data.risk else None,
-                    state=bundle.workflow.initial_state,
-                    # Né dans le workflow par défaut, épinglé à sa version (ADR 0031).
-                    workflow_def_id=bundle.workflow_def_id,
+                # Né dans le workflow que désignent ses étiquettes ou son type (ADR 0031).
+                item = await nouveau_ticket(
+                    session,
+                    bundle.project,
+                    Naissance(
+                        tracker_key=key,
+                        title=data.title,
+                        body=data.body,
+                        url=data.url,
+                        size=str(data.size) if data.size else None,
+                        risk=str(data.risk) if data.risk else None,
+                        labels=tuple(data.labels),
+                        item_type=data.item_type,
+                    ),
                 )
-                session.add(item)
-                await session.flush()
                 created.append(key)
             state = (await workflow_du_ticket(session, item)).states.get(item.state)
             if item.paused or item.closed_at is not None or (state is not None and state.terminal):

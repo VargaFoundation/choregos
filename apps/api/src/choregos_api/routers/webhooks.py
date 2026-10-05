@@ -23,6 +23,7 @@ from ..errors import unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
+from ..services import Naissance, nouveau_ticket
 from ..temporal import deliver_inbound, get_temporal, interpreter_id, train_id
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
@@ -111,16 +112,20 @@ async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
             or event.payload.get("label") == AGENT_READY_LABEL
         )
         if item is None and should_start:
-            item = WorkItem(
-                project_id=project.id,
-                tracker_key=key,
-                title=event.payload.get("title", key),
-                body_snapshot=event.payload.get("body", ""),
-                url=event.payload.get("url"),
-                state="inbox",
+            # Né dans le workflow que désignent ses étiquettes ou son type (ADR 0031) — plus en
+            # `inbox` en dur, qui tuait le ticket sur un workflow commençant ailleurs (#173).
+            item = await nouveau_ticket(
+                session,
+                project,
+                Naissance(
+                    tracker_key=key,
+                    title=event.payload.get("title", key),
+                    body=event.payload.get("body", ""),
+                    url=event.payload.get("url"),
+                    labels=tuple(event.payload.get("labels") or []),
+                    item_type=event.payload.get("item_type"),
+                ),
             )
-            session.add(item)
-            await session.flush()
         if item is None:
             continue
         if should_start:

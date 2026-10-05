@@ -77,6 +77,7 @@ class JiraTracker:
             url=f"{self.client.base_url}/browse/{key}",
             state=((fields.get("status") or {}).get("name")),
             labels=labels,
+            item_type=((fields.get("issuetype") or {}).get("name")),
             size=_parse_enum(Size, fields, self.field_names["Taille"]),
             risk=_parse_enum(Risk, fields, self.field_names["Risque"]),
             assignees=[a for a in [((fields.get("assignee") or {}).get("displayName"))] if a],

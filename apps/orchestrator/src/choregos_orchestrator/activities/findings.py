@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from choregos_api.db.models import Finding, WorkItem
-from choregos_api.services import persist_event
+from choregos_api.services import Naissance, nouveau_ticket, persist_event
 from choregos_contracts import EventType
 from choregos_core import Message, NewItem, utcnow
 from sqlalchemy import select
@@ -112,17 +112,19 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
             # La plateforme tient le ticket : elle lui donne sa clé. Le connecteur interne
             # rendait le titre, d'où des clés comme `[docs] Base de profils manquante`.
             key = await cle_de_ticket_interne(session, bundle)
-        created = WorkItem(
-            project_id=bundle.project.id,
-            tracker_key=key,
-            title=row.title,
-            body_snapshot=body,
-            state="inbox",
-            size=row.estimate,
-            risk="high" if row.severity == "critical" else "low",
+        # Né dans le workflow que désignent ses étiquettes (ADR 0031) — plus en `inbox` en dur (#173).
+        created = await nouveau_ticket(
+            session,
+            bundle.project,
+            Naissance(
+                tracker_key=key,
+                title=row.title,
+                body=body,
+                size=row.estimate,
+                risk="high" if row.severity == "critical" else "low",
+                labels=tuple(labels),
+            ),
         )
-        session.add(created)
-        await session.flush()
         row.created_work_item_id = created.id
         row.status = "created"
 
