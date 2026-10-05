@@ -41,6 +41,10 @@
         "extends": {
           "type": "string",
           "pattern": "^template:[a-z0-9-]+@[0-9]+$"
+        },
+        "inputs": {
+          "type": "object",
+          "description": "JSON Schema of the fields of a work item of this workflow (ADR 0031)."
         }
       }
     },

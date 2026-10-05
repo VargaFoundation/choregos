@@ -37,6 +37,8 @@ class Naissance:
     #: Le type du ticket dans son tracker (Jira : `issuetype`), que le routage peut lire.
     item_type: str | None = None
     allowed_paths: tuple[str, ...] = field(default_factory=tuple)
+    #: Les champs du ticket, validés par `metadata.inputs` du workflow choisi.
+    fields: dict[str, Any] = field(default_factory=dict)
 
 
 def _correspond(condition: dict[str, Any], etiquettes: set[str], type_: str | None) -> bool:
@@ -67,10 +69,27 @@ async def choisir_workflow(
     return await default_workflow(session, project.id)
 
 
+def _valider_les_champs(schema: dict[str, Any] | None, champs: dict[str, Any], workflow: str) -> None:
+    """Un champ hors du schéma, ou un champ requis absent : 422, avec son chemin."""
+    if schema is None:
+        if champs:
+            raise unprocessable(f"le workflow `{workflow}` ne déclare aucun champ (`metadata.inputs`)")
+        return
+    import jsonschema
+
+    erreurs = sorted(jsonschema.Draft202012Validator(schema).iter_errors(champs), key=lambda e: list(e.path))
+    if erreurs:
+        raise unprocessable(
+            f"champs refusés par le workflow `{workflow}`",
+            [{"loc": ["fields", *e.path], "msg": e.message} for e in erreurs],
+        )
+
+
 async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Naissance) -> WorkItem:
     """Le seul constructeur : l'état initial DU workflow choisi, et l'épingle de sa version."""
     ligne = await choisir_workflow(session, project, naissance)
     workflow = workflow_model(ligne)
+    _valider_les_champs(workflow.metadata.inputs, naissance.fields, workflow.metadata.name)
     item = WorkItem(  # le seul `WorkItem(` du code produit (test_un_seul_constructeur_de_ticket)
         project_id=project.id,
         tracker_key=naissance.tracker_key,
@@ -83,6 +102,7 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         workflow_def_id=ligne.id if ligne is not None else None,
         created_by=naissance.created_by,
         allowed_paths=list(naissance.allowed_paths),
+        fields=dict(naissance.fields),
     )
     session.add(item)
     await session.flush()

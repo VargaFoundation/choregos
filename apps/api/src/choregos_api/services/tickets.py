@@ -128,6 +128,7 @@ async def work_item_dto(
     ).scalar_one_or_none()
     return WorkItemDto(
         id=item.id,
+        fields=dict(item.fields or {}),
         project_slug=project.slug,
         tracker_key=item.tracker_key,
         title=item.title,
@@ -281,6 +282,7 @@ async def creer_un_ticket(
             created_by=principal.email,
             workflow=demande.workflow,
             labels=tuple(demande.labels),
+            fields=dict(demande.fields),
         ),
     )
     await persist_event(

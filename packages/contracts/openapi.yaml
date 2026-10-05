@@ -1433,6 +1433,7 @@ components:
         start: { type: boolean, default: true }
         workflow: { type: [string, "null"], description: "Le workflow où le ticket naît ; sinon le routage, sinon le défaut (ADR 0031)." }
         labels: { type: array, items: { type: string }, description: "Lues par les règles de routage." }
+        fields: { type: object, additionalProperties: true, description: "Les champs du ticket, validés par `metadata.inputs` de son workflow." }
     Integrations:
       type: object
       required: [mcp_url, protocol_versions, oauth, version]
@@ -1496,6 +1497,7 @@ components:
       type: object
       required: [id, project_slug, tracker_key, title, state, totals]
       properties:
+        fields: { type: object, additionalProperties: true, description: "Les champs du ticket (ADR 0031)." }
         id: { type: string }
         project_slug: { type: string }
         tracker_key: { type: string }
@@ -1962,6 +1964,7 @@ components:
         key: { type: string }
         title: { type: string }
         body: { type: string }
+        fields: { type: object, additionalProperties: true, description: "Les champs du ticket (ADR 0031)." }
         url: { type: [string, "null"] }
         spec_markdown: { type: [string, "null"] }
         plan_markdown: { type: [string, "null"] }

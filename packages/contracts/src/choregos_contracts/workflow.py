@@ -26,6 +26,9 @@ class WorkflowMetadata(Strict):
     version: int = Field(ge=1)
     description: str | None = None
     extends: str | None = Field(default=None, pattern=r"^template:[a-z0-9-]+@[0-9]+$")
+    #: Le JSON Schema des CHAMPS d'un ticket de ce workflow (ADR 0031) : la date d'arrivée et le poste
+    #: d'un onboarding, par exemple. Validés à la naissance du ticket, transmis aux agents.
+    inputs: dict[str, Any] | None = None
 
 
 #: Un rôle d'agent. Les rôles du paquet (`StageRole`) gardent leur sens — la plateforme

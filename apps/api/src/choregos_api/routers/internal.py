@@ -293,6 +293,7 @@ async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
         key=item.tracker_key,
         title=item.title,
         body=item.body_snapshot or "",
+        fields=dict(item.fields or {}),
         url=item.url,
         spec_markdown=documents.get("spec_markdown"),
         plan_markdown=documents.get("plan_markdown"),

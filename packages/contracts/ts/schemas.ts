@@ -587,6 +587,10 @@ export type Workflow = {
     version: number;
     description?: string;
     extends?: string;
+    /** JSON Schema of the fields of a work item of this workflow (ADR 0031). */
+    inputs?: {
+      [key: string]: unknown;
+    };
   };
   actors: {
     [key: string]: WorkflowActor;
