@@ -80,6 +80,8 @@ test("integrations d'un projet : la porte du projet, et claude.ai dit pourquoi i
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp/projects/varga:billing-api");
   await page.getByRole("link", { name: "claude.ai" }).click();
   await expect(page.getByText("not reachable from here yet")).toBeVisible();
+});
+
 test("propositions : la décision se prend ici, un rejet exige un motif", async ({ page }) => {
   await page.goto("/p/billing-api/proposals");
   await expect(page.getByRole("link", { name: "open_infra_pr" })).toBeVisible();
