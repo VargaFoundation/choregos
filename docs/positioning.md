@@ -5,10 +5,24 @@ better; that is the part worth reading.
 
 ## In one sentence
 
-Choregos is the **delivery layer**: it turns a ticket into a controlled change — stages,
-roles, gates that refuse, evidence the platform measured, a cost ledger, a release train —
-on top of whatever *runtime* runs the agent. It is not a coding agent, and it is not a
-sandbox runtime.
+Choregos is a **general-purpose platform for governed agents** (ADR 0029, 2026-10-05): any
+business process — software delivery, IT operations, joiners and leavers, a data change — carried
+by agents and people through workflows whose gates refuse, whose evidence the platform measures,
+and whose writes to third-party systems wait for a re-authenticated approval. It runs inside the
+customer's perimeter, whatever the agent. It is not a coding agent, not a sandbox runtime, not an
+identity provider and not a general-purpose MCP gateway.
+
+## What changed on 2026-10-05
+
+Until then this page described a *delivery layer* — ticket in, controlled production change out
+(ADR 0028). The product owner widened the scope: several workflows per project, an agent registry
+with skills, MCP servers as connectors, connectors by capability, and governed actions in the
+core. The comparisons below were written for the delivery layer and still hold for it; the new
+competitors are the agent builders of the large platforms (Microsoft Copilot Studio, Google
+Agentspace, Dataiku's agent management). Against them Choregos claims only what they do not ship
+together: open source, self-hosted, any agent, and governance by mechanisms rather than prompts.
+Each claim becomes true story by story (streams S15 to S20); until a story is delivered, this page
+does not count it.
 
 ## Against the runtimes
 

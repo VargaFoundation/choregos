@@ -44,4 +44,5 @@ nine records did not exist.
 | [0025](0025-le-moteur-pilote-l-it-de-la-plateforme.md) | The engine drives platform IT: healthcheck findings become governed changes, nodes last | accepted |
 | [0026](0026-ce-que-la-rls-du-coeur-couvre.md) | What the core's RLS covers — every table checked; identity included since 0.11 (update of 2026-09-29) | accepted |
 | [0027](0027-le-voisinage-se-regle-a-l-admission-et-au-quota.md) | Noisy neighbours: bounded at admission and by a per-organisation namespace quota, not by a Temporal queue per organisation | accepted |
-| [0028](0028-l-execution-gouvernee-du-changement.md) | Choregos governs the execution of change, not agents in general; data work enters through the catalogue and the gates | accepted |
+| [0028](0028-l-execution-gouvernee-du-changement.md) | Choregos governs the execution of change, not agents in general; superseded by 0029 | superseded |
+| [0029](0029-une-plateforme-d-agents-gouvernes.md) | Choregos is a general-purpose platform for governed agents: several workflows per project, an agent registry, skills, MCP, connectors by capability | accepted |

@@ -7,7 +7,8 @@
 > qu'elle se re-vide.
 
 ## Contexte
-Plateforme de delivery agentique (Varga Foundation, Apache 2.0). Plan et état des lieux :
+Plateforme d'agents gouvernés, à usage général (Varga Foundation, Apache 2.0 ; ADR 0029) : des
+workflows de tout métier, portés par des agents et des humains, sous des garanties mesurées. Plan et état des lieux :
 `docs/plan/`. Documentation de référence : `docs/`. Décisions structurantes : `docs/adr/`.
 Contrats : `packages/contracts` — **ne pas modifier sans PR `contract-change`** (ADR 0001).
 
