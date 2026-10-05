@@ -193,7 +193,9 @@ function Extrait({ code }: { code: string }) {
   const pressePapier = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
   return (
     <div className="relative">
-      <pre className="overflow-x-auto bg-surface-sunken p-3 text-xs" data-testid="snippet">
+      {/* Les lignes reviennent à la ligne plutôt que de défiler : un bloc qui défile devrait
+          s'atteindre au clavier (axe), et la copie garde le texte exact. */}
+      <pre className="whitespace-pre-wrap break-all bg-surface-sunken p-3 text-xs" data-testid="snippet">
         <code>{code}</code>
       </pre>
       {pressePapier && (
