@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from choregos_contracts import Role
 from pydantic import Field
@@ -28,10 +29,22 @@ class MeDto(Dto):
     memberships: list[MembershipDto] = Field(default_factory=list)
 
 
+#: Les portées d'un jeton (ADR 0030). `*` ouvre l'API REST et la CLI ; `mcp:read` et `mcp:write`
+#: n'ouvrent que la porte MCP — et un jeton qui les porte est refusé par l'API REST.
+PorteeDeJeton = Literal["*", "mcp:read", "mcp:write"]
+
+
+def _toute_l_api() -> list[PorteeDeJeton]:
+    return ["*"]
+
+
 class ApiTokenCreate(Dto):
     name: str = Field(min_length=1, max_length=128)
     #: Sans expiration si absent — mais dire « jamais » est un choix, pas un oubli.
     expires_in_days: int | None = Field(default=90, ge=1, le=3650)
+    scopes: list[PorteeDeJeton] = Field(default_factory=_toute_l_api, min_length=1)
+    #: `org:slug` : borne un jeton MCP à un seul projet.
+    project: str | None = None
 
 
 class ApiTokenDto(Dto):
@@ -40,6 +53,9 @@ class ApiTokenDto(Dto):
     created_at: datetime
     expires_at: datetime | None = None
     last_used_at: datetime | None = None
+    scopes: list[PorteeDeJeton] = Field(default_factory=_toute_l_api)
+    project: str | None = None
+    last_client: str | None = None
 
 
 class ApiTokenCreated(ApiTokenDto):

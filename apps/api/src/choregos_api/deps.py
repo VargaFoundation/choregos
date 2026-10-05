@@ -117,6 +117,18 @@ async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
     return principal
 
 
+def jeton_rest(token: ApiToken) -> bool:
+    """Ce jeton ouvre-t-il l'API REST ? Un jeton antérieur aux portées (liste vide) vaut `*`."""
+    return "*" in (token.scopes or ["*"])
+
+
+def noter_l_usage(token: ApiToken, request: Request) -> None:
+    """Le dernier usage et le client qui l'a fait : la page Integrations dit « connecté »."""
+    token.last_used_at = utcnow()
+    client = request.headers.get("user-agent", "").strip()
+    token.last_client = client[:200] or None
+
+
 async def current_principal(
     request: Request,
     session: Db,
@@ -140,10 +152,17 @@ async def current_principal(
         # restait valable à vie (état des lieux du 2026-09-24).
         if token.expires_at is not None and _aware(token.expires_at) <= utcnow():
             raise unauthorized("jeton d'API expiré")
+        if not jeton_rest(token):
+            # ADR 0030 : un jeton à portée MCP ne sert QU'À la porte MCP. Volé dans la
+            # configuration d'un client, il ne doit ni frapper un autre jeton, ni décider, ni
+            # lire quoi que ce soit hors de la porte.
+            raise forbidden(
+                "ce jeton est réservé à la porte MCP (portée mcp:*) ; l'API REST demande la portée `*`"
+            )
         user = await session.get(User, token.user_id)
         if user is None:
             raise unauthorized("jeton d'API orphelin")
-        token.last_used_at = utcnow()
+        noter_l_usage(token, request)
         principal = await _principal_from_user(session, user)
         principal.kind = "user"
         return principal

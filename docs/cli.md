@@ -342,6 +342,9 @@ Usage: choregos tokens create [OPTIONS]
 Options:
   --name <str>             [required]
   --expires-in-days <int>  [default: 90]
+  --scope <str>            `*` (API REST et CLI, par défaut), ou `mcp:read` /
+                           `mcp:write` (porte MCP)
+  --project <str>          `org:slug` : borne un jeton MCP à un projet
   --help                   Show this message and exit.
 ```
 

@@ -33,14 +33,16 @@ from choregos_core import utcnow
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..config import Settings, get_settings
-from ..db.models import ApiToken, Membership, Organization, User
-from ..deps import Config, Db, DbPlateforme, Me
+from ..db.models import ApiToken, Membership, Organization, Project, User
+from ..deps import Config, Db, DbPlateforme, Me, resolve_project
 from ..edition import mappeur_de_groupes
-from ..errors import not_found, unauthorized
+from ..errors import ApiError, not_found, unauthorized, unprocessable
 from ..logging import get_logger
+from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
 
@@ -453,12 +455,17 @@ async def logout(settings: Config, response: Response) -> Response:
 
 @router.get("/me/tokens", response_model=list[ApiTokenDto], operation_id="listMyTokens")
 async def list_my_tokens(session: Db, principal: Me) -> list[ApiTokenDto]:
-    rows = (
-        await session.execute(
-            select(ApiToken).where(ApiToken.user_id == principal.user_id).order_by(ApiToken.created_at.desc())
-        )
-    ).scalars()
-    return [_token_dto(row) for row in rows]
+    rows = list(
+        (
+            await session.execute(
+                select(ApiToken)
+                .where(ApiToken.user_id == principal.user_id)
+                .order_by(ApiToken.created_at.desc())
+            )
+        ).scalars()
+    )
+    projets = await _projets_lies(session, {row.project_id for row in rows if row.project_id})
+    return [_token_dto(row, projets.get(row.project_id or "")) for row in rows]
 
 
 @router.post(
@@ -475,19 +482,46 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
     """
     if principal.kind != "user":
         raise unauthorized("seule une session humaine peut émettre un jeton")
+    portees = sorted(set(body.scopes))
+    if "*" in portees and len(portees) > 1:
+        raise unprocessable("la portée `*` ne se combine pas : elle ouvre déjà l'API REST, pas la porte MCP")
+    projet_id: str | None = None
+    projet_nom: str | None = None
+    if body.project is not None:
+        if "*" in portees:
+            raise unprocessable("un projet ne borne qu'un jeton MCP (portée mcp:read ou mcp:write)")
+        # Un jeton ne voit jamais plus que son humain : le projet doit lui être lisible, et un
+        # projet illisible répond comme un projet inexistant.
+        try:
+            projet, org_slug = await resolve_project(session, body.project)
+        except ApiError as erreur:
+            raise not_found("Projet", body.project) from erreur
+        if not principal.can(Permission.PROJECT_READ, org_slug, projet.slug):
+            raise not_found("Projet", body.project)
+        projet_id, projet_nom = projet.id, f"{org_slug}:{projet.slug}"
     raw, digest = generate_api_token()
     row = ApiToken(
         user_id=principal.user_id,
         name=body.name,
         hash=digest,
-        scopes=["*"],
+        scopes=portees,
+        project_id=projet_id,
         expires_at=utcnow() + timedelta(days=body.expires_in_days) if body.expires_in_days else None,
     )
     session.add(row)
     await session.flush()
     # un jeton d'API appartient à un utilisateur, pas à une organisation
-    await record(session, principal, "token.create", org_id=None, target_type="api_token", target_id=row.id)
-    return ApiTokenCreated(**_token_dto(row).model_dump(), token=raw)
+    await record(
+        session,
+        principal,
+        "token.create",
+        org_id=None,
+        target_type="api_token",
+        target_id=row.id,
+        scopes=portees,
+        project=projet_nom,
+    )
+    return ApiTokenCreated(**_token_dto(row, projet_nom).model_dump(), token=raw)
 
 
 @router.delete("/me/tokens/{id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="revokeMyToken")
@@ -500,11 +534,26 @@ async def revoke_my_token(id: str, session: Db, principal: Me) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _token_dto(row: ApiToken) -> ApiTokenDto:
+def _token_dto(row: ApiToken, projet: str | None = None) -> ApiTokenDto:
     return ApiTokenDto(
         id=row.id,
         name=row.name,
         created_at=row.created_at,
         expires_at=row.expires_at,
         last_used_at=row.last_used_at,
+        scopes=list(row.scopes or ["*"]),
+        project=projet,
+        last_client=row.last_client,
     )
+
+
+async def _projets_lies(session: AsyncSession, ids: set[str]) -> dict[str, str]:
+    """`{id: "org:slug"}` des projets auxquels des jetons sont liés."""
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(Project.id, Organization.slug, Project.slug)
+        .join(Organization, Project.org_id == Organization.id)
+        .where(Project.id.in_(ids))
+    )
+    return {pid: f"{org}:{slug}" for pid, org, slug in rows}

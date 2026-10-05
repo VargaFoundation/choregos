@@ -311,9 +311,15 @@ export type WorkItemCreate = {
   start?: boolean;
 };
 
+/** `*` : l'API REST et la CLI. `mcp:read`, `mcp:write` : la porte MCP seulement (ADR 0030) — un tel jeton est refusé par l'API REST, et la porte refuse `*`. */
+export type TokenScope = "*" | "mcp:read" | "mcp:write";
+
 export type ApiTokenCreate = {
   name: string;
   expires_in_days?: number | null;
+  scopes?: Array<TokenScope>;
+  /** `org:slug` : borne un jeton MCP à un seul projet. */
+  project?: string | null;
 };
 
 export type ApiToken = {
@@ -322,6 +328,11 @@ export type ApiToken = {
   created_at: string;
   expires_at?: string | null;
   last_used_at?: string | null;
+  scopes: Array<TokenScope>;
+  /** `org:slug` du projet lié, s'il y en a un. */
+  project?: string | null;
+  /** Le client du dernier appel (`User-Agent`, tronqué). */
+  last_client?: string | null;
 };
 
 export type ApiTokenCreated = ApiToken & {
