@@ -16,7 +16,8 @@ OUTILS: list[dict[str, Any]] = [
     {"name": "suivi_commande", "description": "où en est la commande", "annotations": {"readOnlyHint": True},
      "inputSchema": {"type": "object", "properties": {"numero": {"type": "string"}}, "required": ["numero"]}},
     {"name": "commander_poste", "description": "commande un PC", "inputSchema": {"type": "object"}},
-    {"name": "stock", "description": "le stock", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}},
+    {"name": "stock", "description": "le stock", "inputSchema": {"type": "object"},
+     "annotations": {"readOnlyHint": True}},
 ]  # fmt: skip
 ORG = "/api/v1/orgs/varga"
 
@@ -74,7 +75,7 @@ async def _preparer(
                 status="running",
                 agent_slug="coordinateur",
                 agent_version=1,
-            )  # fmt: skip
+            )
         )
     jeton = mint_run_token(
         "run-courtier-1", project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30
