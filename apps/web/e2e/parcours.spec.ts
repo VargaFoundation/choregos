@@ -275,3 +275,18 @@ test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", as
     "1 new (closed until you open them), 1 changed their schema (closed again)",
   );
 });
+
+test("la boîte des décisions : une action proposée par un agent attend une personne", async ({ page }) => {
+  await page.goto("/approvals");
+  const boite = page.getByTestId("boite");
+  await expect(boite).toContainText("Commander le portable de Léa");
+  await expect(boite).toContainText("proposed by the agent coordinateur-onboarding");
+  await boite.getByRole("link", { name: /Commander le portable/ }).click();
+  await expect(page).toHaveURL(/\/p\/billing-api\/actions\/act-poste$/);
+  await expect(page.getByRole("button", { name: "reject" })).toBeDisabled();
+  await page.getByRole("button", { name: "approve" }).click();
+  // Une action déjà décidée montre ses décisions et le journal de ses effets, clé par clé.
+  await page.goto("/p/billing-api/actions/act-comptes");
+  await expect(page.getByTestId("decisions")).toContainText("approve by lea@varga.dev");
+  await expect(page.getByTestId("effet-1")).toContainText("key act-comptes:1 · 2 attempt(s)");
+});

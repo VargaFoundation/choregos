@@ -215,3 +215,57 @@ async def test_une_cle_faite_ne_se_refait_pas_une_cle_commencee_se_reprend(
     assert journal.faits == [("creer", {"upn": "lea@acme.test"})], "une seule création chez le tiers"
     _, effets = await _etat(action_id)
     assert effets == [("0", "done", 2)]
+
+
+async def test_une_action_approuvee_atteint_le_serveur_avec_la_cle_du_connecteur(
+    setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """De bout en bout côté orchestrateur (S20-02) : l'outil sous validation est devenu une action,
+    elle a été approuvée ; l'`ActionWorkflow` l'exécute, et c'est LUI qui joint le serveur — avec
+    la clé du connecteur, résolue par la plateforme."""
+    import choregos_adapters
+    from choregos_adapters.fakes.mcp import FakeMcpServer
+    from choregos_api.db.models import ConnectorOperation, OrgConnector, Project
+    from choregos_api.db.session import session_scope
+
+    serveur = FakeMcpServer(
+        outils=[{"name": "commander_poste", "inputSchema": {"type": "object"}}], jeton="cle-fournisseur"
+    )
+    monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur)
+    monkeypatch.setenv("CHOREGOS_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
+    async with session_scope() as session:
+        projet = await session.get(Project, setup.project_id)
+        assert projet is not None
+        instance = OrgConnector(
+            org_id=projet.org_id,
+            name="fournisseur",
+            kind="mcp",
+            type="mcp",
+            config={"url": "https://fournisseur.test/mcp"},
+            secret_refs={"token": "env:CHOREGOS_TEST_CLE_FOURNISSEUR"},
+        )
+        session.add(instance)
+        await session.flush()
+        session.add(
+            ConnectorOperation(
+                org_id=projet.org_id,
+                connector_id=instance.id,
+                name="commander_poste",
+                access="write",
+                policy="approval",
+                groups=[],
+            )
+        )
+    effet = {
+        "effect": "connector.call",
+        "with": {
+            "connector": "fournisseur",
+            "operation": "commander_poste",
+            "arguments": {"modele": "portable-14"},
+        },
+    }
+    action_id = await _action(setup, [effet])
+    resultat, _ = await _executer(temporal_env, worker_factory, action_id)
+    assert resultat["status"] == "succeeded", resultat
+    assert serveur.appels == [("commander_poste", {"modele": "portable-14"})]
+    assert {entetes["authorization"] for _, entetes, _ in serveur.recues} == {"Bearer cle-fournisseur"}

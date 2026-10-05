@@ -14,7 +14,7 @@ from fastapi import APIRouter, Path, Query, status
 from sqlalchemy import select
 
 from ..db.models import Action
-from ..deps import Db, ProjectCtx
+from ..deps import Db, Me, ProjectCtx
 from ..errors import not_found
 from ..rbac import Permission
 from ..schemas.actions import ActionCreate, ActionDecisionBody, ActionDto
@@ -50,6 +50,38 @@ async def list_actions(
     ctx: ProjectCtx, session: Db, status_: Annotated[str | None, Query(alias="status")] = None
 ) -> list[ActionDto]:
     requete = select(Action).where(Action.project_id == ctx.id).order_by(Action.created_at.desc()).limit(200)
+    if status_:
+        requete = requete.where(Action.status == status_)
+    return [await service.dto(session, a) for a in (await session.execute(requete)).scalars()]
+
+
+@router.get("/orgs/{org}/actions", response_model=list[ActionDto], operation_id="listOrgActions")
+async def list_org_actions(
+    org: str, session: Db, principal: Me, status_: Annotated[str | None, Query(alias="status")] = None
+) -> list[ActionDto]:
+    """La boîte des décisions : les actions des projets de l'organisation que l'appelant voit —
+    `status=pending_approval` pour ce qui attend quelqu'un."""
+    from ..db.models import Organization, Project
+
+    visibles = [
+        p
+        for p in (
+            await session.execute(
+                select(Project)
+                .join(Organization, Organization.id == Project.org_id)
+                .where(Organization.slug == org)
+            )
+        ).scalars()
+        if principal.can(Permission.PROJECT_READ, org, p.slug)
+    ]
+    if not visibles:
+        return []
+    requete = (
+        select(Action)
+        .where(Action.project_id.in_([p.id for p in visibles]))
+        .order_by(Action.created_at.desc())
+        .limit(200)
+    )
     if status_:
         requete = requete.where(Action.status == status_)
     return [await service.dto(session, a) for a in (await session.execute(requete)).scalars()]

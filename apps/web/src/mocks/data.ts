@@ -7,6 +7,7 @@
  * avance sans l'API — c'est ce que demande la section 3.4 du plan.
  */
 import type {
+  Action,
   Agent,
   AgentCreate,
   ConnectorType,
@@ -843,6 +844,48 @@ export const projectOperations: ProjectOperation[] = [
   { connector: "entra-acme", operation: "creer_compte", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
 ];
 
+/** Des actions gouvernées (ADR 0035) : une en attente, proposée par un agent ; une faite ; une défaite. */
+export const actions: Action[] = [
+  {
+    id: "act-poste",
+    origin: "tool",
+    kind: "fournisseur.commander_poste",
+    title: "Commander le portable de Léa (fournisseur)",
+    justification: "proposed by the agent coordinateur-onboarding in run r9",
+    params: { arguments: { modele: "portable-14" } },
+    effects: [{ effect: "connector.call", with: { connector: "fournisseur", operation: "commander_poste", arguments: { modele: "portable-14" } } }],
+    proposed_by: { kind: "agent", id: "agent:coordinateur-onboarding", run_id: "r9" },
+    approval: { approvers: [{ role: "project_owner", min: 1 }], step_up_minutes: 10, separation_of_duties: true },
+    decisions: [],
+    status: "pending_approval",
+    project_slug: "billing-api",
+    created_at: iso(12),
+    journal: [],
+  },
+  {
+    id: "act-comptes",
+    origin: "transition",
+    kind: "arrivee.comptes",
+    title: "Les comptes de Léa",
+    params: { upn: "lea@acme.example" },
+    effects: [
+      { effect: "connector.call", with: { connector: "entra-acme", operation: "create_user" }, compensate: { effect: "connector.call", with: { operation: "disable_user" } } },
+      { effect: "connector.call", with: { connector: "entra-acme", operation: "add_to_group" } },
+    ],
+    proposed_by: { kind: "system", id: "system" },
+    approval: { step_up_minutes: 10 },
+    decisions: [{ by: "lea@varga.dev", decision: "approve", at: iso(90), auth_age_seconds: 120 }],
+    status: "succeeded",
+    project_slug: "billing-api",
+    created_at: iso(95),
+    finished_at: iso(88),
+    journal: [
+      { position: 0, key: "act-comptes:0", effect: "connector.call", status: "done", attempts: 1 },
+      { position: 1, key: "act-comptes:1", effect: "connector.call", status: "done", attempts: 2 },
+    ],
+  },
+];
+
 /** Ce que les workflows de Billing API exigent : du logiciel, donc un dépôt, une CI, un train. */
 export const projectRequirements: ProjectRequirement[] = [
   {
@@ -936,11 +979,28 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { agent: chemin?.split("/").at(-1), version: corps.version, overrides: corps.overrides ?? {}, effective: {} } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import$/.test(chemin ?? "")) return skills[0] as T;
+  const decision = /^\/projects\/[^/]+\/actions\/([^/]+)\/decision$/.exec(chemin ?? "");
+  if (method === "POST" && decision) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { decision: string; reason?: string };
+    const action = actions.find((a) => a.id === decision[1]) ?? actions[0]!;
+    return {
+      ...action,
+      status: corps.decision === "approve" ? "approved" : "rejected",
+      decisions: [{ by: me.email, decision: corps.decision, reason: corps.reason ?? null, at: new Date().toISOString() }],
+      temporal_wf_id: `action-${action.id}`,
+    } as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
     return { added: ["annuler_commande"], changed: ["commander_poste"], removed: [], unchanged: 1 } as T;
   }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
+  const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
+  if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
+  if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
+    const statut = new URLSearchParams(path.split("?")[1] ?? "").get("status");
+    return actions.filter((a) => !statut || a.status === statut) as T;
+  }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   if (agentLu) return (agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
@@ -968,6 +1028,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/connectors\/types$/, connectorTypes],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
+    [/^\/projects\/[^/]+\/actions$/, actions],
     [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, []],
     [/^\/platform\/backends$/, []],

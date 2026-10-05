@@ -76,6 +76,8 @@ class ActionDto(Dto):
     temporal_wf_id: str | None = None
     work_item_id: str | None = None
     run_id: str | None = None
+    #: le projet, pour la boîte des décisions de l'organisation
+    project_slug: str | None = None
     created_at: datetime | None = None
     finished_at: datetime | None = None
     #: le journal des effets, clé par clé

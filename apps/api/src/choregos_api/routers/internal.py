@@ -446,6 +446,17 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     if outil is not None:
         code, corps = await appeler_outil(outil, body or {})
         fournisseur, prix = outil.provider, outil.price_eur
+    elif name in du_courtier and du_courtier[name].sous_validation:
+        # Sous validation (ADR 0035) : l'appel PROPOSE l'action ; rien ne part vers le serveur. La
+        # proposition compte dans le plafond du run, pour qu'une boucle ne remplisse pas la boîte.
+        from ..services.courtier import ArgumentsRefuses, proposer_l_appel, verifier_les_arguments
+
+        try:
+            verifier_les_arguments(du_courtier[name], body or {})
+        except ArgumentsRefuses as refus:
+            raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
+        code, corps = 202, await proposer_l_appel(session, run, project, du_courtier[name], body or {})
+        fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
     elif name in du_courtier:
         code, corps, suspicions = await _par_le_courtier(session, run, project, du_courtier[name], body or {})
         fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
