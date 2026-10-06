@@ -5,6 +5,7 @@ import {
   Background,
   Controls,
   MarkerType,
+  MiniMap,
   Position,
   ReactFlow,
   ReactFlowProvider,
@@ -83,12 +84,23 @@ const THEME = {
   "--xy-controls-button-color-hover": "var(--varga-ink)",
   "--xy-controls-button-border-color": "var(--varga-line)",
   "--xy-controls-box-shadow": "none",
+  // La vue d'ensemble : le cadre dessiné sur le fond de la console, le reste voilé.
+  "--xy-minimap-background-color": "var(--varga-surface)",
+  "--xy-minimap-mask-background-color": "color-mix(in srgb, var(--varga-surface-muted) 70%, transparent)",
+  "--xy-minimap-mask-stroke-color": "var(--varga-line-strong)",
+  "--xy-minimap-mask-stroke-width": "1",
+  "--xy-minimap-node-background-color": "var(--varga-line-strong)",
 } as CSSProperties;
 
 /**
  * Graphe du workflow en couloirs. La disposition est **déterministe** : deux validations
  * du même YAML donnent la même carte, sinon relire un diff de workflow serait un jeu de
- * piste. Les arêtes secondaires (rejet, reprise, escalade, défauts) sont en pointillés.
+ * piste.
+ *
+ * Le chemin nominal se lit SEUL : les arêtes secondaires (rejet, reprise, escalade) — treize
+ * pointillés sur le gabarit par défaut, qui croisaient toute la carte — ne se montrent que pour
+ * l'état survolé ou parcouru au clavier, ou toutes, sur demande. Un workflow qui ne tient pas
+ * lisible dans le cadre s'ouvre sur son début, avec une vue d'ensemble : ce qui dépasse se voit.
  *
  * Le graphe se parcourt **au clavier** : Tab atteint les états dans l'ordre de lecture
  * (colonne par colonne), ← et → suivent les transitions, ↑ et ↓ passent d'un état à
@@ -106,6 +118,11 @@ export function WorkflowGraph({
   const { nodes, edges, lanes, largeur, hauteur } = useMemo(() => layout(graph), [graph]);
   const nav = useMemo(() => navigation(graph), [graph]);
   const [focused, setFocused] = useState<string | null>(null);
+  const [survol, setSurvol] = useState<string | null>(null);
+  const [toutes, setToutes] = useState(false);
+  const [apercu, setApercu] = useState(false);
+  const affichees = useMemo(() => aretesAffichees(edges, toutes, [survol, focused]), [edges, toutes, survol, focused]);
+  const secondaires = edges.filter((edge) => edge.data?.secondaire).length;
   const container = useRef<HTMLDivElement>(null);
 
   function focusNode(id: string) {
@@ -140,6 +157,7 @@ export function WorkflowGraph({
     const vue = ouverture(container.current?.getBoundingClientRect(), largeur, hauteur);
     if (vue === "ajuster") void instance.fitView({ padding: 0.12, maxZoom: 1 });
     else void instance.setViewport(vue);
+    setApercu(vue !== "ajuster");
   }
 
   function onFocus(event: FocusEvent<HTMLDivElement>) {
@@ -147,8 +165,20 @@ export function WorkflowGraph({
     setFocused(id ?? null);
   }
 
+  /** Le clavier quitte la carte : ses reprises se replient, l'aide revient sous la carte. */
+  function onBlur(event: FocusEvent<HTMLDivElement>) {
+    const suivant = event.relatedTarget;
+    if (!(suivant instanceof HTMLElement) || !container.current?.contains(suivant)) setFocused(null);
+  }
+
   return (
     <div className="space-y-2">
+      {secondaires > 0 && (
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <input type="checkbox" checked={toutes} onChange={(event) => setToutes(event.target.checked)} />
+          show every retry, rejection and escalation ({secondaires}) — otherwise, hover or focus a state for its own
+        </label>
+      )}
       <div
         ref={container}
         className="carte-workflow relative h-[30rem] w-full overflow-hidden rounded border border-line bg-surface"
@@ -156,12 +186,13 @@ export function WorkflowGraph({
         data-testid="workflow-graph"
         onKeyDownCapture={onKeyDown}
         onFocusCapture={onFocus}
+        onBlurCapture={onBlur}
       >
         <ReactFlowProvider>
           <Couloirs couloirs={lanes} largeur={largeur} />
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={affichees}
             onInit={cadrer}
             // Un petit workflow ne se grossit pas : 1 au plus, la taille du texte de la console.
             fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
@@ -172,9 +203,22 @@ export function WorkflowGraph({
             edgesFocusable={false}
             onNodeClick={onSelect ? (_, node) => onSelect("node", node.id) : undefined}
             onEdgeClick={onSelect ? (_, edge) => onSelect("edge", edge.id) : undefined}
+            onNodeMouseEnter={(_, node) => setSurvol(node.id)}
+            onNodeMouseLeave={() => setSurvol(null)}
           >
             <Background gap={24} size={1} />
             <Controls showInteractive={false} position="bottom-right" />
+            {apercu && (
+              <MiniMap
+                position="top-right"
+                pannable
+                zoomable
+                ariaLabel="overview of the whole workflow"
+                nodeColor={(node) => String(node.data?.couleur ?? "var(--varga-ink-muted)")}
+                nodeBorderRadius={2}
+                style={{ width: 168, height: 84 }}
+              />
+            )}
           </ReactFlow>
         </ReactFlowProvider>
       </div>
@@ -200,6 +244,21 @@ const idDessine = (edge: GraphEdge, index: number) => edge.id ?? `${edge.from}->
 /** La transition derrière une flèche de la carte : les défauts ne se dessinent pas (voir `layout`). */
 export function areteDessinee(graph: { nodes: unknown[]; edges: unknown[] }, id: string): GraphEdge | undefined {
   return (graph.edges as GraphEdge[]).filter((edge) => !isDefault(edge)).find((edge, index) => idDessine(edge, index) === id);
+}
+
+/**
+ * Les arêtes que la carte montre. Le chemin nominal, toujours ; une reprise, un rejet ou une escalade
+ * seulement s'ils partent ou arrivent à un état d'`autour` (survolé, parcouru au clavier) — ou tous,
+ * sur demande. Une arête cachée garde son identifiant : la choisir, une fois montrée, ouvre la bonne
+ * transition.
+ */
+export function aretesAffichees(edges: Edge[], toutes: boolean, autour: ReadonlyArray<string | null>): Edge[] {
+  const pres = new Set(autour.filter((id): id is string => Boolean(id)));
+  return edges.map((edge) => {
+    if (!edge.data?.secondaire) return edge;
+    const visible = toutes || pres.has(edge.source) || pres.has(edge.target);
+    return { ...edge, hidden: !visible };
+  });
 }
 
 /**
@@ -282,7 +341,12 @@ export function layout(graph: { nodes: unknown[]; edges: unknown[] }): {
         x: GUTTER + (columns.get(node.id) ?? 0) * COLUMN_WIDTH,
         y: (sommets.get(lane) ?? 0) + LANE_PADDING + (rangs.get(node.id) ?? 0) * ROW_HEIGHT,
       },
-      data: { label: node.display },
+      data: { label: node.display, couleur },
+      // Les dimensions qu'on donne à React Flow, et non seulement au style : la vue d'ensemble les lit
+      // sur l'objet passé — sans elles, elle ne dessinait aucun état (une carte contrôlée ne reçoit pas
+      // les mesures en retour). `initial…` ne fixe pas la hauteur : un libellé sur deux lignes grandit.
+      initialWidth: NODE_WIDTH,
+      initialHeight: NODE_HEIGHT,
       ariaLabel: `${node.display}, ${lane} lane, ${outgoing} outgoing transition${outgoing === 1 ? "" : "s"}`,
       draggable: false,
       // De gauche à droite, comme la lecture : on entre par la gauche, on sort par la droite.
@@ -319,6 +383,7 @@ export function layout(graph: { nodes: unknown[]; edges: unknown[] }): {
       // légende dit ce que veulent dire les pointillés, et dix libellés « échecs épuisés » noyaient
       // le chemin nominal.
       className: secondary ? "arete-secondaire" : "arete-nominale",
+      data: { secondaire: secondary },
       label: secondary ? edge.label : etiquette(edge),
       animated: false,
       markerEnd: { type: MarkerType.ArrowClosed, color: couleur, width: 14, height: 14 },
@@ -532,7 +597,10 @@ export function WorkflowLegend({ graph }: { graph: { nodes: unknown[]; edges: un
             {lane} lane · {nodes.filter((node) => (node.lane ?? "system") === lane).length}
           </li>
         ))}
-        <li>solid: the nominal path · dashed: rejection, retry, escalation (hover one for its reason)</li>
+        <li>
+          solid: the nominal path · dashed, on demand: rejection, retry, escalation — hover or focus a state for its
+          own
+        </li>
       </ul>
       {fallbacks.length > 0 && (
         <div>
