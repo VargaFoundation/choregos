@@ -139,7 +139,15 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await page.getByRole("link", { name: "map" }).click();
   // Les défauts partent de chaque état d'agent : la légende les dit une fois, la carte ne les dessine pas.
   await expect(page.getByTestId("workflow-defaults").getByRole("listitem")).toHaveCount(2);
-  await expect(page.getByTestId("workflow-graph").locator(".react-flow__edge")).toHaveCount(2);
+  // Le chemin nominal se lit seul : une escalade se montre autour de son état, ou toutes sur demande.
+  const carte = page.getByTestId("workflow-graph");
+  await expect(carte.locator(".react-flow__edge")).toHaveCount(2);
+  await carte.locator('.react-flow__node[data-id="ready"]').hover();
+  await expect(carte.locator(".react-flow__edge")).toHaveCount(3);
+  await page.mouse.move(0, 0);
+  await expect(carte.locator(".react-flow__edge")).toHaveCount(2);
+  await page.getByLabel(/show every retry, rejection and escalation/).check();
+  await expect(carte.locator(".react-flow__edge")).toHaveCount(3);
 });
 
 test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {

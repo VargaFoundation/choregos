@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaults, layout, navigation, ouverture } from "@/components/workflow-graph";
+import { aretesAffichees, defaults, layout, navigation, ouverture } from "@/components/workflow-graph";
 import { renommer } from "@/components/workflows/renommer";
 
 const graph = {
@@ -235,5 +235,40 @@ describe("une carte qui se lit (relevé sur le dev le 06/10)", () => {
     expect(longue).toEqual({ x: 8, y: expect.any(Number), zoom: 0.8 });
     expect(ouverture(undefined, 2400, 400)).toBe("ajuster");
     expect(ouverture({ width: 0, height: 0 }, 2400, 400)).toBe("ajuster");
+  });
+});
+
+describe("le chemin nominal se lit seul ; les reprises se montrent à la demande", () => {
+  const cachees = (liste: ReturnType<typeof layout>["edges"]) => liste.filter((edge) => edge.hidden).map((edge) => edge.id);
+
+  it("une escalade est cachée par défaut : treize pointillés croisaient la carte du gabarit", () => {
+    expect(cachees(aretesAffichees(layout(graph).edges, false, [null, null]))).toEqual(["d1"]);
+  });
+
+  it("elle se montre autour de son état — d'où elle part comme où elle arrive — et pas ailleurs", () => {
+    const { edges } = layout(graph);
+    expect(cachees(aretesAffichees(edges, false, ["in_progress"]))).toEqual([]);
+    expect(cachees(aretesAffichees(edges, false, [null, "needs_human"]))).toEqual([]);
+    expect(cachees(aretesAffichees(edges, false, ["inbox"]))).toEqual(["d1"]);
+  });
+
+  it("toutes sur demande ; le chemin nominal ne se cache jamais", () => {
+    const { edges } = layout(graph);
+    expect(cachees(aretesAffichees(edges, true, []))).toEqual([]);
+    const nominales = aretesAffichees(edges, false, []).filter((edge) => !edge.data?.secondaire);
+    expect(nominales.map((edge) => edge.id)).toEqual(["t1", "t2", "t3"]);
+    expect(nominales.every((edge) => !edge.hidden)).toBe(true);
+  });
+
+  it("chaque état porte la couleur de son couloir, que reprend la vue d'ensemble", () => {
+    const { nodes } = layout(graph);
+    expect(nodes.find((node) => node.id === "inbox")?.data.couleur).toBe("var(--varga-accent-strong)");
+  });
+
+  it("chaque état donne ses dimensions à React Flow : sans elles, la vue d'ensemble ne dessinait rien", () => {
+    for (const node of layout(graph).nodes) {
+      expect(node.initialWidth).toBeGreaterThan(0);
+      expect(node.initialHeight).toBeGreaterThan(0);
+    }
   });
 });

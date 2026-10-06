@@ -484,6 +484,8 @@ export const workflowValidation: WorkflowValidation = {
     edges: [
       { id: "t-refine", from: "inbox", to: "ready", kind: "nominal", label: "t-refine", actor: "refiner", gates: [] },
       { id: "t-implement", from: "ready", to: "done", kind: "nominal", label: "t-implement", actor: "dev", gates: ["scope_respected"] },
+      // Une escalade : la carte ne la montre qu'autour de son état, ou sur demande.
+      { id: "ready->needs_human:escalate:échecs épuisés", from: "ready", to: "needs_human", kind: "escalate", label: "échecs épuisés" },
       { id: "inbox->needs_human:default:question", from: "inbox", to: "needs_human", kind: "default", label: "question" },
       { id: "ready->needs_human:default:question", from: "ready", to: "needs_human", kind: "default", label: "question" },
       { id: "ready->needs_human:default:budget", from: "ready", to: "needs_human", kind: "default", label: "budget dépassé" },
