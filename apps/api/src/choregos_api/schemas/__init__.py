@@ -148,6 +148,7 @@ from .tickets import (
     WorkItemCreate,
     WorkItemDto,
     WorkItemPage,
+    WorkItemUpdate,
 )
 
 __all__ = [
@@ -265,6 +266,7 @@ __all__ = [
     "WorkItemCreate",
     "WorkItemDto",
     "WorkItemPage",
+    "WorkItemUpdate",
     "WorkflowDefDto",
     "WorkflowEditRequest",
     "WorkflowEditResult",

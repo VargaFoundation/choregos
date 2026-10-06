@@ -12,18 +12,22 @@ Le journal (`action_effects`) est la mémoire qui rend une reprise sûre :
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
-from choregos_api.db.models import Action, ActionEffect, Project
+from choregos_api.db.models import Action, ActionEffect, Project, WorkItem
 from choregos_api.effets import ContexteEffet, EffetRefuse, effet, rendre
+from choregos_api.logging import get_logger
 from choregos_api.services import persist_event
-from choregos_contracts import ActionStatus, EventType
+from choregos_contracts import ActionOrigin, ActionStatus, EventType
 from choregos_core import utcnow
 from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from .base import db
+
+logger = get_logger("choregos.actions")
 
 
 async def _charger(session: Any, action_id: str) -> tuple[Action, Project]:
@@ -173,8 +177,10 @@ async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
 @activity.defn
 async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:
     action_id, statut = str(entree["action_id"]), str(entree["status"])
+    ticket: str | None = None
     async with db() as session:
         action, projet = await _charger(session, action_id)
+        ticket = await _interpreteur_qui_attend(session, action, projet)
         action.status = statut
         action.error = entree.get("error")
         action.result = {"compensations": entree.get("compensations") or []}
@@ -188,4 +194,87 @@ async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:
             subject=action_id,
             error=action.error,
         )
+    # Après la validation : le ticket qui l'attend relira un état déjà écrit.
+    if ticket is not None:
+        await _prevenir(ticket, action_id, statut)
     return {"action_id": action_id, "status": statut}
+
+
+async def _interpreteur_qui_attend(session: Any, action: Action, projet: Project) -> str | None:
+    """L'interpréteur du ticket dont une TRANSITION a proposé l'action (S20-05), ou rien."""
+    from choregos_api.temporal import interpreter_id
+
+    if action.origin != ActionOrigin.TRANSITION.value or action.work_item_id is None:
+        return None
+    item = await session.get(WorkItem, action.work_item_id)
+    return interpreter_id(projet.slug, item.tracker_key) if item is not None else None
+
+
+async def _prevenir(workflow_id: str, action_id: str, statut: str) -> None:
+    """`action_settled` : le ticket n'attend pas sa prochaine relecture pour savoir. Un ticket
+    arrêté entre-temps n'écoute plus — ce n'est pas une panne de l'action."""
+    try:
+        await (
+            activity.client()
+            .get_workflow_handle(workflow_id)
+            .signal("action_settled", {"action_id": action_id, "status": statut})
+        )
+    except Exception as erreur:
+        logger.warning("ticket non prévenu", workflow_id=workflow_id, action=action_id, erreur=str(erreur))
+
+
+@activity.defn
+async def proposer_l_action_de_transition(entree: dict[str, Any]) -> dict[str, Any]:
+    """L'action d'une transition système (S20-05), proposée une fois par tentative. Née approuvée —
+    chaque opération est permise à ce projet —, elle part aussitôt dans son `ActionWorkflow`.
+
+    Un refus définitif (une variable absente, un effet inconnu, une opération interdite) revient en
+    `refus` : la transition échoue, nommée — ce n'est pas une panne à retenter."""
+    from choregos_api.errors import ApiError
+    from choregos_api.services.actions import proposer_pour_une_transition
+
+    async with db() as session:
+        projet = await session.get(Project, entree["project_id"])
+        item = await session.get(WorkItem, entree["work_item_id"])
+        if projet is None or item is None:
+            return {"refus": "ticket ou projet introuvable"}
+        try:
+            action = await proposer_pour_une_transition(
+                session,
+                projet,
+                item,
+                dict(entree["action"]),
+                transition=str(entree["transition"]),
+                tentative=int(entree["attempt"]),
+                workflow_id=str(entree["workflow_id"]),
+            )
+        except EffetRefuse as refus:
+            return {"refus": str(refus)}
+        except ApiError as refus:
+            return {"refus": str(refus.detail or refus.title)}
+        identifiant, statut = action.id, action.status
+    if statut == ActionStatus.APPROVED.value:
+        await _demarrer(identifiant)
+    return {"action_id": identifiant, "status": statut}
+
+
+async def _demarrer(action_id: str) -> None:
+    """`action-<id>`, une seule fois : une activité rejouée retrouve le workflow déjà parti."""
+    from choregos_api.temporal import action_id as identifiant
+    from temporalio.exceptions import WorkflowAlreadyStartedError
+
+    with contextlib.suppress(WorkflowAlreadyStartedError):
+        await activity.client().start_workflow(
+            "ActionWorkflow",
+            {"action_id": action_id},
+            id=identifiant(action_id),
+            task_queue=activity.info().task_queue,
+        )
+
+
+@activity.defn
+async def etat_de_l_action(action_id: str) -> dict[str, Any]:
+    """Relu en base : le filet quand un signal `action_settled` se perd."""
+    async with db() as session:
+        action = await session.get(Action, action_id)
+        return {"status": action.status if action is not None else ActionStatus.FAILED.value}

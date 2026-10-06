@@ -17,6 +17,7 @@ from choregos_contracts.workflow import AGENT_WILDCARD, AgentActor, HumanActor, 
 #: Ce que vérifie chaque garantie, en une phrase. Un test exige un résumé pour chaque garantie
 #: connue : une garantie nouvelle sans résumé ferait parler la vue processus dans le vide.
 RESUMES: dict[str, str] = {
+    "action_succeeded": "its governed action succeeded",
     "ci_green": "the CI pipeline is green",
     "coverage_delta_min": "test coverage does not drop below the threshold",
     "diff_size_max": "the change stays under the size limit",
@@ -56,18 +57,39 @@ def _qui(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     return "system", nom, "the platform"
 
 
+def _action(t: Transition) -> str | None:
+    """L'action gouvernée que la transition propose, en clair : quoi, quand, sous quelle validation."""
+    if t.action is None:
+        return None
+    texte = f"proposing the governed action `{t.action.kind}`"
+    if t.action.not_before:
+        texte += f" not before `{t.action.not_before}`"
+    if t.action.approval is not None:
+        roles = ", ".join(f"{a.min} {a.role}" for a in t.action.approval.approvers)
+        texte += f", approved by {roles}"
+    else:
+        texte += ", approved by a person when one of its operations requires it"
+    return texte
+
+
 def to_process(wf: Workflow) -> list[dict[str, Any]]:
     """Une étape par transition, dans l'ordre du YAML : qui agit, de quel état vers lequel, sous
     quelles garanties, ce qui doit être produit, et ce qui arrive en cas d'échec ou de rejet."""
     etapes = []
     for t in wf.transitions:
         type_, nom, qui = _qui(wf, t)
-        garanties = [{"name": g.name, "summary": RESUMES.get(g.name, g.name)} for g in t.gates]
+        noms = [g.name for g in t.gates]
+        if t.action is not None and "action_succeeded" not in noms:
+            noms.insert(0, "action_succeeded")  # implicite : une transition à action l'attend toujours
+        garanties = [{"name": nom, "summary": RESUMES.get(nom, nom)} for nom in noms]
         conditions = []
         if t.outputs:
             conditions.append("it produced " + ", ".join(f"`{o}`" for o in t.outputs))
         conditions += [g["summary"] for g in garanties]
         phrase = f"From «{_affiche(wf, t.from_)}», {qui} moves the item to «{_affiche(wf, t.to)}»"
+        action = _action(t)
+        if action:
+            phrase += f", after {action},"
         if conditions:
             phrase += " once " + "; ".join(conditions)
         phrase += "."
@@ -99,6 +121,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "on_fail": echec,
                 "on_reject": rejet,
                 "timeout_hours": t.timeout_hours,
+                "action": action,
                 "sentence": phrase,
             }
         )

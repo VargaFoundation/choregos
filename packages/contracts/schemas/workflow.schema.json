@@ -334,6 +334,10 @@
         "timeout_hours": {
           "type": "integer",
           "minimum": 1
+        },
+        "action": {
+          "$ref": "#/$defs/transitionAction",
+          "description": "une action gouvernée que la transition système propose (ADR 0035), à date"
         }
       },
       "oneOf": [
@@ -438,6 +442,108 @@
               "$ref": "#/$defs/identifier"
             }
           }
+        }
+      }
+    },
+    "actionEffect": {
+      "type": "object",
+      "required": [
+        "effect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "with": {
+          "type": "object"
+        },
+        "compensate": {
+          "type": "object"
+        }
+      }
+    },
+    "actionApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approvers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": [
+                  "developer",
+                  "release_captain",
+                  "project_owner",
+                  "org_admin"
+                ]
+              },
+              "min": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              }
+            }
+          }
+        },
+        "step_up_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "separation_of_duties": {
+          "type": "boolean"
+        }
+      }
+    },
+    "transitionAction": {
+      "type": "object",
+      "required": [
+        "kind",
+        "title",
+        "effects"
+      ],
+      "additionalProperties": false,
+      "description": "titre, justification et paramètres rendus avec les champs du ticket ; une validation humaine quand une opération l'exige ou quand `approval` est déclaré",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,127}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "justification": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "params": {
+          "type": "object"
+        },
+        "effects": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/actionEffect"
+          }
+        },
+        "approval": {
+          "$ref": "#/$defs/actionApproval"
+        },
+        "not_before": {
+          "type": "string",
+          "pattern": "^fields\\.[a-z_][a-z0-9_]{0,62}(\\s*[+-]\\s*[0-9]{1,4}\\s*[dhm])?$",
+          "description": "pas avant cette date, tirée d'un champ du ticket : `fields.date_arrivee - 10d`"
         }
       }
     }

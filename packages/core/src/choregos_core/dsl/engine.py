@@ -193,6 +193,21 @@ class WorkflowEngine:
             return Decision(transition.from_, reason="gates en attente")
         return Decision(transition.to, reason="gates vertes")
 
+    def after_action(
+        self, transition: Transition, status: str, outcomes: list[GateOutcome], attempts: int
+    ) -> Decision:
+        """Suites d'une transition à action (S20-05). Rejetée, l'action suit `on_reject` quand la
+        transition en déclare un ; sinon elle est une garantie comme les autres — `action_succeeded`,
+        implicite —, et un échec suit `on_fail`, que le validateur exige : sans lui, le ticket
+        reviendrait à son état et proposerait la même action, sans fin."""
+        from ..gates import GateContext, evaluate
+
+        if status == "rejected" and transition.on_reject:
+            return Decision(transition.on_reject, reason="action rejetée")
+        verdict = evaluate("action_succeeded", GateContext(action_status=status))
+        autres = [o for o in outcomes if o.name != "action_succeeded"]
+        return self.after_gates(transition, [verdict, *autres], attempts)
+
     def timeout_state(self) -> str | None:
         return self._default_state("on_timeout")
 

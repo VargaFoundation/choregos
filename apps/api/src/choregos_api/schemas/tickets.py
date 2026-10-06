@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from choregos_contracts import StageResult
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from .base import Dto, PageMeta
 
@@ -27,6 +27,14 @@ class WorkItemCreate(Dto):
     labels: list[str] = Field(default_factory=list)
     #: Les champs du ticket, validés par `metadata.inputs` de son workflow.
     fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkItemUpdate(Dto):
+    """Les champs qui changent (S20-05) : ils remplacent les siens, `null` en retire un."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fields: dict[str, Any]
 
 
 class Totals(Dto):

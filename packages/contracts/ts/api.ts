@@ -722,6 +722,13 @@ export type WorkItemCreate = {
   };
 };
 
+export type WorkItemUpdate = {
+  /** Les champs qui changent ; `null` en retire un. */
+  fields: {
+    [key: string]: unknown;
+  };
+};
+
 export type Integrations = {
   /** L'URL de la porte MCP ; celle d'un projet y ajoute `/projects/{org}:{slug}`. */
   mcp_url: string;
@@ -1453,6 +1460,7 @@ export interface Operations {
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
+  updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
   validateWorkflow: { method: "POST"; path: "/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
 }
 

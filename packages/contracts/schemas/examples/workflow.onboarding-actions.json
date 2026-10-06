@@ -1,0 +1,122 @@
+{
+  "apiVersion": "choregos/v1",
+  "kind": "Workflow",
+  "metadata": {
+    "name": "onboarding",
+    "version": 1,
+    "description": "Une arrivée : les comptes à J-10, sous la politique de l'organisation.",
+    "inputs": {
+      "type": "object",
+      "required": [
+        "upn",
+        "date_arrivee"
+      ],
+      "properties": {
+        "upn": {
+          "type": "string"
+        },
+        "date_arrivee": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    }
+  },
+  "initial": "prepare",
+  "actors": {
+    "plateforme": {
+      "type": "system"
+    },
+    "rh": {
+      "type": "human",
+      "group": "rh",
+      "sla_hours": 24
+    }
+  },
+  "states": {
+    "prepare": {
+      "display": "Préparée",
+      "kind": "wait"
+    },
+    "comptes": {
+      "display": "Comptes créés",
+      "kind": "wait"
+    },
+    "a_revoir": {
+      "display": "À revoir",
+      "kind": "wait"
+    },
+    "fait": {
+      "display": "Fait",
+      "terminal": true
+    }
+  },
+  "transitions": [
+    {
+      "id": "t-comptes",
+      "from": "prepare",
+      "to": "comptes",
+      "by": "plateforme",
+      "action": {
+        "kind": "arrivee.comptes",
+        "title": "Les comptes de {{ fields.upn }}",
+        "justification": "arrivée le {{ fields.date_arrivee }}",
+        "params": {
+          "upn": "{{ fields.upn }}"
+        },
+        "effects": [
+          {
+            "effect": "connector.call",
+            "with": {
+              "connector": "entra-acme",
+              "operation": "create_user",
+              "arguments": {
+                "upn": "{{ params.upn }}",
+                "display_name": "{{ params.upn }}"
+              }
+            },
+            "compensate": {
+              "effect": "connector.call",
+              "with": {
+                "connector": "entra-acme",
+                "operation": "disable_user",
+                "arguments": {
+                  "upn": "{{ params.upn }}"
+                }
+              }
+            }
+          }
+        ],
+        "approval": {
+          "approvers": [
+            {
+              "role": "project_owner",
+              "min": 1
+            }
+          ],
+          "step_up_minutes": 10,
+          "separation_of_duties": true
+        },
+        "not_before": "fields.date_arrivee - 10d"
+      },
+      "gates": [
+        {
+          "name": "action_succeeded",
+          "params": {}
+        }
+      ],
+      "on_fail": {
+        "to": "prepare",
+        "max_attempts": 2,
+        "escalate_to": "a_revoir"
+      },
+      "on_reject": "a_revoir"
+    },
+    {
+      "id": "t-fin",
+      "from": "comptes",
+      "to": "fait",
+      "by": "rh"
+    }
+  ]
+}

@@ -119,6 +119,53 @@ class ReviewSpec(Strict):
     humans: ReviewHumans | None = None
 
 
+class ActionEffectSpec(Strict):
+    """Un effet d'une action (ADR 0035) : son nom déclaré (`connector.call`…), ses paramètres —
+    rendus en Jinja isolé avec `params` et `effects` —, et ce qui le défait si la suite échoue."""
+
+    effect: str = Field(min_length=1, max_length=128)
+    with_: dict[str, Any] = Field(default_factory=dict, alias="with")
+    compensate: dict[str, Any] | None = None
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class ActionApprover(Strict):
+    role: Literal["developer", "release_captain", "project_owner", "org_admin"] = "project_owner"
+    min: int = Field(default=1, ge=1, le=5)
+
+
+class ActionApprovalSpec(Strict):
+    approvers: list[ActionApprover] = Field(default_factory=lambda: [ActionApprover()], min_length=1)
+    step_up_minutes: int = Field(default=10, ge=1, le=120)
+    separation_of_duties: bool = True
+
+
+#: `fields.<champ>`, décalé ou non : `fields.date_arrivee - 10d`, `fields.date_depart + 2h`.
+NOT_BEFORE = r"^fields\.[a-z_][a-z0-9_]{0,62}(\s*[+-]\s*[0-9]{1,4}\s*[dhm])?$"
+
+
+class TransitionAction(Strict):
+    """L'action gouvernée qu'une transition SYSTÈME propose (ADR 0035, S20-05).
+
+    `title`, `justification` et `params` sont rendus en Jinja isolé avec les champs du ticket
+    (`fields`) et le ticket (`work_item`) ; les effets, plus tard, avec `params`. La transition
+    attend `not_before` — une date tirée d'un champ, réarmée quand le champ change —, propose
+    l'action, et passe quand elle a RÉUSSI (`action_succeeded`).
+
+    Une validation humaine est exigée quand une opération appelée l'exige pour ce projet, ou
+    quand `approval` est déclaré : le workflow peut en AJOUTER une, jamais en retirer.
+    """
+
+    kind: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,127}$")
+    title: str = Field(min_length=1, max_length=300)
+    justification: str | None = Field(default=None, max_length=4000)
+    params: dict[str, Any] = Field(default_factory=dict)
+    effects: list[ActionEffectSpec] = Field(min_length=1, max_length=50)
+    approval: ActionApprovalSpec | None = None
+    not_before: str | None = Field(default=None, pattern=NOT_BEFORE)
+
+
 class Transition(Strict):
     id: Identifier | None = None
     from_: str = Field(alias="from")
@@ -134,6 +181,8 @@ class Transition(Strict):
     on_changes_requested: Retry | None = None
     review: ReviewSpec | None = None
     timeout_hours: int | None = Field(default=None, ge=1)
+    #: Une transition système peut proposer une action gouvernée, à date (S20-05).
+    action: TransitionAction | None = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

@@ -50,6 +50,9 @@ class GateContext:
     #: pas se prononcer : sans diff, `scope_respected` déclarerait le périmètre respecté et
     #: `no_secrets` l'absence de secrets, faute d'avoir regardé quoi que ce soit.
     diff_available: bool = True
+    #: L'état de l'action gouvernée que la transition a proposée (S20-05) — lu en base, jamais
+    #: déduit : `action_succeeded` ne passe que sur `succeeded`.
+    action_status: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -208,6 +211,25 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         detail="sorties présentes" if not missing else f"sorties manquantes : {', '.join(missing)}",
         annotations=missing,
     )
+
+
+#: Les états d'une action qui ne bougeront plus.
+ACTION_REGLEE = frozenset({"succeeded", "failed", "rejected"})
+
+
+@gate("action_succeeded", asynchronous=True)
+def _action_succeeded(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """L'action gouvernée de la transition a RÉUSSI : chacun de ses effets fait, confirmé (ADR 0035).
+
+    Rejetée, échouée — et alors compensée —, elle bloque ; proposée, en attente d'une décision ou
+    en cours, elle attend. Une transition sans action n'a rien à juger : le validateur le refuse.
+    """
+    statut = ctx.action_status
+    if statut is None or statut not in ACTION_REGLEE:
+        return GateOutcome("action_succeeded", False, pending=True, detail=f"action {statut or 'à proposer'}")
+    if statut == "succeeded":
+        return GateOutcome("action_succeeded", True, detail="action réussie")
+    return GateOutcome("action_succeeded", False, detail=f"action {statut}")
 
 
 @gate("tool_called")

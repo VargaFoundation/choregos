@@ -87,6 +87,9 @@ from .stage import (
     empreinte_de_skill,
 )
 from .workflow import (
+    ActionApprovalSpec,
+    ActionApprover,
+    ActionEffectSpec,
     AgentActor,
     GateSpec,
     HumanActor,
@@ -94,6 +97,7 @@ from .workflow import (
     State,
     SystemActor,
     Transition,
+    TransitionAction,
     Workflow,
     WorkflowDefaults,
     WorkflowMetadata,
@@ -152,6 +156,9 @@ def load_openapi() -> dict[str, Any]:
 __all__ = [
     "STAGE_INPUT_SCHEMA",
     "STAGE_RESULT_SCHEMA",
+    "ActionApprovalSpec",
+    "ActionApprover",
+    "ActionEffectSpec",
     "ActionOrigin",
     "ActionStatus",
     "ActorType",
@@ -228,6 +235,7 @@ __all__ = [
     "ToolsRef",
     "TrainEnvPolicy",
     "Transition",
+    "TransitionAction",
     "TransitionRef",
     "WorkItemLinks",
     "WorkItemRef",

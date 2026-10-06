@@ -69,7 +69,7 @@ async def choisir_workflow(
     return await default_workflow(session, project.id)
 
 
-def _valider_les_champs(schema: dict[str, Any] | None, champs: dict[str, Any], workflow: str) -> None:
+def valider_les_champs(schema: dict[str, Any] | None, champs: dict[str, Any], workflow: str) -> None:
     """Un champ hors du schéma, ou un champ requis absent : 422, avec son chemin."""
     if schema is None:
         if champs:
@@ -89,7 +89,7 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
     """Le seul constructeur : l'état initial DU workflow choisi, et l'épingle de sa version."""
     ligne = await choisir_workflow(session, project, naissance)
     workflow = workflow_model(ligne)
-    _valider_les_champs(workflow.metadata.inputs, naissance.fields, workflow.metadata.name)
+    valider_les_champs(workflow.metadata.inputs, naissance.fields, workflow.metadata.name)
     item = WorkItem(  # le seul `WorkItem(` du code produit (test_un_seul_constructeur_de_ticket)
         project_id=project.id,
         tracker_key=naissance.tracker_key,

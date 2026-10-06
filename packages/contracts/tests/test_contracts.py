@@ -55,6 +55,7 @@ def test_all_declared_schemas_exist() -> None:
     ("example", "schema_name"),
     [
         ("workflow.default-simple.json", "workflow.schema.json"),
+        ("workflow.onboarding-actions.json", "workflow.schema.json"),
         ("policy.solo.json", "policy.schema.json"),
         ("project.example.json", "project.schema.json"),
         ("stage-input.example.json", "stage-input.schema.json"),
@@ -76,6 +77,7 @@ def test_example_matches_json_schema(example: str, schema_name: str) -> None:
     ("example", "model"),
     [
         ("workflow.default-simple.json", Workflow),
+        ("workflow.onboarding-actions.json", Workflow),
         ("policy.solo.json", Policy),
         ("project.example.json", ProjectConfig),
         ("stage-input.example.json", StageInput),

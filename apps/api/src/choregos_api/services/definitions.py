@@ -71,6 +71,32 @@ async def workflow_actif(session: AsyncSession, project_id: str, nom: str) -> Wo
     ).scalar_one_or_none()
 
 
+def _verifier_les_effets(workflow: Any) -> None:
+    """Un effet que la plateforme ne connaît pas se refuse À LA PUBLICATION (S20-05) : une faute de
+    frappe ne doit pas attendre la date d'arrivée d'un ticket pour se découvrir. Les effets sont une
+    couture de l'API (`declarer_un_effet`), le validateur du cœur ne les voit pas."""
+    from ..effets import effets_declares
+
+    connus = effets_declares()
+    erreurs = []
+    for index, transition in enumerate(workflow.transitions):
+        if transition.action is None:
+            continue
+        for position, effet in enumerate(transition.action.effects):
+            noms = [effet.effect, *([str(effet.compensate.get("effect"))] if effet.compensate else [])]
+            for nom in noms:
+                if nom not in connus:
+                    erreurs.append(
+                        {
+                            "loc": [f"/transitions/{index}/action/effects/{position}"],
+                            "msg": f"effet inconnu : {nom} (connus : {', '.join(sorted(connus))})",
+                            "code": "action.effect_unknown",
+                        }
+                    )
+    if erreurs:
+        raise unprocessable("workflow invalide", erreurs)
+
+
 async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses options sont nommées
     session: AsyncSession,
     principal: Any,
@@ -103,6 +129,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         raise unprocessable(
             f"le YAML s'appelle `{nom}`, la route `{nom_attendu}` : `metadata.name` doit coïncider"
         )
+    _verifier_les_effets(workflow)
     actuelle = await workflow_actif(session, project.id, nom)
     if base_version is not None and (actuelle is None or actuelle.version != base_version):
         lue = actuelle.version if actuelle is not None else "aucune"

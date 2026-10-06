@@ -465,7 +465,57 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
 
 The core ships one effect, `connector.call`: an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema. An
-`approval` operation runs here — the action was approved; a `forbidden` one never does.
+`approval` operation runs here — the action was approved; one this **project** cannot use — the
+organisation forbids it, the project tightened it to `forbidden`, or its groups are not the
+project's — never does, and an action calling it is refused when it is proposed (`422`).
+
+**An action at a date, from a workflow.** A system transition can propose the action itself. Its
+title, justification and parameters are rendered (sandboxed Jinja) with the item's `fields` and the
+`work_item`; `not_before` waits for a date read from a field the workflow declares as a date:
+
+```yaml
+metadata:
+  inputs:
+    type: object
+    properties:
+      upn: { type: string }
+      start_date: { type: string, format: date }      # a date: midnight UTC; a date-time keeps its zone
+transitions:
+  - id: t-accounts
+    from: planned
+    to: accounts_ready
+    by: platform                                      # an actor of type `system`
+    action:
+      kind: onboarding.accounts
+      title: "Accounts for {{ fields.upn }}"
+      params: { upn: "{{ fields.upn }}" }
+      effects:
+        - effect: connector.call
+          with: { connector: entra-acme, operation: create_user,
+                  arguments: { upn: "{{ params.upn }}", display_name: "{{ params.upn }}" } }
+      not_before: fields.start_date - 10d             # d, h or m; + or -
+    on_fail: { to: planned, max_attempts: 2, escalate_to: needs_review }
+    on_reject: needs_review
+```
+
+- **The date moves, the timer follows.** `PATCH /work-items/{id}` with `{"fields": {...}}` replaces
+  those fields (`null` removes one), validated by the item's own workflow, and tells its
+  interpreter: a later date re-arms the timer, a date already past starts the action at once. A
+  field not filled yet means waiting for it — no date, no action. A paused item does not start its
+  action; it starts it when resumed.
+- **Who approves.** When every operation the action calls — its compensations included — is
+  `allowed` for the project and the workflow asks for no `approval`, the policy decides: the action
+  is born approved (`by: policy`) and runs. Otherwise a person decides it in **Approvals**, like any
+  other. A workflow can add an approval, never remove one. A plugin effect declares what it needs
+  (`declarer_un_effet(name, fn, politique="allowed")`; `approval` by default).
+- **What follows.** The transition passes when its action **succeeded** (`action_succeeded`, an
+  implicit guarantee). Rejected, it follows `on_reject` when there is one; failed — compensated —,
+  rejected without `on_reject`, or impossible to propose (a missing field, a forbidden operation),
+  it follows `on_fail`, which such a transition must declare: without it the item would propose the
+  same action forever. An unknown effect is refused when the workflow is **published**.
+- **How the item learns.** The action runs in its own `ActionWorkflow`; when it settles, it signals
+  the item (`action_settled`), and a rejection does too. The item also re-reads the action every six
+  hours, in case a signal was lost.
 
 **A tool under approval becomes an action.** A run sees an `approval` operation like any tool,
 its description saying it needs a human approval. Calling it reaches **nothing**: it proposes a

@@ -297,8 +297,12 @@ async def activer_badge(ctx, params):          # ctx: session, action, project
     return {"uid": badge.uid, "active": True}      # recorded under the effect's key
 
 def brancher() -> None:
-    declarer_un_effet("badge.activate", activer_badge)
+    declarer_un_effet("badge.activate", activer_badge, politique="approval")
 ```
+
+`politique` is what a **workflow** action needs to run this effect: `approval` (a person decides,
+the default), `allowed` (the transition is enough) or `forbidden`. `connector.call` has none of its
+own: the operation it calls carries the policy, in the organisation and in the project.
 
 An effect runs in an activity of `ActionWorkflow`, never in the request that approved the action.
 It **must be idempotent**: a worker may die after the call and before the confirmation, and the
