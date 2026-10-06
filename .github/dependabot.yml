@@ -46,8 +46,9 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  # Images de base des cinq Dockerfiles. Une seule PR : elles partagent `python:3.12-slim`
-  # et `node:22`, et les décaler les unes des autres n'a aucun sens.
+  # Images de base des cinq Dockerfiles. Une seule PR : quatre partagent `python:3.12-slim`, la
+  # console part de `node:24`, et les décaler les unes des autres n'a aucun sens. Une montée vers
+  # une version de Node qui n'est pas LTS se ferme : la règle est dans `docker/README.md`.
   - package-ecosystem: docker
     directory: /docker
     schedule:
