@@ -16,7 +16,7 @@ pas (ADR 0030). La tâche « badge » aussi : on n'atteste pas d'un script une r
     uv run python essai/rh/scenario_rh.py verifier RH-1   # chaque action, son journal, la preuve
 
 Variables :
-    CHOREGOS_DEV_URL     (défaut http://choregos.internal.dev.diametral.com)
+    CHOREGOS_DEV_URL     l'adresse de la console du locataire (ex. `https://choregos.example`)
     CHOREGOS_DEV_TOKEN   jeton d'API d'un administrateur (`chg_…`), créé dans la console ; jamais écrit ici
     CHOREGOS_DEV_ORG     l'organisation du locataire
     ESSAI_FAUX_URL       (défaut http://choregos-demo-fakes:8090) l'adresse des faux, vue depuis le cluster
@@ -35,7 +35,8 @@ from typing import Any
 
 import httpx
 
-URL = os.environ.get("CHOREGOS_DEV_URL", "http://choregos.internal.dev.diametral.com").rstrip("/")
+#: Exigée par `client()` : aucun locataire n'est supposé — Choregos est un projet ouvert.
+URL = os.environ.get("CHOREGOS_DEV_URL", "").rstrip("/")
 FAUX = os.environ.get("ESSAI_FAUX_URL", "http://choregos-demo-fakes:8090").rstrip("/")
 PROJET = "rh"
 TERMINAUX = {"pret", "clos"}
@@ -55,7 +56,7 @@ def exiger(nom: str) -> str:
 
 def client() -> httpx.Client:
     return httpx.Client(
-        base_url=f"{URL}/api/v1",
+        base_url=f"{exiger('CHOREGOS_DEV_URL').rstrip('/')}/api/v1",
         headers={"Authorization": f"Bearer {exiger('CHOREGOS_DEV_TOKEN')}"},
         timeout=60,
     )
