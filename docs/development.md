@@ -306,6 +306,17 @@ effect is then attempted again. Raise `EffetRefuse` for what no retry will chang
 exception is retried with backoff. Declaring the same function twice is harmless; another under
 the same name stops start-up.
 
+A connector of a **business family** — `mdm`, `shipping`, `access_control` — declares that
+family's operations (`choregos_adapters.familles`) and enters the shared conformance suite,
+`tests/conformance/connecteurs/`, with the fake of its API: a case of a few lines, and it is judged
+like the demo fakes, the Entra directory and the supplier's MCP server. Each operation declares a
+**closed** input schema that the implementation follows — same parameters, same types, required
+exactly when they have no default; a **write replayed changes nothing**, and a read writes nothing,
+not even for an object it does not know; the key **serves** — a wrong one is refused — and
+**appears nowhere**: not in the log (stdlib or structlog), not in a result, not in a refusal, not
+in the client's `repr`. The fakes of the HR scenario (`choregos_adapters.fakes.rh`) can be reached
+typed, through a `demo` connector, or served as an MCP server (`serveur_mcp`), on the same state.
+
 ### Adding a plugin to a published image
 
 A plugin that ships as an image is built **FROM** the community image, which already holds the

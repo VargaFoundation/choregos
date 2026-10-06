@@ -122,6 +122,7 @@ def _objet(proprietes: dict[str, Any], requis: tuple[str, ...] = ()) -> dict[str
 _TEXTE: dict[str, Any] = {"type": "string"}
 _ENTIER: dict[str, Any] = {"type": "integer"}
 
+from .familles import FAMILLES as _FAMILLES  # noqa: E402 - après le registre
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA  # noqa: E402 - après le registre
 
 #: Ce que chaque type livré déclare (ADR 0034) : son nom, ses capacités, le schéma de sa
@@ -293,6 +294,26 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             for nom, acces, description, schema in _OPERATIONS_ENTRA
         ),
     ),
+    # Les familles métier (S20-04) n'ont pas encore de vrai type : `demo` les tient en mémoire, chaque
+    # processus pour lui — une démonstration, refusée en staging et en prod.
+    ("mdm", "demo"): ConnectorTypeSpec(
+        "demo device management (in memory: demonstrations only, refused in staging and prod)",
+        ("mdm",),
+        secret_fields=("api_key",),
+        operations=_FAMILLES["mdm"],
+    ),
+    ("shipping", "demo"): ConnectorTypeSpec(
+        "demo carrier (in memory: demonstrations only, refused in staging and prod)",
+        ("shipping",),
+        secret_fields=("api_key",),
+        operations=_FAMILLES["shipping"],
+    ),
+    ("access_control", "demo"): ConnectorTypeSpec(
+        "demo badge readers (in memory: demonstrations only, refused in staging and prod)",
+        ("access_control",),
+        secret_fields=("api_key",),
+        operations=_FAMILLES["access_control"],
+    ),
     ("mcp", "mcp"): ConnectorTypeSpec(
         "MCP server (Streamable HTTP)",
         ("mcp",),
@@ -350,6 +371,29 @@ def _annuaire_du_faux_entra(cfg: dict[str, Any]) -> Any:
     )
 
 
+#: Les faux des familles métier, un par famille : partagés dans le processus, comme les autres.
+FAUX_METIER: dict[str, Any] = {}
+
+
+def _guichet_de_demo(famille: str, *, en_production: bool) -> Any:
+    """La fabrique d'un connecteur `<famille>: demo` (ou de son faux, sous `CHOREGOS_FAKES=1`)."""
+
+    def construire(cfg: dict[str, Any]) -> Any:
+        from .fakes.rh import FAUX_PAR_FAMILLE, Guichet
+
+        environnement = _env("CHOREGOS_ENV", "dev")
+        if en_production and environnement in {"staging", "prod"}:
+            raise ConfigurationError(
+                f"connecteur `{famille}: demo` refusé en {environnement} : un faux en mémoire, que "
+                "chaque processus tient pour lui — une démonstration, pas un système de l'entreprise."
+            )
+        if famille not in FAUX_METIER:
+            FAUX_METIER[famille] = FAUX_PAR_FAMILLE[famille]()
+        return Guichet(FAUX_METIER[famille], str(cfg.get("api_key", "")))
+
+    return construire
+
+
 def _register_builtins() -> None:
     """Enregistre les implémentations livrées (import paresseux pour éviter les cycles)."""
     from .fakes import (
@@ -373,6 +417,8 @@ def _register_builtins() -> None:
     register("notify", "fake")(lambda cfg: FakeNotifier())
     register("mcp", "fake")(_client_du_faux_mcp)
     register("identity", "fake")(_annuaire_du_faux_entra)
+    for famille in _FAMILLES:
+        register(famille, "fake")(_guichet_de_demo(famille, en_production=False))
 
     # ───────────────── implémentations réelles (jour 1) ─────────────────
     from .cd.argocd import ArgoCdAdapter
@@ -527,6 +573,10 @@ def _register_builtins() -> None:
             login_url=cfg.get("login_url", "https://login.microsoftonline.com"),
         )
     )
+    for famille in _FAMILLES:
+        register(famille, "demo", _SPECS_LIVREES[(famille, "demo")])(
+            _guichet_de_demo(famille, en_production=True)
+        )
     # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
     from .mcp import ClientMcp
 

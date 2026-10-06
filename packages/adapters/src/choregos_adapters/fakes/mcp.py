@@ -1,15 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 """Un faux serveur MCP, scriptable (ADR 0005) : une application ASGI que le client joint par un
 transport en mémoire. Il sert ses outils par pages, répond en JSON ou en SSE, exige une session
-après `initialize`, et note chaque requête — de quoi vérifier ce qui sort de la plateforme."""
+après `initialize`, et note chaque requête — de quoi vérifier ce qui sort de la plateforme.
+
+Un outil rend un texte (`reponses`), ou FAIT quelque chose (`gestes`) : une fonction appelée avec
+ses arguments, dont l'objet revient en `structuredContent` — et en texte JSON, pour un client qui
+ne le lit pas. Un refus (`AdapterError`) revient en résultat `isError`, comme MCP le veut d'une
+erreur d'outil : ce n'est pas une erreur du protocole."""
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+
+from ..errors import AdapterError
 
 
 @dataclass
@@ -25,6 +33,8 @@ class FakeMcpServer:
     session: str = "session-1"
     #: le texte que rend un outil ; par défaut « <outil> fait »
     reponses: dict[str, str] = field(default_factory=dict)
+    #: ce qu'un outil fait, quand il fait quelque chose
+    gestes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = field(default_factory=dict)
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._repondre)
@@ -73,6 +83,17 @@ class FakeMcpServer:
                 return (-32602, f"outil inconnu : {nom}")
             arguments = dict(params.get("arguments") or {})
             self.appels.append((nom, arguments))
+            geste = self.gestes.get(nom)
+            if geste is not None:
+                try:
+                    objet = geste(arguments)
+                except AdapterError as refus:
+                    return {"content": [{"type": "text", "text": str(refus)}], "isError": True}
+                return {
+                    "content": [{"type": "text", "text": json.dumps(objet, ensure_ascii=False)}],
+                    "structuredContent": objet,
+                    "isError": False,
+                }
             texte = self.reponses.get(nom, f"{nom} fait")
             return {"content": [{"type": "text", "text": texte}], "isError": False}
         return (-32601, f"méthode inconnue : {methode}")

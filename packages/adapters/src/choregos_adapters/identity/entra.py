@@ -21,18 +21,7 @@ import httpx
 
 from ..errors import AdapterError, UpstreamError
 from ..http.rest import RestClient
-
-
-def _schema(*requis: str, **autres: dict[str, Any]) -> dict[str, Any]:
-    proprietes: dict[str, Any] = {nom: {"type": "string"} for nom in requis}
-    proprietes.update(autres)
-    return {
-        "type": "object",
-        "properties": proprietes,
-        "required": list(requis),
-        "additionalProperties": False,
-    }
-
+from ..registry import schema_d_entree as _schema
 
 _UPN = _schema("upn")
 _GROUPE = _schema("upn", "group_id")

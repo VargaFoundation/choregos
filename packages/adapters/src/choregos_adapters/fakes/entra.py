@@ -9,6 +9,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import parse_qs
 
 import httpx
 
@@ -28,6 +29,8 @@ class FakeEntra:
     sessions_revoquees: list[str] = field(default_factory=list)
     #: combien de 429 rendre avant de répondre
     trop_de_requetes: int = 0
+    #: le secret de l'application attendu au jeton ; vide : n'importe lequel
+    secret_attendu: str = field(default="", repr=False)
     recues: list[tuple[str, str]] = field(default_factory=list)
 
     def transport(self) -> httpx.MockTransport:
@@ -49,6 +52,9 @@ class FakeEntra:
         chemin = requete.url.path
         self.recues.append((requete.method, chemin))
         if chemin.endswith("/oauth2/v2.0/token"):
+            secret = parse_qs(requete.content.decode()).get("client_secret", [""])[0]
+            if self.secret_attendu and secret != self.secret_attendu:
+                return httpx.Response(401, json={"error": "invalid_client"})
             return httpx.Response(200, json={"access_token": "jeton-graph", "expires_in": 3600})
         if requete.headers.get("authorization") != "Bearer jeton-graph":
             return httpx.Response(401, json={"error": {"code": "InvalidAuthenticationToken"}})
