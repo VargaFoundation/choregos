@@ -118,11 +118,18 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                       {String(item.pending_request.payload?.summary ?? item.pending_request.kind)} ·{" "}
                       {relative(item.pending_request.requested_at)}
                     </p>
-                    <DecisionBar
-                      itemId={item.id}
-                      kind={item.pending_request.kind}
-                      onDone={() => queryClient.invalidateQueries({ queryKey: ["items", slug] })}
-                    />
+                    {item.pending_request.kind === "task" ? (
+                      // Un formulaire et une attestation ne tiennent pas dans une carte : la page du ticket.
+                      <Link href={`/p/${slug}/items/${item.id}`} className="text-xs">
+                        do the task
+                      </Link>
+                    ) : (
+                      <DecisionBar
+                        itemId={item.id}
+                        kind={item.pending_request.kind}
+                        onDone={() => queryClient.invalidateQueries({ queryKey: ["items", slug] })}
+                      />
+                    )}
                   </div>
                 )}
               </Card>

@@ -166,6 +166,18 @@ class TransitionAction(Strict):
     not_before: str | None = Field(default=None, pattern=NOT_BEFORE)
 
 
+class TaskSpec(Strict):
+    """Une TÂCHE qu'une personne fait pour que le ticket passe (S20-06) : remettre un badge, déballer
+    un poste. Elle remplit un formulaire — un JSON Schema d'objet dont les propriétés sont des champs
+    du ticket : les valeurs y sont versées, et l'action suivante les lit — et atteste ce qu'elle a
+    fait, mot pour mot. La décision garde l'une et l'autre : c'est la preuve."""
+
+    title: str | None = Field(default=None, max_length=200)
+    instructions: str | None = Field(default=None, max_length=4000)
+    form: dict[str, Any]
+    attest: str | None = Field(default=None, max_length=500)
+
+
 class Transition(Strict):
     id: Identifier | None = None
     from_: str = Field(alias="from")
@@ -183,6 +195,8 @@ class Transition(Strict):
     timeout_hours: int | None = Field(default=None, ge=1)
     #: Une transition système peut proposer une action gouvernée, à date (S20-05).
     action: TransitionAction | None = None
+    #: Une transition humaine peut être une tâche : un formulaire, une attestation (S20-06).
+    task: TaskSpec | None = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

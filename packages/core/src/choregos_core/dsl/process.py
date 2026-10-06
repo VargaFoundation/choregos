@@ -72,6 +72,17 @@ def _action(t: Transition) -> str | None:
     return texte
 
 
+def _tache(t: Transition) -> str | None:
+    """La tâche qu'une personne fait, en clair : quoi, quels champs, ce qu'elle atteste."""
+    if t.task is None:
+        return None
+    champs = ", ".join(f"`{nom}`" for nom in (t.task.form.get("properties") or {}))
+    texte = f"done «{t.task.title or t.to}» (filling {champs})"
+    if t.task.attest:
+        texte += f" and attested «{t.task.attest}»"
+    return texte
+
+
 def to_process(wf: Workflow) -> list[dict[str, Any]]:
     """Une étape par transition, dans l'ordre du YAML : qui agit, de quel état vers lequel, sous
     quelles garanties, ce qui doit être produit, et ce qui arrive en cas d'échec ou de rejet."""
@@ -90,6 +101,9 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
         action = _action(t)
         if action:
             phrase += f", after {action},"
+        tache = _tache(t)
+        if tache:
+            phrase += f", once they have {tache},"
         if conditions:
             phrase += " once " + "; ".join(conditions)
         phrase += "."
@@ -122,6 +136,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "on_reject": rejet,
                 "timeout_hours": t.timeout_hours,
                 "action": action,
+                "task": tache,
                 "sentence": phrase,
             }
         )

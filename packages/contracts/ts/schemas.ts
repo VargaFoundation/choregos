@@ -72,11 +72,17 @@ export type Finding = {
 /** Décision humaine acheminée vers un WorkflowInterpreter (front, board, commentaire, Slack, CLI). */
 export type HumanDecision = {
   request_id?: string | null;
-  kind: "approval" | "question" | "scope_change";
+  kind: "approval" | "question" | "scope_change" | "task";
   approved?: boolean | null;
   answer?: string | null;
   granted_paths?: Array<string>;
   reason?: string | null;
+  /** Une tâche : les valeurs saisies, versées dans les champs du ticket. */
+  values?: {
+    [key: string]: unknown;
+  };
+  /** Une tâche : la phrase attestée, telle qu'elle a été montrée. */
+  attestation?: string | null;
   decided_by: string;
   decided_at: string;
   channel?: "web" | "tracker" | "slack" | "cli" | "api" | "board";
@@ -704,6 +710,17 @@ export type WorkflowTransitionAction = {
   approval?: WorkflowActionApproval;
   /** pas avant cette date, tirée d'un champ du ticket : `fields.date_arrivee - 10d` */
   not_before?: string;
+};
+
+export type WorkflowTask = {
+  title?: string;
+  instructions?: string;
+  /** un JSON Schema d'objet ; chaque propriété est un champ du ticket */
+  form: {
+    [key: string]: unknown;
+  };
+  /** ce que la personne atteste, mot pour mot */
+  attest?: string;
 };
 
 /** DSL de workflow Choregos : machine à états déclarative par projet (docs/plan/01 §1.4). */

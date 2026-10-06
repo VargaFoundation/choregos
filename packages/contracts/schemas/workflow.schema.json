@@ -338,6 +338,10 @@
         "action": {
           "$ref": "#/$defs/transitionAction",
           "description": "une action gouvernée que la transition système propose (ADR 0035), à date"
+        },
+        "task": {
+          "$ref": "#/$defs/task",
+          "description": "une tâche qu'une personne fait : un formulaire dont les valeurs deviennent des champs, une attestation"
         }
       },
       "oneOf": [
@@ -544,6 +548,32 @@
           "type": "string",
           "pattern": "^fields\\.[a-z_][a-z0-9_]{0,62}(\\s*[+-]\\s*[0-9]{1,4}\\s*[dhm])?$",
           "description": "pas avant cette date, tirée d'un champ du ticket : `fields.date_arrivee - 10d`"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": [
+        "form"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "instructions": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "form": {
+          "type": "object",
+          "description": "un JSON Schema d'objet ; chaque propriété est un champ du ticket"
+        },
+        "attest": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "ce que la personne atteste, mot pour mot"
         }
       }
     }

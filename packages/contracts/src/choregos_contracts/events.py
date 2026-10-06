@@ -69,6 +69,10 @@ class HumanDecision(Strict):
     answer: str | None = None
     granted_paths: list[str] = Field(default_factory=list)
     reason: str | None = None
+    #: Une tâche : les valeurs saisies — elles deviennent des champs du ticket — et la phrase que la
+    #: personne a attestée, telle qu'on la lui a montrée (S20-06).
+    values: dict[str, Any] = Field(default_factory=dict)
+    attestation: str | None = None
     decided_by: str
     decided_at: datetime = Field(default_factory=_now)
     channel: Literal["web", "tracker", "slack", "cli", "api", "board"] = "web"

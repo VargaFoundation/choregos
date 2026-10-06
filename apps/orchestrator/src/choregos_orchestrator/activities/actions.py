@@ -201,11 +201,15 @@ async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _interpreteur_qui_attend(session: Any, action: Action, projet: Project) -> str | None:
-    """L'interpréteur du ticket dont une TRANSITION a proposé l'action (S20-05), ou rien."""
+    """L'interpréteur dont une TRANSITION a proposé l'action (S20-05), ou rien : celui que la
+    proposition a consigné — c'est lui qui attend —, sinon celui du ticket."""
     from choregos_api.temporal import interpreter_id
 
     if action.origin != ActionOrigin.TRANSITION.value or action.work_item_id is None:
         return None
+    consigne = (action.proposed_by or {}).get("workflow_id")
+    if consigne:
+        return str(consigne)
     item = await session.get(WorkItem, action.work_item_id)
     return interpreter_id(projet.slug, item.tracker_key) if item is not None else None
 

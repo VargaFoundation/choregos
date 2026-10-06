@@ -514,8 +514,37 @@ transitions:
   it follows `on_fail`, which such a transition must declare: without it the item would propose the
   same action forever. An unknown effect is refused when the workflow is **published**.
 - **How the item learns.** The action runs in its own `ActionWorkflow`; when it settles, it signals
-  the item (`action_settled`), and a rejection does too. The item also re-reads the action every six
-  hours, in case a signal was lost.
+  the interpreter that proposed it (`action_settled`), and a rejection does too. The item also
+  re-reads the action every six hours, in case a signal was lost.
+
+**A task, with its proof.** Some steps are gestures a person makes — handing over a badge,
+unpacking a laptop. A human transition can be a **task**: what to do, a form whose properties are
+fields of the item, and a sentence the person attests.
+
+```yaml
+  - id: t-badge
+    from: badge_due
+    to: badge_handed
+    by: front_desk                                    # an actor of type `human`
+    task:
+      title: Hand the badge over
+      instructions: In person, then tap it on the reader.
+      form:
+        type: object
+        required: [badge_uid]
+        properties: { badge_uid: { type: string, minLength: 8 } }
+      attest: I handed the badge to its holder in person
+```
+
+The item page shows the form; **done** stays closed until every required field is filled and the
+sentence is attested. `POST /work-items/{id}/decisions` with `{"kind": "complete", "values": {...},
+"attested": true}` accepts only what the form describes, refuses a missing or malformed field (`422`,
+with its path) and a missing attestation, and writes the values into the item's **fields** — checked
+again by `metadata.inputs`, which keeps the last word. The next action reads them:
+`params: { uid: "{{ fields.badge_uid }}" }`. The decision keeps the values and the attested sentence
+as it was shown, and the timeline tells it: that is the proof. A task that cannot be done is sent
+back with its reason (`reject`). The validator wants a `human` actor, an object form, and every
+form property declared in `metadata.inputs`.
 
 **A tool under approval becomes an action.** A run sees an `approval` operation like any tool,
 its description saying it needs a human approval. Calling it reaches **nothing**: it proposes a

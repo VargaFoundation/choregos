@@ -74,6 +74,9 @@ _MIGRATION = "\x00migration"
 ACTIONS_DE_TRANSITION = "actions-de-transition"
 #: Le filet d'une action qui attend : relue en base à ce rythme, au cas où `action_settled` se perd.
 RELECTURE_D_UNE_ACTION = timedelta(hours=6)
+#: Une transition humaine peut être une TÂCHE : un formulaire, une attestation (S20-06). Avant ce
+#: marqueur, toute transition humaine demandait une approbation.
+TACHES_HUMAINES = "taches-humaines"
 
 
 @dataclass
@@ -512,11 +515,24 @@ class WorkflowInterpreter:
     async def _wait_human(self, params: InterpreterInput, engine: WorkflowEngine, transition: Any) -> Any:
         actor = engine.human_of(transition)
         sla_hours = (actor.sla_hours if actor else None) or 24
+        tache = transition.task is not None and workflow.patched(TACHES_HUMAINES)
+        if tache:
+            kind, payload = (
+                "task",
+                {
+                    "summary": transition.task.title or f"Task before `{transition.to}`",
+                    "instructions": transition.task.instructions,
+                    "form": transition.task.form,
+                    "attest": transition.task.attest,
+                },
+            )
+        else:
+            kind, payload = "approval", {"summary": f"Validation requise pour passer à `{transition.to}`"}
         request = await self._create_request(
             params,
             transition,
-            kind="approval",
-            payload={"summary": f"Validation requise pour passer à `{transition.to}`"},
+            kind=kind,
+            payload=payload,
             sla_hours=sla_hours,
         )
         self.pending_request = request["request_id"]
@@ -542,6 +558,11 @@ class WorkflowInterpreter:
                 )
                 self.pending_request = None
                 approved = bool(decision.get("approved"))
+                if tache and approved and decision.get("values"):
+                    # Les valeurs de la tâche sont des champs : l'API les a déjà écrits, une date
+                    # d'action qui en dépend se recalcule ici.
+                    self.champs = {**self.champs, **dict(decision["values"])}
+                    self.version_des_champs += 1
                 return engine.after_human(transition, approved, decision.get("reason") or "")
             waited += step
             if not got and not reminder_sent and waited >= timedelta(hours=sla_hours):

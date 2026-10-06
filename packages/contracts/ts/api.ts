@@ -844,17 +844,23 @@ export type TimelineEntry = {
 
 export type DecisionRequest = {
   request_id?: string | null;
-  kind: "approve" | "reject" | "answer" | "scope_change";
+  kind: "approve" | "reject" | "answer" | "scope_change" | "complete";
   answer?: string | null;
   reason?: string | null;
   granted_paths?: Array<string>;
+  /** `complete` : les valeurs du formulaire de la tâche, versées dans les champs du ticket. */
+  values?: {
+    [key: string]: unknown;
+  };
+  /** `complete` : la personne atteste la phrase de la tâche. */
+  attested?: boolean;
 };
 
 export type HumanRequest = {
   id: string;
   work_item_id?: string;
   transition_id?: string | null;
-  kind: "approval" | "question" | "scope_change";
+  kind: "approval" | "question" | "scope_change" | "task";
   payload?: {
     [key: string]: unknown;
   };
