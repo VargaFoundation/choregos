@@ -23,6 +23,7 @@ from ..rbac import Permission
 from ..schemas import (
     OrgCreate,
     OrgDto,
+    OrgUpdate,
     PageMeta,
     ProjectCreate,
     ProjectDto,
@@ -88,6 +89,40 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
         session, principal, "org.create", org_id=org.id, target_type="org", target_id=org.id, slug=body.slug
     )
     return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN)
+
+
+@router.patch("/orgs/{org}", response_model=OrgDto, operation_id="updateOrg")
+async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> OrgDto:
+    """Renomme une organisation. Son NOM, son administrateur le change. Son SLUG, seul
+    l'administrateur de la plateforme : il est dans chaque URL de la console, chaque adresse de la
+    porte MCP (`/mcp/projects/<org>:<projet>`), chaque identifiant qualifié (`<org>:<projet>`) et le
+    nom des groupes de l'IdP (`choregos:<org>:<groupe>`) — le changer est un geste d'instance.
+
+    Projets, appartenances, jetons et tout ce qui en dépend suivent : ils tiennent à l'organisation
+    par son identifiant, pas par son slug. Ce qui ne suit pas : les adresses déjà copiées ailleurs, et
+    les groupes de l'IdP qui nomment l'ancien slug.
+    """
+    organisation = await _org(session, org)
+    if principal.org_roles.get(org) != Role.ORG_ADMIN:
+        raise forbidden(f"renommer `{org}` demande le rôle org_admin")
+    avant = {"slug": organisation.slug, "name": organisation.name}
+    if body.slug is not None and body.slug != organisation.slug:
+        await exiger_admin_de_plateforme(session, principal)
+        # La RLS compare les SLUGS (`slug = ANY(choregos_current_orgs())`) : bornée à l'ancien, la
+        # transaction ne verrait plus la ligne qu'elle renomme, et la mise à jour serait refusée. Le
+        # droit d'instance vient d'être établi : la suite de la requête voit l'instance.
+        await limiter_aux_organisations(session, TOUT)
+        pris = await session.execute(select(Organization.id).where(Organization.slug == body.slug))
+        if pris.first() is not None:
+            raise conflict(f"l'organisation `{body.slug}` existe déjà")
+        organisation.slug = body.slug
+    if body.name is not None:
+        organisation.name = body.name
+    await session.flush()
+    apres = {"slug": organisation.slug, "name": organisation.name}
+    await record(session, principal, "org.update", org_id=organisation.id, target_type="org",
+                 target_id=organisation.id, avant=avant, apres=apres)  # fmt: skip
+    return OrgDto(slug=organisation.slug, name=organisation.name, role=Role.ORG_ADMIN)
 
 
 async def _org(session: Any, slug: str) -> Organization:

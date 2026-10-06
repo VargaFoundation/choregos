@@ -80,6 +80,13 @@ class OrgCreate(Dto):
     name: str = Field(min_length=1, max_length=200)
 
 
+class OrgUpdate(Dto):
+    """Ce qui change d'une organisation : son nom, son slug — l'un ou l'autre, ou les deux."""
+
+    slug: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 class OAuthDto(Dto):
     enabled: bool
     authorization_server: str | None = None

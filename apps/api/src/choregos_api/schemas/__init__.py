@@ -59,6 +59,7 @@ from .identite import (
     OAuthDto,
     OrgCreate,
     OrgDto,
+    OrgUpdate,
 )
 from .livraison import (
     AbortRequest,
@@ -219,6 +220,7 @@ __all__ = [
     "OrgConnectorDto",
     "OrgCreate",
     "OrgDto",
+    "OrgUpdate",
     "PageMeta",
     "PolicyDto",
     "PolicyPut",

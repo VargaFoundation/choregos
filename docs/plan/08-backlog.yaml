@@ -1397,6 +1397,15 @@ stories:
     acceptance:
       - "GET /api/v1/edition rend enterprise sur le dev ; les sections apparaissent dans /admin"
       - "Une deuxième organisation se crée puis se suspend ; un jeton SCIM ne s'affiche qu'une fois"
+  - id: S17-05
+    title: "Renommer une organisation : son nom par son administrateur, son slug par l'administrateur de la plateforme"
+    stream: S17
+    sprint: 11
+    priority: 5
+    size: S
+    depends_on: [S17-01]
+    acceptance:
+      - "Le slug change et les projets suivent ; sur PostgreSQL, sous la RLS qui compare les slugs"
 
   # ───────────── S18 — Registre d'agents et bibliothèque de skills (ADR 0033, 2026-10-05) ─────────────
   - id: S18-01
