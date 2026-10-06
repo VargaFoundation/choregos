@@ -21,6 +21,8 @@ Variables :
     CHOREGOS_DEV_ORG     l'organisation du locataire
     ESSAI_FAUX_URL       (défaut http://choregos-demo-fakes:8090) l'adresse des faux, vue depuis le cluster
     ESSAI_JETON_REF      (facultatif) la référence du jeton des faux, ex. `env:CHOREGOS_DEMO_JETON`
+    ESSAI_BACKEND        (défaut opencode) le backend des agents du projet, celui que le dev fait tourner
+    ESSAI_MODELE         (défaut platform/standard) le modèle de la passerelle derrière le profil `standard`
 """
 
 from __future__ import annotations
@@ -37,6 +39,11 @@ URL = os.environ.get("CHOREGOS_DEV_URL", "http://choregos.internal.dev.diametral
 FAUX = os.environ.get("ESSAI_FAUX_URL", "http://choregos-demo-fakes:8090").rstrip("/")
 PROJET = "rh"
 TERMINAUX = {"pret", "clos"}
+#: Ce que les agents du gabarit demandent (`model: profile:standard`), et le backend qui les fait
+#: tourner : un projet neuf reçoit `claude-code` et aucun profil, ce que le dev ne sert pas — le premier
+#: passage, le 06/10, a vu le plan de l'agent échouer deux fois sans un appel au modèle.
+BACKEND = os.environ.get("ESSAI_BACKEND", "opencode")
+MODELE = os.environ.get("ESSAI_MODELE", "platform/standard")
 
 
 def exiger(nom: str) -> str:
@@ -140,7 +147,15 @@ def preparer() -> None:
                 ),
                 200,
             )
-        print(f"projet {PROJET} : prêt — {URL}/p/{PROJET}")
+        # Le backend et le modèle des agents, posés à chaque passage : un projet né avant les garde.
+        projet = dict(lire(http.get(f"/projects/{org}:{PROJET}"), 200))
+        config = {
+            **(projet.get("config") or {}),
+            "agent": {"default_backend": BACKEND, "allowed_backends": [BACKEND]},
+            "models": {"profiles": {"standard": MODELE}},
+        }
+        lire(http.patch(f"/projects/{projet['id']}", json={"config": config}), 200)
+        print(f"projet {PROJET} : prêt — agents sur {BACKEND}, profil standard → {MODELE} — {URL}/p/{PROJET}")
 
 
 def _projet(http: httpx.Client) -> dict[str, Any]:
