@@ -20,7 +20,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def _json() -> sa.types.TypeEngine[object]:
+def _json() -> sa.JSON:
     return sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
 
 
