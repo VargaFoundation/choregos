@@ -6,12 +6,27 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 #: Ce qu'un moteur de gabarit Go écrit quand la variable n'existe pas : il rend littéralement
 #: cette chaîne au lieu d'échouer. Helm et l'opérateur Infisical le font tous les deux.
 GABARIT_NON_RESOLU = ("<no value>", "<nil>")
+
+
+#: Les clients de la page Integrations qu'un client OAuth pré-enregistré peut servir (ADR 0030).
+CLIENTS_OAUTH = frozenset(
+    {"claude-code", "claude-desktop", "claude-ai", "cursor", "vscode", "chatgpt", "other"}
+)
+
+
+class ClientOAuth(BaseModel):
+    """Un client que l'IdP a enregistré pour la porte MCP : la page Integrations en tire la commande."""
+
+    client_id: str = Field(min_length=1)
+    #: Le port de la redirection locale (`http://localhost:PORT/callback`) que l'IdP a enregistré —
+    #: pour un client qui reçoit le code sur le poste (Claude Code).
+    callback_port: int | None = Field(default=None, ge=1024, le=65535)
 
 
 class Settings(BaseSettings):
@@ -57,6 +72,10 @@ class Settings(BaseSettings):
     #: L'audience OBLIGATOIRE d'un jeton de la porte : sur un realm partagé, un jeton obtenu par une
     #: autre application ne doit pas l'ouvrir.
     mcp_oauth_audience: str = "choregos-mcp"
+    #: Les clients OAuth que l'IdP a enregistrés pour la porte, par client de la page Integrations
+    #: (`claude-code`, `claude-ai`…), en JSON : `{"claude-code": {"client_id": "…", "callback_port":
+    #: 33418}}`. La page en tire la commande exacte ; sans eux, elle ne propose que les jetons.
+    mcp_oauth_clients: dict[str, ClientOAuth] = Field(default_factory=dict)
     session_secret: str = "dev-session-secret-change-me"
     session_cookie: str = "choregos_session"
     session_max_age_s: int = 8 * 3600
@@ -138,6 +157,17 @@ class Settings(BaseSettings):
             raise ValueError(
                 "CHOREGOS_DEV_LOGIN_ENABLED=true en staging/prod : la connexion de développement "
                 "ouvre l'API à quiconque atteint /auth/callback. Refusé."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _des_clients_oauth_que_la_page_connait(self) -> Settings:
+        """Une clé mal écrite (`claude_code`) ne montrerait rien, sans rien dire : on refuse."""
+        inconnus = sorted(set(self.mcp_oauth_clients) - CLIENTS_OAUTH)
+        if inconnus:
+            raise ValueError(
+                f"CHOREGOS_MCP_OAUTH_CLIENTS : clients inconnus {inconnus} ; la page Integrations "
+                f"connaît {sorted(CLIENTS_OAUTH)}"
             )
         return self
 

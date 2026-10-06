@@ -1,6 +1,6 @@
 # 0030 — A door for external MCP clients, inside the API
 
-- **Status**: accepted, 2026-10-05
+- **Status**: accepted, 2026-10-05; amended 2026-10-06 (§7, the registered clients the page shows)
 - **Concerns**: the API process, API tokens, the ontology plugin's generated tools, the console,
   the chart's ingress; follows [ADR 0029](0029-une-plateforme-d-agents-gouvernes.md)
 
@@ -58,6 +58,14 @@ Three facts constrain the answer:
    by the identity provider (Keycloak on the development tenant), with a mandatory audience on a
    shared realm. Until then, the platform issuing tokens is a recorded deviation from
    R-SOC-MCP-02.
+
+   *Amendment of 2026-10-06 (S15-09).* The deployment names the clients its IdP registered for the
+   door, under the Integrations page's client names (`global.mcp.oauth.clients`: a client ID, and
+   for a client that receives the code on the person's machine, the port of its registered
+   redirect URI). `GET /integrations` returns them, and the page shows each one's exact setup —
+   single sign-on first, the scoped token one click away. A client secret is never configured in
+   Choregos nor shown by the page: the door checks tokens, it exchanges none. Before, the page said
+   `oauth.enabled: false` whatever the deployment said, and offered tokens only.
 
 ## Consequences
 

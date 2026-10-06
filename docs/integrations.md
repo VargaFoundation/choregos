@@ -59,6 +59,22 @@ claude mcp add --transport http choregos https://<console-host>/mcp \
 Then ask Claude *"what is waiting for my decision in Choregos?"*. Claude Code runs on your machine:
 it reaches a platform behind your VPN.
 
+### Signing in with your single sign-on
+
+When the platform accepts the IdP's tokens and names the client the IdP registered for Claude Code
+(`global.mcp.oauth.clients.claude-code`, [below](#claudeai-claude-mobile-chatgpt)), there is no
+token to mint or paste — the Integrations page shows this command first:
+
+```bash
+claude mcp add --transport http --client-id choregos-claude-code --callback-port 33418 \
+  choregos https://<console-host>/mcp
+```
+
+Then `/mcp` in Claude Code, `choregos`, *Authenticate*: your browser opens the IdP's sign-in page,
+and Claude Code keeps the session. `--callback-port` is the port of the redirect URI the IdP
+registered (`http://localhost:33418/callback`); the client is public and uses PKCE, so there is no
+secret. Your role bounds what Claude sees, and signing out of the IdP ends its access.
+
 ### The Choregos plugin
 
 The plugin bundles the door and a skill that teaches Claude the rules (it never decides; work-item
@@ -130,11 +146,17 @@ These clients call a remote MCP server **from their vendor's network** (Anthropi
 `160.79.104.0/21`) and sign in with **OAuth**: they cannot be handed a `chg_` token. The door is
 an OAuth resource server (RFC 9728) once the platform runs with:
 
-| Setting | Value |
-| :-- | :-- |
-| `CHOREGOS_MCP_OAUTH_ENABLED` | `true` |
-| `CHOREGOS_MCP_OAUTH_AUDIENCE` | the audience your IdP puts in the door's tokens — default `choregos-mcp` |
-| `CHOREGOS_MCP_OAUTH_ISSUER` | empty: the console's own OIDC issuer; set it only for another IdP |
+| Chart value (`global.mcp.oauth.…`) | Setting | Value |
+| :-- | :-- | :-- |
+| `enabled` | `CHOREGOS_MCP_OAUTH_ENABLED` | `true` |
+| `audience` | `CHOREGOS_MCP_OAUTH_AUDIENCE` | the audience your IdP puts in the door's tokens — default `choregos-mcp` |
+| `issuer` | `CHOREGOS_MCP_OAUTH_ISSUER` | empty: the console's own OIDC issuer; set it only for another IdP |
+| `clients` | `CHOREGOS_MCP_OAUTH_CLIENTS` | the clients your IdP registered, per client of the Integrations page — `{claude-code: {clientId, callbackPort}, claude-ai: {clientId}}` in the chart, `{"claude-code": {"client_id": …, "callback_port": …}}` as JSON; a name the page does not know stops the API at startup |
+
+With `clients`, the Integrations page shows each registered client's exact setup: the
+`claude mcp add --client-id` command for Claude Code, and for claude.ai the URL and client ID to
+enter in *Settings, Connectors, Add custom connector, Advanced settings* — the client secret is
+never shown there; your administrator holds it.
 
 The door then publishes `/.well-known/oauth-protected-resource/mcp` (and one document per project
 door), and every `401` points at it in `WWW-Authenticate`. The client reads it, signs you in at the

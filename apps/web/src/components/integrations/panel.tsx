@@ -8,7 +8,15 @@ import { useState } from "react";
 import { Button, Card, ErrorNote } from "@/components/ui";
 import { api, qualify } from "@/lib/api";
 import { shortDate } from "@/lib/format";
-import { CLIENTS, type ClientId, extrait, PLACEHOLDER, urlDeLaPorte } from "@/lib/integrations";
+import {
+  CLIENTS,
+  type ClientId,
+  clientOAuth,
+  etatDuClient,
+  extrait,
+  PLACEHOLDER,
+  urlDeLaPorte,
+} from "@/lib/integrations";
 import type { ApiTokenCreated } from "@/lib/types";
 
 const DUREES = [7, 30, 90] as const;
@@ -19,6 +27,10 @@ const DUREES = [7, 30, 90] as const;
  * s'est bien connecté.
  *
  * Dans un projet (`projet` renseigné), la porte est celle du projet et le jeton y est lié.
+ *
+ * Quand la porte accepte les jetons de l'IdP et que le déploiement nomme le client enregistré, la
+ * connexion par l'authentification unique passe en premier : rien à coller, rien à faire expirer.
+ * Le jeton reste proposé, un clic plus loin.
  */
 export function IntegrationsPanel({ client, projet, base }: { client: ClientId; projet?: string; base: string }) {
   const portee = projet ? qualify(projet) : undefined;
@@ -28,9 +40,15 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
   const [duree, setDuree] = useState<(typeof DUREES)[number]>(30);
   const [frappe, setFrappe] = useState<ApiTokenCreated | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const info = CLIENTS.find((c) => c.id === client) ?? CLIENTS[0]!;
-  const code = extrait(client, url, frappe?.token ?? PLACEHOLDER);
+  const [parJeton, setParJeton] = useState(false);
+  const oauth = infos.data?.oauth;
+  const generique = CLIENTS.find((c) => c.id === client) ?? CLIENTS[0]!;
+  // L'authentification unique d'abord, quand l'IdP a un client pour celui-ci ; le jeton sur demande.
+  const sso = clientOAuth(client, oauth) !== null && !parJeton;
+  const info = sso ? etatDuClient(generique, url, oauth) : generique;
+  const code = extrait(client, url, frappe?.token ?? PLACEHOLDER, sso ? oauth : null);
   const avecJetonMcp = info.auth === "MCP token";
+  const aussiParJeton = clientOAuth(client, oauth) !== null && generique.auth === "MCP token";
 
   async function frapper() {
     setErreur(null);
@@ -84,12 +102,34 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
               <p className="text-xs text-ink-muted">paste into {code.where}</p>
               <Extrait code={code.code} />
             </div>
+          ) : clientOAuth(client, oauth) ? (
+            <Alert tone="warn" title="not reachable from here yet" className="mt-4">
+              {info.label} calls MCP servers from its vendor&apos;s network: the door accepts its sign-in, but this
+              platform has no public HTTPS address for <Code>/mcp</Code>. A platform behind a VPN stays out of its
+              reach: use Claude Code meanwhile.
+            </Alert>
           ) : (
             <Alert tone="warn" title="not reachable from here yet" className="mt-4">
               {info.label} calls MCP servers from its vendor&apos;s network and signs in with OAuth. It needs a public
               HTTPS address for <Code>/mcp</Code> and OAuth on the door — the next step of ADR 0030. A platform behind
               a VPN stays out of its reach: use Claude Code or Claude Desktop meanwhile.
             </Alert>
+          )}
+          {aussiParJeton && (
+            <p className="mt-3 text-xs text-ink-muted">
+              {sso ? (
+                <>
+                  you sign in with your single sign-on: nothing to paste, your session decides.{" "}
+                  <button type="button" className="underline" onClick={() => setParJeton(true)}>
+                    use an MCP token instead
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="underline" onClick={() => setParJeton(false)}>
+                  sign in with single sign-on instead
+                </button>
+              )}
+            </p>
           )}
         </Card>
 
@@ -147,7 +187,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
             </tr>
           </thead>
           <tbody>
-            {CLIENTS.map((c) => (
+            {CLIENTS.map((c) => etatDuClient(c, url, oauth)).map((c) => (
               <tr key={c.id}>
                 <td>{c.label}</td>
                 <td className="text-xs">{c.calls_from}</td>

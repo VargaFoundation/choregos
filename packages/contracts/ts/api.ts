@@ -743,6 +743,14 @@ export type Integrations = {
     /** Faux tant que la porte n'accepte que des jetons à portée. */
     enabled: boolean;
     authorization_server?: string | null;
+    /** Les clients que l'IdP a enregistrés pour la porte, par client de la page Integrations (`claude-code`, `claude-ai`…) : la page en tire la commande exacte. */
+    clients?: {
+      [key: string]: {
+        client_id: string;
+        /** Le port de la redirection locale `http://localhost:PORT/callback` enregistrée chez l'IdP. */
+        callback_port?: number | null;
+      };
+    };
   };
   version: string;
 };

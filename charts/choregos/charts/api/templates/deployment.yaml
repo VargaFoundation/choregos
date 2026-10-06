@@ -107,6 +107,35 @@ spec:
               value: {{ toJson . | quote }}
             {{- end }}
             {{- end }}
+            {{- with (dig "mcp" "oauth" dict .Values.global) }}
+            {{- if .enabled }}
+            {{- range ($.Values.global.extraEnv | default list) }}
+            {{- if hasPrefix "CHOREGOS_MCP_OAUTH_" .name }}
+            {{- fail (printf "global.extraEnv : %s est posé par global.mcp.oauth ; deux valeurs pour un même nom, Kubernetes garderait la dernière sans rien dire" .name) }}
+            {{- end }}
+            {{- end }}
+            # La porte MCP accepte les jetons de l'IdP (ADR 0030) : Claude s'y connecte par
+            # l'authentification unique ; la page Integrations dit avec quel client.
+            - name: CHOREGOS_MCP_OAUTH_ENABLED
+              value: "true"
+            {{- with .issuer }}
+            - name: CHOREGOS_MCP_OAUTH_ISSUER
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .audience }}
+            - name: CHOREGOS_MCP_OAUTH_AUDIENCE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .clients }}
+            {{- $clients := dict }}
+            {{- range $nom, $client := . }}
+            {{- $_ := set $clients $nom (dict "client_id" $client.clientId "callback_port" $client.callbackPort) }}
+            {{- end }}
+            - name: CHOREGOS_MCP_OAUTH_CLIENTS
+              value: {{ toJson $clients | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- include "choregos.commonEnv" . | nindent 12 }}
             - name: CHOREGOS_OIDC_ISSUER
               value: {{ .Values.global.oidc.issuer | quote }}

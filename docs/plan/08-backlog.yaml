@@ -1229,6 +1229,16 @@ stories:
     acceptance:
       - "401 avec WWW-Authenticate: Bearer resource_metadata ; métadonnées dont resource est exactement l'URL MCP"
       - "Contre un faux IdP : audience étrangère, alg none, jeton expiré, kid tourné, sub inconnu sont refusés"
+  - id: S15-09
+    title: "La page Integrations propose l'authentification unique ; le chart règle la porte OAuth et ses clients"
+    stream: S15
+    sprint: 11
+    priority: 9
+    size: M
+    depends_on: [S15-05, S15-08]
+    acceptance:
+      - "GET /integrations rend les clients que l'IdP a enregistrés ; un nom inconnu arrête l'API au démarrage"
+      - "La page montre la commande OAuth de Claude Code, le jeton un clic plus loin ; jamais un secret de client"
 
   # ───────────── S16 — Plusieurs workflows par projet, lisibles et modifiables (ADR 0031, 2026-10-05) ─────────────
   - id: S16-01

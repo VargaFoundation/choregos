@@ -5,7 +5,13 @@
  *
  * Deux règles, chacune tenue par un test : un extrait MCP ne porte jamais un jeton `*` (la page n'en
  * frappe que de portée `mcp:*`), et `--allow-http` n'apparaît que pour une URL en `http:`.
+ *
+ * Quand la porte accepte les jetons de l'IdP et que le déploiement nomme le client que l'IdP a
+ * enregistré (`oauth.clients`), l'extrait le dit : on se connecte par l'authentification unique,
+ * sans jeton à coller — et un secret de client n'apparaît jamais ici.
  */
+
+import type { Integrations } from "@choregos/contracts/api";
 
 export type ClientId =
   | "claude-code"
@@ -25,7 +31,14 @@ export interface ClientInfo {
   calls_from: "your machine" | "the vendor's cloud";
   auth: "MCP token" | "OAuth" | "full-access token";
   /** Ce qu'il faut pour qu'il marche ici et maintenant. */
-  status: "ready" | "needs a public HTTPS address and OAuth";
+  status: "ready" | "needs a public HTTPS address and OAuth" | "needs a public HTTPS address";
+}
+
+export type OAuth = Integrations["oauth"];
+
+export interface ClientOAuth {
+  client_id: string;
+  callback_port?: number | null;
 }
 
 export const CLIENTS: ReadonlyArray<ClientInfo> = [
@@ -58,6 +71,25 @@ export function estClient(valeur: string): valeur is ClientId {
   return CLIENTS.some((client) => client.id === valeur);
 }
 
+/** Le client que l'IdP a enregistré pour ce client de la page — `null` quand la porte n'accepte pas OAuth. */
+export function clientOAuth(client: ClientId, oauth?: OAuth | null): ClientOAuth | null {
+  if (!oauth?.enabled) return null;
+  return oauth.clients?.[client] ?? null;
+}
+
+/**
+ * Ce qu'un client demande ICI : un client OAuth enregistré change la façon de se connecter, et
+ * claude.ai n'est prêt qu'avec une adresse publique en HTTPS — ce que la page ne peut pas deviner,
+ * sinon par le schéma de l'URL.
+ */
+export function etatDuClient(info: ClientInfo, url: string, oauth?: OAuth | null): ClientInfo {
+  if (!clientOAuth(info.id, oauth)) return info;
+  if (info.calls_from === "the vendor's cloud") {
+    return { ...info, auth: "OAuth", status: url.startsWith("https:") ? "ready" : "needs a public HTTPS address" };
+  }
+  return { ...info, auth: "OAuth", status: "ready" };
+}
+
 /** L'URL de la porte d'un projet : `/mcp/projects/org:slug`. Sans projet, la porte de tous. */
 export function urlDeLaPorte(base: string, projet?: string | null): string {
   const racine = base.replace(/\/+$/, "");
@@ -78,12 +110,26 @@ export interface Extrait {
 
 /**
  * L'extrait d'un client, ou `null` quand il n'y en a pas (claude.ai et ChatGPT : il faut une adresse
- * publique et OAuth, que la porte n'a pas encore).
+ * publique et OAuth). Avec `oauth`, le client que l'IdP a enregistré remplace le jeton.
  */
-export function extrait(client: ClientId, url: string, jeton: string = PLACEHOLDER): Extrait | null {
+export function extrait(
+  client: ClientId,
+  url: string,
+  jeton: string = PLACEHOLDER,
+  oauth?: OAuth | null,
+): Extrait | null {
   const http = url.startsWith("http:");
+  const enregistre = clientOAuth(client, oauth);
   switch (client) {
     case "claude-code":
+      if (enregistre) {
+        const port = enregistre.callback_port ? ` --callback-port ${enregistre.callback_port}` : "";
+        return {
+          where: "a terminal — then /mcp in Claude Code, choose choregos and Authenticate: your browser signs you in",
+          language: "bash",
+          code: `claude mcp add --transport http --client-id ${enregistre.client_id}${port} choregos ${url}`,
+        };
+      }
       return {
         where: "a terminal",
         language: "bash",
@@ -154,6 +200,20 @@ export function extrait(client: ClientId, url: string, jeton: string = PLACEHOLD
         code: `curl -H "Authorization: Bearer <full-access token>" ${origineDe(url)}/api/v1/me`,
       };
     case "claude-ai":
+      // claude.ai appelle depuis le réseau d'Anthropic : sans adresse publique en HTTPS, rien à coller.
+      if (enregistre && !http) {
+        return {
+          where: "claude.ai — Settings, Connectors, Add custom connector, then Advanced settings",
+          language: "text",
+          code: [
+            "Name:                  Choregos",
+            `Remote MCP server URL: ${url}`,
+            `OAuth Client ID:       ${enregistre.client_id}`,
+            "OAuth Client Secret:   ask your administrator — it is never shown on this page",
+          ].join("\n"),
+        };
+      }
+      return null;
     case "chatgpt":
       return null;
   }

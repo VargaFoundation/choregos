@@ -23,24 +23,43 @@ It needs, in the realm the console already signs in with:
    - `claude-ai` — confidential, standard flow, PKCE `S256`, redirect URI
      `https://claude.ai/api/mcp/auth_callback`. Its ID and secret go in claude.ai's connector,
      *Advanced settings*.
-   - `claude-code` — public, standard flow, PKCE `S256`, redirect URI
-     `http://localhost:<port>/callback`, the port given to
-     `claude mcp add --transport http choregos https://<console-host>/mcp --client-id claude-code --callback-port <port>`.
+   - `claude-code` — public, standard flow, PKCE `S256`, redirect URIs
+     `http://localhost:<port>/callback` and `http://127.0.0.1:<port>/callback` (Claude Code
+     v2.1.229 sent the second form), the port given to
+     `claude mcp add --transport http --client-id claude-code --callback-port <port> choregos https://<console-host>/mcp`.
+4. **`offline_access` as an optional scope of both clients.** Claude adds it to its request as soon
+   as the realm's metadata lists it, and Keycloak refuses the whole request (`invalid_scope`) when a
+   requested scope is not attached to the client.
 
 The client's ID lands in the audit log (`mcp.call`, `oauth:<client>:<sub>`): one client per kind
 of client keeps the log readable.
 
 ## Turning it on
 
-In the API's values (or its environment):
+In the chart's values (chart ≥ 0.16.3):
 
 ```yaml
-choregos-api:
-  env:
-    CHOREGOS_MCP_OAUTH_ENABLED: "true"
-    CHOREGOS_MCP_OAUTH_AUDIENCE: choregos-mcp
-    # CHOREGOS_MCP_OAUTH_ISSUER: empty, the console's issuer — set it only for another IdP
+global:
+  mcp:
+    oauth:
+      enabled: true
+      audience: choregos-mcp
+      # issuer: empty, the console's issuer — set it only for another IdP
+      clients:
+        claude-code: { clientId: choregos-claude-code, callbackPort: 33418 }
+        claude-ai: { clientId: choregos-claude-ai }
 ```
+
+`clients` names the clients the realm registered, under the Integrations page's names
+(`claude-code`, `claude-ai`, `claude-desktop`, `cursor`, `vscode`, `chatgpt`, `other`): the page then
+shows the exact setup instead of a token. A name it does not know stops the API at startup — a typo
+would otherwise hide the client without a word. Never put a client secret here: the door checks
+tokens, it exchanges none.
+
+Without the chart, the same settings are `CHOREGOS_MCP_OAUTH_ENABLED`, `CHOREGOS_MCP_OAUTH_AUDIENCE`,
+`CHOREGOS_MCP_OAUTH_ISSUER` and `CHOREGOS_MCP_OAUTH_CLIENTS` (JSON:
+`{"claude-code": {"client_id": "…", "callback_port": 33418}}`). Do not set them in
+`global.extraEnv` as well: the chart refuses a name set twice.
 
 A person must have signed in to the console once: the door finds them by the token's `sub`, or by
 a verified e-mail, and creates nobody.

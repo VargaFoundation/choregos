@@ -216,3 +216,44 @@ async def test_un_autre_idp_ne_retrouve_personne_par_son_sub(
     assert (await _outils(client, non_verifie)).status_code == 403, "un e-mail non vérifié ne relie personne"
     verifie = _jeton(idp["k1"], email="admin@varga.dev", email_verified=True)
     assert (await _outils(client, verifie)).status_code == 200
+
+
+async def test_la_page_integrations_dit_ou_et_avec_quel_client_se_connecter(
+    idp: dict[str, Any], client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Avant, `/integrations` disait `enabled: false` quoi que dise le déploiement : la page ne
+    proposait que des jetons, même quand la porte acceptait ceux de l'IdP."""
+    from choregos_api.config import reset_settings_cache
+
+    clients = {
+        "claude-code": {"client_id": "choregos-claude-code", "callback_port": 33418},
+        "claude-ai": {"client_id": "choregos-claude-ai"},
+    }
+    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps(clients))
+    reset_settings_cache()
+    oauth = (await client.get("/api/v1/integrations")).json()["oauth"]
+    assert oauth == {
+        "enabled": True,
+        "authorization_server": EMETTEUR,
+        "clients": {
+            "claude-ai": {"client_id": "choregos-claude-ai", "callback_port": None},
+            "claude-code": {"client_id": "choregos-claude-code", "callback_port": 33418},
+        },
+    }
+
+
+def test_un_client_oauth_que_la_page_ne_connait_pas_arrete_le_demarrage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`claude_code` au lieu de `claude-code` ne montrerait rien, sans rien dire : refusé au démarrage."""
+    from choregos_api.config import Settings
+    from pydantic import ValidationError
+
+    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"claude_code": {"client_id": "x"}}))
+    with pytest.raises(ValidationError, match="claude_code"):
+        Settings()
+    monkeypatch.setenv(
+        "CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"claude-code": {"client_id": "x", "callback_port": 80}})
+    )
+    with pytest.raises(ValidationError, match="callback_port"):
+        Settings()
