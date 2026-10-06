@@ -8,7 +8,11 @@ ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Les correctifs de sécurité de Debian, appliqués à la construction : l'image de base (une étiquette,
+# reconstruite à son rythme) peut porter un paquet déjà corrigé dans `bookworm-security` — perl-base
+# 5.36.0-7+deb12u3 et ses trois CRITICAL ont arrêté la release 0.16.0 au scan Trivy.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends \
       ca-certificates curl git tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --create-home --shell /usr/sbin/nologin choregos

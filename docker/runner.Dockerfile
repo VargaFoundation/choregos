@@ -23,8 +23,10 @@ ENV PYTHONUNBUFFERED=1 \
     HOME=/workspace \
     GIT_TERMINAL_PROMPT=0
 
-# Outils du travail d'un développeur : git, gh, jq, ripgrep, make, compilateurs usuels.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Outils du travail d'un développeur : git, gh, jq, ripgrep, make, compilateurs usuels. Les
+# correctifs de sécurité de Debian d'abord : l'image de base peut porter un paquet déjà corrigé.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends \
       ca-certificates curl git gnupg jq ripgrep make build-essential tini unzip \
  && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \

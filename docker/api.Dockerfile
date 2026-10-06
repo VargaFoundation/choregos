@@ -51,7 +51,11 @@ FROM python:3.12-slim-bookworm AS commun
 # hors du venv — l'image se construit, démarre, et tourne en `community` sans rien dire. Essayé
 # sur `choregos-api:0.8.3` le 2026-09-28 ; `tests/paquets/test_image_ee.py` le garde.
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" PIP_PYTHON=/app/.venv/bin/python
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tini \
+# Les correctifs de sécurité de Debian, appliqués à la construction : l'image de base (une étiquette,
+# reconstruite à son rythme) peut porter un paquet déjà corrigé dans `bookworm-security` — perl-base
+# 5.36.0-7+deb12u3 et ses trois CRITICAL ont arrêté la release 0.16.0 au scan Trivy.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --create-home --shell /usr/sbin/nologin choregos
 WORKDIR /app
