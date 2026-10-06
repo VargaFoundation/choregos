@@ -226,4 +226,6 @@ async def dto(session: AsyncSession, action: Action) -> ActionDto:
     ).scalars()
     resultat = ActionDto.model_validate(action)
     resultat.journal = [ActionEffectDto.model_validate(e) for e in journal]
+    projet = await session.get(Project, action.project_id)
+    resultat.project_slug = projet.slug if projet is not None else None
     return resultat

@@ -42,10 +42,14 @@ class OutilDuCourtier:
     nom: str
     connecteur: OrgConnector
     operation: ConnectorOperation
+    #: `approval` : l'appel PROPOSE une action gouvernée (ADR 0035) au lieu d'atteindre le serveur.
+    sous_validation: bool = False
 
     def annonce(self) -> dict[str, Any]:
         """Le format MCP que le side-car sert à l'agent."""
         description = self.operation.description or self.operation.name
+        if self.sous_validation:
+            description += " — needs a human approval: calling it proposes the action, it does not run it"
         return {
             "name": self.nom,
             "description": f"[{self.connecteur.name}] {description}",
@@ -97,15 +101,64 @@ async def outils_du_courtier(session: AsyncSession, run: Run, project: Project) 
     }
     outils: dict[str, OutilDuCourtier] = {}
     for operation, connecteur in lignes:
-        if plus_stricte(operation.policy, resserres.get(operation.id)) != "allowed":
+        effective = plus_stricte(operation.policy, resserres.get(operation.id))
+        if effective == "forbidden":
             continue
         if operation.groups and not groupes & set(operation.groups):
             continue
         if not any(fnmatchcase(operation.name, m) for m in selection.get(connecteur.name, [])):
             continue
         nom = f"{connecteur.name}{SEPARATEUR}{operation.name}"
-        outils[nom] = OutilDuCourtier(nom, connecteur, operation)
+        outils[nom] = OutilDuCourtier(nom, connecteur, operation, sous_validation=effective == "approval")
     return outils
+
+
+async def proposer_l_appel(
+    session: AsyncSession, run: Run, project: Project, outil: OutilDuCourtier, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """Un outil sous validation, appelé : une action gouvernée, proposée au nom de l'agent du run
+    (`agent:<slug>`). Rien n'atteint le serveur avant qu'un humain ré-authentifié l'approuve —
+    et qui possède l'agent ne l'approuve pas (séparation des rôles)."""
+    from choregos_contracts import ActionOrigin
+
+    from ..rbac import SYSTEM
+    from ..schemas.actions import ActionCreate, ActionEffectSpec
+    from .actions import proposer
+
+    corps = ActionCreate(
+        kind=f"{outil.connecteur.name}.{outil.operation.name}",
+        title=f"{outil.operation.description or outil.operation.name} ({outil.connecteur.name})",
+        justification=f"proposed by the agent {run.agent_slug} in run {run.id}",
+        params={"arguments": arguments},
+        effects=[
+            ActionEffectSpec.model_validate(
+                {
+                    "effect": "connector.call",
+                    "with": {
+                        "connector": outil.connecteur.name,
+                        "operation": outil.operation.name,
+                        "arguments": arguments,
+                    },
+                }
+            )
+        ],
+        work_item_id=run.work_item_id,
+    )
+    action = await proposer(
+        session,
+        project,
+        corps,
+        origine=ActionOrigin.TOOL.value,
+        propose_par={"kind": "agent", "id": f"agent:{run.agent_slug}", "run_id": run.id},
+        principal=SYSTEM,
+        run_id=run.id,
+    )
+    return {
+        "action": action.id,
+        "status": action.status,
+        "message": "proposed: a person approves it in the console before anything is done",
+        "decision_path": f"/p/{project.slug}/actions/{action.id}",
+    }
 
 
 class ArgumentsRefuses(ValueError):  # noqa: N818 - un refus motivé, rendu en 400

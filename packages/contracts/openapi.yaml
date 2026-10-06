@@ -336,6 +336,16 @@ paths:
         "201": { description: Proposée, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/actions:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [actions]
+      operationId: listOrgActions
+      description: La boîte des décisions — les actions des projets de l'organisation que l'appelant voit ; `status=pending_approval` pour ce qui attend quelqu'un.
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Action" } } } } }
   /projects/{id}/actions/{action_id}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -1793,6 +1803,7 @@ components:
         temporal_wf_id: { type: [string, "null"] }
         work_item_id: { type: [string, "null"] }
         run_id: { type: [string, "null"] }
+        project_slug: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
         journal: { type: array, items: { $ref: "#/components/schemas/ActionEffect" } }

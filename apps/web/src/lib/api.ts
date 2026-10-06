@@ -6,6 +6,7 @@
  * pour que le front avance sans l'API — `NEXT_PUBLIC_API_MODE=mock`).
  */
 import type {
+  Action,
   Agent,
   ConnectorDiscovery,
   ConnectorOperation,
@@ -294,6 +295,17 @@ export const api = {
         allowed: boolean;
       }[];
     }>(`/projects/${qualify(id)}/tools`),
+  /** Les actions gouvernées (ADR 0035) : la boîte des décisions, et chaque action avec son journal. */
+  orgActions: (org: string, status?: string) =>
+    request<Action[]>(`/orgs/${org}/actions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  projectActions: (id: string) => request<Action[]>(`/projects/${qualify(id)}/actions`),
+  projectAction: (id: string, actionId: string) => request<Action>(`/projects/${qualify(id)}/actions/${actionId}`),
+  /** Une approbation exige une session récente : un 401 `step_up_required` repasse par l'IdP. */
+  decideAction: (id: string, actionId: string, body: { decision: "approve" | "reject"; reason?: string }) =>
+    request<Action>(`/projects/${qualify(id)}/actions/${actionId}/decision`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** Les connecteurs de l'organisation et la politique de chaque opération (ADR 0034). */
   orgConnectors: (org: string) => request<OrgConnector[]>(`/orgs/${org}/connectors`),
   createOrgConnector: (org: string, body: OrgConnectorCreate) =>

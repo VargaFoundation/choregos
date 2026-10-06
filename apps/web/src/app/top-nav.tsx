@@ -13,6 +13,7 @@ const NAV = [
   { href: "/", label: "projects" },
   // La bibliothèque de skills se range sous les agents : ce qu'ils savent faire.
   { href: "/agents", label: "agents", aussi: "/skills" },
+  { href: "/approvals", label: "approvals" },
   { href: "/integrations", label: "integrations" },
   { href: "/admin", label: "administration" },
 ];

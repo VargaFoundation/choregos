@@ -59,6 +59,8 @@ export type {
 import type { Operations } from "@choregos/contracts/api";
 
 export type {
+  Action,
+  ActionEffect,
   ConnectorDiscovery,
   ConnectorOperation,
   Integrations,

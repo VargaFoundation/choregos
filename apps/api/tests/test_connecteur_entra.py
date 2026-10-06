@@ -82,22 +82,28 @@ async def test_les_operations_d_un_annuaire_naissent_declarees_lecture_permise_e
     assert operations["create_user"]["input_schema"]["required"] == ["upn", "display_name"]
 
 
-async def test_un_run_lit_l_annuaire_par_le_courtier_et_n_y_ecrit_pas_sans_validation(
+async def test_un_run_lit_l_annuaire_et_n_y_ecrit_qu_en_proposant_une_action(
     client: AsyncClient, project: dict[str, Any], graph: Any
 ) -> None:
     graph.ajouter_compte("lea@acme.test")
     await _declarer(client)
     base, entetes = await _run(client, project, ["*"])
-    noms = [o["name"] for o in (await client.get(base, headers=entetes)).json()["tools"]]
-    assert noms == ["entra-acme__get_user"], (
-        "les écritures sont sous validation : des actions, pas des outils"
-    )
+    outils = {o["name"]: o for o in (await client.get(base, headers=entetes)).json()["tools"]}
+    assert "needs a human approval" not in outils["entra-acme__get_user"]["description"]
+    assert "needs a human approval" in outils["entra-acme__create_user"]["description"]
 
     lu = await client.post(f"{base}/entra-acme__get_user", headers=entetes, json={"upn": "lea@acme.test"})
     assert lu.status_code == 200 and lu.json()["status_code"] == 200, lu.text
     assert lu.json()["result"]["structuredContent"]["user"]["userPrincipalName"] == "lea@acme.test"
     assert (await client.post(f"{base}/entra-acme__get_user", headers=entetes, json={})).status_code == 400
-    assert (await client.post(f"{base}/entra-acme__create_user", headers=entetes, json={})).status_code == 404
+    # Une écriture sous validation : l'appel propose une action, l'annuaire ne bouge pas.
+    propose = await client.post(
+        f"{base}/entra-acme__create_user",
+        headers=entetes,
+        json={"upn": "paul@acme.test", "display_name": "Paul"},
+    )
+    assert propose.json()["status_code"] == 202, propose.text
+    assert [c["userPrincipalName"] for c in graph.comptes.values()] == ["lea@acme.test"]
 
 
 async def test_un_compte_hors_de_l_unite_est_refuse_meme_ouvert(

@@ -456,6 +456,17 @@ The core ships one effect, `connector.call`: an operation of a connector of the 
 its key resolved by the platform, its arguments checked against the operation's schema. An
 `approval` operation runs here — the action was approved; a `forbidden` one never does.
 
+**A tool under approval becomes an action.** A run sees an `approval` operation like any tool,
+its description saying it needs a human approval. Calling it reaches **nothing**: it proposes a
+governed action in the agent's name (`agent:<slug>`, origin `tool`), returns its id and the
+console path where it is decided, and counts against the run's `tool_calls_per_run` — an agent
+in a loop does not fill the box. The agent's **owner** does not approve its agent's writes.
+
+**Approvals** (top bar) lists what waits across the organisation's projects
+(`GET /orgs/{org}/actions?status=pending_approval`); a project's **actions** tab lists its actions,
+and each one shows its parameters, effects and their compensations, its decisions — who, when, how
+long after signing in — and the journal, key by key.
+
 ## 5. Let a ticket run
 
 Label a ticket `agent-ready` in your tracker (or create it in Choregos with

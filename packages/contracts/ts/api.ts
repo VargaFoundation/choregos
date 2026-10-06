@@ -333,6 +333,7 @@ export type Action = {
   temporal_wf_id?: string | null;
   work_item_id?: string | null;
   run_id?: string | null;
+  project_slug?: string | null;
   created_at?: string | null;
   finished_at?: string | null;
   journal?: Array<ActionEffect>;
@@ -1385,6 +1386,7 @@ export interface Operations {
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
+  listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };

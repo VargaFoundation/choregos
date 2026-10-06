@@ -90,7 +90,7 @@ async def test_le_run_voit_la_selection_de_son_agent_que_la_politique_permet(
     noms = [o["name"] for o in (await client.get(base, headers=entetes)).json()["tools"]]
     assert "fournisseur__suivi_commande" in noms
     assert "fournisseur__stock" not in noms, "hors des motifs de l'agent"
-    assert "fournisseur__commander_poste" not in noms, "sous validation : une action gouvernée, pas un outil"
+    assert "fournisseur__commander_poste" in noms, "sous validation : annoncé, l'appel proposera une action"
     (suivi,) = [
         o
         for o in (await client.get(base, headers=entetes)).json()["tools"]
@@ -99,13 +99,13 @@ async def test_le_run_voit_la_selection_de_son_agent_que_la_politique_permet(
     assert suivi["inputSchema"]["required"] == ["numero"]
 
 
-async def test_un_outil_interdit_ou_sous_validation_repond_404(
+async def test_un_outil_interdit_repond_404_un_outil_sous_validation_propose_sans_rien_atteindre(
     client: AsyncClient, project: dict[str, Any], fournisseur: Any
 ) -> None:
     base, entetes = await _preparer(client, project, ["*"])
-    assert (
-        await client.post(f"{base}/fournisseur__commander_poste", headers=entetes, json={})
-    ).status_code == 404
+    propose = await client.post(f"{base}/fournisseur__commander_poste", headers=entetes, json={})
+    assert propose.status_code == 200 and propose.json()["status_code"] == 202, propose.text
+    assert propose.json()["result"]["status"] == "pending_approval"
     assert (await client.post(f"{base}/fournisseur__inconnu", headers=entetes, json={})).status_code == 404
     fermee = await client.patch(
         f"{ORG}/connectors/fournisseur/operations/stock", json={"policy": "forbidden"}
