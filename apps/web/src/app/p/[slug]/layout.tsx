@@ -4,7 +4,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
-import { Eyebrow, Heading, TabList, tabClasses } from "@varga/design-system";
+import { Eyebrow, Heading, tabClasses } from "@varga/design-system";
+import { Onglets } from "@/components/ui";
 
 const TABS = [
   { suffix: "", label: "overview" },
@@ -36,7 +37,7 @@ export default function ProjectLayout({
           {slug}
         </Heading>
       </div>
-      <TabList aria-label="project sections">
+      <Onglets aria-label="project sections">
         {TABS.map((tab) => {
           const href = `/p/${slug}${tab.suffix}`;
           // Les intégrations (un sous-onglet par client), les propositions (une page par proposition)
@@ -50,7 +51,7 @@ export default function ProjectLayout({
             </Link>
           );
         })}
-      </TabList>
+      </Onglets>
       {children}
     </div>
   );

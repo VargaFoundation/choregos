@@ -3,9 +3,9 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Code, TabList, tabClasses } from "@varga/design-system";
+import { Alert, Code, tabClasses } from "@varga/design-system";
 import { useState } from "react";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { Button, Card, ErrorNote, Onglets } from "@/components/ui";
 import { api, qualify } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import {
@@ -67,7 +67,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
 
   return (
     <div className="space-y-6">
-      <TabList aria-label="clients">
+      <Onglets aria-label="clients">
         {CLIENTS.map((c) => {
           const href = `${base}/${c.id}`;
           const active = c.id === client;
@@ -77,7 +77,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
             </Link>
           );
         })}
-      </TabList>
+      </Onglets>
 
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
 

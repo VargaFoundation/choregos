@@ -5,7 +5,7 @@ import { EditionBadge, EditionCard, FONCTIONS_ENTREPRISE } from "@/components/ed
 import { Garanties } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
 import { Preuves } from "@/components/preuves";
-import { ActorIcon, CostChip, StateBadge } from "@/components/ui";
+import { ActorIcon, CostChip, Onglets, StateBadge } from "@/components/ui";
 import type { RunEventDto } from "@/lib/types";
 
 describe("composants transverses", () => {
@@ -17,6 +17,16 @@ describe("composants transverses", () => {
   it("marque le dépassement de budget", () => {
     const { container } = render(<CostChip costEur={30} budgetEur={25} />);
     expect(container.querySelector(".text-danger")).not.toBeNull();
+  });
+
+  it("une barre d'onglets reçoit le pixel que l'onglet actif déborde : pas de défilement vertical", () => {
+    render(
+      <Onglets aria-label="sections" className="mt-2">
+        <a href="#a">a</a>
+      </Onglets>,
+    );
+    const barre = screen.getByRole("navigation", { name: "sections" });
+    expect(barre).toHaveClass("pb-px", "overflow-x-auto", "mt-2");
   });
 
   it("nomme le type d'acteur pour les lecteurs d'écran", () => {

@@ -9,7 +9,7 @@
  */
 "use client";
 
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import {
   Alert,
   Badge,
@@ -17,6 +17,7 @@ import {
   Card as VargaCard,
   Dot,
   Empty as VargaEmpty,
+  TabList,
   type Tone,
 } from "@varga/design-system";
 import { cn } from "@/lib/cn";
@@ -189,4 +190,17 @@ export function Empty({ children, title, action }: { children: ReactNode; title?
 
 export function ErrorNote({ children }: { children: ReactNode }) {
   return <Alert tone="danger">{children}</Alert>;
+}
+
+/**
+ * La barre d'onglets du design system, sans la barre de défilement VERTICALE qu'elle portait.
+ *
+ * L'onglet actif descend d'un pixel (`-mb-px`) pour poser son trait sur le filet de la barre ; dans
+ * une barre qui défile en largeur (`overflow-x-auto`), ce pixel de trop est un débordement vertical,
+ * et Windows dessinait ses flèches ▲ ● ▼ au bout de chaque barre d'onglets de la console (relevé le
+ * 06/10 sur la page d'un workflow). Un pixel de marge basse le reçoit : rien ne déborde, et le trait
+ * de l'onglet actif garde ses deux pixels.
+ */
+export function Onglets({ className, ...props }: ComponentProps<typeof TabList>) {
+  return <TabList className={cn("pb-px", className)} {...props} />;
 }
