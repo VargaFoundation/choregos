@@ -50,9 +50,13 @@ export function DecisionDAction({ projet, action }: { projet: string; action: Ac
           reject
         </Button>
       </div>
-      <p className="text-xs text-ink-muted">
-        Approving needs a recent sign-in (within {String(action.approval?.step_up_minutes ?? 10)} min). Whoever proposed
-        it, or owns the agent that did, cannot decide.
+      <p className="text-xs text-ink-muted" data-testid="regles-de-decision">
+        {/* Sans `step_up_minutes`, la règle n'exige pas d'authentification récente (S20-08) : ne pas
+            promettre un détour par l'IdP qui n'aura pas lieu. */}
+        {action.approval?.step_up_minutes != null
+          ? `Approving needs a recent sign-in (within ${String(action.approval.step_up_minutes)} min). `
+          : ""}
+        Whoever proposed it, or owns the agent that did, cannot decide.
       </p>
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
     </div>

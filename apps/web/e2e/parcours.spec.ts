@@ -111,16 +111,22 @@ test("integrations d'un projet : la porte du projet, et claude.ai dit pourquoi i
   await expect(page.getByText("not reachable from here yet")).toBeVisible();
 });
 
-test("propositions : la décision se prend ici, un rejet exige un motif", async ({ page }) => {
-  await page.goto("/p/billing-api/proposals");
-  await expect(page.getByRole("link", { name: "open_infra_pr" })).toBeVisible();
-  await page.getByRole("link", { name: "open_infra_pr" }).click();
-  await expect(page).toHaveURL(/\/p\/billing-api\/proposals\/pr1$/);
-  await expect(page.getByText("you may be asked to sign in again")).toBeVisible();
+test("une proposition de l'ontologie est une action : un ancien lien y mène, qui dit ce qu'elle touche", async ({
+  page,
+}) => {
+  // Un lien de décision émis avant S20-10 (porte MCP, courriel) : même identifiant, page des actions.
+  await page.goto("/p/billing-api/proposals/pr1");
+  await expect(page).toHaveURL(/\/p\/billing-api\/actions\/pr1$/);
+  const ontologie = page.getByTestId("ontologie");
+  await expect(ontologie).toContainText("open_infra_pr");
+  await expect(ontologie).toContainText("os-reboot-required");
+  await expect(page.getByTestId("regles-de-decision")).toContainText("within 10 min");
   await expect(page.getByRole("button", { name: "reject" })).toBeDisabled();
-  await page.getByLabel("reason").fill("la fenêtre de maintenance est gelée");
+  await page.getByLabel("reason to reject").fill("la fenêtre de maintenance est gelée");
   await expect(page.getByRole("button", { name: "reject" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "approve" })).toBeEnabled();
+  await page.goto("/p/billing-api/proposals");
+  await expect(page).toHaveURL(/\/p\/billing-api\/actions$/);
 });
 
 test("workflows : un projet en porte plusieurs, chacun se lit en processus et en carte", async ({ page }) => {

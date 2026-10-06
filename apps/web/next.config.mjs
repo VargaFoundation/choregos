@@ -32,6 +32,15 @@ const nextConfig = {
       },
     ];
   },
+  // Une proposition de l'ontologie est une action du cœur depuis S20-08, sous le MÊME identifiant :
+  // la page « proposals » s'est fondue dans celle des actions (S20-10), et un lien de décision émis
+  // avant — par la porte MCP, dans un courriel — mène toujours à la bonne page.
+  async redirects() {
+    return [
+      { source: "/p/:slug/proposals", destination: "/p/:slug/actions", permanent: true },
+      { source: "/p/:slug/proposals/:id", destination: "/p/:slug/actions/:id", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

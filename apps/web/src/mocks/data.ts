@@ -886,6 +886,35 @@ export const actions: Action[] = [
   },
 ];
 
+/** Une action de l'ontologie (S20-08), proposée par une personne depuis son client MCP. */
+actions.push({
+  id: "pr1",
+  origin: "ontology",
+  kind: "ontology.open_infra_pr",
+  title: "open_infra_pr on os-reboot-required",
+  justification: "Deux nœuds attendent un redémarrage depuis une semaine : une PR planifie la fenêtre.",
+  params: {
+    ontologie: {
+      version_id: "v1",
+      action_type: "open_infra_pr",
+      target_ids: ["os-reboot-required"],
+      params: { path: "platform/maintenance/os-reboot-required.yaml" },
+      idempotency_key: "os-reboot-required:platform/maintenance/os-reboot-required.yaml",
+    },
+  },
+  effects: [
+    { effect: "ontology.effet", with: { index: 0 } },
+    { effect: "ontology.preuve", with: { index: 0, position: 1 } },
+  ],
+  proposed_by: { kind: "user", id: "lea@varga.dev", via: "mcp" },
+  approval: { approvers: [{ role: "project_owner", min: 1 }], step_up_minutes: 10, separation_of_duties: true },
+  decisions: [],
+  status: "pending_approval",
+  project_slug: "billing-api",
+  created_at: iso(42),
+  journal: [],
+});
+
 /** Ce que les workflows de Billing API exigent : du logiciel, donc un dépôt, une CI, un train. */
 export const projectRequirements: ProjectRequirement[] = [
   {
@@ -901,22 +930,6 @@ export const projectRequirements: ProjectRequirement[] = [
 ];
 
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
-const proposition = {
-  proposal: "pr1",
-  action_type: "open_infra_pr",
-  status: "pending_approval",
-  target: ["os-reboot-required"],
-  params: { file: "platform/maintenance/os-reboot-required.yaml" },
-  justification: "Deux nœuds attendent un redémarrage depuis une semaine : une PR planifie la fenêtre.",
-  proposed_by: { kind: "user", id: "lea@varga.dev", via: "mcp" },
-  approval: { approvers: [{ role: "owner", min: 1 }], step_up_minutes: 10, separation_of_duties: true },
-  decisions: [],
-  effects: [],
-  evidence: [],
-  created_at: iso(42),
-  finished_at: null,
-};
-
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -1056,8 +1069,6 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
     // Un tracker interne : la demande se pose dans la console (le board offre « new request »).
     [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
-    [/^\/projects\/[^/]+\/proposals\/[^/]+$/, proposition],
-    [/^\/projects\/[^/]+\/proposals$/, [proposition]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
     [/^\/work-items\/[^/]+\/runs$/, runs],
     [/^\/work-items\/[^/]+$/, workItems.items[0]],

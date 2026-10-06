@@ -474,7 +474,11 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   none in time, fails it and compensates what was done.
 - **Reading**: `GET /projects/{id}/actions/{id}` gives the decisions (who, when, how fresh their
   authentication was) and the **journal** — every effect's key, attempts, answer or error. Events
-  `choregos.action.*` tell the same story on the ticket.
+  `choregos.action.*` tell the same story on the ticket. In the console, every action has its page,
+  `/p/<project>/actions/<id>`, where it is decided — an ontology proposal too: it is a core action
+  under the same id, and its page says what it acts on (action type, targets, parameters), what its
+  effects returned and what its evidence collected. The former `/p/<project>/proposals[/<id>]` links
+  redirect there.
 
 The core ships two effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP

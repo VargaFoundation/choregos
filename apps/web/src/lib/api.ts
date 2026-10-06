@@ -58,7 +58,6 @@ import type {
   PolicyDef,
   ProjectDto,
   ProjectPage,
-  Proposal,
   ProvisionStatus,
   ReleasePage,
   Run,
@@ -168,16 +167,6 @@ export const api = {
   edition: () => request<Edition>("/edition"),
   /** Où brancher un client MCP (ADR 0030) : l'URL de la porte, pour la page Integrations. */
   integrations: () => request<Integrations>("/integrations"),
-  /** Les propositions d'action de l'ontologie (greffon `choregos-ontology`). */
-  proposals: (projectId: string, status?: string) =>
-    request<Proposal[]>(`/projects/${qualify(projectId)}/proposals${status ? `?status=${status}` : ""}`),
-  proposal: (projectId: string, id: string) => request<Proposal>(`/projects/${qualify(projectId)}/proposals/${id}`),
-  /** Une décision exige une session RÉCENTE : un 401 `step_up_required` repasse par l'IdP. */
-  decideProposal: (projectId: string, id: string, body: { decision: "approve" | "reject"; reason?: string }) =>
-    request<Proposal>(`/projects/${qualify(projectId)}/proposals/${id}/decision`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
   /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
   loginUrl: (next?: string, as?: string, reauth = false) => {
     const params = new URLSearchParams();
