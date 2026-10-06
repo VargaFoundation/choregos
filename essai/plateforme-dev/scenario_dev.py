@@ -9,7 +9,7 @@ Trois temps, parce qu'un humain intervient au milieu :
     uv run python essai/plateforme-dev/scenario_dev.py verifier   # la PR, puis la relance du collecteur
 
 Variables :
-    CHOREGOS_DEV_URL    (défaut http://choregos.internal.dev.diametral.com)
+    CHOREGOS_DEV_URL    l'adresse de la console du locataire (ex. `https://choregos.example`)
     CHOREGOS_DEV_TOKEN  jeton d'API d'un humain (`chg_…`), créé dans la console ; jamais écrit ici
     CHOREGOS_DEV_ORG    l'organisation du locataire
     ESSAI_DEPOT         le dépôt de bac à sable où l'App GitHub du locataire est installée (`org/nom`)
@@ -29,7 +29,8 @@ import httpx
 
 ICI = pathlib.Path(__file__).resolve().parent
 IT4IT = ICI.parents[1] / "packages" / "ontology" / "tests" / "fixtures" / "it4it"
-URL = os.environ.get("CHOREGOS_DEV_URL", "http://choregos.internal.dev.diametral.com").rstrip("/")
+#: Exigée par `client()` : aucun locataire n'est supposé — Choregos est un projet ouvert.
+URL = os.environ.get("CHOREGOS_DEV_URL", "").rstrip("/")
 PROJET = os.environ.get("ESSAI_PROJET", "essai-it4it")
 CLE = "os-reboot-required"
 ETAT = ICI / ".etat.json"  # identifiants du dernier passage (hors git)
@@ -54,7 +55,8 @@ def ligne(check: str, scope: str, status: str, **extra: Any) -> dict[str, Any]:
 
 def client() -> httpx.Client:
     jeton = exiger("CHOREGOS_DEV_TOKEN")
-    return httpx.Client(base_url=f"{URL}/api/v1", headers={"Authorization": f"Bearer {jeton}"}, timeout=60)
+    base = exiger("CHOREGOS_DEV_URL").rstrip("/")
+    return httpx.Client(base_url=f"{base}/api/v1", headers={"Authorization": f"Bearer {jeton}"}, timeout=60)
 
 
 def verifier_reponse(reponse: httpx.Response, *attendus: int) -> Any:

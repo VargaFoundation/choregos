@@ -31,7 +31,7 @@ Ce que l'essai n'a pas pu prouver en local, éprouvé sur le locataire dev de Di
 | 5 | La plateforme | Écrit le fichier sur `choregos/<proposition>` et ouvre la PR ; la preuve la constate |
 | 6 | Le script | `scenario_dev.py verifier` : la PR, la décision et son `auth_time`, puis la relance du collecteur |
 
-Variables du script : `CHOREGOS_DEV_TOKEN`, `CHOREGOS_DEV_ORG`, `ESSAI_DEPOT` (voir son en-tête).
+Variables du script : `CHOREGOS_DEV_URL`, `CHOREGOS_DEV_TOKEN`, `CHOREGOS_DEV_ORG`, `ESSAI_DEPOT` (voir son en-tête) — aucune ne suppose un locataire.
 
 **Valider (étape 4)** : une décision exige une session humaine. Un jeton d'API est refusé (403
 `decision_requires_session`), et c'est voulu. Après `?reauth=1`, dans la console du navigateur, sur

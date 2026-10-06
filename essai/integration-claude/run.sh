@@ -3,15 +3,16 @@
 # Essai S15-07 : un VRAI Claude Code se connecte à la porte MCP du locataire dev (ADR 0030), liste
 # les outils, ouvre un ticket — puis on vérifie en REST, sans croire le modèle.
 #
-#   CHOREGOS_DEV_URL      (défaut http://choregos.internal.dev.diametral.com)
+#   CHOREGOS_DEV_URL      l'adresse de la console du locataire (ex. https://choregos.example)
 #   CHOREGOS_DEV_TOKEN    jeton `*` d'un humain (préparation et vérifications REST) — jamais écrit ici
-#   ESSAI_PROJET          `org:slug` d'un projet à tracker interne (défaut diametral:essai-it4it)
+#   ESSAI_PROJET          `org:slug` d'un projet à tracker interne (ex. varga:essai-it4it)
 #
 # Le jeton MCP est frappé pour l'essai (portée mcp:write, lié au projet, un jour), écrit dans un
 # fichier 0600 du répertoire temporaire, et révoqué à la fin.
 set -euo pipefail
-URL=${CHOREGOS_DEV_URL:-http://choregos.internal.dev.diametral.com}
-PROJET=${ESSAI_PROJET:-diametral:essai-it4it}
+# Aucun locataire supposé : Choregos est un projet ouvert, l'essai se joue contre le vôtre.
+URL=${CHOREGOS_DEV_URL:?adresse de la console requise, voir en tête du script}
+PROJET=${ESSAI_PROJET:?projet org:slug requis, voir en tête du script}
 : "${CHOREGOS_DEV_TOKEN:?jeton de portée * requis, voir en tête du script}"
 API=(curl -sS --max-time 30 -H "Authorization: Bearer $CHOREGOS_DEV_TOKEN" -H "Content-Type: application/json")
 TMP=$(mktemp -d)
