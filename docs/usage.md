@@ -613,6 +613,17 @@ human is notified with an SLA, and the answer resumes the workflow where it stop
 Costs export as CSV from the project overview, grouped by day, stage, model, backend, size
 or kind.
 
+**Renaming an organisation.** `PATCH /orgs/{org}` changes its `name` (its administrator) or its
+`slug` (the platform administrator only: the slug is in every console URL, every qualified id
+`<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, and the IdP group names
+`choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
+organisation by its id. What does not follow: addresses already copied elsewhere (an MCP client's
+configuration), IdP groups that still name the old slug, and `oidc.defaultOrg` if it names it.
+
+```bash
+curl -X PATCH $API/orgs/acme -d '{"slug": "acme-corp", "name": "Acme Corporation"}'
+```
+
 ## Known limits, stated rather than discovered
 
 - The engine is still shaped by software in two places (ADR 0012): `StageOutputs` is typed

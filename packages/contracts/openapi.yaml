@@ -118,6 +118,21 @@ paths:
         "201": { description: Créée, content: { application/json: { schema: { $ref: "#/components/schemas/Org" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    patch:
+      tags: [projects]
+      operationId: updateOrg
+      summary: Renomme une organisation — son nom par son administrateur, son slug par l'administrateur de la plateforme
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgUpdate" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Org" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/projects:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -2215,6 +2230,12 @@ components:
       properties:
         slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
         name: { type: string, minLength: 1, maxLength: 200 }
+    OrgUpdate:
+      type: object
+      description: Ce qui change d'une organisation ; le slug est dans chaque URL et chaque adresse MCP.
+      properties:
+        slug: { type: [string, "null"], pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        name: { type: [string, "null"], minLength: 1, maxLength: 200 }
     WorkItemCreate:
       type: object
       required: [title]

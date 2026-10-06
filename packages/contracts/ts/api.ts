@@ -706,6 +706,12 @@ export type OrgCreate = {
   name: string;
 };
 
+/** Ce qui change d'une organisation ; le slug est dans chaque URL et chaque adresse MCP. */
+export type OrgUpdate = {
+  slug?: string | null;
+  name?: string | null;
+};
+
 export type WorkItemCreate = {
   title: string;
   body?: string;
@@ -1464,6 +1470,7 @@ export interface Operations {
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
+  updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
