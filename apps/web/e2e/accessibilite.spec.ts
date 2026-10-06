@@ -119,3 +119,21 @@ test("graphe de workflow : parcours au clavier et description de l'état", async
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("panneau-etat")).toBeVisible();
 });
+
+test("les barres d'onglets ne défilent pas en hauteur : Windows y dessinait ses flèches", async ({ page }) => {
+  // L'onglet actif descend d'un pixel sur le filet ; sans la marge qui le reçoit, chaque barre
+  // débordait d'un pixel en hauteur, et Windows dessinait ▲ ● ▼ au bout de la ligne (relevé le 06/10).
+  const barres: Array<[string, string]> = [
+    ["/p/billing-api/workflows/default-simple/map", "project sections"],
+    ["/p/billing-api/workflows/default-simple/map", "views of default-simple"],
+    ["/admin", "administration sections"],
+    ["/integrations/claude-code", "clients"],
+  ];
+  for (const [chemin, nom] of barres) {
+    await page.goto(chemin);
+    const barre = page.getByRole("navigation", { name: nom });
+    await expect(barre).toBeVisible();
+    const deborde = await barre.evaluate((element) => element.scrollHeight - element.clientHeight);
+    expect(deborde, `${chemin} · ${nom}`).toBe(0);
+  }
+});
