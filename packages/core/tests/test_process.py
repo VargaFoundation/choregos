@@ -36,3 +36,13 @@ def test_une_personne_son_delai_et_le_rejet() -> None:
     phrase = str(validation["sentence"])
     assert "a person of group `staffing-managers`, within 48 h" in phrase
     assert "If rejected, back to «Sourcing»" in phrase and "times out after 72 h" in phrase
+
+
+def test_ce_que_fait_la_plateforme_se_dit_en_clair() -> None:
+    """`does` (#175) : la vue processus dit que la plateforme ouvre, puis fusionne la PR."""
+    from choregos_core.dsl import template_yaml
+
+    workflow, _ = parse_workflow(template_yaml("default-simple"))
+    etapes = {e["to"]: str(e["sentence"]) for e in to_process(workflow)}
+    assert "the platform, which opens the pull request" in etapes["pr_open"]
+    assert "the platform, which merges the pull request" in etapes["merged"]

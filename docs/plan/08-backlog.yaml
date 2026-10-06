@@ -1357,6 +1357,16 @@ stories:
     acceptance:
       - "La restauration crée la version suivante"
 
+  - id: S16-14
+    title: "Ce qu'un workflow fait s'écrit (does, production), plus le nom d'un état"
+    stream: S16
+    sprint: 11
+    priority: 14
+    size: M
+    depends_on: [S16-11]
+    acceptance:
+      - "Un état renommé depuis la console garde son effet ; une histoire enregistrée se rejoue à l'identique"
+
   # ───────────── S17 — Administration par manifestes, édition entreprise sur le dev (ADR 0032, 2026-10-05) ─────────────
   - id: S17-01
     title: "La couture « sections d'administration » : manifeste validé au démarrage, GET /ui/admin-sections"

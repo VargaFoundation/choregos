@@ -24,11 +24,12 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal
 
 import yaml
+from choregos_contracts.workflow import PREFIXE_PRODUCTION, effet_implicite
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 
-#: Les états dont le NOM porte un effet (`interpreter.py`, `validator.py`) : les renommer ou les
-#: retirer change le comportement, pas seulement l'affichage.
+#: Les états dont le NOM porte encore un effet, pour un workflow écrit avant #175 (`does`,
+#: `production`) : un renommage l'écrit d'abord, un ajout ou un retrait l'annonce.
 PREFIXES_A_EFFET = ("pr_", "merged", "deployed_prod")
 IDENTIFIANT = re.compile(r"^[a-z][a-z0-9_-]*$")
 
@@ -163,14 +164,54 @@ class Edition:
 
 
 def editer(texte: str, operations: list[Any]) -> Edition:
-    """Applique les opérations dans l'ordre ; l'inverse les défait dans l'ordre contraire."""
+    """Applique les opérations dans l'ordre ; l'inverse les défait dans l'ordre contraire.
+
+    Renommer un état dont le NOM porte un effet (un workflow écrit avant #175) l'écrit d'abord —
+    `does` sur les transitions système qui y mènent, `production: true` sur l'état — : le renommage
+    ne change plus ce que fait le workflow, et son inverse défait le tout, à l'octet près."""
     edition = Edition(yaml=texte)
     for operation in OPERATIONS.validate_python(operations):
-        appliquer = _APPLICATIONS[operation.op]
-        edition.yaml, inverse, avertissements = appliquer(edition.yaml, operation)
-        edition.inverse.insert(0, inverse)
-        edition.avertissements.extend(avertissements)
+        etapes: list[Any] = [operation]
+        if isinstance(operation, RenameState):
+            ecrites = _effets_a_ecrire(edition.yaml, operation.from_)
+            etapes = [*ecrites, operation]
+            if ecrites:
+                edition.avertissements.append(
+                    f"l'effet que portait le nom `{operation.from_}` est désormais écrit "
+                    "(`does`, `production`) : le renommage ne change pas ce que fait le workflow"
+                )
+        for etape in etapes:
+            appliquer = _APPLICATIONS[etape.op]
+            edition.yaml, inverse, avertissements = appliquer(edition.yaml, etape)
+            edition.inverse.insert(0, inverse)
+            edition.avertissements.extend(avertissements)
     return edition
+
+
+def _effets_a_ecrire(texte: str, nom: str) -> list[Any]:
+    """Ce qu'il faut ÉCRIRE avant de renommer `nom` pour que le renommage ne change rien (#175)."""
+    effet = effet_implicite(nom)
+    production = nom.startswith(PREFIXE_PRODUCTION)
+    if effet is None and not production:
+        return []
+    donnees = yaml.safe_load(texte) or {}
+    acteurs = donnees.get("actors") or {}
+    systemes = {n for n, a in acteurs.items() if isinstance(a, dict) and a.get("type") == "system"}
+    ecrites: list[Any] = []
+    for transition in donnees.get("transitions") or []:
+        if not isinstance(transition, dict) or effet is None:
+            continue
+        if transition.get("to") == nom and transition.get("by") in systemes and not transition.get("does"):
+            if not transition.get("id"):
+                raise EditionRefusee(
+                    f"la transition vers `{nom}` n'a pas d'`id` : son effet ne peut pas s'écrire avant le "
+                    "renommage — donnez-lui un `id`, ou écrivez `does` à la main"
+                )
+            ecrites.append(SetTransition(id=str(transition["id"]), field="does", value=effet))
+    etat = (donnees.get("states") or {}).get(nom)
+    if production and not (isinstance(etat, dict) and etat.get("production")):
+        ecrites.append(SetState(name=nom, field="production", value=True))
+    return ecrites
 
 
 # ───────────────────────────── lecture du texte ─────────────────────────────
@@ -471,7 +512,7 @@ def _rename_state(texte: str, op: RenameState) -> tuple[str, Any, list[str]]:
         if noeud.style in {'"', "'"}:
             debut, fin = debut + 1, fin - 1
         texte = _greffer(texte, debut, fin, op.to)
-    return texte, RenameState(**{"from": op.to, "to": op.from_}), _a_effet(op.from_) + _a_effet(op.to)
+    return texte, RenameState(**{"from": op.to, "to": op.from_}), _a_effet(op.to)
 
 
 def _set_state(texte: str, op: SetState) -> tuple[str, Any, list[str]]:

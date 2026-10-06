@@ -11,14 +11,21 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from choregos_contracts import AgentActor, HumanActor, SystemActor, Workflow
-from choregos_contracts.workflow import AGENT_WILDCARD
+from choregos_contracts.workflow import (
+    AGENT_WILDCARD,
+    PREFIXE_PRODUCTION,
+    effet_de_la_transition,
+    effet_implicite,
+    est_un_etat_de_production,
+)
 
 from ..errors import Issue
 from ..gates import known_gates
 from .dates import champ_de
 from .yamlsource import json_pointer, locate
 
-PROD_STATE_PREFIX = "deployed_prod"
+#: Lu encore pour les workflows écrits avant #175 ; un état de production s'écrit `production: true`.
+PROD_STATE_PREFIX = PREFIXE_PRODUCTION
 
 
 @dataclass(slots=True)
@@ -60,6 +67,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
     _check_tasks(wf, report, source)
+    _check_effets(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -367,9 +375,35 @@ def _check_reachability(wf: Workflow, report: ValidationReport, source: Any) -> 
         )
 
 
+def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """Ce que la plateforme fait s'ÉCRIT (#175) : `does` sur une transition système, `production`
+    sur un état. Un effet encore déduit d'un nom se lit — un workflow publié ne change pas de
+    comportement —, mais il s'annonce : un renommage le perdrait."""
+    gestes = {"open_pr": "ouvre la PR", "merge_pr": "fusionne la PR"}
+    for index, t in enumerate(wf.transitions):
+        systeme = isinstance(wf.actors.get(t.by or ""), SystemActor)
+        if t.does is not None and not systeme:
+            message = f"`does: {t.does}` est un geste de la plateforme : seul un acteur `system` le porte"
+            report.error("transition.does_requires_system", message, ["transitions", index, "does"], source)
+        implicite = effet_implicite(t.to)
+        if systeme and t.does is None and implicite is not None:
+            message = (
+                f"la transition vers `{t.to}` {gestes[implicite]} à cause du NOM de l'état : "
+                f"écrivez `does: {implicite}`, un renommage ne le changera plus"
+            )
+            report.warn("workflow.effet_implicite", message, ["transitions", index, "to"], source)
+    for nom, etat in wf.states.items():
+        if nom.startswith(PREFIXE_PRODUCTION) and not etat.production:
+            message = (
+                f"l'état `{nom}` est la production à cause de son NOM : écrivez `production: true`, "
+                "un renommage ne lèvera plus le verrou"
+            )
+            report.warn("workflow.effet_implicite", message, ["states", nom], source)
+
+
 def _check_prod_states(wf: Workflow, report: ValidationReport, source: Any) -> None:
     for index, t in enumerate(wf.transitions):
-        if t.to.startswith(PROD_STATE_PREFIX) and t.via != "release_train":
+        if est_un_etat_de_production(t.to, wf.states.get(t.to)) and t.via != "release_train":
             report.error(
                 "prod.requires_train",
                 f"l'état {t.to} n'est atteignable que par `via: release_train` (la prod est un verrou)",
@@ -479,7 +513,10 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
         if isinstance(actor, AgentActor):
             used_roles.add(str(actor.role))
     has_verify = "verify" in (roles & used_roles)
-    has_pr = any(name.startswith("pr_") for name in wf.states)
+    has_pr = any(
+        isinstance(wf.actors.get(t.by or ""), SystemActor) and effet_de_la_transition(t) == "open_pr"
+        for t in wf.transitions
+    )
     if has_pr and not has_verify:
         report.warn(
             "workflow.no_verify_before_pr",

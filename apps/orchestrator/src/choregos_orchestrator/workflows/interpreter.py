@@ -29,6 +29,7 @@ FILE_MAX_MINUTES = 360
 
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus, Workflow
+    from choregos_contracts.workflow import effet_de_la_transition
     from choregos_core import WorkflowEngine
     from choregos_core.dsl.dates import DateIllisible, echeance
     from choregos_core.gates import ACTION_REGLEE, GateOutcome
@@ -638,7 +639,10 @@ class WorkflowInterpreter:
         if transition.action is not None and workflow.patched(ACTIONS_DE_TRANSITION):
             return await self._run_action(params, engine, transition, attempt + 1)
 
-        if transition.to.startswith("pr_"):
+        # Ce que la plateforme fait s'ÉCRIT (`does`, #175) ; un workflow publié avant le portait dans le
+        # nom de l'état visé, et se lit encore ainsi : une histoire enregistrée se rejoue à l'identique.
+        effet = effet_de_la_transition(transition)
+        if effet == "open_pr":
             await executer_activite(
                 scm_activities.open_pull_request,
                 {"project_id": params.project_id, "work_item_id": params.work_item_id},
@@ -646,7 +650,7 @@ class WorkflowInterpreter:
                 retry_policy=DEFAULT_RETRY,
             )
         outcomes = await self._gates(params, transition, self.current_run or self.last_run or "")
-        if transition.to.startswith("merged") and all(not o.blocking and not o.pending for o in outcomes):
+        if effet == "merge_pr" and all(not o.blocking and not o.pending for o in outcomes):
             await executer_activite(
                 scm_activities.enqueue_merge,
                 {"project_id": params.project_id, "work_item_id": params.work_item_id},

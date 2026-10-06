@@ -36,7 +36,7 @@ states:
   fixing_ci: { display: Correction CI, tracker: { status: Fixing CI } }
   merged: { display: Fusionné, tracker: { status: Merged } }
   deployed_staging: { display: En staging, tracker: { status: Staging } }
-  deployed_prod: { display: En production, tracker: { status: Prod } }
+  deployed_prod: { display: En production, tracker: { status: Prod }, production: true }
   verified_prod: { display: Vérifié en production, terminal: true, tracker: { status: Done } }
   needs_human: { display: Intervention humaine, kind: wait, tracker: { status: Blocked } }
   abandoned: { display: Abandonné, terminal: true, tracker: { status: Cancelled } }
@@ -103,6 +103,7 @@ transitions:
     by: ci
     gates: [evidence_present, scope_respected]
     on_fail: { to: agent_review, max_attempts: 2, escalate_to: needs_human }
+    does: open_pr
   - id: t-fix-ci
     from: pr_open
     to: fixing_ci
@@ -113,6 +114,7 @@ transitions:
     to: pr_open
     by: ci
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+    does: open_pr
   - id: t-merge
     from: pr_open
     to: merged
@@ -120,6 +122,7 @@ transitions:
     gates: [ci_green, review_approved, scans_ok, provenance_signed]
     timeout_hours: 48
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
+    does: merge_pr
   - id: t-deploy-staging
     from: merged
     to: deployed_staging

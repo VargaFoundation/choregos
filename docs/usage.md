@@ -44,7 +44,8 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 A project only needs what its workflows read ([ADR 0034](adr/0034-connecteurs-par-capacites.md)).
 `GET /projects/{id}/requirements` derives it — a guarantee says what it reads (`ci_green` the CI,
 `scope_respected` a diff), an agent whose role works in a repository needs an `scm`, a release
-train or a `deployed_prod*` state needs a `cd` — and says why for each. An HR project shows
+train or a production state (`production: true`) needs a `cd`, a transition that opens or merges a
+pull request (`does`) needs an `scm` — and says why for each. An HR project shows
 neither `scm`, nor `ci`, nor `cd`; the settings page lists what is required, what is configured,
 and *add a connector* for the rest. `GET /connectors/types` reads the adapter registry, plugins
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
@@ -186,6 +187,24 @@ The validator refuses more than syntax: an unreachable state, a retry that can l
 an unknown gate, or **a gate that would have nothing to check** — `outputs_present` on a
 transition that declares no `outputs:`. If you mean it, say so: `params: { allow_empty: true }`.
 
+**What the platform does is written, not named.** A system transition says what the platform does
+when it takes it — `does: open_pr` opens the ticket's pull request, `does: merge_pr` merges it — and
+a production state says so — `production: true`, reachable only through a release train:
+
+```yaml
+states:
+  review:  { display: In review, kind: wait }
+  live:    { display: In production, terminal: true, production: true }
+transitions:
+  - { id: t-open, from: verifying, to: review, by: ci, does: open_pr }
+```
+
+Before this, the *name* of the target state carried the effect (`pr_*` opened, `merged*` merged,
+`deployed_prod*` was production): renaming a state silently changed what the workflow did, or
+lifted the production lock. Those names are still read, so a published workflow keeps its
+behaviour, but the validator warns (`workflow.effet_implicite`), and a rename from the console
+first writes the effect down.
+
 The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
 the process (each transition in plain words), the map (one lane per kind of actor), the YAML
 editor (it validates as you type) and the version history. The map is keyboard-navigable: Tab
@@ -265,8 +284,10 @@ curl -X POST $API/workflows/edit -d '{"yaml": "...", "operations": [
 The answer carries the edited `yaml`, its unified `diff`, the validation and the graph, and the
 `inverse` operations, which give back the original bytes. Nothing is saved: the console saves
 with `PUT /projects/{id}/workflows/{name}` and the `base_version` it read. A state or an actor
-still named elsewhere cannot be removed (`422`); renaming a state whose name carries an effect
-(`pr_*`, `merged*`, `deployed_prod*`) is allowed, and said in `notices`.
+still named elsewhere cannot be removed (`422`); renaming a state whose name carried an effect
+(`pr_*`, `merged*`, `deployed_prod*`, in a workflow written before effects were explicit) first
+writes that effect down — `does` on the system transitions that reach it, `production: true` on the
+state — so the rename changes nothing the workflow does, and `notices` says so.
 
 In the console, a click on a state or a transition of the map — or **edit** on a step of the
 process view — opens its panel. A state has its label, its name, a new transition (to a state

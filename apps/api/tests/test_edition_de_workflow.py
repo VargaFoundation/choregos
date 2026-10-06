@@ -45,10 +45,20 @@ async def test_une_garantie_ajoutee_se_relit_en_diff_et_s_annule(client: AsyncCl
     assert annulee.json()["yaml"] == ORIGINE
 
 
-async def test_renommer_un_etat_a_effet_le_signale(client: AsyncClient, admin: str) -> None:
-    reponse = await _editer(client, ORIGINE, {"op": "rename_state", "from": "pr_open", "to": "revue"})
+async def test_renommer_un_etat_a_effet_l_ecrit_d_abord(client: AsyncClient, admin: str) -> None:
+    """Un workflow écrit avant #175 : `pr_open` ouvre la PR par son NOM. Renommé, l'effet s'écrit
+    d'abord (`does: open_pr`) et la réponse le dit ; l'inverse rend le texte d'origine."""
+    ancien = ORIGINE.replace("    does: open_pr\n", "")
+    assert "does: open_pr" not in ancien
+    reponse = await _editer(client, ancien, {"op": "rename_state", "from": "pr_open", "to": "revue"})
     assert reponse.status_code == 200, reponse.text
-    assert any("effet" in n for n in reponse.json()["notices"])
+    corps = reponse.json()
+    assert "does: open_pr" in corps["yaml"] and "pr_open" not in corps["yaml"]
+    assert any("désormais écrit" in n for n in corps["notices"])
+    annulee = await client.post(
+        "/api/v1/workflows/edit", json={"yaml": corps["yaml"], "operations": corps["inverse"]}
+    )
+    assert annulee.json()["yaml"] == ancien
 
 
 async def test_ce_qui_ne_s_applique_pas_recoit_422(client: AsyncClient, admin: str) -> None:

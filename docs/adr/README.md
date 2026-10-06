@@ -53,3 +53,4 @@ nine records did not exist.
 | [0034](0034-connecteurs-par-capacites.md) | Connectors by capability, a policy per operation; a discovered MCP tool is born closed (amends 0014) | accepted |
 | [0035](0035-actions-gouvernees-dans-le-coeur.md) | Governed actions move into the core and run in Temporal; each effect is recorded by key and compensated on failure | accepted |
 | [0036](0036-un-gabarit-livre-ce-qu-un-greffon-installe.md) | A template ships what a plugin installs (`defaults.extensions`); without the plugin the project is born without it, and the audit says so | accepted |
+| [0037](0037-les-effets-d-un-workflow-s-ecrivent.md) | What a workflow does is written (`does`, `production`), not carried by a state's name; names are still read for older workflows, and a rename writes the effect down first | accepted |

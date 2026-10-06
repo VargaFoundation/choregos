@@ -663,6 +663,8 @@ export type WorkflowState = {
   };
   terminal?: boolean;
   kind?: "work" | "wait" | "terminal";
+  /** Un état de production : il ne s'atteint que par `via: release_train` (avant #175 : le préfixe `deployed_prod` du nom). */
+  production?: boolean;
 };
 
 export type WorkflowTransition = unknown | unknown;

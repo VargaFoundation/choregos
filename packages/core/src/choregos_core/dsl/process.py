@@ -12,7 +12,13 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_contracts import Workflow
-from choregos_contracts.workflow import AGENT_WILDCARD, AgentActor, HumanActor, Transition
+from choregos_contracts.workflow import (
+    AGENT_WILDCARD,
+    AgentActor,
+    HumanActor,
+    Transition,
+    effet_de_la_transition,
+)
 
 #: Ce que vérifie chaque garantie, en une phrase. Un test exige un résumé pour chaque garantie
 #: connue : une garantie nouvelle sans résumé ferait parler la vue processus dans le vide.
@@ -54,7 +60,9 @@ def _qui(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     if isinstance(acteur, HumanActor):
         delai = f", within {acteur.sla_hours} h" if acteur.sla_hours else ""
         return "human", nom, f"a person of group `{acteur.group}`{delai}"
-    return "system", nom, "the platform"
+    # Ce que la plateforme fait en la franchissant, en clair (`does`, #175).
+    geste = {"open_pr": ", which opens the pull request", "merge_pr": ", which merges the pull request"}
+    return "system", nom, f"the platform{geste.get(effet_de_la_transition(t) or '', '')}"
 
 
 def _action(t: Transition) -> str | None:
