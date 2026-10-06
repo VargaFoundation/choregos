@@ -183,7 +183,8 @@ async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:
         ticket = await _interpreteur_qui_attend(session, action, projet)
         action.status = statut
         action.error = entree.get("error")
-        action.result = {"compensations": entree.get("compensations") or []}
+        # Fusionné : un effet a pu y consigner ce qu'il attend, une preuve ce qu'elle a vu (S20-08).
+        action.result = {**(action.result or {}), "compensations": entree.get("compensations") or []}
         action.finished_at = utcnow()
         await persist_event(
             session,
@@ -274,6 +275,25 @@ async def _demarrer(action_id: str) -> None:
             id=identifiant(action_id),
             task_queue=activity.info().task_queue,
         )
+
+
+@activity.defn
+async def marquer_l_attente(entree: dict[str, Any]) -> dict[str, Any]:
+    """L'action attend la preuve d'un de ses effets (S20-08) — `awaiting_evidence`, avec l'effet et
+    l'échéance —, ou ne l'attend plus. Ce que l'on montre ; l'attente elle-même est au workflow."""
+    action_id = str(entree["action_id"])
+    async with db() as session:
+        action, _projet = await _charger(session, action_id)
+        resultat = dict(action.result or {})
+        if entree.get("en_attente"):
+            action.status = ActionStatus.AWAITING_EVIDENCE.value
+            resultat["attente"] = {"position": entree["position"], "jusqu_a": entree["jusqu_a"]}
+        else:
+            action.status = ActionStatus.RUNNING.value
+            resultat.pop("attente", None)
+            resultat.setdefault("preuves", []).append(dict(entree.get("preuve") or {}))
+        action.result = resultat
+    return {"action_id": action_id, "status": action.status}
 
 
 @activity.defn

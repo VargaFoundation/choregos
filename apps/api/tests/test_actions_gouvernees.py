@@ -221,3 +221,18 @@ async def test_un_effet_inconnu_est_refuse_a_la_proposition(
         json={"kind": "x", "title": "x", "effects": [{"effect": "effacer.tout"}]},
     )
     assert refus.status_code == 422 and "effacer.tout" in refus.text
+
+
+async def test_une_preuve_se_remet_a_l_action_qui_l_attend() -> None:
+    """La couture d'une preuve (S20-08) : ce qui la constate la remet à `action-<id>`, par signal."""
+    from choregos_api.services.actions import signaler_une_preuve
+    from choregos_api.temporal import FakeTemporal, set_temporal
+
+    fake = FakeTemporal()
+    set_temporal(fake)
+    try:
+        await signaler_une_preuve("a1", 2, False, "la clé est toujours là")
+    finally:
+        set_temporal(None)
+    attendu = {"position": 2, "ok": False, "detail": "la clé est toujours là"}
+    assert fake.signals == [("action-a1", "preuve", attendu)]

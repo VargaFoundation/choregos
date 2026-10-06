@@ -325,7 +325,7 @@ export type Action = {
   decisions?: Array<{
     [key: string]: unknown;
   }>;
-  status: "pending_approval" | "rejected" | "approved" | "running" | "succeeded" | "failed";
+  status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed";
   result?: {
     [key: string]: unknown;
   } | null;

@@ -469,6 +469,9 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   forbidden operation) stops the action, and what was done is **compensated in reverse** — the
   action says what it could not undo. Parameters are Jinja (sandboxed) over `params` and the results
   of earlier `effects`; a compensation also sees its own effect's `result`.
+- **Proving**: an effect can make the action wait for the proof that it served — the next report
+  of a collector, say — until a deadline: the action shows `awaiting_evidence`; a contrary proof, or
+  none in time, fails it and compensates what was done.
 - **Reading**: `GET /projects/{id}/actions/{id}` gives the decisions (who, when, how fresh their
   authentication was) and the **journal** — every effect's key, attempts, answer or error. Events
   `choregos.action.*` tell the same story on the ticket.
