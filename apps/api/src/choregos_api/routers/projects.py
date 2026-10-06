@@ -5,13 +5,14 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from choregos_contracts import EventType, Role
+from choregos_contracts import EventType, ProjectConfig, Role
 from choregos_core import utcnow
 from fastapi import APIRouter, Path, Request, status
 from sqlalchemy import func, select
 from sse_starlette.sse import EventSourceResponse
 
 from ..audit import record
+from ..config import get_settings
 from ..db.models import Membership, Organization, Project
 from ..db.session import TOUT, limiter_aux_organisations
 from ..deps import Db, Me, Pagination, ProjectCtx, exiger_admin_de_plateforme
@@ -116,6 +117,21 @@ async def list_projects(org: str, session: Db, principal: Me, page: Pagination) 
     )
 
 
+def _avec_les_defauts_du_deploiement(config: ProjectConfig) -> dict[str, Any]:
+    """La configuration d'un projet neuf : ce que la demande dit, et — pour ce qu'elle tait — le
+    backend et les profils de modèle que le déploiement sait servir (#245). Une demande qui nomme
+    `agent` ou `models` garde les siens : le déploiement propose, le projet dispose."""
+    reglages = get_settings()
+    donnees = config.model_dump(mode="json", exclude_none=True)
+    if "agent" not in config.model_fields_set and reglages.default_agent_backend:
+        permis = list(reglages.allowed_agent_backends) or [reglages.default_agent_backend]
+        donnees["agent"] = {"default_backend": reglages.default_agent_backend, "allowed_backends": permis}
+    if "models" not in config.model_fields_set and reglages.default_model_profiles:
+        donnees["models"] = {**donnees.get("models", {}), "profiles": dict(reglages.default_model_profiles)}
+    # Repassée par le contrat : un profil s'écrit en raccourci (`standard: platform/standard`).
+    return ProjectConfig.model_validate(donnees).model_dump(mode="json", exclude_none=True)
+
+
 @router.post(
     "/orgs/{org}/projects",
     response_model=ProjectDto,
@@ -139,7 +155,7 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
         slug=body.slug,
         name=body.name,
         template_ref=body.template_ref,
-        config=body.config.model_dump(mode="json", exclude_none=True),
+        config=_avec_les_defauts_du_deploiement(body.config),
         status="draft",
         provision_state={"status": "pending", "steps": [], "inputs": body.inputs},
     )

@@ -117,6 +117,24 @@ choregos-orchestrator:
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
 
+**Say what this installation can run.** A project created without an `agent` or `models`
+section inherits the deployment's backend and model profiles; without them, it falls back to the
+contract's defaults (`claude-code`, no profile), and a template's agents never reach a model on an
+installation that serves another backend:
+
+```yaml
+global:
+  agents:
+    defaultBackend: opencode
+    allowedBackends: [opencode]
+    modelProfiles: { standard: platform/standard }   # profile → gateway model
+```
+
+A project that names its own `agent` or `models` keeps them. When a runner pod dies before it can
+report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
+code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
+digest…), or why the container never started.
+
 ## Playbooks and the tool catalogue
 
 Both are brought by the deployment, as ConfigMaps, and both are optional.

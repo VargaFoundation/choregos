@@ -69,6 +69,15 @@ global:
     #: Secret dont TOUTES les clés deviennent des variables d'environnement de l'API :
     #: c'est là que vivent les clés des fournisseurs, jamais dans le catalogue.
     credentialsSecret: ""
+  # Ce que CE déploiement sait faire tourner : un projet neuf en hérite quand sa demande n'en dit
+  # rien (#245). Vide : le contrat décide (`claude-code`, aucun profil de modèle). Un locataire qui
+  # sert opencode derrière la passerelle de la plateforme le dit ici, sans quoi les agents d'un
+  # gabarit n'y atteignent jamais leur modèle.
+  agents:
+    defaultBackend: ""
+    allowedBackends: []
+    # profil → modèle de la passerelle : `{ standard: platform/standard }`
+    modelProfiles: {}
   logLevel: INFO
   # Anti-affinité entre les répliques d'un même composant : `soft` (préférée), `hard`
   # (une réplique par nœud, sinon pas de pod) ou `none`.

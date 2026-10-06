@@ -359,3 +359,61 @@ async def test_le_pod_d_agent_n_a_qu_un_conteneur() -> None:
         "refait ce qui marche, et il prend le port avant lui"
     )
     assert [c["name"] for c in pod["containers"]] == ["runner"]
+
+
+class _ClusterScripte:
+    """Un Job échoué, et les pods de son run tels que les décrit le test."""
+
+    def __init__(self, pods: list[dict[str, Any]]) -> None:
+        self.pods = pods
+
+    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        if path.endswith("/jobs/run-r-1"):
+            conditions = [{"type": "Failed", "message": "Job has reached the specified backoff limit"}]
+            return {"spec": {}, "status": {"failed": 1, "conditions": conditions}}
+        if path.endswith("/pods"):
+            return {"items": self.pods}
+        return None
+
+
+def _pod(cree: str, etat: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "metadata": {"creationTimestamp": cree},
+        "status": {"containerStatuses": [{"name": "runner", "state": etat}]},
+    }
+
+
+async def test_un_run_mort_dit_le_code_de_sortie_du_runner_et_ce_qu_il_signifie() -> None:
+    """Le 06/10, un run du scénario RH ne disait que « backoff limit » : le pod savait pourquoi."""
+    # La liste de l'API n'a pas d'ordre garanti : le plus récent vient ici en premier.
+    client = _ClusterScripte(
+        [
+            _pod("2026-10-06T03:49:00Z", {"terminated": {"exitCode": 30, "reason": "Error"}}),
+            _pod("2026-10-06T03:48:00Z", {"terminated": {"exitCode": 20, "reason": "Error"}}),
+        ]
+    )
+    statut = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
+    )
+    assert statut.state == "failed"
+    assert statut.exit_code == 30, "le dernier pod fait foi"
+    assert "runner sorti en 30 (Error : backend agent injoignable)" in statut.message
+    assert "backoff limit" in statut.message
+
+
+async def test_un_runner_jamais_demarre_dit_pourquoi() -> None:
+    client = _ClusterScripte(
+        [_pod("2026-10-06T03:48:00Z", {"waiting": {"reason": "ImagePullBackOff", "message": "pull refusé"}})]
+    )
+    statut = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
+    )
+    assert statut.exit_code is None
+    assert "runner jamais démarré : ImagePullBackOff — pull refusé" in statut.message
+
+
+async def test_sans_pod_le_run_le_dit() -> None:
+    statut = await KubernetesJobExecutor(client=_ClusterScripte([])).status(  # type: ignore[arg-type]
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
+    )
+    assert "aucun pod du run" in statut.message

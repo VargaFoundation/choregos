@@ -24,6 +24,7 @@ from typing import Any
 
 from choregos_contracts import ExecutorKind
 from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from choregos_core.sorties import explication
 
 from .tekton import CORE_API, KubernetesClient, _parse_time
 
@@ -309,13 +310,54 @@ class KubernetesJobExecutor:
             # de composant en plus, pas de minuterie à régler.
             admis = await self._admettre(ref, payload) if self.max_active else False
             attente = "" if admis else f"en attente d'une place (plafond {self.max_active} par namespace)"
+        message = attente or "; ".join(c.get("message", "") for c in status.get("conditions", []) or [])[:500]
+        code = None
+        if state == "failed":
+            # « Job has reached the specified backoff limit » ne dit pas pourquoi : le pod le sait —
+            # son code de sortie, que le runner choisit (`choregos_core.sorties`), ou la raison pour
+            # laquelle son conteneur n'a jamais démarré (image, secret, configuration).
+            code, cause = await self._diagnostic(ref)
+            if cause:
+                message = f"{cause} — {message}" if message else cause
         return ExecStatus(
             state=state,
-            message=attente
-            or "; ".join(c.get("message", "") for c in status.get("conditions", []) or [])[:500],
+            exit_code=code,
+            message=message[:700],
             started_at=_parse_time(status.get("startTime")),
             ended_at=_parse_time(status.get("completionTime")),
         )
+
+    async def _diagnostic(self, ref: ExecRef) -> tuple[int | None, str]:
+        """Le code de sortie du conteneur du runner et ce qu'il dit, lus sur le DERNIER pod du run ;
+        ou pourquoi ce conteneur attend encore. Jamais les journaux : ils peuvent tout contenir."""
+        pods = await self.client.request(
+            "GET",
+            f"{CORE_API}/namespaces/{ref.namespace}/pods",
+            params={"labelSelector": f"choregos/run-id={ref.run_id}"},
+        )
+        items = sorted(
+            (pods or {}).get("items", []) or [],
+            key=lambda pod: str((pod.get("metadata") or {}).get("creationTimestamp") or ""),
+        )
+        if not items:
+            return None, "aucun pod du run : refusé à l'admission, ou déjà effacé"
+        etats = (items[-1].get("status") or {}).get("containerStatuses") or []
+        conteneur = next((c for c in etats if c.get("name") == "runner"), etats[0] if etats else None)
+        if conteneur is None:
+            return None, ""
+        etat = conteneur.get("state") or {}
+        dernier = conteneur.get("lastState") or {}
+        termine = etat.get("terminated") or dernier.get("terminated")
+        if termine:
+            code = termine.get("exitCode")
+            raison = str(termine.get("reason") or "terminé")
+            sens = explication(code)
+            return code, f"runner sorti en {code} ({raison}{' : ' + sens if sens else ''})"
+        attente = etat.get("waiting")
+        if attente:
+            detail = str(attente.get("message") or "")[:200]
+            return None, f"runner jamais démarré : {attente.get('reason')}{' — ' + detail if detail else ''}"
+        return None, ""
 
     async def logs(self, ref: ExecRef) -> AsyncIterator[str]:
         pods = await self.client.request(

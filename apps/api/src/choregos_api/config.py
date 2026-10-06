@@ -96,6 +96,14 @@ class Settings(BaseSettings):
     temporal_task_queue: str = "orchestrator"
     gateway_url: str = "http://localhost:4000"
     gateway_master_key: str = ""
+    # Ce que CE déploiement sait faire tourner (#245) : un projet neuf en hérite quand sa demande
+    # n'en dit rien. Sans eux, il part sur `claude-code` et aucun profil de modèle — sur le dev, qui
+    # sert opencode derrière la passerelle, le premier agent du gabarit RH n'a jamais atteint le
+    # modèle. Listes et tables en JSON : `CHOREGOS_ALLOWED_AGENT_BACKENDS='["opencode"]'`,
+    # `CHOREGOS_DEFAULT_MODEL_PROFILES='{"standard": "platform/standard"}'`.
+    default_agent_backend: str | None = None
+    allowed_agent_backends: list[str] = Field(default_factory=list)
+    default_model_profiles: dict[str, str] = Field(default_factory=dict)
     memory_url: str = "http://localhost:8432"
     object_store_url: str = "s3://choregos"
     public_url: str = "http://localhost:3000"

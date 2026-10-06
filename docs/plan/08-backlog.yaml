@@ -1597,3 +1597,12 @@ stories:
     depends_on: [S20-02, S20-08]
     acceptance:
       - "Un ancien lien de proposition mène à la page de l'action, qui dit ce qu'elle touche ; l'onglet proposals n'existe plus"
+  - id: S20-11
+    title: "Un projet hérite de ce que son déploiement sait faire tourner ; un run mort dit pourquoi"
+    stream: S20
+    sprint: 11
+    priority: 11
+    size: S
+    depends_on: [S20-07]
+    acceptance:
+      - "Un projet né sans section agent ni models hérite du backend et des profils du déploiement ; un pod de runner mort donne son code de sortie et son sens"
