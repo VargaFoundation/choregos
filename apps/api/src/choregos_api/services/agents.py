@@ -4,6 +4,8 @@ version, la version effective, et la résolution d'une référence `slug[@versio
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 
 from choregos_core import utcnow
@@ -15,6 +17,12 @@ from ..db.models import Agent, AgentVersion, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
 from ..schemas import AgentOverrides, AgentSpec
+
+
+def empreinte(spec: AgentSpec) -> str:
+    """L'empreinte d'une version : ce qu'un run enregistre, et ce qu'on compare."""
+    blob = json.dumps(spec.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def erreurs_d_une_version(spec: AgentSpec) -> None:

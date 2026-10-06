@@ -7,10 +7,10 @@ après une panne : créer un compte le cherche d'abord, ajouter à un groupe tie
 pour un succès. Il ne s'exécute jamais dans la requête qui approuve l'action : l'`ActionWorkflow`
 le joue, sous sa clé, et le compense à rebours si une suite échoue.
 
-Le cœur livre `connector.call` — une opération d'un connecteur de l'organisation (ADR 0034) ; un
-greffon déclare les siens. Les paramètres d'un effet se rendent en Jinja isolé, avec ceux de
-l'action (`params`) et les résultats des effets déjà faits (`effects`) : le second effet d'une
-arrivée ajoute aux groupes le compte que le premier a créé.
+Le cœur livre `connector.call` — une opération d'un connecteur de l'organisation (ADR 0034) — et
+`verifier`, un contrôle sans effet au-dehors ; un greffon déclare les siens. Les paramètres d'un
+effet se rendent en Jinja isolé, avec ceux de l'action (`params`) et les résultats des effets déjà
+faits (`effects`) : le second effet d'une arrivée ajoute aux groupes le compte que le premier a créé.
 """
 
 from __future__ import annotations
@@ -146,7 +146,10 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
             resultat = await client.call_tool(operation, arguments)
             if resultat.get("isError"):
                 raise EffetRefuse(f"{nom}/{operation} : le serveur a répondu une erreur")
-            return dict(resultat)
+            # Ce que l'outil a STRUCTURÉ, quand il le fait : un effet suivant cite `effects[0].serial`
+            # comme pour un connecteur typé, pas l'enveloppe du protocole (S20-07).
+            structure = resultat.get("structuredContent")
+            return dict(structure) if isinstance(structure, dict) else dict(resultat)
         return dict(await client.executer(operation, arguments))
     except UpstreamError as panne:
         code = panne.status_code or 0
@@ -163,11 +166,24 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
         raise EffetRefuse(f"{nom}/{operation} : {refus}") from refus
 
 
+async def _verifier(_ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, Any]:
+    """`verifier` : une condition, rendue avec les résultats des effets précédents, qui doit être
+    VRAIE — sinon l'action échoue, nommée par son `motif`, et ce qu'elle avait fait se compense.
+    Aucun système tiers n'est touché : c'est un contrôle (un J+1, une clôture), permis par défaut."""
+    condition = str(params.get("condition", "")).strip().lower()
+    motif = str(params.get("motif") or params.get("condition") or "")
+    if condition not in {"true", "1", "yes", "oui"}:
+        raise EffetRefuse(f"contrôle en échec : {motif}")
+    return {"ok": True, "motif": motif}
+
+
 def reinitialiser() -> None:
     """Pour les tests : seuls les effets du cœur restent."""
     _EFFETS.clear()
     _POLITIQUES.clear()
     _EFFETS["connector.call"] = _appel_de_connecteur
+    _EFFETS["verifier"] = _verifier
+    _POLITIQUES["verifier"] = "allowed"
 
 
 reinitialiser()

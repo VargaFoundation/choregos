@@ -444,6 +444,10 @@ def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> 
     for actor_id, actor in wf.actors.items():
         if not isinstance(actor, AgentActor):
             continue
+        if actor.agent:
+            # Un agent du registre apporte ses instructions (ADR 0033) : le playbook n'est plus
+            # qu'un repli, et l'avertir serait un avertissement qu'on apprend à ignorer.
+            continue
         role = str(actor.playbook or actor.role)
         try:
             # On tente la RÉSOLUTION, pas une comparaison à la liste du paquet : un rôle

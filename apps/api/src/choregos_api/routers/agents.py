@@ -8,8 +8,6 @@ peut que la resserrer : un budget plus bas, moins d'outils. Une surcharge qui é
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Annotated
 
 from choregos_core import utcnow
@@ -36,17 +34,11 @@ from ..schemas import (
     ProjectAgentDto,
     ProjectAgentPut,
 )
-from ..services.agents import depense_du_jour, effective, elargissements, erreurs_d_une_version
+from ..services.agents import depense_du_jour, effective, elargissements, empreinte, erreurs_d_une_version
 
 router = APIRouter(tags=["agents"])
 
 Slug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
-
-
-def empreinte(spec: AgentSpec) -> str:
-    """L'empreinte d'une version : ce qu'un run enregistre, et ce qu'on compare."""
-    blob = json.dumps(spec.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 async def _organisation(session: AsyncSession, slug: str) -> Organization:

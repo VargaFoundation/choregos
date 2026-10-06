@@ -498,6 +498,10 @@ export type Template = {
     cluster_capabilities?: Array<string>;
     /** Fournisseurs de ressources Azure à enregistrer, ex. Microsoft.App/managedEnvironments */
     azure_capabilities?: Array<string>;
+    /** les connecteurs de l'ORGANISATION que les workflows appellent, par leur nom → leur capacité (S20-07), ex. annuaire: identity */
+    org_connectors?: {
+      [key: string]: string;
+    };
   };
   defaults: {
     /** un seul workflow : la forme d'avant `workflows` */
@@ -518,6 +522,10 @@ export type Template = {
     policy?: string;
     models?: string;
     agent?: string;
+    /** les agents installés dans l'organisation à la naissance d'un projet, s'ils n'y sont pas : des fichiers du gabarit, au format de `POST /orgs/{org}/agents` (S20-07) */
+    agents?: Array<string>;
+    /** les skills installées de même : des dossiers du gabarit, chacun avec son SKILL.md (S20-07) */
+    skills?: Array<string>;
   };
   inputs: Array<{
     name: string;
@@ -527,6 +535,7 @@ export type Template = {
     values?: Array<string>;
     description?: string;
   }>;
+  /** les étapes de provisioning ; aucune pour un projet sans dépôt (S20-07) */
   steps: Array<string | {
     [key: string]: {
       [key: string]: unknown;

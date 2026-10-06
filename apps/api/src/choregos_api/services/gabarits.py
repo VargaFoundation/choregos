@@ -40,6 +40,10 @@ class Livraison:
     politique: str
     defaut: str | None = None
     routage: list[dict[str, Any]] = field(default_factory=list)
+    #: Les agents (leur document `AgentCreate`) et les skills (leurs fichiers) qu'il installe dans
+    #: l'organisation (S20-07).
+    agents: list[dict[str, Any]] = field(default_factory=list)
+    skills: list[dict[str, str]] = field(default_factory=list)
 
 
 async def manifeste_du_gabarit(
@@ -76,7 +80,45 @@ def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
         politique=_source_de_la_politique(str(defauts.get("policy") or POLITIQUE_SANS_GABARIT)),
         defaut=defauts.get("default_workflow"),
         routage=list(defauts.get("routing") or []),
+        agents=[_document_de_l_agent(str(ref), dossier) for ref in defauts.get("agents") or []],
+        skills=[_fichiers_de_la_skill(str(ref), dossier) for ref in defauts.get("skills") or []],
     )
+
+
+def _chemin_du_gabarit(ref: str, dossier: Path | None) -> Path:
+    """Un chemin que nomme le manifeste : dans le dossier du gabarit, jamais au-dehors."""
+    if dossier is None:
+        raise unprocessable(f"`{ref}` : un gabarit publié en base ne porte aucun fichier")
+    racine = dossier.resolve()
+    chemin = (racine / ref).resolve()
+    if not chemin.is_relative_to(racine):
+        raise unprocessable(f"`{ref}` sort du dossier du gabarit")
+    return chemin
+
+
+def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:
+    chemin = _chemin_du_gabarit(ref, dossier)
+    if not chemin.is_file():
+        raise unprocessable(f"`{ref}` : agent absent du gabarit")
+    document = yaml.safe_load(chemin.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise unprocessable(f"`{ref}` : un agent se décrit par un objet (`slug`, `display_name`, `spec`)")
+    return document
+
+
+def _fichiers_de_la_skill(ref: str, dossier: Path | None) -> dict[str, str]:
+    """Les fichiers d'une skill du gabarit, chemin relatif → texte ; un lien symbolique est refusé,
+    comme dans une archive (la skill ne doit rien lire hors d'elle)."""
+    racine = _chemin_du_gabarit(ref, dossier)
+    if not racine.is_dir():
+        raise unprocessable(f"`{ref}` : skill absente du gabarit")
+    fichiers: dict[str, str] = {}
+    for chemin in sorted(racine.rglob("*")):
+        if chemin.is_symlink():
+            raise unprocessable(f"`{ref}` : lien symbolique refusé ({chemin.name})")
+        if chemin.is_file():
+            fichiers[chemin.relative_to(racine).as_posix()] = chemin.read_text(encoding="utf-8")
+    return fichiers
 
 
 def _source_du_workflow(ref: str, dossier: Path | None) -> str:
@@ -90,10 +132,7 @@ def _source_du_workflow(ref: str, dossier: Path | None) -> str:
         raise unprocessable(
             f"`{ref}` : un gabarit publié en base ne porte aucun fichier ; nommez `template:<nom>@<v>`"
         )
-    racine = dossier.resolve()
-    chemin = (racine / ref).resolve()
-    if not chemin.is_relative_to(racine):
-        raise unprocessable(f"`{ref}` sort du dossier du gabarit")
+    chemin = _chemin_du_gabarit(ref, dossier)
     if not chemin.is_file():
         raise unprocessable(f"`{ref}` : fichier absent du gabarit")
     return chemin.read_text(encoding="utf-8")

@@ -285,6 +285,18 @@ def test_16_un_role_du_paquet_n_avertit_pas(tmp_path: Path) -> None:
     ]
 
 
+def test_16b_un_agent_du_registre_n_a_pas_besoin_de_playbook() -> None:
+    """Un acteur qui nomme un agent du registre prend ses instructions (ADR 0033) : le playbook de
+    son rôle n'est qu'un repli, et l'avertir de son absence serait du bruit (S20-07)."""
+    metier = BASE.replace(
+        "dev: {{ type: agent, role: implement }}",
+        "dev: {{ type: agent, role: coordination, agent: coordinateur-onboarding }}",
+    )
+    _wf, rapport = parse_workflow(metier.format(transitions=OK_TRANSITIONS), strict=False)
+    assert rapport.valid, [i.format() for i in rapport.errors]
+    assert "role.playbook_introuvable" not in [i.code for i in rapport.warnings]
+
+
 def test_17_un_role_qui_n_est_pas_un_identifiant_est_refuse() -> None:
     """Un rôle sert de NOM DE FICHIER pour le playbook : une espace ou une barre oblique
     y ferait chercher ailleurs que prévu."""

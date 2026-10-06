@@ -1,0 +1,138 @@
+# Un départ : à J0, le compte désactivé, ses sessions révoquées, le badge coupé — d'un seul geste
+# gouverné ; puis le poste repris, reçu (une tâche, sa preuve) et effacé ; puis le contrôle. Le
+# dossier de preuves d'une personne est l'histoire de son ticket : chaque action, chaque décision,
+# chaque attestation.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: offboarding
+  version: 1
+  description: Un départ — à J0 le compte, les sessions et le badge coupés ; le poste repris, reçu, effacé.
+  inputs:
+    type: object
+    required: [nom, upn, date_depart, badge_uid, serial, adresse]
+    properties:
+      nom: { type: string, title: Nom complet }
+      upn: { type: string, title: Identifiant (UPN) }
+      date_depart: { type: string, format: date, title: Date de départ }
+      badge_uid: { type: string, title: UID du badge }
+      serial: { type: string, title: Numéro de série du poste }
+      adresse: { type: string, title: Adresse de reprise du poste }
+      etat_du_poste: { type: string, title: État du poste reçu }
+initial: demande
+actors:
+  coordinateur: { type: agent, role: coordination, agent: coordinateur-offboarding, max_turns: 30, max_minutes: 15 }
+  rh: { type: human, group: rh, sla_hours: 24 }
+  it: { type: human, group: it, sla_hours: 48 }
+  plateforme: { type: system }
+states:
+  demande: { display: Départ annoncé, kind: wait }
+  plan: { display: Plan de départ proposé, kind: wait }
+  valide: { display: Plan validé, kind: wait }
+  coupe: { display: Accès coupés, kind: wait }
+  reprise: { display: Reprise du poste planifiée, kind: wait }
+  recu: { display: Poste reçu, kind: wait }
+  efface: { display: Poste effacé, kind: wait }
+  a_revoir: { display: À revoir, kind: wait }
+  clos: { display: Départ clos, terminal: true }
+transitions:
+  - id: t-plan
+    from: demande
+    to: plan
+    by: coordinateur
+    outputs: [plan_de_depart]
+    gates: [outputs_present]
+    on_fail: { to: demande, max_attempts: 2, escalate_to: a_revoir }
+
+  - id: t-validation
+    from: plan
+    to: valide
+    by: rh
+    on_reject: a_revoir
+
+  # J0 : tout ce qui ouvre une porte se ferme, ensemble.
+  - id: t-coupure
+    from: valide
+    to: coupe
+    by: plateforme
+    action:
+      kind: depart.coupure
+      title: "Couper les accès de {{ fields.nom }}"
+      justification: "départ le {{ fields.date_depart }}"
+      params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}" }
+      effects:
+        - effect: connector.call
+          with: { connector: annuaire, operation: disable_user, arguments: { upn: "{{ params.upn }}" } }
+        - effect: connector.call
+          with: { connector: annuaire, operation: revoke_sessions, arguments: { upn: "{{ params.upn }}" } }
+        - effect: connector.call
+          with: { connector: lecteurs, operation: deactivate_badge, arguments: { uid: "{{ params.uid }}" } }
+      not_before: fields.date_depart
+    on_fail: { to: valide, max_attempts: 3, escalate_to: a_revoir }
+
+  - id: t-reprise
+    from: coupe
+    to: reprise
+    by: plateforme
+    action:
+      kind: depart.reprise
+      title: "Reprendre le poste {{ fields.serial }}"
+      params: { reference: "{{ work_item.key }}-retour", adresse: "{{ fields.adresse }}" }
+      effects:
+        - effect: connector.call
+          with:
+            connector: transporteur
+            operation: create_return
+            arguments: { reference: "{{ params.reference }}", address: "{{ params.adresse }}" }
+    on_fail: { to: coupe, max_attempts: 2, escalate_to: a_revoir }
+
+  - id: t-reception
+    from: reprise
+    to: recu
+    by: it
+    task:
+      title: Réceptionner le poste
+      instructions: Vérifier que le numéro de série reçu est bien celui du poste repris, et dire son état.
+      form:
+        type: object
+        required: [etat_du_poste]
+        properties:
+          etat_du_poste: { type: string, title: État du poste reçu, enum: [intact, abime, manquant] }
+      attest: J'ai reçu ce poste et vérifié son numéro de série
+    on_reject: a_revoir
+
+  - id: t-effacement
+    from: recu
+    to: efface
+    by: plateforme
+    action:
+      kind: depart.effacement
+      title: "Effacer le poste {{ fields.serial }}"
+      params: { serial: "{{ fields.serial }}" }
+      effects:
+        - effect: connector.call
+          with: { connector: parc, operation: wipe_device, arguments: { serial: "{{ params.serial }}" } }
+    on_fail: { to: recu, max_attempts: 2, escalate_to: a_revoir }
+
+  - id: t-controle
+    from: efface
+    to: clos
+    by: plateforme
+    action:
+      kind: depart.controle
+      title: "Contrôle du départ de {{ fields.nom }}"
+      params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}", serial: "{{ fields.serial }}" }
+      effects:
+        - effect: connector.call
+          with: { connector: annuaire, operation: get_user, arguments: { upn: "{{ params.upn }}" } }
+        - effect: connector.call
+          with: { connector: lecteurs, operation: badge_status, arguments: { uid: "{{ params.uid }}" } }
+        - effect: connector.call
+          with: { connector: parc, operation: device_status, arguments: { serial: "{{ params.serial }}" } }
+        - effect: verifier
+          with:
+            condition: >-
+              {{ (effects[0].user is none or not effects[0].user.accountEnabled)
+                 and not effects[1].active and effects[2].state == 'wiped' }}
+            motif: le compte désactivé, le badge coupé, le poste effacé
+    on_fail: { to: efface, max_attempts: 2, escalate_to: a_revoir }

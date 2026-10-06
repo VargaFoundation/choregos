@@ -297,6 +297,13 @@ transitions:
 polite zero: finding nobody is said by failing the step. `demo/workflows/staffing.yaml` is a
 complete example that runs on the same deployment as the software one, with no code change.
 
+The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
+prepares the access plan with its skills, a person from HR validates it, and every write is a
+**governed action** at a date — the account at D-10, the sensitive group on a re-authenticated
+approval, the laptop ordered from the supplier's agent at D-7, the badge a **task** with its proof,
+the check at D+1; at departure, D0 cuts the account, its sessions and the badge in one gesture.
+See [§4 bis](#4-bis-governed-actions).
+
 ## 3 bis. Give agents tools they cannot misuse
 
 Agents get their platform tools over MCP on localhost — `report_finding`, `ask_human`,
@@ -463,11 +470,15 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   authentication was) and the **journal** — every effect's key, attempts, answer or error. Events
   `choregos.action.*` tell the same story on the ticket.
 
-The core ships one effect, `connector.call`: an operation of a connector of the organisation,
-its key resolved by the platform, its arguments checked against the operation's schema. An
-`approval` operation runs here — the action was approved; one this **project** cannot use — the
-organisation forbids it, the project tightened it to `forbidden`, or its groups are not the
-project's — never does, and an action calling it is refused when it is proposed (`422`).
+The core ships two effects. `connector.call` is an operation of a connector of the organisation,
+its key resolved by the platform, its arguments checked against the operation's schema; what an MCP
+tool returns **structured** (`structuredContent`) is its result, so a later effect cites
+`effects[0].serial` as it would for a typed connector. An `approval` operation runs here — the
+action was approved; one this **project** cannot use — the organisation forbids it, the project
+tightened it to `forbidden`, or its groups are not the project's — never does, and an action
+calling it is refused when it is proposed (`422`). `verifier` is a check that touches nothing
+outside: a condition, rendered with the earlier effects' results, that must be true — otherwise the
+action fails, named by its `motif` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
 
 **An action at a date, from a workflow.** A system transition can propose the action itself. Its
 title, justification and parameters are rendered (sandboxed Jinja) with the item's `fields` and the
