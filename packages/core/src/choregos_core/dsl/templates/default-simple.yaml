@@ -21,7 +21,7 @@ states:
   verifying: { display: Vérification, tracker: { status: Verifying } }
   pr_open: { display: PR ouverte, kind: wait, tracker: { status: In review } }
   merged: { display: Fusionné, tracker: { status: Merged } }
-  deployed_prod: { display: En production, terminal: true, tracker: { status: Done } }
+  deployed_prod: { display: En production, terminal: true, tracker: { status: Done }, production: true }
   needs_human: { display: Intervention humaine, kind: wait, tracker: { status: Blocked } }
   abandoned: { display: Abandonné, terminal: true, tracker: { status: Cancelled } }
 transitions:
@@ -62,6 +62,7 @@ transitions:
     by: ci
     gates: [evidence_present]
     on_fail: { to: verifying, max_attempts: 2, escalate_to: needs_human }
+    does: open_pr
   - id: t-merge
     from: pr_open
     to: merged
@@ -69,6 +70,7 @@ transitions:
     gates: [ci_green, review_approved, scans_ok]
     timeout_hours: 48
     on_fail: { to: in_progress, max_attempts: 3, escalate_to: needs_human }
+    does: merge_pr
   - id: t-deploy
     from: merged
     to: deployed_prod

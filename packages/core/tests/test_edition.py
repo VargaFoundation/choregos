@@ -266,14 +266,101 @@ def test_le_premier_champ_d_une_transition_en_bloc_ne_bouge_pas() -> None:
     assert editer(edition.yaml, inverse).yaml == texte
 
 
-def test_un_etat_a_effet_est_signale() -> None:
-    texte = template_yaml("default-simple")
-    avec_effet = [
-        e for e in yaml.safe_load(texte)["states"] if e.startswith(("pr_", "merged", "deployed_prod"))
-    ]
-    assert avec_effet, "le gabarit a des états à effet"
-    edition = editer(texte, [{"op": "rename_state", "from": avec_effet[0], "to": "ailleurs"}])
-    assert any("effet" in a for a in edition.avertissements)
+#: Un workflow écrit AVANT #175 : ses effets sont dans les noms (`pr_open`, `merged`, `deployed_prod`).
+ANCIEN = """apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: ancien, version: 1 }
+actors:
+  ci: { type: system }
+  captain: { type: human, group: release-captains, sla_hours: 4 }
+  owner: { type: human, group: product-owners, sla_hours: 24 }
+states:
+  inbox: { display: À trier, kind: wait }
+  in_progress: { display: En cours }
+  pr_open: { display: PR ouverte, kind: wait }
+  merged: { display: Fusionné }
+  deployed_prod: { display: En production, terminal: true }
+transitions:
+  - { id: t-start, from: inbox, to: in_progress, by: owner }
+  - { id: t-pr, from: in_progress, to: pr_open, by: ci }
+  - { id: t-merge, from: pr_open, to: merged, by: ci }
+  - id: t-deploy
+    from: merged
+    to: deployed_prod
+    via: release_train
+    train: { env: prod, approval: captain }
+"""
+
+
+def test_renommer_un_etat_a_effet_ecrit_d_abord_son_effet() -> None:
+    """#175 : `pr_open` ouvrait la PR par son NOM. Renommé depuis la console, il l'aurait perdu sans
+    le dire. Le renommage écrit d'abord `does: open_pr` : le workflow fait la même chose après."""
+    from choregos_contracts.workflow import effet_de_la_transition
+
+    edition = editer(ANCIEN, [{"op": "rename_state", "from": "pr_open", "to": "revue"}])
+    apres, _ = parse_workflow(edition.yaml, strict=False)
+    (t_pr,) = [t for t in apres.transitions if t.id == "t-pr"]
+    assert (t_pr.to, t_pr.does, effet_de_la_transition(t_pr)) == ("revue", "open_pr", "open_pr")
+    assert any("désormais écrit" in a for a in edition.avertissements)
+    assert editer(edition.yaml, edition.inverse).yaml == ANCIEN, "l'inverse défait le tout, à l'octet près"
+
+
+def test_renommer_la_production_ne_leve_pas_le_verrou() -> None:
+    edition = editer(ANCIEN, [{"op": "rename_state", "from": "deployed_prod", "to": "en_service"}])
+    apres, rapport = parse_workflow(edition.yaml, strict=False)
+    assert apres.states["en_service"].production is True
+    assert rapport.valid, [e.message for e in rapport.errors]
+    # Le verrou tient : une transition qui y mène sans train est refusée, quel que soit le nom.
+    sans_train = edition.yaml.replace(
+        "    via: release_train\n    train: { env: prod, approval: captain }\n", "    by: captain\n"
+    )
+    _, refus = parse_workflow(sans_train, strict=False)
+    assert any(e.code == "prod.requires_train" for e in refus.errors)
+
+
+def test_un_effet_ecrit_se_lit_et_un_effet_deduit_s_annonce() -> None:
+    _, ancien = parse_workflow(ANCIEN, strict=False)
+    assert len([w for w in ancien.warnings if w.code == "workflow.effet_implicite"]) == 3
+    nouveau = editer(
+        ANCIEN,
+        [
+            {"op": "set_transition", "id": "t-pr", "field": "does", "value": "open_pr"},
+            {"op": "set_transition", "id": "t-merge", "field": "does", "value": "merge_pr"},
+            {"op": "set_state", "name": "deployed_prod", "field": "production", "value": True},
+        ],
+    ).yaml
+    _, ecrit = parse_workflow(nouveau, strict=False)
+    assert [w for w in ecrit.warnings if w.code == "workflow.effet_implicite"] == []
+
+
+def test_does_n_est_qu_un_geste_de_la_plateforme() -> None:
+    humain = editer(ANCIEN, [{"op": "set_transition", "id": "t-start", "field": "does", "value": "open_pr"}])
+    _, rapport = parse_workflow(humain.yaml, strict=False)
+    assert any(e.code == "transition.does_requires_system" for e in rapport.errors)
+
+
+def test_un_effet_sans_id_de_transition_ne_se_renomme_pas_en_silence() -> None:
+    sans_id = ANCIEN.replace(
+        "  - { id: t-pr, from: in_progress, to: pr_open, by: ci }",
+        "  - { from: in_progress, to: pr_open, by: ci }",
+    )
+    with pytest.raises(EditionRefusee, match="pas d'`id`"):
+        editer(sans_id, [{"op": "rename_state", "from": "pr_open", "to": "revue"}])
+
+
+def test_un_effet_ecrit_garde_ce_que_le_validateur_en_deduit() -> None:
+    """Après le renommage, la PR s'ouvre encore : le validateur le sait (`no_verify_before_pr`)."""
+    _, avant = parse_workflow(ANCIEN, strict=False)
+    renomme = editer(ANCIEN, [{"op": "rename_state", "from": "pr_open", "to": "revue"}]).yaml
+    _, apres = parse_workflow(renomme, strict=False)
+    for rapport in (avant, apres):
+        assert any(w.code == "workflow.no_verify_before_pr" for w in rapport.warnings)
+
+
+def test_renommer_vers_un_nom_a_effet_l_annonce() -> None:
+    """Un nom en `pr_`, `merged` ou `deployed_prod` se lit encore comme un effet : le donner le dit."""
+    edition = editer(ANCIEN, [{"op": "rename_state", "from": "in_progress", "to": "pr_brouillon"}])
+    assert any("porte un effet par son nom" in a for a in edition.avertissements)
 
 
 def test_plusieurs_operations_s_annulent_dans_l_ordre_contraire() -> None:

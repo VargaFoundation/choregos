@@ -84,6 +84,9 @@ class State(Strict):
     tracker: TrackerMapping | None = None
     terminal: bool = False
     kind: StateKind = StateKind.WORK
+    #: Un état de PRODUCTION : il ne s'atteint que par un train de release (`via: release_train`).
+    #: Avant, c'était le préfixe de son nom (`deployed_prod`) : un renommage levait le verrou (#175).
+    production: bool = False
 
     @model_validator(mode="after")
     def _coherent_kind(self) -> State:
@@ -197,6 +200,10 @@ class Transition(Strict):
     action: TransitionAction | None = None
     #: Une transition humaine peut être une tâche : un formulaire, une attestation (S20-06).
     task: TaskSpec | None = None
+    #: Ce que la PLATEFORME fait en franchissant une transition système : ouvrir la PR du ticket, ou
+    #: la fusionner. Avant, c'était le préfixe du nom de l'état visé (`pr_`, `merged`) : un renommage
+    #: depuis la console changeait le comportement sans le dire (#175).
+    does: Literal["open_pr", "merge_pr"] | None = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -304,3 +311,34 @@ class Workflow(Strict):
 
     def actor_of(self, transition: Transition) -> Actor | None:
         return self.actors.get(transition.by) if transition.by else None
+
+
+# ───────────────────────────── effets : écrits, ou déduits des noms (#175) ─────────────────────────────
+#
+# Un workflow écrit avant #175 portait ses effets dans des NOMS d'états : `pr_*` ouvrait la PR,
+# `merged*` la fusionnait, `deployed_prod*` était la production. Ils se lisent encore — un workflow
+# publié ne change pas de comportement, une histoire Temporal se rejoue —, mais le validateur avertit,
+# et un renommage par la console les écrit d'abord (`does`, `production`).
+
+PREFIXE_OUVERTURE_DE_PR = "pr_"
+PREFIXE_FUSION = "merged"
+PREFIXE_PRODUCTION = "deployed_prod"
+
+
+def effet_implicite(etat: str) -> Literal["open_pr", "merge_pr"] | None:
+    """L'effet qu'un NOM d'état portait avant #175 ; `None` s'il n'en porte pas."""
+    if etat.startswith(PREFIXE_OUVERTURE_DE_PR):
+        return "open_pr"
+    if etat.startswith(PREFIXE_FUSION):
+        return "merge_pr"
+    return None
+
+
+def effet_de_la_transition(transition: Transition) -> Literal["open_pr", "merge_pr"] | None:
+    """Ce que la plateforme fait en franchissant une transition système : écrit, sinon déduit."""
+    return transition.does or effet_implicite(transition.to)
+
+
+def est_un_etat_de_production(nom: str, etat: State | None) -> bool:
+    """Un état de production : écrit (`production: true`), sinon déduit du préfixe de son nom."""
+    return bool(etat is not None and etat.production) or nom.startswith(PREFIXE_PRODUCTION)

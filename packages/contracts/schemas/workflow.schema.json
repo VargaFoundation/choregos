@@ -225,6 +225,11 @@
             "terminal"
           ],
           "default": "work"
+        },
+        "production": {
+          "type": "boolean",
+          "default": false,
+          "description": "Un état de production : il ne s'atteint que par `via: release_train` (avant #175 : le préfixe `deployed_prod` du nom)."
         }
       }
     },
@@ -342,6 +347,14 @@
         "task": {
           "$ref": "#/$defs/task",
           "description": "une tâche qu'une personne fait : un formulaire dont les valeurs deviennent des champs, une attestation"
+        },
+        "does": {
+          "type": "string",
+          "enum": [
+            "open_pr",
+            "merge_pr"
+          ],
+          "description": "Ce que la plateforme fait en franchissant une transition système : ouvrir la PR du ticket, ou la fusionner (avant #175 : le préfixe `pr_` ou `merged` de l'état visé)."
         }
       },
       "oneOf": [

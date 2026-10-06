@@ -66,3 +66,23 @@ def test_chaque_garantie_du_coeur_sait_ce_qu_elle_lit() -> None:
     assert lisent["scope_respected"] == {"scm"}
     assert lisent["ci_green"] == {"ci"}
     assert lisent["outputs_present"] == frozenset()
+
+
+def test_ce_que_la_plateforme_fait_s_exige_par_l_effet_pas_par_le_nom() -> None:
+    """#175 : un état renommé garde ce qu'il exige — l'effet est écrit (`does`, `production`)."""
+    from choregos_core import parse_workflow
+    from choregos_core.dsl import template_yaml
+    from choregos_core.dsl.edition import editer
+    from choregos_core.dsl.exigences import exigences
+
+    texte = editer(
+        template_yaml("default-simple"),
+        [
+            {"op": "rename_state", "from": "pr_open", "to": "revue"},
+            {"op": "rename_state", "from": "deployed_prod", "to": "en_service"},
+        ],
+    ).yaml
+    workflow, _ = parse_workflow(texte, strict=False)
+    raisons = {e.capacite: " ".join(e.raisons) for e in exigences([workflow])}
+    assert "opens a pull request" in raisons["scm"]
+    assert "en_service is production" in raisons["cd"]

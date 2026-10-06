@@ -7,8 +7,10 @@ DÉDUIT de ce que ses workflows font :
 
 - une garantie lit des capacités (`ci_green` la CI, `scope_respected` un diff) : `gate_needs` ;
 - un agent dont le rôle travaille dans un dépôt (`implement`, `fix_ci`…) exige un `scm` ;
-- un train de release, un état `deployed_prod*` ou une vérification en prod exigent un `cd` ;
-- un état à effet `pr_*` ou `merged*` exige un `scm` (l'interpréteur ouvre ou fusionne une PR) ;
+- un train de release, un état de production (`production: true`, ou `deployed_prod*` pour un workflow
+  écrit avant #175) ou une vérification en prod exigent un `cd` ;
+- une transition système qui ouvre ou fusionne une PR (`does`, ou un état `pr_*` / `merged*` pour un
+  workflow écrit avant #175) exige un `scm` ;
 - des agents tournent quelque part (`runtime`) et appellent des modèles (`gateway`) ;
 - les tickets vivent dans un `tracker` — l'interne, tant qu'on n'en branche pas un autre.
 
@@ -20,8 +22,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from choregos_contracts import Workflow
+from choregos_contracts import SystemActor, Workflow
 from choregos_contracts.enums import ActorType
+from choregos_contracts.workflow import effet_de_la_transition, est_un_etat_de_production
 
 from ..gates import gate_needs
 
@@ -74,13 +77,17 @@ def _acteurs(workflow: Workflow, raisons: _Raisons) -> None:
 
 def _etats_et_transitions(workflow: Workflow, raisons: _Raisons) -> None:
     nom = workflow.metadata.name
-    for etat in workflow.states:
-        if etat.startswith(("pr_", "merged")):
-            raisons.exiger("scm", f"{nom}: the state {etat} opens or merges a pull request")
-        if etat.startswith("deployed_prod"):
-            raisons.exiger("cd", f"{nom}: the state {etat} deploys to production")
+    for etat, spec in workflow.states.items():
+        if est_un_etat_de_production(etat, spec):
+            raisons.exiger("cd", f"{nom}: the state {etat} is production")
     for transition in workflow.transitions:
         ident = transition.id or f"{transition.from_}->{transition.to}"
+        # Ce que la plateforme FAIT en franchissant une transition système (`does`, #175) — déduit du
+        # nom de l'état visé pour un workflow écrit avant.
+        effet = effet_de_la_transition(transition)
+        if effet and isinstance(workflow.actors.get(transition.by or ""), SystemActor):
+            geste = "opens" if effet == "open_pr" else "merges"
+            raisons.exiger("scm", f"{nom}: {ident} {geste} a pull request")
         if transition.via == "release_train" or transition.train is not None:
             raisons.exiger("cd", f"{nom}: {ident} goes through a release train")
         for garantie in transition.gates:
