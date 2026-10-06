@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ApprovalPolicy
+metadata: {name: rh}
+spec:
+  rules:
+    # Consigner ce qu'un workflow vient d'ouvrir ne change rien hors du registre : la politique décide.
+    - when: "action.risk == 'low'"
+      approve: auto
+    # Déclarer quelqu'un parti ferme ses accès au registre : une personne, ré-authentifiée.
+    - when: "true"
+      approvers: [{role: owner, min: 1}]
+      stepUp: {maxAgeMinutes: 10}
+      sla: {remindAfter: 4h, escalateAfter: 24h, expireAfter: 72h}

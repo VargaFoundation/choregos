@@ -61,11 +61,13 @@ def signatures(routeur: APIRouter, prefixe: str = "") -> set[tuple[str, str]]:
 
 
 def reinitialiser() -> None:
-    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste, aucun outil, aucune section."""
+    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste, aucun outil, aucune section,
+    aucun installateur de gabarit."""
     _ROUTEURS.clear()
     _FOURNISSEURS_D_OUTILS.clear()
     _FOURNISSEURS_HUMAINS.clear()
     _SECTIONS.clear()
+    _INSTALLATEURS.clear()
     reinitialiser_les_controles()
 
 
@@ -197,6 +199,32 @@ def declarer_des_outils_pour_les_humains(nom: str, lister: Any, appeler: Any, en
 
 def fournisseurs_humains() -> dict[str, FournisseurHumain]:
     return dict(_FOURNISSEURS_HUMAINS)
+
+
+# ───────────────────────────── ce qu'un gabarit livre à un greffon ─────────────────────────────
+#
+# Un gabarit livre des workflows, une politique, des agents et des skills : le cœur sait les
+# installer. Il peut livrer aussi ce que seul un greffon comprend — une ontologie, par exemple :
+# `defaults.extensions: {<installateur>: <dossier du gabarit>}`. À la naissance du projet, le cœur lit
+# le dossier (sans en sortir, sans lien symbolique) et le remet à l'installateur déclaré sous ce
+# nom, dans la transaction qui crée le projet : un refus de l'installateur (`HTTPException`) fait
+# échouer la naissance, comme un workflow invalide. Sans installateur — le greffon n'est pas là, ou
+# pas actif —, le projet naît sans, et le journal d'audit le dit (S20-09).
+
+_INSTALLATEURS: dict[str, Any] = {}
+
+
+def declarer_un_installateur_de_gabarit(nom: str, installer: Any) -> None:
+    """`installer(session, projet, fichiers, auteur)`, asynchrone, rend ce qu'il a installé (un objet
+    que l'audit garde) ; `fichiers` : chemin relatif au dossier → texte. Deux greffons ne déclarent pas
+    le même nom."""
+    if nom in _INSTALLATEURS and _INSTALLATEURS[nom] is not installer:
+        raise ValueError(f"installateur de gabarit « {nom} » déjà déclaré")
+    _INSTALLATEURS[nom] = installer
+
+
+def installateurs_de_gabarit() -> dict[str, Any]:
+    return dict(_INSTALLATEURS)
 
 
 # ───────────────────────────── contrôle des gestes humains ─────────────────────────────

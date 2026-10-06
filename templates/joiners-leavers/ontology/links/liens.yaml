@@ -1,0 +1,31 @@
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: collaborateur_contrats}
+spec:
+  from: {objectType: collaborateur, name: contrats, cardinality: many}
+  to: {objectType: contrat, name: collaborateur, cardinality: one}
+  foreignKey: {side: to, property: matricule}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: collaborateur_comptes}
+spec:
+  from: {objectType: collaborateur, name: comptes, cardinality: many}
+  to: {objectType: account, name: titulaire, cardinality: one}
+  foreignKey: {side: to, property: matricule}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: collaborateur_materiels}
+spec:
+  from: {objectType: collaborateur, name: materiels, cardinality: many}
+  to: {objectType: materiel, name: detenteur, cardinality: one}
+  foreignKey: {side: to, property: matricule}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: collaborateur_badges}
+spec:
+  from: {objectType: collaborateur, name: badges, cardinality: many}
+  to: {objectType: badge, name: porteur, cardinality: one}
+  foreignKey: {side: to, property: matricule}

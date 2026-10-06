@@ -1,0 +1,11 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: group, displayName: Groupe, description: "Un groupe de l'annuaire ; un groupe sensible s'ouvre sur validation ré-authentifiée.", owner: it}
+spec:
+  datasource: groupes
+  primaryKey: nom
+  titleProperty: nom
+  properties:
+    nom: {type: string, required: true}
+    sensible: {type: boolean, required: true}
+    description: {type: string}

@@ -86,12 +86,12 @@ def _write_package(root: Path, files: dict[str, str]) -> None:
         target.write_text(content, encoding="utf-8")
 
 
-def _check_package(package: OntologyPackage) -> None:
-    if len(package.files) > MAX_FILES:
-        raise unprocessable(f"{len(package.files)} files; at most {MAX_FILES}")
-    if sum(len(c.encode()) for c in package.files.values()) > MAX_PACKAGE_BYTES:
+def _check_package(files: dict[str, str]) -> None:
+    if len(files) > MAX_FILES:
+        raise unprocessable(f"{len(files)} files; at most {MAX_FILES}")
+    if sum(len(c.encode()) for c in files.values()) > MAX_PACKAGE_BYTES:
         raise unprocessable(f"package larger than {MAX_PACKAGE_BYTES} bytes")
-    refused = sorted(n for n in package.files if not _PATH.match(n) or ".." in n.split("/"))
+    refused = sorted(n for n in files if not _PATH.match(n) or ".." in n.split("/"))
     if refused:
         raise unprocessable(f"file names must be relative YAML paths without `..`: {refused}")
 
@@ -99,30 +99,45 @@ def _check_package(package: OntologyPackage) -> None:
 @router.put("/projects/{id}/ontology", operation_id="putOntology")
 async def put_ontology(package: OntologyPackage, ctx: ProjectCtx, session: Db) -> dict[str, Any]:
     ctx.require(Permission.PROJECT_WRITE)
-    _check_package(package)
+    return await publier_l_ontologie(session, ctx.project.id, package.files, ctx.principal.email)
+
+
+async def installer_depuis_un_gabarit(
+    session: AsyncSession, projet: Any, fichiers: dict[str, str], auteur: str
+) -> dict[str, Any]:
+    """L'installateur `ontology` des gabarits (S20-09) : le paquet livré devient l'ontologie active du
+    projet qui naît. Un paquet invalide fait échouer la naissance : c'est le gabarit qui est faux."""
+    return await publier_l_ontologie(session, projet.id, fichiers, auteur)
+
+
+async def publier_l_ontologie(
+    session: AsyncSession, project_id: str, files: dict[str, str], auteur: str | None
+) -> dict[str, Any]:
+    """Un paquet validé, compilé, puis actif ; la version active passe `superseded`."""
+    _check_package(files)
     with tempfile.TemporaryDirectory(prefix="ontology-") as directory:
         root = Path(directory)
-        await asyncio.to_thread(_write_package, root, package.files)
+        await asyncio.to_thread(_write_package, root, files)
         compiled, validation = await asyncio.to_thread(compile_directory, root, REGISTRY)
     if compiled is None:
         raise unprocessable(
             f"ontology_invalid: {len(validation.errors)} error(s)",
             errors=[issue.to_dict() for issue in validation.errors],
         )
-    await _serialize(session, "ontology-version", ctx.project.id)
+    await _serialize(session, "ontology-version", project_id)
     await session.execute(
         update(OntologyVersion)
-        .where(OntologyVersion.project_id == ctx.project.id, OntologyVersion.status == ACTIVE)
+        .where(OntologyVersion.project_id == project_id, OntologyVersion.status == ACTIVE)
         .values(status=SUPERSEDED)
     )
     version = OntologyVersion(
-        project_id=ctx.project.id,
+        project_id=project_id,
         name=compiled.name,
         version=compiled.version,
         checksum=compiled.checksum,
         status=ACTIVE,
         compiled_ir=compiled.to_dict(),
-        created_by=ctx.principal.email,
+        created_by=auteur,
     )
     session.add(version)
     await session.flush()

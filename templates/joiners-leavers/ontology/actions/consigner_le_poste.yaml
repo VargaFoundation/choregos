@@ -1,0 +1,32 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: consigner_le_poste
+  displayName: Consigner le poste
+  description: "Inscrit au registre le poste confié à la personne, sous le numéro de série que le fournisseur a attribué."
+spec:
+  target: {objectType: collaborateur, cardinality: one}
+  parameters:
+    numero_de_serie: {type: string, required: true}
+    modele: {type: string}
+    statut: {type: string, enum: [commande, expedie, inscrit], required: true}
+    suivi: {type: string, description: "Le numéro de suivi du transporteur."}
+  preconditions:
+    - {name: pas_parti, expr: "target.statut != 'parti'", message: "On ne confie pas de poste à une personne partie."}
+  permissions:
+    propose: [agent:coordinateur-onboarding, role:contributor]
+    approve: policy:rh
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: materiel
+        id: "${params.numero_de_serie}"
+        properties:
+          numero_de_serie: "${params.numero_de_serie}"
+          matricule: "${target.matricule}"
+          modele: "${has(params.modele) ? params.modele : null}"
+          statut: "${params.statut}"
+          suivi: "${has(params.suivi) ? params.suivi : null}"
+  idempotencyKey: "${params.numero_de_serie}"

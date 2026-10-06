@@ -526,6 +526,10 @@ export type Template = {
     agents?: Array<string>;
     /** les skills installées de même : des dossiers du gabarit, chacun avec son SKILL.md (S20-07) */
     skills?: Array<string>;
+    /** ce qu'un GREFFON installe dans le projet à sa naissance : un nom d'installateur → un dossier du gabarit (`ontology: ./ontology`). Sans greffon pour l'installer, le projet naît sans, et le journal d'audit le dit (S20-09) */
+    extensions?: {
+      [key: string]: string;
+    };
   };
   inputs: Array<{
     name: string;

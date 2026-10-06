@@ -1,0 +1,47 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: consigner_une_arrivee
+  displayName: Consigner une arrivée
+  description: "Inscrit au registre la personne qui arrive et son contrat, quand sa demande d'arrivée est validée."
+spec:
+  target: {cardinality: none}
+  parameters:
+    matricule: {type: string, required: true}
+    nom: {type: string, required: true}
+    email: {type: string}
+    poste: {type: string}
+    manager: {type: string}
+    date_arrivee: {type: date, required: true}
+    contrat: {type: string, required: true, description: "Référence du contrat."}
+    nature: {type: string, enum: [cdi, cdd, alternance, stage, prestation], required: true}
+    fin: {type: date, description: "Fin du contrat, s'il en a une."}
+  permissions:
+    propose: [agent:coordinateur-onboarding, role:contributor]
+    approve: policy:rh
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: collaborateur
+        id: "${params.matricule}"
+        properties:
+          matricule: "${params.matricule}"
+          nom: "${params.nom}"
+          email: "${has(params.email) ? params.email : null}"
+          poste: "${has(params.poste) ? params.poste : null}"
+          manager: "${has(params.manager) ? params.manager : null}"
+          statut: a_venir
+          date_arrivee: "${params.date_arrivee}"
+    - type: object.create
+      with:
+        objectType: contrat
+        id: "${params.contrat}"
+        properties:
+          reference: "${params.contrat}"
+          matricule: "${params.matricule}"
+          nature: "${params.nature}"
+          debut: "${params.date_arrivee}"
+          fin: "${has(params.fin) ? params.fin : null}"
+  idempotencyKey: "${params.matricule}"

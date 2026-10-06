@@ -1,0 +1,16 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: collaborateur, displayName: Collaborateur, description: "Une personne qui arrive, est là, ou est partie.", owner: rh}
+spec:
+  datasource: collaborateurs
+  primaryKey: matricule
+  titleProperty: nom
+  properties:
+    matricule: {type: string, required: true}
+    nom: {type: string, required: true}
+    email: {type: string}
+    poste: {type: string}
+    manager: {type: string}
+    statut: {type: string, enum: [a_venir, present, parti], required: true}
+    date_arrivee: {type: date}
+    date_depart: {type: date}

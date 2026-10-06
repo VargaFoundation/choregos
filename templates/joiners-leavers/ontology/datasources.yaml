@@ -1,0 +1,29 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: collaborateurs}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: contrats}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: comptes}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: groupes}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: materiels}
+spec: {type: table}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: Datasource
+metadata: {name: badges}
+spec: {type: table}
