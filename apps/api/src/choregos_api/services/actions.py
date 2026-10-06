@@ -205,32 +205,39 @@ async def proposer_pour_une_transition(
     )
     pire, _motifs = await politique_de_l_action(session, projet, nouvelle.effects, nouvelle.params or {})
     if action.approval is None and pire == "allowed":
-        from ..temporal import action_id as identifiant_temporal
-
-        nouvelle.status = ActionStatus.APPROVED.value
         # Démarrée par l'activité qui l'a proposée, une fois la ligne écrite (orchestrateur).
-        nouvelle.temporal_wf_id = identifiant_temporal(nouvelle.id)
-        nouvelle.decisions = [
-            {
-                "by": "policy",
-                "decision": "approve",
-                "reason": "every operation it calls is allowed for this project",
-                "at": utcnow().isoformat(),
-                "auth_age_seconds": None,
-            }
-        ]
-        await persist_event(
-            session,
-            EventType.ACTION_DECIDED,
-            project_id=projet.id,
-            work_item_id=item.id,
-            project_slug=projet.slug,
-            subject=nouvelle.id,
-            decision="approve",
-            by="policy",
-            status=nouvelle.status,
-        )
+        await approuvee_par_la_politique(session, projet, nouvelle)
     return nouvelle
+
+
+async def approuvee_par_la_politique(session: AsyncSession, projet: Project, action: Action) -> None:
+    """Chaque opération qu'elle appelle est permise à ce projet : la politique décide, l'action naît
+    approuvée — journalisée, compensable, jouée par l'`ActionWorkflow` comme toute autre. Qui la
+    démarre (l'activité d'une transition, le courtier) le fait une fois la ligne VISIBLE."""
+    from ..temporal import action_id as identifiant_temporal
+
+    action.status = ActionStatus.APPROVED.value
+    action.temporal_wf_id = identifiant_temporal(action.id)
+    action.decisions = [
+        {
+            "by": "policy",
+            "decision": "approve",
+            "reason": "every operation it calls is allowed for this project",
+            "at": utcnow().isoformat(),
+            "auth_age_seconds": None,
+        }
+    ]
+    await persist_event(
+        session,
+        EventType.ACTION_DECIDED,
+        project_id=projet.id,
+        work_item_id=action.work_item_id,
+        project_slug=projet.slug,
+        subject=action.id,
+        decision="approve",
+        by="policy",
+        status=action.status,
+    )
 
 
 async def _prevenir_le_ticket(session: AsyncSession, projet: Project, action: Action) -> None:

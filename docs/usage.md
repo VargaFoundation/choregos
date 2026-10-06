@@ -336,6 +336,14 @@ Three properties worth knowing before you wire an external provider:
 An unauthorised tool answers **404, not 403**: an agent has no business discovering the
 deployment's catalogue by guessing names.
 
+**A write is a governed action, even when the policy allows it.** An agent that calls an
+organisation connector's *read* operation gets a direct answer. A *write* — create an account,
+order a laptop — becomes a governed action the policy approves at once: recorded under its key,
+done once, compensated if a later step fails, played by Temporal. The agent still gets what the
+server answered (the call waits up to `courtier_attente_ecriture_s`, 30 s, then answers `202` with
+the action's id), and calling it again with the same arguments returns the same action instead of
+writing twice. A write set to `approval` waits for a person instead ([ADR 0034](adr/0034-connecteurs-par-capacites.md) §7).
+
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
 

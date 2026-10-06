@@ -1377,6 +1377,13 @@ paths:
       security: [{ runToken: [] }]
       operationId: callRunTool
       summary: Appelle un outil du catalogue pour ce run. La clé du fournisseur reste côté plateforme.
+      description: |
+        Une LECTURE permise est un appel direct. Une ÉCRITURE — même permise — est une action
+        gouvernée (ADR 0034 §7) : approuvée par la politique, jouée par l'ActionWorkflow, faite une
+        fois ; le courtier en attend l'issue (bornée) et rend ce que le serveur a répondu, avec
+        `result.action` ; au-delà, `status_code` 202 et l'identifiant de l'action. Le même appel
+        (run, outil, arguments) rend la même action. Une écriture sous validation (`approval`) rend
+        202 : une personne en décide.
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true } } }

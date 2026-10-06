@@ -106,9 +106,12 @@ async def test_un_run_lit_l_annuaire_et_n_y_ecrit_qu_en_proposant_une_action(
     assert [c["userPrincipalName"] for c in graph.comptes.values()] == ["lea@acme.test"]
 
 
-async def test_un_compte_hors_de_l_unite_est_refuse_meme_ouvert(
+async def test_meme_ouvert_un_geste_nait_en_action_et_n_atteint_rien_directement(
     client: AsyncClient, project: dict[str, Any], graph: Any
 ) -> None:
+    """Une écriture permise, appelée par un run, n'atteint pas l'annuaire depuis la requête : elle
+    naît en action gouvernée, approuvée par la politique, que l'`ActionWorkflow` jouera (#241) — et
+    où le refus d'un compte hors de l'unité se dira (prouvé de bout en bout, dans Temporal)."""
     graph.ajouter_compte("pdg@acme.test", dans_l_unite=False)
     await _declarer(client)
     ouverte = await client.patch(
@@ -116,8 +119,12 @@ async def test_un_compte_hors_de_l_unite_est_refuse_meme_ouvert(
     )
     assert ouverte.status_code == 200
     base, entetes = await _run(client, project, ["disable_*"])
-    refus = (
+    appel = (
         await client.post(f"{base}/entra-acme__disable_user", headers=entetes, json={"upn": "pdg@acme.test"})
     ).json()
-    assert refus["status_code"] == 422 and "unité administrative" in refus["result"]["error"]
+    assert appel["status_code"] == 202, appel
+    chemin = f"/api/v1/projects/{project['id']}/actions/{appel['result']['action']}"
+    action = (await client.get(chemin)).json()
+    assert (action["origin"], action["status"]) == ("tool", "approved")
+    assert action["decisions"][0]["by"] == "policy"
     assert all(c["accountEnabled"] for c in graph.comptes.values()), "rien n'a bougé dans l'annuaire"

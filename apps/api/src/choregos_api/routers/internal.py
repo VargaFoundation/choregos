@@ -457,6 +457,14 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
         code, corps = 202, await proposer_l_appel(session, run, project, du_courtier[name], body or {})
         fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
+    elif name in du_courtier and du_courtier[name].ecriture:
+        # Une écriture, même permise, est une action gouvernée (#241) : faite une fois, consignée,
+        # compensable — jouée par l'`ActionWorkflow`. Son prix se compte quand elle naît.
+        code, corps, suspicions, nouvelle = await _ecriture_par_le_courtier(
+            session, run, project, du_courtier[name], body or {}
+        )
+        fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
+        prix_usd = (du_courtier[name].operation.price_usd or 0.0) if nouvelle else 0.0
     elif name in du_courtier:
         code, corps, suspicions = await _par_le_courtier(session, run, project, du_courtier[name], body or {})
         fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
@@ -505,18 +513,43 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
 async def _par_le_courtier(
     session: Any, run: Run, project: Project, outil: Any, arguments: dict[str, Any]
 ) -> tuple[int, Any, list[dict[str, str]]]:
-    """Un appel par le courtier : arguments vérifiés AVANT (400, rien de compté), clé du
-    connecteur résolue ICI, et ce que le serveur rend passé à la garde contre l'injection — un
-    serveur tiers écrit ce que l'agent lira. `warn` le dit, `block` le retient."""
-    from choregos_core.injection import suspicions as chercher
-
-    from ..services.courtier import ArgumentsRefuses, appeler, texte_du_resultat, verifier_les_arguments
+    """Un appel par le courtier — une LECTURE : arguments vérifiés AVANT (400, rien de compté), clé
+    du connecteur résolue ICI, et ce que le serveur rend passé à la garde contre l'injection — un
+    serveur tiers écrit ce que l'agent lira."""
+    from ..services.courtier import ArgumentsRefuses, appeler, verifier_les_arguments
 
     try:
         verifier_les_arguments(outil, arguments)
     except ArgumentsRefuses as refus:
         raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
     code, corps = await appeler(outil, arguments)
+    return await _garde_contre_l_injection(session, run, project, outil, code, corps)
+
+
+async def _ecriture_par_le_courtier(
+    session: Any, run: Run, project: Project, outil: Any, arguments: dict[str, Any]
+) -> tuple[int, Any, list[dict[str, str]], bool]:
+    """Une écriture appelée par un run : arguments vérifiés AVANT (400, rien de proposé), puis une
+    action gouvernée dont le courtier attend l'issue ; ce qu'elle rend passe la même garde."""
+    from ..services.courtier import ArgumentsRefuses, ecrire_par_une_action, verifier_les_arguments
+
+    try:
+        verifier_les_arguments(outil, arguments)
+    except ArgumentsRefuses as refus:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
+    code, corps, nouvelle = await ecrire_par_une_action(session, run, project, outil, arguments)
+    code, corps, suspicions = await _garde_contre_l_injection(session, run, project, outil, code, corps)
+    return code, corps, suspicions, nouvelle
+
+
+async def _garde_contre_l_injection(
+    session: Any, run: Run, project: Project, outil: Any, code: int, corps: Any
+) -> tuple[int, Any, list[dict[str, str]]]:
+    """Ce qu'un serveur tiers rend, l'agent le lira : `warn` le dit, `block` le retient."""
+    from choregos_core.injection import suspicions as chercher
+
+    from ..services.courtier import texte_du_resultat
+
     mode = PolicyEngine(
         policy_model(await active_policy(session, project.id))
     ).policy.sandbox.prompt_injection
