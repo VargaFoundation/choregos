@@ -226,6 +226,26 @@ class Guichet:
         return {"ok": True, "fake": type(self.faux).__name__}
 
 
+@dataclass
+class GuichetDistant:
+    """Un connecteur `demo` qui porte une `url` : le faux de sa famille servi par UN processus
+    (`fakes/serveur.py`), joint en MCP — l'API et l'orchestrateur voient alors le même état."""
+
+    client: Any
+
+    async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
+        resultat = await self.client.call_tool(operation, params)
+        if resultat.get("isError"):
+            contenu = resultat.get("content") or [{}]
+            raise AdapterError(str(contenu[0].get("text") or f"{operation} refusée"))
+        structure = resultat.get("structuredContent")
+        return dict(structure) if isinstance(structure, dict) else {}
+
+    async def test(self) -> dict[str, Any]:
+        resultat: dict[str, Any] = await self.client.test()
+        return resultat
+
+
 def serveur_mcp(faux: FauxMetier, *, jeton: str = "") -> FakeMcpServer:
     """Le même faux, servi comme un serveur MCP : chaque opération devient un outil (une lecture
     porte `readOnlyHint`) et chaque appel joue la même méthode, sur le même état."""

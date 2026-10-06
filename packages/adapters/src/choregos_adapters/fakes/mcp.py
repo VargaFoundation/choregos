@@ -37,9 +37,9 @@ class FakeMcpServer:
     gestes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = field(default_factory=dict)
 
     def transport(self) -> httpx.MockTransport:
-        return httpx.MockTransport(self._repondre)
+        return httpx.MockTransport(self.repondre)
 
-    def _repondre(self, requete: httpx.Request) -> httpx.Response:
+    def repondre(self, requete: httpx.Request) -> httpx.Response:
         corps = json.loads(requete.content or b"{}")
         entetes = {k.lower(): v for k, v in requete.headers.items()}
         methode = str(corps.get("method", ""))

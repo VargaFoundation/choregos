@@ -125,6 +125,17 @@ _ENTIER: dict[str, Any] = {"type": "integer"}
 from .familles import FAMILLES as _FAMILLES  # noqa: E402 - après le registre
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA  # noqa: E402 - après le registre
 
+#: La configuration d'un type `demo` : rien, ou l'adresse du processus qui sert les faux.
+_CONFIGURATION_DE_DEMO = _objet(
+    {
+        "url": {
+            "type": "string",
+            "description": "the MCP endpoint of the single process serving the fakes "
+            "(`choregos_adapters.fakes.serveur`); empty: in this process",
+        }
+    }
+)
+
 #: Ce que chaque type livré déclare (ADR 0034) : son nom, ses capacités, le schéma de sa
 #: configuration — celui dont la console tire le formulaire — et ses champs SECRETS, qui ne
 #: s'écrivent qu'en référence. Ces schémas vivaient dans le routeur de l'API, en double du
@@ -299,18 +310,21 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("mdm", "demo"): ConnectorTypeSpec(
         "demo device management (in memory: demonstrations only, refused in staging and prod)",
         ("mdm",),
+        _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["mdm"],
     ),
     ("shipping", "demo"): ConnectorTypeSpec(
         "demo carrier (in memory: demonstrations only, refused in staging and prod)",
         ("shipping",),
+        _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["shipping"],
     ),
     ("access_control", "demo"): ConnectorTypeSpec(
         "demo badge readers (in memory: demonstrations only, refused in staging and prod)",
         ("access_control",),
+        _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["access_control"],
     ),
@@ -387,6 +401,13 @@ def _guichet_de_demo(famille: str, *, en_production: bool) -> Any:
                 f"connecteur `{famille}: demo` refusé en {environnement} : un faux en mémoire, que "
                 "chaque processus tient pour lui — une démonstration, pas un système de l'entreprise."
             )
+        if en_production and cfg.get("url"):
+            # Servi par un seul processus (`choregos_adapters.fakes.serveur`) : là où l'API et
+            # l'orchestrateur sont deux processus, un faux en mémoire leur montrerait deux états.
+            from .fakes.rh import GuichetDistant
+            from .mcp import ClientMcp
+
+            return GuichetDistant(ClientMcp(str(cfg["url"]), token=str(cfg.get("api_key", ""))))
         if famille not in FAUX_METIER:
             FAUX_METIER[famille] = FAUX_PAR_FAMILLE[famille]()
         return Guichet(FAUX_METIER[famille], str(cfg.get("api_key", "")))

@@ -125,6 +125,22 @@ async def _en_mcp(faux: Any, cle: str) -> Cas:
     return cas
 
 
+async def _servie(famille: str, cle: str) -> Cas:
+    """Un connecteur `demo` qui porte une `url` : le faux servi par UN processus (`fakes/serveur.py`),
+    ce que le dev déploie — ses opérations sont celles de la famille, déclarées, pas découvertes."""
+    import httpx
+    from choregos_adapters.fakes.rh import GuichetDistant
+    from choregos_adapters.fakes.serveur import ApplicationDeDemo
+    from choregos_adapters.mcp import ClientMcp
+
+    app = ApplicationDeDemo(jeton=SECRET)
+    client = GuichetDistant(
+        ClientMcp(f"http://demo/{famille}/mcp", token=cle, transport=httpx.ASGITransport(app=app))
+    )
+    surcharges = {"create_return": {"reference": "reference-retour"}}
+    return Cas(_typees(f"{famille}/demo"), client.executer, app.faux[famille].etat, client, surcharges)
+
+
 async def _entra(cle: str) -> Cas:
     from choregos_adapters.fakes.entra import FakeEntra
     from choregos_adapters.identity import EntraIdentity
@@ -162,6 +178,8 @@ async def ouvrir(nom: str, monkeypatch: pytest.MonkeyPatch, cle: str = SECRET) -
     if forme == "mcp":
         faux = FakeFournisseur() if famille == "fournisseur" else FAUX_PAR_FAMILLE[famille]()
         return await _en_mcp(faux, cle)
+    if forme == "servi":
+        return await _servie(famille, cle)
     return await _entra(cle)
 
 
@@ -173,6 +191,9 @@ CAS = [
     "mcp:shipping",
     "mcp:access_control",
     "mcp:fournisseur",
+    "servi:mdm",
+    "servi:shipping",
+    "servi:access_control",
     "entra",
 ]
 

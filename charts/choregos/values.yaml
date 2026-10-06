@@ -288,5 +288,19 @@ monitoring:
   dashboards: true
   alerts: true
 
+# Les faux du scénario RH servis par un seul processus (S20-07) : MCP pour le parc, le transporteur,
+# les lecteurs de badges et l'agent du fournisseur, et un faux Microsoft Graph. Une démonstration :
+# refusé en staging et en prod. Les connecteurs de l'organisation les désignent par
+# `http://choregos-demo-fakes:<port>/{mdm,shipping,access_control,fournisseur}/mcp` et, pour `entra`,
+# `graph_url: …/graph/v1.0` et `login_url: …/login`.
+demoFakes:
+  enabled: false
+  port: 8090
+  # { name: <secret>, key: <clé> } : le jeton des serveurs MCP et le secret du faux Graph.
+  tokenSecret: null
+  resources:
+    requests: { cpu: 20m, memory: 96Mi }
+    limits: { cpu: 200m, memory: 256Mi }
+
 networkPolicies:
   enabled: true

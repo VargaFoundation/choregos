@@ -34,7 +34,7 @@ class FakeEntra:
     recues: list[tuple[str, str]] = field(default_factory=list)
 
     def transport(self) -> httpx.MockTransport:
-        return httpx.MockTransport(self._repondre)
+        return httpx.MockTransport(self.repondre)
 
     def ajouter_compte(self, upn: str, *, dans_l_unite: bool = True) -> str:
         identifiant = str(uuid.uuid4())
@@ -48,7 +48,7 @@ class FakeEntra:
             (c for c in self.comptes.values() if c["userPrincipalName"].lower() == cle.lower()), None
         )
 
-    def _repondre(self, requete: httpx.Request) -> httpx.Response:  # noqa: C901 - un routeur
+    def repondre(self, requete: httpx.Request) -> httpx.Response:  # noqa: C901 - un routeur
         chemin = requete.url.path
         self.recues.append((requete.method, chemin))
         if chemin.endswith("/oauth2/v2.0/token"):

@@ -319,7 +319,11 @@ exactly when they have no default; a **write replayed changes nothing**, and a r
 not even for an object it does not know; the key **serves** — a wrong one is refused — and
 **appears nowhere**: not in the log (stdlib or structlog), not in a result, not in a refusal, not
 in the client's `repr`. The fakes of the HR scenario (`choregos_adapters.fakes.rh`) can be reached
-typed, through a `demo` connector, or served as an MCP server (`serveur_mcp`), on the same state.
+typed, through a `demo` connector, or served as an MCP server (`serveur_mcp`), on the same state —
+and all of them by one process, `choregos_adapters.fakes.serveur` (an ASGI app with no framework),
+for a deployment where the API and the orchestrator would otherwise each see their own fakes: the
+chart deploys it with `demoFakes.enabled` (refused in staging and prod), and `essai/rh/` plays the
+HR scenario against it.
 
 ### Adding a plugin to a published image
 
