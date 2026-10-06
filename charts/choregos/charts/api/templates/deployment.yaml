@@ -92,6 +92,21 @@ spec:
             - name: CHOREGOS_PLAYBOOKS_DIR
               value: {{ $.Values.global.playbooks.mountPath | quote }}
             {{- end }}
+            {{- with .Values.global.agents }}
+            {{- if .defaultBackend }}
+            # Le backend et les profils dont un projet neuf hérite (#245).
+            - name: CHOREGOS_DEFAULT_AGENT_BACKEND
+              value: {{ .defaultBackend | quote }}
+            {{- end }}
+            {{- with .allowedBackends }}
+            - name: CHOREGOS_ALLOWED_AGENT_BACKENDS
+              value: {{ toJson . | quote }}
+            {{- end }}
+            {{- with .modelProfiles }}
+            - name: CHOREGOS_DEFAULT_MODEL_PROFILES
+              value: {{ toJson . | quote }}
+            {{- end }}
+            {{- end }}
             {{- include "choregos.commonEnv" . | nindent 12 }}
             - name: CHOREGOS_OIDC_ISSUER
               value: {{ .Values.global.oidc.issuer | quote }}
