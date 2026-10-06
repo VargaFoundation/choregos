@@ -38,7 +38,11 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 # npm est retiré : rien ne l'appelle ici (on démarre `next` directement) et il embarque son
 # propre `tar` 7.5.11 — le second des deux CRITICAL trouvés par Trivy (CVE-2026-59873). Une
 # image qui n'a pas besoin d'un gestionnaire de paquets ne doit pas en porter un.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+# Les correctifs de sécurité de Debian, appliqués à la construction : l'image de base (une étiquette,
+# reconstruite à son rythme) peut porter un paquet déjà corrigé dans `bookworm-security` — perl-base
+# 5.36.0-7+deb12u3 et ses trois CRITICAL ont arrêté la release 0.16.0 au scan Trivy.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 WORKDIR /app
 # Ce dont `next start` a besoin, et rien d'autre : le build, le manifeste, et la config —
 # qui porte les en-têtes CSP et le relais `/api/v1`, donc elle n'est pas optionnelle.
