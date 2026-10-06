@@ -1,6 +1,6 @@
 """Chaque image applique-t-elle les correctifs de sécurité de Debian à sa construction ?
 
-Les images partent d'étiquettes (`python:3.12-slim-bookworm`, `node:22-bookworm-slim`) que leurs
+Les images partent d'étiquettes (`python:3.12-slim-bookworm`, `node:24-bookworm-slim`) que leurs
 mainteneurs reconstruisent à leur rythme. Le 2026-10-06, `perl-base` 5.36.0-7+deb12u3 y portait
 trois CRITICAL déjà corrigés dans `bookworm-security` : le scan Trivy de la release a refusé quatre
 images sur cinq, et la 0.16.0 n'est pas sortie. Le runner passait — par chance : `build-essential`

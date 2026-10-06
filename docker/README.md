@@ -27,14 +27,18 @@ journalisent dans le run. Le jeton Git est minté par run, injecté en mémoire,
 
 ## Images de base : la règle
 
-Les bases suivent les lignes **LTS** : `python:3.12-slim-bookworm` et `node:22-bookworm-slim`
+Les bases suivent les lignes **LTS** : `python:3.12-slim-bookworm` et `node:24-bookworm-slim`
 aujourd'hui. Une version impaire de Node (23, 25, …) est *Current* — maintenue quelques mois,
-jamais promue — et n'a rien à faire dans une image de production. Dependabot proposera quand
-même ces montées, c'est son travail ; la règle est ici pour qu'elles soient jugées sur un
-critère et non sur l'humeur du jour.
+jamais promue — et n'a rien à faire dans une image de production. Une version paire l'est aussi
+jusqu'à sa promotion, en octobre de l'année de sa sortie : Node 26, sorti le 2026-05-05, ne
+devient LTS que le 2026-10-28 (calendrier officiel : `nodejs/Release`, `schedule.json`).
+Dependabot proposera quand même ces montées, c'est son travail ; la règle est ici pour qu'elles
+soient jugées sur un critère et non sur l'humeur du jour.
 
 Node 25 a en prime retiré corepack, dont `web.Dockerfile` se sert pour activer pnpm : une
-montée de base peut coûter une réécriture, pas seulement une ligne.
+montée de base peut coûter une réécriture, pas seulement une ligne. Node 26 en hérite — son
+image n'a plus de `corepack` (`corepack enable` y sort en 127) ; passer à 26 demandera
+d'installer pnpm autrement.
 
 ## Signature et provenance
 
