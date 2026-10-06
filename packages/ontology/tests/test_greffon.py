@@ -388,15 +388,95 @@ def test_la_branche_du_greffon_cree_ses_tables_et_redescend_seule(
     try:
         main([])
         tables, versions = etat()
-        assert {"ontology_versions", "managed_objects", "action_proposals", "projects"} <= tables
+        assert {"ontology_versions", "managed_objects", "actions", "projects"} <= tables
+        assert "action_proposals" not in tables, "les propositions sont des actions du cœur (onto0003)"
         # La tête du greffon dépend d'une révision du cœur, pas de sa tête : dès que le cœur avance
         # (jetons à portée, ADR 0030), les deux têtes coexistent dans `alembic_version`.
-        assert "onto0002" in versions
-        assert versions <= {"onto0002", tete_du_coeur}
+        assert "onto0003" in versions
+        assert versions <= {"onto0003", tete_du_coeur}
         main(["downgrade", "ontology@base"])
         tables, versions = etat()
         assert not {"ontology_versions", "managed_objects", "action_proposals"} & tables
         assert versions == {tete_du_coeur}
+    finally:
+        moteur.dispose()
+        reset_settings_cache()
+
+
+def _proposition(ident: str, statut: str) -> dict[str, Any]:
+    import json
+
+    return {
+        "id": ident,
+        "statut": statut,
+        "cibles": json.dumps(["os-key"]),
+        "params": json.dumps({"title": "t"}),
+        "par": json.dumps({"kind": "agent", "id": "agent:platform", "run_id": "r1"}),
+        "approbation": json.dumps({"approvers": [{"role": "owner"}], "step_up_minutes": 10}),
+    }
+
+
+INSERER_UNE_PROPOSITION = (
+    "INSERT INTO action_proposals (id, project_id, version_id, action_type, target_ids, params, "
+    "justification, status, proposed_by, approval, decisions, effects, evidence, created_at, updated_at) "
+    "VALUES (:id, 'p1', 'v1', 'open_infra_pr', :cibles, :params, 'two nodes', :statut, :par, :approbation, "
+    "'[]', '[]', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+)
+
+
+def test_onto0003_copie_les_propositions_dans_les_actions_puis_retire_la_table(
+    greffon: None, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Une proposition en attente devient une action du cœur, sous le même identifiant, avec ses
+    effets du cœur déduits de sa version — elle se décidera et s'exécutera comme les autres ; une
+    proposition qui s'exécutait dans la requête est close, et le dit (S20-08)."""
+    import json
+
+    from choregos_api.config import reset_settings_cache
+    from choregos_api.db.models import Organization, Project
+    from choregos_api.migrer import main
+    from choregos_ontology.service.store import OntologyVersion
+    from sqlalchemy import create_engine, inspect, text
+    from sqlalchemy.orm import Session
+
+    fichier = tmp_path / "onto0003.db"
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{fichier}")
+    reset_settings_cache()
+    moteur = create_engine(f"sqlite:///{fichier}")
+    effets = [{"type": "gitops.pull_request"}]
+    ir = {"action_types": [{"name": "open_infra_pr", "effects": effets, "evidence": [{"name": "pr_open"}]}]}
+    try:
+        main(["upgrade", "f8a0b2c4d6e9"])
+        main(["upgrade", "onto0002"])
+        with Session(moteur) as session:
+            session.add(Organization(id="o1", slug="varga", name="Varga"))
+            session.add(Project(id="p1", org_id="o1", slug="infra", name="Infra", status="active", config={}))
+            session.flush()
+            session.add(
+                OntologyVersion(
+                    id="v1", project_id="p1", name="it4it", version="1", checksum="sha", compiled_ir=ir
+                )
+            )
+            session.commit()
+        with moteur.begin() as connexion:
+            for ident, statut in (("a1", "pending_approval"), ("a2", "running")):
+                connexion.execute(text(INSERER_UNE_PROPOSITION), _proposition(ident, statut))
+        main([])
+        assert "action_proposals" not in set(inspect(moteur).get_table_names())
+        with moteur.connect() as connexion:
+            lignes = {r["id"]: r for r in connexion.execute(text("SELECT * FROM actions")).mappings()}
+        attente, interrompue = lignes["a1"], lignes["a2"]
+        assert (attente["origin"], attente["kind"]) == ("ontology", "ontology.open_infra_pr")
+        assert attente["status"] == "pending_approval"
+        assert json.loads(attente["effects"]) == [
+            {"effect": "ontology.effet", "with": {"index": 0}},
+            {"effect": "ontology.preuve", "with": {"index": 0, "position": 1}},
+        ]
+        assert json.loads(attente["approval"])["approvers"] == [{"role": "project_owner", "min": 1}]
+        meta = json.loads(attente["params"])["ontologie"]
+        assert (meta["version_id"], meta["target_ids"], meta["params"]) == ("v1", ["os-key"], {"title": "t"})
+        assert attente["run_id"] == "r1" and attente["org_id"] == "o1"
+        assert interrompue["status"] == "failed" and "onto0003" in interrompue["error"]
     finally:
         moteur.dispose()
         reset_settings_cache()

@@ -7,7 +7,7 @@
   vers les objets `finding` — tout ou rien : un rapport partiel n'écrit rien ;
 - `GET /projects/{id}/objects/{type}` : les objets d'un type, vus avec l'habilitation par défaut ;
 - `GET /projects/{id}/proposals[/{proposal_id}]` et `POST …/{proposal_id}/decision` : les
-  propositions d'action et la décision humaine, avec ré-authentification (éléments 4 et 5).
+  propositions d'action — des actions du cœur depuis S20-08 — et leur décision, prise par le cœur.
 
 Raccourcis de l'essai, à reprendre dans le socle : la synchronisation est une route et non l'action
 système `connector.sync` (R-SOC-CON-04), et un paquet devient actif sans plan ni application en
@@ -38,7 +38,7 @@ from choregos_ontology.compiler import compile_directory
 from choregos_ontology.observations import PartialReportError, parse_report, plan_sync
 from choregos_ontology.service import actions, objects
 from choregos_ontology.service.objects import ToolRefusal
-from choregos_ontology.service.store import ACTIVE, SUPERSEDED, ActionProposal, ManagedObject, OntologyVersion
+from choregos_ontology.service.store import ACTIVE, SUPERSEDED, ManagedObject, OntologyVersion
 from choregos_ontology.validator import CORE_EFFECTS, Registry
 
 router = APIRouter(tags=["ontology"])
@@ -233,11 +233,14 @@ async def list_objects(
 # ───────────────────────────── propositions d'action ─────────────────────────────
 
 
-async def _proposal(session: AsyncSession, project_id: str, proposal_id: str) -> ActionProposal:
-    proposal = await session.get(ActionProposal, proposal_id)
-    if proposal is None or proposal.project_id != project_id:
-        raise ApiError(404, "Proposition introuvable", f"la proposition `{proposal_id}` n'existe pas")
-    return proposal
+async def _proposal(session: AsyncSession, project_id: str, proposal_id: str) -> Any:
+    """Une proposition : une action du cœur née de l'ontologie (S20-08)."""
+    try:
+        return await actions.une_action(session, project_id, proposal_id)
+    except actions.Refusal as refus:
+        raise ApiError(
+            404, "Proposition introuvable", f"la proposition `{proposal_id}` n'existe pas"
+        ) from refus
 
 
 @router.get("/projects/{id}/proposals", operation_id="listProposals")
@@ -246,11 +249,9 @@ async def list_proposals(
     session: Db,
     status: Annotated[str | None, Query()] = None,
 ) -> list[dict[str, Any]]:
-    query = select(ActionProposal).where(ActionProposal.project_id == ctx.project.id)
-    if status:
-        query = query.where(ActionProposal.status == status)
-    lignes = (await session.execute(query.order_by(ActionProposal.created_at))).scalars().all()
-    return [actions.describe(p) for p in lignes]
+    return [
+        actions.describe(p) for p in await actions.actions_de_l_ontologie(session, ctx.project.id, status)
+    ]
 
 
 @router.post("/projects/{id}/proposals", status_code=201, operation_id="createProposal")
@@ -288,18 +289,14 @@ async def create_proposal(body: ProposalIn, ctx: ProjectCtx, session: Db) -> Any
 
 @router.get("/projects/{id}/proposals/{proposal_id}", operation_id="getProposal")
 async def get_proposal(proposal_id: str, ctx: ProjectCtx, session: Db) -> dict[str, Any]:
-    proposal = await _proposal(session, ctx.project.id, proposal_id)
-    await actions.expire(session, ctx.project, proposal)
-    return actions.describe(proposal)
+    return actions.describe(await _proposal(session, ctx.project.id, proposal_id))
 
 
 @router.post("/projects/{id}/proposals/{proposal_id}/decision", operation_id="decideProposal")
 async def decide_proposal(proposal_id: str, body: Decision, ctx: ProjectCtx, session: Db) -> Any:
-    """La décision humaine. `401` avec `reauth` : se ré-authentifier (`?reauth=1`), puis recommencer."""
+    """La décision humaine, prise par le cœur (`decider`) — la même que
+    `POST /projects/{id}/actions/{id}/decision`. `401` avec `reauth` : se ré-authentifier, recommencer."""
     proposal = await _proposal(session, ctx.project.id, proposal_id)
-    try:
-        return await actions.decide(
-            session, ctx.project, ctx.org_slug, proposal, ctx.principal, body.decision, body.reason
-        )
-    except actions.Refusal as refus:
-        raise ApiError(refus.code, "Décision refusée", str(refus), errors=[refus.body]) from refus
+    return await actions.decide(
+        session, ctx.project, ctx.org_slug, proposal, ctx.principal, body.decision, body.reason
+    )

@@ -57,6 +57,10 @@ async def _faits(session: Any, action_id: str, avant: int) -> list[dict[str, Any
 @activity.defn
 async def charger_l_action(action_id: str) -> dict[str, Any]:
     async with db() as session:
+        if await session.get(Action, action_id) is None:
+            # Démarrée par la requête qui l'a décidée, AVANT que celle-ci ne valide sa transaction :
+            # la ligne peut ne pas être encore visible. Une erreur passagère, que Temporal retente.
+            raise ApplicationError(f"action {action_id} pas encore visible", type="ActionPasEncoreVisible")
         action, _projet = await _charger(session, action_id)
         if action.status == ActionStatus.APPROVED.value:
             action.status = ActionStatus.RUNNING.value

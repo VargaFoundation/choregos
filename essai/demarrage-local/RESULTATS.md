@@ -68,6 +68,21 @@ l'envoi. Le test `apps/api/tests/test_commit_avant_la_reponse.py` appelle l'appl
 directement et vérifie l'ordre des événements ; sans le correctif, il échoue. Issue `finding`
 ouverte pour la ligne principale.
 
+## Rejoué le 2026-10-06, après S20-08 : l'orchestrateur exécute l'ontologie
+
+Depuis S20-08, une proposition de l'ontologie est une action du cœur : la décision répond AVANT
+tout effet, et c'est l'`ActionWorkflow`, dans l'orchestrateur, qui ouvre la PR puis attend la preuve.
+La pile intégrée le prouve hors des tests : les neuf étapes passent, la PR ouverte par le worker après
+la validation ré-authentifiée, la preuve tranchée par la relance du collecteur — sous RLS forcée,
+`actions` comprise (la table `action_proposals` n'existe plus, `onto0003`). Démarrage 17 s, 664 Mio au
+repos (images en cache).
+
+Le scénario a dû suivre : il attend désormais l'état qu'il lit (la décision rend `approved`, l'action
+réussit ensuite ; la relance ne tranche qu'une preuve DEMANDÉE avant elle), lit
+`auth_age_seconds` au lieu d'`auth_time`, et compte 14 outils générés. Et la pile n'activait pas le
+greffon, livré inactif depuis la 0.13.0 : `CHOREGOS_ESSAI_ONTOLOGIE=1` dans `compose.yaml` — l'essai
+était cassé depuis, sans que rien ne le dise.
+
 ## Ce que l'élément 9 ne prouve pas
 
 - **Le temps sur un poste neuf** : environ 1,6 Go à télécharger, soit 2 à 3 minutes à 100 Mbit/s et

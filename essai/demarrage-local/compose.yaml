@@ -23,6 +23,9 @@ x-choregos: &choregos
   CHOREGOS_RUN_TOKEN_PUBLIC_KEY: ${CHOREGOS_RUN_TOKEN_PUBLIC_KEY:?générée par run.sh}
   CHOREGOS_API_URL: http://localhost:${ESSAI_PORT_API:-18190}
   CHOREGOS_PUBLIC_URL: http://localhost:${ESSAI_PORT_API:-18190}
+  # Le greffon est livré INACTIF depuis la 0.13.0 : l'essai l'active, dans l'API, le Job de migration
+  # et l'orchestrateur — qui joue ses effets depuis S20-08.
+  CHOREGOS_ESSAI_ONTOLOGIE: "1"
 
 services:
   choregos-db:

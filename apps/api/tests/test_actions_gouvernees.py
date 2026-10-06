@@ -236,3 +236,34 @@ async def test_une_preuve_se_remet_a_l_action_qui_l_attend() -> None:
         set_temporal(None)
     attendu = {"position": 2, "ok": False, "detail": "la clé est toujours là"}
     assert fake.signals == [("action-a1", "preuve", attendu)]
+
+
+async def test_une_regle_sans_step_up_n_exige_pas_d_authentification_recente(
+    client: AsyncClient, project: dict[str, Any], app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Une politique de greffon peut ne pas exiger d'authentification récente (S20-08) : `step_up_minutes`
+    absent. Une action proposée par l'API en a toujours une ; celle-ci se décide sans 401."""
+    import time
+
+    from choregos_api import fraicheur
+    from choregos_api.db.models import Action
+    from choregos_api.db.session import session_scope
+
+    pid = project["id"]
+    await _membre(client, "dev@varga.dev", "developer")
+    dev = await _session(app, "dev@varga.dev")
+    try:
+        action = await _proposer(dev, pid)
+    finally:
+        await dev.aclose()
+    async with session_scope(orgs="*") as session:
+        ligne = await session.get(Action, action["id"])
+        assert ligne is not None
+        ligne.approval = {**ligne.approval, "step_up_minutes": None}
+    plus_tard = time.time() + 11 * 60
+    monkeypatch.setattr(fraicheur.time, "time", lambda: plus_tard)
+    decidee = await client.post(
+        f"/api/v1/projects/{pid}/actions/{action['id']}/decision", json={"decision": "approve"}
+    )
+    assert decidee.status_code == 200, decidee.text
+    assert decidee.json()["decisions"][0]["auth_age_seconds"] >= 11 * 60, "l'âge reste consigné"

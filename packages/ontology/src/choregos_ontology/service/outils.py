@@ -19,12 +19,10 @@ from __future__ import annotations
 from typing import Any
 
 import jsonschema
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from choregos_ontology.service import actions, objects
 from choregos_ontology.service.objects import ToolRefusal
-from choregos_ontology.service.store import ActionProposal
 
 SERVED_KINDS = frozenset({"describe", "search", "get", "link", "action", "status", "list"})
 PAGE = 20
@@ -139,26 +137,29 @@ async def appeler(
 async def _proposals(
     session: AsyncSession, project: Any, kind: str, arguments: dict[str, Any]
 ) -> dict[str, Any]:
+    """Le statut d'une proposition, ou leur liste : des actions du cœur nées de l'ontologie (S20-08)."""
     if kind == "status":
-        proposal = await session.get(ActionProposal, str(arguments["proposal"]))
-        if proposal is None or proposal.project_id != project.id:
-            raise ToolRefusal(404, f"proposal {arguments['proposal']!r} not found")
-        await actions.expire(session, project, proposal)
+        try:
+            proposal = await actions.une_action(session, project.id, str(arguments["proposal"]))
+        except actions.Refusal as refus:
+            raise ToolRefusal(404, f"proposal {arguments['proposal']!r} not found") from refus
         return actions.describe(proposal)
-    query = select(ActionProposal).where(ActionProposal.project_id == project.id)
-    if arguments.get("status"):
-        query = query.where(ActionProposal.status == str(arguments["status"]))
-    if arguments.get("action_type"):
-        query = query.where(ActionProposal.action_type == str(arguments["action_type"]))
-    rows = list(
-        (await session.execute(query.order_by(ActionProposal.created_at, ActionProposal.id))).scalars()
+    rows = await actions.actions_de_l_ontologie(
+        session, project.id, str(arguments.get("status") or "") or None
     )
+    if arguments.get("action_type"):
+        rows = [r for r in rows if actions._meta(r).get("action_type") == str(arguments["action_type"])]
     start = int(arguments.get("cursor") or 0) if str(arguments.get("cursor") or "0").isdigit() else 0
     window = rows[start : start + PAGE]
     more = start + PAGE < len(rows)
     return {
         "proposals": [
-            {"proposal": p.id, "action_type": p.action_type, "status": p.status, "target": list(p.target_ids)}
+            {
+                "proposal": p.id,
+                "action_type": actions._meta(p).get("action_type"),
+                "status": p.status,
+                "target": list(actions._meta(p).get("target_ids") or []),
+            }
             for p in window
         ],
         "next_cursor": str(start + PAGE) if more else None,
@@ -281,30 +282,27 @@ async def appeler_pour_un_humain(
 async def en_attente_pour_un_humain(
     session: AsyncSession, principal: Any, project: Any, org_slug: str
 ) -> list[dict[str, Any]]:
-    """Les propositions qui attendent une décision, avec la page de la console où elle se prend."""
-    rows = (
-        await session.execute(
-            select(ActionProposal)
-            .where(ActionProposal.project_id == project.id, ActionProposal.status == actions.PENDING)
-            .order_by(ActionProposal.created_at)
-        )
-    ).scalars()
-    rang = actions._rank(principal, org_slug, project.slug)
+    """Les propositions qui attendent une décision, avec la page de la console où elle se prend —
+    celle des actions du cœur, dont elles sont désormais (S20-08)."""
+    from choregos_api.services.actions import RANGS, rang
+
     attentes = []
-    for proposal in rows:
-        approvers = (proposal.approval or {}).get("approvers") or []
-        requis = max((actions.ONTOLOGY_ROLES.get(str(a.get("role")), 3) for a in approvers), default=2)
+    for proposal in await actions.actions_de_l_ontologie(session, project.id, actions.PENDING):
+        approvers = (proposal.approval or {}).get("approvers") or [{"role": "project_owner"}]
+        requis = min(RANGS.get(str(a.get("role")), 3) for a in approvers)
         proposant = proposal.proposed_by or {}
         meme_personne = proposant.get("kind") == "user" and proposant.get("id") == principal.email
+        meta = actions._meta(proposal)
+        cibles = ", ".join(meta.get("target_ids") or []) or "nothing"
         attentes.append(
             {
                 "key": proposal.id,
-                "title": f"{proposal.action_type} on {', '.join(proposal.target_ids) or 'nothing'}",
+                "title": f"{meta.get('action_type')} on {cibles}",
                 "kind": "action proposal",
                 "question": proposal.justification,
                 "requested_at": proposal.created_at.isoformat() if proposal.created_at else None,
-                "can_decide": rang >= requis and not meme_personne,
-                "decision_path": f"/p/{project.slug}/proposals/{proposal.id}",
+                "can_decide": rang(principal, org_slug, project.slug) >= requis and not meme_personne,
+                "decision_path": f"/p/{project.slug}/actions/{proposal.id}",
             }
         )
     return attentes

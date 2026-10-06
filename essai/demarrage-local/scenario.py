@@ -71,6 +71,15 @@ class Scenario:
         retour = self.http.get(debut.headers["location"])
         assert retour.status_code == 307, retour.text
 
+    def attendre(self, projet: str, proposition: str, *statuts: str, secondes: int = 120) -> dict[str, Any]:
+        """L'état d'une proposition, une fois qu'il est l'un de `statuts` (ou le dernier lu au délai)."""
+        fin = time.monotonic() + secondes
+        while True:
+            dossier = dict(self.http.get(f"/api/v1/projects/{projet}/proposals/{proposition}").json())
+            if dossier.get("status") in statuts or time.monotonic() > fin:
+                return dossier
+            time.sleep(1)
+
     def poster(self, projet: str, texte: str) -> httpx.Response:
         return self.http.post(
             f"/api/v1/projects/{projet}/observations",
@@ -124,7 +133,8 @@ def jouer(s: Scenario) -> dict[str, Any]:
         }
         depot = s.http.put(f"/api/v1/projects/{pid}/ontology", json={"files": fichiers})
         assert depot.status_code == 200, depot.text
-        assert depot.json()["mcp_tools"] == 13, depot.json()
+        # 14 : l'inventaire (`register_host`) s'écrit par le moteur d'actions depuis la mesure de 13.
+        assert depot.json()["mcp_tools"] == 14, depot.json()
 
     s.etape("élément 1 — paquet IT4IT validé, compilé, actif", ontologie)
 
@@ -199,9 +209,10 @@ def jouer(s: Scenario) -> dict[str, Any]:
         chemin = f"/api/v1/projects/{pid}/proposals/{proposition}/decision"
         decision = s.http.post(chemin, json={"decision": "approve", "comment": "diff relu"})
         assert decision.status_code == 200, decision.text
-        dossier = dict(decision.json())
+        # Depuis S20-08, l'action approuvée s'exécute dans Temporal, après la réponse : on l'attend.
+        dossier = s.attendre(pid, proposition, "succeeded", "failed")
         assert dossier["status"] == "succeeded", dossier
-        assert dossier["decisions"][-1]["auth_time"], dossier
+        assert dossier["decisions"][-1]["auth_age_seconds"] is not None, dossier
         assert dossier["effects"][0]["head"] == f"choregos/{proposition}", dossier
         return dossier
 
@@ -209,7 +220,9 @@ def jouer(s: Scenario) -> dict[str, Any]:
 
     def prouver() -> dict[str, Any]:
         arguments = {"target": [CLE], "justification": "The PR is merged and applied.", "params": {}}
-        verification = s.outil(jeton, "action_verify_finding_fixed", arguments)["result"]
+        proposee = s.outil(jeton, "action_verify_finding_fixed", arguments)["result"]
+        # La relance ne tranche qu'une preuve DEMANDÉE avant elle : on attend que l'action l'attende.
+        verification = s.attendre(pid, proposee["proposal"], "awaiting_evidence", "failed")
         assert verification["status"] == "awaiting_evidence", verification
         relance = rapport(
             ligne("reboot-required", "node-1", "ok"),
@@ -218,7 +231,7 @@ def jouer(s: Scenario) -> dict[str, Any]:
         )
         reponse = s.poster(pid, relance).json()
         assert reponse["proposals_decided"] == [verification["proposal"]], reponse
-        final = s.http.get(f"/api/v1/projects/{pid}/proposals/{verification['proposal']}").json()
+        final = s.attendre(pid, verification["proposal"], "succeeded", "failed")
         assert final["status"] == "succeeded", final
         return dict(final)
 
@@ -227,7 +240,7 @@ def jouer(s: Scenario) -> dict[str, Any]:
     def rls() -> None:
         requete = (
             "select relname, relrowsecurity, relforcerowsecurity from pg_class where relname in "
-            "('ontology_versions', 'managed_objects', 'action_proposals') order by 1;"
+            "('ontology_versions', 'managed_objects', 'actions') order by 1;"
             "select rolsuper from pg_roles where rolname = 'choregos_app';"
         )
         sortie = _compose(
@@ -235,7 +248,7 @@ def jouer(s: Scenario) -> dict[str, Any]:
         )
         lignes = [x for x in sortie.split() if x]
         assert lignes == [
-            "action_proposals|t|t",
+            "actions|t|t",
             "managed_objects|t|t",
             "ontology_versions|t|t",
             "f",
