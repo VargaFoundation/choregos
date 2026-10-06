@@ -32,7 +32,8 @@ def _env_de_l_api(*surcharges: str) -> dict[str, str]:
     rendu = _rendu(*surcharges)
     assert rendu.returncode == 0, rendu.stderr
     documents: list[dict[str, Any]] = [d for d in yaml.safe_load_all(rendu.stdout) if d]
-    (api,) = [d for d in documents if d.get("kind") == "Deployment" and d["metadata"]["name"] == "choregos-api"]
+    deploiements = [d for d in documents if d.get("kind") == "Deployment"]
+    (api,) = [d for d in deploiements if d["metadata"]["name"] == "choregos-api"]
     (conteneur,) = [c for c in api["spec"]["template"]["spec"]["containers"] if c["name"] == "api"]
     return {e["name"]: e.get("value", "") for e in conteneur.get("env", []) if "value" in e}
 
