@@ -26,7 +26,7 @@ depends_on: str | Sequence[str] | None = "e5a7c9b1d3f5"
 TABLES = ("ontology_versions", "managed_objects")
 
 
-def _json() -> sa.types.TypeEngine[object]:
+def _json() -> sa.JSON:
     return sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
 
 

@@ -43,7 +43,7 @@ ROLE_DU_COEUR = {
 INTERROMPUE = "interrompue par la migration onto0003 : elle s'exécutait dans la requête, rien ne la reprend"
 
 
-def _json() -> sa.types.TypeEngine[object]:
+def _json() -> sa.JSON:
     return sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
 
 
