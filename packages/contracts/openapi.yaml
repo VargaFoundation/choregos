@@ -2273,6 +2273,19 @@ components:
           properties:
             enabled: { type: boolean, description: "Faux tant que la porte n'accepte que des jetons à portée." }
             authorization_server: { type: [string, "null"] }
+            clients:
+              type: object
+              description: >-
+                Les clients que l'IdP a enregistrés pour la porte, par client de la page Integrations
+                (`claude-code`, `claude-ai`…) : la page en tire la commande exacte.
+              additionalProperties:
+                type: object
+                required: [client_id]
+                properties:
+                  client_id: { type: string }
+                  callback_port:
+                    type: [integer, "null"]
+                    description: "Le port de la redirection locale `http://localhost:PORT/callback` enregistrée chez l'IdP."
         version: { type: string }
     TokenScope:
       type: string

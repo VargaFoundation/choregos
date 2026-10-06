@@ -142,6 +142,21 @@ global:
     # Organisation à laquelle rattacher les groupes OIDC NON préfixés (`developers`,
     # `org-admins`…). Vide : seuls les groupes `choregos:<org>:<groupe>` donnent un rôle.
     defaultOrg: ""
+  # La porte MCP en serveur de ressources OAuth (ADR 0030, RFC 9728) : l'IdP de la console émet les
+  # jetons de Claude Code et de claude.ai, sans jeton à coller. Ce que l'IdP doit porter (portée
+  # `choregos-mcp`, clients) : docs/runbooks/keycloak-mcp.md.
+  mcp:
+    oauth:
+      enabled: false
+      # Vide : l'émetteur de la console (`global.oidc.issuer`). À poser pour un AUTRE IdP seulement.
+      issuer: ""
+      # L'audience obligatoire des jetons de la porte.
+      audience: choregos-mcp
+      # Les clients que l'IdP a enregistrés, par client de la page Integrations — la page en tire
+      # la commande exacte. `callbackPort` : le port de `http://localhost:PORT/callback` enregistré.
+      #   claude-code: { clientId: choregos-claude-code, callbackPort: 33418 }
+      #   claude-ai: { clientId: choregos-claude-ai }
+      clients: {}
   # Amorçage d'une installation neuve : l'organisation créée au premier démarrage si elle
   # manque, et les e-mails qui y reçoivent org_admin. Idempotent. Sans cela, aucune route
   # ni aucun écran ne peut créer la première organisation.

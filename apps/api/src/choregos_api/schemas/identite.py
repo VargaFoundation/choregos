@@ -87,9 +87,16 @@ class OrgUpdate(Dto):
     name: str | None = Field(default=None, min_length=1, max_length=200)
 
 
+class OAuthClientDto(Dto):
+    client_id: str
+    callback_port: int | None = None
+
+
 class OAuthDto(Dto):
     enabled: bool
     authorization_server: str | None = None
+    #: Les clients pré-enregistrés chez l'IdP, par client de la page Integrations.
+    clients: dict[str, OAuthClientDto] = Field(default_factory=dict)
 
 
 class IntegrationsDto(Dto):
