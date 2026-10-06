@@ -1,6 +1,6 @@
 # 0034 — Connectors by capability, a policy per operation; a discovered MCP tool is born closed
 
-- **Status**: accepted, 2026-10-05
+- **Status**: accepted, 2026-10-05; amended 2026-10-06 (§7, a write is always a governed action)
 - **Concerns**: the connector registry (`register`), the `connectors` table, `GET /connectors/types`,
   project settings, a new `connector_operations` table, the internal tool broker, the tool
   catalogue of [ADR 0014](0014-un-catalogue-d-outils-tenu-par-la-plateforme.md) (amended), the MCP
@@ -45,11 +45,22 @@ a device manager, a carrier, badge readers, a supplier's agent — would do with
    policy, the groups, the activation and the agent's selection (ADR 0033). The run token stays
    the only credential in the pod; the server's key reaches the server, never the pod. Each call
    is costed (`provider=mcp:<connector>`) and filtered for injection.
+7. **A write is always a governed action** (amendment of 2026-10-06, issue #241). A **read** that
+   the policy allows is a direct call. A **write** — even `allowed` — is not: calling it proposes
+   a governed action (ADR 0035) that the policy approves at once (`by: policy`), recorded under its
+   key, done once, compensated if a later step fails, and played by the `ActionWorkflow`, never by
+   the request. The broker waits for its outcome, bounded (`courtier_attente_ecriture_s`, 30 s), to
+   hand the agent what the server answered — beyond that, `202` and the action's id. The same call
+   (run, tool, arguments) is the same action: an agent that repeats it does not write twice. Before
+   the amendment an `allowed` write was a direct call: no journal, no compensation, and a retried
+   call wrote twice unless the remote happened to be idempotent — the governance promise of
+   ADR 0029 held for approved writes only.
 
 ## Consequences
 
 - The YAML catalogue of ADR 0014 becomes one source among others, read through the same broker;
   its guarantees (no wide token in a pod, every call in the ledger, a cap per run) now hold for
   every MCP server.
-- An operation set to `approval` turns a tool call into a governed action (ADR 0035).
+- An operation set to `approval` turns a tool call into a governed action (ADR 0035) that waits
+  for a person; a write set to `allowed` turns it into one that the policy approves (§7).
 - The connector pages are generated, so a connector type a plugin adds needs no console change.

@@ -17,6 +17,10 @@ Ce qu'un run voit est l'intersection de quatre décisions :
 
 from __future__ import annotations
 
+import asyncio
+import json
+import time
+import uuid
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from typing import Any
@@ -35,6 +39,9 @@ from ..db.models import (
 from .connecteurs import plus_stricte
 
 SEPARATEUR = "__"
+#: L'espace des identifiants d'une écriture appelée par un run : le même appel (run, outil,
+#: arguments) est la même action — un agent qui le répète ne fait pas deux fois l'écriture.
+_ESPACE_DES_APPELS = uuid.UUID("6b3f0f3e-6c0e-4f0a-9a52-0e3c8f1d2b41")
 
 
 @dataclass(frozen=True)
@@ -45,11 +52,18 @@ class OutilDuCourtier:
     #: `approval` : l'appel PROPOSE une action gouvernée (ADR 0035) au lieu d'atteindre le serveur.
     sous_validation: bool = False
 
+    @property
+    def ecriture(self) -> bool:
+        """Une opération d'ÉCRITURE : même permise, elle passe par une action gouvernée (#241)."""
+        return self.operation.access == "write"
+
     def annonce(self) -> dict[str, Any]:
         """Le format MCP que le side-car sert à l'agent."""
         description = self.operation.description or self.operation.name
         if self.sous_validation:
             description += " — needs a human approval: calling it proposes the action, it does not run it"
+        elif self.ecriture:
+            description += " — runs as a governed action: journaled, done once, undone if a later step fails"
         return {
             "name": self.nom,
             "description": f"[{self.connecteur.name}] {description}",
@@ -119,6 +133,24 @@ async def proposer_l_appel(
     """Un outil sous validation, appelé : une action gouvernée, proposée au nom de l'agent du run
     (`agent:<slug>`). Rien n'atteint le serveur avant qu'un humain ré-authentifié l'approuve —
     et qui possède l'agent ne l'approuve pas (séparation des rôles)."""
+    action = await _proposer_l_action_de_l_outil(session, run, project, outil, arguments)
+    return {
+        "action": action.id,
+        "status": action.status,
+        "message": "proposed: a person approves it in the console before anything is done",
+        "decision_path": f"/p/{project.slug}/actions/{action.id}",
+    }
+
+
+async def _proposer_l_action_de_l_outil(
+    session: AsyncSession,
+    run: Run,
+    project: Project,
+    outil: OutilDuCourtier,
+    arguments: dict[str, Any],
+    action_id: str | None = None,
+) -> Any:
+    """L'action d'un appel d'outil : un effet `connector.call`, au nom de l'agent du run."""
     from choregos_contracts import ActionOrigin
 
     from ..rbac import SYSTEM
@@ -144,7 +176,7 @@ async def proposer_l_appel(
         ],
         work_item_id=run.work_item_id,
     )
-    action = await proposer(
+    return await proposer(
         session,
         project,
         corps,
@@ -152,13 +184,109 @@ async def proposer_l_appel(
         propose_par={"kind": "agent", "id": f"agent:{run.agent_slug}", "run_id": run.id},
         principal=SYSTEM,
         run_id=run.id,
+        action_id=action_id,
     )
+
+
+def identifiant_de_l_appel(run_id: str, outil: str, arguments: dict[str, Any]) -> str:
+    """Le même appel (run, outil, arguments) est la même action : rejoué, il ne refait rien."""
+    canonique = json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str)
+    return str(uuid.uuid5(_ESPACE_DES_APPELS, f"{run_id}:{outil}:{canonique}"))
+
+
+async def ecrire_par_une_action(
+    session: AsyncSession, run: Run, project: Project, outil: OutilDuCourtier, arguments: dict[str, Any]
+) -> tuple[int, dict[str, Any], bool]:
+    """Une écriture PERMISE, appelée par un run (#241, amende l'ADR 0034) : une action gouvernée,
+    approuvée par la politique — consignée sous sa clé, faite une fois, compensée si une étape
+    suivante échoue — et jouée par l'`ActionWorkflow`, jamais par la requête. Le courtier en attend
+    l'issue, borné (`courtier_attente_ecriture_s`), pour rendre à l'agent ce que le serveur a
+    répondu ; au-delà, 202 et l'identifiant de l'action. Le même appel rejoué rend la même action.
+
+    Rend (code, corps, nouvelle) — `nouvelle` : cet appel a créé l'action (le prix se compte une fois).
+    """
+    from choregos_contracts import ActionStatus
+
+    from ..config import get_settings
+    from ..db.models import Action
+    from ..db.session import TOUT, limiter_aux_organisations, session_scope
+    from ..temporal import action_id as identifiant_temporal
+    from ..temporal import get_temporal
+    from .actions import approuvee_par_la_politique, politique_de_l_action
+
+    ident = identifiant_de_l_appel(run.id, outil.nom, arguments)
+    action = await session.get(Action, ident)
+    nouvelle = action is None
+    if action is None:
+        action = await _proposer_l_action_de_l_outil(session, run, project, outil, arguments, ident)
+        pire, _motifs = await politique_de_l_action(session, project, action.effects, action.params or {})
+        if pire != "allowed":
+            # Resserrée depuis l'annonce (l'organisation, le projet) : une personne en décide.
+            return 202, _en_attente(project, action), nouvelle
+        await approuvee_par_la_politique(session, project, action)
+        # La ligne doit être VISIBLE avant que le workflow la lise, et l'attente ci-dessous lit ce
+        # que le worker valide : on valide ici, puis la portée du jeton de run se repose — elle ne
+        # vit que le temps d'une transaction.
+        await session.commit()
+        await limiter_aux_organisations(session, TOUT)
+        await get_temporal().start_action(identifiant_temporal(action.id), {"action_id": action.id})
+    fin = time.monotonic() + get_settings().courtier_attente_ecriture_s
+    finies = {ActionStatus.SUCCEEDED.value, ActionStatus.FAILED.value, ActionStatus.REJECTED.value}
+    while True:
+        # Une lecture COURTE par tour : une transaction tenue ouverte entre deux tours garderait,
+        # sous SQLite, le verrou qui empêche le worker de valider ce qu'il écrit — l'attente se
+        # bornerait elle-même.
+        async with session_scope(orgs=TOUT) as lecture:
+            etat = await lecture.get(Action, ident)
+            statut = etat.status if etat is not None else action.status
+        if statut in finies or time.monotonic() >= fin:
+            break
+        await asyncio.sleep(0.2)
+    await session.refresh(action)
+    if action.status == ActionStatus.SUCCEEDED.value:
+        return 200, await _resultat_de_l_action(session, action), nouvelle
+    if action.status in finies:
+        refus = {"error": action.error or f"action {action.status}", "action": action.id}
+        return 422, refus, nouvelle
+    if action.status == ActionStatus.PENDING_APPROVAL.value:
+        return 202, _en_attente(project, action), nouvelle
+    return (
+        202,
+        {
+            "action": action.id,
+            "status": action.status,
+            "message": "the write runs as a governed action and is not finished yet: its result will be "
+            "in the action's journal",
+            "decision_path": f"/p/{project.slug}/actions/{action.id}",
+        },
+        nouvelle,
+    )
+
+
+def _en_attente(project: Project, action: Any) -> dict[str, Any]:
     return {
         "action": action.id,
         "status": action.status,
         "message": "proposed: a person approves it in the console before anything is done",
         "decision_path": f"/p/{project.slug}/actions/{action.id}",
     }
+
+
+async def _resultat_de_l_action(session: AsyncSession, action: Any) -> dict[str, Any]:
+    """Ce que l'écriture a rendu, au format d'un résultat MCP : l'agent lit la même chose qu'un appel
+    direct — plus l'identifiant de l'action qui l'a faite."""
+    from ..db.models import ActionEffect
+
+    effet = (
+        await session.execute(
+            select(ActionEffect).where(ActionEffect.action_id == action.id, ActionEffect.position == 0)
+        )
+    ).scalar_one_or_none()
+    rendu: dict[str, Any] = dict(effet.result or {}) if effet is not None else {}
+    if isinstance(rendu.get("content"), list):
+        return {**rendu, "action": action.id}
+    texte = {"type": "text", "text": _json(rendu)}
+    return {"content": [texte], "structuredContent": rendu, "action": action.id}
 
 
 class ArgumentsRefuses(ValueError):  # noqa: N818 - un refus motivé, rendu en 400

@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     # modèle. Listes et tables en JSON : `CHOREGOS_ALLOWED_AGENT_BACKENDS='["opencode"]'`,
     # `CHOREGOS_DEFAULT_MODEL_PROFILES='{"standard": "platform/standard"}'`.
     default_agent_backend: str | None = None
+    # Combien de temps le courtier attend l'issue d'une écriture appelée par un run, jouée en action
+    # gouvernée (#241), avant de rendre 202 et l'identifiant de l'action.
+    courtier_attente_ecriture_s: float = 30.0
     allowed_agent_backends: list[str] = Field(default_factory=list)
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     memory_url: str = "http://localhost:8432"

@@ -1506,6 +1506,15 @@ stories:
       - "Un outil interdit répond 404 ; le plafond rend 429 ; la clé atteint le faux serveur, jamais le pod"
 
   # ───────────── S20 — Actions gouvernées dans le cœur et scénario RH arrivées/départs (ADR 0035, 2026-10-05) ─────────────
+  - id: S19-05
+    title: "Une écriture appelée par un run est une action gouvernée, même permise"
+    stream: S19
+    sprint: 11
+    priority: 5
+    size: M
+    depends_on: [S19-04, S20-01]
+    acceptance:
+      - "Une écriture permise est faite une fois par l'ActionWorkflow et rend son résultat ; rejouée, elle n'écrit pas deux fois"
   - id: S20-01
     title: "Les actions gouvernées dans le cœur, exécutées par Temporal : effet consigné par clé, compensation"
     stream: S20

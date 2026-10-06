@@ -224,3 +224,50 @@ async def test_un_agent_qui_nomme_un_autre_serveur_ne_voit_pas_celui_ci(
     noms = [o["name"] for o in (await client.get(base, headers=entetes)).json()["tools"]]
     assert not [n for n in noms if n.startswith("fournisseur__")]
     assert (await client.post(f"{base}/fournisseur__stock", headers=entetes, json={})).status_code == 404
+
+
+async def test_une_ecriture_permise_devient_une_action_et_n_atteint_pas_le_serveur_directement(
+    client: AsyncClient, project: dict[str, Any], fournisseur: Any
+) -> None:
+    """#241 : une écriture que la politique permet n'est pas un appel direct. Elle naît en action
+    gouvernée, approuvée par la politique, démarrée dans Temporal — c'est l'`ActionWorkflow` qui
+    joindra le serveur, sous sa clé, une fois. Le même appel rejoué rend la même action."""
+    from choregos_api.db.models import Action
+    from choregos_api.db.session import session_scope
+    from choregos_api.temporal import get_temporal
+    from sqlalchemy import select
+
+    base, entetes = await _preparer(client, project, ["*"])
+    ouverte = await client.patch(
+        f"{ORG}/connectors/fournisseur/operations/commander_poste", json={"policy": "allowed"}
+    )
+    assert ouverte.status_code == 200, ouverte.text
+    annonce = (await client.get(base, headers=entetes)).json()
+    (commande,) = [o for o in annonce["tools"] if o["name"] == "fournisseur__commander_poste"]
+    assert "governed action" in commande["description"]
+
+    premier = (
+        await client.post(f"{base}/fournisseur__commander_poste", headers=entetes, json={"modele": "x14"})
+    ).json()
+    assert premier["status_code"] == 202, premier
+    action_id = premier["result"]["action"]
+    assert fournisseur.appels == [], "rien n'atteint le serveur depuis la requête"
+    assert f"action-{action_id}" in get_temporal().started, "l'ActionWorkflow est démarré"
+    action = (await client.get(f"/api/v1/projects/{project['id']}/actions/{action_id}")).json()
+    assert (action["origin"], action["status"], action["decisions"][0]["by"]) == (
+        "tool",
+        "approved",
+        "policy",
+    )
+
+    rejoue = (
+        await client.post(f"{base}/fournisseur__commander_poste", headers=entetes, json={"modele": "x14"})
+    ).json()
+    assert rejoue["result"]["action"] == action_id, "le même appel est la même action"
+    autre = (
+        await client.post(f"{base}/fournisseur__commander_poste", headers=entetes, json={"modele": "x15"})
+    ).json()
+    assert autre["result"]["action"] != action_id
+    async with session_scope() as session:
+        lignes = (await session.execute(select(Action.id).where(Action.origin == "tool"))).scalars().all()
+    assert sorted(lignes) == sorted({action_id, autre["result"]["action"]})

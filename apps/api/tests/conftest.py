@@ -16,6 +16,9 @@ os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
+# Une écriture d'un run est une action gouvernée que joue Temporal (#241) ; ici `FakeTemporal` ne la
+# joue pas : le courtier n'attend pas trente secondes une issue qui ne viendra pas.
+os.environ.setdefault("CHOREGOS_COURTIER_ATTENTE_ECRITURE_S", "0.3")
 
 
 #: `CHOREGOS_TEST_SUITE_SUR_POSTGRES=1` (avec `CHOREGOS_TEST_DATABASE_URL`) : TOUTE la suite de l'API
