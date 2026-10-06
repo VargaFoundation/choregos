@@ -97,11 +97,16 @@ test("graphe de workflow : parcours au clavier et description de l'état", async
 
   await page.keyboard.press("ArrowRight");
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "ready");
-  await expect(focus).toHaveText("Prêt (agent lane): → Fini (by dev, gates scope_respected).");
+  await expect(focus).toHaveText(
+    "Prêt (agent lane): → Fini (by dev, gates scope_respected); → Besoin d'un humain on échecs épuisés.",
+  );
+  // Au clavier comme au survol : les escalades de l'état parcouru se montrent, puis se replient.
+  await expect(graph.locator(".react-flow__edge")).toHaveCount(3);
 
   await page.keyboard.press("ArrowRight");
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "done");
   await expect(focus).toHaveText("Fini (terminal lane, terminal): no outgoing transition.");
+  await expect(graph.locator(".react-flow__edge")).toHaveCount(2);
 
   // Au bout du workflow, → reste sur place ; Début revient au premier état.
   await page.keyboard.press("ArrowRight");
