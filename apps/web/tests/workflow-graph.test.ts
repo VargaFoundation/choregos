@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaults, layout, navigation } from "@/components/workflow-graph";
+import { defaults, layout, navigation, ouverture } from "@/components/workflow-graph";
 import { renommer } from "@/components/workflows/renommer";
 
 const graph = {
@@ -175,5 +175,65 @@ describe("un workflow neuf, depuis un gabarit", () => {
     expect(renommer("metadata:\n  name: default-simple\n  version: 1\n", "offboarding")).toBe(
       "metadata:\n  name: offboarding\n  version: 1\n",
     );
+  });
+});
+
+
+describe("une carte qui se lit (relevé sur le dev le 06/10)", () => {
+  /** Deux escalades depuis le même état, vers deux états humains : même couloir, même colonne. */
+  const encombre = {
+    nodes: [
+      { id: "travail", display: "Travail", lane: "agent" },
+      { id: "question", display: "Question", lane: "human" },
+      { id: "revue", display: "Revue", lane: "human" },
+      { id: "fin", display: "Fin", lane: "terminal", terminal: true },
+    ],
+    edges: [
+      { id: "a", from: "travail", to: "fin", kind: "nominal", actor: "ci", gates: ["ci_green", "review_approved", "scans_ok"] },
+      { id: "b", from: "travail", to: "question", kind: "escalate", label: "question" },
+      { id: "c", from: "travail", to: "revue", kind: "escalate", label: "revue" },
+    ],
+  };
+
+  it("deux états du même couloir et de la même colonne ne tombent jamais au même point", () => {
+    const positions = layout(encombre).nodes.map((node) => `${node.position.x},${node.position.y}`);
+    expect(new Set(positions).size).toBe(positions.length);
+  });
+
+  it("le couloir qui empile deux états est plus haut que les autres", () => {
+    const { lanes } = layout(encombre);
+    const hauteur = (lane: string) => lanes.find((couloir) => couloir.lane === lane)?.height ?? 0;
+    expect(hauteur("human")).toBeGreaterThan(hauteur("agent"));
+    expect(lanes.map((couloir) => couloir.lane)).toEqual(["agent", "human", "terminal"]);
+  });
+
+  it("ne peint qu'avec des jetons du design system : `rgb(var(--…))` n'existe plus dans la console", () => {
+    const { nodes, edges, lanes } = layout(encombre);
+    const peintures = [
+      ...nodes.flatMap((node) => [node.style?.border, node.style?.borderLeft, node.style?.background, node.style?.color]),
+      ...edges.flatMap((edge) => [edge.style?.stroke, (edge.markerEnd as { color?: string } | undefined)?.color]),
+      ...lanes.map((couloir) => couloir.color),
+    ].map(String);
+    expect(peintures.filter((peinture) => peinture.includes("rgb(var(--"))).toEqual([]);
+    expect(peintures.every((peinture) => peinture.includes("var(--varga-"))).toBe(true);
+  });
+
+  it("une étiquette trop longue donne le nombre de garanties, pas leurs noms", () => {
+    const { edges } = layout(encombre);
+    expect(edges.find((edge) => edge.id === "a")?.label).toBe("ci · 3 gates");
+  });
+
+  it("les flèches vont de gauche à droite, avec une pointe", () => {
+    const { nodes, edges } = layout(encombre);
+    expect(nodes.every((node) => node.sourcePosition === "right" && node.targetPosition === "left")).toBe(true);
+    expect(edges.every((edge) => edge.markerEnd !== undefined && edge.type === "smoothstep")).toBe(true);
+  });
+
+  it("une carte qui tient lisible s'ajuste ; une longue s'ouvre lisible, sur son début", () => {
+    expect(ouverture({ width: 1300, height: 480 }, 600, 300)).toBe("ajuster");
+    const longue = ouverture({ width: 1300, height: 480 }, 2400, 400);
+    expect(longue).toEqual({ x: 8, y: expect.any(Number), zoom: 0.8 });
+    expect(ouverture(undefined, 2400, 400)).toBe("ajuster");
+    expect(ouverture({ width: 0, height: 0 }, 2400, 400)).toBe("ajuster");
   });
 });

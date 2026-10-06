@@ -22,8 +22,25 @@
   --color-system: var(--varga-ink-muted);
 }
 
-/* Le graphe de workflow se parcourt au clavier : l'état sous le curseur doit se voir. */
-.react-flow__node:focus-visible {
-  outline: 2px solid rgb(var(--agent));
+/* Le graphe de workflow se parcourt au clavier : l'état sous le curseur doit se voir. Le contour
+   lisait `rgb(var(--agent))`, une variable que la console ne définit plus : il ne se voyait pas. */
+.react-flow__node:focus-visible,
+.carte-workflow .react-flow__node.selected {
+  outline: 2px solid var(--varga-focus);
   outline-offset: 2px;
+}
+
+/* Les poignées servent au tracé des arêtes, pas à l'édition : la carte ne se câble pas à la souris. */
+.carte-workflow .react-flow__handle {
+  opacity: 0;
+}
+
+/* Le libellé d'une arête secondaire (rejet, reprise, escalade) n'apparaît qu'au survol : la légende
+   dit ce que veulent dire les pointillés, et le chemin nominal reste lisible. */
+.carte-workflow .react-flow__edge.arete-secondaire .react-flow__edge-textwrapper {
+  opacity: 0;
+  transition: opacity var(--varga-duration-fast) var(--varga-easing);
+}
+.carte-workflow .react-flow__edge.arete-secondaire:hover .react-flow__edge-textwrapper {
+  opacity: 1;
 }

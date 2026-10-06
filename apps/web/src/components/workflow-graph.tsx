@@ -4,12 +4,17 @@
 import {
   Background,
   Controls,
-  MiniMap,
+  MarkerType,
+  Position,
   ReactFlow,
+  ReactFlowProvider,
+  useViewport,
+  type BuiltInEdge,
   type Edge,
   type Node,
+  type ReactFlowInstance,
 } from "@xyflow/react";
-import { useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent } from "react";
 import "@xyflow/react/dist/style.css";
 
 type GraphNode = {
@@ -33,17 +38,52 @@ type GraphEdge = {
 /** Un couloir par type d'acteur : on lit le workflow de haut en bas, comme un plan de voie. */
 const LANES = ["agent", "human", "system", "train", "wait", "terminal"] as const;
 
+/**
+ * Les couleurs des couloirs, prises dans les jetons du design system de la fondation. La carte les
+ * écrivait `rgb(var(--agent))` : des variables que la console ne définit plus depuis qu'elle porte
+ * ce design system — couleurs invalides, donc transparentes, et une carte sans bords ni flèches
+ * (relevé sur le dev le 06/10).
+ */
 const LANE_COLOR: Record<string, string> = {
-  agent: "rgb(var(--agent))",
-  human: "rgb(var(--human))",
-  system: "rgb(var(--system))",
-  train: "rgb(var(--ok))",
-  wait: "rgb(var(--warn))",
-  terminal: "rgb(var(--ink-muted))",
+  agent: "var(--varga-accent-strong)",
+  human: "var(--varga-ink)",
+  system: "var(--varga-ink-muted)",
+  train: "var(--varga-ok)",
+  wait: "var(--varga-warn)",
+  terminal: "var(--varga-ink-subtle)",
 };
 
-const LANE_HEIGHT = 110;
-const COLUMN_WIDTH = 210;
+/** Largeur d'un état, et pas d'une colonne à la suivante : la place d'une étiquette entre les deux. */
+const NODE_WIDTH = 176;
+const NODE_HEIGHT = 40;
+const COLUMN_WIDTH = 288;
+/** Deux états du même couloir et de la même colonne s'empilent, à cet intervalle. */
+const ROW_HEIGHT = 62;
+const LANE_PADDING = 22;
+/** La marge où se lit le nom des couloirs, à gauche de la première colonne. */
+const GUTTER = 120;
+/** Au-delà, une étiquette d'arête nominale donne le nombre de garanties, pas leurs noms. */
+const ETIQUETTE_MAX = 16;
+/** En dessous, le texte d'un état ne se lit plus : la carte s'ouvre à cette taille, sur son début. */
+const ZOOM_LISIBLE = 0.8;
+
+/** Un couloir dessiné derrière les états : son nom, sa couleur, et la bande qu'il occupe. */
+export type Couloir = { lane: string; color: string; top: number; height: number };
+
+/** React Flow habillé aux jetons du design system : clair ou sombre, comme le reste de la console. */
+const THEME = {
+  "--xy-background-color": "transparent",
+  "--xy-background-pattern-color": "var(--varga-line)",
+  "--xy-edge-stroke": "var(--varga-line-strong)",
+  "--xy-edge-label-background-color": "var(--varga-surface)",
+  "--xy-edge-label-color": "var(--varga-ink-muted)",
+  "--xy-controls-button-background-color": "var(--varga-surface-muted)",
+  "--xy-controls-button-background-color-hover": "var(--varga-line)",
+  "--xy-controls-button-color": "var(--varga-ink)",
+  "--xy-controls-button-color-hover": "var(--varga-ink)",
+  "--xy-controls-button-border-color": "var(--varga-line)",
+  "--xy-controls-box-shadow": "none",
+} as CSSProperties;
 
 /**
  * Graphe du workflow en couloirs. La disposition est **déterministe** : deux validations
@@ -63,7 +103,7 @@ export function WorkflowGraph({
   /** Un état ou une transition choisis (clic, ou Entrée sur un état) : la carte devient éditable. */
   onSelect?: (kind: "node" | "edge", id: string) => void;
 }) {
-  const { nodes, edges } = useMemo(() => layout(graph), [graph]);
+  const { nodes, edges, lanes, largeur, hauteur } = useMemo(() => layout(graph), [graph]);
   const nav = useMemo(() => navigation(graph), [graph]);
   const [focused, setFocused] = useState<string | null>(null);
   const container = useRef<HTMLDivElement>(null);
@@ -90,6 +130,18 @@ export function WorkflowGraph({
     if (target !== null) focusNode(target);
   }
 
+  /**
+   * Le cadrage d'ouverture. Un workflow qui tient lisible dans le cadre s'y ajuste ; un workflow
+   * plus long (le gabarit par défaut a huit colonnes) s'ouvrait réduit à moitié, son texte
+   * illisible : il s'ouvre alors à une taille lisible, sur son début, et se parcourt en glissant —
+   * le bouton d'ajustement le montre encore en entier.
+   */
+  function cadrer(instance: ReactFlowInstance) {
+    const vue = ouverture(container.current?.getBoundingClientRect(), largeur, hauteur);
+    if (vue === "ajuster") void instance.fitView({ padding: 0.12, maxZoom: 1 });
+    else void instance.setViewport(vue);
+  }
+
   function onFocus(event: FocusEvent<HTMLDivElement>) {
     const id = (event.target as HTMLElement).closest<HTMLElement>(".react-flow__node")?.dataset.id;
     setFocused(id ?? null);
@@ -99,31 +151,37 @@ export function WorkflowGraph({
     <div className="space-y-2">
       <div
         ref={container}
-        className="h-[28rem] w-full rounded border border-line bg-surface"
+        className="carte-workflow relative h-[30rem] w-full overflow-hidden rounded border border-line bg-surface"
+        style={THEME}
         data-testid="workflow-graph"
         onKeyDownCapture={onKeyDown}
         onFocusCapture={onFocus}
       >
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          fitView
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          edgesFocusable={false}
-          onNodeClick={onSelect ? (_, node) => onSelect("node", node.id) : undefined}
-          onEdgeClick={onSelect ? (_, edge) => onSelect("edge", edge.id) : undefined}
-        >
-          <Background gap={20} />
-          <MiniMap pannable zoomable className="!bg-surface-muted" />
-          <Controls showInteractive={false} />
-        </ReactFlow>
+        <ReactFlowProvider>
+          <Couloirs couloirs={lanes} largeur={largeur} />
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onInit={cadrer}
+            // Un petit workflow ne se grossit pas : 1 au plus, la taille du texte de la console.
+            fitViewOptions={{ padding: 0.12, maxZoom: 1 }}
+            minZoom={0.3}
+            proOptions={{ hideAttribution: true }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            edgesFocusable={false}
+            onNodeClick={onSelect ? (_, node) => onSelect("node", node.id) : undefined}
+            onEdgeClick={onSelect ? (_, edge) => onSelect("edge", edge.id) : undefined}
+          >
+            <Background gap={24} size={1} />
+            <Controls showInteractive={false} position="bottom-right" />
+          </ReactFlow>
+        </ReactFlowProvider>
       </div>
       <p className="text-xs text-ink-muted" aria-live="polite" data-testid="workflow-graph-focus">
         {focused
           ? nav.describe(focused)
-          : `Tab reaches the states; ← → follow transitions, ↑ ↓ change state, Home/End jump to the ends${onSelect ? "; Enter edits the state" : ""}.`}
+          : `Drag to move, scroll to zoom, ⛶ fits the whole map. Tab reaches the states; ← → follow transitions, ↑ ↓ change state, Home/End jump to the ends${onSelect ? "; Enter edits the state" : ""}.`}
       </p>
     </div>
   );
@@ -144,59 +202,200 @@ export function areteDessinee(graph: { nodes: unknown[]; edges: unknown[] }, id:
   return (graph.edges as GraphEdge[]).filter((edge) => !isDefault(edge)).find((edge, index) => idDessine(edge, index) === id);
 }
 
-export function layout(graph: { nodes: unknown[]; edges: unknown[] }): { nodes: Node[]; edges: Edge[] } {
+/**
+ * Comment la carte s'ouvre dans un cadre : ajustée si elle y tient lisible, sinon à `ZOOM_LISIBLE`,
+ * sur son début (à gauche), centrée en hauteur. Un cadre sans taille connue (rendu côté serveur,
+ * onglet caché) : ajustée.
+ */
+export function ouverture(
+  cadre: { width: number; height: number } | undefined,
+  largeur: number,
+  hauteur: number,
+): "ajuster" | { x: number; y: number; zoom: number } {
+  if (!cadre || cadre.width === 0 || cadre.height === 0) return "ajuster";
+  const ajuste = Math.min(cadre.width / (largeur + 48), cadre.height / (hauteur + 48), 1);
+  if (ajuste >= ZOOM_LISIBLE) return "ajuster";
+  return { x: 8, y: Math.max(8, (cadre.height - hauteur * ZOOM_LISIBLE) / 2), zoom: ZOOM_LISIBLE };
+}
+
+/** Les couloirs présents, de haut en bas : ceux du DSL dans leur ordre, puis tout autre nom rencontré. */
+function couloirsPresents(raw: GraphNode[]): string[] {
+  const vus = new Set(raw.map((node) => node.lane ?? "system"));
+  const connus = LANES.filter((lane) => vus.has(lane));
+  const autres = [...vus].filter((lane) => !(LANES as readonly string[]).includes(lane)).sort();
+  return [...connus, ...autres];
+}
+
+/** L'étiquette d'une arête nominale : qui la franchit, et ses garanties — leur nombre quand leurs
+ * noms ne tiennent pas entre deux colonnes (la vue processus les dit toutes, en clair). */
+function etiquette(edge: GraphEdge): string {
+  const gates = edge.gates ?? [];
+  const noms = [edge.actor, gates.join(", ")].filter(Boolean).join(" · ");
+  if (noms.length <= ETIQUETTE_MAX || gates.length === 0) return noms;
+  return [edge.actor, `${gates.length} gate${gates.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+}
+
+export function layout(graph: { nodes: unknown[]; edges: unknown[] }): {
+  nodes: Node[];
+  edges: Edge[];
+  lanes: Couloir[];
+  largeur: number;
+  hauteur: number;
+} {
   const raw = graph.nodes as GraphNode[];
   const allEdges = graph.edges as GraphEdge[];
   const rawEdges = allEdges.filter((edge) => !isDefault(edge));
   const columns = depths(raw, allEdges);
-  const perLane = new Map<string, number>();
+
+  // Deux états du même couloir et de la même colonne s'EMPILENT : ils tombaient au même point, et
+  // leurs libellés se superposaient (« Intervention humaine » deux fois, illisible).
+  const rangs = new Map<string, number>();
+  const piles = new Map<string, number>();
+  for (const node of raw) {
+    const lane = node.lane ?? "system";
+    const case_ = `${lane}|${columns.get(node.id) ?? 0}`;
+    const rang = piles.get(case_) ?? 0;
+    rangs.set(node.id, rang);
+    piles.set(case_, rang + 1);
+    piles.set(`#${lane}`, Math.max(piles.get(`#${lane}`) ?? 0, rang + 1));
+  }
+
+  const lanes: Couloir[] = [];
+  const sommets = new Map<string, number>();
+  let haut = 0;
+  for (const lane of couloirsPresents(raw)) {
+    const hauteur = 2 * LANE_PADDING + NODE_HEIGHT + ((piles.get(`#${lane}`) ?? 1) - 1) * ROW_HEIGHT;
+    lanes.push({ lane, color: LANE_COLOR[lane] ?? LANE_COLOR.system ?? "var(--varga-ink-muted)", top: haut, height: hauteur });
+    sommets.set(lane, haut);
+    haut += hauteur;
+  }
+  const colonnes = Math.max(0, ...raw.map((node) => columns.get(node.id) ?? 0)) + 1;
+  const largeur = GUTTER + colonnes * COLUMN_WIDTH;
 
   const nodes: Node[] = raw.map((node) => {
     const lane = node.lane ?? "system";
-    const row = LANES.indexOf(lane as (typeof LANES)[number]);
-    const column = columns.get(node.id) ?? perLane.get(lane) ?? 0;
-    perLane.set(lane, column + 1);
+    const couleur = LANE_COLOR[lane] ?? LANE_COLOR.system;
     const outgoing = rawEdges.filter((edge) => edge.from === node.id).length;
     return {
       id: node.id,
-      position: { x: column * COLUMN_WIDTH, y: (row < 0 ? LANES.length : row) * LANE_HEIGHT },
+      position: {
+        x: GUTTER + (columns.get(node.id) ?? 0) * COLUMN_WIDTH,
+        y: (sommets.get(lane) ?? 0) + LANE_PADDING + (rangs.get(node.id) ?? 0) * ROW_HEIGHT,
+      },
       data: { label: node.display },
       ariaLabel: `${node.display}, ${lane} lane, ${outgoing} outgoing transition${outgoing === 1 ? "" : "s"}`,
       draggable: false,
+      // De gauche à droite, comme la lecture : on entre par la gauche, on sort par la droite.
+      targetPosition: Position.Left,
+      sourcePosition: Position.Right,
       style: {
-        width: 170,
-        borderRadius: 6,
-        border: `1px solid ${LANE_COLOR[lane] ?? LANE_COLOR.system}`,
-        background: "rgb(var(--surface-muted))",
-        color: "rgb(var(--ink))",
-        fontSize: 12,
-        padding: 8,
-        fontWeight: node.terminal ? 600 : 400,
+        width: NODE_WIDTH,
+        minHeight: NODE_HEIGHT,
+        borderRadius: node.terminal ? 999 : 8,
+        border: `1px solid ${node.terminal ? couleur : "var(--varga-line-strong)"}`,
+        borderLeft: node.terminal ? `1px solid ${couleur}` : `4px solid ${couleur}`,
+        background: "var(--varga-surface-muted)",
+        color: "var(--varga-ink)",
+        fontSize: 13,
+        lineHeight: 1.25,
+        padding: "9px 12px",
+        textAlign: node.terminal ? "center" : "left",
+        fontWeight: node.terminal ? 600 : 500,
+        boxShadow: "none",
       },
     } satisfies Node;
   });
 
   const edges: Edge[] = rawEdges.map((edge, index) => {
     const secondary = Boolean(edge.kind && edge.kind !== "nominal");
+    const couleur = secondary ? "var(--varga-ink-muted)" : "var(--varga-accent-strong)";
     return {
       id: idDessine(edge, index),
       source: edge.from,
       target: edge.to,
-      label: secondary ? edge.label : [edge.actor, edge.gates?.join(", ")].filter(Boolean).join(" · "),
+      type: "smoothstep",
+      pathOptions: { borderRadius: 10, offset: 16 },
+      // Une arête secondaire (rejet, reprise, escalade) ne montre son libellé qu'au survol : la
+      // légende dit ce que veulent dire les pointillés, et dix libellés « échecs épuisés » noyaient
+      // le chemin nominal.
+      className: secondary ? "arete-secondaire" : "arete-nominale",
+      label: secondary ? edge.label : etiquette(edge),
       animated: false,
+      markerEnd: { type: MarkerType.ArrowClosed, color: couleur, width: 14, height: 14 },
       style: {
-        stroke: secondary ? "rgb(var(--ink-muted))" : "rgb(var(--agent))",
+        stroke: couleur,
+        strokeWidth: secondary ? 1 : 1.5,
         strokeDasharray: secondary ? "4 3" : undefined,
-        opacity: secondary ? 0.7 : 1,
       },
-      labelStyle: { fontSize: 10, fill: "rgb(var(--ink-muted))" },
-    } satisfies Edge;
+      labelStyle: { fontSize: 10, fill: secondary ? "var(--varga-ink-muted)" : "var(--varga-ink)" },
+      labelBgStyle: { fill: "var(--varga-surface)" },
+      labelBgPadding: [4, 2],
+      labelBgBorderRadius: 3,
+    } satisfies BuiltInEdge;
   });
 
   // Ordre de lecture = ordre du DOM = ordre de Tab : colonne par colonne, puis couloir
   // par couloir. Sans ce tri, Tab suivrait l'ordre du YAML, qui n'est pas celui de la carte.
   nodes.sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y);
-  return { nodes, edges };
+  return { nodes, edges, lanes, largeur, hauteur: haut };
+}
+
+/**
+ * Les couloirs, dessinés DERRIÈRE la carte et calés sur son viewport : une bande par type d'acteur,
+ * son nom à gauche. Ce ne sont pas des nœuds de React Flow — un nœud se tabule, se compte, se lit :
+ * un couloir n'est qu'un repère.
+ */
+function Couloirs({ couloirs, largeur }: { couloirs: Couloir[]; largeur: number }) {
+  const { x, y, zoom } = useViewport();
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0" data-testid="couloirs">
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          transformOrigin: "0 0",
+          transform: `translate(${x}px, ${y}px) scale(${zoom})`,
+        }}
+      >
+        {couloirs.map((couloir, index) => (
+          <div
+            key={couloir.lane}
+            style={{
+              position: "absolute",
+              // La bande déborde à gauche comme à droite : elle couvre le cadre quel que soit le cadrage.
+              left: -largeur,
+              top: couloir.top,
+              width: 3 * largeur,
+              height: couloir.height,
+              borderTop: index === 0 ? undefined : "1px solid var(--varga-line)",
+              background: index % 2 === 0 ? "var(--varga-surface-muted)" : "transparent",
+              opacity: 0.85,
+            }}
+          />
+        ))}
+      </div>
+      {/* Le nom de chaque couloir reste au bord gauche du CADRE, à la hauteur de sa bande : en
+          coordonnées de la carte, il sortait du champ dès que l'ajustement centrait les états. */}
+      {couloirs.map((couloir) => (
+        <span
+          key={couloir.lane}
+          style={{
+            position: "absolute",
+            left: 10,
+            top: y + couloir.top * zoom + 6,
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: couloir.color,
+          }}
+        >
+          {couloir.lane}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** Parcours au clavier : où mène chaque touche depuis un état, et comment le décrire. */
@@ -333,7 +532,7 @@ export function WorkflowLegend({ graph }: { graph: { nodes: unknown[]; edges: un
             {lane} lane · {nodes.filter((node) => (node.lane ?? "system") === lane).length}
           </li>
         ))}
-        <li>solid: the nominal path · dashed: rejection, retry, escalation</li>
+        <li>solid: the nominal path · dashed: rejection, retry, escalation (hover one for its reason)</li>
       </ul>
       {fallbacks.length > 0 && (
         <div>
