@@ -18,8 +18,8 @@ if TYPE_CHECKING:  # les fakes exposent des méthodes de mise en scène (seed, s
 
 BANNER = """
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  Choregos — démonstration hors ligne                                │
-  │  Un ticket entre, une mise en production maîtrisée sort.            │
+  │  Choregos — offline demonstration                                   │
+  │  A work item comes in, a controlled production release comes out.  │
   └─────────────────────────────────────────────────────────────────────┘
 """
 
@@ -76,8 +76,8 @@ async def seed() -> tuple[str, str, Any]:
             project,
             Naissance(
                 tracker_key="varga/billing-api#123",
-                title="Les avoirs ne sont pas déduits du total de la facture",
-                body="Quand une commande a un avoir, le total affiché ignore la remise.",
+                title="Credits are not deducted from the invoice total",
+                body="When an order has a credit, the total shown ignores the discount.",
                 size="M",
                 risk="low",
                 allowed_paths=("src/orders/**", "tests/orders/**"),
@@ -108,7 +108,7 @@ async def seed() -> tuple[str, str, Any]:
     executor.queue_result(
         StageResult(
             status=StageStatus.DONE,
-            summary="spécification rédigée : 6 chemins autorisés, critères Given/When/Then",
+            summary="specification written: 6 allowed paths, Given/When/Then criteria",
             outputs={
                 "size": "M",
                 "risk": "low",
@@ -121,12 +121,12 @@ async def seed() -> tuple[str, str, Any]:
     executor.queue_result(
         StageResult(
             status=StageStatus.DONE,
-            summary="avoirs déduits du total ; 3 tests ajoutés",
-            artifacts={"branch": "choregos/123", "commits": ["fix(orders): déduire les avoirs du total"]},
+            summary="credits deducted from the total; 3 tests added",
+            artifacts={"branch": "choregos/123", "commits": ["fix(orders): deduct credits from the total"]},
             evidence=evidence(),
             findings=[
                 {
-                    "title": "Requête N+1 sur le chargement des lignes",
+                    "title": "N+1 query when loading the lines",
                     "type": "perf",
                     "severity": "medium",
                     "evidence": "src/orders/repository.py:88",
@@ -137,7 +137,7 @@ async def seed() -> tuple[str, str, Any]:
         )
     )
     executor.queue_result(
-        StageResult(status=StageStatus.DONE, summary="412 tests verts, couverture +1,2", evidence=evidence())
+        StageResult(status=StageStatus.DONE, summary="412 tests green, coverage +1.2", evidence=evidence())
     )
     return project_id, work_item_id, adapters
 
@@ -148,7 +148,7 @@ async def main_async() -> int:
     print(BANNER)
     project_id, work_item_id, adapters = await seed()
 
-    print("· ticket varga/billing-api#123 créé, workflow `default-simple` épinglé\n")
+    print("· work item varga/billing-api#123 created, workflow `default-simple` pinned\n")
     seen: dict[str, Any] = {}
 
     async def world(state: str) -> None:
@@ -158,26 +158,26 @@ async def main_async() -> int:
             adapters.scm.set_checks(ref, "success")
             adapters.scm.submit_review(ref, "marie", "approved")
             seen["pr"] = ref
-            print(f"· CI verte et review approuvée sur {ref.url}")
+            print(f"· CI green and review approved on {ref.url}")
         if state == "merged" and "merged" not in seen:
             seen["merged"] = True
-            print("· le release train embarque le ticket dans le prochain lot")
+            print("· the release train takes the work item in its next batch")
 
     trace = await run_local(project_id, work_item_id, approve=lambda *_: True, on_state=world)
     ref = seen.get("pr")
 
     print(trace.summary())
-    print("\n── Commentaire écrit dans le ticket ──\n")
-    print(adapters.tracker.status_comment("varga/billing-api#123") or "(aucun)")
+    print("\n── Comment written on the work item ──\n")
+    print(adapters.tracker.status_comment("varga/billing-api#123") or "(none)")
 
     findings = [item for item in adapters.tracker.items.values() if "finding" in item.labels]
-    print("\n── Ce que la plateforme a produit ──")
-    print(f"· runs exécutés        : {len([s for s in trace.steps if s.run_id])}")
-    print(f"· coût total           : {trace.cost_usd:.2f} USD")
-    print(f"· PR ouverte           : {ref.url if ref else '—'}")
-    print(f"· findings déposés     : {len(findings)}" + (f" ({findings[0].key})" if findings else ""))
+    print("\n── What the platform produced ──")
+    print(f"· runs                 : {len([s for s in trace.steps if s.run_id])}")
+    print(f"· total cost           : {trace.cost_usd:.2f} USD")
+    print(f"· pull request         : {ref.url if ref else '—'}")
+    print(f"· findings filed       : {len(findings)}" + (f" ({findings[0].key})" if findings else ""))
     print(f"· notifications        : {len(adapters.notify.sent)}")
-    print(f"· état final du ticket : {trace.final_state}")
+    print(f"· final state          : {trace.final_state}")
     return 0 if trace.final_state in {"merged", "deployed_prod", "pr_open"} else 1
 
 

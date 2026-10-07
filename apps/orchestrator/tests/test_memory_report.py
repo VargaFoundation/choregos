@@ -50,7 +50,7 @@ async def test_le_rapport_est_poste_sur_le_canal_du_projet(setup: Fixture) -> No
     assert report["org"] == "varga"
     assert report["verdict"] == "échantillon insuffisant", "trois tickets ne prouvent rien"
     titres = [message.title for _, message in setup.adapters.notify.sent]
-    assert any("rapport A/B" in titre for titre in titres), titres
+    assert any("A/B report" in titre for titre in titres), titres
 
 
 async def test_sans_projet_mesurable_rien_n_est_poste(setup: Fixture) -> None:
@@ -79,5 +79,5 @@ async def test_le_rapport_ne_part_qu_une_fois_par_semaine(
         outcome = await handle.result()
 
     assert outcome["cycles"] == 3
-    rapports = [m.title for _, m in setup.adapters.notify.sent if "rapport A/B" in m.title]
+    rapports = [m.title for _, m in setup.adapters.notify.sent if "A/B report" in m.title]
     assert len(rapports) == 1, rapports

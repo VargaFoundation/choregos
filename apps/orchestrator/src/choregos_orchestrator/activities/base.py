@@ -71,7 +71,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         rows = (await session.execute(select(Project).where(Project.slug == project_id))).scalars().all()
         if len(rows) > 1:
             # Un slug dans deux organisations : « le premier » serait celui d'un autre locataire.
-            raise ValueError(f"projet ambigu : {project_id} existe dans plusieurs organisations")
+            raise ValueError(f"ambiguous project: {project_id} exists in several organisations")
         project = rows[0] if rows else None
     if project is None:
         raise ValueError(f"projet inconnu : {project_id}")
@@ -142,7 +142,7 @@ async def load_work_item(session: AsyncSession, work_item_id: str) -> WorkItem:
             await session.execute(select(WorkItem).where(WorkItem.tracker_key == work_item_id).limit(1))
         ).scalar_one_or_none()
     if item is None:
-        raise ValueError(f"ticket inconnu : {work_item_id}")
+        raise ValueError(f"unknown work item: {work_item_id}")
     return item
 
 

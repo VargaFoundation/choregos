@@ -99,7 +99,7 @@ async def test_en_block_l_etape_s_arrete_avant_tout_run_avec_la_raison(setup: Fi
     with pytest.raises(ApplicationError) as exc:
         await _preparer(setup)
     assert exc.value.type == "injection_suspected" and exc.value.non_retryable
-    assert "ticket.body" in str(exc.value) and "relire le ticket" in str(exc.value)
+    assert "ticket.body" in str(exc.value) and "read the work item" in str(exc.value)
     assert len(await _evenements(setup)) == 1, "journalisé aussi : la raison se relit sur le ticket"
 
 

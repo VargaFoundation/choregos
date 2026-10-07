@@ -21,7 +21,7 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         if not bundle.engine.memory_enabled():
-            return {"facts": 0, "skipped": "mémoire désactivée"}
+            return {"facts": 0, "skipped": "memory disabled"}
         events: list[dict[str, Any]] = []
 
         if "closed_issues" in sources:
@@ -46,7 +46,7 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                         "external_id": f"workitem:{item.tracker_key}",
                         "kind": "ticket_summary",
                         "subject": f"ticket_summary:{item.tracker_key}",
-                        "content": f"{item.title} — état final {item.state}, {cost:.2f} USD.",
+                        "content": f"{item.title} — final state {item.state}, {cost:.2f} USD.",
                         "source": "tracker",
                     }
                 )
@@ -62,13 +62,13 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 .all()
             )
             for run in runs:
-                reason = (run.result or {}).get("reason") or "échec"
+                reason = (run.result or {}).get("reason") or "failed"
                 events.append(
                     {
                         "external_id": f"run:{run.id}",
                         "kind": "run_lesson",
                         "subject": f"run_lesson:{bundle.slug}:{run.stage_role}",
-                        "content": f"L'étape {run.stage_role} a échoué ({reason}) — tentative {run.attempt}.",
+                        "content": f"The {run.stage_role} step failed ({reason}) — attempt {run.attempt}.",
                         "source": "orchestrator",
                     }
                 )
@@ -206,7 +206,7 @@ async def memory_ab_report(payload: dict[str, Any]) -> dict[str, Any]:
             await bundle.adapters.notify.send(
                 bundle.config.notify.slack_channel or "#choregos",
                 Message(
-                    title=f"Mémoire : rapport A/B sur {report['weeks']} semaines — {report['verdict']}",
+                    title=f"Memory: A/B report over {report['weeks']} weeks — {report['verdict']}",
                     body=str(report["detail"]),
                     severity="warning" if report["verdict"] == "la mémoire ne paie pas" else "info",
                 ),

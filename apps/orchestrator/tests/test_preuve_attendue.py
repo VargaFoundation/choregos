@@ -135,7 +135,7 @@ async def test_une_preuve_contraire_fait_echouer_l_action_et_compense(
         await handle.signal("preuve", {"position": 1, "ok": False, "detail": "la clé est toujours là"})
         resultat = await handle.result()
     assert (
-        resultat["status"] == "failed" and "la preuve dit non : la clé est toujours là" in resultat["error"]
+        resultat["status"] == "failed" and "the evidence says no: la clé est toujours là" in resultat["error"]
     )
     assert [nom for nom, _ in faits] == ["creer", "attendre", "defaire"], "ce qui était fait se défait"
     assert (await _ligne(action_id)).status == "failed"
@@ -150,5 +150,5 @@ async def test_sans_preuve_avant_l_echeance_l_action_echoue(
         handle = await _demarrer(temporal_env, action_id)
         await _en_attente(action_id)
         resultat = await handle.result()  # le temps saute jusqu'à l'échéance
-    assert resultat["status"] == "failed" and "délai dépassé" in resultat["error"]
+    assert resultat["status"] == "failed" and "timed out" in resultat["error"]
     assert [nom for nom, _ in faits][-1] == "defaire"

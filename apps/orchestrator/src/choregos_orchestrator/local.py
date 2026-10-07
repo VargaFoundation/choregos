@@ -52,15 +52,15 @@ class LocalRun:
     stopped_reason: str = ""
 
     def summary(self) -> str:
-        lines = [f"{'#':>2}  {'état':<24} {'transition':<18} {'acteur':<8} suite"]
+        lines = [f"{'#':>2}  {'state':<24} {'transition':<18} {'actor':<8} next"]
         for index, step in enumerate(self.steps, start=1):
             lines.append(
                 f"{index:>2}  {step.state:<24} {step.transition:<18} {step.kind:<8} → {step.next_state}"
                 + (f"  ({step.cost_usd:.2f} USD)" if step.cost_usd else "")
             )
-        lines.append(f"\nétat final : {self.final_state} · coût total : {self.cost_usd:.2f} USD")
+        lines.append(f"\nfinal state: {self.final_state} · total cost: {self.cost_usd:.2f} USD")
         if self.stopped_reason:
-            lines.append(f"arrêt : {self.stopped_reason}")
+            lines.append(f"stopped: {self.stopped_reason}")
         return "\n".join(lines)
 
 
@@ -84,7 +84,7 @@ async def run_local(
     approve = approve or (lambda _transition, _state: True)
 
     await tracker_activities.mirror_state(
-        {"project_id": project_id, "work_item_id": work_item_id, "state": state, "reason": "démarrage"}
+        {"project_id": project_id, "work_item_id": work_item_id, "state": state, "reason": "started"}
     )
     if on_state is not None:
         await on_state(state)
@@ -95,7 +95,7 @@ async def run_local(
         transition = engine.select_transition(state, last_outcome)
         last_outcome = None
         if transition is None:
-            trace.stopped_reason = f"aucune transition depuis `{state}` (attente d'un événement externe)"
+            trace.stopped_reason = f"no transition from `{state}` (waiting for an external event)"
             break
         kind = engine.actor_kind(transition)
         key = transition.key
@@ -118,7 +118,7 @@ async def run_local(
                     "work_item_id": work_item_id,
                     "transition_id": key,
                     "kind": "approval",
-                    "payload": {"summary": f"Validation requise pour passer à `{transition.to}`"},
+                    "payload": {"summary": f"Approval needed to move to `{transition.to}`"},
                     "sla_hours": (human.sla_hours if human else 24),
                 }
             )
@@ -130,7 +130,7 @@ async def run_local(
                     "decision": {"approved": approved, "kind": "approval"},
                 }
             )
-            decision = engine.after_human(transition, approved, "décision simulée")
+            decision = engine.after_human(transition, approved, "simulated decision")
             trace.steps.append(Step(state, key, kind, decision.reason, decision.next_state))
         elif kind == "train":
             decision = engine.after_train(transition, ok=deploy_ok)
@@ -146,7 +146,7 @@ async def run_local(
             trace.steps.append(Step(state, key, kind, decision.reason, decision.next_state))
 
         if decision.next_state == state and not decision.retried:
-            trace.stopped_reason = f"bloqué sur `{state}` : {decision.reason}"
+            trace.stopped_reason = f"blocked on `{state}`: {decision.reason}"
             break
         state = decision.next_state
         await tracker_activities.mirror_state(

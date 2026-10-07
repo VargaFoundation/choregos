@@ -259,7 +259,7 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                     "status": "missing_result",
                     "result": StageResult(
                         status=StageStatus.FAILED,
-                        summary="le runner s'est terminé sans poster de résultat",
+                        summary="the runner ended without posting a result",
                         reason="invalid_result",
                     ).model_dump(mode="json", by_alias=True),
                 }
@@ -267,7 +267,7 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 "status": status.state,
                 "result": StageResult(
                     status=StageStatus.FAILED,
-                    summary=status.message or f"exécution {status.state}",
+                    summary=status.message or f"run {status.state}",
                     reason=status.state,
                 ).model_dump(mode="json", by_alias=True),
             }
@@ -283,8 +283,8 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                     "result": StageResult(
                         status=StageStatus.FAILED,
                         summary=(
-                            f"jamais admis : {en_file / 60:.0f} min en file d'attente "
-                            f"({status.message or 'plafond atteint'})"
+                            f"never admitted: {en_file / 60:.0f} min in the queue "
+                            f"({status.message or 'limit reached'})"
                         ),
                         reason="queue_timeout",
                     ).model_dump(mode="json", by_alias=True),
@@ -299,7 +299,7 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "timed_out",
         "result": StageResult(
-            status=StageStatus.FAILED, summary=f"dépassement de {timeout_minutes:g} min", reason="timeout"
+            status=StageStatus.FAILED, summary=f"over {timeout_minutes:g} min", reason="timeout"
         ).model_dump(mode="json", by_alias=True),
     }
 

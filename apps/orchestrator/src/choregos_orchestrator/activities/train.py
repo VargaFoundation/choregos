@@ -178,7 +178,7 @@ async def promote(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_slug"])
         release = await session.get(Release, payload["release_id"])
         if release is None:
-            return {"ok": False, "reason": "release inconnue"}
+            return {"ok": False, "reason": "unknown release"}
         apps = list(bundle.config.gitops.apps) if bundle.config.gitops else [bundle.slug]
         tag = f"R-{utcnow():%Y.%m.%d}-{release.batch_no}"
         changes = [Change(app=app, tag=tag) for app in apps]
@@ -239,7 +239,7 @@ async def run_smoke(payload: dict[str, Any]) -> dict[str, Any]:
         for app in apps:
             health = await bundle.adapters.cd.health(app)
             if health.status in {"Degraded", "Missing"}:
-                return {"ok": False, "reason": f"{app} : {health.status} {health.message}"}
+                return {"ok": False, "reason": f"{app}: {health.status} {health.message}"}
         return {"ok": True}
 
 
@@ -261,7 +261,7 @@ async def soak(payload: dict[str, Any]) -> dict[str, Any]:
             for app in apps:
                 health = await bundle.adapters.cd.health(app)
                 if health.status == "Degraded":
-                    return {"ok": False, "reason": f"{app} dégradé pendant le soak"}
+                    return {"ok": False, "reason": f"{app} degraded during the soak"}
     return {"ok": True}
 
 
@@ -277,8 +277,8 @@ async def request_approval(payload: dict[str, Any]) -> dict[str, Any]:
         await bundle.adapters.notify.send(
             bundle.config.notify.slack_channel or "#choregos",
             Message(
-                title=f"Approbation demandée — {bundle.slug} → {payload['env']}",
-                body=f"Lot {release.batch_no} : {len(release.items)} ticket(s).",
+                title=f"Approval requested — {bundle.slug} → {payload['env']}",
+                body=f"Batch {release.batch_no}: {len(release.items)} work item(s).",
                 url=f"{settings.public_url}/p/{bundle.slug}/trains",
                 severity="warning",
             ),
@@ -311,7 +311,7 @@ async def promote_canary_step(payload: dict[str, Any]) -> dict[str, Any]:
             state = await bundle.adapters.cd.rollout_status(app)
             if state.phase in {"Degraded", "Aborted"}:
                 await bundle.adapters.cd.abort_rollout(app)
-                return {"ok": False, "reason": f"analyse KO sur {app} : {state.message}"}
+                return {"ok": False, "reason": f"analysis failed on {app}: {state.message}"}
     return {"ok": True, "weight": payload.get("weight")}
 
 
@@ -323,7 +323,7 @@ async def verify_prod(payload: dict[str, Any]) -> dict[str, Any]:
         for app in apps:
             health = await bundle.adapters.cd.health(app)
             if health.status not in {"Healthy", "Progressing"}:
-                return {"ok": False, "reason": f"{app} : {health.status}"}
+                return {"ok": False, "reason": f"{app}: {health.status}"}
         release = await session.get(Release, payload["release_id"])
         if release is not None:
             release.verdict = {"go": True, "checked_apps": apps}
@@ -364,7 +364,7 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
         await bundle.adapters.notify.send(
             bundle.config.notify.slack_channel or "#choregos",
             Message(
-                title=f"Déployé — {bundle.slug} → {release.env} (lot {release.batch_no})",
+                title=f"Deployed — {bundle.slug} → {release.env} (batch {release.batch_no})",
                 body=notes,
                 severity="success",
             ),
@@ -448,7 +448,7 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
             session.add(
                 Finding(
                     project_id=bundle.project.id,
-                    title=f"Rollback {bundle.slug} → {release.env} (lot {release.batch_no})",
+                    title=f"Rollback {bundle.slug} → {release.env} (batch {release.batch_no})",
                     type="bug",
                     severity="critical",
                     evidence=str(payload.get("reason", "")),
@@ -473,7 +473,7 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
                 Fact(
                     kind="incident",
                     subject=f"incident:{bundle.slug}:{utcnow():%Y-%m-%d}",
-                    content=f"Rollback sur {release.env if release else '?'} : {payload.get('reason', '')}",
+                    content=f"Rollback on {release.env if release else '?'}: {payload.get('reason', '')}",
                     provenance=Provenance(source="cd", ref=payload.get("release_id")),
                 ),
             )
@@ -535,10 +535,10 @@ async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_slug"])
         spec = getattr(bundle.engine.train(payload["env"]), "terraform", None)
         if spec is None or str(getattr(spec, "via", "none")) != "atlantis":
-            return {"applied": [], "skipped": "atlantis non configuré pour cet environnement"}
+            return {"applied": [], "skipped": "Atlantis is not configured for this environment"}
         release = await session.get(Release, payload["release_id"])
         if release is None:
-            return {"applied": [], "skipped": "release inconnue"}
+            return {"applied": [], "skipped": "unknown release"}
         prs = [
             (item.get("work_item_key", ""), str(item["infra_pr_url"]))
             for item in release.items
@@ -550,25 +550,25 @@ async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
         notify = bundle.adapters.notify
 
     if not prs:
-        return {"applied": [], "skipped": "aucune PR d'infra dans ce lot"}
+        return {"applied": [], "skipped": "no infrastructure pull request in this batch"}
 
     applied: list[str] = []
     for key, url in prs:
         ref = _pr_ref(url)
         if ref is None:
-            return {"applied": applied, "ok": False, "reason": f"URL de PR illisible : {url}"}
+            return {"applied": applied, "ok": False, "reason": f"unreadable pull request URL: {url}"}
         await scm.comment_pr(ref, "atlantis apply")
         verdict = await _await_atlantis(scm, ref, int(payload.get("timeout_minutes", 30)))
         if verdict != "success":
             await notify.send(
                 channel,
                 Message(
-                    title=f"Terraform : apply en échec — {slug} → {payload['env']}",
+                    title=f"Terraform apply failed — {slug} → {payload['env']}",
                     body=f"{key} · {url} : {verdict}",
                     severity="error",
                 ),
             )
-            return {"applied": applied, "ok": False, "reason": f"apply {verdict} sur {url}"}
+            return {"applied": applied, "ok": False, "reason": f"apply {verdict} on {url}"}
         applied.append(url)
     return {"applied": applied, "ok": True}
 

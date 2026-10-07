@@ -63,7 +63,7 @@ async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         failure = {
-            "message": str(payload.get("message") or "interpréteur en échec"),
+            "message": str(payload.get("message") or "the interpreter failed"),
             "activity": payload.get("activity"),
             "state": payload.get("state") or item.state,
             "at": utcnow().isoformat(),

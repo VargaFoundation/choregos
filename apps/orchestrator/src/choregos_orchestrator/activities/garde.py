@@ -51,10 +51,10 @@ async def garde_contre_l_injection(
             suspicions=[a.to_dict() for a in alertes[:10]],
         )
     if mode == "block":
-        resume = " ; ".join(f"{a.source} : {a.motif}" for a in alertes[:3])
+        resume = "; ".join(f"{a.source}: {a.motif}" for a in alertes[:3])
         raise ApplicationError(
-            f"injection de prompt suspectée, étape arrêtée avant tout run ({resume}) — "
-            "politique sandbox.prompt_injection: block ; relire le ticket, puis relancer",
+            f"suspected prompt injection, step stopped before any run ({resume}) — "
+            "policy sandbox.prompt_injection: block; read the work item, then retry",
             type="injection_suspected",
             non_retryable=True,
         )

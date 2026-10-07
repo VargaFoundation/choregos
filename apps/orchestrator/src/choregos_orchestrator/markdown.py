@@ -3,6 +3,7 @@
 
 Un seul commentaire, repéré par un marqueur, réécrit à chaque étape : c'est la vue
 humaine du travail de la plateforme — étapes, acteurs, tokens, coûts, durées, résultat.
+En anglais (ADR 0039, S21-13) : c'est le tracker qui le montre ; les marqueurs ne changent pas.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 STATUS_MARKER = "<!-- choregos:status -->"
-TABLE_HEADER = "| # | Étape | Acteur | Backend · modèle | Tokens in / out (cache) | Coût | Durée | Résultat |"
+TABLE_HEADER = "| # | Step | Actor | Backend · model | Tokens in / out (cached) | Cost | Duration | Result |"
 
 
 @dataclass(slots=True)
@@ -66,8 +67,8 @@ class StatusComment:
     def render(self) -> str:
         header = (
             f"**Workflow** {self.workflow} v{self.workflow_version} · "
-            f"**Taille** {self.size or '—'} · **Risque** {self.risk or '—'} · "
-            f"**État** {self.state_display}"
+            f"**Size** {self.size or '—'} · **Risk** {self.risk or '—'} · "
+            f"**State** {self.state_display}"
         )
         if self.pr_url:
             header += f" · **PR** {self.pr_url}"
@@ -77,8 +78,8 @@ class StatusComment:
         totals = _totals(self.lines)
         estimate = ""
         if self.estimate_eur is not None:
-            estimate = f"estimé {_eur(self.estimate_eur)}" + (
-                " ⚠ dépassement p80" if self.over_estimate else ""
+            estimate = f"estimated {_eur(self.estimate_eur)}" + (
+                " ⚠ over the p80" if self.over_estimate else ""
             )
         rows.append(
             f"| | **Total** | | | **{_thousands(totals[0])} / {_thousands(totals[1])}** | "
@@ -87,9 +88,9 @@ class StatusComment:
 
         footer_parts: list[str] = []
         if self.findings:
-            footer_parts.append("Findings déposés : " + " · ".join(self.findings))
+            footer_parts.append("Findings filed: " + " · ".join(self.findings))
         if self.run_url:
-            footer_parts.append(f"Run : {self.run_url}")
+            footer_parts.append(f"Run: {self.run_url}")
         if self.memory_note:
             footer_parts.append(self.memory_note)
 
@@ -97,7 +98,7 @@ class StatusComment:
             "\n".join(
                 [
                     STATUS_MARKER,
-                    "### Choregos — suivi",
+                    "### Choregos — progress",
                     header,
                     "",
                     TABLE_HEADER,
@@ -122,14 +123,14 @@ def _totals(lines: list[StageLine]) -> tuple[int, int, float, float]:
 
 def _thousands(value: int) -> str:
     if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f} M".replace(".", ",")
+        return f"{value / 1_000_000:.1f} M"
     if value >= 1000:
         return f"{round(value / 1000)} k"
     return str(value)
 
 
 def _eur(value: float) -> str:
-    return f"{value:.2f} €".replace(".", ",")
+    return f"€{value:.2f}"
 
 
 def _duration(seconds: float) -> str:
@@ -138,7 +139,7 @@ def _duration(seconds: float) -> str:
     hours, remainder = divmod(remainder, 3600)
     minutes, secs = divmod(remainder, 60)
     if days:
-        return f"{days} j {hours} h"
+        return f"{days} d {hours} h"
     if hours:
         return f"{hours} h {minutes} min"
     if minutes:
@@ -164,7 +165,7 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
             lines += ["", *[f"- {option}" for option in options]]
         lines += [
             "",
-            f"Répondre depuis l'interface : {public_url}",
+            f"Answer in the console: {public_url}",
         ]
         return "\n".join(lines)
     if kind == "scope_change":
@@ -172,21 +173,21 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
         return "\n".join(
             [
                 "<!-- choregos:human -->",
-                "### Choregos — élargissement de périmètre demandé",
-                f"Justification : {payload.get('justification', '')}",
+                "### Choregos — wider scope requested",
+                f"Reason: {payload.get('justification', '')}",
                 "",
-                "Chemins demandés :",
+                "Paths requested:",
                 *[f"- `{path}`" for path in (paths if isinstance(paths, list) else [])],
                 "",
-                f"Accorder ou refuser depuis l'interface : {public_url}",
+                f"Grant or refuse in the console: {public_url}",
             ]
         )
     return "\n".join(
         [
             "<!-- choregos:human -->",
-            "### Choregos — validation demandée",
-            str(payload.get("summary", "Une décision humaine est nécessaire pour continuer.")),
+            "### Choregos — approval requested",
+            str(payload.get("summary", "A person's decision is needed to continue.")),
             "",
-            f"Approuver ou refuser depuis l'interface : {public_url}",
+            f"Approve or refuse in the console: {public_url}",
         ]
     )

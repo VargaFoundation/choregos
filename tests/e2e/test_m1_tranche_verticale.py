@@ -157,7 +157,7 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
     # ── 6. ce que la plateforme doit avoir produit ──
     comment = platform.adapters.tracker.status_comment("varga/billing-api#123")
     assert comment is not None
-    assert "Choregos — suivi" in comment
+    assert "Choregos — progress" in comment
     assert "agent refine" in comment and "agent implement" in comment
     assert "€" in comment, "le coût est écrit dans le ticket"
 

@@ -106,7 +106,7 @@ def main() -> None:
     parser.add_argument(
         "--queues",
         default=",".join(ALL_QUEUES),
-        help=f"task queues séparées par des virgules (défaut : {','.join(ALL_QUEUES)})",
+        help=f"comma-separated task queues (default: {','.join(ALL_QUEUES)})",
     )
     args = parser.parse_args()
     settings = get_settings()

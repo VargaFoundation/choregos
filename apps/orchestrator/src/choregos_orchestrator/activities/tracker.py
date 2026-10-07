@@ -120,16 +120,16 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
                 decided = entry.decided_at
                 duration = elapsed_seconds(entry.requested_at, decided)
                 decision = (entry.decision or {}).get("approved")
-                outcome = "en attente" if decided is None else ("approuvée" if decision else "renvoyée")
+                outcome = "waiting" if decided is None else ("approved" if decision else "sent back")
                 lines.append(
                     StageLine(
                         index=index,
                         label={
-                            "approval": "Validation",
+                            "approval": "Approval",
                             "question": "Question",
-                            "scope_change": "Périmètre",
+                            "scope_change": "Scope",
                         }.get(entry.kind, entry.kind),
-                        actor=entry.decided_by or "humain",
+                        actor=entry.decided_by or "a person",
                         duration_s=duration,
                         outcome=outcome,
                     )
@@ -226,13 +226,13 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             await bundle.adapters.notify.send(
                 channel,
                 Message(
-                    title=f"Choregos — {payload['kind']} sur {item.tracker_key}",
+                    title=f"Choregos — {payload['kind']} on {item.tracker_key}",
                     body=item.title,
                     url=f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
                     severity="warning",
                     actions=[
-                        MessageAction(id="approve", label="Approuver", style="primary", value=row.id),
-                        MessageAction(id="reject", label="Renvoyer", style="danger", value=row.id),
+                        MessageAction(id="approve", label="Approve", style="primary", value=row.id),
+                        MessageAction(id="reject", label="Send back", style="danger", value=row.id),
                     ],
                 ),
             )
@@ -267,7 +267,7 @@ async def close_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             return {"closed": False}
         if row.decided_at is None:
             row.decided_at = utcnow()
-            row.decided_by = payload.get("decided_by", "système")
+            row.decided_by = payload.get("decided_by", "the platform")
             row.decision = payload.get("decision", {})
             await _garder_la_raison(session, row, dict(payload.get("decision") or {}))
         return {"closed": True}
@@ -320,8 +320,8 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
             runs = (await session.execute(select(Run).where(Run.work_item_id == item.id))).scalars().all()
             attempts = max((run.attempt for run in runs), default=1)
             lesson = (
-                f"Ticket {item.tracker_key} ({item.size or '?'}, risque {item.risk or '?'}) terminé en "
-                f"{len(runs)} runs, {attempts} tentative(s) max, "
+                f"Work item {item.tracker_key} ({item.size or '?'}, risk {item.risk or '?'}) finished in "
+                f"{len(runs)} runs, {attempts} attempt(s) at most, "
                 f"{float((item.totals or {}).get('cost_usd', 0.0)):.2f} USD."
             )
             await bundle.adapters.memory.write_fact(

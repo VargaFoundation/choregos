@@ -488,7 +488,7 @@ def render_project_manifests(
                                 "name": "runtimeclass-gvisor",
                                 "match": {"any": [{"resources": {"kinds": ["Pod"]}}]},
                                 "validate": {
-                                    "message": "les runners de ce projet doivent utiliser gVisor",
+                                    "message": "this project's runners must use gVisor",
                                     "pattern": {"spec": {"runtimeClassName": "gvisor"}},
                                 },
                             }

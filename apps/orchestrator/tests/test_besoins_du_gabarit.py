@@ -97,7 +97,7 @@ async def test_le_pas_des_etiquettes_ajoute_celles_du_gabarit_sans_toucher_a_cel
     bundle = SimpleNamespace(adapters=SimpleNamespace(tracker=SimpleNamespace(ensure_labels=ensure_labels)))
     message = await _github_ensure_labels({"labels": ["study"]}, bundle, None)
     assert recues == [{**LABELS, "study": "ededed"}]
-    assert message == f"{len(LABELS) + 1} labels garantis"
+    assert message == f"{len(LABELS) + 1} labels ensured"
 
 
 def test_la_pr_porte_les_notes_de_version_en_anglais() -> None:

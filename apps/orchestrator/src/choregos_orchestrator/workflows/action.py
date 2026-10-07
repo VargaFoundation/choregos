@@ -137,9 +137,9 @@ class ActionWorkflow:
             await workflow.wait_condition(lambda: position in self.preuves, timeout=delai)
         preuve = self.preuves.get(position)
         if preuve is None:
-            raise PreuveManquante(f"aucune preuve avant {jusqu_a.isoformat()} : délai dépassé")
+            raise PreuveManquante(f"no evidence before {jusqu_a.isoformat()}: timed out")
         if not preuve.get("ok"):
-            raise PreuveManquante(f"la preuve dit non : {preuve.get('detail') or 'sans détail'}")
+            raise PreuveManquante(f"the evidence says no: {preuve.get('detail') or 'no detail'}")
         self.etat = "running"
         await executer_activite(
             activites.marquer_l_attente,

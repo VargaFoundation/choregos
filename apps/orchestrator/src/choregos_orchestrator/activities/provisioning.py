@@ -88,7 +88,7 @@ async def run_provision_step(payload: dict[str, Any]) -> dict[str, Any]:
         steps: list[dict[str, Any]] = list(state.get("steps", []))
         done = next((s for s in steps if s["name"] == name and s["status"] == "succeeded"), None)
         if done is not None and payload.get("resume", True):
-            return {"status": "skipped", "step": name, "reason": "déjà exécutée"}
+            return {"status": "skipped", "step": name, "reason": "already done"}
 
         entry = {"name": name, "status": "running", "started_at": utcnow().isoformat(), "message": None}
         steps = [s for s in steps if s["name"] != name] + [entry]
@@ -157,8 +157,8 @@ async def _github_install_app(params: dict[str, Any], bundle: Any, settings: Any
     checker = getattr(bundle.adapters.tracker, "test", None)
     if checker is not None:
         result = await checker()
-        return f"App installée : {result.get('repo', bundle.slug)}"
-    return "App supposée installée (mode fakes)"
+        return f"App installed: {result.get('repo', bundle.slug)}"
+    return "App assumed installed (fakes mode)"
 
 
 #: La couleur d'une étiquette qu'un gabarit nomme sans la colorer.
@@ -181,17 +181,17 @@ async def _github_ensure_labels(params: dict[str, Any], bundle: Any, settings: A
     ensure = getattr(bundle.adapters.tracker, "ensure_labels", None)
     if ensure is not None:
         await ensure(etiquettes)
-    return f"{len(etiquettes)} labels garantis"
+    return f"{len(etiquettes)} labels ensured"
 
 
 async def _github_ensure_project_board(params: dict[str, Any], bundle: Any, settings: Any) -> str:
     fields = params.get("fields", ["Status", "Cost", "Size", "Risk", "Run"])
-    return f"board vérifié ({', '.join(fields)})"
+    return f"board checked ({', '.join(fields)})"
 
 
 async def _github_ensure_webhooks(params: dict[str, Any], bundle: Any, settings: Any) -> str:
     events = params.get("events", [])
-    return f"webhooks : {', '.join(events) if events else 'par défaut'}"
+    return f"webhooks: {', '.join(events) if events else 'default'}"
 
 
 async def _argocd_wait_synced(params: dict[str, Any], bundle: Any, settings: Any) -> str:
@@ -199,8 +199,8 @@ async def _argocd_wait_synced(params: dict[str, Any], bundle: Any, settings: Any
     for app in apps:
         health = await bundle.adapters.cd.health(str(app).replace("{{slug}}", bundle.slug))
         if health.status in {"Degraded", "Missing"}:
-            raise RuntimeError(f"application {app} non synchronisée : {health.status}")
-    return f"{len(apps)} application(s) synchronisée(s)"
+            raise RuntimeError(f"application {app} is not synced: {health.status}")
+    return f"{len(apps)} application(s) synced"
 
 
 async def _memory_create_tenant(params: dict[str, Any], bundle: Any, settings: Any) -> str:
@@ -209,11 +209,11 @@ async def _memory_create_tenant(params: dict[str, Any], bundle: Any, settings: A
         Fact(
             kind="convention",
             subject=f"convention:{bundle.slug}:bootstrap",
-            content=f"Projet {bundle.slug} provisionné par Choregos.",
+            content=f"Project {bundle.slug} provisioned by Choregos.",
             provenance=Provenance(source="provisioning"),
         ),
     )
-    return "tenant mémoire créé"
+    return "memory tenant created"
 
 
 async def _memory_initial_import(params: dict[str, Any], bundle: Any, settings: Any) -> str:
@@ -225,13 +225,13 @@ async def _memory_initial_import(params: dict[str, Any], bundle: Any, settings: 
                 "external_id": f"{bundle.slug}:{source}",
                 "kind": "convention",
                 "subject": f"convention:{bundle.slug}:{source}",
-                "content": f"Import initial depuis {source}",
+                "content": f"Initial import from {source}",
                 "source": "provisioning",
             }
             for source in sources
         ],
     )
-    return f"import initial : {', '.join(sources)}"
+    return f"initial import: {', '.join(sources)}"
 
 
 async def _gateway_create_team_and_budget(params: dict[str, Any], bundle: Any, settings: Any) -> str:
@@ -242,15 +242,15 @@ async def _gateway_create_team_and_budget(params: dict[str, Any], bundle: Any, s
         models=[],
     )
     await bundle.adapters.gateway.revoke(key.key_id)
-    return "équipe et budget gateway créés"
+    return "gateway team and budget created"
 
 
 async def _notify_test_message(params: dict[str, Any], bundle: Any, settings: Any) -> str:
     await bundle.adapters.notify.send(
         bundle.config.notify.slack_channel or "#choregos",
-        Message(title=f"Choregos — projet {bundle.slug} provisionné", severity="success"),
+        Message(title=f"Choregos — project {bundle.slug} provisioned", severity="success"),
     )
-    return "message de test envoyé"
+    return "test message sent"
 
 
 def _etape_constante(texte: str) -> Etape:
@@ -261,7 +261,7 @@ def _etape_constante(texte: str) -> Etape:
 
 
 def _etape_inconnue(name: str) -> str:
-    return f"étape `{name}` ignorée (non implémentée par ce template)"
+    return f"step `{name}` skipped (not implemented for this template)"
 
 
 async def _gitops_write(params: dict[str, Any], bundle: Any, settings: Any) -> str:
@@ -269,7 +269,7 @@ async def _gitops_write(params: dict[str, Any], bundle: Any, settings: Any) -> s
 
 
 async def _repo_scaffold_pr(params: dict[str, Any], bundle: Any, settings: Any) -> str:
-    return f"PR de scaffolding : {len(params.get('files', []))} fichier(s)"
+    return f"scaffolding pull request: {len(params.get('files', []))} file(s)"
 
 
 async def _aca_check_environment(params: dict[str, Any], bundle: Any, settings: Any) -> str:
@@ -287,12 +287,12 @@ _ETAPES: dict[str, Etape] = {
     "github.install_app": _github_install_app,
     "github.ensure_labels": _github_ensure_labels,
     "github.ensure_project_board": _github_ensure_project_board,
-    "github.ensure_issue_template": _etape_constante("gabarit d'issue déposé"),
+    "github.ensure_issue_template": _etape_constante("issue template added"),
     "github.ensure_webhooks": _github_ensure_webhooks,
     "aca.check_environment": _aca_check_environment,
     "aca.check_identity": _aca_check_identity,
     "gitops.write_project_manifests": _gitops_write,
-    "gitops.open_pr_or_commit": _etape_constante("PR GitOps ouverte sur choregos-infra"),
+    "gitops.open_pr_or_commit": _etape_constante("GitOps pull request opened on choregos-infra"),
     "argocd.wait_synced": _argocd_wait_synced,
     "repo.scaffold_pr": _repo_scaffold_pr,
     "memory.create_tenant": _memory_create_tenant,
@@ -312,19 +312,19 @@ async def _check_aca(step: str, bundle: Any) -> str:
     client = getattr(executor, "client", None)
     environment = getattr(executor, "environment_id", None)
     if client is None or environment is None:
-        return f"étape `{step}` ignorée : l'exécuteur de ce projet n'est pas Azure Container Apps"
+        return f"step `{step}` skipped: this project's runtime is not Azure Container Apps"
     if step == "aca.check_environment":
         found = await client.request("GET", environment)
         if found is None:
-            raise RuntimeError(f"environnement ACA introuvable : {environment}")
-        return f"environnement ACA joignable : {environment.rsplit('/', 1)[-1]}"
+            raise RuntimeError(f"ACA environment not found: {environment}")
+        return f"ACA environment reachable: {environment.rsplit('/', 1)[-1]}"
     identity = getattr(executor, "identity_id", None)
     if not identity:
-        return "aucune identité managée déclarée : l'image runner doit être publique"
+        return "no managed identity declared: the runner image must be public"
     found = await client.request("GET", identity)
     if found is None:
-        raise RuntimeError(f"identité managée introuvable : {identity}")
-    return f"identité managée joignable : {identity.rsplit('/', 1)[-1]}"
+        raise RuntimeError(f"managed identity not found: {identity}")
+    return f"managed identity reachable: {identity.rsplit('/', 1)[-1]}"
 
 
 async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -> str:
@@ -344,19 +344,19 @@ async def _write_manifests(bundle: Any, params: dict[str, Any], settings: Any) -
     writer = getattr(bundle.adapters.cd, "write_files", None)
     if writer is not None:
         await writer(path, manifests)
-    return f"{len(manifests)} manifeste(s) écrits dans {path}"
+    return f"{len(manifests)} manifest(s) written to {path}"
 
 
 def _remediation(step: str) -> str:
     return {
-        "github.install_app": "Installer l'App GitHub `choregos-bot` sur le dépôt, puis relancer.",
-        "github.ensure_project_board": "Créer le board Projects v2 et donner son numéro au connecteur.",
-        "gitops.write_project_manifests": "Vérifier les droits d'écriture sur `choregos-infra`.",
-        "argocd.wait_synced": "Regarder l'application dans Argo CD : sync manuelle possible.",
-        "gateway.create_team_and_budget": "Vérifier `master_key` LiteLLM et le quota de l'équipe.",
-        "aca.check_environment": "Créer le Managed Environment ACA, ou corriger `environment_id`.",
-        "aca.check_identity": "Vérifier l'identité managée et son rôle `AcrPull` sur le registre.",
-    }.get(step, "Corriger la cause puis relancer le provisioning : il reprend à l'étape échouée.")
+        "github.install_app": "Install the GitHub App `choregos-bot` on the repository, then retry.",
+        "github.ensure_project_board": "Create the Projects v2 board and give its number to the connector.",
+        "gitops.write_project_manifests": "Check the write rights on `choregos-infra`.",
+        "argocd.wait_synced": "Look at the application in Argo CD: a manual sync is possible.",
+        "gateway.create_team_and_budget": "Check the LiteLLM `master_key` and the team's quota.",
+        "aca.check_environment": "Create the ACA Managed Environment, or fix `environment_id`.",
+        "aca.check_identity": "Check the managed identity and its `AcrPull` role on the registry.",
+    }.get(step, "Fix the cause, then retry the provisioning: it resumes at the failed step.")
 
 
 @activity.defn(name="finish_provisioning")

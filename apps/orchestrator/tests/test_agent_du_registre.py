@@ -106,7 +106,7 @@ async def test_l_epingle_du_projet_resserre_le_budget(setup: Fixture) -> None:
         pytest.param({"status": "revoked"}, "révoqué", id="revoque"),
         pytest.param({"slug": "autre"}, "n'existe pas", id="inconnu"),
         pytest.param(
-            {"instructions": "{{ ''.__class__.__mro__ }}"}, "ne se rendent pas", id="evasion-du-bac-a-sable"
+            {"instructions": "{{ ''.__class__.__mro__ }}"}, "do not render", id="evasion-du-bac-a-sable"
         ),
     ],
 )
@@ -208,7 +208,7 @@ async def test_un_agent_qui_a_epuise_son_budget_du_jour_ne_lance_plus_de_run(set
         session.add(
             CostLedger(project_id=setup.project_id, run_id="run-hier", kind="tool", cost_usd=1.5, ts=utcnow())
         )
-    with pytest.raises(ApplicationError, match="budget du jour") as refus:
+    with pytest.raises(ApplicationError, match="daily budget") as refus:
         await prepare_stage(_plan(setup, agent="coordinateur"))
     assert refus.value.non_retryable and refus.value.type == "admission_refused"
 
