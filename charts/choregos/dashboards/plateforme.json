@@ -1,5 +1,5 @@
 {
-  "title": "Choregos — Plateforme",
+  "title": "Choregos — Platform",
   "uid": "choregos-plateforme",
   "tags": [
     "choregos"
@@ -9,7 +9,7 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "Requêtes API par seconde",
+      "title": "API requests per second",
       "targets": [
         {
           "expr": "sum(rate(http_requests_total{job=\"choregos-api\"}[5m])) by (status)"
@@ -24,7 +24,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Backlog des files Temporal",
+      "title": "Temporal task queue backlog",
       "targets": [
         {
           "expr": "sum(temporal_task_queue_backlog) by (task_queue)"
@@ -39,7 +39,7 @@
     },
     {
       "type": "stat",
-      "title": "Runs en cours",
+      "title": "Runs in progress",
       "targets": [
         {
           "expr": "sum(choregos_runs_active)"
@@ -54,7 +54,7 @@
     },
     {
       "type": "stat",
-      "title": "Démarrage d'un run (p95)",
+      "title": "Run start-up (p95)",
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(choregos_run_start_seconds_bucket[30m])) by (le))"

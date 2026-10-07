@@ -1,34 +1,70 @@
 {
-  "title": "Choregos — Projets et coûts",
+  "title": "Choregos — Projects & Costs",
   "uid": "choregos-couts",
-  "tags": ["choregos"],
+  "tags": [
+    "choregos"
+  ],
   "refresh": "5m",
   "panels": [
     {
       "type": "timeseries",
-      "title": "Coût par jour et par projet (USD)",
-      "targets": [{ "expr": "sum(increase(choregos_cost_usd_total[1d])) by (project)" }],
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 }
+      "title": "Cost per day and per project (USD)",
+      "targets": [
+        {
+          "expr": "sum(increase(choregos_cost_usd_total[1d])) by (project)"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "type": "bargauge",
-      "title": "Budget journalier consommé",
+      "title": "Daily budget consumed",
       "targets": [
-        { "expr": "choregos_project_daily_cost_usd / clamp_min(choregos_project_daily_budget_usd, 0.01)" }
+        {
+          "expr": "choregos_project_daily_cost_usd / clamp_min(choregos_project_daily_budget_usd, 0.01)"
+        }
       ],
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
     },
     {
       "type": "table",
-      "title": "Coût par étape et par modèle",
-      "targets": [{ "expr": "sum(increase(choregos_cost_usd_total[7d])) by (stage, model)" }],
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+      "title": "Cost per step and per model",
+      "targets": [
+        {
+          "expr": "sum(increase(choregos_cost_usd_total[7d])) by (stage, model)"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
     },
     {
       "type": "stat",
-      "title": "Taux de PR mergées au premier passage",
-      "targets": [{ "expr": "avg(choregos_first_pass_merge_rate)" }],
-      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 16 }
+      "title": "First-pass PR merge rate",
+      "targets": [
+        {
+          "expr": "avg(choregos_first_pass_merge_rate)"
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 16
+      }
     }
   ]
 }

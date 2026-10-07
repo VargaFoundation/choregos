@@ -310,6 +310,11 @@ monitoring:
   flavour: prometheus
   serviceMonitor: true
   dashboards: true
+  # Annotations posées sur chaque ConfigMap de dashboard. Le sidecar Grafana range un
+  # dashboard dans le dossier que nomme son `folderAnnotation` (souvent `grafana_folder`) ;
+  # sans annotation, il atterrit dans `General`, mêlé à ceux de la plateforme.
+  # Ex. `{grafana_folder: choregos}`.
+  dashboardAnnotations: {}
   alerts: true
 
 # Les faux du scénario RH servis par un seul processus (S20-07) : MCP pour le parc, le transporteur,

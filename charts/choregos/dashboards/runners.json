@@ -7,7 +7,7 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "Runs par état",
+      "title": "Runs by status",
       "targets": [
         {
           "expr": "sum(choregos_runs_total) by (status)"
@@ -22,7 +22,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Permissions refusées par run",
+      "title": "Permissions denied per run",
       "targets": [
         {
           "expr": "sum(rate(choregos_permission_denials_total[1h])) by (project)"
