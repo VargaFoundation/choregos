@@ -53,5 +53,5 @@ def _instant(nom: str, valeur: Any) -> datetime:
             return datetime(jour.year, jour.month, jour.day, tzinfo=UTC)
         instant = datetime.fromisoformat(texte.replace("Z", "+00:00"))
     except ValueError as erreur:
-        raise DateIllisible(f"le champ `{nom}` ne dit pas une date : {texte!r}") from erreur
+        raise DateIllisible(f"the field `{nom}` is not a date: {texte!r}") from erreur
     return instant if instant.tzinfo is not None else instant.replace(tzinfo=UTC)

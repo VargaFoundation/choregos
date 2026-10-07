@@ -39,7 +39,7 @@ def test_registry_is_complete() -> None:
 
 
 def test_unknown_gate_raises() -> None:
-    with pytest.raises(GateError, match="gate inconnue"):
+    with pytest.raises(GateError, match="unknown gate"):
         evaluate("licorne", GateContext())
 
 
@@ -77,13 +77,13 @@ def test_diff_size_max() -> None:
 
 def test_no_secrets() -> None:
     assert evaluate("no_secrets", GateContext()).passed
-    assert not evaluate("no_secrets", GateContext(secrets_found=["clé AWS"])).passed
+    assert not evaluate("no_secrets", GateContext(secrets_found=["AWS key"])).passed
 
 
 def test_scan_secrets_detects_common_shapes() -> None:
-    assert scan_secrets("AKIA1234567890ABCDEF") == ["clé AWS"]
-    assert scan_secrets("-----BEGIN PRIVATE KEY-----") == ["clé privée"]
-    assert scan_secrets("ghp_" + "a" * 30) == ["token GitHub"]
+    assert scan_secrets("AKIA1234567890ABCDEF") == ["AWS key"]
+    assert scan_secrets("-----BEGIN PRIVATE KEY-----") == ["private key"]
+    assert scan_secrets("ghp_" + "a" * 30) == ["GitHub token"]
     assert scan_secrets("rien à voir") == []
 
 
@@ -125,7 +125,7 @@ def test_provenance_signed() -> None:
 def test_flag_present() -> None:
     assert evaluate("flag_present", GateContext(flags=["new-billing"]), {"name": "new-billing"}).passed
     out = evaluate("flag_present", GateContext(flags=[]), {"name": "new-billing"})
-    assert out.blocking and "absent" in out.detail
+    assert out.blocking and "missing" in out.detail
     assert evaluate("flag_present", GateContext()).blocking
 
 
@@ -172,7 +172,7 @@ def test_une_garantie_sans_rien_a_verifier_refuse() -> None:
     rien = GateContext()
     verdict = evaluate("outputs_present", rien)
     assert not verdict.passed
-    assert "aucune sortie déclarée" in verdict.detail
+    assert "no output declared" in verdict.detail
     assert evaluate("outputs_present", rien, {"allow_empty": True}).passed
 
     assert not evaluate("evidence_facts", GateContext()).passed
@@ -218,7 +218,7 @@ def test_une_garantie_sans_diff_ne_se_prononce_pas() -> None:
     for nom in ("scope_respected", "diff_size_max", "no_secrets"):
         verdict = evaluate(nom, aveugle, {"files": 10})
         assert not verdict.passed, nom
-        assert "diff indisponible" in verdict.detail
+        assert "diff unavailable" in verdict.detail
 
     # Avec un diff, rien ne change pour les cas déjà couverts.
     assert evaluate("no_secrets", GateContext()).passed

@@ -64,7 +64,7 @@ def est_notification(message: dict[str, Any]) -> bool:
 def defaut_du_message(message: object) -> str | None:
     """Pourquoi ce message n'est pas une requête JSON-RPC 2.0 acceptable, ou `None`."""
     if isinstance(message, list):
-        return "les lots JSON-RPC ne sont pas pris en charge (MCP 2025-06-18)"
+        return "JSON-RPC batches are not supported (MCP 2025-06-18)"
     if not isinstance(message, dict):
         return "un message JSON-RPC est un objet"
     if message.get("jsonrpc") != "2.0":

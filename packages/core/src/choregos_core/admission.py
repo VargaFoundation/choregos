@@ -54,7 +54,7 @@ def declarer_une_admission(nom: str, controle: Controle) -> None:
     greffon remplace au lieu de doubler.
     """
     if not callable(controle):
-        raise TypeError(f"admission « {nom} » : un appelable est attendu")
+        raise TypeError(f"admission “{nom}”: a callable is expected")
     _CONTROLES[nom] = controle
 
 

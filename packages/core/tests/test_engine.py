@@ -89,7 +89,7 @@ def test_after_stage_pending_gate_waits(simple: WorkflowEngine) -> None:
         t, done(), attempts=0, gate_outcomes=[GateOutcome("ci_green", False, pending=True)]
     )
     assert decision.next_state == "ready"
-    assert "attente" in decision.reason
+    assert "pending" in decision.reason
 
 
 def test_needs_human_uses_defaults(simple: WorkflowEngine) -> None:
@@ -120,7 +120,7 @@ def test_after_train(simple: WorkflowEngine) -> None:
 def test_migration_requires_known_state(simple: WorkflowEngine) -> None:
     other = load_template("advanced")
     assert simple.can_migrate_to(other, "in_progress") == "in_progress"
-    with pytest.raises(ValueError, match="n'existe pas"):
+    with pytest.raises(ValueError, match="does not exist"):
         simple.can_migrate_to(other, "deployed_prod_only_here")
     assert (
         simple.can_migrate_to(other, "deployed_prod", {"deployed_prod": "verified_prod"}) == "verified_prod"

@@ -116,7 +116,7 @@ class PolicyEngine:
         }.get(str(kind), str(kind))
         rule: ApprovalRule | None = getattr(self.policy.approvals, attr, None)
         if rule is None:
-            return ApprovalDecision(False, reason=f"aucune règle `{attr}` : pas d'approbation")
+            return ApprovalDecision(False, reason=f"no `{attr}` rule: no approval")
         if rule.required == "always":
             return ApprovalDecision(True, rule.group, rule.timeout_hours, f"`{attr}` : toujours")
         if rule.required == "never":
@@ -213,7 +213,7 @@ def parse_policy(text: str) -> Policy:
         raise ValidationError([Issue("yaml.syntax", str(exc))], subject="politique") from exc
     if not isinstance(raw, dict):
         raise ValidationError(
-            [Issue("yaml.not_a_mapping", "la politique doit être un objet")], subject="politique"
+            [Issue("yaml.not_a_mapping", "the policy must be an object")], subject="politique"
         )
     try:
         return Policy.model_validate(raw)

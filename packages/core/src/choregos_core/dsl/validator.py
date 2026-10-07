@@ -84,7 +84,7 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
     except jsonschema.SchemaError as erreur:
         report.error(
             "inputs.invalid",
-            f"`metadata.inputs` n'est pas un JSON Schema valide : {erreur.message}",
+            f"`metadata.inputs` is not a valid JSON Schema: {erreur.message}",
             ["metadata", "inputs"],
             source,
         )
@@ -92,7 +92,7 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
     if schema.get("type", "object") != "object":
         report.error(
             "inputs.not_object",
-            "`metadata.inputs` décrit un objet : les champs du ticket",
+            "`metadata.inputs` describes an object: the work item's fields",
             ["metadata", "inputs"],
             source,
         )
@@ -110,7 +110,7 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 if g.name == "action_succeeded":
                     report.error(
                         "gate.sans_matiere",
-                        "garantie `action_succeeded` sans `action:` : aucune action à juger",
+                        "guarantee `action_succeeded` without `action:`: there is no action to judge",
                         [*chemin, "gates", g_index],
                         source,
                     )
@@ -118,8 +118,8 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
         if t.on_fail is None:
             report.error(
                 "action.on_fail_missing",
-                "une action peut échouer ou être rejetée : `on_fail: {to, max_attempts, escalate_to}` dit "
-                "où va le ticket — sans lui, il proposerait la même action sans fin",
+                "an action can fail or be rejected: `on_fail: {to, max_attempts, escalate_to}` says where "
+                "the work item goes — without it, it would propose the same action forever",
                 [*chemin, "action"],
                 source,
             )
@@ -127,8 +127,8 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
         if not isinstance(acteur, SystemActor):
             report.error(
                 "action.not_system",
-                "seule une transition de la plateforme (`by:` un acteur `system`) propose une action : "
-                "un agent appelle des outils, un humain décide",
+                "only a platform transition (`by:` a `system` actor) proposes an action: "
+                "an agent calls tools, a person decides",
                 [*chemin, "action"],
                 source,
             )
@@ -139,14 +139,14 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
         if not isinstance(declare, dict):
             report.error(
                 "action.date_field_unknown",
-                f"`not_before` lit `fields.{nom}`, que `metadata.inputs` ne déclare pas",
+                f"`not_before` reads `fields.{nom}`, which `metadata.inputs` does not declare",
                 [*chemin, "action", "not_before"],
                 source,
             )
         elif declare.get("format") not in {"date", "date-time"}:
             report.error(
                 "action.date_field_not_date",
-                f"`fields.{nom}` n'est pas déclaré comme une date (`format: date` ou `date-time`)",
+                f"`fields.{nom}` is not declared as a date (`format: date` or `date-time`)",
                 [*chemin, "action", "not_before"],
                 source,
             )
@@ -164,7 +164,7 @@ def _check_tasks(wf: Workflow, report: ValidationReport, source: Any) -> None:
         if not isinstance(wf.actors.get(t.by) if t.by else None, HumanActor):
             report.error(
                 "task.not_human",
-                "une tâche se fait par une personne : `by:` un acteur `human`",
+                "a task is done by a person: `by:` a `human` actor",
                 chemin,
                 source,
             )
@@ -173,14 +173,14 @@ def _check_tasks(wf: Workflow, report: ValidationReport, source: Any) -> None:
         try:
             jsonschema.Draft202012Validator.check_schema(t.task.form)
         except jsonschema.SchemaError as erreur:
-            report.error("task.form_invalid", f"le formulaire n'est pas un JSON Schema : {erreur.message}",
+            report.error("task.form_invalid", f"the form is not a JSON Schema: {erreur.message}",
                          [*chemin, "form"], source)  # fmt: skip
             continue
         proprietes = t.task.form.get("properties") or {}
         if t.task.form.get("type", "object") != "object" or not proprietes:
             report.error(
                 "task.form_invalid",
-                "le formulaire décrit un objet, et au moins un champ à remplir",
+                "the form describes an object, with at least one field to fill",
                 [*chemin, "form"],
                 source,
             )
@@ -189,7 +189,7 @@ def _check_tasks(wf: Workflow, report: ValidationReport, source: Any) -> None:
             if nom not in champs:
                 report.error(
                     "task.field_unknown",
-                    f"le formulaire remplit `fields.{nom}`, que `metadata.inputs` ne déclare pas",
+                    f"the form fills `fields.{nom}`, which `metadata.inputs` does not declare",
                     [*chemin, "form", "properties", nom],
                     source,
                 )
@@ -206,7 +206,7 @@ def _check_references(
         if isinstance(actor, HumanActor) and actor.escalate_to and actor.escalate_to not in wf.actors:
             report.error(
                 "actor.unknown",
-                f"escalade vers un acteur inconnu : {actor.escalate_to}",
+                f"escalation to an unknown actor: {actor.escalate_to}",
                 ["actors", actor_id, "escalate_to"],
                 source,
             )
@@ -224,19 +224,19 @@ def _check_transition_references(
 ) -> None:
     def etat(nom: str | None, chemin: list[str | int], libelle: str) -> None:
         if nom is not None and nom not in states:
-            report.error("state.unknown", f"{libelle} : {nom}", chemin, source)
+            report.error("state.unknown", f"{libelle}: {nom}", chemin, source)
 
     if t.from_ != AGENT_WILDCARD:
-        etat(t.from_, [*path, "from"], "état source inconnu")
-    etat(t.to, [*path, "to"], "état cible inconnu")
-    etat(t.on_reject, [*path, "on_reject"], "état inconnu")
+        etat(t.from_, [*path, "from"], "unknown source state")
+    etat(t.to, [*path, "to"], "unknown target state")
+    etat(t.on_reject, [*path, "on_reject"], "unknown state")
     if t.by is not None and t.by not in wf.actors:
-        report.error("actor.unknown", f"acteur inconnu : {t.by}", [*path, "by"], source)
+        report.error("actor.unknown", f"unknown actor: {t.by}", [*path, "by"], source)
     for g_index, g in enumerate(t.gates):
         if g.name not in gates:
             report.error(
                 "gate.unknown",
-                f"gate inconnue : {g.name} (connues : {', '.join(sorted(gates))})",
+                f"unknown gate: {g.name} (known: {', '.join(sorted(gates))})",
                 [*path, "gates", g_index],
                 source,
             )
@@ -245,18 +245,18 @@ def _check_transition_references(
         if retry is None:
             continue
         for attr in ("to", "escalate_to"):
-            etat(getattr(retry, attr), [*path, field_name, attr], f"état inconnu dans {field_name}.{attr}")
+            etat(getattr(retry, attr), [*path, field_name, attr], f"unknown state in {field_name}.{attr}")
     for a_index, actor_id in enumerate(t.review.agents if t.review and t.review.agents else []):
         if actor_id not in wf.actors:
             report.error(
                 "actor.unknown",
-                f"relecteur inconnu : {actor_id}",
+                f"unknown reviewer: {actor_id}",
                 [*path, "review", "agents", a_index],
                 source,
             )
     actor = wf.actors.get(t.by) if t.by else None
     if isinstance(actor, AgentActor) and actor.model == "profile:":
-        report.error("model.profile_empty", "profil de modèle vide", ["actors", t.by, "model"], source)
+        report.error("model.profile_empty", "empty model profile", ["actors", t.by, "model"], source)
 
 
 def _check_defaults_references(wf: Workflow, states: set[str], report: ValidationReport, source: Any) -> None:
@@ -269,14 +269,14 @@ def _check_defaults_references(wf: Workflow, states: set[str], report: Validatio
             if target is not None and target not in states:
                 report.error(
                     "state.unknown",
-                    f"état inconnu dans defaults.from_any_agent_state.{attr} : {target}",
+                    f"unknown state in defaults.from_any_agent_state.{attr}: {target}",
                     ["defaults", "from_any_agent_state", attr],
                     source,
                 )
     abandon = defaults.needs_human.on_abandon if defaults.needs_human else None
     if abandon and abandon not in states:
         report.error(
-            "state.unknown", f"état inconnu : {abandon}", ["defaults", "needs_human", "on_abandon"], source
+            "state.unknown", f"unknown state: {abandon}", ["defaults", "needs_human", "on_abandon"], source
         )
 
 
@@ -286,7 +286,7 @@ def _check_initial_and_terminal(wf: Workflow, report: ValidationReport, source: 
     if initial not in wf.states:
         report.error(
             "workflow.initial_state_unknown",
-            f"`initial: {initial}` ne nomme aucun état déclaré",
+            f"`initial: {initial}` names no declared state",
             ["initial"],
             source,
         )
@@ -294,12 +294,12 @@ def _check_initial_and_terminal(wf: Workflow, report: ValidationReport, source: 
     if wf.states[initial].terminal:
         report.error(
             "workflow.initial_state_terminal",
-            f"l'état initial ({initial}) ne peut pas être terminal : le ticket naîtrait fini",
+            f"the initial state ({initial}) cannot be terminal: the work item would be born finished",
             ["states", initial],
             source,
         )
     if not wf.terminal_states():
-        report.error("workflow.no_terminal_state", "aucun état terminal déclaré", ["states"], source)
+        report.error("workflow.no_terminal_state", "no terminal state declared", ["states"], source)
 
     # Un état qui n'est atteignable que par un chemin d'échec est légitime (needs_human) ;
     # un état qui n'est atteint par aucune transition, hors état initial, est une faute de frappe.
@@ -308,7 +308,7 @@ def _check_initial_and_terminal(wf: Workflow, report: ValidationReport, source: 
         if name != initial and name not in targets:
             report.error(
                 "state.no_inbound",
-                f"aucune transition ne mène à l'état {name} (l'état initial est {initial})",
+                f"no transition leads to the state {name} (the initial state is {initial})",
                 ["states", name],
                 source,
             )
@@ -364,12 +364,12 @@ def _check_reachability(wf: Workflow, report: ValidationReport, source: Any) -> 
     reachable = _reachable_states(wf)
     for name in wf.states:
         if name not in reachable:
-            report.error("state.orphan", f"état orphelin (inatteignable) : {name}", ["states", name], source)
+            report.error("state.orphan", f"orphan state (unreachable): {name}", ["states", name], source)
     terminals = set(wf.terminal_states())
     if terminals and not (terminals & reachable):
         report.error(
             "workflow.terminal_unreachable",
-            "aucun état terminal n'est atteignable depuis l'état initial",
+            "no terminal state is reachable from the initial state",
             ["states"],
             source,
         )
@@ -379,24 +379,24 @@ def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
     """Ce que la plateforme fait s'ÉCRIT (#175) : `does` sur une transition système, `production`
     sur un état. Un effet encore déduit d'un nom se lit — un workflow publié ne change pas de
     comportement —, mais il s'annonce : un renommage le perdrait."""
-    gestes = {"open_pr": "ouvre la PR", "merge_pr": "fusionne la PR"}
+    gestes = {"open_pr": "opens the PR", "merge_pr": "merges the PR"}
     for index, t in enumerate(wf.transitions):
         systeme = isinstance(wf.actors.get(t.by or ""), SystemActor)
         if t.does is not None and not systeme:
-            message = f"`does: {t.does}` est un geste de la plateforme : seul un acteur `system` le porte"
+            message = f"`does: {t.does}` is a platform gesture: only a `system` actor carries it"
             report.error("transition.does_requires_system", message, ["transitions", index, "does"], source)
         implicite = effet_implicite(t.to)
         if systeme and t.does is None and implicite is not None:
             message = (
-                f"la transition vers `{t.to}` {gestes[implicite]} à cause du NOM de l'état : "
-                f"écrivez `does: {implicite}`, un renommage ne le changera plus"
+                f"the transition to `{t.to}` {gestes[implicite]} because of the state's NAME: "
+                f"write `does: {implicite}`, so that a rename no longer changes it"
             )
             report.warn("workflow.effet_implicite", message, ["transitions", index, "to"], source)
     for nom, etat in wf.states.items():
         if nom.startswith(PREFIXE_PRODUCTION) and not etat.production:
             message = (
-                f"l'état `{nom}` est la production à cause de son NOM : écrivez `production: true`, "
-                "un renommage ne lèvera plus le verrou"
+                f"the state `{nom}` is production because of its NAME: write `production: true`, "
+                "so that a rename no longer lifts the lock"
             )
             report.warn("workflow.effet_implicite", message, ["states", nom], source)
 
@@ -406,7 +406,7 @@ def _check_prod_states(wf: Workflow, report: ValidationReport, source: Any) -> N
         if est_un_etat_de_production(t.to, wf.states.get(t.to)) and t.via != "release_train":
             report.error(
                 "prod.requires_train",
-                f"l'état {t.to} n'est atteignable que par `via: release_train` (la prod est un verrou)",
+                f"the state {t.to} can only be reached `via: release_train` (production is locked)",
                 ["transitions", index, "to"],
                 source,
             )
@@ -425,7 +425,7 @@ def _check_retries(wf: Workflow, report: ValidationReport, source: Any) -> None:
             if isinstance(actor, AgentActor):
                 report.error(
                     "transition.unbounded_retry",
-                    f"transition de retour {t.from_} → {t.to} sans `on_fail.max_attempts`",
+                    f"return transition {t.from_} → {t.to} without `on_fail.max_attempts`",
                     ["transitions", index],
                     source,
                 )
@@ -434,9 +434,9 @@ def _check_retries(wf: Workflow, report: ValidationReport, source: Any) -> None:
 # Ce qu'une garantie a besoin de trouver sur la transition pour pouvoir se prononcer.
 # `outputs_present` sans `outputs:` ne regarde rien ; `evidence_facts` sans `keys:` non plus.
 GATES_A_MATIERE: dict[str, tuple[str, str]] = {
-    "outputs_present": ("outputs", "`outputs:` sur la transition"),
-    "evidence_facts": ("keys", "`keys:` en paramètre de la garantie"),
-    "tool_called": ("tools", "`tools:` en paramètre de la garantie"),
+    "outputs_present": ("outputs", "`outputs:` on the transition"),
+    "evidence_facts": ("keys", "`keys:` as a parameter of the guarantee"),
+    "tool_called": ("tools", "`tools:` as a parameter of the guarantee"),
 }
 
 
@@ -457,7 +457,7 @@ def _check_gates_ont_de_la_matiere(wf: Workflow, report: ValidationReport, sourc
                 continue
             report.error(
                 "gate.sans_matiere",
-                f"garantie `{g.name}` sans {comment} : elle n'aurait rien à vérifier",
+                f"guarantee `{g.name}` without {comment}: it would have nothing to check",
                 ["transitions", index, "gates", g_index],
                 source,
             )
@@ -491,7 +491,7 @@ def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> 
         except FileNotFoundError:
             report.warn(
                 "role.playbook_introuvable",
-                f"aucun playbook pour le rôle `{role}` : le déploiement doit fournir "
+                f"no playbook for the role `{role}`: the deployment must provide "
                 f"`{role}.md` (CHOREGOS_PLAYBOOKS_DIR)",
                 ["actors", actor_id, "role"],
                 source,
@@ -502,7 +502,7 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
     if not any(name == "needs_human" or state.kind == "wait" for name, state in wf.states.items()):
         report.warn(
             "workflow.no_human_state",
-            "aucun état d'attente humaine : le workflow ne pourra jamais demander d'arbitrage",
+            "no human waiting state: the workflow can never ask a person to arbitrate",
             ["states"],
             source,
         )
@@ -520,7 +520,7 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
     if has_pr and not has_verify:
         report.warn(
             "workflow.no_verify_before_pr",
-            "aucune étape `verify` avant l'ouverture de PR",
+            "no `verify` step before the pull request is opened",
             ["transitions"],
             source,
         )
@@ -532,7 +532,7 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
         if not used:
             report.warn(
                 "actor.unused",
-                f"acteur déclaré mais jamais utilisé : {actor_id}",
+                f"actor declared but never used: {actor_id}",
                 ["actors", actor_id],
                 source,
             )

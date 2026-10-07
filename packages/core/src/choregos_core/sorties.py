@@ -26,12 +26,12 @@ class Exit(IntEnum):
     @property
     def explanation(self) -> str:
         return {
-            Exit.OK: "résultat posté",
-            Exit.INPUT_NOT_FOUND: "StageInput introuvable ou résultat déjà posté",
-            Exit.CLONE_FAILED: "clone du dépôt impossible",
-            Exit.AGENT_UNREACHABLE: "backend agent injoignable",
-            Exit.INVALID_RESULT: "résultat invalide après tentatives de réparation",
-            Exit.SKILLS_INVALID: "skill absente ou d'empreinte fausse",
+            Exit.OK: "result posted",
+            Exit.INPUT_NOT_FOUND: "StageInput not found, or result already posted",
+            Exit.CLONE_FAILED: "could not clone the repository",
+            Exit.AGENT_UNREACHABLE: "agent backend unreachable",
+            Exit.INVALID_RESULT: "invalid result after repair attempts",
+            Exit.SKILLS_INVALID: "skill missing, or its digest does not match",
         }[self]
 
 

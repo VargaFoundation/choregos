@@ -204,34 +204,34 @@ def test_une_garantie_ajoutee_garde_le_style_de_sa_liste() -> None:
 @pytest.mark.parametrize(
     ("op", "motif"),
     [
-        pytest.param({"op": "remove_state", "name": "demande"}, "encore nommé", id="etat-reference"),
-        pytest.param({"op": "remove_actor", "name": "rh"}, "porte encore", id="acteur-reference"),
+        pytest.param({"op": "remove_state", "name": "demande"}, "still named", id="etat-reference"),
+        pytest.param({"op": "remove_actor", "name": "rh"}, "still carries", id="acteur-reference"),
         pytest.param(
-            {"op": "rename_state", "from": "demande", "to": "fait"}, "déjà", id="renommer-vers-un-existant"
+            {"op": "rename_state", "from": "demande", "to": "fait"}, "already", id="renommer-vers-un-existant"
         ),
         pytest.param(
-            {"op": "rename_state", "from": "demande", "to": "Pas Un Nom"}, "nom d'état", id="nom-invalide"
+            {"op": "rename_state", "from": "demande", "to": "Pas Un Nom"}, "state name", id="nom-invalide"
         ),
-        pytest.param({"op": "add_state", "name": "demande"}, "existe déjà", id="etat-existant"),
+        pytest.param({"op": "add_state", "name": "demande"}, "already exists", id="etat-existant"),
         pytest.param(
-            {"op": "remove_transition", "id": "t-inconnue"}, "n'existe pas", id="transition-inconnue"
+            {"op": "remove_transition", "id": "t-inconnue"}, "does not exist", id="transition-inconnue"
         ),
         pytest.param(
             {"op": "set_transition", "id": "t-valider", "field": "gates", "value": []},
-            "en bloc",
+            "block style",
             id="valeur-en-bloc",
         ),
         pytest.param({"op": "set_transition", "id": "t-valider", "field": "id", "value": "x"}, "id", id="id"),
         pytest.param(
             {"op": "add_gate", "transition": "t-valider", "gate": "review_approved"},
-            "déjà",
+            "already",
             id="garantie-en-double",
         ),
         # `on_timeout` nomme `plus_tard`, qui n'est pas (encore) un état : le renommage inverse le
         # renommerait aussi, et ne redonnerait pas les octets d'origine.
         pytest.param(
             {"op": "rename_state", "from": "attente_badge", "to": "plus_tard"},
-            "déjà nommé",
+            "already named",
             id="renommer-vers-un-nom-deja-cite",
         ),
         pytest.param(
@@ -239,7 +239,7 @@ def test_une_garantie_ajoutee_garde_le_style_de_sa_liste() -> None:
                 "op": "add_transition",
                 "transition": {"id": "t-preparer", "from": "demande", "to": "fait", "by": "rh"},
             },
-            "existe déjà",
+            "already exists",
             id="transition-existante",
         ),
     ],
@@ -256,7 +256,7 @@ def test_le_premier_champ_d_une_transition_en_bloc_ne_bouge_pas() -> None:
         '  - id: t-valider\n    from: "preparation"', '  - from: "preparation"\n    id: t-valider'
     )
     assert '  - from: "preparation"\n    id: t-valider' in texte
-    with pytest.raises(EditionRefusee, match="ligne du tiret"):
+    with pytest.raises(EditionRefusee, match="dash's line"):
         editer(texte, [{"op": "set_transition", "id": "t-valider", "field": "from", "unset": True}])
     # Le reste de la transition se modifie.
     edition = editer(
@@ -301,7 +301,7 @@ def test_renommer_un_etat_a_effet_ecrit_d_abord_son_effet() -> None:
     apres, _ = parse_workflow(edition.yaml, strict=False)
     (t_pr,) = [t for t in apres.transitions if t.id == "t-pr"]
     assert (t_pr.to, t_pr.does, effet_de_la_transition(t_pr)) == ("revue", "open_pr", "open_pr")
-    assert any("désormais écrit" in a for a in edition.avertissements)
+    assert any("is now written" in a for a in edition.avertissements)
     assert editer(edition.yaml, edition.inverse).yaml == ANCIEN, "l'inverse défait le tout, à l'octet près"
 
 
@@ -344,7 +344,7 @@ def test_un_effet_sans_id_de_transition_ne_se_renomme_pas_en_silence() -> None:
         "  - { id: t-pr, from: in_progress, to: pr_open, by: ci }",
         "  - { from: in_progress, to: pr_open, by: ci }",
     )
-    with pytest.raises(EditionRefusee, match="pas d'`id`"):
+    with pytest.raises(EditionRefusee, match="has no `id`"):
         editer(sans_id, [{"op": "rename_state", "from": "pr_open", "to": "revue"}])
 
 
@@ -360,7 +360,7 @@ def test_un_effet_ecrit_garde_ce_que_le_validateur_en_deduit() -> None:
 def test_renommer_vers_un_nom_a_effet_l_annonce() -> None:
     """Un nom en `pr_`, `merged` ou `deployed_prod` se lit encore comme un effet : le donner le dit."""
     edition = editer(ANCIEN, [{"op": "rename_state", "from": "in_progress", "to": "pr_brouillon"}])
-    assert any("porte un effet par son nom" in a for a in edition.avertissements)
+    assert any("carries an effect through its name" in a for a in edition.avertissements)
 
 
 def test_plusieurs_operations_s_annulent_dans_l_ordre_contraire() -> None:

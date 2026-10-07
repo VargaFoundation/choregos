@@ -28,7 +28,7 @@ class Issue:
     def format(self) -> str:
         where = self.path or ""
         if self.line is not None:
-            where = f"{where} (ligne {self.line}" + (f", colonne {self.column})" if self.column else ")")
+            where = f"{where} (line {self.line}" + (f", column {self.column})" if self.column else ")")
         return f"[{self.code}] {self.message}" + (f" — {where}" if where.strip() else "")
 
 
@@ -44,7 +44,7 @@ class ValidationError(ChoregosError):
     subject: str = "document"
 
     def __str__(self) -> str:
-        head = f"{self.subject} invalide ({len(self.issues)} erreur(s)) :"
+        head = f"invalid {self.subject} ({len(self.issues)} error(s)):"
         return "\n".join([head, *[f"  - {i.format()}" for i in self.issues]])
 
 

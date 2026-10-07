@@ -20,7 +20,7 @@ from jinja2.sandbox import SandboxedEnvironment
 
 #: De quoi rendre un gabarit pour le vérifier, à la publication d'une version.
 VARIABLES_D_EXEMPLE: dict[str, Any] = {
-    "ticket": {"key": "DEMO-1", "title": "Arrivée de Camille", "body": "Arrive le 2 novembre."},
+    "ticket": {"key": "DEMO-1", "title": "Onboarding of Camille", "body": "Arrive le 2 novembre."},
     "spec": "",
     "plan_markdown": "",
     "inputs": {},

@@ -121,7 +121,7 @@ class WorkflowEngine:
         retry = transition.on_fail or transition.on_changes_requested
         if retry is None:
             fallback = self._default_state("on_question") or transition.from_
-            return Decision(fallback, escalated=True, reason=reason or "échec sans politique de reprise")
+            return Decision(fallback, escalated=True, reason=reason or "failed, with no retry policy")
         if attempts < retry.max_attempts:
             return Decision(
                 retry.to, retried=True, reason=reason or f"tentative {attempts + 1}/{retry.max_attempts}"
@@ -129,7 +129,7 @@ class WorkflowEngine:
         return Decision(
             retry.escalate_to,
             escalated=True,
-            reason=reason or f"{retry.max_attempts} tentatives épuisées",
+            reason=reason or f"{retry.max_attempts} attempts exhausted",
         )
 
     def after_stage(
@@ -144,13 +144,13 @@ class WorkflowEngine:
         if result.status is StageStatus.NEEDS_HUMAN:
             target = self._default_state("on_question")
             if target:
-                return Decision(target, reason=result.reason or "l'agent demande un arbitrage")
-            return self.retry_or_escalate(transition, attempts, "l'agent demande un arbitrage")
+                return Decision(target, reason=result.reason or "the agent asks a person to arbitrate")
+            return self.retry_or_escalate(transition, attempts, "the agent asks a person to arbitrate")
         if result.status is not StageStatus.DONE:
             if result.reason == "budget":
                 target = self._default_state("on_budget_exceeded")
                 if target:
-                    return Decision(target, reason="budget dépassé")
+                    return Decision(target, reason="budget exceeded")
             if result.reason in {"limit", "timeout"}:
                 target = self._default_state("on_timeout")
                 if target:
@@ -160,38 +160,36 @@ class WorkflowEngine:
         blocking = [g for g in gate_outcomes if g.blocking]
         if blocking:
             names = ", ".join(f"{g.name} ({g.detail})" for g in blocking)
-            return self.retry_or_escalate(transition, attempts, f"gates en échec : {names}")
+            return self.retry_or_escalate(transition, attempts, f"failing gates: {names}")
         pending = [g for g in gate_outcomes if g.pending]
         if pending:
             names = ", ".join(g.name for g in pending)
-            return Decision(transition.from_, reason=f"gates en attente : {names}")
+            return Decision(transition.from_, reason=f"pending gates: {names}")
         return Decision(transition.to, reason=result.summary[:200])
 
     def after_human(self, transition: Transition, approved: bool, reason: str = "") -> Decision:
         if approved:
-            return Decision(transition.to, reason=reason or "décision humaine : approuvé")
+            return Decision(transition.to, reason=reason or "human decision: approved")
         if transition.on_reject:
-            return Decision(transition.on_reject, reason=reason or "décision humaine : renvoyé")
-        return Decision(
-            transition.from_, reason=reason or "décision humaine : renvoyé (retour à l'état courant)"
-        )
+            return Decision(transition.on_reject, reason=reason or "human decision: sent back")
+        return Decision(transition.from_, reason=reason or "human decision: sent back (to the current state)")
 
     def after_train(self, transition: Transition, ok: bool, rollback_state: str | None = None) -> Decision:
         if ok:
-            return Decision(transition.to, reason="déploiement vérifié")
+            return Decision(transition.to, reason="deployment verified")
         target = rollback_state or self._default_state("on_question") or transition.from_
-        return Decision(target, escalated=True, reason="déploiement échoué ou annulé")
+        return Decision(target, escalated=True, reason="deployment failed or aborted")
 
     def after_gates(self, transition: Transition, outcomes: list[GateOutcome], attempts: int) -> Decision:
         """Suites d'une transition `system` : uniquement des gates."""
         blocking = [g for g in outcomes if g.blocking]
         if blocking:
             return self.retry_or_escalate(
-                transition, attempts, "gates en échec : " + ", ".join(g.name for g in blocking)
+                transition, attempts, "failing gates: " + ", ".join(g.name for g in blocking)
             )
         if any(g.pending for g in outcomes):
-            return Decision(transition.from_, reason="gates en attente")
-        return Decision(transition.to, reason="gates vertes")
+            return Decision(transition.from_, reason="pending gates")
+        return Decision(transition.to, reason="gates green")
 
     def after_action(
         self, transition: Transition, status: str, outcomes: list[GateOutcome], attempts: int
@@ -203,7 +201,7 @@ class WorkflowEngine:
         from ..gates import GateContext, evaluate
 
         if status == "rejected" and transition.on_reject:
-            return Decision(transition.on_reject, reason="action rejetée")
+            return Decision(transition.on_reject, reason="action rejected")
         verdict = evaluate("action_succeeded", GateContext(action_status=status))
         autres = [o for o in outcomes if o.name != "action_succeeded"]
         return self.after_gates(transition, [verdict, *autres], attempts)
@@ -237,8 +235,8 @@ class WorkflowEngine:
         target = mapping.get(current_state, current_state)
         if target not in other.states:
             raise ValueError(
-                f"l'état courant `{current_state}` n'existe pas dans {other.metadata.name}"
-                f"@{other.metadata.version} et aucun mapping n'a été fourni"
+                f"the current state `{current_state}` does not exist in {other.metadata.name}"
+                f"@{other.metadata.version}, and no mapping was given"
             )
         return target
 

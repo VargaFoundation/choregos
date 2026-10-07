@@ -69,8 +69,8 @@ async def test_un_secret_en_clair_recoit_422(client: AsyncClient, project: dict[
 
     corps["config"].pop("api_token")
     for references, motif in (
-        ({"api_token": "s3cr3t"}, "référence"),
-        ({"api_token": "coffre:x"}, "inconnu"),
+        ({"api_token": "s3cr3t"}, "reference"),
+        ({"api_token": "coffre:x"}, "unknown"),
         ({"mot_de_passe": "env:X"}, "champ secret"),
     ):
         refus = await client.put(

@@ -119,9 +119,9 @@ class ModelResolver:
         profile = self._lookup(profile_name, project)
         if profile is None:
             raise ModelResolutionError(
-                f"profil de modèle inconnu : `{profile_name}` "
-                f"(projet : {sorted((project.models.profiles if project else {}) or {})} ; "
-                f"plateforme : {sorted(self.platform_profiles)})"
+                f"unknown model profile: `{profile_name}` "
+                f"(project: {sorted((project.models.profiles if project else {}) or {})}; "
+                f"platform: {sorted(self.platform_profiles)})"
             )
         api_format = BACKEND_API_FORMAT.get(backend, ApiFormat.OPENAI)
         resolved = ResolvedModel(
@@ -166,7 +166,7 @@ class ModelResolver:
         if self.gateway_models and model not in listed:
             self._reject(
                 resolved,
-                f"le modèle `{model}` n'est pas listé au gateway ({len(self.gateway_models)} modèles connus)",
+                f"the model `{model}` is not listed by the gateway ({len(self.gateway_models)} models known)",
                 allow_unvalidated,
             )
         effective = model
@@ -176,7 +176,7 @@ class ModelResolver:
                 resolved.provider_model = effective
                 if not gateway_model.supports_tool_calling:
                     self._reject(
-                        resolved, f"le modèle `{model}` ne gère pas le tool calling", allow_unvalidated
+                        resolved, f"the model `{model}` does not support tool calling", allow_unvalidated
                     )
                 break
         constraints = BACKEND_MODEL_CONSTRAINTS.get(backend)
@@ -185,22 +185,22 @@ class ModelResolver:
             # contrainte ne peut pas être vérifiée ici. La refuser rendrait tout alias
             # inutilisable avec ce backend ; on le signale, et le gateway reste seul juge.
             resolved.warnings.append(
-                f"le backend `{backend}` n'accepte que des modèles {' / '.join(constraints)} ; "
-                f"`{model}` est un alias non résolu, la contrainte n'a pas pu être vérifiée"
+                f"the backend `{backend}` only accepts {' / '.join(constraints)} models; "
+                f"`{model}` is an unresolved alias, the constraint could not be checked"
             )
         elif constraints and not any(token in effective.lower() for token in constraints):
             self._reject(
                 resolved,
-                f"le backend `{backend}` n'accepte que des modèles {' / '.join(constraints)} "
-                f"(reçu `{model}` → `{effective}`)",
+                f"the backend `{backend}` only accepts {' / '.join(constraints)} models "
+                f"(got `{model}` → `{effective}`)",
                 allow_unvalidated=False,  # contrainte dure : jamais contournable
             )
         validated = self.validated_backends.get(model)
         if validated is not None and backend not in validated:
             self._reject(
                 resolved,
-                f"combinaison non validée par la matrice d'évals : {backend} × {model} "
-                f"(validés : {', '.join(validated) or 'aucun'})",
+                f"combination not validated by the eval matrix: {backend} × {model} "
+                f"(validated: {', '.join(validated) or 'none'})",
                 allow_unvalidated,
             )
 
