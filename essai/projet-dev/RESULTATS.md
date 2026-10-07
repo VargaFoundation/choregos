@@ -9,8 +9,8 @@
 - `scenario_dev.py` (préparer, exigences, ouvrir, suivre, vérifier).
 
 **Pas joué**, parce que le dev ne porte pas encore ce qu'il faut :
-- les PR #276 → #289 (S21-19 à S21-24) ne sont pas fusionnées, aucune release ne les porte, et
-  `choregos-deploy` ne les vend pas ;
+- la pile S21 (#264 → #291, S21-01 à S21-25) n'est pas fusionnée, aucune release ne la porte, et
+  `choregos-deploy` ne la vend pas ;
 - l'App GitHub de Choregos n'est pas installée sur le bac à sable ;
 - les groupes `maintainers`, `product-owners`, `release-captains`, `architects` ne sont pas vérifiés
   dans le fournisseur d'identité.
