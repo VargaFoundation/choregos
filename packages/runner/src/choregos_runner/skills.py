@@ -48,14 +48,16 @@ def poser(
     for ref in attendues:
         skill = par_nom.get(ref.slug)
         if skill is None:
-            raise SkillInvalide(f"la skill `{ref.slug}@{ref.version}` n'a pas été livrée")
+            raise SkillInvalide(f"the skill `{ref.slug}@{ref.version}` was not delivered")
         fichiers: dict[str, str] = dict(skill.get("files") or {})
         if empreinte_de_skill(fichiers) != ref.digest:
-            raise SkillInvalide(f"la skill `{ref.slug}@{ref.version}` n'a pas l'empreinte que le run attend")
+            raise SkillInvalide(
+                f"the skill `{ref.slug}@{ref.version}` does not have the digest the run expects"
+            )
         for chemin, texte in fichiers.items():
             normalise = posixpath.normpath(chemin)
             if normalise.startswith(("../", "/")) or normalise == "..":
-                raise SkillInvalide(f"la skill `{ref.slug}` sort de son dossier : `{chemin}`")
+                raise SkillInvalide(f"the skill `{ref.slug}` reaches outside its folder: `{chemin}`")
             relatif = f"{racine}/{ref.slug}/{normalise}"
             cible = workspace / relatif
             cible.parent.mkdir(parents=True, exist_ok=True)
@@ -65,7 +67,7 @@ def poser(
             description = _description(fichiers.get("SKILL.md", ""))
             index.append(f"- `{racine}/{ref.slug}/SKILL.md`" + (f" — {description}" if description else ""))
     texte_index = (
-        "## Skills\n\nAvant d'agir, lis la skill qui convient à la tâche :\n\n" + "\n".join(index)
+        "## Skills\n\nBefore you act, read the skill that fits the task:\n\n" + "\n".join(index)
         if index
         else ""
     )

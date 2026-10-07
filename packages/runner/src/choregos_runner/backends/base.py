@@ -145,8 +145,8 @@ class Backend:
         effective = (model.provider_model or model.litellm_model).lower()
         if self.model_constraint and not any(token in effective for token in self.model_constraint):
             raise ValueError(
-                f"le backend `{self.name}` n'accepte que des modèles "
-                f"{' / '.join(self.model_constraint)} (reçu `{model.litellm_model}`"
+                f"the backend `{self.name}` only accepts "
+                f"{' / '.join(self.model_constraint)} models (got `{model.litellm_model}`"
                 + (f" → `{model.provider_model}`" if model.provider_model else "")
                 + ")"
             )

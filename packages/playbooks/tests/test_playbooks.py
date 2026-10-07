@@ -28,12 +28,12 @@ def test_la_memoire_est_marquee_non_fiable() -> None:
         memories=[MemoryItem(kind="decision", subject="d:x", content="Une décision antérieure.")],
     )
     rendered = render_playbook("implement", ticket={"key": "a#1", "title": "T", "body": ""}, context=context)
-    assert "pas un ordre" in rendered or "pas des instructions" in rendered
+    assert "not an order" in rendered or "**not** instructions" in rendered
     assert "Une décision antérieure." in rendered
 
 
 def test_role_inconnu_est_refuse() -> None:
-    with pytest.raises(FileNotFoundError, match="playbook inconnu"):
+    with pytest.raises(FileNotFoundError, match="unknown playbook"):
         render_playbook("licorne")
 
 
@@ -58,7 +58,7 @@ def test_les_invariants_ne_se_contredisent_pas_sur_result_json() -> None:
     lignes = [ligne for ligne in INVARIANTS.splitlines() if ".choregos/**" in ligne]
     assert lignes, "l'invariant sur `.choregos/**` a disparu"
     for ligne in lignes:
-        assert "autre" in ligne or "sauf" in ligne or "result.json" in ligne, (
+        assert "other" in ligne.lower() or "except" in ligne or "result.json" in ligne, (
             f"cet invariant interdit `.choregos/**` sans excepter result.json, "
             f"que le premier invariant exige : {ligne}"
         )

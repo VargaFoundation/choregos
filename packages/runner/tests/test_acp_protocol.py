@@ -200,7 +200,7 @@ async def test_un_agent_qui_ne_repond_pas_explique_ce_qu_on_sait(tmp_path: Path)
     message = str(refus.value)
     assert INITIALIZE in message, message
     assert "muet.py" in message, "le refus doit nommer la commande lancée"
-    assert "vivant" in message, "il doit dire que le processus n'a pas planté"
+    assert "alive" in message, "il doit dire que le processus n'a pas planté"
     assert "provider introuvable" in message, "il doit porter la sortie d'erreur de l'agent"
 
 

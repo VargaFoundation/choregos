@@ -1,36 +1,36 @@
-Tu **qualifies** les profils proposés à l'étape précédente.
+You **qualify** the profiles proposed at the previous step.
 
-## Le besoin
-- Référence : {{ ticket.key }}
-- Intitulé : {{ ticket.title }}
+## The need
+- Reference: {{ ticket.key }}
+- Title: {{ ticket.title }}
 
 {{ ticket.body }}
 
-## Les profils à qualifier
+## The profiles to qualify
 {{ inputs.profils }}
 
-(Ce sont les `outputs.profils` de l'étape de sourcing, transmis tels quels. S'ils sont
-vides, l'étape précédente n'a rien produit : dis-le, ne cherche pas ailleurs.)
+(These are the `outputs.profils` of the sourcing step, passed on as they are. If they are
+empty, the previous step produced nothing: say so, do not look elsewhere.)
 
-## Ce qu'on attend de toi
-1. Pour chaque profil : ce qui est acquis, ce qui est à vérifier, ce qui est rédhibitoire.
-2. Une **recommandation** classée, avec la raison du classement — la raison compte plus que le rang.
-3. Les questions à poser en entretien, celles dont la réponse changerait le classement.
+## What is expected of you
+1. For each profile: what is established, what is to be checked, what rules it out.
+2. A ranked **recommendation**, with the reason for the ranking — the reason matters more than the rank.
+3. The questions to ask in an interview, those whose answer would change the ranking.
 
-N'invente ni expérience ni référence. Un doute se déclare comme un doute.
+Invent neither experience nor references. A doubt is declared as a doubt.
 
-## Sorties
-`outputs.evaluation` (Markdown, une section par profil) et `outputs.recommandation` (le
-profil retenu et pourquoi). Sans ces deux sorties, la garantie `outputs_present` refuse l'étape.
+## Outputs
+`outputs.evaluation` (Markdown, one section per profile) and `outputs.recommandation` (the
+chosen profile and why). Without these two outputs, the `outputs_present` gate refuses the step.
 
-Et `evidence.facts`, qui se compte et se vérifie :
+And `evidence.facts`, which are counted and checked:
 
 ```json
 "evidence": { "facts": { "profils_evalues": 2, "entretiens_a_prevoir": 1, "recommandation_tenue": true } }
 ```
 
-`recommandation_tenue` vaut `true` seulement si tu peux nommer la raison du classement. Un
-classement que tu ne peux pas justifier vaut `false`, et la garantie refusera — c'est le but.
+`recommandation_tenue` is `true` only if you can name the reason for the ranking. A ranking
+you cannot justify is `false`, and the gate will refuse — that is the point.
 
 {{ output_contract }}
 

@@ -1,45 +1,44 @@
-Tu fais du **sourcing** pour un besoin de staffing.
+You do the **sourcing** for a staffing need.
 
-## Le besoin
-- Référence : {{ ticket.key }}
-- Intitulé : {{ ticket.title }}
+## The need
+- Reference: {{ ticket.key }}
+- Title: {{ ticket.title }}
 
 {{ ticket.body }}
 
-## L'outil à ta disposition
-Tu as un outil `verifier_adresse` : donne-lui une adresse ou une ville telle qu'elle figure
-dans le besoin, il rend sa forme officielle, son code postal et sa commune. **Tu n'as aucune
-clé et tu ne sors pas sur internet** : c'est la plateforme qui appelle pour toi, et chaque
-appel est compté.
+## The tool at your disposal
+You have a `verifier_adresse` tool: give it an address or a city as it appears in the need,
+and it returns its official form, its postcode and its municipality. **You hold no key and you
+do not go out to the internet**: the platform makes the call for you, and every call is counted.
 
-Si le besoin mentionne un lieu, vérifie-le avec cet outil **avant toute chose** et consigne
-`lieu_verifie: true` dans tes faits. S'il n'en mentionne aucun, `lieu_verifie: false` — ne
-l'invente pas.
+If the need mentions a place, check it with this tool **before anything else** and record
+`lieu_verifie: true` in your facts. If it mentions none, `lieu_verifie: false` — do not
+invent one.
 
-## Ce qu'on attend de toi
-1. Reformule le besoin en critères vérifiables : compétences, séniorité, contexte, contraintes
-   (lieu, date de démarrage, tarif). Ce qui n'est pas dans le ticket se demande, ne s'invente pas.
-2. Propose **trois profils** au plus, chacun avec : un intitulé, les critères couverts, ceux qui
-   ne le sont pas, et ce qu'il reste à vérifier en entretien.
-3. Dis explicitement sur quoi tu n'as pas pu te prononcer.
+## What is expected of you
+1. Restate the need as verifiable criteria: skills, seniority, context, constraints
+   (place, start date, rate). What is not in the work item is asked for, not invented.
+2. Propose **three profiles** at most, each with: a title, the criteria it covers, those it
+   does not, and what remains to be checked in an interview.
+3. Say explicitly what you could not form a view on.
 
-Un profil que tu ne peux pas rattacher au besoin n'entre pas dans la liste. Mieux vaut deux
-profils tenus qu'une liste de trois qui se ressemblent.
+A profile you cannot tie to the need does not go on the list. Two solid profiles are better
+than a list of three that look alike.
 
-## Sorties
-Dans `.choregos/result.json`, `outputs.profils` porte la liste (Markdown), et le `summary`
-tient en une phrase : combien de profils, et le point de vigilance principal.
+## Outputs
+In `.choregos/result.json`, `outputs.profils` carries the list (Markdown), and the `summary`
+fits in one sentence: how many profiles, and the main point of caution.
 
-Renseigne aussi `evidence.facts` — ce sont les seules preuves que la plateforme sait vérifier
-toute seule, et elles se comptent :
+Fill in `evidence.facts` too — they are the only evidence the platform can check on its own,
+and they are counted:
 
 ```json
 "evidence": { "facts": { "profils_retenus": 2, "lieu_verifie": true, "besoin_complet": true } }
 ```
 
-`profils_retenus` est le nombre de profils que tu as VRAIMENT rattachés au besoin. Zéro est une
-réponse acceptable — mais elle se dit en échouant l'étape (`status: "blocked"`), pas en rendant
-une liste vide : la garantie exige au moins un profil, et elle refusera.
+`profils_retenus` is the number of profiles you REALLY tied to the need. Zero is an acceptable
+answer — but it is given by failing the step (`status: "blocked"`), not by returning an empty
+list: the gate requires at least one profile, and it will refuse.
 
 {{ output_contract }}
 

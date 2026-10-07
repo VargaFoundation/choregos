@@ -3,13 +3,13 @@ description: >-
   Le playbook d'implémentation doit interdire l'élargissement de périmètre, imposer les
   preuves réelles, et rappeler que la plateforme revérifie.
 must_contain:
-  - "chemins autorisés"
+  - "within the allowed paths"
   - "report_finding"
   - "result.json"
   - "evidence"
-  - "Commits conventionnels"
+  - "Conventional commits"
 must_not_contain:
-  - "ignore les tests"
+  - "ignore the tests"
 rubric:
   - critere: "interdit d'écrire hors du périmètre"
     poids: 3

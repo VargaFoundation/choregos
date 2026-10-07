@@ -31,12 +31,12 @@ class ScopeCheck:
     def prompt(self) -> str:
         return "\n".join(
             [
-                "Des fichiers hors du périmètre autorisé ont été modifiés ; je les ai annulés :",
+                "Files outside the allowed paths were changed; I reverted them:",
                 *[f"- `{path}`" for path in self.reverted],
                 "",
-                "Si l'un d'eux est indispensable, appelle `request_scope_change(paths, justification)`.",
-                "Si c'est un problème que tu as remarqué au passage, appelle `report_finding(...)`.",
-                "Reprends ensuite ton travail dans le périmètre, puis mets à jour `.choregos/result.json`.",
+                "If one of them is essential, call `request_scope_change(paths, justification)`.",
+                "If it is a problem you noticed on the way, call `report_finding(...)`.",
+                "Then resume your work within the allowed paths, and update `.choregos/result.json`.",
             ]
         )
 

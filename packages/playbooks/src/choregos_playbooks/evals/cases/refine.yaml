@@ -5,11 +5,11 @@ description: >-
 must_contain:
   - "Given / When / Then"
   - "allowed_paths"
-  - "Hors périmètre"
+  - "Out of scope"
   - "rollback"
   - "ask_human"
 must_not_contain:
-  - "écris du code"
+  - "write code"
 rubric:
   - critere: "demande des critères d'acceptation testables"
     poids: 2

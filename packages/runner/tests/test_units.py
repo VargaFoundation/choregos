@@ -80,18 +80,18 @@ def test_decision_serialisable_pour_le_journal() -> None:
 def test_resultat_absent_puis_repare(tmp_path: Path) -> None:
     path = tmp_path / "result.json"
     load = load_result(path)
-    assert not load.ok and "absent" in (load.error or "")
+    assert not load.ok and "missing" in (load.error or "")
     assert "result.json" in repair_prompt(load, path)
 
     path.write_text("   ", encoding="utf-8")
-    assert "vide" in (load_result(path).error or "")
+    assert "empty" in (load_result(path).error or "")
 
     path.write_text("[]", encoding="utf-8")
-    assert "objet JSON" in (load_result(path).error or "")
+    assert "JSON object" in (load_result(path).error or "")
 
     path.write_text('{"status": "licorne", "summary": "x"}', encoding="utf-8")
     error = load_result(path).error or ""
-    assert "contrat" in error and "status" in error
+    assert "contract" in error and "status" in error
 
 
 def test_les_preuves_mesurees_ecrasent_les_preuves_declarees() -> None:
@@ -175,7 +175,7 @@ def test_le_prompt_de_reparation_cite_la_sortie() -> None:
     )
     prompt = report.prompt_for_repair()
     assert "make test" in prompt and "AssertionError" in prompt
-    assert "sans élargir le périmètre" in prompt
+    assert "without widening the scope" in prompt
 
 
 # ───────────────────────────── périmètre ─────────────────────────────
@@ -240,7 +240,7 @@ def test_un_fichier_du_depot_n_est_jamais_ecrase(tmp_path: Path) -> None:
 
 
 def test_backend_inconnu_et_versions() -> None:
-    with pytest.raises(KeyError, match="backend inconnu"):
+    with pytest.raises(KeyError, match="unknown backend"):
         get_backend("licorne")
     assert set(known_backends()) == set(BACKENDS)
     assert backend_version("claude-code"), "la version du binaire est épinglée"
@@ -315,7 +315,7 @@ async def test_une_commande_qui_echoue_ne_leve_pas(tmp_path: Path) -> None:
 
 async def test_le_depassement_de_delai_est_rapporte(tmp_path: Path) -> None:
     result = await run_command(["sleep", "5"], cwd=tmp_path, timeout=0.2)
-    assert result.code == 124 and "délai" in result.stderr
+    assert result.code == 124 and "timed out" in result.stderr
 
 
 async def test_le_jeton_n_apparait_jamais_en_clair(tmp_path: Path) -> None:
@@ -390,7 +390,7 @@ def test_un_backend_retire_est_refuse_avec_sa_raison() -> None:
     with pytest.raises(KeyError) as error:
         get_backend("openhands")
     message = str(error.value)
-    assert "retiré" in message and "ACP" in message
+    assert "retired" in message and "ACP" in message
     assert "claude-code" in message, "le message indique le remplaçant"
 
 
@@ -655,7 +655,7 @@ def test_une_ecriture_de_claude_code_passe_par_le_perimetre() -> None:
     refus = rails.decide(dehors)
     assert not refus.allowed, "une écriture hors périmètre doit être refusée, même sans `kind`"
     assert refus.kind == "write" and refus.inferred
-    assert "périmètre" in refus.reason
+    assert "allowed paths" in refus.reason
 
 
 def test_la_nature_se_deduit_du_titre_quand_les_arguments_ne_disent_rien() -> None:
@@ -705,7 +705,7 @@ def test_une_demande_de_nature_inconnue_passe_par_defaut_et_le_dit() -> None:
     """Le défaut reste un filet : ce que le runner ne sait pas nommer passe, journalisé."""
     rails = guards(write_paths=["src/**"])
     decision = rails.decide({"toolCall": {"title": "Frobnicate", "rawInput": {"foo": "bar"}}})
-    assert decision.allowed and decision.kind == "read" and "filet" in decision.reason
+    assert decision.allowed and decision.kind == "read" and "a net" in decision.reason
 
 
 def test_la_politique_peut_fermer_les_demandes_de_nature_inconnue() -> None:

@@ -55,13 +55,13 @@ def test_un_backend_sans_skills_recoit_un_index(tmp_path: Path) -> None:
     [
         pytest.param(
             [{**LIVREE, "files": {**FICHIERS, "references/groupes.md": "- tout\n"}}],
-            "empreinte",
+            "digest",
             id="alteree",
         ),
-        pytest.param([], "pas été livrée", id="absente"),
+        pytest.param([], "was not delivered", id="absente"),
         pytest.param(
             [{**LIVREE, "files": {"../evasion.sh": "x"}, "digest": REF.digest}],
-            "empreinte",
+            "digest",
             id="evasion-sans-empreinte",
         ),
     ],

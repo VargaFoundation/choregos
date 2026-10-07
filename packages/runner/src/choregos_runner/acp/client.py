@@ -122,7 +122,7 @@ class AcpClient:
                 stderr=asyncio.subprocess.PIPE,
             )
         except (FileNotFoundError, PermissionError) as exc:
-            raise AgentUnreachableError(f"impossible de lancer {self.command[0]} : {exc}") from exc
+            raise AgentUnreachableError(f"cannot start {self.command[0]}: {exc}") from exc
         self._reader_task = asyncio.create_task(self._read_loop())
         self._stderr_task = asyncio.create_task(self._read_stderr())
 
@@ -167,7 +167,7 @@ class AcpClient:
             timeout=60.0,
         )
         if response.failed:
-            raise AgentUnreachableError(f"initialize refusé : {response.error}")
+            raise AgentUnreachableError(f"initialize refused: {response.error}")
         self.capabilities = (response.result or {}).get("agentCapabilities", {})
         return dict(response.result or {})
 
@@ -176,17 +176,17 @@ class AcpClient:
             SESSION_NEW, {"cwd": cwd, "mcpServers": mcp_servers or []}, timeout=120.0
         )
         if response.failed:
-            raise AgentProtocolError(f"session/new refusé : {response.error}")
+            raise AgentProtocolError(f"session/new refused: {response.error}")
         session_id = (response.result or {}).get("sessionId")
         if not session_id:
-            raise AgentProtocolError("session/new n'a pas rendu de sessionId")
+            raise AgentProtocolError("session/new returned no sessionId")
         self.session_id = str(session_id)
         return self.session_id
 
     async def prompt(self, text: str, *, timeout: float) -> PromptOutcome:
         """Envoie un tour de prompt et laisse l'agent travailler jusqu'à `stopReason`."""
         if self.session_id is None:
-            raise AgentProtocolError("aucune session ouverte")
+            raise AgentProtocolError("no open session")
         self.outcome.turns += 1
         try:
             response = await self.request(
@@ -215,7 +215,7 @@ class AcpClient:
 
     async def request(self, method: str, params: dict[str, Any], *, timeout: float = 60.0) -> Response:
         if self.process is None or self.process.stdin is None:
-            raise AgentUnreachableError("processus agent absent")
+            raise AgentUnreachableError("agent process missing")
         self._next_id += 1
         request = Request(id=self._next_id, method=method, params=params)
         future: asyncio.Future[Response] = asyncio.get_running_loop().create_future()
@@ -240,20 +240,20 @@ class AcpClient:
         exactement là qu'il faut une phrase qui dit quoi regarder.
         """
         morceaux = [
-            f"l'agent n'a pas répondu à `{method}` en {timeout:.0f} s",
-            f"commande : {' '.join(self.command)}",
+            f"the agent did not answer `{method}` within {timeout:.0f} s",
+            f"command: {' '.join(self.command)}",
         ]
         if self.process is None:
-            morceaux.append("processus : absent")
+            morceaux.append("process: missing")
         elif self.process.returncode is None:
-            morceaux.append("processus : vivant (il n'a donc pas planté, il n'a rien écrit)")
+            morceaux.append("process: alive (so it did not crash; it wrote nothing)")
         else:
-            morceaux.append(f"processus : terminé, code {self.process.returncode}")
+            morceaux.append(f"process: exited, code {self.process.returncode}")
         if self.stderr_tail:
             dernieres = " / ".join(ligne.strip() for ligne in self.stderr_tail[-5:] if ligne.strip())
-            morceaux.append(f"sortie d'erreur de l'agent : {dernieres[:600]}")
+            morceaux.append(f"agent's error output: {dernieres[:600]}")
         else:
-            morceaux.append("sortie d'erreur de l'agent : VIDE")
+            morceaux.append("agent's error output: EMPTY")
         return " — ".join(morceaux)
 
     async def notify(self, method: str, params: dict[str, Any]) -> None:
@@ -321,7 +321,7 @@ class AcpClient:
             await self._write_text_file(request)
             return
         await self.respond(
-            error_response(request.id, PERMISSION_DENIED, f"méthode non gérée : {request.method}")
+            error_response(request.id, PERMISSION_DENIED, f"unhandled method: {request.method}")
         )
 
     def _resolve(self, raw: Any) -> Path | None:
@@ -341,12 +341,12 @@ class AcpClient:
         params = request.params or {}
         cible = self._resolve(params.get("path"))
         if cible is None:
-            await self.respond(error_response(request.id, PERMISSION_DENIED, "chemin hors du workspace"))
+            await self.respond(error_response(request.id, PERMISSION_DENIED, "path outside the workspace"))
             return
         try:
             lignes = cible.read_text(encoding="utf-8").splitlines(keepends=True)
         except OSError as exc:
-            await self.respond(error_response(request.id, PERMISSION_DENIED, f"lecture impossible : {exc}"))
+            await self.respond(error_response(request.id, PERMISSION_DENIED, f"cannot read: {exc}"))
             return
         # `line` est 1-indexé dans ACP ; `limit` borne le nombre de lignes rendues.
         depart = max(int(params.get("line") or 1) - 1, 0)
@@ -358,13 +358,13 @@ class AcpClient:
         params = request.params or {}
         cible = self._resolve(params.get("path"))
         if cible is None:
-            await self.respond(error_response(request.id, PERMISSION_DENIED, "chemin hors du workspace"))
+            await self.respond(error_response(request.id, PERMISSION_DENIED, "path outside the workspace"))
             return
         try:
             cible.parent.mkdir(parents=True, exist_ok=True)
             cible.write_text(str(params.get("content", "")), encoding="utf-8")
         except OSError as exc:
-            await self.respond(error_response(request.id, PERMISSION_DENIED, f"écriture impossible : {exc}"))
+            await self.respond(error_response(request.id, PERMISSION_DENIED, f"cannot write: {exc}"))
             return
         await self.respond(Response(id=request.id, result={}))
 
@@ -380,7 +380,7 @@ class AcpClient:
 
     async def _decide(self, params: dict[str, Any]) -> tuple[bool, str]:
         if self.on_permission is None:
-            return True, "aucune politique de permission : autorisé"
+            return True, "no permission policy: allowed"
         return await self.on_permission(params)
 
     async def _read_stderr(self) -> None:

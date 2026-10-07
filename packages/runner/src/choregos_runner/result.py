@@ -40,18 +40,18 @@ class ResultLoad:
 def load_result(path: Path) -> ResultLoad:
     """Lit et valide le fichier. Toute erreur est formulée pour être renvoyée à l'agent."""
     if not path.exists():
-        return ResultLoad(None, error=f"`{path.name}` est absent : écris-le avant de terminer.")
+        return ResultLoad(None, error=f"`{path.name}` is missing: write it before you finish.")
     raw = path.read_text(encoding="utf-8")
     if not raw.strip():
-        return ResultLoad(None, error=f"`{path.name}` est vide.", raw=raw)
+        return ResultLoad(None, error=f"`{path.name}` is empty.", raw=raw)
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
         return ResultLoad(
-            None, error=f"JSON invalide ligne {exc.lineno}, colonne {exc.colno} : {exc.msg}", raw=raw
+            None, error=f"invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}", raw=raw
         )
     if not isinstance(payload, dict):
-        return ResultLoad(None, error="le document doit être un objet JSON.", raw=raw)
+        return ResultLoad(None, error="the document must be a JSON object.", raw=raw)
     payload.setdefault("schema", "choregos/StageResult/v1")
     try:
         return ResultLoad(StageResult.model_validate(payload), raw=raw)
@@ -60,10 +60,10 @@ def load_result(path: Path) -> ResultLoad:
 
 
 def _explain(exc: ValidationError) -> str:
-    lines = ["le résultat ne respecte pas le contrat `choregos/StageResult/v1` :"]
+    lines = ["the result does not follow the `choregos/StageResult/v1` contract:"]
     for error in exc.errors()[:8]:
-        location = ".".join(str(part) for part in error["loc"]) or "(racine)"
-        lines.append(f"- `{location}` : {error['msg']}")
+        location = ".".join(str(part) for part in error["loc"]) or "(root)"
+        lines.append(f"- `{location}`: {error['msg']}")
     return "\n".join(lines)
 
 
@@ -71,17 +71,17 @@ def repair_prompt(load: ResultLoad, path: Path) -> str:
     """Message envoyé à l'agent pour qu'il corrige son résultat."""
     return "\n".join(
         [
-            f"Ton fichier `{path.name}` n'est pas exploitable.",
+            f"Your file `{path.name}` cannot be used.",
             "",
-            load.error or "raison inconnue",
+            load.error or "unknown reason",
             "",
-            "Réécris-le entièrement, sans commentaire autour, avec au minimum :",
+            "Rewrite it entirely, with no comment around it, with at least:",
             "```json",
             json.dumps(
                 {
                     "schema": "choregos/StageResult/v1",
                     "status": "done",
-                    "summary": "ce que tu as fait, en une phrase",
+                    "summary": "what you did, in one sentence",
                     "evidence": {"tests_passed": True, "tests_run": 0},
                 },
                 indent=2,
@@ -128,13 +128,13 @@ def complete_result(
         completed.status = StageStatus.BLOCKED
         completed.reason = "scope"
         completed.summary = (
-            f"{completed.summary} — {len(scope_blocked)} fichier(s) hors périmètre "
-            f"non annulables : {', '.join(scope_blocked[:5])}"
+            f"{completed.summary} — {len(scope_blocked)} out-of-scope file(s) "
+            f"that could not be reverted: {', '.join(scope_blocked[:5])}"
         )
     elif completed.status is StageStatus.DONE and completed.evidence.tests_passed is False:
         completed.status = StageStatus.FAILED
         completed.reason = "tests"
-        completed.summary = f"{completed.summary} — les tests du dépôt échouent"
+        completed.summary = f"{completed.summary} — the repository's tests fail"
     return completed
 
 

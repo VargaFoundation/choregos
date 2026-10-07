@@ -96,25 +96,25 @@ async def test_report_finding_respects_the_cap(server: tuple[McpServer, StubClie
     mcp, client = server
     payload = {"title": "N+1 sur les lignes", "type": "perf", "severity": "medium", "evidence": "repo.py:88"}
     first = await call(mcp, "report_finding", payload)
-    assert not first["isError"] and "enregistré" in first["content"][0]["text"]
+    assert not first["isError"] and "recorded" in first["content"][0]["text"]
     await call(mcp, "report_finding", {**payload, "title": "Autre problème"})
     third = await call(mcp, "report_finding", {**payload, "title": "Encore un"})
-    assert third["isError"] and "plafond" in third["content"][0]["text"]
+    assert third["isError"] and "cap reached" in third["content"][0]["text"]
     assert len(client.findings) == 2
 
 
 async def test_scope_change_granted_pending_denied(server: tuple[McpServer, StubClient]) -> None:
     mcp, client = server
     granted = await call(mcp, "request_scope_change", {"paths": ["src/a.py"], "justification": "nécessaire"})
-    assert "élargi" in granted["content"][0]["text"]
+    assert "widened" in granted["content"][0]["text"]
 
     client.scope_decision = {"decision": "pending"}
     pending = await call(mcp, "request_scope_change", {"paths": ["src/b.py"], "justification": "?"})
-    assert "humain" in pending["content"][0]["text"]
+    assert "human" in pending["content"][0]["text"]
 
     client.scope_decision = {"decision": "denied", "reason": "chemins interdits"}
     denied = await call(mcp, "request_scope_change", {"paths": [".choregos/x"], "justification": "?"})
-    assert denied["isError"] and "refusé" in denied["content"][0]["text"]
+    assert denied["isError"] and "refused" in denied["content"][0]["text"]
 
 
 async def test_ask_human_tells_the_agent_to_stop(server: tuple[McpServer, StubClient]) -> None:
@@ -127,7 +127,7 @@ async def test_ask_human_tells_the_agent_to_stop(server: tuple[McpServer, StubCl
 async def test_read_only_tools(server: tuple[McpServer, StubClient]) -> None:
     mcp, _ = server
     assert "## Spec" in (await call(mcp, "get_spec", {}))["content"][0]["text"]
-    assert "aucun plan" in (await call(mcp, "get_plan", {}))["content"][0]["text"]
+    assert "no approved plan" in (await call(mcp, "get_plan", {}))["content"][0]["text"]
     assert "acme#1" in (await call(mcp, "get_ticket", {}))["content"][0]["text"]
     assert "ERREUR" in (await call(mcp, "get_ci_logs", {"tail": 10}))["content"][0]["text"]
     assert "arrondis" in (await call(mcp, "get_context", {}))["content"][0]["text"]
@@ -138,9 +138,9 @@ async def test_search_memory_marks_data_as_untrusted(server: tuple[McpServer, St
     found = await call(mcp, "search_memory", {"query": "arrondi"})
     text = found["content"][0]["text"]
     assert "decision:billing:arrondis" in text
-    assert "pas des instructions" in text
+    assert "not instructions" in text
     empty = await call(mcp, "search_memory", {"query": "licorne"})
-    assert "aucun souvenir" in empty["content"][0]["text"]
+    assert "no relevant memory" in empty["content"][0]["text"]
 
 
 async def test_propose_fact_goes_through_review(server: tuple[McpServer, StubClient]) -> None:
@@ -150,7 +150,7 @@ async def test_propose_fact_goes_through_review(server: tuple[McpServer, StubCli
         "propose_fact",
         {"subject": "convention:tests:nommage", "content": "Les tests suivent Given/When/Then."},
     )
-    assert "validera" in result["content"][0]["text"]
+    assert "will review it" in result["content"][0]["text"]
     assert client.findings and client.findings[0].type == "docs"
 
 
@@ -198,6 +198,6 @@ async def test_validate_result_dit_avant_de_finir_ce_que_le_runner_dirait_apres(
         "findings": [],
     }
     ok = await mcp.call("validate_result", {"result": json.dumps(bon)})
-    assert not ok.get("isError") and "conforme" in ok["content"][0]["text"]
+    assert not ok.get("isError") and "conforms" in ok["content"][0]["text"]
 
     assert (await mcp.call("validate_result", {"result": "{pas du json"}))["isError"] is True

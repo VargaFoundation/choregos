@@ -28,9 +28,9 @@ BACKENDS: dict[str, type[Backend]] = {
 # « backend inconnu » qui laisserait croire à une faute de frappe.
 RETIRED: dict[str, str] = {
     "openhands": (
-        "retiré le 2026-09-21 : OpenHands n'expose aucun agent ACP en ligne de commande — ni en 0.59 "
-        "(`serve` et `cli` seulement), ni en 1.x (plus de binaire, un serveur HTTP `agent-server`). "
-        "Voir docs/adr/0011-retrait-d-openhands.md ; le défaut est désormais `claude-code`."
+        "retired on 2026-09-21: OpenHands exposes no command-line ACP agent — neither in 0.59 "
+        "(`serve` and `cli` only), nor in 1.x (no binary any more, an `agent-server` HTTP server). "
+        "See docs/adr/0011-retrait-d-openhands.md; the default is now `claude-code`."
     ),
 }
 
@@ -43,7 +43,7 @@ def get_backend(name: str) -> Backend:
         raise KeyError(f"backend {name} {RETIRED[name]}")
     backend_class = BACKENDS.get(name)
     if backend_class is None:
-        raise KeyError(f"backend inconnu : {name} (connus : {', '.join(sorted(BACKENDS))})")
+        raise KeyError(f"unknown backend: {name} (known: {', '.join(sorted(BACKENDS))})")
     return backend_class()
 
 

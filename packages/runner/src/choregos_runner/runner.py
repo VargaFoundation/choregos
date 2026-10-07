@@ -109,7 +109,7 @@ class Runner:
             except Exception as exc:
                 detail = str(exc)
                 if "409" in detail:  # résultat déjà posté : rejeu, on sort proprement
-                    return RunOutcome(Exit.OK, detail="résultat déjà posté")
+                    return RunOutcome(Exit.OK, detail="result already posted")
                 return RunOutcome(Exit.INPUT_NOT_FOUND, detail=detail)
             return await self.execute(stage_input, client)
         finally:
@@ -301,7 +301,7 @@ class Runner:
         """Playbook rendu + tâche. Le playbook vient de l'orchestrateur, jamais du dépôt."""
         playbook = stage_input.playbook.prompt or ""
         if not playbook and stage_input.playbook.prompt_url:
-            playbook = f"(playbook : {stage_input.playbook.ref})"
+            playbook = f"(playbook: {stage_input.playbook.ref})"
         task = (workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
         if self.index_des_skills:
             playbook = f"{playbook}\n\n{self.index_des_skills}"
@@ -342,7 +342,7 @@ class Runner:
             if not push.ok:
                 # Une poussée ratée est la fin silencieuse la plus coûteuse : le résultat dit
                 # « fait », et l'étape suivante ne trouve rien.
-                result.summary = f"{result.summary} (poussée refusée : {push.output[-200:]})"
+                result.summary = f"{result.summary} (push refused: {push.output[-200:]})"
 
         await journal.record("run.result", {"status": str(result.status), "summary": result.summary})
         await journal.flush()
@@ -370,7 +370,7 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
         "release_notes": "docs",
     }.get(stage_input.transition.role, "chore")
     scope = stage_input.work_item.key.rsplit("#", 1)[-1]
-    summary = result.summary.strip().splitlines()[0][:100] if result.summary else "étape Choregos"
+    summary = result.summary.strip().splitlines()[0][:100] if result.summary else "Choregos step"
     return f"{prefix}({scope}): {summary}"
 
 
@@ -384,11 +384,11 @@ def _diagnostic_sans_resultat(agent: Any, erreur: str | None, result_path: Path)
         # c'est là que le fournisseur dit « quota atteint » ou « clé refusée ».
         bruit = " | ".join(agent.outcome.errors[-2:] or agent.stderr_tail[-2:])
         detail = (
-            "l'agent n'a produit ni texte ni appel d'outil : vérifier l'accès "
-            f"au modèle (fin de tour : {agent.outcome.stop_reason})" + (f" — {bruit[:300]}" if bruit else "")
+            "the agent produced neither text nor a tool call: check its access to the model "
+            f"(end of turn: {agent.outcome.stop_reason})" + (f" — {bruit[:300]}" if bruit else "")
         )
         return "agent_silencieux", detail
-    return "invalid_result", (erreur or "résultat illisible")
+    return "invalid_result", (erreur or "unreadable result")
 
 
 def _agent_muet(outcome: PromptOutcome) -> bool:
