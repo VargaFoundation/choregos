@@ -58,6 +58,7 @@ ALL_ACTIVITIES = [
     train.promote_canary_step,
     train.verify_prod,
     train.finish_release,
+    train.confirmer_auto_sync,
     train.rollback,
     train.mark_release,
     train.apply_terraform,

@@ -377,15 +377,39 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _tickets_du_lot(session: Any, bundle: Any, release: Release) -> dict[str, WorkItem | None]:
+    return await _tickets(session, bundle, [str(item.get("work_item_key") or "") for item in release.items])
+
+
+async def _tickets(session: Any, bundle: Any, cles: list[str]) -> dict[str, WorkItem | None]:
     tickets: dict[str, WorkItem | None] = {}
-    for item in release.items:
-        cle = str(item.get("work_item_key") or "")
+    for cle in cles:
         tickets[cle] = (
             await session.execute(
                 select(WorkItem).where(WorkItem.project_id == bundle.project.id, WorkItem.tracker_key == cle)
             )
         ).scalar_one_or_none()
     return tickets
+
+
+@activity.defn(name="confirmer_auto_sync")
+async def confirmer_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
+    """`auto_sync` : Argo suit `main`, il n'y a pas de départ. Le ticket est livré quand les applications
+    de l'environnement sont saines, rendu à un humain si elles se dégradent (#278) ; encore en cours,
+    rien n'est dit — le train redemande. Au dernier essai (`conclure`), ne pas être sain vaut échec :
+    le ticket attendait sinon 72 h sans que personne sache pourquoi."""
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_slug"])
+        apps = list(bundle.config.gitops.apps) if bundle.config.gitops else [bundle.slug]
+        etats = {app: (await bundle.adapters.cd.health(app)).status for app in apps}
+        prevenir = _destinataires(bundle.slug, await _tickets(session, bundle, list(payload["items"])))
+    if all(etat == "Healthy" for etat in etats.values()):
+        type_, ok = "cd.rollout.completed", True
+    elif any(etat == "Degraded" for etat in etats.values()) or payload.get("conclure"):
+        type_, ok = "cd.rollout.aborted", False
+    else:
+        return {"ok": None, "etats": etats}
+    await _prevenir_les_tickets(prevenir, type_, str(payload["sync_id"]), str(payload["env"]))
+    return {"ok": ok, "etats": etats}
 
 
 def _destinataires(slug: str, tickets: dict[str, WorkItem | None]) -> list[tuple[str, str]]:
