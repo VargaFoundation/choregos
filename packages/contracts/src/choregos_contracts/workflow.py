@@ -221,11 +221,11 @@ class Transition(Strict):
     def _actor_or_train(self) -> Transition:
         if self.via == "release_train":
             if self.by is not None:
-                raise ValueError("une transition `via: release_train` ne porte pas `by`")
+                raise ValueError("a `via: release_train` transition has no `by`")
             if self.train is None:
-                raise ValueError("une transition `via: release_train` exige `train: { env: … }`")
+                raise ValueError("a `via: release_train` transition needs `train: { env: … }`")
         elif self.by is None:
-            raise ValueError("une transition exige `by: <acteur>` ou `via: release_train`")
+            raise ValueError("a transition needs `by: <actor>` or `via: release_train`")
         return self
 
     @property

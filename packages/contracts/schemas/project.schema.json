@@ -139,7 +139,7 @@
     },
     "cluster": {
       "type": "string",
-      "description": "Référence de cluster (executor)."
+      "description": "Cluster reference (executor)."
     },
     "notify": {
       "type": "object",
@@ -166,7 +166,7 @@
       "default": []
     },
     "groups": {
-      "description": "Groupes de l'organisation auxquels ce projet appartient. Ils décident de ce que le déploiement lui ouvre dans le catalogue d'outils.",
+      "description": "The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue.",
       "type": "array",
       "items": {
         "type": "string"

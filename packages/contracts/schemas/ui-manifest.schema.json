@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/ui-manifest.schema.json",
   "title": "AdminSection",
-  "description": "Une section d'administration déclarée par un greffon, en DONNÉES : la console la rend avec ses propres blocs, aucun code du greffon n'y tourne (ADR 0032). Les chemins sont relatifs à /api/v1 ; `{org}` vaut l'organisation courante, `{id}` l'identifiant de la ligne.",
+  "description": "An administration section declared by a plugin, as DATA: the console renders it with its own blocks, no plugin code runs there (ADR 0032). Paths are relative to /api/v1; `{org}` is the current organisation, `{id}` the row's identifier.",
   "type": "object",
   "required": ["id", "title", "scope", "permission", "blocks"],
   "additionalProperties": false,
@@ -11,7 +11,7 @@
     "title": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
     "scope": { "enum": ["platform", "organisation"] },
-    "permission": { "type": "string", "description": "une permission du cœur, ex. member:manage ; platform:admin pour la portée plateforme" },
+    "permission": { "type": "string", "description": "a core permission, e.g. member:manage; platform:admin for the platform scope" },
     "blocks": {
       "type": "array",
       "minItems": 1,
@@ -75,10 +75,10 @@
         "description": { "type": "string" },
         "path": { "$ref": "#/$defs/path" },
         "method": { "enum": ["POST", "PUT", "PATCH", "DELETE"], "default": "POST" },
-        "confirm": { "type": "string", "description": "la phrase à confirmer avant d'agir" },
+        "confirm": { "type": "string", "description": "the sentence to confirm before acting" },
         "danger": { "type": "boolean", "default": false },
-        "reauth": { "type": "boolean", "default": false, "description": "le geste exige une authentification fraîche" },
-        "params": { "type": "object", "description": "le JSON Schema des paramètres demandés avant d'agir" }
+        "reauth": { "type": "boolean", "default": false, "description": "the gesture requires a fresh sign-in" },
+        "params": { "type": "object", "description": "the JSON Schema of the parameters asked for before acting" }
       }
     },
     "secret_once": {
@@ -93,7 +93,7 @@
         "method": { "enum": ["POST", "PUT"], "default": "POST" },
         "confirm": { "type": "string" },
         "params": { "type": "object" },
-        "secret_field": { "type": "string", "description": "le champ de la réponse qui porte le secret, montré une fois et jamais gardé" }
+        "secret_field": { "type": "string", "description": "the response field that carries the secret, shown once and never kept" }
       }
     }
   }

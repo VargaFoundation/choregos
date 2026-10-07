@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/workflow.schema.json",
   "title": "Workflow",
-  "description": "DSL de workflow Choregos : machine à états déclarative par projet (docs/plan/01 §1.4).",
+  "description": "Choregos workflow DSL: a declarative state machine per project (docs/plan/01 §1.4).",
   "type": "object",
   "required": [
     "apiVersion",
@@ -80,7 +80,7 @@
     },
     "initial": {
       "type": "string",
-      "description": "Où commence le workflow. Facultatif : le parseur y écrit le premier état déclaré (§1.4). Le champ existe parce que l'ordre des clés d'un objet ne survit pas à un stockage jsonb, et qu'un workflow qui croit commencer par son état terminal clôt le ticket sans rien faire."
+      "description": "Where the workflow starts. Optional: the parser writes the first declared state there (§1.4). The field exists because the order of an object's keys does not survive jsonb storage, and a workflow that believes it starts at its terminal state closes the work item without doing anything."
     }
   },
   "$defs": {
@@ -119,7 +119,7 @@
         "role": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]{1,31}$",
-          "description": "Rôle de l'agent. Les rôles du paquet — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — gardent leur sens ; un métier nomme les siens (`sourcing`, `instruction_dossier`), et le playbook se résout par le nom du rôle."
+          "description": "The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name."
         },
         "model": {
           "type": "string",
@@ -128,7 +128,7 @@
         },
         "backend": {
           "type": "string",
-          "description": "Backend ACP imposé (sinon défaut du projet)."
+          "description": "The ACP backend to use (otherwise the project's default)."
         },
         "fresh_context": {
           "type": "boolean",
@@ -146,12 +146,12 @@
         },
         "playbook": {
           "type": "string",
-          "description": "Nom du playbook (défaut : le rôle)."
+          "description": "The playbook's name (default: the role)."
         },
         "agent": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$",
-          "description": "Un agent du registre (ADR 0033) : `slug`, ou `slug@version`. Sa version — l'épinglée du projet, sinon la dernière — fixe instructions, modèle, limites et budget ; ses instructions priment sur le playbook."
+          "description": "A registry agent (ADR 0033): `slug`, or `slug@version`. Its version — the project's pinned one, otherwise the latest — sets the instructions, model, limits and budget; its instructions take precedence over the playbook."
         }
       }
     },
@@ -229,7 +229,7 @@
         "production": {
           "type": "boolean",
           "default": false,
-          "description": "Un état de production : il ne s'atteint que par `via: release_train` (avant #175 : le préfixe `deployed_prod` du nom)."
+          "description": "A production state: it can only be reached `via: release_train` (before #175: the name's `deployed_prod` prefix)."
         }
       }
     },
@@ -246,7 +246,7 @@
         },
         "from": {
           "type": "string",
-          "description": "identifiant d'état, ou *agent (tout état piloté par un agent)"
+          "description": "a state identifier, or *agent (any state an agent drives)"
         },
         "to": {
           "$ref": "#/$defs/identifier"
@@ -342,11 +342,11 @@
         },
         "action": {
           "$ref": "#/$defs/transitionAction",
-          "description": "une action gouvernée que la transition système propose (ADR 0035), à date"
+          "description": "a governed action the system transition proposes (ADR 0035), on a date"
         },
         "task": {
           "$ref": "#/$defs/task",
-          "description": "une tâche qu'une personne fait : un formulaire dont les valeurs deviennent des champs, une attestation"
+          "description": "a task a person does: a form whose values become fields, an attestation"
         },
         "does": {
           "type": "string",
@@ -354,7 +354,7 @@
             "open_pr",
             "merge_pr"
           ],
-          "description": "Ce que la plateforme fait en franchissant une transition système : ouvrir la PR du ticket, ou la fusionner (avant #175 : le préfixe `pr_` ou `merged` de l'état visé)."
+          "description": "What the platform does when it takes a system transition: open the work item's pull request, or merge it (before #175: the `pr_` or `merged` prefix of the target state)."
         }
       },
       "oneOf": [
@@ -528,7 +528,7 @@
         "effects"
       ],
       "additionalProperties": false,
-      "description": "titre, justification et paramètres rendus avec les champs du ticket ; une validation humaine quand une opération l'exige ou quand `approval` est déclaré",
+      "description": "title, reason and parameters rendered with the work item's fields; a human approval when an operation requires one or when `approval` is declared",
       "properties": {
         "kind": {
           "type": "string",
@@ -560,7 +560,7 @@
         "not_before": {
           "type": "string",
           "pattern": "^fields\\.[a-z_][a-z0-9_]{0,62}(\\s*[+-]\\s*[0-9]{1,4}\\s*[dhm])?$",
-          "description": "pas avant cette date, tirée d'un champ du ticket : `fields.date_arrivee - 10d`"
+          "description": "not before this date, taken from a work item's field: `fields.date_arrivee - 10d`"
         }
       }
     },
@@ -581,7 +581,7 @@
         },
         "form": {
           "type": "object",
-          "description": "un JSON Schema d'objet ; chaque propriété est un champ du ticket"
+          "description": "an object JSON Schema; each property is a field of the work item"
         },
         "attest": {
           "type": "string",

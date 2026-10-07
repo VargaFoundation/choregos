@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/policy.schema.json",
   "title": "Policy",
-  "description": "Politique d'un projet : budgets, approbations, tentatives, périmètre, sandbox, findings, release train.",
+  "description": "A project's policy: budgets, approvals, attempts, scope, sandbox, findings, release train.",
   "type": "object",
   "required": ["apiVersion", "kind", "metadata"],
   "additionalProperties": false,
@@ -26,7 +26,7 @@
       "properties": {
         "ticket_usd": {
           "type": "object",
-          "description": "Plafond de coût par ticket, par taille.",
+          "description": "Cost ceiling per work item, by size.",
           "additionalProperties": false,
           "properties": {
             "S": { "type": "number", "exclusiveMinimum": 0 },
@@ -37,7 +37,7 @@
         },
         "stage_usd": {
           "type": "object",
-          "description": "Plafond par étape : rôle → taille → USD. La clé `default` s'applique aux rôles non listés.",
+          "description": "Ceiling per step: role → size → USD. The `default` key applies to the roles not listed.",
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
@@ -57,7 +57,7 @@
     },
     "approvals": {
       "type": "object",
-      "description": "Règles d'approbation humaine par type de décision.",
+      "description": "Human approval rules, by kind of decision.",
       "additionalProperties": false,
       "properties": {
         "spec": { "$ref": "#/$defs/approvalRule" },
@@ -106,13 +106,13 @@
           "type": "string",
           "enum": ["allow", "reject"],
           "default": "allow",
-          "description": "Demande de permission de nature inconnue : laissée passer et journalisée (allow) ou refusée (reject)"
+          "description": "A permission request of an unknown kind: let through and logged (allow), or refused (reject)"
         },
         "prompt_injection": {
           "type": "string",
           "enum": ["ignore", "warn", "block"],
           "default": "warn",
-          "description": "Injection de prompt repérée dans ce que l'agent va lire : journaliser (warn), arrêter l'étape (block), ne pas regarder (ignore)"
+          "description": "A prompt injection spotted in what the agent will read: log it (warn), stop the step (block), do not look (ignore)"
         }
       }
     },
@@ -144,7 +144,7 @@
       "additionalProperties": false,
       "properties": {
         "cross_backend": { "type": "boolean", "default": false,
-          "description": "Le backend de review doit différer de celui de l'implémentation." },
+          "description": "The review backend must differ from the implementation's." },
         "require_human_for_risk": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high"] },
           "default": ["high"] }
       }
@@ -176,7 +176,7 @@
         "schedule": { "type": "string", "description": "Cron (5 champs), fuseau du projet." },
         "timezone": { "type": "string", "default": "Europe/Paris" },
         "windows": { "type": "array", "items": { "type": "string" },
-          "description": "Fenêtres autorisées, ex. 'Mon-Thu 09:00-18:00'." },
+          "description": "Allowed windows, e.g. 'Mon-Thu 09:00-18:00'." },
         "batch_min": { "type": "integer", "minimum": 1, "default": 1 },
         "batch_max": { "type": "integer", "minimum": 1, "default": 8 },
         "soak_minutes": { "type": "integer", "minimum": 0, "default": 10 },
