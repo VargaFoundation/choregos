@@ -157,7 +157,7 @@ async def test_une_operation_que_le_projet_s_interdit_ne_se_propose_pas_et_ne_s_
         f"/api/v1/projects/{pid}/actions",
         json={"kind": "x", "title": "x", "effects": [{"effect": "connector.call", "with": appel}]},
     )
-    assert propose.status_code == 422 and "interdite à ce projet" in propose.text
+    assert propose.status_code == 422 and "forbidden in this project" in propose.text
     async with session_scope() as session:
         projet = await session.get(Project, pid)
         assert projet is not None
@@ -196,7 +196,7 @@ async def test_une_operation_reservee_a_d_autres_groupes_est_interdite_a_ce_proj
         f"/api/v1/projects/{pid}/actions",
         json={"kind": "x", "title": "x", "effects": [{"effect": "connector.call", "with": appel}]},
     )
-    assert propose.status_code == 422 and "entra-acme/create_user : forbidden" in propose.text
+    assert propose.status_code == 422 and "entra-acme/create_user: forbidden" in propose.text
 
 
 async def _proposer_depuis_la_transition(pid: str, item_id: str, tentative: int = 1, **action: Any) -> Any:

@@ -101,12 +101,12 @@ async def _dto(session: AsyncSession, agent: Agent, *, avec_versions: bool = Fal
 
 def _lire(principal: Me, org: str) -> None:
     if not principal.can(Permission.PROJECT_READ, org):
-        raise forbidden(f"lire les agents de {org} demande d'en être membre")
+        raise forbidden(f"reading the agents of {org} requires being a member of it")
 
 
 def _gerer(principal: Me, org: str) -> None:
     if not principal.can(Permission.AGENT_MANAGE, org):
-        raise forbidden("créer, publier ou révoquer un agent demande le rôle org_admin")
+        raise forbidden("creating, publishing or revoking an agent needs the org_admin role")
 
 
 @router.get("/orgs/{org}/agents", response_model=list[AgentDto], operation_id="listAgents")
@@ -135,7 +135,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         )
     ).first()
     if existant is not None:
-        raise conflict(f"l'agent `{body.slug}` existe déjà dans {org}")
+        raise conflict(f"agent `{body.slug}` already exists in {org}")
     agent = Agent(
         org_id=organisation.id,
         slug=body.slug,
@@ -187,7 +187,7 @@ async def publish_version(
     organisation = await _organisation(session, org)
     agent = await _agent(session, organisation, slug)
     if agent.status == "revoked":
-        raise conflict(f"l'agent `{slug}` est révoqué : il ne publie plus")
+        raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
     derniere = (
         await session.execute(select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == agent.id))
     ).scalar() or 0
@@ -227,7 +227,7 @@ async def get_version(org: str, slug: Slug, version: int, session: Db, principal
         )
     ).scalar_one_or_none()
     if ligne is None:
-        raise not_found("Version d'agent", f"{slug}@{version}")
+        raise not_found("Agent version", f"{slug}@{version}")
     return _version_dto(ligne)
 
 
@@ -305,7 +305,7 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
     organisation = await _organisation(session, org)
     agent = await _agent(session, organisation, slug)
     if agent.status == "revoked" and body.status not in {None, "revoked"}:
-        raise conflict(f"l'agent `{slug}` est révoqué : la révocation est définitive")
+        raise conflict(f"agent `{slug}` is revoked: revocation is final")
     for champ in ("display_name", "description", "expires_at"):
         if champ in body.model_fields_set:
             setattr(agent, champ, getattr(body, champ))
@@ -335,7 +335,7 @@ async def _version_de(session: AsyncSession, agent: Agent, version: int) -> Agen
         )
     ).scalar_one_or_none()
     if ligne is None:
-        raise not_found("Version d'agent", f"{agent.slug}@{version}")
+        raise not_found("Agent version", f"{agent.slug}@{version}")
     return ligne
 
 
@@ -366,12 +366,12 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
     assert organisation is not None
     agent = await _agent(session, organisation, slug)
     if agent.status != "active":
-        raise conflict(f"l'agent `{slug}` est {agent.status} : il ne s'épingle pas")
+        raise conflict(f"agent `{slug}` is {agent.status}: it cannot be pinned")
     spec = AgentSpec.model_validate((await _version_de(session, agent, body.version)).spec)
     ecarts = elargissements(spec, body.overrides)
     if ecarts:
         raise unprocessable(
-            "un projet ne fait que resserrer une version d'agent",
+            "a project can only narrow an agent version, never widen it",
             [{"loc": ["overrides"], "msg": ecart} for ecart in ecarts],
         )
     epingle = (
@@ -418,7 +418,7 @@ async def unpin_agent(slug: Slug, ctx: ProjectCtx, session: Db) -> Response:
         )
     ).scalar_one_or_none()
     if epingle is None:
-        raise not_found("Épingle", f"{slug} sur {ctx.project.slug}")
+        raise not_found("Pin", f"{slug} on {ctx.project.slug}")
     await session.delete(epingle)
     await record(
         session,
@@ -491,20 +491,20 @@ async def attach_credential(
     organisation = await _organisation(session, org)
     agent = await _agent(session, organisation, slug)
     if agent.kind != "external":
-        raise unprocessable(f"`{slug}` est un agent interne : seul un agent `external` porte un client MCP")
+        raise unprocessable(f"`{slug}` is an internal agent: only an `external` agent carries an MCP client")
     if body.kind == "token":
         if not body.token_id:
-            raise unprocessable("`token_id` manque")
+            raise unprocessable("`token_id` is missing")
         async with en_portee_de_plateforme(session):
             jeton = await session.get(ApiToken, body.token_id)
         if jeton is None or not set(jeton.scopes or []) & {"mcp:read", "mcp:write"}:
-            raise unprocessable("un jeton `mcp:read` ou `mcp:write` existant est attendu")
+            raise unprocessable("an existing `mcp:read` or `mcp:write` token is expected")
         existant = (
             await session.execute(select(AgentCredential.id).where(AgentCredential.api_token_id == jeton.id))
         ).first()
     else:
         if not body.client_id:
-            raise unprocessable("`client_id` manque")
+            raise unprocessable("`client_id` is missing")
         existant = (
             await session.execute(
                 select(AgentCredential.id).where(
@@ -513,7 +513,7 @@ async def attach_credential(
             )
         ).first()
     if existant is not None:
-        raise conflict("ce client est déjà rattaché à un agent")
+        raise conflict("this client is already attached to an agent")
     ligne = AgentCredential(
         org_id=organisation.id,
         agent_id=agent.id,
@@ -545,7 +545,7 @@ async def detach_credential(org: str, slug: Slug, credential_id: str, session: D
     agent = await _agent(session, await _organisation(session, org), slug)
     ligne = await session.get(AgentCredential, credential_id)
     if ligne is None or ligne.agent_id != agent.id:
-        raise not_found("Client de l'agent", credential_id)
+        raise not_found("Agent client", credential_id)
     await session.delete(ligne)
     await record(
         session,

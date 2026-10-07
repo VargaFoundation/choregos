@@ -215,7 +215,7 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
     from ..rbac import Permission
 
     if not principal.can(Permission.MEMBER_MANAGE, org, body.project_slug):
-        raise forbidden("gérer les membres demande le rôle project_owner ou org_admin")
+        raise forbidden("managing members needs the project_owner or org_admin role")
     # L'e-mail est unique à l'échelle de l'INSTANCE : un utilisateur déjà membre d'une autre
     # organisation est invisible sous la RLS de `users`, et la route tentait un doublon.
     async with en_portee_de_plateforme(session):
@@ -234,7 +234,7 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
             )
         ).scalar_one_or_none()
         if project is None:
-            raise not_found("Projet", f"{org}/{body.project_slug}")
+            raise not_found("Project", f"{org}/{body.project_slug}")
     existing = (
         await session.execute(
             select(Membership).where(
@@ -289,7 +289,7 @@ async def remove_member(
     if organization is None:
         raise not_found("Organisation", org)
     if not principal.can(Permission.MEMBER_MANAGE, org, project):
-        raise forbidden("gérer les membres demande le rôle project_owner ou org_admin")
+        raise forbidden("managing members needs the project_owner or org_admin role")
     projet_id = None
     if project:
         projet = (
@@ -298,7 +298,7 @@ async def remove_member(
             )
         ).scalar_one_or_none()
         if projet is None:
-            raise not_found("Projet", f"{org}/{project}")
+            raise not_found("Project", f"{org}/{project}")
         projet_id = projet.id
     appartenance = (
         await session.execute(
@@ -310,7 +310,7 @@ async def remove_member(
         )
     ).scalar_one_or_none()
     if appartenance is None:
-        raise not_found("Appartenance", f"{user_id} dans {org}" + (f"/{project}" if project else ""))
+        raise not_found("Membership", f"{user_id} in {org}" + (f"/{project}" if project else ""))
     if appartenance.role == str(Role.ORG_ADMIN) and projet_id is None:
         administrateurs = (
             await session.execute(
@@ -324,9 +324,7 @@ async def remove_member(
             )
         ).scalar_one()
         if administrateurs <= 1:
-            raise conflict(
-                f"le dernier administrateur de {org} ne se retire pas : nommez-en un autre d'abord"
-            )
+            raise conflict(f"the last administrator of {org} cannot be removed: appoint another one first")
     await session.delete(appartenance)
     await record(
         session,
@@ -356,7 +354,7 @@ async def list_audit(
     # fin, et c'est lui qui manquait. Jusqu'au 2026-09-26 la requête n'avait aucun `where`.
     lisibles = [org for org in principal.org_roles if principal.can(Permission.AUDIT_READ, org)]
     if not lisibles:
-        raise forbidden("lecture de l'audit réservée aux propriétaires et administrateurs")
+        raise forbidden("reading the audit log is reserved for owners and administrators")
 
     # Volontairement SANS `is_platform_admin()` : ce prédicat rend vrai pour TOUT `org_admin`
     # de N'IMPORTE QUELLE organisation (`rbac.py:112`), donc s'en servir ici rouvrirait la fuite

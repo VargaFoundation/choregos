@@ -210,18 +210,16 @@ def parse_policy(text: str) -> Policy:
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise ValidationError([Issue("yaml.syntax", str(exc))], subject="politique") from exc
+        raise ValidationError([Issue("yaml.syntax", str(exc))], subject="policy") from exc
     if not isinstance(raw, dict):
-        raise ValidationError(
-            [Issue("yaml.not_a_mapping", "the policy must be an object")], subject="politique"
-        )
+        raise ValidationError([Issue("yaml.not_a_mapping", "the policy must be an object")], subject="policy")
     try:
         return Policy.model_validate(raw)
     except PydanticValidationError as exc:
         issues = [
             Issue(f"schema.{e['type']}", e["msg"], ".".join(str(p) for p in e["loc"])) for e in exc.errors()
         ]
-        raise ValidationError(issues, subject="politique") from exc
+        raise ValidationError(issues, subject="policy") from exc
 
 
 @lru_cache(maxsize=8)

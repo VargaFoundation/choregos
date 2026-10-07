@@ -226,7 +226,7 @@ async def test_un_tracker_externe_est_un_refus_lisible(client: AsyncClient, proj
         "result"
     ]
     assert resultat["isError"] is True
-    assert "tracker externe" in resultat["content"][0]["text"]
+    assert "external tracker" in resultat["content"][0]["text"]
 
 
 async def test_un_jeton_lie_a_un_projet_ne_voit_que_lui(client: AsyncClient, project: dict[str, Any]) -> None:

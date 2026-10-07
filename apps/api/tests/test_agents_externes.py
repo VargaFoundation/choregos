@@ -78,7 +78,7 @@ async def test_un_agent_revoque_recoit_401_a_l_appel_suivant(
     revoque = await client.patch("/api/v1/orgs/varga/agents/claude-de-lea", json={"status": "revoked"})
     assert revoque.status_code == 200
     refuse = await _outils(client, jeton)
-    assert refuse.status_code == 401 and "révoqué" in refuse.text
+    assert refuse.status_code == 401 and "revoked" in refuse.text
 
 
 async def test_un_humain_sans_droit_donne_un_agent_sans_droit(

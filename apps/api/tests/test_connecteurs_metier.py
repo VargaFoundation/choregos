@@ -60,7 +60,7 @@ async def test_une_famille_se_declare_cle_en_reference_et_ses_ecritures_passent_
     en_clair = await client.post(
         f"{ORG}/connectors", json={"name": "autre", "kind": kind, "type": "demo", "config": {"api_key": CLE}}
     )
-    assert en_clair.status_code == 422 and "en clair" in en_clair.text
+    assert en_clair.status_code == 422 and "in clear" in en_clair.text
 
 
 async def test_une_ecriture_approuvee_atteint_le_parc_avec_la_cle_resolue_et_un_refus_est_definitif(

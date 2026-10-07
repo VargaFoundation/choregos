@@ -284,13 +284,11 @@ async def controler(session: Any, demande: DemandeDeGeste) -> None:
             if inspect.isawaitable(resultat):
                 await resultat
         except GesteRefuse as refus:
-            raison = f"{nom} : {refus}"
+            raison = f"{nom}: {refus}"
             if refus.nature == "conflit":
                 raise conflict(raison) from refus
             if refus.nature == "reauth":
-                raise unauthorized(
-                    f"{raison} — se ré-authentifier (GET /api/v1/auth/login?reauth=1)"
-                ) from refus
+                raise unauthorized(f"{raison} — sign in again (GET /api/v1/auth/login?reauth=1)") from refus
             raise forbidden(raison) from refus
 
 

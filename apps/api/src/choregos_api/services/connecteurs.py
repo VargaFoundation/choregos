@@ -27,7 +27,7 @@ def spec_du_type(kind: str, type_name: str) -> ConnectorTypeSpec:
     spec = spec_of(kind, type_name)
     if spec is None:
         raise unprocessable(
-            f"aucun type `{type_name}` pour `{kind}` (connus : {', '.join(available(kind)) or 'aucun'})"
+            f"no type `{type_name}` for `{kind}` (known: {', '.join(available(kind)) or 'none'})"
         )
     return spec
 
@@ -49,14 +49,14 @@ def verifier_les_secrets(
     en_clair = sorted(set(config) & set(spec.secret_fields))
     if en_clair:
         raise unprocessable(
-            f"secret écrit en clair : {', '.join(en_clair)}. Un secret s'écrit en référence, dans "
-            f"`secret_refs` (`{en_clair[0]}: env:NOM_DE_VARIABLE`) — jamais sa valeur"
+            f"secret written in clear: {', '.join(en_clair)}. A secret is written as a reference, in "
+            f"`secret_refs` (`{en_clair[0]}: env:VARIABLE_NAME`) — never its value"
         )
     inconnus = sorted(set(secret_refs) - set(spec.secret_fields))
     if inconnus:
         raise unprocessable(
-            f"`{type_name}` n'a pas de champ secret {', '.join(inconnus)} "
-            f"(les siens : {', '.join(spec.secret_fields) or 'aucun'})"
+            f"`{type_name}` has no secret field {', '.join(inconnus)} "
+            f"(its own: {', '.join(spec.secret_fields) or 'none'})"
         )
     for reference in [*secret_refs.values(), *([secret_ref] if secret_ref else [])]:
         try:

@@ -103,8 +103,8 @@ async def test_l_epingle_du_projet_resserre_le_budget(setup: Fixture) -> None:
 @pytest.mark.parametrize(
     ("agent", "motif"),
     [
-        pytest.param({"status": "revoked"}, "révoqué", id="revoque"),
-        pytest.param({"slug": "autre"}, "n'existe pas", id="inconnu"),
+        pytest.param({"status": "revoked"}, "is revoked", id="revoque"),
+        pytest.param({"slug": "autre"}, "does not exist", id="inconnu"),
         pytest.param(
             {"instructions": "{{ ''.__class__.__mro__ }}"}, "do not render", id="evasion-du-bac-a-sable"
         ),

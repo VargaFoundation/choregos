@@ -111,7 +111,7 @@ async def test_une_skill_du_gabarit_ne_lit_rien_hors_d_elle(
             "config": {"slug": "rh", "org": "varga"},
         },
     )
-    assert refus.status_code == 422 and "lien symbolique" in refus.text
+    assert refus.status_code == 422 and "symbolic link" in refus.text
 
 
 async def test_verifier_tient_ou_refuse_et_un_serveur_mcp_rend_ce_qu_il_a_structure(

@@ -65,14 +65,14 @@ async def test_un_secret_en_clair_recoit_422(client: AsyncClient, project: dict[
     corps = {"type": "jira", "config": {"base_url": "https://acme.atlassian.net", "email": "a@b.c",
                                          "project_key": "RH", "api_token": "s3cr3t"}}  # fmt: skip
     refus = await client.put(f"/api/v1/projects/{pid}/connectors/tracker", json=corps)
-    assert refus.status_code == 422 and "en clair" in refus.text
+    assert refus.status_code == 422 and "in clear" in refus.text
     assert "s3cr3t" not in refus.text
 
     corps["config"].pop("api_token")
     for references, motif in (
         ({"api_token": "s3cr3t"}, "reference"),
         ({"api_token": "coffre:x"}, "unknown"),
-        ({"mot_de_passe": "env:X"}, "champ secret"),
+        ({"mot_de_passe": "env:X"}, "secret field"),
     ):
         refus = await client.put(
             f"/api/v1/projects/{pid}/connectors/tracker", json={**corps, "secret_refs": references}

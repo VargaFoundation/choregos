@@ -71,19 +71,19 @@ async def test_une_archive_avec_son_dossier_racine_s_importe(client: AsyncClient
 @pytest.mark.parametrize(
     ("contenu", "motif"),
     [
-        pytest.param(_zip({**FICHIERS, "../../evasion.sh": "rm -rf /"}), "sort du dossier", id="zip-slip"),
-        pytest.param(_zip(FICHIERS, lien="references/lien"), "lien symbolique", id="lien-symbolique"),
+        pytest.param(_zip({**FICHIERS, "../../evasion.sh": "rm -rf /"}), "goes outside", id="zip-slip"),
+        pytest.param(_zip(FICHIERS, lien="references/lien"), "symbolic link", id="lien-symbolique"),
         pytest.param(
             _zip({"SKILL.md": SKILL_MD.replace("description:", "allowed-tools: [Bash]\ndescription:")}),
-            "aucune permission",
+            "declares no permission",
             id="allowed-tools",
         ),
         pytest.param(
             _zip({"SKILL.md": SKILL_MD.replace("name: procedure-onboarding\n", "")}), "name", id="sans-nom"
         ),
-        pytest.param(_zip({"lisez-moi.md": "x"}), "SKILL.md manque", id="sans-skill-md"),
+        pytest.param(_zip({"lisez-moi.md": "x"}), "SKILL.md is missing", id="sans-skill-md"),
         pytest.param(_zip({**FICHIERS, **{f"f{i}.md": "x" for i in range(64)}}), "64", id="trop-de-fichiers"),
-        pytest.param(_zip({**FICHIERS, "gros.md": "x" * (600 * 1024)}), "Kio", id="trop-gros"),
+        pytest.param(_zip({**FICHIERS, "gros.md": "x" * (600 * 1024)}), "KiB", id="trop-gros"),
         pytest.param(b"pas une archive", "zip", id="pas-un-zip"),
     ],
 )
@@ -104,7 +104,7 @@ async def test_le_nom_de_la_version_suivante_doit_etre_celui_de_la_skill(
     refuse = await client.post(
         "/api/v1/orgs/varga/skills/procedure-onboarding/versions", json={"files": autre}
     )
-    assert refuse.status_code == 422 and "coïncider" in refuse.text
+    assert refuse.status_code == 422 and "must match" in refuse.text
 
 
 async def test_une_skill_dit_quels_agents_la_portent(client: AsyncClient, admin: str) -> None:

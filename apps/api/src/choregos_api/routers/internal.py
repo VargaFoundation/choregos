@@ -43,7 +43,7 @@ async def _run_and_item(session: Any, run_id: str) -> tuple[Run, WorkItem, Proje
     item = await session.get(WorkItem, run.work_item_id)
     project = await session.get(Project, run.project_id)
     if item is None or project is None:
-        raise not_found("Ticket du run", run_id)
+        raise not_found("Work item of the run", run_id)
     return run, item, project
 
 
@@ -52,7 +52,7 @@ async def get_input(id: str, session: Db, claims: RunAuth) -> StageInput:
     """Le `StageInput` du run. Si le résultat est déjà posté, 409 : le runner sort en 0."""
     run, _, _ = await _run_and_item(session, id)
     if run.result is not None:
-        raise conflict("résultat déjà posté pour ce run")
+        raise conflict("result already posted for this run")
     if not run.stage_input:
         raise not_found("StageInput", id)
     return StageInput.model_validate(run.stage_input)
@@ -150,8 +150,8 @@ async def post_finding(id: str, body: Finding, session: Db, claims: RunAuth) -> 
     if len(existing) >= cap:
         raise ApiError(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            "Plafond de findings atteint",
-            f"ce run a déjà déposé {len(existing)} findings (plafond {cap})",
+            "Findings cap reached",
+            f"this run has already filed {len(existing)} findings (cap {cap})",
         )
     row = FindingRow(
         project_id=project.id,
@@ -310,7 +310,7 @@ async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, An
             )
         ).scalar_one_or_none()
         if ligne is None:
-            raise not_found("Skill du run", f"{ref['slug']}@{ref['version']}")
+            raise not_found("Skill of the run", f"{ref['slug']}@{ref['version']}")
         rendues.append(
             {"slug": ref["slug"], "version": ligne.version, "digest": ligne.digest, "files": ligne.files}
         )
@@ -381,8 +381,8 @@ async def _outils_des_greffons(
         for outil in await fournisseur.lister(session, run, project):
             nom = str(outil["name"])
             if nom in deja or nom in trouves:
-                autre = trouves[nom][0] if nom in trouves else "le catalogue"
-                raise conflict(f"outil « {nom} » déclaré par {autre} et par le greffon « {greffon} »")
+                autre = trouves[nom][0] if nom in trouves else "the catalogue"
+                raise conflict(f"tool `{nom}` declared by {autre} and by the plugin `{greffon}`")
             trouves[nom] = (greffon, outil)
     return trouves
 
@@ -413,7 +413,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     """Appelle un outil du catalogue ou d'un greffon pour le run, et l'inscrit au registre de coûts."""
     run, item, project = await _run_and_item(session, id)
     if run.result is not None:
-        raise conflict("résultat déjà posté pour ce run")
+        raise conflict("result already posted for this run")
     from ..services.courtier import outils_du_courtier
 
     du_catalogue = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
@@ -423,7 +423,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     if outil is None and name not in des_greffons and name not in du_courtier:
         # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
         # le catalogue du déploiement en essayant des noms.
-        raise not_found("Outil", name)
+        raise not_found("Tool", name)
 
     engine = PolicyEngine(policy_model(await active_policy(session, project.id)))
     plafond = engine.max_tool_calls_per_run()
@@ -437,8 +437,8 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     if plafond and deja >= plafond:
         raise ApiError(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            "Plafond d'appels d'outils atteint",
-            f"ce run a déjà appelé {deja} outils (plafond {plafond})",
+            "Tool call cap reached",
+            f"this run has already called {deja} tools (cap {plafond})",
         )
 
     suspicions: list[dict[str, str]] = []
@@ -454,7 +454,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         try:
             verifier_les_arguments(du_courtier[name], body or {})
         except ArgumentsRefuses as refus:
-            raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
+            raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
         code, corps = 202, await proposer_l_appel(session, run, project, du_courtier[name], body or {})
         fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
     elif name in du_courtier and du_courtier[name].ecriture:
@@ -521,7 +521,7 @@ async def _par_le_courtier(
     try:
         verifier_les_arguments(outil, arguments)
     except ArgumentsRefuses as refus:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
     code, corps = await appeler(outil, arguments)
     return await _garde_contre_l_injection(session, run, project, outil, code, corps)
 
@@ -536,7 +536,7 @@ async def _ecriture_par_le_courtier(
     try:
         verifier_les_arguments(outil, arguments)
     except ArgumentsRefuses as refus:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refusés", str(refus)) from refus
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
     code, corps, nouvelle = await ecrire_par_une_action(session, run, project, outil, arguments)
     code, corps, suspicions = await _garde_contre_l_injection(session, run, project, outil, code, corps)
     return code, corps, suspicions, nouvelle
@@ -568,6 +568,6 @@ async def _garde_contre_l_injection(
         suspicions=[s.to_dict() for s in trouvees],
     )
     if mode == "block":
-        retenu = {"error": f"résultat de {outil.nom} retenu : injection suspectée — un humain relit"}
+        retenu = {"error": f"result of {outil.nom} withheld: suspected injection — a human reviews it"}
         return 451, retenu, [s.to_dict() for s in trouvees]
     return code, corps, [s.to_dict() for s in trouvees]

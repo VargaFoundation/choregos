@@ -49,12 +49,12 @@ async def _skill(session: AsyncSession, organisation: Organization, slug: str) -
 
 def _gerer(principal: Me, org: str) -> None:
     if not principal.can(Permission.AGENT_MANAGE, org):
-        raise forbidden("publier une skill demande le rôle org_admin")
+        raise forbidden("publishing a skill needs the org_admin role")
 
 
 def _lire(principal: Me, org: str) -> None:
     if not principal.can(Permission.PROJECT_READ, org):
-        raise forbidden(f"lire les skills de {org} demande d'en être membre")
+        raise forbidden(f"reading the skills of {org} requires being a member of it")
 
 
 async def _utilisee_par(session: AsyncSession, organisation: Organization, slug: str) -> list[str]:
@@ -172,7 +172,7 @@ async def create_skill(org: str, body: SkillFiles, session: Db, principal: Me) -
     if (
         await session.execute(select(Skill.id).where(Skill.org_id == organisation.id, Skill.slug == nom))
     ).first():
-        raise conflict(f"la skill `{nom}` existe déjà : publiez sa version suivante")
+        raise conflict(f"skill `{nom}` already exists: publish its next version instead")
     skill, _ = await _publier(session, principal, organisation, body.files, None)
     return await _dto(session, organisation, skill, avec_versions=True)
 
@@ -189,7 +189,7 @@ async def import_skill(org: str, request: Request, session: Db, principal: Me) -
     organisation = await _organisation(session, org)
     contenu = await request.body()
     if len(contenu) > ARCHIVE_MAX:
-        raise unprocessable(f"archive de plus de {ARCHIVE_MAX // (1024 * 1024)} Mio")
+        raise unprocessable(f"archive larger than {ARCHIVE_MAX // (1024 * 1024)} MiB")
     try:
         fichiers = lire_le_zip(contenu)
     except SkillRefusee as refus:
@@ -242,7 +242,7 @@ async def get_skill_version(
         )
     ).scalar_one_or_none()
     if ligne is None:
-        raise not_found("Version de skill", f"{slug}@{version}")
+        raise not_found("Skill version", f"{slug}@{version}")
     return SkillVersionDto(
         version=ligne.version,
         digest=ligne.digest,

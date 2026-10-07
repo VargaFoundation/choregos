@@ -74,13 +74,13 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
         deja = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
         if deja:
             raise conflict(
-                "l'édition communautaire tient une seule organisation. Le multi-organisation, "
-                "et l'isolation qui va avec, sont l'édition entreprise (docs/adr/0024-deux-editions.md)."
+                "the community edition holds a single organisation. Several organisations, and the "
+                "isolation between them, are the enterprise edition (docs/adr/0024-deux-editions.md)."
             )
     if (
         await session.execute(select(Organization).where(Organization.slug == body.slug))
     ).scalar_one_or_none():
-        raise conflict(f"l'organisation `{body.slug}` existe déjà")
+        raise conflict(f"organisation `{body.slug}` already exists")
     org = Organization(slug=body.slug, name=body.name)
     session.add(org)
     await session.flush()
@@ -104,7 +104,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     """
     organisation = await _org(session, org)
     if principal.org_roles.get(org) != Role.ORG_ADMIN:
-        raise forbidden(f"renommer `{org}` demande le rôle org_admin")
+        raise forbidden(f"renaming `{org}` needs the org_admin role")
     avant = {"slug": organisation.slug, "name": organisation.name}
     if body.slug is not None and body.slug != organisation.slug:
         await exiger_admin_de_plateforme(session, principal)
@@ -114,7 +114,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         await limiter_aux_organisations(session, TOUT)
         pris = await session.execute(select(Organization.id).where(Organization.slug == body.slug))
         if pris.first() is not None:
-            raise conflict(f"l'organisation `{body.slug}` existe déjà")
+            raise conflict(f"organisation `{body.slug}` already exists")
         organisation.slug = body.slug
     if body.name is not None:
         organisation.name = body.name
@@ -176,14 +176,14 @@ def _avec_les_defauts_du_deploiement(config: ProjectConfig) -> dict[str, Any]:
 async def create_project(org: str, body: ProjectCreate, session: Db, principal: Me) -> ProjectDto:
     organization = await _org(session, org)
     if not principal.can(Permission.PROJECT_CREATE, org):
-        raise forbidden("créer un projet demande le rôle org_admin")
+        raise forbidden("creating a project needs the org_admin role")
     existing = (
         await session.execute(
             select(Project).where(Project.org_id == organization.id, Project.slug == body.slug)
         )
     ).scalar_one_or_none()
     if existing is not None:
-        raise conflict(f"le projet `{body.slug}` existe déjà dans {org}")
+        raise conflict(f"project `{body.slug}` already exists in {org}")
     await controler(session, DemandeDeGeste("project.create", org, principal, {"slug": body.slug}))
     project = Project(
         org_id=organization.id,

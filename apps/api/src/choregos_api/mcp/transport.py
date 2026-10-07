@@ -111,14 +111,12 @@ async def _servir(request: Request, session: Any, settings: Settings, projet_dem
     origine = request.headers.get("origin")
     if origine and origine not in _origines_admises(settings):
         # Une page web ouverte dans le navigateur de l'humain ne parle pas à sa place (DNS rebinding).
-        return _refus_http(403, f"origine refusée : {origine}")
+        return _refus_http(403, f"origin refused: {origine}")
     longueur = request.headers.get("content-length")
     if longueur and longueur.isdigit() and int(longueur) > TAILLE_MAX_DU_CORPS:
-        return _refus_http(413, "message trop grand (1 Mio au plus)")
+        return _refus_http(413, "message too large (1 MiB at most)")
     if not version_acceptable(request.headers.get("mcp-protocol-version")):
-        return _refus_http(
-            400, f"version du protocole non prise en charge : {request.headers['mcp-protocol-version']}"
-        )
+        return _refus_http(400, f"unsupported protocol version: {request.headers['mcp-protocol-version']}")
     try:
         appelant = await identifier(session, request, settings)
     except Refus as refus:
@@ -134,20 +132,20 @@ async def _servir(request: Request, session: Any, settings: Settings, projet_dem
         try:
             cible, org_cible = await resolve_project(session, projet_demande)
         except ApiError:
-            return _refus_http(404, f"projet `{projet_demande}` introuvable")
+            return _refus_http(404, f"project `{projet_demande}` not found")
         if not appelant.principal.can(Permission.PROJECT_READ, org_cible, cible.slug):
-            return _refus_http(404, f"projet `{projet_demande}` introuvable")
+            return _refus_http(404, f"project `{projet_demande}` not found")
         if projet is not None and projet.id != cible.id:
-            return _refus_http(403, f"ce jeton est lié au projet {org}:{projet.slug}")
+            return _refus_http(403, f"this token is bound to project {org}:{projet.slug}")
         projet, org = cible, org_cible
 
     corps = await request.body()
     if len(corps) > TAILLE_MAX_DU_CORPS:
-        return _refus_http(413, "message trop grand (1 Mio au plus)")
+        return _refus_http(413, "message too large (1 MiB at most)")
     try:
         message = json.loads(corps)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return _faute(None, SYNTAXE, "corps illisible : du JSON est attendu", statut=400)
+        return _faute(None, SYNTAXE, "unreadable body: JSON is expected", statut=400)
     defaut = defaut_du_message(message)
     if defaut is not None:
         identifiant = message.get("id") if isinstance(message, dict) else None
@@ -186,7 +184,7 @@ async def _repondre(ctx: Contexte, message: dict[str, Any], request: Request) ->
         return ok(identifiant, {"tools": [outil.annonce() for outil in await annonces(ctx)]})
     if methode == "tools/call":
         return await _appeler(ctx, identifiant, params, request)
-    return erreur(identifiant, METHODE_INCONNUE, f"méthode inconnue : {methode}")
+    return erreur(identifiant, METHODE_INCONNUE, f"unknown method: {methode}")
 
 
 async def _appeler(

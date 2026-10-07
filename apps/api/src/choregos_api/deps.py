@@ -147,21 +147,21 @@ async def current_principal(
             await session.execute(select(ApiToken).where(ApiToken.hash == hash_api_token(raw)))
         ).scalar_one_or_none()
         if token is None:
-            raise unauthorized("jeton d'API inconnu ou révoqué")
+            raise unauthorized("unknown or revoked API token")
         # `expires_at` existait en base sans que personne ne le lise : un jeton expiré
         # restait valable à vie (état des lieux du 2026-09-24).
         if token.expires_at is not None and _aware(token.expires_at) <= utcnow():
-            raise unauthorized("jeton d'API expiré")
+            raise unauthorized("expired API token")
         if not jeton_rest(token):
             # ADR 0030 : un jeton à portée MCP ne sert QU'À la porte MCP. Volé dans la
             # configuration d'un client, il ne doit ni frapper un autre jeton, ni décider, ni
             # lire quoi que ce soit hors de la porte.
             raise forbidden(
-                "ce jeton est réservé à la porte MCP (portée mcp:*) ; l'API REST demande la portée `*`"
+                "this token is reserved for the MCP gate (scope mcp:*); the REST API needs the `*` scope"
             )
         user = await session.get(User, token.user_id)
         if user is None:
-            raise unauthorized("jeton d'API orphelin")
+            raise unauthorized("orphaned API token: its user no longer exists")
         noter_l_usage(token, request)
         principal = await _principal_from_user(session, user)
         principal.kind = "user"
@@ -172,7 +172,7 @@ async def current_principal(
         raise unauthorized()
     user = await session.get(User, str(payload.get("sub", "")))
     if user is None:
-        raise unauthorized("session périmée")
+        raise unauthorized("expired session")
     await _valider_la_session(session, user, payload)
     principal = await _principal_from_user(session, user)
     # L'heure d'authentification chez l'IdP (`auth_time`) quand la session la porte ; sinon l'heure
@@ -227,8 +227,8 @@ async def exiger_admin_de_plateforme(session: AsyncSession, principal: Principal
             return
         manquantes = sorted(slugs - administrees)
         raise forbidden(
-            "réservé aux administrateurs de la plateforme : ce droit porte sur l'instance "
-            f"entière, et il manque {manquantes or 'toute organisation'}."
+            "reserved for platform administrators: this right covers the whole instance, and you "
+            f"do not administer {manquantes or 'any organisation'}."
         )
 
 
@@ -258,7 +258,8 @@ class ProjectContext:
     def require(self, permission: Permission) -> None:
         if not self.principal.can(permission, self.org_slug, self.project.slug):
             raise forbidden(
-                f"`{permission}` requiert un rôle supérieur sur {self.org_slug}/{self.project.slug}"
+                f"insufficient rights: `{permission}` needs a higher role on "
+                f"{self.org_slug}/{self.project.slug}"
             )
 
     @property
@@ -294,13 +295,13 @@ async def resolve_project(session: AsyncSession, identifier: str) -> tuple[Proje
             )
         ).scalar_one_or_none()
         if project is None:
-            raise not_found("Projet", identifier)
+            raise not_found("Project", identifier)
         return project, org_slug
     candidats = (await session.execute(select(Project).where(Project.slug == identifier))).scalars().all()
     if not candidats:
-        raise not_found("Projet", identifier)
+        raise not_found("Project", identifier)
     if len(candidats) > 1:
-        raise not_found("Projet", f"{identifier} (ambigu : préciser `org/{identifier}`)")
+        raise not_found("Project", f"{identifier} (ambiguous: specify `org/{identifier}`)")
     org = await session.get(Organization, candidats[0].org_id)
     return candidats[0], org.slug if org else ""
 
@@ -323,13 +324,13 @@ async def run_claims(
 ) -> RunClaims:
     """Authentifie un runner : le JWT doit porter **ce** run et ne pas être expiré."""
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise unauthorized("jeton de run manquant")
+        raise unauthorized("missing run token")
     try:
         claims = verify_run_token(authorization.split(" ", 1)[1].strip())
     except jwt.PyJWTError as exc:
-        raise forbidden(f"jeton de run invalide : {exc}") from exc
+        raise forbidden(f"invalid run token: {exc}") from exc
     if claims.run_id != id:
-        raise forbidden("ce jeton n'est pas celui de ce run")
+        raise forbidden("this token belongs to another run")
     bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
     # Un jeton de run est frappé par la plateforme pour UN run : la portée est déjà dans
     # le jeton (`claims.run_id`, vérifié par chaque route), pas dans une organisation.

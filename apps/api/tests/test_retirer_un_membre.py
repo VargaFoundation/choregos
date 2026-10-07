@@ -38,7 +38,7 @@ async def test_un_membre_se_retire_et_l_audit_le_dit(client: AsyncClient, admin:
 async def test_le_dernier_administrateur_ne_se_retire_pas(client: AsyncClient, admin: str) -> None:
     moi = next(m for m in (await client.get("/api/v1/orgs/varga/members")).json() if m["email"] == admin)
     seul = await client.delete(f"/api/v1/orgs/varga/members/{moi['user_id']}")
-    assert seul.status_code == 409 and "dernier administrateur" in seul.text
+    assert seul.status_code == 409 and "last administrator" in seul.text
     await _membre(client, "second@varga.dev", "org_admin")
     assert (await client.delete(f"/api/v1/orgs/varga/members/{moi['user_id']}")).status_code == 204
 

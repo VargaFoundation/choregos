@@ -280,7 +280,7 @@ async def test_un_jeton_d_api_s_emet_s_use_et_se_revoque(client: AsyncClient, ad
         row.expires_at = utcnow() - timedelta(seconds=1)
     expired = await porteur.get("/api/v1/me", headers={"Authorization": f"Bearer {body['token']}"})
     assert expired.status_code == 401
-    assert "expiré" in expired.json()["detail"]
+    assert "expired" in expired.json()["detail"]
 
     assert (await client.delete(f"/api/v1/me/tokens/{body['id']}")).status_code == 204
     assert (
@@ -338,7 +338,7 @@ async def test_un_webhook_github_sans_secret_est_refuse_en_production(
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             refus = await c.post("/api/v1/webhooks/github", content=b"{}", headers={"X-GitHub-Event": "ping"})
         assert refus.status_code == 401
-        assert "non configuré" in refus.json()["detail"]
+        assert "not configured" in refus.json()["detail"]
     finally:
         reset_settings_cache()
 

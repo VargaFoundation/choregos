@@ -92,7 +92,7 @@ async def test_qui_propose_ne_decide_pas(client: AsyncClient, project: dict[str,
     refus = await client.post(
         f"/api/v1/projects/{project['id']}/actions/{action['id']}/decision", json={"decision": "approve"}
     )
-    assert refus.status_code == 422 and "séparation" in refus.text
+    assert refus.status_code == 422 and "separation of duties" in refus.text
 
 
 async def test_un_rejet_dit_pourquoi_et_une_action_decidee_ne_se_redecide_pas(
@@ -130,7 +130,7 @@ async def test_un_developpeur_ne_decide_pas_et_un_jeton_d_api_non_plus(
         refus = await par_jeton.post(
             base, json={"decision": "approve"}, headers={"Authorization": f"Bearer {jeton}"}
         )
-        assert refus.status_code == 403 and "session humaine" in refus.text
+        assert refus.status_code == 403 and "human session" in refus.text
     finally:
         await par_jeton.aclose()
 

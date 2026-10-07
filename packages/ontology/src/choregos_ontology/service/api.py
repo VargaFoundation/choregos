@@ -155,7 +155,7 @@ async def publier_l_ontologie(
 async def get_ontology(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
     version = await objects.active_version(session, ctx.project.id)
     if version is None:
-        raise ApiError(404, "Ontologie introuvable", "ce projet n'a pas d'ontologie active")
+        raise ApiError(404, "Ontology not found", "this project has no active ontology")
     ir = version.compiled_ir
     return {
         "id": version.id,
@@ -174,14 +174,14 @@ async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> A
     ctx.require(Permission.PROJECT_WRITE)
     body = await request.body()
     if len(body) > MAX_REPORT_BYTES:
-        raise ApiError(413, "Rapport trop gros", f"au plus {MAX_REPORT_BYTES} octets")
+        raise ApiError(413, "Report too large", f"{MAX_REPORT_BYTES} bytes at most")
     version = await objects.active_version(session, ctx.project.id)
     if version is None:
-        raise conflict("ce projet n'a pas d'ontologie active : PUT /projects/{id}/ontology d'abord")
+        raise conflict("this project has no active ontology: PUT /projects/{id}/ontology first")
     types = version.compiled_ir.get("object_types", [])
     finding_type = next((o for o in types if o["name"] == FINDING), None)
     if finding_type is None or (finding_type.get("datasource") or {}).get("type") != "table":
-        raise conflict("l'ontologie active n'a pas de type `finding` à datasource `table`")
+        raise conflict("the active ontology has no `finding` type with a `table` datasource")
     try:
         observations = parse_report(body.decode("utf-8"))
     except (UnicodeDecodeError, PartialReportError) as error:
@@ -233,7 +233,7 @@ async def list_objects(
 ) -> dict[str, Any]:
     version = await objects.active_version(session, ctx.project.id)
     if version is None:
-        raise ApiError(404, "Ontologie introuvable", "ce projet n'a pas d'ontologie active")
+        raise ApiError(404, "Ontology not found", "this project has no active ontology")
     arguments: dict[str, Any] = {"limit": limit}
     if cursor:
         arguments["cursor"] = cursor
@@ -242,7 +242,7 @@ async def list_objects(
             session, ctx.project.id, objects.object_type(version.compiled_ir, object_type), arguments
         )
     except ToolRefusal as refusal:
-        raise ApiError(refusal.code, "Requête refusée", str(refusal)) from refusal
+        raise ApiError(refusal.code, "Request refused", str(refusal)) from refusal
 
 
 # ───────────────────────────── propositions d'action ─────────────────────────────
@@ -253,9 +253,7 @@ async def _proposal(session: AsyncSession, project_id: str, proposal_id: str) ->
     try:
         return await actions.une_action(session, project_id, proposal_id)
     except actions.Refusal as refus:
-        raise ApiError(
-            404, "Proposition introuvable", f"la proposition `{proposal_id}` n'existe pas"
-        ) from refus
+        raise ApiError(404, "Proposal not found", f"proposal `{proposal_id}` does not exist") from refus
 
 
 @router.get("/projects/{id}/proposals", operation_id="listProposals")
@@ -275,16 +273,16 @@ async def create_proposal(body: ProposalIn, ctx: ProjectCtx, session: Db) -> Any
     paramètres, préconditions, chemins permis, politique — et le droit vient de ses rôles."""
     version = await objects.active_version(session, ctx.project.id)
     if version is None:
-        raise conflict("ce projet n'a pas d'ontologie active : PUT /projects/{id}/ontology d'abord")
+        raise conflict("this project has no active ontology: PUT /projects/{id}/ontology first")
     action = next(
         (a for a in version.compiled_ir.get("action_types", []) if a["name"] == body.action_type), None
     )
     if action is None:
-        raise ApiError(404, "Action introuvable", f"l'action `{body.action_type}` n'existe pas")
+        raise ApiError(404, "Action not found", f"action `{body.action_type}` does not exist")
     try:
         jsonschema.validate(body.params, action["parameters_schema"])
     except jsonschema.ValidationError as erreur:
-        raise unprocessable(f"paramètres refusés : {erreur.message}") from erreur
+        raise unprocessable(f"parameters refused: {erreur.message}") from erreur
     acteur = actions.Actor(kind="user", id=ctx.principal.email, user_id=ctx.principal.user_id)
     try:
         code, resultat = await actions.propose(
@@ -298,7 +296,7 @@ async def create_proposal(body: ProposalIn, ctx: ProjectCtx, session: Db) -> Any
             ctx.org_slug,
         )
     except actions.Refusal as refus:
-        raise ApiError(refus.code, "Proposition refusée", str(refus), errors=[refus.body]) from refus
+        raise ApiError(refus.code, "Proposal refused", str(refus), errors=[refus.body]) from refus
     return JSONResponse(resultat, status_code=code)
 
 

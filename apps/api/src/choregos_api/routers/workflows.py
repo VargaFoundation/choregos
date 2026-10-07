@@ -92,7 +92,7 @@ async def edit(body: WorkflowEditRequest) -> WorkflowEditResult:
         edition = editer(body.yaml, body.operations)
     except ErreurDeModele as erreur:
         raise unprocessable(
-            "opération mal formée",
+            "malformed operation",
             [{"loc": ["operations", *e["loc"]], "msg": e["msg"]} for e in erreur.errors()],
         ) from erreur
     except EditionRefusee as refus:
@@ -228,9 +228,9 @@ async def deactivate_workflow(name: str, ctx: ProjectCtx, session: Db) -> Respon
     ctx.require(Permission.WORKFLOW_WRITE)
     row = await _actif(session, ctx, name)
     if name == ctx.project.default_workflow:
-        raise conflict(f"`{name}` est le workflow par défaut : choisissez-en un autre avant de le désactiver")
+        raise conflict(f"`{name}` is the default workflow: choose another one before deactivating it")
     if name in _cibles_du_routage(ctx.project):
-        raise conflict(f"`{name}` est la cible d'une règle de routage : retirez-la d'abord")
+        raise conflict(f"`{name}` is the target of a routing rule: remove the rule first")
     row.is_active = False
     await record(
         session,
@@ -311,7 +311,7 @@ async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) ->
     )
     inconnus = sorted({body.default, *(r.workflow for r in body.rules)} - actifs)
     if inconnus:
-        raise unprocessable(f"workflow(s) inconnu(s) ou inactif(s) : {', '.join(inconnus)}")
+        raise unprocessable(f"unknown or inactive workflow(s): {', '.join(inconnus)}")
     ctx.project.default_workflow = body.default
     ctx.project.workflow_routing = [r.model_dump(mode="json") for r in body.rules]
     await record(

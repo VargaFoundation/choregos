@@ -303,9 +303,9 @@ def verifier_les_arguments(outil: OutilDuCourtier, arguments: dict[str, Any]) ->
     try:
         jsonschema.validate(arguments, outil.operation.input_schema)
     except jsonschema.ValidationError as exc:
-        chemin = "/".join(str(p) for p in exc.absolute_path) or "(racine)"
+        chemin = "/".join(str(p) for p in exc.absolute_path) or "(root)"
         raise ArgumentsRefuses(
-            f"argument refusé par le schéma de {outil.nom} en {chemin} : {exc.message}"
+            f"argument refused by the schema of {outil.nom} at {chemin}: {exc.message}"
         ) from exc
 
 
@@ -333,7 +333,7 @@ async def appeler(outil: OutilDuCourtier, arguments: dict[str, Any]) -> tuple[in
     except AdapterError as refus:
         return 422, {"error": str(refus)}
     except (SecretIntrouvable, httpx.HTTPError) as panne:
-        return 502, {"error": f"{instance.name} injoignable : {panne}"}
+        return 502, {"error": f"{instance.name} unreachable: {panne}"}
     return (200 if not resultat.get("isError") else 422), resultat
 
 

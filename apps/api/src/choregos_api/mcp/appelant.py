@@ -56,7 +56,7 @@ async def identifier(session: AsyncSession, request: Request, settings: Settings
     """Le jeton porteur, lu en portée de plateforme ; le principal borne ensuite la RLS."""
     entete = request.headers.get("authorization", "")
     if not entete.lower().startswith("bearer "):
-        raise Refus(401, "jeton manquant : Authorization: Bearer chg_… (portée mcp:read ou mcp:write)")
+        raise Refus(401, "missing token: Authorization: Bearer chg_… (scope mcp:read or mcp:write)")
     brut = entete.split(" ", 1)[1].strip()
     await limiter_aux_organisations(session, TOUT)
     if not brut.startswith("chg_") and settings.mcp_oauth_enabled:
@@ -65,21 +65,21 @@ async def identifier(session: AsyncSession, request: Request, settings: Settings
         await session.execute(select(ApiToken).where(ApiToken.hash == hash_api_token(brut)))
     ).scalar_one_or_none()
     if jeton is None:
-        raise Refus(401, "jeton inconnu ou révoqué", erreur="invalid_token")
+        raise Refus(401, "unknown or revoked token", erreur="invalid_token")
     if jeton.expires_at is not None and _aware(jeton.expires_at) <= utcnow():
-        raise Refus(401, "jeton expiré", erreur="invalid_token")
+        raise Refus(401, "expired token", erreur="invalid_token")
     portees = frozenset(jeton.scopes or ["*"])
     if not portees & PORTEES_MCP:
         # Un jeton `*` ouvre l'API REST : on n'en veut pas dans la configuration d'un client.
         raise Refus(
             403,
-            "la porte MCP refuse un jeton de portée `*` : "
-            "créez un jeton mcp:read ou mcp:write pour ce client",
+            "the MCP gate refuses a token with the `*` scope: "
+            "create an mcp:read or mcp:write token for this client",
             erreur="insufficient_scope",
         )
     user = await session.get(User, jeton.user_id)
     if user is None:
-        raise Refus(401, "jeton orphelin", erreur="invalid_token")
+        raise Refus(401, "orphaned token", erreur="invalid_token")
     noter_l_usage(jeton, request)
     principal = await _principal_from_user(session, user)
     appelant = Appelant(principal=principal, jeton=jeton, portees=portees, cle=f"jeton:{jeton.id}")
@@ -87,7 +87,7 @@ async def identifier(session: AsyncSession, request: Request, settings: Settings
     if jeton.project_id:
         projet = await session.get(Project, jeton.project_id)
         if projet is None:
-            raise Refus(401, "le projet de ce jeton n'existe plus", erreur="invalid_token")
+            raise Refus(401, "this token's project no longer exists", erreur="invalid_token")
         org = await session.get(Organization, projet.org_id)
         appelant.projet_lie, appelant.org_du_projet_lie = projet, org.slug if org else ""
     return appelant
@@ -114,7 +114,7 @@ async def _par_oauth(session: AsyncSession, brut: str, settings: Settings) -> Ap
     if user is None:
         raise Refus(
             403,
-            "utilisateur inconnu de Choregos : connectez-vous une fois à la console",
+            "user unknown to Choregos: sign in to the console once",
             erreur="invalid_token",
         )
     demandees = set(str(revendications.get("scope") or "").split()) & PORTEES_MCP
@@ -156,11 +156,11 @@ async def incarner_l_agent(
     if agent is None:
         return
     if agent.status != "active" or (agent.expires_at is not None and _aware(agent.expires_at) <= utcnow()):
-        from ..services.agents import ETATS
-
-        etat = ETATS.get(agent.status, agent.status) if agent.status != "active" else "expiré"
+        etat = agent.status if agent.status != "active" else "expired"
         raise Refus(
-            401, f"l'agent `{agent.slug}` est {etat} : ce client ne passe plus", erreur="invalid_token"
+            401,
+            f"agent `{agent.slug}` is {etat}: this client is no longer allowed in",
+            erreur="invalid_token",
         )
     spec = (
         await session.execute(

@@ -48,30 +48,30 @@ class ApiError(Exception):
 
 
 def not_found(what: str, key: str) -> ApiError:
-    return ApiError(status.HTTP_404_NOT_FOUND, f"{what} introuvable", f"{what} `{key}` n'existe pas")
+    return ApiError(status.HTTP_404_NOT_FOUND, f"{what} not found", f"{what} `{key}` does not exist")
 
 
-def forbidden(detail: str = "droits insuffisants") -> ApiError:
-    return ApiError(status.HTTP_403_FORBIDDEN, "Interdit", detail)
+def forbidden(detail: str = "insufficient rights") -> ApiError:
+    return ApiError(status.HTTP_403_FORBIDDEN, "Forbidden", detail)
 
 
-def unauthorized(detail: str = "authentification requise") -> ApiError:
-    return ApiError(status.HTTP_401_UNAUTHORIZED, "Non authentifié", detail)
+def unauthorized(detail: str = "authentication required") -> ApiError:
+    return ApiError(status.HTTP_401_UNAUTHORIZED, "Not authenticated", detail)
 
 
 def conflict(detail: str) -> ApiError:
-    return ApiError(status.HTTP_409_CONFLICT, "Conflit d'état", detail)
+    return ApiError(status.HTTP_409_CONFLICT, "State conflict", detail)
 
 
 def unprocessable(detail: str, errors: list[dict[str, Any]] | None = None) -> ApiError:
-    return ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY, "Entité non traitable", detail, errors=errors)
+    return ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unprocessable entity", detail, errors=errors)
 
 
 def upstream(service: str, detail: str, retry_after: int | None = None) -> ApiError:
     """Erreur d'un service externe (GitHub, Argo, LiteLLM) encapsulée avec un `retry_after`."""
     return ApiError(
         status.HTTP_502_BAD_GATEWAY,
-        f"Erreur du service {service}",
+        f"Error from the {service} service",
         detail,
         type_=f"https://choregos.dev/problems/upstream/{service}",
         retry_after=retry_after,
@@ -93,7 +93,7 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _core_validation(request: Request, exc: ValidationError) -> JSONResponse:
         problem = ApiError(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"{exc.subject} invalide",
+            f"Invalid {exc.subject}",
             str(exc),
             errors=[
                 {
@@ -114,8 +114,8 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _request_validation(request: Request, exc: RequestValidationError) -> JSONResponse:
         problem = ApiError(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Requête invalide",
-            "le corps ou les paramètres ne respectent pas le contrat",
+            "Invalid request",
+            "the body or the parameters do not match the contract",
             errors=[{"loc": [str(p) for p in e["loc"]], "msg": e["msg"]} for e in exc.errors()],
         )
         return JSONResponse(

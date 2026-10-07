@@ -31,7 +31,7 @@ def erreurs_d_une_version(spec: AgentSpec) -> None:
     erreurs = erreurs_des_instructions(spec.instructions)
     if erreurs:
         raise unprocessable(
-            "les instructions de l'agent ne se rendent pas",
+            "the agent's instructions do not render",
             [{"loc": ["instructions"], "msg": e} for e in erreurs],
         )
 
@@ -49,11 +49,11 @@ def elargissements(spec: AgentSpec, surcharges: AgentOverrides) -> list[str]:
         for champ in type(de_la_version).model_fields:
             plafond, demande = getattr(de_la_version, champ), getattr(du_projet, champ)
             if demande is not None and plafond is not None and demande > plafond:
-                ecarts.append(f"{groupe}.{champ} : {demande} dépasse les {plafond} de la version")
+                ecarts.append(f"{groupe}.{champ}: {demande} exceeds the version's {plafond}")
     if surcharges.tools is not None:
         en_trop = sorted(set(surcharges.tools) - _outils(spec))
         if en_trop:
-            ecarts.append(f"outils que la version n'accorde pas : {', '.join(en_trop)}")
+            ecarts.append(f"tools the version does not grant: {', '.join(en_trop)}")
     return ecarts
 
 
@@ -71,10 +71,6 @@ def effective(spec: AgentSpec, surcharges: AgentOverrides) -> AgentSpec:
         for serveur in resultat.mcp_servers:
             serveur.tools = [outil for outil in serveur.tools if outil in gardes]
     return resultat
-
-
-#: L'état d'un agent, dit en clair dans un refus.
-ETATS = {"revoked": "révoqué", "suspended": "suspendu", "active": "actif"}
 
 
 class AgentIndisponible(RuntimeError):  # noqa: N818 - un refus motivé, dit au run
@@ -98,13 +94,11 @@ async def resoudre_l_agent(
         await session.execute(select(Agent).where(Agent.org_id == org_id, Agent.slug == slug))
     ).scalar_one_or_none()
     if agent is None:
-        raise AgentIndisponible(f"l'agent `{slug}` n'existe pas dans l'organisation du projet")
+        raise AgentIndisponible(f"agent `{slug}` does not exist in the project's organisation")
     if agent.status != "active":
-        raise AgentIndisponible(
-            f"l'agent `{slug}` est {ETATS.get(agent.status, agent.status)} : le run ne part pas"
-        )
+        raise AgentIndisponible(f"agent `{slug}` is {agent.status}: the run does not start")
     if agent.expires_at is not None and _aware(agent.expires_at) <= utcnow():
-        raise AgentIndisponible(f"l'agent `{slug}` a expiré le {agent.expires_at:%Y-%m-%d}")
+        raise AgentIndisponible(f"agent `{slug}` expired on {agent.expires_at:%Y-%m-%d}")
     epingle = (
         await session.execute(
             select(ProjectAgent).where(
@@ -131,7 +125,7 @@ async def resoudre_l_agent(
         )
     ).scalar_one_or_none()
     if ligne is None:
-        raise AgentIndisponible(f"l'agent `{slug}` n'a pas de version {version}")
+        raise AgentIndisponible(f"agent `{slug}` has no version {version}")
     spec = AgentSpec.model_validate(ligne.spec)
     surcharges = (
         AgentOverrides.model_validate(epingle.overrides or {}) if epingle is not None else AgentOverrides()
@@ -160,7 +154,6 @@ async def depense_du_jour(session: AsyncSession, org_id: str, agent_slug: str) -
 
 
 __all__ = [
-    "ETATS",
     "AgentIndisponible",
     "AgentResolu",
     "depense_du_jour",

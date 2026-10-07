@@ -60,7 +60,7 @@ async def _release(session: Any, release_id: str, principal: Any) -> tuple[Relea
         raise not_found("Release", release_id)
     project = await session.get(Project, row.project_id)
     if project is None:
-        raise not_found("Projet", row.project_id)
+        raise not_found("Project", row.project_id)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
@@ -181,7 +181,7 @@ async def approve(id: str, body: ApproveRequest, session: Db, principal: Me) -> 
     """Approuver une mise en production demande le rôle release_captain (ou owner)."""
     row, project, org_slug = await _release(session, id, principal)
     if not principal.can(Permission.TRAIN_APPROVE, org_slug, project.slug):
-        raise forbidden("approuver une release demande le rôle release_captain")
+        raise forbidden("approving a release needs the release_captain role")
     await controler(
         session,
         DemandeDeGeste(
