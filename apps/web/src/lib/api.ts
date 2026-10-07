@@ -102,7 +102,7 @@ export class ApiError extends Error {
     readonly status: number,
     readonly problem: { title?: string; detail?: string; errors?: unknown[] },
   ) {
-    super(problem.detail ?? problem.title ?? `Erreur ${status}`);
+    super(problem.detail ?? problem.title ?? `request failed (HTTP ${status})`);
     this.name = "ApiError";
   }
 }

@@ -16,7 +16,7 @@ test("liste des projets et accès à un projet", async ({ page }) => {
 test("board : colonnes du workflow et décision humaine", async ({ page }) => {
   await page.goto("/p/billing-api/board");
   await expect(page.getByRole("heading", { name: "Board" })).toBeVisible();
-  await expect(page.getByText("Les avoirs ne sont pas déduits du total")).toBeVisible();
+  await expect(page.getByText("Credit notes are not deducted from the total")).toBeVisible();
   await expect(page.getByRole("button", { name: "approve" }).first()).toBeVisible();
 });
 
@@ -41,7 +41,7 @@ test("trains : gel impossible sans motif", async ({ page }) => {
 
 test("findings : triage disponible", async ({ page }) => {
   await page.goto("/p/billing-api/findings");
-  await expect(page.getByText("Requête N+1 sur le chargement des lignes")).toBeVisible();
+  await expect(page.getByText("N+1 query when loading order lines")).toBeVisible();
   await expect(page.getByRole("button", { name: "create the ticket" })).toBeVisible();
 });
 
@@ -122,7 +122,7 @@ test("une proposition de l'ontologie est une action : un ancien lien y mène, qu
   await expect(ontologie).toContainText("os-reboot-required");
   await expect(page.getByTestId("regles-de-decision")).toContainText("within 10 min");
   await expect(page.getByRole("button", { name: "reject" })).toBeDisabled();
-  await page.getByLabel("reason to reject").fill("la fenêtre de maintenance est gelée");
+  await page.getByLabel("reason to reject").fill("the maintenance window is frozen");
   await expect(page.getByRole("button", { name: "reject" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "approve" })).toBeEnabled();
   await page.goto("/p/billing-api/proposals");
@@ -135,7 +135,7 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await expect(page.getByTestId("workflow-card-hotfix")).toContainText("labelled incident");
   await page.getByRole("link", { name: "default-simple" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows\/default-simple$/);
-  await expect(page.getByTestId("process-step-t-implement")).toContainText("le diff reste dans le périmètre permis");
+  await expect(page.getByTestId("process-step-t-implement")).toContainText("the agent stayed within its allowed paths");
   await page.getByRole("link", { name: "map" }).click();
   // Les défauts partent de chaque état d'agent : la légende les dit une fois, la carte ne les dessine pas.
   await expect(page.getByTestId("workflow-defaults").getByRole("listitem")).toHaveCount(2);
@@ -200,7 +200,7 @@ test("historique d'un workflow : deux versions se comparent, une ancienne se rep
 
 test("board par workflow : la demande choisit son workflow, et ses champs en viennent", async ({ page }) => {
   await page.goto("/p/billing-api/board");
-  await expect(page.getByText("Les avoirs ne sont pas déduits du total")).toBeVisible();
+  await expect(page.getByText("Credit notes are not deducted from the total")).toBeVisible();
   await page.getByRole("button", { name: "new request" }).click();
   await page.getByLabel("workflow of the request").selectOption("hotfix");
   const champs = page.getByTestId("request-fields");
@@ -215,29 +215,29 @@ test("board par workflow : la demande choisit son workflow, et ses champs en vie
 test("agents : le registre, et un Claude Code connecté qui agit comme agent externe", async ({ page }) => {
   await page.goto("/agents");
   await expect(page.getByRole("heading", { name: "agents" })).toBeVisible();
-  await expect(page.getByTestId("agent-coordinateur-onboarding")).toContainText("Coordinateur onboarding");
-  await expect(page.getByTestId("agent-coordinateur-onboarding")).toContainText("1 skill");
+  await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("Onboarding coordinator");
+  await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("1 skill");
   // Le jeton du Claude Code de Léa a appelé la porte : connecté, et rattaché à son agent externe.
   const claude = page.getByTestId("client-tok-claude");
   await expect(claude).toContainText("connected");
   await expect(claude).toContainText("claude-code/2.1.0");
-  await expect(claude.getByRole("link", { name: "acts as Le Claude Code de Léa" })).toBeVisible();
+  await expect(claude.getByRole("link", { name: "acts as Léa's Claude Code" })).toBeVisible();
   // Un client jamais appelé ne se dit pas connecté, et s'enregistre.
   await expect(page.getByTestId("client-tok-cursor")).toContainText("never called");
   await expect(page.getByTestId("client-tok-cursor").getByRole("button", { name: "register as an external agent" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Coordinateur onboarding" }).click();
+  await page.getByRole("link", { name: "Onboarding coordinator" }).click();
   await expect(page.getByTestId("mesures")).toContainText("14 (12 succeeded, 2 failed)");
-  await expect(page.getByTestId("version")).toContainText("procedure-onboarding@1");
-  await page.getByRole("link", { name: "procedure-onboarding@1" }).click();
-  await expect(page.getByTestId("fichiers")).toContainText("Comptes Entra à J-10");
+  await expect(page.getByTestId("version")).toContainText("onboarding-procedure@1");
+  await page.getByRole("link", { name: "onboarding-procedure@1" }).click();
+  await expect(page.getByTestId("fichiers")).toContainText("Entra accounts ten days before the start date");
 });
 
 test("agents : un agent externe montre son client, et un projet ses agents implicites", async ({ page }) => {
-  await page.goto("/agents/claude-de-lea");
+  await page.goto("/agents/leas-claude-code");
   await expect(page.getByTestId("clients-de-l-agent")).toContainText("claude-code/2.1.0");
   await page.goto("/p/billing-api/agents");
-  await expect(page.getByTestId("epingles")).toContainText("coordinateur-onboarding");
+  await expect(page.getByTestId("epingles")).toContainText("onboarding-coordinator");
   await expect(page.getByTestId("epingles")).toContainText("tightened");
   await expect(page.getByTestId("implicites")).toContainText("refiner");
   await expect(page.getByTestId("implicites")).toContainText("dev");
@@ -269,21 +269,21 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
 test("connecteurs de l'organisation : chaque opération porte sa politique ; un projet ne fait que resserrer", async ({ page }) => {
   await page.goto("/admin/connectors");
   const operations = page.getByTestId("operations-entra-acme");
-  await expect(operations).toContainText("creer_compte");
-  await expect(page.getByLabel("policy of creer_compte")).toHaveValue("approval");
-  await expect(page.getByLabel("project groups of creer_compte")).toHaveValue("rh");
+  await expect(operations).toContainText("create_account");
+  await expect(page.getByLabel("policy of create_account")).toHaveValue("approval");
+  await expect(page.getByLabel("project groups of create_account")).toHaveValue("hr");
 
   await page.goto("/p/billing-api/settings");
   const projet = page.getByTestId("operations-du-projet");
-  await expect(projet).toContainText("lire_utilisateur");
-  // `creer_compte` est `approval` dans l'organisation : le choix ne propose pas `allowed`.
-  const choix = page.getByLabel("this project's policy for creer_compte");
+  await expect(projet).toContainText("read_user");
+  // `create_account` est `approval` dans l'organisation : le choix ne propose pas `allowed`.
+  const choix = page.getByLabel("this project's policy for create_account");
   await expect(choix.locator("option")).toHaveText(["as the organisation", "approval", "forbidden"]);
 });
 
 test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", async ({ page }) => {
   await page.goto("/admin/connectors");
-  await expect(page.getByLabel("policy of commander_poste")).toHaveValue("forbidden");
+  await expect(page.getByLabel("policy of order_laptop")).toHaveValue("forbidden");
   await page.getByRole("button", { name: "discover" }).click();
   await expect(page.getByRole("status")).toHaveText(
     "1 new (closed until you open them), 1 changed their schema (closed again)",
@@ -293,9 +293,9 @@ test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", as
 test("la boîte des décisions : une action proposée par un agent attend une personne", async ({ page }) => {
   await page.goto("/approvals");
   const boite = page.getByTestId("boite");
-  await expect(boite).toContainText("Commander le portable de Léa");
-  await expect(boite).toContainText("proposed by the agent coordinateur-onboarding");
-  await boite.getByRole("link", { name: /Commander le portable/ }).click();
+  await expect(boite).toContainText("Order Léa's laptop");
+  await expect(boite).toContainText("proposed by the agent onboarding-coordinator");
+  await boite.getByRole("link", { name: /Order Léa's laptop/ }).click();
   await expect(page).toHaveURL(/\/p\/billing-api\/actions\/act-poste$/);
   await expect(page.getByRole("button", { name: "reject" })).toBeDisabled();
   await page.getByRole("button", { name: "approve" }).click();

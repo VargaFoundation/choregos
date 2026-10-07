@@ -102,22 +102,22 @@ export const projects: ProjectPage = {
 
 export const workItems: WorkItemPage = {
   items: [
-    item("w1", "varga/billing-api#123", "Les avoirs ne sont pas déduits du total", "in_progress", "En cours", {
+    item("w1", "varga/billing-api#123", "Credit notes are not deducted from the total", "in_progress", "In progress", {
       size: "M" as const,
       cost: 6.77,
       run: { id: "r3", status: "running", stage_role: "implement", attempt: 1, cost_usd: 2.74, backend: "claude-code" },
     }),
-    item("w2", "varga/billing-api#124", "Exporter les factures en PDF", "awaiting_spec_approval", "Spec à valider", {
+    item("w2", "varga/billing-api#124", "Export invoices as PDF", "awaiting_spec_approval", "Spec to approve", {
       size: "L",
       cost: 1.12,
       pending: true,
     }),
-    item("w3", "varga/billing-api#125", "Corriger l'arrondi des remises", "pr_open", "PR ouverte", {
+    item("w3", "varga/billing-api#125", "Fix the rounding of discounts", "pr_open", "PR open", {
       size: "S",
       cost: 3.4,
       pr: "https://github.com/varga/billing-api/pull/456",
     }),
-    item("w4", "varga/billing-api#120", "Migrer vers pydantic v2", "deployed_prod", "En production", {
+    item("w4", "varga/billing-api#120", "Migrate to pydantic v2", "deployed_prod", "In production", {
       size: "L",
       cost: 24.9,
       closed: true,
@@ -180,7 +180,7 @@ function item(
       ? {
           id: "hr1",
           kind: "approval",
-          payload: { summary: "Validation de la spécification demandée" },
+          payload: { summary: "Approval of the specification requested" },
           requested_at: iso(180),
         }
       : undefined,
@@ -190,23 +190,23 @@ function item(
 }
 
 export const timeline: TimelineEntry[] = [
-  { ts: iso(240), kind: "state_change", title: "inbox → refining", actor: "orchestrateur", actor_kind: "system" },
+  { ts: iso(240), kind: "state_change", title: "inbox → refining", actor: "orchestrator", actor_kind: "system" },
   {
     ts: iso(235),
     kind: "run",
-    title: "refine — tentative 1",
-    detail: "spec rédigée, 6 chemins autorisés",
+    title: "refine — attempt 1",
+    detail: "spec written, 6 allowed paths",
     actor: "claude-code",
     actor_kind: "agent",
     cost_usd: 0.34,
     ref_id: "r1",
   },
-  { ts: iso(200), kind: "decision", title: "validation : approuvée", actor: "augustin", actor_kind: "user" },
+  { ts: iso(200), kind: "decision", title: "approval: approved", actor: "augustin", actor_kind: "user" },
   {
     ts: iso(90),
     kind: "run",
-    title: "implement — tentative 1",
-    detail: "7 commits, 412 tests verts",
+    title: "implement — attempt 1",
+    detail: "7 commits, 412 tests passing",
     actor: "claude-code",
     actor_kind: "agent",
     cost_usd: 2.74,
@@ -215,16 +215,16 @@ export const timeline: TimelineEntry[] = [
   {
     ts: iso(80),
     kind: "finding",
-    title: "finding medium : requête N+1 sur les lignes",
+    title: "finding medium: N+1 query on order lines",
     detail: "src/orders/repository.py:88",
     actor_kind: "agent",
   },
 ];
 
 export const runs: Run[] = [
-  run("r1", "refine", "succeeded", 0.34, "spec rédigée"),
-  run("r2", "verify", "succeeded", 0.62, "412 tests verts, couverture +1,2"),
-  run("r3", "implement", "running", 2.74, "en cours"),
+  run("r1", "refine", "succeeded", 0.34, "spec written"),
+  run("r2", "verify", "succeeded", 0.62, "412 tests passing, coverage +1.2"),
+  run("r3", "implement", "running", 2.74, "running"),
 ];
 
 function run(id: string, role: string, status: string, cost: number, summary: string): Run {
@@ -266,20 +266,20 @@ export const runEvents: RunEventDto[] = [
     seq: 0,
     type: "gate.outcome",
     ts: iso(30),
-    payload: { name: "scope_respected", passed: true, pending: false, detail: "2 fichiers, tous dans le périmètre" },
+    payload: { name: "scope_respected", passed: true, pending: false, detail: "2 files, all within the allowed paths" },
   },
   {
     seq: 0,
     type: "gate.outcome",
     ts: iso(30),
-    payload: { name: "evidence_present", passed: false, pending: false, detail: "aucun test exécuté (tests_run absent)" },
+    payload: { name: "evidence_present", passed: false, pending: false, detail: "no test was run (tests_run missing)" },
   },
-  { seq: 2, type: "session/update", ts: iso(59), payload: { text: "Je lis src/orders/total.py" } },
+  { seq: 2, type: "session/update", ts: iso(59), payload: { text: "Reading src/orders/total.py" } },
   {
     seq: 3,
     type: "session/request_permission",
     ts: iso(58),
-    payload: { allowed: true, kind: "edit", target: "src/orders/total.py", reason: "dans le périmètre autorisé" },
+    payload: { allowed: true, kind: "edit", target: "src/orders/total.py", reason: "within the allowed paths" },
   },
   {
     seq: 4,
@@ -289,12 +289,12 @@ export const runEvents: RunEventDto[] = [
       allowed: false,
       kind: "edit",
       target: "src/billing/rates.py",
-      reason: "hors du périmètre autorisé — utilise report_finding ou request_scope_change",
+      reason: "outside the allowed paths — use report_finding or request_scope_change",
     },
   },
   { seq: 5, type: "dod.retry", ts: iso(40), payload: { iteration: 1, failures: ["tests"] } },
-  { seq: 6, type: "session/update", ts: iso(35), payload: { text: "Je corrige l'arrondi et relance les tests" } },
-  { seq: 7, type: "run.result", ts: iso(30), payload: { status: "done", summary: "avoirs déduits du total" } },
+  { seq: 6, type: "session/update", ts: iso(35), payload: { text: "Fixing the rounding and running the tests again" } },
+  { seq: 7, type: "run.result", ts: iso(30), payload: { status: "done", summary: "credit notes deducted from the total" } },
 ];
 
 export const trains: Record<string, TrainStatus> = {
@@ -325,7 +325,7 @@ export const releases: ReleasePage = {
       env: "prod",
       batch_no: 42,
       status: "done",
-      items: [{ work_item_key: "varga/billing-api#120", sha: "a1b2c3", title: "Migrer vers pydantic v2" }],
+      items: [{ work_item_key: "varga/billing-api#120", sha: "a1b2c3", title: "Migrate to pydantic v2" }],
       started_at: iso(60 * 26),
       ended_at: iso(60 * 25),
       approved_by: "marie@varga.dev",
@@ -340,7 +340,7 @@ export const releases: ReleasePage = {
       items: [{ work_item_key: "varga/billing-api#118", sha: "d4e5f6" }],
       started_at: iso(60 * 50),
       ended_at: iso(60 * 49),
-      verdict: { go: false, reason: "analyse canary KO : 5xx > 1 %" },
+      verdict: { go: false, reason: "canary analysis failed: 5xx > 1%" },
     },
   ],
   meta: { has_more: false },
@@ -351,10 +351,10 @@ export const findings: FindingPage = {
     {
       id: "f1",
       project_slug: "billing-api",
-      title: "Requête N+1 sur le chargement des lignes",
+      title: "N+1 query when loading order lines",
       type: "perf",
       severity: "medium",
-      evidence: "src/orders/repository.py:88 — 1 + N requêtes pour 200 lignes",
+      evidence: "src/orders/repository.py:88 — 1 + N queries for 200 lines",
       suggested_fix: "selectinload(Order.lines)",
       estimate: "S",
       status: "pending",
@@ -365,10 +365,10 @@ export const findings: FindingPage = {
     {
       id: "f2",
       project_slug: "billing-api",
-      title: "Test instable : test_invoice_totals",
+      title: "Flaky test: test_invoice_totals",
       type: "flaky-test",
       severity: "low",
-      evidence: "échoue 1 fois sur 12 en CI",
+      evidence: "fails once in 12 CI runs",
       status: "created",
       created_work_item_key: "varga/billing-api#127",
       occurrences: 1,
@@ -383,16 +383,16 @@ export const memories: Memory[] = [
     id: "m1",
     kind: "decision",
     subject: "decision:billing:totals-rounding",
-    content: "Les totaux sont arrondis au centime à l'émission, jamais à l'affichage (ADR-0007).",
+    content: "Totals are rounded to the cent when an invoice is issued, never when it is displayed (ADR-0007).",
     status: "active",
     valid_from: iso(60 * 24 * 180),
-    provenance: { source: "scm", ref: "docs/adr/0007-arrondis.md" },
+    provenance: { source: "scm", ref: "docs/adr/0007-rounding.md" },
   },
   {
     id: "m2",
     kind: "incident",
     subject: "incident:billing-api:2026-06-11",
-    content: "Rollback après une régression sur les avoirs : calcul déplacé côté client.",
+    content: "Rolled back after a regression on credit notes: the calculation had moved to the client.",
     status: "active",
     valid_from: iso(60 * 24 * 100),
     provenance: { source: "cd", ref: "R-2026.06.11-1" },
@@ -404,7 +404,7 @@ export const pendingMemories: Memory[] = [
     id: "m3",
     kind: "convention",
     subject: "convention:tests:given-when-then",
-    content: "Les tests d'acceptation suivent la structure Given/When/Then.",
+    content: "Acceptance tests follow the Given/When/Then structure.",
     status: "pending",
     proposed_by: "r3",
     provenance: { source: "agent", run_id: "r3" },
@@ -431,10 +431,10 @@ export const dora: DoraReport = {
   since: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
   until: now.toISOString(),
   deployments: 23,
-  deployment_frequency: { value: 0.77, unit: "par jour", level: "high", sample: 23 },
-  lead_time: { value: 9.4, unit: "heures (médiane)", level: "elite", sample: 23 },
-  change_failure_rate: { value: 0.087, unit: "part des mises en production", level: "high", sample: 23 },
-  time_to_restore: { value: 1.6, unit: "heures (médiane)", level: "high", sample: 2 },
+  deployment_frequency: { value: 0.77, unit: "per day", level: "high", sample: 23 },
+  lead_time: { value: 9.4, unit: "hours (median)", level: "elite", sample: 23 },
+  change_failure_rate: { value: 0.087, unit: "share of production releases", level: "high", sample: 23 },
+  time_to_restore: { value: 1.6, unit: "hours (median)", level: "high", sample: 2 },
 };
 
 export const workflow: WorkflowDef = {
@@ -451,9 +451,9 @@ actors:
   owner: { type: human, group: product-owners, sla_hours: 24 }
   dev: { type: agent, role: implement, model: "profile:by_size" }
 states:
-  inbox: { display: À trier, kind: wait }
-  ready: { display: Prêt }
-  done: { display: Fini, terminal: true }
+  inbox: { display: To triage, kind: wait }
+  ready: { display: Ready }
+  done: { display: Done, terminal: true }
 transitions:
   - { id: t-refine, from: inbox, to: ready, by: refiner }
   - { id: t-implement, from: ready, to: done, by: dev, gates: [scope_respected] }
@@ -476,53 +476,53 @@ export const workflowValidation: WorkflowValidation = {
   warnings: [],
   graph: {
     nodes: [
-      { id: "inbox", display: "À trier", kind: "wait", lane: "agent" },
-      { id: "ready", display: "Prêt", kind: "normal", lane: "agent" },
-      { id: "needs_human", display: "Besoin d'un humain", kind: "wait", lane: "human" },
-      { id: "done", display: "Fini", kind: "normal", terminal: true, lane: "terminal" },
+      { id: "inbox", display: "To triage", kind: "wait", lane: "agent" },
+      { id: "ready", display: "Ready", kind: "normal", lane: "agent" },
+      { id: "needs_human", display: "Needs a human", kind: "wait", lane: "human" },
+      { id: "done", display: "Done", kind: "normal", terminal: true, lane: "terminal" },
     ],
     edges: [
       { id: "t-refine", from: "inbox", to: "ready", kind: "nominal", label: "t-refine", actor: "refiner", gates: [] },
       { id: "t-implement", from: "ready", to: "done", kind: "nominal", label: "t-implement", actor: "dev", gates: ["scope_respected"] },
       // Une escalade : la carte ne la montre qu'autour de son état, ou sur demande.
-      { id: "ready->needs_human:escalate:échecs épuisés", from: "ready", to: "needs_human", kind: "escalate", label: "échecs épuisés" },
+      { id: "ready->needs_human:escalate:retries exhausted", from: "ready", to: "needs_human", kind: "escalate", label: "retries exhausted" },
       { id: "inbox->needs_human:default:question", from: "inbox", to: "needs_human", kind: "default", label: "question" },
       { id: "ready->needs_human:default:question", from: "ready", to: "needs_human", kind: "default", label: "question" },
-      { id: "ready->needs_human:default:budget", from: "ready", to: "needs_human", kind: "default", label: "budget dépassé" },
+      { id: "ready->needs_human:default:budget", from: "ready", to: "needs_human", kind: "default", label: "budget exceeded" },
     ],
   },
   process: [
     {
       id: "t-refine",
       from: "inbox",
-      from_display: "À trier",
+      from_display: "To triage",
       to: "ready",
-      to_display: "Prêt",
+      to_display: "Ready",
       actor: "refiner",
       actor_type: "agent",
-      who: "l'agent refiner (rôle refine)",
+      who: "the agent `refiner` (role refine, model profile:standard)",
       outputs: ["spec_markdown"],
       gates: [],
       on_fail: null,
       on_reject: null,
       timeout_hours: null,
-      sentence: "De « À trier » à « Prêt » : l'agent refiner (rôle refine) rédige la spec.",
+      sentence: "From «To triage», the agent `refiner` (role refine, model profile:standard) moves the item to «Ready» once it produced `spec_markdown`.",
     },
     {
       id: "t-implement",
       from: "ready",
-      from_display: "Prêt",
+      from_display: "Ready",
       to: "done",
-      to_display: "Fini",
+      to_display: "Done",
       actor: "dev",
       actor_type: "agent",
-      who: "l'agent dev (rôle implement)",
+      who: "the agent `dev` (role implement, model profile:by_size)",
       outputs: [],
-      gates: [{ name: "scope_respected", summary: "le diff reste dans le périmètre permis" }],
-      on_fail: "réessaie deux fois, puis remonte à un humain",
+      gates: [{ name: "scope_respected", summary: "the agent stayed within its allowed paths" }],
+      on_fail: "On failure it retries up to 2 time(s) from «Ready», then goes to «Needs a human».",
       on_reject: null,
       timeout_hours: 72,
-      sentence: "De « Prêt » à « Fini » : l'agent dev (rôle implement), si le diff reste dans le périmètre permis.",
+      sentence: "From «Ready», the agent `dev` (role implement, model profile:by_size) moves the item to «Done» once the agent stayed within its allowed paths. It times out after 72 h.",
     },
   ],
 };
@@ -664,10 +664,10 @@ function editionSimulee(yaml: string, operations: WorkflowOperation[]): Workflow
 /** Le registre de démonstration (ADR 0033) : un agent interne qui porte une skill, et un Claude Code. */
 export const agents: Agent[] = [
   {
-    slug: "coordinateur-onboarding",
+    slug: "onboarding-coordinator",
     kind: "internal",
-    display_name: "Coordinateur onboarding",
-    description: "Prépare le plan d'accès d'une arrivée et suit chaque étape jusqu'au badge.",
+    display_name: "Onboarding coordinator",
+    description: "Prepares a joiner's access plan and follows each step up to the badge.",
     status: "active",
     owner: "lea@varga.dev",
     latest_version: 2,
@@ -676,11 +676,11 @@ export const agents: Agent[] = [
       {
         version: 2,
         spec: {
-          instructions: "Tu prépares le plan d'accès d'une arrivée : comptes, groupes, poste, badge.\nCite le profil d'accès retenu.",
+          instructions: "You prepare a joiner's access plan: accounts, groups, laptop, badge.\nCite the access profile you chose.",
           model: "profile:standard",
           limits: { max_turns: 40, max_minutes: 20 },
           budget: { run_usd: 1.5, daily_usd: 5 },
-          skills: [{ slug: "procedure-onboarding", version: 1 }],
+          skills: [{ slug: "onboarding-procedure", version: 1 }],
           mcp_servers: [],
         },
         checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
@@ -689,7 +689,7 @@ export const agents: Agent[] = [
       },
       {
         version: 1,
-        spec: { instructions: "Tu prépares le plan d'accès d'une arrivée.", model: "profile:standard" },
+        spec: { instructions: "You prepare a joiner's access plan.", model: "profile:standard" },
         checksum: "sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
         created_by: "lea@varga.dev",
         created_at: iso(60 * 24 * 9),
@@ -697,9 +697,9 @@ export const agents: Agent[] = [
     ],
   },
   {
-    slug: "claude-de-lea",
+    slug: "leas-claude-code",
     kind: "external",
-    display_name: "Le Claude Code de Léa",
+    display_name: "Léa's Claude Code",
     status: "active",
     owner: "lea@varga.dev",
     latest_version: 1,
@@ -717,7 +717,7 @@ export const agents: Agent[] = [
 ];
 
 export const agentMetrics: AgentMetrics = {
-  agent: "coordinateur-onboarding",
+  agent: "onboarding-coordinator",
   days: 30,
   runs: 14,
   succeeded: 12,
@@ -760,7 +760,7 @@ export const myTokens: ApiToken[] = [
 
 export const projectAgents: ProjectAgent[] = [
   {
-    agent: "coordinateur-onboarding",
+    agent: "onboarding-coordinator",
     version: 2,
     overrides: { budget: { daily_usd: 3 } },
     effective: { ...agents[0]!.versions![0]!.spec, budget: { run_usd: 1.5, daily_usd: 3 } },
@@ -769,11 +769,11 @@ export const projectAgents: ProjectAgent[] = [
 
 export const skills: Skill[] = [
   {
-    slug: "procedure-onboarding",
-    description: "La procédure d'arrivée : comptes, groupes, poste, badge, et qui valide quoi.",
+    slug: "onboarding-procedure",
+    description: "The onboarding procedure: accounts, groups, laptop, badge, and who approves what.",
     status: "active",
     latest_version: 1,
-    used_by: ["coordinateur-onboarding@2"],
+    used_by: ["onboarding-coordinator@2"],
     versions: [{ version: 1, digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c", created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) }],
   },
 ];
@@ -784,8 +784,8 @@ export const skillVersion: SkillVersion = {
   created_by: "lea@varga.dev",
   created_at: iso(60 * 24 * 3),
   files: {
-    "SKILL.md": "---\nname: procedure-onboarding\ndescription: La procédure d'arrivée.\n---\n\n# Arrivée\n\n1. Comptes Entra à J-10.\n2. Groupes selon le profil d'accès.\n",
-    "profils.md": "| poste | groupes |\n|---|---|\n| développeur | devs, vpn |\n",
+    "SKILL.md": "---\nname: onboarding-procedure\ndescription: The onboarding procedure.\n---\n\n# Onboarding\n\n1. Entra accounts ten days before the start date.\n2. Groups according to the access profile.\n",
+    "profiles.md": "| role | groups |\n|---|---|\n| developer | devs, vpn |\n",
   },
 };
 
@@ -821,29 +821,29 @@ export const orgConnectors: OrgConnector[] = [
     status: "ok",
     created_by: "lea@varga.dev",
     operations: [
-      { name: "lire_utilisateur", access: "read", policy: "allowed", groups: [] },
-      { name: "creer_compte", access: "write", policy: "approval", groups: ["rh"], description: "crée un compte" },
-      { name: "desactiver_compte", access: "write", policy: "approval", groups: ["rh"] },
+      { name: "read_user", access: "read", policy: "allowed", groups: [] },
+      { name: "create_account", access: "write", policy: "approval", groups: ["hr"], description: "creates an account" },
+      { name: "disable_account", access: "write", policy: "approval", groups: ["hr"] },
     ],
   },
 ];
 
 orgConnectors.push({
-  name: "fournisseur",
+  name: "supplier-agent",
   kind: "mcp",
   type: "mcp",
-  config: { url: "https://fournisseur.example/mcp" },
-  secret_refs: { token: "env:CLE_FOURNISSEUR" },
+  config: { url: "https://supplier.example/mcp" },
+  secret_refs: { token: "env:SUPPLIER_TOKEN" },
   status: "ok",
   operations: [
-    { name: "suivi_commande", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
-    { name: "commander_poste", access: "write", policy: "forbidden", groups: [], schema_digest: "sha256:a07c", description: "commande un PC" },
+    { name: "track_order", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
+    { name: "order_laptop", access: "write", policy: "forbidden", groups: [], schema_digest: "sha256:a07c", description: "orders a laptop" },
   ],
 });
 
 export const projectOperations: ProjectOperation[] = [
-  { connector: "entra-acme", operation: "lire_utilisateur", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
-  { connector: "entra-acme", operation: "creer_compte", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
+  { connector: "entra-acme", operation: "read_user", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
+  { connector: "entra-acme", operation: "create_account", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
 ];
 
 /** Des actions gouvernées (ADR 0035) : une en attente, proposée par un agent ; une faite ; une défaite. */
@@ -851,12 +851,12 @@ export const actions: Action[] = [
   {
     id: "act-poste",
     origin: "tool",
-    kind: "fournisseur.commander_poste",
-    title: "Commander le portable de Léa (fournisseur)",
-    justification: "proposed by the agent coordinateur-onboarding in run r9",
-    params: { arguments: { modele: "portable-14" } },
-    effects: [{ effect: "connector.call", with: { connector: "fournisseur", operation: "commander_poste", arguments: { modele: "portable-14" } } }],
-    proposed_by: { kind: "agent", id: "agent:coordinateur-onboarding", run_id: "r9" },
+    kind: "supplier-agent.order_laptop",
+    title: "Order Léa's laptop (supplier)",
+    justification: "proposed by the agent onboarding-coordinator in run r9",
+    params: { arguments: { model: "laptop-14" } },
+    effects: [{ effect: "connector.call", with: { connector: "supplier-agent", operation: "order_laptop", arguments: { model: "laptop-14" } } }],
+    proposed_by: { kind: "agent", id: "agent:onboarding-coordinator", run_id: "r9" },
     approval: { approvers: [{ role: "project_owner", min: 1 }], step_up_minutes: 10, separation_of_duties: true },
     decisions: [],
     status: "pending_approval",
@@ -867,8 +867,8 @@ export const actions: Action[] = [
   {
     id: "act-comptes",
     origin: "transition",
-    kind: "arrivee.comptes",
-    title: "Les comptes de Léa",
+    kind: "onboarding.accounts",
+    title: "Léa's accounts",
     params: { upn: "lea@acme.example" },
     effects: [
       { effect: "connector.call", with: { connector: "entra-acme", operation: "create_user" }, compensate: { effect: "connector.call", with: { operation: "disable_user" } } },
@@ -894,7 +894,7 @@ actions.push({
   origin: "ontology",
   kind: "ontology.open_infra_pr",
   title: "open_infra_pr on os-reboot-required",
-  justification: "Deux nœuds attendent un redémarrage depuis une semaine : une PR planifie la fenêtre.",
+  justification: "Two nodes have been waiting for a reboot for a week: a pull request schedules the window.",
   params: {
     ontologie: {
       version_id: "v1",
@@ -1006,7 +1006,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
-    return { added: ["annuler_commande"], changed: ["commander_poste"], removed: [], unchanged: 1 } as T;
+    return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
@@ -1019,7 +1019,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   if (agentLu) return (agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
-  if (credentials) return (credentials[1] === "claude-de-lea" ? agentCredentials : []) as T;
+  if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
     [/^\/edition$/, { edition: "community", features: [], version: "0.13.1" }],
