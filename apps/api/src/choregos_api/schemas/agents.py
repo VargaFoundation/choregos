@@ -57,6 +57,33 @@ class AgentCreate(Dto):
     spec: AgentSpec = Field(default_factory=AgentSpec)
 
 
+class AgentCatalogueEntry(Dto):
+    """Un agent que le catalogue propose (ADR 0040), et ce qu'il en est dans l'organisation."""
+
+    slug: str
+    kind: Literal["internal", "external"]
+    display_name: str
+    description: str | None = None
+    #: Le rôle du paquet qu'il tient (`implement`, `review`…), ou `external` pour un client.
+    role: str
+    summary: str
+    version: int
+    skills: list[str] = Field(default_factory=list)
+    #: Pour un client externe : son identifiant sur la page des clients, et d'où il appelle.
+    client: str | None = None
+    reach: Literal["always", "cloud"] | None = None
+    installed: bool
+    installed_version: int | None = None
+    #: Un agent du même nom existe, mais l'organisation l'a créé elle-même : le catalogue n'y touche pas.
+    own_agent: bool = False
+    update_available: bool = False
+
+
+class AgentCatalogueInstall(Dto):
+    #: Déjà installé : publier la version suivante depuis le catalogue (rien si le texte n'a pas changé).
+    upgrade: bool = False
+
+
 class AgentPatch(Dto):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None

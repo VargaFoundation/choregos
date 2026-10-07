@@ -484,6 +484,34 @@ export type AgentCreate = {
   spec?: AgentSpec;
 };
 
+/** An agent the platform's catalogue offers (ADR 0040), and its state in the organisation. */
+export type AgentCatalogueEntry = {
+  slug: string;
+  kind: "internal" | "external";
+  display_name: string;
+  description?: string | null;
+  /** the package role it plays (`implement`, `review`…), or `external` for a client */
+  role: string;
+  summary: string;
+  /** the catalogue's version of the entry */
+  version: number;
+  skills?: Array<string>;
+  /** an external client's id on the AI clients page */
+  client?: string | null;
+  /** `cloud`: it calls from its vendor's cloud */
+  reach?: "always" | "cloud" | null;
+  installed: boolean;
+  installed_version?: number | null;
+  /** an agent of the organisation has this name and does not come from the catalogue */
+  own_agent?: boolean;
+  update_available?: boolean;
+};
+
+export type AgentCatalogueInstall = {
+  /** already installed: publish the catalogue's version as the next one */
+  upgrade?: boolean;
+};
+
 export type AgentPatch = {
   display_name?: string | null;
   description?: string | null;
@@ -1397,11 +1425,13 @@ export interface Operations {
 }; response: WebhookAck };
   healthz: { method: "GET"; path: "/healthz"; body: never; response: void };
   importSkill: { method: "POST"; path: "/orgs/{org}/skills/import"; body: void; response: Skill };
+  installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
   listActions: { method: "GET"; path: "/projects/{id}/actions"; body: never; response: Array<Action> };
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
+  listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };

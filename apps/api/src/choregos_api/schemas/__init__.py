@@ -7,6 +7,8 @@ Huit modules, un par domaine, réexportés : `choregos_api.schemas.X` reste l'ad
 from __future__ import annotations
 
 from .agents import (
+    AgentCatalogueEntry,
+    AgentCatalogueInstall,
     AgentCreate,
     AgentCredentialCreate,
     AgentCredentialDto,
@@ -157,6 +159,8 @@ __all__ = [
     "AbortRequest",
     "AgentBackendInfo",
     "AgentBackendUpdate",
+    "AgentCatalogueEntry",
+    "AgentCatalogueInstall",
     "AgentCreate",
     "AgentCredentialCreate",
     "AgentCredentialDto",

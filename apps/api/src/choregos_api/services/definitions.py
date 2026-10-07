@@ -160,6 +160,11 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     if activate and (devient_le_defaut or not project.default_workflow):
         project.default_workflow = nom
     await session.flush()
+    # Un agent du catalogue que ce workflow nomme, absent de l'organisation, s'installe (ADR 0040) :
+    # sinon le ticket mourrait au premier run (`AgentIndisponible`).
+    from .catalogue_d_agents import installer_les_agents_nommes
+
+    await installer_les_agents_nommes(session, project.org_id, [workflow], principal)
     await record(
         session,
         principal,
@@ -206,6 +211,13 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
             from .installation import installer_ce_que_livre_le_gabarit
 
             await installer_ce_que_livre_le_gabarit(session, project, livree, str(project.template_ref))
+        # APRÈS le gabarit : son propre agent du même nom l'emporte sur celui du catalogue (ADR 0040).
+        from ..rbac import SYSTEM
+        from .catalogue_d_agents import installer_les_agents_nommes
+
+        await installer_les_agents_nommes(
+            session, project.org_id, [parse_workflow(s, strict=False)[0] for s in livree.workflows], SYSTEM
+        )
     if not project.default_workflow:
         project.default_workflow = workflow.name
     if policy is None:

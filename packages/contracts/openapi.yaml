@@ -1111,6 +1111,32 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agent-catalogue:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listAgentCatalogue
+      description: The agents the platform ships (ADR 0040), and their state in the organisation — installed, in which version, an update available, or an agent of the organisation with the same name.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCatalogueEntry" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/agent-catalogue/{slug}/install:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: installCatalogueAgent
+      description: Installs the agent as version 1 of an agent of the organisation (201), its skills first. Already installed, `upgrade` publishes the next version when the catalogue changed (200). An agent of the organisation with the same name that does not come from the catalogue is never touched (409). `agent:manage`.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentCatalogueInstall" } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "201": { description: Installed, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/skills:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1998,6 +2024,29 @@ components:
         display_name: { type: string }
         description: { type: [string, "null"] }
         spec: { $ref: "#/components/schemas/AgentSpec" }
+    AgentCatalogueEntry:
+      type: object
+      description: An agent the platform's catalogue offers (ADR 0040), and its state in the organisation.
+      required: [slug, kind, display_name, role, summary, version, installed]
+      properties:
+        slug: { type: string }
+        kind: { type: string, enum: [internal, external] }
+        display_name: { type: string }
+        description: { type: [string, "null"] }
+        role: { type: string, description: "the package role it plays (`implement`, `review`…), or `external` for a client" }
+        summary: { type: string }
+        version: { type: integer, description: the catalogue's version of the entry }
+        skills: { type: array, items: { type: string } }
+        client: { type: [string, "null"], description: "an external client's id on the AI clients page" }
+        reach: { type: [string, "null"], enum: [always, cloud, null], description: "`cloud`: it calls from its vendor's cloud" }
+        installed: { type: boolean }
+        installed_version: { type: [integer, "null"] }
+        own_agent: { type: boolean, description: "an agent of the organisation has this name and does not come from the catalogue" }
+        update_available: { type: boolean }
+    AgentCatalogueInstall:
+      type: object
+      properties:
+        upgrade: { type: boolean, default: false, description: "already installed: publish the catalogue's version as the next one" }
     AgentPatch:
       type: object
       properties:
