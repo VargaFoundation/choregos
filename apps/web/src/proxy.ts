@@ -5,8 +5,10 @@ import { type NextRequest, NextResponse } from "next/server";
  * Une CSP sans `'unsafe-inline'` pour les scripts : un nonce par requête, que Next pose
  * lui-même sur ses scripts (il le lit dans l'en-tête `Content-Security-Policy`). Le prix :
  * chaque page est rendue dynamiquement — c'est déjà le cas d'un tableau de bord qui lit
- * l'API à chaque affichage. Les styles gardent `'unsafe-inline'` : Monaco et React Flow
- * injectent des `<style>`, et un style n'exécute rien.
+ * l'API à chaque affichage. Les styles gardent `'unsafe-inline'` : CodeMirror et React Flow
+ * injectent des `<style>`, et un style n'exécute rien. Aucune origine tierce : l'éditeur YAML
+ * (Monaco) se téléchargeait depuis un CDN, dont cette politique bloquait la feuille et la police —
+ * il s'affichait sans style (revue du 07/10). Tout ce que la console charge vient d'elle.
  *
  * Avant le 2026-09-25 : `script-src 'self' 'unsafe-inline'` dans `next.config.mjs` — une
  * CSP qui laissait passer exactement ce contre quoi une CSP existe.

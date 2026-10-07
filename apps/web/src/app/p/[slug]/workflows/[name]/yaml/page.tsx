@@ -9,7 +9,7 @@ import { useWorkflow } from "@/components/workflows/use-workflow";
 import { ApiError, api } from "@/lib/api";
 import type { WorkflowValidation } from "@/lib/types";
 
-// Monaco pèse lourd : chargé à l'ouverture de l'éditeur, et de lui seul.
+// L'éditeur (CodeMirror) n'est chargé qu'à l'ouverture de l'onglet : la page n'en paie pas le poids avant.
 const YamlEditor = dynamic(
   () => import("@/components/yaml-editor").then((m) => m.YamlEditor),
   {
@@ -119,7 +119,8 @@ export default function YamlPage({
           </p>
         )}
       </Card>
-      <Card title="validation">
+      <Card title="validation" className="self-start">
+        <div data-testid="validation-yaml">
         {!report && <Empty>validating…</Empty>}
         {report?.valid && <p className="text-sm text-ok">✓ valid workflow</p>}
         {report?.errors?.map((issue, index) => (
@@ -137,6 +138,7 @@ export default function YamlPage({
             {issue.message}
           </p>
         ))}
+        </div>
       </Card>
     </div>
   );
