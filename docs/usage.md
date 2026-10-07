@@ -42,8 +42,9 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 | `notify` | `slack`, `fake` |
 
 A project only needs what its workflows read ([ADR 0034](adr/0034-connecteurs-par-capacites.md)).
-`GET /projects/{id}/requirements` derives it — a guarantee says what it reads (`ci_green` the CI,
-`scope_respected` a diff), an agent whose role works in a repository needs an `scm`, a release
+`GET /projects/{id}/requirements` derives it — a guarantee says what it reads (`scope_respected` a
+diff; `ci_green` and `scans_ok` the pull request's checks, read through the `scm`, so GitHub Actions
+needs no `ci` connector), an agent whose role works in a repository needs an `scm`, a release
 train or a production state (`production: true`) needs a `cd`, a transition that opens or merges a
 pull request (`does`) needs an `scm` — and says why for each. An HR project shows
 neither `scm`, nor `ci`, nor `cd`; the settings page lists what is required, what is configured,

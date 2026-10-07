@@ -1,0 +1,127 @@
+# Un bogue ou un correctif léger, du ticket à la production vérifiée, sans humain — sauf si ça déraille.
+#
+# Le triage arrête ce qui n'est pas petit (`outputs_in` sur la taille et le risque) : un humain le
+# migre vers `dev-complex`. Le testeur renvoie au développeur avec son rapport ; une revue qui demande
+# des changements part chez le répondeur ; une CI rouge chez le réparateur. Le train de prod part sans
+# approbation : ce workflow n'en nomme pas (ADR 0041). Aucun agent ne déploie — le train le fait,
+# l'agent de production vérifie ensuite, en lecture seule.
+#
+# Les états ne portent aucun effet par leur nom : `does` et `production` sont écrits (ADR 0037).
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: dev-simple
+  version: 1
+  description: "A bug or a small fix: triage, implementation, tests, agent review, pull request, merge, release train to production, production check. No human unless something goes wrong."
+initial: inbox
+actors:
+  triager: { type: agent, role: triage, agent: triager, model: "profile:cheap" }
+  developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
+  tester: { type: agent, role: verify, agent: tester, model: "profile:standard" }
+  reviewer: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
+  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard" }
+  prod_verifier: { type: agent, role: verify_prod, agent: prod-verifier, model: "profile:standard" }
+  platform: { type: system }
+  maintainers: { type: human, group: maintainers, sla_hours: 24 }
+states:
+  inbox: { display: To triage, kind: wait, tracker: { status: Todo } }
+  triaged: { display: Triaged, tracker: { status: Triaged } }
+  implemented: { display: Implemented, tracker: { status: In progress } }
+  tested: { display: Tested, tracker: { status: In progress } }
+  reviewed: { display: Reviewed by an agent, tracker: { status: In review } }
+  addressing_review: { display: Addressing the review, tracker: { status: In progress } }
+  in_pr: { display: Pull request open, kind: wait, tracker: { status: In review } }
+  fixing_ci: { display: Fixing the CI, tracker: { status: In progress } }
+  integrated: { display: Merged, tracker: { status: Merged } }
+  live: { display: In production, production: true, tracker: { status: Deployed } }
+  verified: { display: Verified in production, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-triage
+    from: inbox
+    to: triaged
+    by: triager
+    outputs: [size, risk]
+    gates:
+      - { name: outputs_in, params: { values: { size: [S, M], risk: [low, medium] } } }
+    on_fail: { to: inbox, max_attempts: 1, escalate_to: needs_human }
+  - id: t-implement
+    from: triaged
+    to: implemented
+    by: developer
+    inputs: [test_report, human_feedback]
+    gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 20, lines: 800 } }]
+    on_fail: { to: triaged, max_attempts: 3, escalate_to: needs_human }
+  - id: t-test
+    from: implemented
+    to: tested
+    by: tester
+    outputs: [test_report]
+    gates: [evidence_present]
+    on_fail: { to: triaged, max_attempts: 3, escalate_to: needs_human }
+  - id: t-review
+    from: tested
+    to: reviewed
+    by: reviewer
+    outputs: [review_markdown, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-address-review
+    from: addressing_review
+    to: implemented
+    by: responder
+    inputs: [review_markdown]
+    outputs: [review_markdown]
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-open-pr
+    from: reviewed
+    to: in_pr
+    by: platform
+    does: open_pr
+    on_fail: { to: reviewed, max_attempts: 2, escalate_to: needs_human }
+  - id: t-merge
+    from: in_pr
+    to: integrated
+    by: platform
+    does: merge_pr
+    gates: [ci_green]
+    timeout_hours: 24
+    on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
+  - id: t-fix-ci
+    from: fixing_ci
+    to: in_pr
+    by: ci_fixer
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+  - id: t-release
+    from: integrated
+    to: live
+    via: release_train
+    train: { env: prod }
+    timeout_hours: 72
+  - id: t-verify-prod
+    from: live
+    to: verified
+    by: prod_verifier
+    outputs: [verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+      - { name: evidence_facts, params: { keys: [smoke_ok], must_be_true: [smoke_ok] } }
+    on_fail: { to: live, max_attempts: 1, escalate_to: needs_human }
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: maintainers
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

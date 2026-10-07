@@ -5,7 +5,8 @@ La revue produit du 2026-10-05 : les réglages d'un projet RH montraient `scm`, 
 dépôt, une intégration continue et un train qu'il n'a pas. Ce qu'un projet doit brancher se
 DÉDUIT de ce que ses workflows font :
 
-- une garantie lit des capacités (`ci_green` la CI, `scope_respected` un diff) : `gate_needs` ;
+- une garantie lit des capacités (`scope_respected` un diff ; `ci_green` les checks de la PR, par le
+  dépôt — ce n'était pas la CI, que rien ne lit) : `gate_needs` ;
 - un agent dont le rôle travaille dans un dépôt (`implement`, `fix_ci`…) exige un `scm` ;
 - un train de release, un état de production (`production: true`, ou `deployed_prod*` pour un workflow
   écrit avant #175) ou une vérification en prod exigent un `cd` ;
@@ -32,8 +33,6 @@ from ..gates import gate_needs
 ROLES_DANS_UN_DEPOT = frozenset(
     {"implement", "fix_ci", "address_review", "review", "release_notes", "architect"}
 )
-#: Ceux qui relancent la CI en plus.
-ROLES_SUR_LA_CI = frozenset({"fix_ci"})
 #: Ceux qui regardent la production.
 ROLES_EN_PRODUCTION = frozenset({"verify_prod"})
 
@@ -71,8 +70,6 @@ def _acteurs(workflow: Workflow, raisons: _Raisons) -> None:
         role = str(getattr(spec, "role", ""))
         if role in ROLES_DANS_UN_DEPOT:
             raisons.exiger("scm", f"{nom}: the agent {acteur} ({role}) works in a repository")
-        if role in ROLES_SUR_LA_CI:
-            raisons.exiger("ci", f"{nom}: the agent {acteur} ({role}) reruns the pipeline")
         if role in ROLES_EN_PRODUCTION:
             raisons.exiger("cd", f"{nom}: the agent {acteur} ({role}) checks production")
 

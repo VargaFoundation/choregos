@@ -113,8 +113,15 @@ def test_les_workflows_le_defaut_le_routage_et_la_politique_existent(path: Path)
         )
 
     policy_ref = str(defaults["policy"])
-    assert policy_ref.startswith("preset:")
-    assert load_preset(policy_ref.removeprefix("preset:")) is not None
+    if policy_ref.startswith("preset:"):
+        assert load_preset(policy_ref.removeprefix("preset:")) is not None
+        return
+    # Une politique propre au gabarit (S21-22) : dans son dossier, et lisible.
+    from choregos_core.policy import parse_policy
+
+    chemin = (path.parent / policy_ref).resolve()
+    assert chemin.is_relative_to(path.parent.resolve()), f"{policy_ref} sort du dossier du gabarit"
+    assert parse_policy(chemin.read_text(encoding="utf-8")).metadata.name
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)

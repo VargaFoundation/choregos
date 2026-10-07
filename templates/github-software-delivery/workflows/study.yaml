@@ -1,0 +1,111 @@
+# Une étude poussée, close par un ADR au format MADR 4 — fusionné, jamais déployé.
+#
+# Le rédacteur de spec pose la question et les critères ; le chercheur instruit, preuves `chemin:ligne`
+# à l'appui ; l'architecte écrit UN ADR dans `docs/adr/` — la garantie `markdown_sections` lit ce que
+# la branche AJOUTE (contexte, options, décision « Chosen option: »), pas le récit de l'agent. Un
+# critique le relit ; les architectes décident (un refus renvoie à l'instruction, la raison suit) ;
+# l'architecte passe alors le statut à `accepted`, ce que la même garantie vérifie, et la PR fusionne.
+# Aucun train : une étude ne part pas en production (ADR 0041).
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: study
+  version: 1
+  description: "An in-depth study that ends with one architecture decision record in MADR 4 format: question, research, ADR, critique, decision by the architects, ADR accepted and merged. Nothing is deployed."
+initial: inbox
+actors:
+  spec_writer: { type: agent, role: refine, agent: spec-writer, model: "profile:standard" }
+  researcher: { type: agent, role: research, agent: researcher, model: "profile:standard" }
+  architect: { type: agent, role: architect, agent: architect, model: "profile:standard" }
+  critic: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
+  platform: { type: system }
+  architects: { type: human, group: architects, sla_hours: 48 }
+states:
+  inbox: { display: To frame, kind: wait, tracker: { status: Todo } }
+  framed: { display: Question framed, tracker: { status: In progress } }
+  researched: { display: Researched, tracker: { status: In progress } }
+  drafted: { display: ADR drafted, tracker: { status: In progress } }
+  awaiting_decision: { display: Decision to take, kind: wait, tracker: { status: Needs review } }
+  decided: { display: Decided, tracker: { status: In progress } }
+  accepted: { display: ADR accepted, tracker: { status: In progress } }
+  in_pr: { display: Pull request open, kind: wait, tracker: { status: In review } }
+  adopted: { display: ADR merged, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-frame
+    from: inbox
+    to: framed
+    by: spec_writer
+    outputs: [spec_markdown]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-research
+    from: framed
+    to: researched
+    by: researcher
+    inputs: [spec_markdown]
+    outputs: [research_markdown]
+    on_fail: { to: framed, max_attempts: 2, escalate_to: needs_human }
+  - id: t-draft
+    from: researched
+    to: drafted
+    by: architect
+    inputs: [research_markdown, review_markdown, human_feedback]
+    outputs: [adr_path, adr_markdown]
+    gates:
+      - { name: scope_respected, params: { paths: ["docs/adr/**"] } }
+      - name: markdown_sections
+        params:
+          paths: ["docs/adr/**"]
+          sections: [Context and Problem Statement, Considered Options, Decision Outcome]
+          patterns: ['Chosen option: "']
+    on_fail: { to: researched, max_attempts: 3, escalate_to: needs_human }
+  - id: t-critique
+    from: drafted
+    to: awaiting_decision
+    by: critic
+    outputs: [review_markdown, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_changes_requested: { to: researched, max_attempts: 2, escalate_to: needs_human }
+  - id: t-decide
+    from: awaiting_decision
+    to: decided
+    by: architects
+    on_reject: researched
+  - id: t-accept
+    from: decided
+    to: accepted
+    by: architect
+    inputs: [adr_path]
+    gates:
+      - { name: scope_respected, params: { paths: ["docs/adr/**"] } }
+      - { name: markdown_sections, params: { paths: ["docs/adr/**"], patterns: ['status: "?accepted'] } }
+    on_fail: { to: decided, max_attempts: 2, escalate_to: needs_human }
+  - id: t-open-pr
+    from: accepted
+    to: in_pr
+    by: platform
+    does: open_pr
+    on_fail: { to: accepted, max_attempts: 2, escalate_to: needs_human }
+  - id: t-merge
+    from: in_pr
+    to: adopted
+    by: platform
+    does: merge_pr
+    gates: [ci_green]
+    timeout_hours: 24
+    on_fail: { to: in_pr, max_attempts: 2, escalate_to: needs_human }
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: architects
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned
