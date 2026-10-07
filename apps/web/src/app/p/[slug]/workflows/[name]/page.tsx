@@ -44,7 +44,7 @@ export default function ProcessPage() {
                   {ouverte === etape.id ? "close" : `edit ${etape.id}`}
                 </Button>
               </div>
-              <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5 text-xs">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                 <dt className="text-ink-muted">from → to</dt>
                 <dd className="flex flex-wrap items-center gap-2">
                   <StateBadge state={etape.from} display={etape.from_display} />

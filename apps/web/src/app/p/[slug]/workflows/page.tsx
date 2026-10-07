@@ -85,7 +85,7 @@ export default function WorkflowsPage({
                 }
               >
                 <dl
-                  className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-sm"
+                  className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm"
                   data-testid={`workflow-card-${workflow.name}`}
                 >
                   <dt className="text-ink-muted">active version</dt>
