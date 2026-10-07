@@ -515,11 +515,14 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
         if isinstance(actor, AgentActor):
             used_roles.add(str(actor.role))
     has_verify = "verify" in (roles & used_roles)
+    # Sans agent qui écrit du code, rien à tester avant la PR : une étude qui fusionne un ADR était
+    # avertie de n'avoir pas de `verify` (S21-22).
+    writes_code = "implement" in (roles & used_roles)
     has_pr = any(
         isinstance(wf.actors.get(t.by or ""), SystemActor) and effet_de_la_transition(t) == "open_pr"
         for t in wf.transitions
     )
-    if has_pr and not has_verify:
+    if has_pr and writes_code and not has_verify:
         report.warn(
             "workflow.no_verify_before_pr",
             "no `verify` step before the pull request is opened",

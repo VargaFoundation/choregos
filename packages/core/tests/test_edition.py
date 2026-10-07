@@ -349,9 +349,15 @@ def test_un_effet_sans_id_de_transition_ne_se_renomme_pas_en_silence() -> None:
 
 
 def test_un_effet_ecrit_garde_ce_que_le_validateur_en_deduit() -> None:
-    """Après le renommage, la PR s'ouvre encore : le validateur le sait (`no_verify_before_pr`)."""
-    _, avant = parse_workflow(ANCIEN, strict=False)
-    renomme = editer(ANCIEN, [{"op": "rename_state", "from": "pr_open", "to": "revue"}]).yaml
+    """Après le renommage, la PR s'ouvre encore : le validateur le sait (`no_verify_before_pr`, qu'il
+    ne dit que d'un workflow où un agent écrit du code — S21-22)."""
+    avec_un_dev = ANCIEN.replace(
+        "  owner: { type: human, group: product-owners, sla_hours: 24 }\n",
+        "  owner: { type: human, group: product-owners, sla_hours: 24 }\n"
+        '  dev: { type: agent, role: implement, model: "profile:standard" }\n',
+    ).replace("to: in_progress, by: owner }", "to: in_progress, by: dev }")
+    _, avant = parse_workflow(avec_un_dev, strict=False)
+    renomme = editer(avec_un_dev, [{"op": "rename_state", "from": "pr_open", "to": "revue"}]).yaml
     _, apres = parse_workflow(renomme, strict=False)
     for rapport in (avant, apres):
         assert any(w.code == "workflow.no_verify_before_pr" for w in rapport.warnings)

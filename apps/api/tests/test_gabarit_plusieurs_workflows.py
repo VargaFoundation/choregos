@@ -116,7 +116,19 @@ async def test_un_projet_ne_d_un_gabarit_a_deux_workflows_les_recoit(
         ),
         pytest.param({"workflows": ["template:inconnu@1"]}, "inconnu", id="gabarit-du-coeur-inconnu"),
         pytest.param(
-            {"workflows": ["workflows/arrivee.yaml"], "policy": "/etc/passwd"}, "preset", id="politique"
+            {"workflows": ["workflows/arrivee.yaml"], "policy": "/etc/passwd"},
+            "sort du dossier",
+            id="politique",
+        ),
+        pytest.param(
+            {"workflows": ["workflows/arrivee.yaml"], "policy": "./absente.yaml"},
+            "absent",
+            id="politique-absente",
+        ),
+        pytest.param(
+            {"workflows": ["workflows/arrivee.yaml"], "policy": "preset:../solo"},
+            "preset",
+            id="preset-en-chemin",
         ),
     ],
 )
@@ -159,3 +171,18 @@ def test_le_schema_des_gabarits_connait_ces_champs() -> None:
     assert list(schema.iter_errors({**manifeste, "defaults": sans_cible})), (
         "une règle sans workflow est refusée"
     )
+
+
+async def test_un_gabarit_livre_sa_propre_politique(
+    client: AsyncClient, admin: str, gabarits: Any, tmp_path: pathlib.Path
+) -> None:
+    """Ses budgets et ses trains, qu'aucun preset ne porte (S21-22) : `./policy.yaml`, dans son dossier."""
+    from choregos_core.policy import preset_yaml
+
+    gabarits({"workflows": ["workflows/arrivee.yaml"], "policy": "./policy.yaml"})
+    propre = preset_yaml("team").replace("name: team", "name: livraison-rh", 1)
+    (tmp_path / "rh" / "policy.yaml").write_text(propre, encoding="utf-8")
+    cree = await _projet(client, "rh@1.0.0")
+    assert cree.status_code == 201, cree.text
+    politique = (await client.get(f"/api/v1/projects/{cree.json()['id']}/policy")).json()
+    assert politique["name"] == "livraison-rh"

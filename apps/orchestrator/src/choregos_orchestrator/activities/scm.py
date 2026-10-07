@@ -52,16 +52,20 @@ async def open_pull_request(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _pr_body(item: Any, documents: dict[str, Any]) -> str:
+    """Le corps de la PR, en anglais (ADR 0039) : c'est GitHub qui le montre. Les notes de version
+    qu'un agent `release_notes` a écrites y figurent — elles ne se lisaient nulle part (S21-22)."""
     parts = [
-        f"Ticket : {item.tracker_key}",
+        f"Work item: {item.tracker_key}",
         "",
         documents.get("spec_markdown", item.body_snapshot or ""),
     ]
     if documents.get("plan_markdown"):
         parts += ["", "## Plan", documents["plan_markdown"]]
     if documents.get("review_markdown"):
-        parts += ["", "## Review agent", documents["review_markdown"]]
-    parts += ["", "---", "_PR ouverte par Choregos ; le coût et les preuves sont dans le ticket._"]
+        parts += ["", "## Agent review", documents["review_markdown"]]
+    if documents.get("release_notes_markdown"):
+        parts += ["", "## Release notes", documents["release_notes_markdown"]]
+    parts += ["", "---", "_Opened by Choregos; the cost and the evidence are on the work item._"]
     return "\n".join(parts)
 
 

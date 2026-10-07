@@ -86,3 +86,10 @@ def test_ce_que_la_plateforme_fait_s_exige_par_l_effet_pas_par_le_nom() -> None:
     raisons = {e.capacite: " ".join(e.raisons) for e in exigences([workflow])}
     assert "opens a pull request" in raisons["scm"]
     assert "en_service is production" in raisons["cd"]
+
+
+def test_l_architecte_d_une_etude_ecrit_dans_le_depot() -> None:
+    """Il écrit `docs/adr/NNNN-*.md` sur une branche (S21-22) : son projet branche un dépôt."""
+    etude = ARRIVEE.replace("role: plan", "role: architect")
+    (scm,) = [e for e in exigences([parse_workflow(etude)[0]]) if e.capacite == "scm"]
+    assert any("coordinateur (architect) works in a repository" in r for r in scm.raisons)

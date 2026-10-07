@@ -161,11 +161,27 @@ async def _github_install_app(params: dict[str, Any], bundle: Any, settings: Any
     return "App supposée installée (mode fakes)"
 
 
+#: La couleur d'une étiquette qu'un gabarit nomme sans la colorer.
+COULEUR_PAR_DEFAUT = "ededed"
+
+
+def etiquettes_du_pas(params: dict[str, Any]) -> dict[str, str]:
+    """Celles de la plateforme, puis celles que le gabarit ajoute (`labels:`, une liste de noms ou un
+    dictionnaire nom → couleur) : le routage d'un gabarit lit des étiquettes que le dépôt n'a pas
+    encore (`bug`, `adr`, `complex`…), et un ticket étiqueté d'une étiquette absente ne naît pas
+    dans le bon workflow (S21-22). Une couleur de la plateforme n'est jamais remplacée."""
+    ajoutees = params.get("labels") or {}
+    if isinstance(ajoutees, list):
+        ajoutees = dict.fromkeys((str(nom) for nom in ajoutees), COULEUR_PAR_DEFAUT)
+    return {**{str(nom): str(couleur).lstrip("#") for nom, couleur in dict(ajoutees).items()}, **LABELS}
+
+
 async def _github_ensure_labels(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    etiquettes = etiquettes_du_pas(params)
     ensure = getattr(bundle.adapters.tracker, "ensure_labels", None)
     if ensure is not None:
-        await ensure(LABELS)
-    return f"{len(LABELS)} labels garantis"
+        await ensure(etiquettes)
+    return f"{len(etiquettes)} labels garantis"
 
 
 async def _github_ensure_project_board(params: dict[str, Any], bundle: Any, settings: Any) -> str:
