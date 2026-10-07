@@ -170,18 +170,18 @@ async def test_connector(ctx: ProjectCtx, kind: Annotated[str, Path()], session:
         if tester is not None:
             result = await tester()
             checks.append(
-                ConnectorCheck(name="connexion", ok=bool(result.get("ok", True)), detail=str(result))
+                ConnectorCheck(name="connection", ok=bool(result.get("ok", True)), detail=str(result))
             )
         else:
             checks.append(
                 ConnectorCheck(
-                    name="connexion",
+                    name="connection",
                     ok=True,
-                    detail="fakes actifs" if fakes_enabled() else "aucun test spécifique fourni",
+                    detail="fakes active" if fakes_enabled() else "no specific test for this type",
                 )
             )
     except Exception as exc:  # une erreur de connecteur n'est jamais une erreur 500
-        checks.append(ConnectorCheck(name="connexion", ok=False, detail=str(exc)[:500]))
+        checks.append(ConnectorCheck(name="connection", ok=False, detail=str(exc)[:500]))
 
     ok = all(check.ok for check in checks)
     row.status = "ok" if ok else "error"

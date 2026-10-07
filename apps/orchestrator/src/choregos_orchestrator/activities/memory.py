@@ -208,7 +208,7 @@ async def memory_ab_report(payload: dict[str, Any]) -> dict[str, Any]:
                 Message(
                     title=f"Memory: A/B report over {report['weeks']} weeks — {report['verdict']}",
                     body=str(report["detail"]),
-                    severity="warning" if report["verdict"] == "la mémoire ne paie pas" else "info",
+                    severity="warning" if report["verdict"] == "memory does not pay off" else "info",
                 ),
             )
     return report

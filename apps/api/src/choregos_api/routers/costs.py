@@ -151,7 +151,7 @@ async def org_costs(
     "/projects/{id}/costs.csv",
     operation_id="exportProjectCostsCsv",
     response_class=Response,
-    responses={200: {"content": {"text/csv": {}}, "description": "Rapport de coûts en CSV"}},
+    responses={200: {"content": {"text/csv": {}}, "description": "Cost report as CSV"}},
 )
 async def project_costs_csv(
     ctx: ProjectCtx,
@@ -296,19 +296,19 @@ async def project_dora(
         ),
         lead_time=DoraMetric(
             value=round(lead_p50, 2) if lead_p50 is not None else None,
-            unit="heures (médiane)",
+            unit="hours (median)",
             level=_level(lead_p50, LEAD_TIME_LEVELS, higher_is_better=False),
             sample=len(lead_times),
         ),
         change_failure_rate=DoraMetric(
             value=round(failure_rate, 4) if failure_rate is not None else None,
-            unit="part des mises en production",
+            unit="share of production releases",
             level=_level(failure_rate, FAILURE_LEVELS, higher_is_better=False),
             sample=len(finished),
         ),
         time_to_restore=DoraMetric(
             value=round(restore_p50, 2) if restore_p50 is not None else None,
-            unit="heures (médiane)",
+            unit="hours (median)",
             level=_level(restore_p50, RESTORE_LEVELS, higher_is_better=False),
             sample=len(restores),
         ),
@@ -420,19 +420,19 @@ async def project_cross_backend(
 def _cross_backend_verdict(same: CrossBackendArm, other: CrossBackendArm) -> tuple[str, str]:
     if same.reviews < MIN_REVIEWS_PAR_BRAS or other.reviews < MIN_REVIEWS_PAR_BRAS:
         return (
-            "échantillon insuffisant",
-            f"{other.reviews} revue(s) par un autre backend, {same.reviews} par le même : "
-            f"il en faut {MIN_REVIEWS_PAR_BRAS} de chaque côté pour comparer.",
+            "not enough data",
+            f"{other.reviews} review(s) by another backend, {same.reviews} by the same one: "
+            f"{MIN_REVIEWS_PAR_BRAS} are needed on each side to compare.",
         )
     if same.catch_rate is None or other.catch_rate is None:
-        return ("échantillon insuffisant", "un des deux bras n'a pas de taux mesurable.")
+        return ("not enough data", "one of the two arms has no measurable rate.")
     delta = other.catch_rate - same.catch_rate
     detail = (
-        f"un autre backend trouve quelque chose dans {other.catch_rate:.0%} des revues, "
-        f"le même dans {same.catch_rate:.0%} ({delta:+.1%})."
+        f"another backend finds something in {other.catch_rate:.0%} of the reviews, "
+        f"the same one in {same.catch_rate:.0%} ({delta:+.1%})."
     )
     if delta > 0.05:
-        return ("la revue croisée attrape plus", detail)
+        return ("cross review catches more", detail)
     if delta < -0.05:
-        return ("la revue croisée attrape moins", detail)
-    return ("pas de différence nette", detail)
+        return ("cross review catches less", detail)
+    return ("no clear difference", detail)

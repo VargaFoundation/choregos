@@ -66,7 +66,7 @@ async def _review(
 async def test_sans_assez_de_revues_on_ne_compare_pas(client: AsyncClient, project: dict[str, Any]) -> None:
     await _review(project["id"], index=1, implementer="codex", reviewer="claude-code", caught=True)
     report = (await client.get(f"/api/v1/projects/{project['id']}/metrics/cross-backend")).json()
-    assert report["verdict"] == "échantillon insuffisant"
+    assert report["verdict"] == "not enough data"
     assert report["other_backend"]["reviews"] == 1
     assert report["same_backend"]["reviews"] == 0
 
@@ -86,7 +86,7 @@ async def test_la_revue_croisee_attrape_plus(client: AsyncClient, project: dict[
         "backends": ["claude-code"],
     }
     assert report["same_backend"]["catch_rate"] == 0.0
-    assert report["verdict"] == "la revue croisée attrape plus"
+    assert report["verdict"] == "cross review catches more"
     assert "100 %" in report["detail"] or "100%" in report["detail"]
 
 

@@ -69,8 +69,8 @@ async def test_sans_assez_de_tickets_le_rapport_refuse_de_conclure(
 ) -> None:
     await _tickets(project["id"], count=2, attempts=1, cost=1.0)
     report = (await client.get("/api/v1/orgs/varga/memory/ab-report")).json()
-    assert report["verdict"] == "échantillon insuffisant"
-    assert "10 de chaque côté" in report["detail"] or "il en faut 10" in report["detail"]
+    assert report["verdict"] == "not enough data"
+    assert "10 are needed on each side" in report["detail"]
 
 
 async def test_la_memoire_paie_quand_elle_ameliore_le_premier_passage(
@@ -87,8 +87,8 @@ async def test_la_memoire_paie_quand_elle_ameliore_le_premier_passage(
     assert report["without_memory"]["projects"] == ["sans-memoire"]
     assert report["with_memory"]["first_pass_merge_rate"] == 1.0
     assert report["without_memory"]["first_pass_merge_rate"] == 0.0
-    assert report["verdict"] == "la mémoire paie"
-    assert "premier passage" in report["detail"]
+    assert report["verdict"] == "memory pays off"
+    assert "first pass" in report["detail"]
 
 
 async def test_la_memoire_ne_paie_pas_quand_elle_coute_plus_cher_sans_gain(
@@ -101,7 +101,7 @@ async def test_la_memoire_ne_paie_pas_quand_elle_coute_plus_cher_sans_gain(
 
     report = (await client.get("/api/v1/orgs/varga/memory/ab-report")).json()
 
-    assert report["verdict"] == "la mémoire ne paie pas", report["detail"]
+    assert report["verdict"] == "memory does not pay off", report["detail"]
     assert report["with_memory"]["cost_per_ticket_usd"] == 6.0
 
 

@@ -52,8 +52,9 @@ No agent deploys: the release train does, under the project's policy. A batch th
    `merge_queue` to match the repository (`true` for a merge queue, `false` for a direct merge).
 3. **A `cd` connector** for the release train: Argo CD in real life; the `demo` type on a
    demonstration tenant.
-4. **The groups** `maintainers`, `product-owners`, `release-captains` and `architects` must exist in
-   your identity provider: a human step addressed to an unknown group waits forever.
+4. **Who decides**: the groups `maintainers`, `product-owners`, `release-captains` and `architects`
+   name who a human step is for. Today, anyone with the `developer` role (or above) on the project
+   can decide it in the console; the production departure needs the `release_captain` role.
 5. **A production check**: set `dod.facts.smoke_ok` in the project's configuration to a command that
    exits 0 when production is healthy (for instance `curl -fsS https://app.example.com/health`), and
    add the domain to the policy's `sandbox.network.allow_domains`. The production verifier fails

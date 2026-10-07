@@ -100,7 +100,7 @@ async def edit(body: WorkflowEditRequest) -> WorkflowEditResult:
     rapport = await validate(WorkflowValidateRequest(yaml=edition.yaml))
     diff = "".join(
         difflib.unified_diff(
-            body.yaml.splitlines(keepends=True), edition.yaml.splitlines(keepends=True), "avant", "après"
+            body.yaml.splitlines(keepends=True), edition.yaml.splitlines(keepends=True), "before", "after"
         )
     )
     return WorkflowEditResult(

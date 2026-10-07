@@ -206,7 +206,7 @@ def create_app() -> FastAPI:
         # jour, et `/openapi.json` du locataire dev le répétait pendant que le chart et les
         # paquets étaient en 0.4.1. Une version qui ment est ce que ce dépôt traque.
         version=__version__,
-        description="Un ticket entre, une mise en production maîtrisée sort.",
+        description="A work item comes in, a controlled production release comes out.",
         lifespan=lifespan,
         docs_url="/docs",
         openapi_url="/openapi.json",
