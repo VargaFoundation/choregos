@@ -35,7 +35,7 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 | :-- | :-- |
 | `tracker` | `github-issues`, `jira`, `gitlab-issues`, `internal`, `fake` |
 | `scm` | `github`, `fake` |
-| `ci` / `cd` | `tekton` / `argocd`, `fake` |
+| `ci` / `cd` | `tekton` / `argocd`, `demo`, `fake` |
 | `runtime` | `tekton`, `k8s_job`, `aca`, `local_docker`, `fake` |
 | `gateway` | `litellm`, `direct`, `fake` |
 | `memory` | `ecphoria`, `lexical`, `fake` |
@@ -122,7 +122,9 @@ families have **no real type yet**: type `demo` keeps them in memory, each proce
 demonstration, refused in staging and prod. Where the API and the orchestrator are several
 processes, give the `demo` connector a `url`: it then reaches the fakes served by **one** pod
 (`demoFakes.enabled` in the chart, `python -m choregos_adapters.fakes.serveur`), which also serves a
-fake Microsoft Graph for an `entra` connector whose `graph_url` and `login_url` point to it. A supplier's agent needs no family: it is an MCP
+fake Microsoft Graph for an `entra` connector whose `graph_url` and `login_url` point to it, and a
+demonstration environment for a `cd: demo` connector (`/cd/mcp`): the release train of a demo
+project promotes, checks and rolls back there, with no Argo CD — refused in staging and prod too. A supplier's agent needs no family: it is an MCP
 server like any other, its tools discovered and born closed.
 
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,

@@ -328,6 +328,14 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         secret_fields=("api_key",),
         operations=_FAMILLES["access_control"],
     ),
+    # Le train d'un locataire de démonstration (S21-24) : un environnement en mémoire, ou servi par le
+    # processus des faux. Aucune opération exposée : c'est le train qui l'appelle, jamais un agent.
+    ("cd", "demo"): ConnectorTypeSpec(
+        "demo deployment (in memory: demonstrations only, refused in staging and prod)",
+        ("cd",),
+        _CONFIGURATION_DE_DEMO,
+        secret_fields=("api_key",),
+    ),
     ("mcp", "mcp"): ConnectorTypeSpec(
         "MCP server (Streamable HTTP)",
         ("mcp",),
@@ -413,6 +421,26 @@ def _guichet_de_demo(famille: str, *, en_production: bool) -> Any:
         return Guichet(FAUX_METIER[famille], str(cfg.get("api_key", "")))
 
     return construire
+
+
+def _cd_de_demo(cfg: dict[str, Any]) -> Any:
+    """La fabrique de `cd: demo` : refusée en staging et en prod ; servie quand elle porte une `url`."""
+    from .fakes.cd_de_demo import CdDeDemo, FakeCdDeDemo
+    from .fakes.rh import Guichet, GuichetDistant
+
+    environnement = _env("CHOREGOS_ENV", "dev")
+    if environnement in {"staging", "prod"}:
+        raise ConfigurationError(
+            f"connecteur `cd: demo` refusé en {environnement} : un environnement simulé — une "
+            "démonstration, pas un déploiement."
+        )
+    if cfg.get("url"):
+        from .mcp import ClientMcp
+
+        return CdDeDemo(GuichetDistant(ClientMcp(str(cfg["url"]), token=str(cfg.get("api_key", "")))))
+    if "cd" not in FAUX_METIER:
+        FAUX_METIER["cd"] = FakeCdDeDemo()
+    return CdDeDemo(Guichet(FAUX_METIER["cd"], str(cfg.get("api_key", ""))))
 
 
 def _register_builtins() -> None:
@@ -598,6 +626,7 @@ def _register_builtins() -> None:
         register(famille, "demo", _SPECS_LIVREES[(famille, "demo")])(
             _guichet_de_demo(famille, en_production=True)
         )
+    register("cd", "demo", _SPECS_LIVREES[("cd", "demo")])(_cd_de_demo)
     # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
     from .mcp import ClientMcp
 
