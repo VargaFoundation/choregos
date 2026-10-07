@@ -3,7 +3,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: full-auto
-  version: 1
+  version: 2
   description: "Automatic triage, refinement, implementation, verification and merge; production stays locked behind a captain."
 actors:
   sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
@@ -66,17 +66,12 @@ transitions:
     gates: [evidence_present]
     on_fail: { to: reviewing, max_attempts: 2, escalate_to: needs_human }
     does: open_pr
+  # Le réparateur part de l'état où `t-merge` envoie une CI rouge (#284).
   - id: t-fix-ci
-    from: pr_open
-    to: fixing_ci
-    by: fixer
-    on_fail: { to: pr_open, max_attempts: 3, escalate_to: needs_human }
-  - id: t-back-to-pr
     from: fixing_ci
     to: pr_open
-    by: ci
+    by: fixer
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
-    does: open_pr
   - id: t-merge
     from: pr_open
     to: merged

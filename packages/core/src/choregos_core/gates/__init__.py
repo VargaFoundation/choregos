@@ -503,10 +503,20 @@ def _scans_ok(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-@gate("provenance_signed", asynchronous=True, needs=("ci",))
+# La provenance se lit sur la PR, comme les scans : un check dont le nom contient `provenance`
+# (`attest-build-provenance`, `slsa-provenance`…). Rien ne renseignait `signed` : la garantie
+# attendait pour toujours, et un ticket `advanced` ne fusionnait jamais (#283).
+@gate("provenance_signed", asynchronous=True, needs=("scm",))
 def _provenance_signed(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.signed is None:
-        return GateOutcome("provenance_signed", False, pending=True, detail="signature pending")
+        if ctx.ci_status in {"success", "failure", "neutral", "succeeded"}:
+            return GateOutcome(
+                "provenance_signed",
+                False,
+                detail="no provenance check on the pull request: add one to the CI (a check named "
+                "`provenance`), or remove the `provenance_signed` guarantee from the workflow",
+            )
+        return GateOutcome("provenance_signed", False, pending=True, detail="provenance pending")
     return GateOutcome("provenance_signed", ctx.signed, detail="signed" if ctx.signed else "not signed")
 
 

@@ -4,7 +4,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: advanced
-  version: 1
+  version: 2
   description: "The full chain: plan, cross review, staging then production."
 actors:
   sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
@@ -32,6 +32,7 @@ states:
   verifying: { display: Verifying, tracker: { status: Verifying } }
   agent_review: { display: Agent review, tracker: { status: Agent review } }
   addressing_review: { display: Addressing the review, tracker: { status: Addressing review } }
+  notes_written: { display: Release notes written, tracker: { status: Agent review } }
   pr_open: { display: PR open, kind: wait, tracker: { status: In review } }
   fixing_ci: { display: Fixing CI, tracker: { status: Fixing CI } }
   merged: { display: Merged, tracker: { status: Merged } }
@@ -97,29 +98,33 @@ transitions:
     to: verifying
     by: responder
     on_fail: { to: addressing_review, max_attempts: 3, escalate_to: needs_human }
-  - id: t-open-pr
+  # Les notes de version s'écrivent AVANT la PR : elles entrent dans son corps. Une boucle
+  # `merged → merged` déclarée après le train n'était jamais choisie (#285).
+  - id: t-release-notes
     from: agent_review
+    to: notes_written
+    by: scribe
+    outputs: [release_notes_markdown]
+    on_fail: { to: agent_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-open-pr
+    from: notes_written
     to: pr_open
     by: ci
     gates: [evidence_present, scope_respected]
-    on_fail: { to: agent_review, max_attempts: 2, escalate_to: needs_human }
+    on_fail: { to: notes_written, max_attempts: 2, escalate_to: needs_human }
     does: open_pr
+  # Le réparateur part de l'état où `t-merge` envoie une CI rouge : depuis `pr_open`, il n'était
+  # choisi que sur un résultat que l'interpréteur avait déjà oublié (#284).
   - id: t-fix-ci
-    from: pr_open
-    to: fixing_ci
-    by: fixer
-    on_fail: { to: pr_open, max_attempts: 3, escalate_to: needs_human }
-  - id: t-back-to-pr
     from: fixing_ci
     to: pr_open
-    by: ci
+    by: fixer
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
-    does: open_pr
   - id: t-merge
     from: pr_open
     to: merged
     by: ci
-    gates: [ci_green, review_approved, scans_ok, provenance_signed]
+    gates: [ci_green, review_approved, scans_ok]
     timeout_hours: 48
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
     does: merge_pr
@@ -141,12 +146,6 @@ transitions:
     by: sentinel
     outputs: [verdict]
     on_fail: { to: deployed_prod, max_attempts: 2, escalate_to: needs_human }
-  - id: t-release-notes
-    from: merged
-    to: merged
-    by: scribe
-    outputs: [release_notes]
-    on_fail: { to: merged, max_attempts: 1, escalate_to: needs_human }
   - id: t-human-review
     from: needs_human
     to: in_progress
