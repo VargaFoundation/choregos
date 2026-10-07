@@ -1069,6 +1069,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
+    // Checkout Web livre par Jira, GitHub et Argo CD — dont la dernière vérification a échoué.
+    [
+      /^\/projects\/[^/]*checkout-web\/connectors$/,
+      [
+        { id: "c-jira", kind: "tracker", type: "jira", config: {}, secret_refs: {}, status: "ok" },
+        { id: "c-gh", kind: "scm", type: "github", config: {}, secret_refs: {}, status: "ok" },
+        { id: "c-argo", kind: "cd", type: "argocd", config: {}, secret_refs: {}, status: "error" },
+      ],
+    ],
     // Un tracker interne : la demande se pose dans la console (le board offre « new request »).
     [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],

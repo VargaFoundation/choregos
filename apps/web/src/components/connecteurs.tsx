@@ -2,11 +2,13 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import { Button, Card, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
+import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ConnectorType, ProjectRequirement } from "@/lib/types";
 
 /** L'ordre dans lequel la console montre les capacités (celui de `choregos_core.dsl.exigences`). */
@@ -62,7 +64,12 @@ export function Connecteurs({ slug }: { slug: string }) {
       <div className="space-y-3">
         <p className="text-sm text-ink-muted">
           What this project&apos;s workflows need, and why. A secret is never typed here: name it by reference
-          (<code>env:NAME</code>), the platform reads it when the connector is used.
+          (<code>env:NAME</code>), the platform reads it when the connector is used. Systems the whole organisation
+          shares — a directory, MCP servers — are declared in{" "}
+          <Link href="/admin/connectors" className="underline">
+            admin › connectors
+          </Link>
+          .
         </p>
         {(message || erreur) && (
           <div>
@@ -149,7 +156,10 @@ function Ligne({
   return (
     <li className="rounded border border-line p-3" data-testid={`connecteur-${sorte}`}>
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span className="w-20 font-medium">{sorte}</span>
+        <span className="w-44">
+          <span className="font-medium">{sorte}</span>
+          {libelleDeSorte(sorte) !== sorte && <span className="ml-2 text-xs text-ink-muted">{libelleDeSorte(sorte)}</span>}
+        </span>
         <span className="font-mono text-xs">
           {actuel ? (
             actuel.type
