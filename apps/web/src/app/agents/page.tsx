@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Badge, Eyebrow, Heading } from "@varga/design-system";
 import { estUnClientMcp, resumeDeLaVersion } from "@/components/agents/registre";
+import { CatalogueDAgents } from "@/components/agents/catalogue";
 import { ClientsMcp } from "@/components/agents/clients-mcp";
 import { Glossaire } from "@/components/glossaire";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
@@ -85,6 +86,7 @@ export default function AgentsPage() {
           </table>
         )}
       </Card>
+      <CatalogueDAgents org={org} />
       <ClientsMcp org={org} clients={clients} agents={agents.data ?? []} />
       <NouvelAgent org={org} />
     </div>

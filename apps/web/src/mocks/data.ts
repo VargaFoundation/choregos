@@ -9,6 +9,7 @@
 import type {
   Action,
   Agent,
+  AgentCatalogueEntry,
   AgentCreate,
   ConnectorType,
   OrgConnector,
@@ -789,6 +790,22 @@ export const agents: Agent[] = [
   },
 ];
 
+/** Le catalogue de la plateforme (ADR 0040) : quelques entrées, l'une installée, les clients externes. */
+const entreeDuCatalogue = (slug: string, display_name: string, role: string, summary: string, extra: Partial<AgentCatalogueEntry> = {}): AgentCatalogueEntry => ({
+  slug, kind: "internal", display_name, role, summary, version: 1, skills: [], installed: false, installed_version: null,
+  own_agent: false, update_available: false, offered: true, unavailable_reason: null, client: null, reach: null, ...extra,
+});
+export const agentCatalogue: AgentCatalogueEntry[] = [
+  entreeDuCatalogue("developer", "Developer", "implement", "Implements the specification inside the allowed paths, test first, small conventional commits."),
+  entreeDuCatalogue("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1 }),
+  entreeDuCatalogue("reviewer", "Reviewer", "review", "Reviews the branch with fresh eyes and gives a verdict.", { installed: true, installed_version: 1, update_available: true, skills: ["madr-4"] }),
+  entreeDuCatalogue("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"] }),
+  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP gate, with its person's rights.", { kind: "external", client: "claude-code", reach: "always" }),
+  entreeDuCatalogue("chatgpt", "ChatGPT", "external", "ChatGPT acting through the MCP gate, with its person's rights.", {
+    kind: "external", client: "chatgpt", reach: "cloud", offered: false, unavailable_reason: "the MCP gate does not accept OAuth (`global.mcp.oauth`); the console's public address is not https",
+  }),
+];
+
 export const agentMetrics: AgentMetrics = {
   agent: "onboarding-coordinator",
   days: 30,
@@ -1057,6 +1074,21 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
     } as T;
   }
+  const duCatalogue = /^\/orgs\/[^/]+\/agent-catalogue\/([^/]+)\/(install|connect)$/.exec(chemin ?? "");
+  if (method === "POST" && duCatalogue) {
+    const entree = agentCatalogue.find((e) => e.slug === duCatalogue[1])!;
+    const agent = {
+      slug: entree.slug, kind: entree.kind, display_name: entree.display_name, status: "active", owner: null, latest_version: 1,
+      versions: [{ version: 1, spec: {}, checksum: "sha256:catalogue", created_by: `catalogue:${entree.slug}@1` }],
+    };
+    if (duCatalogue[2] === "install") return agent as T;
+    const lecture = (JSON.parse(String(init.body ?? "{}")) as { read_only?: boolean }).read_only;
+    return {
+      agent,
+      token: { id: "tok-catalogue", name: entree.display_name, created_at: iso(0), scopes: [lecture ? "mcp:read" : "mcp:write"], token: "chg_demo_shown_once" },
+      oauth_client_id: null,
+    } as T;
+  }
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
     return { version: agent.latest_version + 1, spec: JSON.parse(String(init.body ?? "{}")), checksum: "sha256:suivante" } as T;
@@ -1110,6 +1142,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     ],
     [/^\/me\/tokens$/, myTokens],
     [/^\/orgs\/[^/]+\/agents$/, agents],
+    [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, projectAgents],
     [/^\/orgs\/[^/]+\/skills$/, skills],

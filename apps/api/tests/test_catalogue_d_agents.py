@@ -172,3 +172,82 @@ async def test_un_gabarit_peut_nommer_un_agent_du_catalogue(
     reviewer = (await client.get(f"{ORG}/agents/reviewer")).json()
     assert reviewer["versions"][0]["spec"]["skills"] == [{"slug": "madr-4", "version": None}]
     assert "madr-4" in {s["slug"] for s in (await client.get(f"{ORG}/skills")).json()}
+
+
+# ───────────────────────── les clients externes en un clic (S21-18) ─────────────────────────
+
+
+async def test_connecter_claude_code_cree_l_agent_frappe_un_jeton_mcp_et_le_rattache(
+    client: AsyncClient, admin: str
+) -> None:
+    connecte = await client.post(f"{ORG}/agent-catalogue/claude-code/connect")
+    assert connecte.status_code == 201, connecte.text
+    corps = connecte.json()
+    assert (corps["agent"]["slug"], corps["agent"]["kind"]) == ("claude-code", "external")
+    assert corps["token"]["scopes"] == ["mcp:write"] and corps["token"]["token"], "le jeton, rendu une fois"
+    assert corps["oauth_client_id"] is None
+    rattaches = (await client.get(f"{ORG}/agents/claude-code/credentials")).json()
+    assert [r["token_name"] for r in rattaches] == ["Claude Code"]
+    jetons = (await client.get("/api/v1/me/tokens")).json()
+    assert "token" not in jetons[0], "relu, le jeton ne se montre plus"
+
+
+async def test_un_membre_rejoint_l_agent_d_un_client_mais_ne_le_cree_pas(
+    client: AsyncClient, admin: str
+) -> None:
+    from .conftest import login
+
+    membre = await client.post(f"{ORG}/members", json={"email": "dev@varga.dev", "role": "developer"})
+    assert membre.status_code in {200, 201}
+    await login(client, "dev@varga.dev")
+    assert (await client.post(f"{ORG}/agent-catalogue/cursor/connect")).status_code == 403, (
+        "créer : un administrateur"
+    )
+    await login(client, "admin@varga.dev")
+    assert (await client.post(f"{ORG}/agent-catalogue/cursor/connect")).status_code == 201
+    await login(client, "dev@varga.dev")
+    rejoint = await client.post(f"{ORG}/agent-catalogue/cursor/connect", json={"read_only": True})
+    assert rejoint.status_code == 201, rejoint.text
+    assert rejoint.json()["token"]["scopes"] == ["mcp:read"]
+    await login(client, "admin@varga.dev")
+    assert len((await client.get(f"{ORG}/agents/cursor/credentials")).json()) == 2, "un jeton par personne"
+
+
+async def test_un_agent_interne_ne_se_connecte_pas(client: AsyncClient, admin: str) -> None:
+    assert (await client.post(f"{ORG}/agent-catalogue/developer/connect")).status_code == 404
+
+
+async def test_un_client_qui_appelle_depuis_le_cloud_n_est_pas_propose_sans_oauth_ni_https(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    from choregos_api.config import reset_settings_cache
+
+    chatgpt = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "chatgpt")
+    assert chatgpt["offered"] is False and "OAuth" in chatgpt["unavailable_reason"]
+    refuse = await client.post(f"{ORG}/agent-catalogue/chatgpt/connect")
+    assert refuse.status_code == 409 and "not offered" in refuse.text
+
+    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ISSUER", "https://sso.example/realms/varga")
+    monkeypatch.setenv(
+        "CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"chatgpt": {"client_id": "choregos-chatgpt"}})
+    )
+    reset_settings_cache()
+    toujours = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "chatgpt")
+    assert toujours["offered"] is False and "https" in toujours["unavailable_reason"], "OAuth, mais en http"
+
+    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "https://choregos.example")
+    reset_settings_cache()
+    claude_ai = next(
+        e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "claude-ai"
+    )
+    assert claude_ai["offered"] is False and "claude-ai" in claude_ai["unavailable_reason"], (
+        "aucun client pour lui"
+    )
+    connecte = await client.post(f"{ORG}/agent-catalogue/chatgpt/connect")
+    assert connecte.status_code == 201, connecte.text
+    assert (connecte.json()["token"], connecte.json()["oauth_client_id"]) == (None, "choregos-chatgpt")
+    rattache = (await client.get(f"{ORG}/agents/chatgpt/credentials")).json()
+    assert [(r["kind"], r["client_id"]) for r in rattache] == [("oauth_client", "choregos-chatgpt")]

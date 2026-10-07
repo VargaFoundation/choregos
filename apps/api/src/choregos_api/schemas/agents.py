@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import Field
 
 from .base import Dto
+from .identite import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
 
@@ -77,6 +78,25 @@ class AgentCatalogueEntry(Dto):
     #: Un agent du même nom existe, mais l'organisation l'a créé elle-même : le catalogue n'y touche pas.
     own_agent: bool = False
     update_available: bool = False
+    #: Faux pour un client qui appelle depuis le cloud de son éditeur quand la porte ne l'accepte pas
+    #: encore (OAuth, client enregistré, https) : la page le dit, et ne le propose pas.
+    offered: bool = True
+    unavailable_reason: str | None = None
+
+
+class AgentCatalogueConnect(Dto):
+    #: Un jeton `mcp:read` au lieu de `mcp:write` : le client lit, il n'ouvre ni ne propose rien.
+    read_only: bool = False
+    expires_in_days: int | None = Field(default=30, ge=1, le=365)
+
+
+class AgentCatalogueConnection(Dto):
+    """Un client connecté : son agent externe, et de quoi le configurer — un jeton rendu UNE fois,
+    ou le client OAuth que l'IdP a enregistré (claude.ai, ChatGPT)."""
+
+    agent: AgentDto
+    token: ApiTokenCreated | None = None
+    oauth_client_id: str | None = None
 
 
 class AgentCatalogueInstall(Dto):
