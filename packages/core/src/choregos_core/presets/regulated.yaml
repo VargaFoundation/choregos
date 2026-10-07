@@ -5,7 +5,7 @@ metadata:
   name: regulated
   version: 1
   preset: regulated
-  description: Contexte régulé — toute décision structurante est humaine, la provenance est obligatoire.
+  description: "Regulated context: every structural decision is made by a human, and provenance is mandatory."
 budgets:
   ticket_usd: { S: 20, M: 60, L: 150, XL: 300 }
   stage_usd:

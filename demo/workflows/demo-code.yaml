@@ -9,19 +9,19 @@ kind: Workflow
 metadata:
   name: demo-code
   version: 1
-  description: Ticket → implémentation → vérification → branche poussée.
+  description: Work item → implementation → verification → branch pushed.
 actors:
   dev: { type: agent, role: implement, model: "profile:standard", max_turns: 40, max_minutes: 20 }
   checker: { type: agent, role: verify, model: "profile:standard", max_turns: 20, max_minutes: 10 }
   arbitre: { type: human, group: demo, sla_hours: 24 }
   journal: { type: system }
 states:
-  inbox: { display: À faire, kind: wait }
-  in_progress: { display: En cours }
-  verifying: { display: Vérification }
-  done: { display: Terminé, terminal: true }
-  needs_human: { display: Intervention humaine, kind: wait }
-  abandoned: { display: Abandonné, terminal: true }
+  inbox: { display: To do, kind: wait }
+  in_progress: { display: In progress }
+  verifying: { display: Verifying }
+  done: { display: Done, terminal: true }
+  needs_human: { display: Needs a human, kind: wait }
+  abandoned: { display: Abandoned, terminal: true }
 transitions:
   - id: t-implement
     from: inbox

@@ -5,7 +5,7 @@ kind: Workflow
 metadata:
   name: advanced
   version: 1
-  description: Chaîne complète avec plan, review croisée, staging puis production.
+  description: "The full chain: plan, cross review, staging then production."
 actors:
   sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
   refiner: { type: agent, role: refine, model: "profile:standard" }
@@ -22,24 +22,24 @@ actors:
   captain: { type: human, group: release-captains, sla_hours: 4 }
   ci: { type: system }
 states:
-  inbox: { display: À trier, kind: wait, tracker: { status: Todo } }
-  triaged: { display: Trié, tracker: { status: Triaged } }
-  refining: { display: Cadrage, tracker: { status: Refining } }
-  awaiting_spec_approval: { display: Spec à valider, kind: wait, tracker: { status: Needs review } }
-  planning: { display: Plan, tracker: { status: Planning } }
-  ready: { display: Prêt, tracker: { status: Ready } }
-  in_progress: { display: En cours, tracker: { status: In progress } }
-  verifying: { display: Vérification, tracker: { status: Verifying } }
-  agent_review: { display: Relecture agent, tracker: { status: Agent review } }
-  addressing_review: { display: Réponses à la review, tracker: { status: Addressing review } }
-  pr_open: { display: PR ouverte, kind: wait, tracker: { status: In review } }
-  fixing_ci: { display: Correction CI, tracker: { status: Fixing CI } }
-  merged: { display: Fusionné, tracker: { status: Merged } }
-  deployed_staging: { display: En staging, tracker: { status: Staging } }
-  deployed_prod: { display: En production, tracker: { status: Prod }, production: true }
-  verified_prod: { display: Vérifié en production, terminal: true, tracker: { status: Done } }
-  needs_human: { display: Intervention humaine, kind: wait, tracker: { status: Blocked } }
-  abandoned: { display: Abandonné, terminal: true, tracker: { status: Cancelled } }
+  inbox: { display: To triage, kind: wait, tracker: { status: Todo } }
+  triaged: { display: Triaged, tracker: { status: Triaged } }
+  refining: { display: Refining, tracker: { status: Refining } }
+  awaiting_spec_approval: { display: Spec to approve, kind: wait, tracker: { status: Needs review } }
+  planning: { display: Planning, tracker: { status: Planning } }
+  ready: { display: Ready, tracker: { status: Ready } }
+  in_progress: { display: In progress, tracker: { status: In progress } }
+  verifying: { display: Verifying, tracker: { status: Verifying } }
+  agent_review: { display: Agent review, tracker: { status: Agent review } }
+  addressing_review: { display: Addressing the review, tracker: { status: Addressing review } }
+  pr_open: { display: PR open, kind: wait, tracker: { status: In review } }
+  fixing_ci: { display: Fixing CI, tracker: { status: Fixing CI } }
+  merged: { display: Merged, tracker: { status: Merged } }
+  deployed_staging: { display: In staging, tracker: { status: Staging } }
+  deployed_prod: { display: In production, tracker: { status: Prod }, production: true }
+  verified_prod: { display: Verified in production, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
 transitions:
   - id: t-triage
     from: inbox

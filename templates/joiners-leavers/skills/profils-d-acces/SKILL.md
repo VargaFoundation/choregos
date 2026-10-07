@@ -1,25 +1,25 @@
 ---
 name: profils-d-acces
-description: Les groupes d'accès de chaque poste, et les groupes sensibles qui demandent une validation renforcée.
+description: The access groups of each job, and the sensitive groups that need a stronger approval.
 ---
 
-# Les profils d'accès
+# Access profiles
 
-Un poste ouvre un **groupe d'accès** ; certains ouvrent aussi un **groupe sensible**, qui ne
-s'accorde que sur une validation ré-authentifiée.
+A job opens an **access group**; some also open a **sensitive group**, granted only on a
+re-authenticated approval.
 
-| Poste | Groupe d'accès | Groupe sensible |
+| Job | Access group | Sensitive group |
 |:--|:--|:--|
-| Développeuse, développeur | `devs` | `prod-lecture` |
-| Ingénieure, ingénieur d'exploitation | `ops` | `prod-admin` |
-| Comptable | `finance` | `paie` |
-| Chargée, chargé de recrutement | `rh` | `dossiers-salaries` |
-| Commerciale, commercial | `ventes` | `crm-export` |
+| Developer | `devs` | `prod-lecture` |
+| Operations engineer | `ops` | `prod-admin` |
+| Accountant | `finance` | `paie` |
+| Recruiter | `rh` | `dossiers-salaries` |
+| Sales | `ventes` | `crm-export` |
 
-## Règles
+## Rules
 
-- Un poste absent de ce tableau n'a **pas** de groupe sensible par défaut : le dire dans le plan.
-- Un groupe demandé qui ne correspond pas au poste est un **écart** : le signaler, avec le groupe
-  attendu.
-- Au départ, tout groupe — sensible compris — se ferme avec le compte : la désactivation suffit,
-  aucun retrait groupe par groupe n'est à prévoir.
+- A job missing from this table has **no** sensitive group by default: say so in the plan.
+- A requested group that does not match the job is a **mismatch**: report it, with the expected
+  group.
+- When someone leaves, every group — sensitive ones included — closes with the account: disabling
+  it is enough, no group-by-group removal is needed.

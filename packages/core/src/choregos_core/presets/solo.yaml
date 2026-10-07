@@ -5,7 +5,7 @@ metadata:
   name: solo
   version: 1
   preset: solo
-  description: Un développeur, budgets serrés, approbation sur la spec et la prod.
+  description: "One developer, tight budgets, approval on the spec and on production."
 budgets:
   ticket_usd:
     S: 8

@@ -1,14 +1,14 @@
-## Ticket
-<!-- lien vers l'issue -->
+## Work item
+<!-- link to the issue -->
 
-## Changement
+## Change
 …
 
-## Critères d'acceptation
+## Acceptance criteria
 - [ ] …
 
-## Preuves
-Commandes exécutées, résultats de tests.
+## Evidence
+Commands run, test results.
 
-## Findings déposés
+## Findings filed
 - #…

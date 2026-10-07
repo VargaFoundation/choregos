@@ -3,10 +3,11 @@ kind: Ontology
 metadata: {name: rh-arrivees-departs, version: 1.0.0}
 spec:
   description: >-
-    Le registre de ce qu'une arrivée ouvre et de ce qu'un départ doit fermer : la personne et son
-    contrat, son compte et ses groupes, son poste, son badge. Les workflows agissent sur l'annuaire,
-    le parc et les lecteurs ; ce registre garde ce qu'ils ont ouvert, et le Claude d'une RH
-    l'interroge à la porte MCP — qui détient encore un badge actif parmi les partants ?
+    The registry of what an onboarding opens and what an offboarding must close: the person and
+    their contract, their account and groups, their laptop, their badge. The workflows act on the
+    directory, the device fleet and the badge readers; this registry keeps what they opened, and an
+    HR person's Claude queries it through the MCP gate — who among the leavers still holds an
+    active badge?
   defaults:
     sensitivity: internal
     mcp: {exposeObjects: true, exposeActions: true}

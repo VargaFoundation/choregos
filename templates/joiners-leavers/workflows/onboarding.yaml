@@ -15,20 +15,20 @@ kind: Workflow
 metadata:
   name: onboarding
   version: 1
-  description: Une arrivée — plan d'accès, compte et groupes à J-10, poste à J-7, badge remis, contrôle à J+1.
+  description: A joiner — access plan, account and groups ten days before, laptop seven days before, badge handed over, check the day after.
   inputs:
     type: object
     required: [nom, upn, date_arrivee, poste, groupe, groupe_sensible, adresse]
     properties:
-      nom: { type: string, title: Nom complet }
-      upn: { type: string, title: Identifiant (UPN) }
-      date_arrivee: { type: string, format: date, title: Date d'arrivée }
-      poste: { type: string, title: Poste occupé }
-      groupe: { type: string, title: Groupe d'accès du poste }
-      groupe_sensible: { type: string, title: Groupe sensible (validation renforcée) }
-      adresse: { type: string, title: Adresse de livraison du poste }
-      modele: { type: string, title: Modèle de poste, default: portable-14 }
-      badge_uid: { type: string, title: UID du badge }
+      nom: { type: string, title: Full name }
+      upn: { type: string, title: Sign-in name (UPN) }
+      date_arrivee: { type: string, format: date, title: Start date }
+      poste: { type: string, title: Job title }
+      groupe: { type: string, title: Access group of the role }
+      groupe_sensible: { type: string, title: Sensitive group (stronger approval) }
+      adresse: { type: string, title: Laptop delivery address }
+      modele: { type: string, title: Laptop model, default: portable-14 }
+      badge_uid: { type: string, title: Badge UID }
 initial: demande
 actors:
   coordinateur: { type: agent, role: coordination, agent: coordinateur-onboarding, max_turns: 40, max_minutes: 20 }
@@ -36,16 +36,16 @@ actors:
   accueil: { type: human, group: accueil, sla_hours: 8 }
   plateforme: { type: system }
 states:
-  demande: { display: Demande reçue, kind: wait }
-  plan: { display: Plan d'accès proposé, kind: wait }
-  valide: { display: Plan validé, kind: wait }
-  comptes: { display: Compte et groupe créés, kind: wait }
-  sensible: { display: Groupe sensible décidé, kind: wait }
-  poste: { display: "Poste commandé, inscrit, expédié", kind: wait }
-  badge: { display: Badge remis, kind: wait }
-  actif: { display: Badge actif, kind: wait }
-  a_revoir: { display: À revoir, kind: wait }
-  pret: { display: Arrivée prête, terminal: true }
+  demande: { display: Request received, kind: wait }
+  plan: { display: Access plan proposed, kind: wait }
+  valide: { display: Plan approved, kind: wait }
+  comptes: { display: Account and group created, kind: wait }
+  sensible: { display: Sensitive group decided, kind: wait }
+  poste: { display: "Laptop ordered, enrolled, shipped", kind: wait }
+  badge: { display: Badge handed over, kind: wait }
+  actif: { display: Badge active, kind: wait }
+  a_revoir: { display: To review, kind: wait }
+  pret: { display: Joiner ready, terminal: true }
 transitions:
   - id: t-plan
     from: demande
@@ -67,8 +67,8 @@ transitions:
     by: plateforme
     action:
       kind: arrivee.comptes
-      title: "Compte et groupe de {{ fields.nom }}"
-      justification: "arrivée le {{ fields.date_arrivee }}, poste {{ fields.poste }}"
+      title: "Account and group of {{ fields.nom }}"
+      justification: "starts on {{ fields.date_arrivee }} as {{ fields.poste }}"
       params: { upn: "{{ fields.upn }}", nom: "{{ fields.nom }}", groupe: "{{ fields.groupe }}" }
       effects:
         - effect: connector.call
@@ -101,7 +101,7 @@ transitions:
     by: plateforme
     action:
       kind: arrivee.groupe_sensible
-      title: "{{ fields.nom }} dans {{ fields.groupe_sensible }}"
+      title: "{{ fields.nom }} in {{ fields.groupe_sensible }}"
       params: { upn: "{{ fields.upn }}", groupe: "{{ fields.groupe_sensible }}" }
       effects:
         - effect: connector.call
@@ -123,7 +123,7 @@ transitions:
     by: plateforme
     action:
       kind: arrivee.poste
-      title: "Le poste de {{ fields.nom }} ({{ fields.modele | default('portable-14') }})"
+      title: "Laptop of {{ fields.nom }} ({{ fields.modele | default('portable-14') }})"
       params:
         reference: "{{ work_item.key }}"
         upn: "{{ fields.upn }}"
@@ -159,14 +159,14 @@ transitions:
     to: badge
     by: accueil
     task:
-      title: Remettre le badge
-      instructions: Remettre le badge en main propre à son porteur, puis le passer au lecteur pour lire son UID.
+      title: Hand over the badge
+      instructions: Hand the badge to its holder in person, then hold it to the reader to read its UID.
       form:
         type: object
         required: [badge_uid]
         properties:
-          badge_uid: { type: string, title: UID du badge, minLength: 8 }
-      attest: J'ai remis le badge en main propre à son porteur
+          badge_uid: { type: string, title: Badge UID, minLength: 8 }
+      attest: I handed the badge to its holder in person
     on_reject: a_revoir
 
   - id: t-activer
@@ -175,7 +175,7 @@ transitions:
     by: plateforme
     action:
       kind: arrivee.badge
-      title: "Activer le badge {{ fields.badge_uid }}"
+      title: "Activate badge {{ fields.badge_uid }}"
       params: { uid: "{{ fields.badge_uid }}", porteur: "{{ fields.upn }}" }
       effects:
         - effect: connector.call
@@ -195,7 +195,7 @@ transitions:
     by: plateforme
     action:
       kind: arrivee.controle
-      title: "Contrôle de l'arrivée de {{ fields.nom }}"
+      title: "Check the onboarding of {{ fields.nom }}"
       params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}", reference: "{{ work_item.key }}-poste" }
       effects:
         - effect: connector.call
@@ -207,6 +207,6 @@ transitions:
         - effect: verifier
           with:
             condition: "{{ effects[0].user is not none and effects[1].active and effects[2].state != 'unknown' }}"
-            motif: le compte, le badge actif et l'envoi du poste
+            motif: the account, the active badge and the laptop shipment
       not_before: fields.date_arrivee + 1d
     on_fail: { to: actif, max_attempts: 2, escalate_to: a_revoir }

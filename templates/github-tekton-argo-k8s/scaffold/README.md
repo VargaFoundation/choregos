@@ -1,8 +1,8 @@
-# Scaffolding du template `github-tekton-argo-k8s`
+# Scaffolding of the `github-tekton-argo-k8s` template
 
-Ces fichiers sont rendus en Jinja2 puis proposés en **pull request** sur le dépôt du projet
-lors du provisioning (étape `repo.scaffold_pr`). Rien n'est poussé directement sur la branche
-par défaut : l'équipe relit et fusionne.
+These files are rendered with Jinja2, then proposed as a **pull request** on the project's
+repository during provisioning (step `repo.scaffold_pr`). Nothing is pushed directly to the
+default branch: the team reviews and merges.
 
-Variables disponibles : `project` (config du projet), `inputs` (réponses du wizard),
+Available variables: `project` (the project's configuration), `inputs` (the wizard's answers),
 `workflow_yaml`, `policy_yaml`, `env`.

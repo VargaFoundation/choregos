@@ -5,7 +5,7 @@ metadata:
   name: team
   version: 1
   preset: team
-  description: Équipe de 3 à 10 personnes ; la spec et le merge passent par un humain, la prod par un capitaine.
+  description: "A team of 3 to 10 people: a human approves the spec and the merge, a release captain approves production."
 budgets:
   ticket_usd: { S: 15, M: 45, L: 110, XL: 220 }
   stage_usd:

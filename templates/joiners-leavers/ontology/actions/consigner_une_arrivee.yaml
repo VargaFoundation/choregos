@@ -2,8 +2,8 @@ apiVersion: choregos.dev/v1alpha1
 kind: ActionType
 metadata:
   name: consigner_une_arrivee
-  displayName: Consigner une arrivée
-  description: "Inscrit au registre la personne qui arrive et son contrat, quand sa demande d'arrivée est validée."
+  displayName: Record a joiner
+  description: "Records the person who is joining and their contract, once the onboarding request is approved."
 spec:
   target: {cardinality: none}
   parameters:
@@ -13,9 +13,9 @@ spec:
     poste: {type: string}
     manager: {type: string}
     date_arrivee: {type: date, required: true}
-    contrat: {type: string, required: true, description: "Référence du contrat."}
+    contrat: {type: string, required: true, description: "Contract reference."}
     nature: {type: string, enum: [cdi, cdd, alternance, stage, prestation], required: true}
-    fin: {type: date, description: "Fin du contrat, s'il en a une."}
+    fin: {type: date, description: "End of the contract, if it has one."}
   permissions:
     propose: [agent:coordinateur-onboarding, role:contributor]
     approve: policy:rh

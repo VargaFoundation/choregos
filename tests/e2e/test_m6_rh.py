@@ -31,8 +31,8 @@ ORG = "/api/v1/orgs/varga"
 CLE_ANNUAIRE = "secret-de-l-application-entra"
 CLE_PARC = "cle-du-parc"
 CLE_FOURNISSEUR = "jeton-du-fournisseur"
-ATTESTATION_BADGE = "J'ai remis le badge en main propre à son porteur"
-ATTESTATION_RECEPTION = "J'ai reçu ce poste et vérifié son numéro de série"
+ATTESTATION_BADGE = "I handed the badge to its holder in person"
+ATTESTATION_RECEPTION = "I received this laptop and checked its serial number"
 
 
 class Faux:

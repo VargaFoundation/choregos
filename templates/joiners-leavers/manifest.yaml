@@ -3,14 +3,15 @@ kind: Template
 metadata:
   name: joiners-leavers
   version: 1.0.0
-  display: Arrivées et départs (RH)
+  display: Joiners and leavers (HR)
   description: >-
-    Deux workflows sans dépôt ni CI. L'arrivée : le plan d'accès préparé par un agent et validé par
-    les RH, le compte et son groupe à J-10, le groupe sensible sur validation ré-authentifiée, le
-    poste commandé à l'agent du fournisseur puis inscrit au parc et expédié à J-7, le badge remis en
-    main propre — une tâche, sa preuve —, le contrôle à J+1. Le départ : à J0 le compte désactivé,
-    ses sessions révoquées et le badge coupé ; le poste repris, reçu et effacé. Chaque écriture dans
-    l'annuaire, le parc, le transporteur ou les lecteurs de badges est une action gouvernée.
+    Two workflows with no repository and no CI. Onboarding: the access plan prepared by an agent and
+    approved by HR, the account and its group ten days before the start date, the sensitive group on
+    a re-authenticated approval, the laptop ordered from the supplier's agent then enrolled in the
+    fleet and shipped seven days before, the badge handed over in person — a task, with its proof —,
+    a check the day after. Offboarding: on the last day the account is disabled, its sessions revoked
+    and the badge cut; the laptop is collected, received and wiped. Every write to the directory, the
+    fleet, the carrier or the badge readers is a governed action.
 requires:
   # Le projet : ses tickets vivent dans Choregos.
   connectors:

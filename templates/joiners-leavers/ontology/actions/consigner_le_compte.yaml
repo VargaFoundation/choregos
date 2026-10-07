@@ -2,15 +2,15 @@ apiVersion: choregos.dev/v1alpha1
 kind: ActionType
 metadata:
   name: consigner_le_compte
-  displayName: Consigner le compte
-  description: "Inscrit au registre le compte que le workflow d'arrivée a créé dans l'annuaire, et ses groupes."
+  displayName: Record the account
+  description: "Records the account the onboarding workflow created in the directory, and its groups."
 spec:
   target: {objectType: collaborateur, cardinality: one}
   parameters:
     upn: {type: string, required: true}
     groupes: {type: "array<string>"}
   preconditions:
-    - {name: pas_parti, expr: "target.statut != 'parti'", message: "On n'ouvre rien au registre pour une personne partie."}
+    - {name: pas_parti, expr: "target.statut != 'parti'", message: "Nothing is opened in the registry for a person who has left."}
   permissions:
     propose: [agent:coordinateur-onboarding, role:contributor]
     approve: policy:rh

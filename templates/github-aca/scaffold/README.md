@@ -1,15 +1,15 @@
-# Scaffold du template `github-aca`
+# Scaffold of the `github-aca` template
 
-Ces fichiers sont déposés dans le dépôt applicatif par une PR, jamais écrits directement :
-un humain les relit et les fusionne comme n'importe quel changement.
+These files are added to the application repository through a pull request, never written
+directly: a human reviews and merges them like any other change.
 
-| Fichier | Rôle |
+| File | Role |
 | :-- | :-- |
-| `AGENTS.md.j2` | ce que l'agent doit savoir du dépôt : commandes, conventions, DoD |
-| `.choregos/workflow.yaml.j2` | le workflow du projet, dérivé du template choisi |
-| `.choregos/policy.yaml.j2` | budgets, approbations, périmètres |
-| `CODEOWNERS.j2` | qui relit quoi |
-| `.github/PULL_REQUEST_TEMPLATE.md` | le gabarit de PR |
+| `AGENTS.md.j2` | what the agent must know about the repository: commands, conventions, definition of done |
+| `.choregos/workflow.yaml.j2` | the project's workflow, derived from the chosen template |
+| `.choregos/policy.yaml.j2` | budgets, approvals, scopes |
+| `CODEOWNERS.j2` | who reviews what |
+| `.github/PULL_REQUEST_TEMPLATE.md` | the pull request template |
 
-Le template `github-aca` ne dépose pas de pipeline Tekton : les runs d'agents tournent sur
-Azure Container Apps, déclenchés par l'orchestrateur, pas par un `PipelineRun` dans le dépôt.
+The `github-aca` template adds no Tekton pipeline: agent runs execute on Azure Container Apps,
+started by the orchestrator, not by a `PipelineRun` in the repository.

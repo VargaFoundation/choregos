@@ -1,30 +1,30 @@
 ---
 name: procedure-onboarding
-description: Ce qu'une arrivée demande, dans quel ordre, et ce qui exige une validation renforcée.
+description: What an onboarding requires, in which order, and what needs a stronger approval.
 ---
 
-# La procédure d'une arrivée
+# The onboarding procedure
 
-Une arrivée se prépare en cinq temps ; chacun a sa date, calculée depuis la **date d'arrivée**.
+An onboarding is prepared in five steps; each has its date, counted from the **start date**.
 
-| Quand | Quoi | Qui décide |
+| When | What | Who decides |
 |:--|:--|:--|
-| à la demande | le plan d'accès, préparé par l'agent | une personne des RH le valide |
-| J-10 | le compte (UPN) et son groupe d'accès | la politique de l'organisation |
-| juste après | le **groupe sensible** | une personne, ré-authentifiée |
-| J-7 | le poste : commandé au fournisseur, inscrit au parc, expédié | la politique de l'organisation |
-| le jour J | le badge, remis en main propre | l'accueil — une tâche, attestée |
-| J+1 | le contrôle : compte, badge actif, poste livré | la plateforme |
+| on request | the access plan, prepared by the agent | a person from HR approves it |
+| 10 days before | the account (UPN) and its access group | the organisation's policy |
+| right after | the **sensitive group** | a person, re-authenticated |
+| 7 days before | the laptop: ordered from the supplier, enrolled in the fleet, shipped | the organisation's policy |
+| on the start date | the badge, handed over in person | the front desk — a task, attested |
+| the day after | the check: account, active badge, laptop delivered | the platform |
 
-## Ce que le plan d'accès doit dire
+## What the access plan must say
 
-- l'identifiant (UPN) et le nom, tels que l'annuaire les recevra ;
-- le groupe d'accès et le groupe sensible, et s'ils correspondent au poste (skill `profils-d-acces`) ;
-- le modèle de poste et l'adresse de livraison ;
-- **les écarts** : un groupe qui ne correspond pas au poste, un identifiant déjà pris, une date
-  trop proche pour tenir J-10. Un écart se signale ; il ne se corrige pas en silence.
+- the sign-in name (UPN) and the name, as the directory will receive them;
+- the access group and the sensitive group, and whether they match the job (skill `profils-d-acces`);
+- the laptop model and the delivery address;
+- **the mismatches**: a group that does not match the job, a sign-in name already taken, a start
+  date too close to keep the ten-day lead. A mismatch is reported; it is never corrected silently.
 
-## Ce que le plan ne fait pas
+## What the plan does not do
 
-Il ne crée rien. Chaque écriture — compte, groupe, commande, inscription, badge — est une **action
-gouvernée** que la plateforme propose à sa date, et que la politique ou une personne décide.
+It creates nothing. Every write — account, group, order, enrolment, badge — is a **governed
+action** that the platform proposes on its date, and that the policy or a person decides.
