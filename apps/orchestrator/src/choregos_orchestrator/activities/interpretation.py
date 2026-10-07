@@ -166,7 +166,8 @@ def activite_de(exc: BaseException) -> str | None:
 
 @activity.defn(name="signal_train")
 async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
-    """Annonce au train de l'environnement qu'un ticket est prêt à embarquer."""
+    """Annonce au train de l'environnement qu'un ticket est prêt à embarquer, avec l'approbation
+    que son workflow exige du départ (ADR 0041) — absente des embarquements d'avant."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
@@ -185,6 +186,7 @@ async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
                 "risk": item.risk,
                 "labels": [],
                 "pr_url": item.pr_url,
+                **({"approval": payload["approval"]} if payload.get("approval") else {}),
             },
         )
         return {"signalled": True}

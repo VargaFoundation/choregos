@@ -12,6 +12,7 @@ from typing import Annotated, Any
 
 from choregos_contracts import InboundEvent, InboundEventType
 from choregos_core import utcnow
+from choregos_core.dsl.trains import approbation_du_train, env_du_train, train_apres_fusion
 from fastapi import APIRouter, Header, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -23,7 +24,7 @@ from ..errors import unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
-from ..services import Naissance, nouveau_ticket
+from ..services import Naissance, nouveau_ticket, workflow_du_ticket, workflow_model
 from ..temporal import deliver_inbound, get_temporal, interpreter_id, train_id
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
@@ -142,21 +143,33 @@ async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
             item.temporal_wf_id = workflow_id
         await deliver_inbound(project.slug, key, event)
         if event.type == InboundEventType.PR_MERGED:
-            await get_temporal().signal(
-                train_id(project.slug, "prod"),
-                "merged",
-                {
-                    "work_item_key": key,
-                    "sha": event.payload.get("sha", ""),
-                    "merged_at": utcnow().isoformat(),  # borne de départ du délai de livraison
-                    "risk": item.risk,
-                    "labels": event.payload.get("labels", []),
-                    "pr_url": event.payload.get("pr_url"),
-                    "title": item.title,
-                },
-            )
+            await _embarquer(session, project, item, event)
         delivered += 1
     return delivered
+
+
+async def _embarquer(session: Any, project: Project, item: WorkItem, event: InboundEvent) -> None:
+    """Le ticket fusionné monte dans le train que SON workflow prend après la fusion, avec l'approbation
+    qu'il y exige (ADR 0041). Tout ticket fusionné montait dans le train de PROD : une étude qui
+    fusionne un ADR partait en production, une livraison prudente sautait son staging."""
+    workflow = workflow_model(await workflow_du_ticket(session, item))
+    train = train_apres_fusion(workflow)
+    if train is None:
+        return
+    await get_temporal().signal(
+        train_id(project.slug, env_du_train(train)),
+        "merged",
+        {
+            "work_item_key": item.tracker_key,
+            "sha": event.payload.get("sha", ""),
+            "merged_at": utcnow().isoformat(),  # borne de départ du délai de livraison
+            "risk": item.risk,
+            "labels": event.payload.get("labels", []),
+            "pr_url": event.payload.get("pr_url"),
+            "title": item.title,
+            "approval": dict(approbation_du_train(workflow, train)),
+        },
+    )
 
 
 # ───────────────────────────── GitHub ─────────────────────────────
