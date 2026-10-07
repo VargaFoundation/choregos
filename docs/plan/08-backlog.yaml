@@ -25,6 +25,7 @@ streams:
   S18: "Registre d'agents et bibliothèque de skills (ADR 0033)"
   S19: "Connecteurs par capacités et serveurs MCP (ADR 0034)"
   S20: "Actions gouvernées dans le cœur et scénario RH arrivées/départs (ADR 0035)"
+  S21: "Utilisabilité : console lisible, anglais partout, catalogue d'agents, gouvernance appliquée, projet de développement (revue produit du 2026-10-07)"
 
 stories:
 
@@ -1644,3 +1645,228 @@ stories:
     depends_on: [S20-07]
     acceptance:
       - "Un projet né sans section agent ni models hérite du backend et des profils du déploiement ; un pod de runner mort donne son code de sortie et son sens"
+  - id: S21-01
+    title: "Les grilles arbitraires de la console séparent leurs pistes par `_` (Tailwind 4)"
+    stream: S21
+    sprint: 12
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "Aucune grille arbitraire ne sépare ses pistes par une virgule hors d'une fonction ; le panneau de validation se tient à côté de l'éditeur"
+  - id: S21-02
+    title: "Le mode démo de la console parle anglais"
+    stream: S21
+    sprint: 12
+    priority: 2
+    size: S
+    depends_on: []
+    acceptance:
+      - "Aucune chaîne exportée par les fixtures ne ressemble à du français ; une erreur sans détail se dit en anglais"
+  - id: S21-03
+    title: "Les skills dans la barre du haut, « AI clients », un glossaire des quatre notions"
+    stream: S21
+    sprint: 12
+    priority: 3
+    size: S
+    depends_on: [S21-02]
+    acceptance:
+      - "/skills a son entrée ; le glossaire dit agent, skill, connector, client ; l'en-tête tient sur une ligne à 1280 px"
+  - id: S21-04
+    title: "/admin/connectors en sections : systèmes métier, serveurs MCP, outils de livraison des projets"
+    stream: S21
+    sprint: 12
+    priority: 4
+    size: S
+    depends_on: [S21-03]
+    acceptance:
+      - "Un serveur MCP n'apparaît jamais parmi les systèmes métier ; les outils de livraison des projets se lisent, en lecture"
+  - id: S21-05
+    title: "L'éditeur YAML est CodeMirror, empaqueté (ADR 0038)"
+    stream: S21
+    sprint: 12
+    priority: 5
+    size: M
+    depends_on: [S21-01]
+    acceptance:
+      - "L'éditeur se rend sous la CSP de production, sans violation ni requête hors de la console"
+  - id: S21-06
+    title: "Un seul brouillon pour le YAML, la carte et la vue processus"
+    stream: S21
+    sprint: 12
+    priority: 6
+    size: M
+    depends_on: [S21-05]
+    acceptance:
+      - "Une seule publication pour les trois vues ; une version publiée pendant l'édition ne s'écrase pas en silence"
+  - id: S21-07
+    title: "La carte d'un workflow à plat, cases colorées par qui agit (ADR 0038)"
+    stream: S21
+    sprint: 12
+    priority: 7
+    size: M
+    depends_on: [S21-06]
+    acceptance:
+      - "18 états se lisent sans zoom ni débordement ; chaque case dit qui agit en toutes lettres"
+  - id: S21-08
+    title: "Revue produit du 2026-10-07 et flux S21"
+    stream: S21
+    sprint: 12
+    priority: 8
+    size: S
+    depends_on: []
+    acceptance:
+      - "La revue dit ce qui ne tient pas, ce que S21 corrige et ce qui est proposé ensuite"
+  - id: S21-09
+    title: "Les textes livrés en anglais : gabarits, presets, joiners-leavers (ADR 0039)"
+    stream: S21
+    sprint: 12
+    priority: 9
+    size: S
+    depends_on: [S21-08]
+    acceptance:
+      - "Aucun texte livré (états, descriptions, tâches, agents, skills) ne ressemble à du français"
+  - id: S21-10
+    title: "Les messages du cœur en anglais : validateur, analyseur, carte, garanties, moteur, politique"
+    stream: S21
+    sprint: 12
+    priority: 10
+    size: M
+    depends_on: [S21-09]
+    acceptance:
+      - "Un balayage AST refuse un message français du validateur ; les étiquettes de la carte sont en anglais"
+  - id: S21-11
+    title: "Les messages des contrats en anglais (contract-change)"
+    stream: S21
+    sprint: 12
+    priority: 11
+    size: S
+    depends_on: [S21-10]
+    acceptance:
+      - "Les messages et descriptions des schémas sont en anglais"
+  - id: S21-12
+    title: "Les erreurs de l'API en anglais"
+    stream: S21
+    sprint: 12
+    priority: 12
+    size: M
+    depends_on: [S21-10]
+    acceptance:
+      - "Un balayage AST des erreurs de l'API ne trouve plus de français, sauf une liste qui ne peut que raccourcir"
+  - id: S21-13
+    title: "Les textes de l'orchestrateur en anglais : commentaire de suivi, notifications, corps de PR"
+    stream: S21
+    sprint: 12
+    priority: 13
+    size: S
+    depends_on: [S21-10]
+    acceptance:
+      - "Le commentaire de suivi et le corps de PR sont en anglais ; les historiques rejouent"
+  - id: S21-14
+    title: "Les playbooks, le runner et les outils en anglais"
+    stream: S21
+    sprint: 12
+    priority: 14
+    size: M
+    depends_on: [S21-10]
+    acceptance:
+      - "Les playbooks, task.md et les descriptions d'outils sont en anglais ; les évals passent"
+  - id: S21-15
+    title: "Le catalogue d'agents au contrat (contract-change)"
+    stream: S21
+    sprint: 13
+    priority: 1
+    size: S
+    depends_on: [S21-08]
+    acceptance:
+      - "GET /orgs/{org}/agent-catalogue, install, connect déclarés dans l'OpenAPI"
+  - id: S21-16
+    title: "Le catalogue d'agents intégré, et un agent du registre reçoit le ticket (ADR 0040)"
+    stream: S21
+    sprint: 13
+    priority: 2
+    size: M
+    depends_on: [S21-15]
+    acceptance:
+      - "Chaque rôle du paquet a son agent au catalogue ; un agent du registre reçoit le ticket, la spec et le plan"
+  - id: S21-17
+    title: "Installer et mettre à jour un agent du catalogue ; un workflow qui en nomme un l'installe"
+    stream: S21
+    sprint: 13
+    priority: 3
+    size: M
+    depends_on: [S21-16]
+    acceptance:
+      - "Installer n'écrase rien ; une mise à jour publie la version suivante seulement si elle change"
+  - id: S21-18
+    title: "Les clients externes en un clic, et l'onglet catalogue de /agents"
+    stream: S21
+    sprint: 13
+    priority: 4
+    size: M
+    depends_on: [S21-17]
+    acceptance:
+      - "Connecter Claude Code crée l'agent externe, frappe un jeton mcp et le rattache ; un client du cloud n'est proposé qu'avec OAuth et https"
+  - id: S21-19
+    title: "Les gabarits livrés nomment des agents du catalogue"
+    stream: S21
+    sprint: 13
+    priority: 5
+    size: S
+    depends_on: [S21-17]
+    acceptance:
+      - "default-simple, full-auto et advanced nomment leurs agents ; la traversée complète passe"
+  - id: S21-20
+    title: "Deux garanties : outputs_in et markdown_sections"
+    stream: S21
+    sprint: 13
+    priority: 6
+    size: S
+    depends_on: [S21-08]
+    acceptance:
+      - "Une revue qui demande des changements ne passe plus ; un ADR sans « Decision Outcome » ne passe pas"
+  - id: S21-21
+    title: "Le train prévient le ticket, l'approbation suit ce que la release livre (ADR 0041)"
+    stream: S21
+    sprint: 13
+    priority: 7
+    size: L
+    depends_on: [S21-20]
+    acceptance:
+      - "Le ticket avance quand son train a livré, sans événement injecté ; un lot sans exigence part sans approbation, un lot qui en contient une attend le capitaine"
+  - id: S21-22
+    title: "Ce dont le gabarit de développement a besoin : raison d'un refus, politique locale, étiquettes, notes de version"
+    stream: S21
+    sprint: 13
+    priority: 8
+    size: S
+    depends_on: [S21-21]
+    acceptance:
+      - "La raison d'un refus humain parvient à l'agent suivant ; un gabarit livre sa politique"
+  - id: S21-23
+    title: "Le gabarit github-software-delivery : dev-simple, study, dev-complex"
+    stream: S21
+    sprint: 13
+    priority: 9
+    size: M
+    depends_on: [S21-19, S21-22]
+    acceptance:
+      - "dev-simple va du ticket à la production vérifiée sans humain ; dev-complex attend trois décisions ; study fusionne un ADR MADR 4 approuvé"
+  - id: S21-24
+    title: "Une CD de démonstration servie par le pod des faux"
+    stream: S21
+    sprint: 13
+    priority: 10
+    size: S
+    depends_on: [S21-23]
+    acceptance:
+      - "Un train de démonstration promeut, vérifie et revient en arrière sur le dev ; refusée en staging et en prod"
+  - id: S21-25
+    title: "Le projet de développement sur le locataire dev"
+    stream: S21
+    sprint: 13
+    priority: 11
+    size: S
+    depends_on: [S21-23, S21-24]
+    acceptance:
+      - "Un ticket par workflow, mesuré sur le dev, dans essai/projet-dev/RESULTATS.md"
