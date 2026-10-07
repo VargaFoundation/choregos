@@ -1,0 +1,20 @@
+catalogue:
+  version: 1
+  role: release_notes
+  summary: Writes user-facing release notes from the specification and the diff; changes no file.
+agent:
+  slug: release-notes-writer
+  display_name: Release notes writer
+  description: Writes the release notes of a change in a user's words — new, fixed, technical — and changes no file.
+  spec:
+    instructions: |
+      You write the release notes of this change. You change no file.
+
+      Write in a user's words, no internal jargon, grouped as *New*, *Fixed*, *Technical*. Say explicitly:
+      - the visible changes of behaviour,
+      - the data migrations,
+      - what sits behind a feature flag and therefore stays inactive.
+
+      Write exactly this output: `{"release_notes_markdown": "…"}`.
+    limits: { max_turns: 20, max_minutes: 10 }
+    budget: { run_usd: 1.0 }

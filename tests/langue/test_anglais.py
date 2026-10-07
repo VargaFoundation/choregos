@@ -75,10 +75,12 @@ YAML_LIVRES = [
     *sorted((RACINE / "packages/core/src/choregos_core/presets").glob("*.yaml")),
     *sorted((RACINE / "templates").rglob("*.yaml")),
     *sorted((RACINE / "demo/workflows").glob("*.yaml")),
+    *sorted((RACINE / "packages/core/src/choregos_core/catalogue_d_agents").rglob("*.yaml")),
 ]
 TEXTES_LIVRES = sorted(
     chemin
-    for chemin in (RACINE / "templates").rglob("*")
+    for dossier in ("templates", "packages/core/src/choregos_core/catalogue_d_agents")
+    for chemin in (RACINE / dossier).rglob("*")
     if chemin.is_file() and chemin.suffix in {".md", ".j2"}
 )
 
