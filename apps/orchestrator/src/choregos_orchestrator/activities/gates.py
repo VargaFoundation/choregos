@@ -35,7 +35,9 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         changed: list[str] = []
         additions = deletions = 0
         secrets: list[str] = []
-        needs_diff = any(g["name"] in {"scope_respected", "diff_size_max", "no_secrets"} for g in gates)
+        ajoute: dict[str, str] = {}
+        lisent_le_diff = {"scope_respected", "diff_size_max", "no_secrets", "markdown_sections"}
+        needs_diff = any(g["name"] in lisent_le_diff for g in gates)
         # Sans dépôt, il n'y a pas de diff — et pas d'erreur non plus : la garantie refusera
         # d'elle-même (`diff_available`), ce qui est exactement ce qu'on veut qu'elle fasse.
         depot = bundle.config.repo
@@ -54,6 +56,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 for file in diff.files:
                     if file.patch:
                         secrets.extend(scan_secrets(file.patch))
+                        ajoute[file.path] = texte_ajoute(file.patch)
 
         ci_status = None
         review_state = None
@@ -99,6 +102,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             # `needs_diff` dit qu'une garantie en dépend ; `diff` dit si on l'a obtenu.
             diff_available=(diff is not None) if needs_diff else True,
             required_flag=payload.get("required_flag"),
+            added_text=ajoute,
         )
         outcomes: list[GateOutcome] = []
         for gate in gates:
@@ -122,6 +126,13 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             }
             for o in outcomes
         ]
+
+
+def texte_ajoute(patch: str) -> str:
+    """Les lignes qu'un patch unifié AJOUTE, sans leur `+` : un fichier neuf, tout entier."""
+    return "\n".join(
+        ligne[1:] for ligne in patch.splitlines() if ligne.startswith("+") and not ligne.startswith("+++")
+    )
 
 
 async def _journaliser(session: Any, run: Run, outcomes: list[GateOutcome]) -> None:

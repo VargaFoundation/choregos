@@ -53,6 +53,10 @@ class GateContext:
     #: L'état de l'action gouvernée que la transition a proposée (S20-05) — lu en base, jamais
     #: déduit : `action_succeeded` ne passe que sur `succeeded`.
     action_status: str | None = None
+    #: Le texte que la branche AJOUTE, fichier par fichier : les lignes `+` du diff cumulé (un
+    #: fichier neuf l'est tout entier). `markdown_sections` lit ce qui est écrit, pas ce que
+    #: l'agent raconte en avoir écrit.
+    added_text: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -171,6 +175,80 @@ def _evidence_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         "evidence_present",
         not missing,
         detail="evidence complete" if not missing else f"missing evidence: {', '.join(missing)}",
+    )
+
+
+@gate("outputs_in")
+def _outputs_in(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Les sorties nommées prennent une valeur permise : `{values: {verdict: [approve]}}`.
+
+    Le moteur ne lit pas le verdict d'une revue : une revue qui demandait des changements passait
+    `outputs_present` (la sortie existe) et le ticket avançait. Ici, la valeur compte.
+    """
+    permises: dict[str, list[Any]] = dict(params.get("values") or {})
+    if not permises:
+        return GateOutcome(
+            "outputs_in", False, detail="no value required: `values:` missing on the guarantee"
+        )
+    if ctx.result is None:
+        return GateOutcome("outputs_in", False, detail="no stage result")
+    produites = ctx.result.outputs.model_dump(exclude_none=True)
+    ecarts = [
+        f"{cle} = {produites.get(cle)!r} (allowed: {', '.join(str(v) for v in valeurs)})"
+        for cle, valeurs in permises.items()
+        if str(produites.get(cle)) not in {str(v) for v in valeurs}
+    ]
+    return GateOutcome(
+        "outputs_in",
+        not ecarts,
+        detail="outputs within the allowed values" if not ecarts else "; ".join(ecarts),
+        annotations=ecarts,
+    )
+
+
+def _titres(texte: str) -> set[str]:
+    """Les titres Markdown d'un texte, sans dièses ni casse : `## Decision Outcome` → `decision outcome`."""
+    return {
+        ligne.lstrip("#").strip().lower()
+        for ligne in texte.splitlines()
+        if ligne.startswith("#") and ligne.lstrip("#").startswith(" ")
+    }
+
+
+@gate("markdown_sections", needs=("scm",))
+def _markdown_sections(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Les documents que la branche ajoute portent leurs sections : `{paths, sections, patterns,
+    min_files}`. Un ADR au format MADR 4 doit dire son contexte, ses options et sa décision — et le
+    dire DANS le fichier, lu dans le diff, pas dans le résumé de l'agent."""
+    if not ctx.diff_available:
+        return _sans_diff("markdown_sections")
+    chemins = [str(c) for c in params.get("paths") or []]
+    if not chemins:
+        return GateOutcome("markdown_sections", False, detail="no path: `paths:` missing on the guarantee")
+    fichiers = {chemin: texte for chemin, texte in ctx.added_text.items() if matches_any(chemin, chemins)}
+    minimum = int(params.get("min_files", 1))
+    if len(fichiers) < minimum:
+        return GateOutcome(
+            "markdown_sections",
+            False,
+            detail=f"{len(fichiers)} file(s) matching {', '.join(chemins)} in the change, {minimum} expected",
+        )
+    manques = []
+    for chemin, texte in sorted(fichiers.items()):
+        titres = _titres(texte)
+        manques += [
+            f"{chemin}: section “{s}” missing"
+            for s in params.get("sections") or []
+            if str(s).lower() not in titres
+        ]
+        manques += [
+            f"{chemin}: {m!r} not found" for m in params.get("patterns") or [] if not re.search(str(m), texte)
+        ]
+    return GateOutcome(
+        "markdown_sections",
+        not manques,
+        detail=f"{len(fichiers)} document(s) with their sections" if not manques else "; ".join(manques),
+        annotations=manques,
     )
 
 

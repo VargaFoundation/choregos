@@ -245,3 +245,84 @@ def test_tool_called_lit_le_registre_pas_le_recit() -> None:
 
     # demandée sans rien exiger : elle refuse, comme les autres garanties sans matière
     assert not evaluate("tool_called", avec_appel).passed
+
+
+# ───────────────────────── outputs_in et markdown_sections (S21-20) ─────────────────────────
+
+
+def _avec_sorties(**sorties: object) -> StageResult:
+    return StageResult(status=StageStatus.DONE, summary="ok", outputs=sorties)  # type: ignore[arg-type]
+
+
+def test_outputs_in_refuse_une_revue_qui_demande_des_changements() -> None:
+    valeurs = {"values": {"verdict": ["approve"]}}
+    assert evaluate("outputs_in", GateContext(result=_avec_sorties(verdict="approve")), valeurs).passed
+    refus = evaluate("outputs_in", GateContext(result=_avec_sorties(verdict="request_changes")), valeurs)
+    assert refus.blocking and "verdict = 'request_changes' (allowed: approve)" in refus.detail
+    assert evaluate("outputs_in", GateContext(result=_avec_sorties()), valeurs).blocking, "absente : refusée"
+    assert evaluate("outputs_in", GateContext(), valeurs).blocking, "sans résultat : refusée"
+    assert not evaluate("outputs_in", GateContext(result=_avec_sorties(verdict="approve")), {}).passed
+
+
+def test_outputs_in_lit_plusieurs_sorties_ensemble() -> None:
+    valeurs = {"values": {"size": ["S", "M"], "risk": ["low", "medium"]}}
+    assert evaluate("outputs_in", GateContext(result=_avec_sorties(size="M", risk="low")), valeurs).passed
+    trop_gros = evaluate("outputs_in", GateContext(result=_avec_sorties(size="L", risk="low")), valeurs)
+    assert trop_gros.annotations == ["size = 'L' (allowed: S, M)"]
+
+
+ADR = """---
+status: "proposed"
+---
+
+# Use row-level security for tenant isolation
+
+## Context and Problem Statement
+
+Tenants share one database.
+
+## Considered Options
+
+* Row-level security
+* One schema per tenant
+
+## Decision Outcome
+
+Chosen option: "Row-level security", because it keeps one schema.
+"""
+MADR = {
+    "paths": ["docs/adr/[0-9][0-9][0-9][0-9]-*.md"],
+    "sections": ["Context and Problem Statement", "Considered Options", "Decision Outcome"],
+    "patterns": ['Chosen option: "'],
+}
+
+
+def test_markdown_sections_lit_le_texte_ajoute_pas_le_recit() -> None:
+    bon = GateContext(added_text={"docs/adr/0042-rls.md": ADR})
+    assert evaluate("markdown_sections", bon, MADR).passed
+    sans_decision = ADR.split("## Decision Outcome", maxsplit=1)[0]
+    mauvais = evaluate(
+        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": sans_decision}), MADR
+    )
+    assert mauvais.blocking
+    assert "docs/adr/0042-rls.md: section “Decision Outcome” missing" in mauvais.annotations
+    assert any("not found" in a for a in mauvais.annotations), "le motif « Chosen option » non plus"
+    # Le récit de l'agent ne compte pas : seul le texte que la branche ajoute.
+    ailleurs = GateContext(result=_avec_sorties(adr_markdown=ADR), added_text={"README.md": ADR})
+    assert "0 file(s) matching" in evaluate("markdown_sections", ailleurs, MADR).detail
+
+
+def test_markdown_sections_refuse_sans_diff_et_sans_chemin() -> None:
+    assert "diff unavailable" in evaluate("markdown_sections", GateContext(diff_available=False), MADR).detail
+    assert evaluate("markdown_sections", GateContext(added_text={"docs/adr/0042-x.md": ADR}), {}).blocking
+
+
+def test_un_statut_accepte_se_verifie_par_un_motif() -> None:
+    accepte = {"paths": MADR["paths"], "patterns": ['(?m)^status: "?accepted"?\\s*$']}
+    assert not evaluate(
+        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": ADR}), accepte
+    ).passed
+    ecrit = ADR.replace('status: "proposed"', 'status: "accepted"')
+    assert evaluate(
+        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": ecrit}), accepte
+    ).passed

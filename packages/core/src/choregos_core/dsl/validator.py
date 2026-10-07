@@ -437,6 +437,8 @@ GATES_A_MATIERE: dict[str, tuple[str, str]] = {
     "outputs_present": ("outputs", "`outputs:` on the transition"),
     "evidence_facts": ("keys", "`keys:` as a parameter of the guarantee"),
     "tool_called": ("tools", "`tools:` as a parameter of the guarantee"),
+    "outputs_in": ("values", "`values:` as a parameter of the guarantee"),
+    "markdown_sections": ("paths", "`paths:` as a parameter of the guarantee"),
 }
 
 

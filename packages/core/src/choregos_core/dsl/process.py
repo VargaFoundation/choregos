@@ -33,6 +33,8 @@ RESUMES: dict[str, str] = {
     "flag_present": "the change sits behind a feature flag",
     "no_secrets": "no secret leaks into the change",
     "outputs_present": "the declared outputs are present",
+    "outputs_in": "the outputs take an allowed value (a review's verdict, a size)",
+    "markdown_sections": "the documents the change adds carry their required sections",
     "provenance_signed": "the build provenance is signed",
     "review_approved": "the review is approved",
     "scans_ok": "security scans find nothing blocking",

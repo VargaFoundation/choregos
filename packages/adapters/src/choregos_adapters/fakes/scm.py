@@ -31,11 +31,16 @@ class FakeScm:
 
     # ───────────────────────── scripting ─────────────────────────
 
-    def set_diff(self, repo: str, base: str, head: str, files: list[tuple[str, int, int]]) -> None:
+    def set_diff(self, repo: str, base: str, head: str, files: list[tuple[Any, ...]]) -> None:
+        """`(chemin, ajouts, retraits)`, ou `(chemin, ajouts, retraits, patch)` quand une garantie
+        lit ce que la branche écrit (`markdown_sections`)."""
         self._diffs[(repo, base, head)] = DiffSummary(
             base=base,
             head=head,
-            files=[DiffFile(path=p, additions=a, deletions=d) for p, a, d in files],
+            files=[
+                DiffFile(path=f[0], additions=f[1], deletions=f[2], patch=f[3] if len(f) > 3 else None)
+                for f in files
+            ],
         )
 
     def atlantis(self, conclusion: str = "success") -> None:
