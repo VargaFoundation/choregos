@@ -4,6 +4,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { Card, Empty, ErrorNote } from "@/components/ui";
+import { TexteIllisible } from "@/components/workflows/texte-illisible";
 import { WorkflowLegend, areteDessinee } from "@/components/workflow-graph";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { PanneauDEtat, PanneauDeTransition } from "@/components/workflows/panneaux";
@@ -35,7 +36,8 @@ export default function MapPage() {
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
       <Card title="map">
-        <div className="space-y-3">
+        <div className={brouillon.grapheObsolete ? "space-y-3 opacity-60" : "space-y-3"}>
+          {brouillon.grapheObsolete && <TexteIllisible />}
           <WorkflowLegend graph={graph} />
           <WorkflowGraph graph={graph} onSelect={(kind, id) => setChoix({ kind, id })} />
         </div>

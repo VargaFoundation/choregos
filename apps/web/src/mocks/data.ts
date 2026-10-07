@@ -935,7 +935,14 @@ export const projectRequirements: ProjectRequirement[] = [
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
-  if (method === "POST" && path === "/workflows/validate") return workflowValidation as T;
+  if (method === "POST" && path === "/workflows/validate") {
+    // Comme l'API : un texte sans `states:` n'est pas un workflow, et ne se dessine pas.
+    const texte = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
+    if (!/^states:/m.test(texte)) {
+      return { valid: false, errors: [{ code: "workflow.states", message: "a workflow declares its states", line: 1, column: 1 }], warnings: [] } as T;
+    }
+    return workflowValidation as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
     return { id: "t2", name: "okta", token: "scim_demo_shown_once" } as T;

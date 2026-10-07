@@ -61,3 +61,38 @@ test("l'éditeur de la politique d'un projet se rend aussi, sous la même CSP", 
   await expect(page.getByLabel("policy YAML")).toContainText("per_ticket_usd");
   expect(await bilan()).toEqual({ violations: [], dehors: [] });
 });
+
+test("le texte tapé dans l'onglet YAML survit au passage par la carte, et se publie d'un seul bouton", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/default-simple/yaml");
+  const contenu = page.getByLabel("YAML of default-simple");
+  await contenu.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("# kept across tabs");
+  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  await page.getByRole("link", { name: "map", exact: true }).click();
+  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  await page.getByRole("link", { name: "YAML", exact: true }).click();
+  await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# kept across tabs");
+  // Un seul bouton de publication, celui de la barre du brouillon.
+  await expect(page.getByRole("button", { name: /^publish/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "publish v2" })).toBeEnabled();
+  await page.getByRole("button", { name: "publish v2" }).click();
+  await expect(page.getByText(/published — running items finish on their version/)).toBeVisible();
+});
+
+test("un texte invalide se souligne dans la marge et interdit de publier", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/default-simple/yaml");
+  const contenu = page.getByLabel("YAML of default-simple");
+  await contenu.click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.type("kind: Workflow");
+  await expect(page.getByTestId("validation-yaml")).toContainText("a workflow declares its states");
+  await expect(page.getByTestId("yaml-editor").locator(".cm-lint-marker-error")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "publish v2" })).toBeDisabled();
+  // Cliquer la ligne d'une erreur ramène le curseur dans l'éditeur, à cette ligne.
+  await page.getByTestId("validation-yaml").getByRole("button", { name: "line 1" }).click();
+  await expect(page.getByTestId("yaml-editor").locator(".cm-editor.cm-focused")).toHaveCount(1);
+  // La carte garde la dernière version valide, et le dit.
+  await page.getByRole("link", { name: "map", exact: true }).click();
+  await expect(page.getByTestId("texte-illisible")).toBeVisible();
+});
