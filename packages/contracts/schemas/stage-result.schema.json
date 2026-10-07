@@ -28,7 +28,7 @@
         "string",
         "null"
       ],
-      "description": "Cause quand status != done : limit, budget, scope, invalid_result, agent_error, ci…"
+      "description": "Cause when status != done: limit, budget, scope, invalid_result, agent_error, ci…"
     },
     "summary": {
       "type": "string",

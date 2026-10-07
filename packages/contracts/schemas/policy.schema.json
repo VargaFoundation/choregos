@@ -151,7 +151,7 @@
     },
     "release_train": {
       "type": "object",
-      "description": "Configuration par environnement (docs/plan/05 §5.2).",
+      "description": "Configuration per environment (docs/plan/05 §5.2).",
       "additionalProperties": { "$ref": "#/$defs/trainEnv" }
     }
   },
@@ -173,7 +173,7 @@
       "additionalProperties": false,
       "properties": {
         "mode": { "type": "string", "enum": ["auto_sync", "train"], "default": "train" },
-        "schedule": { "type": "string", "description": "Cron (5 champs), fuseau du projet." },
+        "schedule": { "type": "string", "description": "Cron (5 fields), in the project's time zone." },
         "timezone": { "type": "string", "default": "Europe/Paris" },
         "windows": { "type": "array", "items": { "type": "string" },
           "description": "Allowed windows, e.g. 'Mon-Thu 09:00-18:00'." },

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/template.schema.json",
   "title": "Template",
-  "description": "Manifeste d'un template de stack (docs/plan/03 §3.2).",
+  "description": "A stack template's manifest (docs/plan/03 §3.2).",
   "type": "object",
   "required": ["apiVersion", "kind", "metadata", "requires", "defaults", "inputs", "steps"],
   "additionalProperties": false,
@@ -28,7 +28,7 @@
         "connectors": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "description": "kind → type attendu, ex. tracker: github-issues"
+          "description": "kind → expected type, e.g. tracker: github-issues"
         },
         "cluster_capabilities": { "type": "array", "items": { "type": "string" } },
         "azure_capabilities": {
@@ -47,7 +47,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "workflow": { "type": "string", "description": "un seul workflow : la forme d'avant `workflows`" },
+        "workflow": { "type": "string", "description": "a single workflow: the form used before `workflows`" },
         "workflows": {
           "type": "array",
           "minItems": 1,

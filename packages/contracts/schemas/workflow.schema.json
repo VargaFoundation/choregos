@@ -123,7 +123,7 @@
         },
         "model": {
           "type": "string",
-          "description": "profile:<name>, profile:by_size, ou un identifiant LiteLLM direct.",
+          "description": "profile:<name>, profile:by_size, or a direct LiteLLM identifier.",
           "default": "profile:by_size"
         },
         "backend": {
@@ -586,7 +586,7 @@
         "attest": {
           "type": "string",
           "maxLength": 500,
-          "description": "ce que la personne atteste, mot pour mot"
+          "description": "what the person attests, word for word"
         }
       }
     }

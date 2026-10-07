@@ -115,7 +115,7 @@ export type PolicyApprovalRule = {
 
 export type PolicyTrainEnv = {
   mode?: "auto_sync" | "train";
-  /** Cron (5 champs), fuseau du projet. */
+  /** Cron (5 fields), in the project's time zone. */
   schedule?: string;
   timezone?: string;
   /** Allowed windows, e.g. 'Mon-Thu 09:00-18:00'. */
@@ -240,7 +240,7 @@ export type Policy = {
     cross_backend?: boolean;
     require_human_for_risk?: Array<"low" | "medium" | "high">;
   };
-  /** Configuration par environnement (docs/plan/05 §5.2). */
+  /** Configuration per environment (docs/plan/05 §5.2). */
   release_train?: {
     [key: string]: PolicyTrainEnv;
   };
@@ -254,7 +254,7 @@ export type ProjectProfile = string | {
   max_turns_factor?: number;
 };
 
-/** Configuration d'un projet Choregos (colonne `projects.config`). */
+/** A Choregos project's configuration (the `projects.config` column). */
 export type Project = {
   slug: string;
   org: string;
@@ -276,7 +276,7 @@ export type Project = {
     allowed_backends?: Array<string>;
   };
   models?: {
-    /** Surcharges projet : nom de profil → identifiant LiteLLM. */
+    /** Project overrides: profile name → LiteLLM identifier. */
     profiles?: {
       [key: string]: ProjectProfile;
     };
@@ -293,7 +293,7 @@ export type Project = {
     slack_channel?: string;
     emails?: Array<string>;
   };
-  /** Outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun. ['*'] ouvre tout le catalogue. */
+  /** Catalogue tools this project may call, by name. Empty = none. ['*'] opens the whole catalogue. */
   tools?: Array<string>;
   /** The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue. */
   groups?: Array<string>;
@@ -302,7 +302,7 @@ export type Project = {
   };
 };
 
-/** Contrat orchestrateur → runner (docs/plan/01 §1.5). */
+/** Orchestrator → runner contract (docs/plan/01 §1.5). */
 export type StageInput = {
   schema: "choregos/StageInput/v1";
   run_id: string;
@@ -381,7 +381,7 @@ export type StageInput = {
   playbook: {
     ref: string;
     prompt_url?: string | null;
-    /** Prompt rendu en clair (dev et fakes). */
+    /** The rendered prompt in plain text (dev and fakes). */
     prompt?: string | null;
   };
   tools?: {
@@ -419,7 +419,7 @@ export type StageInput = {
 export type StageResult = {
   schema: "choregos/StageResult/v1";
   status: "done" | "blocked" | "needs_human" | "failed";
-  /** Cause quand status != done : limit, budget, scope, invalid_result, agent_error, ci… */
+  /** Cause when status != done: limit, budget, scope, invalid_result, agent_error, ci… */
   reason?: string | null;
   summary: string;
   outputs?: {
@@ -480,7 +480,7 @@ export type StageResult = {
   };
 };
 
-/** Manifeste d'un template de stack (docs/plan/03 §3.2). */
+/** A stack template's manifest (docs/plan/03 §3.2). */
 export type Template = {
   apiVersion: "choregos/v1";
   kind: "Template";
@@ -491,7 +491,7 @@ export type Template = {
     description?: string;
   };
   requires: {
-    /** kind → type attendu, ex. tracker: github-issues */
+    /** kind → expected type, e.g. tracker: github-issues */
     connectors: {
       [key: string]: string;
     };
@@ -504,7 +504,7 @@ export type Template = {
     };
   };
   defaults: {
-    /** un seul workflow : la forme d'avant `workflows` */
+    /** a single workflow: the form used before `workflows` */
     workflow?: string;
     /** the workflows shipped (ADR 0031): `template:<name>@<v>`, a core template, or a path relative to the template's folder (`workflows/arrivee.yaml`) */
     workflows?: Array<string>;
@@ -554,7 +554,7 @@ export type UiManifestForm = {
   kind: "form";
   title: string;
   description?: string;
-  /** le JSON Schema des valeurs ; la console en tire le formulaire */
+  /** the JSON Schema of the values; the console derives the form from it */
   schema: {
     [key: string]: unknown;
   };
@@ -631,7 +631,7 @@ export type WorkflowAgentActor = {
   type: "agent";
   /** The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name. */
   role: string;
-  /** profile:<name>, profile:by_size, ou un identifiant LiteLLM direct. */
+  /** profile:<name>, profile:by_size, or a direct LiteLLM identifier. */
   model?: string;
   /** The ACP backend to use (otherwise the project's default). */
   backend?: string;
@@ -734,7 +734,7 @@ export type WorkflowTask = {
   form: {
     [key: string]: unknown;
   };
-  /** ce que la personne atteste, mot pour mot */
+  /** what the person attests, word for word */
   attest?: string;
 };
 

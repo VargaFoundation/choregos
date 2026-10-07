@@ -35,7 +35,7 @@
         "kind": { "const": "form" },
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "schema": { "type": "object", "description": "le JSON Schema des valeurs ; la console en tire le formulaire" },
+        "schema": { "type": "object", "description": "the JSON Schema of the values; the console derives the form from it" },
         "read": { "$ref": "#/$defs/path" },
         "write": { "$ref": "#/$defs/path" },
         "write_method": { "enum": ["PUT", "PATCH", "POST"], "default": "PUT" }

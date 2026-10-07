@@ -19,6 +19,7 @@ des clés, pas du texte.
 from __future__ import annotations
 
 import ast
+import json
 import pathlib
 import re
 from collections.abc import Iterator
@@ -182,3 +183,29 @@ def test_les_messages_du_coeur_sont_en_anglais() -> None:
     """Validateur, analyseur, carte, garanties, moteur, éditions typées, politique, secrets (S21-10)."""
     fautes = _francais_d_un_paquet("packages/core/src/choregos_core")
     assert not fautes, "du français dans ce que le cœur dit :\n  " + "\n  ".join(fautes)
+
+
+# ──────────────── les contrats : la référence OpenAPI et les JSON Schemas (S21-11) ────────────────
+
+CONTRATS = RACINE / "packages/contracts"
+
+
+def test_les_contrats_sont_en_anglais() -> None:
+    """La référence OpenAPI (résumés, descriptions, réponses, paramètres, schémas), les descriptions
+    des JSON Schemas — que l'API sert, que l'éditeur et les types générés montrent — et les messages
+    que lèvent les contrats. Les identifiants (chemins, operationId, propriétés, enum) n'y sont pas
+    lus : ce sont des clés."""
+    documents = [
+        (chemin, json.loads(chemin.read_text(encoding="utf-8")))
+        for chemin in sorted((CONTRATS / "schemas").glob("*.json"))
+    ]
+    openapi = CONTRATS / "openapi.yaml"
+    documents.append((openapi, yaml.safe_load(openapi.read_text(encoding="utf-8"))))
+    fautes = [
+        f"{chemin.relative_to(RACINE)}: {cle}: {texte[:80]!r}"
+        for chemin, document in documents
+        for cle, texte in _visibles(document)
+        if ressemble_a_du_francais(_prose(texte))
+    ]
+    fautes += _francais_d_un_paquet("packages/contracts/src/choregos_contracts")
+    assert not fautes, "du français dans les contrats :\n  " + "\n  ".join(fautes)
