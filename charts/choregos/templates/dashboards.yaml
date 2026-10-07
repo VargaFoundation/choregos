@@ -8,6 +8,10 @@ metadata:
   labels:
     {{- include "choregos.labels" $ | nindent 4 }}
     grafana_dashboard: "1"
+  {{- with $.Values.monitoring.dashboardAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 data:
   {{ base $path }}: |
     {{- $.Files.Get $path | nindent 4 }}
