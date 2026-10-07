@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Eyebrow, Heading } from "@varga/design-system";
+import { Glossaire } from "@/components/glossaire";
 import { Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -43,11 +44,9 @@ export default function SkillsPage() {
         <p className="max-w-3xl text-sm text-ink-muted">
           A skill is a folder: a <code>SKILL.md</code> that says when to use it, and the files it brings. An agent&apos;s
           version names the skills it carries; the runner lays them where its backend reads them, and checks each one
-          against its digest. A skill grants nothing — <code>allowed-tools</code> is refused.{" "}
-          <Link href="/agents" className="underline">
-            the agents
-          </Link>
+          against its digest. A skill grants nothing — <code>allowed-tools</code> is refused.
         </p>
+        <Glossaire ici="skills" />
       </div>
       <Card title="library">
         {skills.error ? (

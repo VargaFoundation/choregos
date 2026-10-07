@@ -23,14 +23,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Providers>
           <div className="flex min-h-screen flex-col">
             <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur-sm">
-              <Container size="wide" className="flex h-16 items-center gap-10">
+              <Container size="wide" className="flex h-16 items-center gap-8">
                 <Link href="/" className="no-underline">
                   <BrandMark name="choregos" product="varga foundation" />
                 </Link>
                 <TopNav />
                 {demo && (
-                  <span className="ml-auto border border-line-strong px-2 py-0.5 text-xs text-ink-muted">
-                    demo mode · fixtures
+                  <span className="ml-auto whitespace-nowrap border border-line-strong px-2 py-0.5 text-xs text-ink-muted">
+                    demo · fixtures
                   </span>
                 )}
               </Container>

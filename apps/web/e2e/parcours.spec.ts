@@ -96,7 +96,7 @@ test("administration : en communautaire, ce que l'édition entreprise ajoute, sa
 
 test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async ({ page }) => {
   await page.goto("/integrations");
-  await expect(page.getByRole("heading", { name: "integrations" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "connect a client" })).toBeVisible();
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp");
   await expect(page.getByTestId("snippet")).toContainText("claude mcp add --transport http choregos");
   await page.getByRole("button", { name: "create a token for Claude Code" }).click();

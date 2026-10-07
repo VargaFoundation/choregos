@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Badge, Eyebrow, Heading } from "@varga/design-system";
 import { estUnClientMcp, resumeDeLaVersion } from "@/components/agents/registre";
 import { ClientsMcp } from "@/components/agents/clients-mcp";
+import { Glossaire } from "@/components/glossaire";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -32,12 +33,11 @@ export default function AgentsPage() {
         </Heading>
         <p className="max-w-3xl text-sm text-ink-muted">
           An agent is an object of the organisation: its instructions, model, skills and tools live in versions that
-          never change; a project pins one and may only tighten it. An <em>external</em> agent is an MCP client — a
-          Claude Code, a vendor&apos;s agent — that acts with its human&apos;s rights, never more.{" "}
-          <Link href="/skills" className="underline">
-            the skills library
-          </Link>
+          never change; a project pins one and may only tighten it. An <em>external</em> agent is an assistant — a
+          Claude Code, a Cursor — that reaches in through the MCP gate and acts with its human&apos;s rights, never
+          more.
         </p>
+        <Glossaire ici="agents" />
       </div>
       <Card title="registry">
         {agents.error ? (
