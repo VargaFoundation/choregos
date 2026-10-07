@@ -38,6 +38,7 @@ const PAGES = [
   "/p/billing-api/agents",
   "/p/billing-api/integrations/claude-desktop",
   "/p/billing-api/actions/pr1",
+  "/p/billing-api/workflows/release-full/map",
 ];
 
 for (const path of PAGES) {
@@ -55,7 +56,7 @@ for (const path of PAGES) {
 /** La carte en cours d'édition (S16-12) : le panneau d'un état et le brouillon passent axe aussi. */
 test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/map");
-  await page.getByTestId("workflow-graph").locator('.react-flow__node[data-id="inbox"]').click();
+  await page.getByTestId("workflow-graph").getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
   await panneau.getByLabel("label").fill("Nouvelles demandes");
   await panneau.getByRole("button", { name: "set label" }).click();
@@ -87,33 +88,31 @@ test("réglages : la section des connecteurs sans violation sérieuse", async ({
  */
 test("graphe de workflow : parcours au clavier et description de l'état", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/map");
-  const graph = page.getByTestId("workflow-graph");
-  await expect(graph.locator(".react-flow__node")).toHaveCount(4);
+  const carte = page.getByTestId("workflow-graph");
+  await expect(carte.locator("[data-etat]")).toHaveCount(4);
   const focus = page.getByTestId("workflow-graph-focus");
   await expect(focus).toContainText("Tab reaches the states");
 
-  await graph.locator(".react-flow__node").first().focus();
-  await expect(focus).toHaveText("To triage (agent lane): → Ready (by refiner).");
+  await carte.getByTestId("etat-inbox").focus();
+  await expect(focus).toHaveText("To triage (agent): → Ready (by refiner).");
 
   await page.keyboard.press("ArrowRight");
-  await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "ready");
-  await expect(focus).toHaveText(
-    "Ready (agent lane): → Done (by dev, gates scope_respected); → Needs a human on retries exhausted.",
-  );
+  await expect(carte.getByTestId("etat-ready")).toBeFocused();
+  await expect(focus).toHaveText("Ready (agent): → Done (by dev, gates scope_respected); → Needs a human when retries run out.");
   // Au clavier comme au survol : les escalades de l'état parcouru se montrent, puis se replient.
-  await expect(graph.locator(".react-flow__edge")).toHaveCount(3);
+  await expect(carte.getByTestId("secondaires-ready")).toBeVisible();
 
   await page.keyboard.press("ArrowRight");
-  await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "done");
-  await expect(focus).toHaveText("Done (terminal lane, terminal): no outgoing transition.");
-  await expect(graph.locator(".react-flow__edge")).toHaveCount(2);
+  await expect(carte.getByTestId("etat-done")).toBeFocused();
+  await expect(focus).toHaveText("Done (end, terminal): no outgoing transition.");
+  await expect(carte.getByTestId("secondaires-ready")).toHaveCount(0);
 
-  // Au bout du workflow, → reste sur place ; Début revient au premier état.
+  // Au bout du chemin, → reste sur place ; Début revient au premier état.
   await page.keyboard.press("ArrowRight");
-  await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "done");
+  await expect(carte.getByTestId("etat-done")).toBeFocused();
   await page.keyboard.press("Home");
-  await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "inbox");
-  await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("aria-label", /To triage, agent lane, 1 outgoing transition/);
+  await expect(carte.getByTestId("etat-inbox")).toBeFocused();
+  await expect(carte.getByTestId("etat-inbox")).toHaveAttribute("aria-label", "To triage, agent");
 
   // Entrée sur un état ouvre son panneau : la carte se modifie au clavier aussi (S16-12).
   await page.keyboard.press("Enter");
