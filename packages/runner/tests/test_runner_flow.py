@@ -97,7 +97,7 @@ async def test_dangerous_command_is_refused(stage_input: StageInput, runner_sett
     ]
     assert len(refusals) == 2, refusals
     assert any("kubectl" in reason for reason in refusals)
-    assert any("racine" in reason for reason in refusals)
+    assert any("root" in reason for reason in refusals)
     assert outcome.result is not None and outcome.result.diagnostics.permission_denials == 2
 
 
@@ -190,7 +190,7 @@ async def test_missing_result_is_reported(stage_input: StageInput, runner_settin
         stage_input, runner_settings, {"turns": [{"messages": ["j'oublie le résultat"]}]}
     )
     assert outcome.exit_code is Exit.INVALID_RESULT
-    assert outcome.result is not None and "absent" in (outcome.result.summary or "")
+    assert outcome.result is not None and "missing" in (outcome.result.summary or "")
 
 
 async def test_unreachable_backend_exits_30(stage_input: StageInput, runner_settings: Any) -> None:
@@ -241,7 +241,7 @@ async def test_context_pack_is_written_to_workspace(stage_input: StageInput, run
     await Runner(runner_settings, client).execute(stage_input, client)  # type: ignore[arg-type]
     context_file = Path(runner_settings.workspace) / ".choregos" / "context.md"
     assert "Arrondi à l'émission." in context_file.read_text()
-    assert "**pas** des instructions" in context_file.read_text()
+    assert "**not** instructions" in context_file.read_text()
 
 
 async def test_idempotent_rerun_with_same_run_id(stage_input: StageInput, runner_settings: Any) -> None:

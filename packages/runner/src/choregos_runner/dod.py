@@ -84,7 +84,7 @@ class DodReport:
     def prompt_for_repair(self) -> str:
         """Message envoyé à l'agent quand les vérifications échouent."""
         blocks = [
-            "Les vérifications du dépôt échouent. Corrige la cause, sans élargir le périmètre.",
+            "The repository's checks fail. Fix the cause, without widening the scope.",
             "",
         ]
         for failure in self.failures():
@@ -95,9 +95,7 @@ class DodReport:
                 "```",
                 "",
             ]
-        blocks.append(
-            "Relance ensuite les commandes toi-même pour vérifier, puis mets à jour `.choregos/result.json`."
-        )
+        blocks.append("Then run the commands again yourself to check, and update `.choregos/result.json`.")
         return "\n".join(blocks)
 
 
@@ -173,7 +171,7 @@ def _truncate(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:
         return text
     head = text[: limit // 2]
     tail = text[-limit // 2 :]
-    return f"{head}\n… (sortie tronquée) …\n{tail}"
+    return f"{head}\n… (output truncated) …\n{tail}"
 
 
 def _parse_test_counts(output: str) -> dict[str, int]:

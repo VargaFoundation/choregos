@@ -72,10 +72,10 @@ def playbook_path(role: str) -> Path:
                 return candidate
     path = ROLES_DIR / role / "prompt.md"
     if not path.exists():
-        extra = ", ".join(str(d) for d in extra_roles_dirs()) or "aucun"
+        extra = ", ".join(str(d) for d in extra_roles_dirs()) or "none"
         raise FileNotFoundError(
-            f"playbook inconnu : {role} (rôles du paquet : {', '.join(KNOWN_ROLES)} ; "
-            f"répertoires du déploiement : {extra})"
+            f"unknown playbook: {role} (package roles: {', '.join(KNOWN_ROLES)}; "
+            f"deployment directories: {extra})"
         )
     return path
 
@@ -111,7 +111,7 @@ def cadrer(instructions: str) -> str:
     """
     return (
         f"{instructions.rstrip()}\n\n---\n\n"
-        "## Ce que la plateforme exige (ce cadre ne se modifie pas)\n\n"
+        "## What the platform requires (this frame cannot be changed)\n\n"
         f"{INVARIANTS}\n\n{OUTPUT_CONTRACT}\n"
     )
 
@@ -126,40 +126,40 @@ def _template_name(path: Path, role: str) -> str:
     return f"{role}/prompt.md"
 
 
-INVARIANTS = """- Écris `.choregos/result.json` conforme au contrat avant de terminer.
-- N'élargis jamais le périmètre toi-même : appelle `request_scope_change(paths, justification)`.
-- Un problème hors périmètre se signale avec `report_finding(...)`, il ne se corrige pas.
-- Préfère `ask_human(question)` à une hypothèse qui engage le produit.
-- Commits conventionnels (`fix(orders): …`), un commit par intention.
-- Ne touche à aucun AUTRE fichier de `.choregos/**` : `result.json` en est la seule sortie
-  qui t'appartient, le reste est la configuration du run.
-- Consulte `search_memory(query)` avant toute décision d'architecture."""
+INVARIANTS = """- Write `.choregos/result.json`, conforming to the contract, before you finish.
+- Never widen the scope yourself: call `request_scope_change(paths, justification)`.
+- A problem out of scope is reported with `report_finding(...)`; it is not fixed.
+- Prefer `ask_human(question)` to an assumption that commits the product.
+- Conventional commits (`fix(orders): …`), one commit per intent.
+- Touch no OTHER file under `.choregos/**`: `result.json` is the only output there that
+  belongs to you; the rest is the run's configuration.
+- Check `search_memory(query)` before any architecture decision."""
 
-OUTPUT_CONTRACT = """Écris `.choregos/result.json` — exactement cette forme (le runner la valide contre
-`choregos/StageResult/v1` ; un résultat mal formé te sera renvoyé pour réparation, et
-l'outil `validate_result` te dit AVANT de finir si le tien passe) :
+OUTPUT_CONTRACT = """Write `.choregos/result.json` — exactly this shape (the runner validates it against
+`choregos/StageResult/v1`; a malformed result is sent back to you for repair, and the
+`validate_result` tool tells you BEFORE you finish whether yours passes):
 
 ```json
 {
   "schema": "choregos/StageResult/v1",
   "status": "done | blocked | needs_human | failed",
-  "summary": "une phrase qui dit ce qui a été fait",
-  "outputs": { "<nom de sortie déclaré par la transition>": "texte (Markdown)" },
+  "summary": "one sentence that says what was done",
+  "outputs": { "<output name declared by the transition>": "text (Markdown)" },
   "evidence": {
     "tests_passed": true, "tests_run": 0,
-    "facts": { "<fait nommé par le playbook>": 3, "<autre>": true }
+    "facts": { "<fact named by the playbook>": 3, "<another>": true }
   },
   "findings": [
     { "title": "…", "type": "bug | perf | security | tech-debt | docs | flaky-test | ux",
-      "severity": "low | medium | high | critical", "evidence": "chemin:ligne ou sortie" }
+      "severity": "low | medium | high | critical", "evidence": "path:line or output" }
   ],
   "scope_changes_requested": [ { "paths": ["…"], "justification": "…" } ],
-  "questions": [ { "text": "la question, en une phrase", "options": ["…"] } ]
+  "questions": [ { "text": "the question, in one sentence", "options": ["…"] } ]
 }
 ```
 
-`questions`, `findings` et `scope_changes_requested` sont des listes d'OBJETS, jamais de
-chaînes. Une liste vide vaut `[]`."""
+`questions`, `findings` and `scope_changes_requested` are lists of OBJECTS, never of
+strings. An empty list is `[]`."""
 
 __all__ = [
     "INVARIANTS",

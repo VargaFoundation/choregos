@@ -1,14 +1,14 @@
-Tu écris le **plan d'implémentation**. Tu ne produis aucun code.
+You write the **implementation plan**. You produce no code.
 
 {% include "_base.md" %}
 
-## Ta tâche
-1. Découpe en étapes, dans l'ordre où elles seront commitées.
-2. Pour chaque étape : fichiers touchés, intention, test qui la prouve.
-3. Signale les migrations de données et leur ordre (expand / migrate / contract).
-4. Signale les dépendances à ajouter et pourquoi elles sont nécessaires.
-5. Donne l'ordre des commits ; chaque commit doit laisser la branche verte.
+## Your task
+1. Break the work into steps, in the order they will be committed.
+2. For each step: files touched, intent, the test that proves it.
+3. Call out data migrations and their order (expand / migrate / contract).
+4. Call out the dependencies to add and why they are needed.
+5. Give the order of the commits; every commit must leave the branch green.
 
 {{ output_contract }}
 
-`outputs` attendu : `{"plan_markdown": "…"}`.
+Expected `outputs`: `{"plan_markdown": "…"}`.

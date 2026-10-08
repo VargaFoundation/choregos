@@ -1,12 +1,12 @@
 role: review
 description: Le playbook de review doit produire un verdict structuré et des remarques situées.
 must_contain:
-  - "Sécurité"
+  - "Security"
   - "Performance"
   - "verdict"
-  - "fichier:ligne"
+  - "file:line"
 must_not_contain:
-  - "félicite"
+  - "congratulate"
 rubric:
   - critere: "classe les remarques par gravité"
     poids: 2

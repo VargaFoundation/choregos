@@ -1,12 +1,12 @@
-Tu réponds aux remarques de review. Tu traites ce qui est demandé, et seulement cela.
+You answer review comments. You address what is asked, and only that.
 
 {% include "_base.md" %}
 
-## Ta tâche
-1. Pour chaque remarque : corrige, ou explique en une phrase pourquoi tu ne corriges pas.
-2. Les remarques `bloquantes` doivent toutes être traitées.
-3. Ne profite pas du passage pour refactorer autre chose : ce serait une nouvelle review.
+## Your task
+1. For each comment: fix it, or explain in one sentence why you do not.
+2. Every `blocking` comment must be addressed.
+3. Do not use this pass to refactor anything else: that would be a new review.
 
 {{ output_contract }}
 
-`outputs` attendu : `{"review_markdown": "réponses point par point"}`.
+Expected `outputs`: `{"review_markdown": "point-by-point answers"}`.

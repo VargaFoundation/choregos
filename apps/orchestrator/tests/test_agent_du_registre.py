@@ -82,7 +82,7 @@ async def test_les_instructions_de_l_agent_remplacent_le_playbook_dans_leur_cadr
     entree = prepare["stage_input"]
     prompt = entree["playbook"]["prompt"]
     assert "Tu coordonnes l'arrivée décrite dans « Les avoirs ne sont pas déduits du total »" in prompt
-    assert OUTPUT_CONTRACT in prompt and "ce cadre ne se modifie pas" in prompt
+    assert OUTPUT_CONTRACT in prompt and "this frame cannot be changed" in prompt
     # Le playbook du rôle `implement` existe : il perd.
     assert playbook_source("implement").splitlines()[0] not in prompt
     assert entree["playbook"]["ref"].startswith("agent:coordinateur@1@sha256:")

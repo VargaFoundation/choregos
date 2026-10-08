@@ -66,20 +66,26 @@ class ClaudeCodeBackend(Backend):
 
 
 def _scope_hook() -> str:
-    """Filet de sécurité local : le vrai contrôle reste la vérification du diff."""
+    """Filet de sécurité local : le vrai contrôle reste la vérification du diff.
+
+    Le script est déposé dans l'espace de travail de l'agent, qui peut le lire : ses commentaires
+    sont en anglais (ADR 0039). L'histoire de l'exception `.choregos/**` est ici : elle appartient
+    à la PLATEFORME, pas au périmètre du ticket — c'est là que l'agent doit écrire son
+    `result.json`, exigé par le contrat de sortie. Le refuser mettait l'agent devant une
+    contradiction ; il l'a écrit noir sur blanc dans sa transcription — « il y a une contradiction
+    entre le périmètre autorisé et l'obligation d'écrire result.json » —, puis il abandonnait, et
+    l'étape échouait sur un résultat absent.
+    """
     return """#!/usr/bin/env bash
-# Hook de secours : refuse une écriture hors des chemins autorisés.
-# Ce n'est pas la garantie (le runner vérifie le diff), c'est un raccourci utile.
+# Fallback hook: refuses a write outside the allowed paths.
+# It is not the guarantee (the runner checks the diff); it is a useful shortcut.
 set -euo pipefail
 payload=$(cat)
 path=$(printf '%s' "$payload" | grep -o '"file_path"[^,]*' | head -1 | cut -d'"' -f4 || true)
 [ -z "${path:-}" ] && exit 0
 rel_precoce=${path#"$PWD/"}
-# `.choregos/**` appartient à la PLATEFORME, pas au périmètre du ticket : c'est là que
-# l'agent doit écrire son `result.json`, exigé par le contrat de sortie. Le refuser mettait
-# l'agent devant une contradiction — il l'a écrit noir sur blanc dans sa transcription :
-# « il y a une contradiction entre le périmètre autorisé et l'obligation d'écrire
-# result.json » — puis il abandonnait, et l'étape échouait sur un résultat absent.
+# `.choregos/**` belongs to the platform, not to the work item's scope: the agent must
+# write its `result.json` there, as the output contract requires.
 case "$rel_precoce" in
   .choregos/*) exit 0 ;;
 esac
@@ -92,7 +98,7 @@ while read -r pattern; do
     $pattern) exit 0 ;;
   esac
 done < "$allowed_file"
-echo "chemin hors périmètre : $rel (voir .choregos/allowed_paths.txt)" >&2
+echo "path outside the allowed paths: $rel (see .choregos/allowed_paths.txt)" >&2
 exit 2
 """
 
@@ -102,11 +108,11 @@ def _claude_md(stage_input: StageInput) -> str:
         [
             "# Instructions (Choregos)",
             "",
-            "Ce dépôt suit `AGENTS.md`. En plus, pour cette étape :",
+            "This repository follows `AGENTS.md`. In addition, for this step:",
             "",
-            f"- Ticket : {stage_input.work_item.key} — {stage_input.work_item.title}",
-            f"- Rôle : {stage_input.transition.role}",
-            "- Périmètre autorisé : voir `.choregos/allowed_paths.txt`.",
-            "- Termine en écrivant `.choregos/result.json`.",
+            f"- Work item: {stage_input.work_item.key} — {stage_input.work_item.title}",
+            f"- Role: {stage_input.transition.role}",
+            "- Allowed paths: see `.choregos/allowed_paths.txt`.",
+            "- Finish by writing `.choregos/result.json`.",
         ]
     )

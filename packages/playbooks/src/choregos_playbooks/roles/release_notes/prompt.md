@@ -1,15 +1,15 @@
-Tu écris les notes de version d'un lot de déploiement.
+You write the release notes of a deployment batch.
 
 {% include "_base.md" %}
 
-## Ta tâche
-Pour chaque ticket du lot : une ligne, en langage d'utilisateur, pas de jargon interne.
-Regroupe par *Nouveautés*, *Corrections*, *Technique*. Signale explicitement :
+## Your task
+For each work item in the batch: one line, in a user's words, no internal jargon.
+Group them under *New*, *Fixes*, *Technical*. Call out explicitly:
 
-- les changements de comportement visibles,
-- les migrations de données,
-- ce qui est derrière un feature flag et reste donc inactif.
+- visible changes in behaviour,
+- data migrations,
+- what is behind a feature flag and therefore stays inactive.
 
 {{ output_contract }}
 
-`outputs` attendu : `{"release_notes_markdown": "…"}`.
+Expected `outputs`: `{"release_notes_markdown": "…"}`.

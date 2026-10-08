@@ -34,7 +34,7 @@ def test_validate_accepte_un_resultat_conforme(tmp_path: Path) -> None:
     )
     result = cli.invoke(app, ["validate", str(path)])
     assert result.exit_code == 0
-    assert "valide" in result.stdout
+    assert "valid — status=done" in result.stdout
 
 
 def test_validate_refuse_un_resultat_invalide(tmp_path: Path) -> None:

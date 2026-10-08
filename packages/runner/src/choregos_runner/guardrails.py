@@ -16,15 +16,15 @@ from choregos_contracts import Permissions
 from choregos_core import matches_any
 
 DANGEROUS_PATTERNS: tuple[tuple[str, str], ...] = (
-    (r"\brm\s+-rf\s+/(?!\w)", "suppression récursive de la racine"),
+    (r"\brm\s+-rf\s+/(?!\w)", "recursive deletion of the root"),
     (r":\(\)\s*\{\s*:\|:&\s*\};:", "fork bomb"),
-    (r"\bcurl\b[^|]*\|\s*(ba)?sh", "exécution d'un script téléchargé"),
-    (r"\bwget\b[^|]*\|\s*(ba)?sh", "exécution d'un script téléchargé"),
-    (r"\bgit\s+push\s+.*--force(?!-with-lease)", "push forcé"),
-    (r"\bgit\s+reset\s+--hard\s+origin", "réécriture de l'historique distant"),
-    (r"\bchmod\s+777\b", "permissions trop larges"),
-    (r"\bhistory\s+-c\b", "effacement de traces"),
-    (r">\s*/dev/sd[a-z]", "écriture disque brute"),
+    (r"\bcurl\b[^|]*\|\s*(ba)?sh", "running a downloaded script"),
+    (r"\bwget\b[^|]*\|\s*(ba)?sh", "running a downloaded script"),
+    (r"\bgit\s+push\s+.*--force(?!-with-lease)", "force push"),
+    (r"\bgit\s+reset\s+--hard\s+origin", "rewriting the remote history"),
+    (r"\bchmod\s+777\b", "permissions too broad"),
+    (r"\bhistory\s+-c\b", "erasing traces"),
+    (r">\s*/dev/sd[a-z]", "raw disk write"),
 )
 
 SECRET_FILE_PATTERNS = (".env", ".git-credentials", "id_rsa", ".npmrc", ".pypirc", ".netrc")
@@ -137,25 +137,27 @@ class GuardRails:
         elif url:
             decision = self.check_network(url)
         elif kind in {"read", "search", "fetch", "think", "other"}:
-            decision = Decision(True, "lecture ou recherche : autorisé", kind, path or title)
+            decision = Decision(True, "read or search: allowed", kind, path or title)
         elif not kind and self.permissions.unknown_requests == "reject":
             # Fermé : la politique (`sandbox.unknown_requests: reject`) refuse ce qu'elle ne
             # sait pas nommer. Le message dit à l'agent par où passer — un refus muet fait
             # un agent qui réessaie autrement.
             decision = Decision(
                 False,
-                "demande de nature inconnue, refusée par la politique du projet "
-                "(sandbox.unknown_requests: reject) ; pour signaler ou demander plus de "
-                "périmètre : `report_finding`, `request_scope_change`",
+                "request of unknown kind, refused by the project's policy "
+                "(sandbox.unknown_requests: reject); to report something or ask for a wider "
+                "scope: `report_finding`, `request_scope_change`",
                 "unknown",
                 path or title,
             )
         elif not kind:
             decision = Decision(
-                True, "nature inconnue : autorisée et journalisée (filet, pas mur)", "read", path or title
+                True, "unknown kind: allowed and logged (a net, not a wall)", "read", path or title
             )
         else:
-            decision = Decision(True, f"opération `{kind}` sans cible identifiée : autorisée", kind, title)
+            decision = Decision(
+                True, f"operation `{kind}` without an identified target: allowed", kind, title
+            )
         decision.inferred = inferred
         self.decisions.append(decision)
         return decision
@@ -165,25 +167,25 @@ class GuardRails:
     def check_write(self, path: str) -> Decision:
         normalized = self._relatif(path)
         if any(normalized.endswith(pattern) or pattern in normalized for pattern in SECRET_FILE_PATTERNS):
-            return Decision(False, f"écriture interdite dans un fichier sensible : {path}", "write", path)
+            return Decision(False, f"writing to a sensitive file is forbidden: {path}", "write", path)
         if normalized == ".choregos/result.json":
-            return Decision(True, "dépôt du résultat de l'étape : autorisé", "write", path)
+            return Decision(True, "writing the step's result: allowed", "write", path)
         if normalized.startswith(".choregos/"):
             return Decision(
                 False,
-                "la configuration Choregos n'est pas modifiable par l'agent "
-                "(seul `.choregos/result.json` est attendu)",
+                "the agent cannot change the Choregos configuration "
+                "(only `.choregos/result.json` is expected)",
                 "write",
                 path,
             )
         if not self.allowed_paths:
-            return Decision(True, "aucun périmètre déclaré : écriture autorisée", "write", path)
+            return Decision(True, "no scope declared: write allowed", "write", path)
         if matches_any(normalized, self.allowed_paths):
-            return Decision(True, "dans le périmètre autorisé", "write", path)
+            return Decision(True, "within the allowed paths", "write", path)
         return Decision(
             False,
-            f"`{path}` est hors du périmètre autorisé. Utilise `report_finding` si c'est un autre "
-            "problème, ou `request_scope_change` si c'est indispensable à ce ticket.",
+            f"`{path}` is outside the allowed paths. Use `report_finding` if it is another "
+            "problem, or `request_scope_change` if it is essential to this work item.",
             "write",
             path,
         )
@@ -199,23 +201,23 @@ class GuardRails:
         lowered = command.lower()
         for pattern, why in DANGEROUS_PATTERNS:
             if re.search(pattern, lowered):
-                return Decision(False, f"commande refusée ({why})", "execute", command[:200])
+                return Decision(False, f"command refused ({why})", "execute", command[:200])
         for denied in self.permissions.deny_commands:
             if _command_matches(lowered, denied.lower()):
                 return Decision(
-                    False, f"commande interdite par la politique : `{denied}`", "execute", command[:200]
+                    False, f"command forbidden by the policy: `{denied}`", "execute", command[:200]
                 )
-        return Decision(True, "commande autorisée", "execute", command[:200])
+        return Decision(True, "command allowed", "execute", command[:200])
 
     def check_network(self, url: str) -> Decision:
         if not self.permissions.allow_domains:
-            return Decision(True, "aucune allowlist réseau : autorisé (le sandbox filtre)", "network", url)
+            return Decision(True, "no network allowlist: allowed (the sandbox filters)", "network", url)
         host = _host_of(url)
         if any(host == domain or host.endswith(f".{domain}") for domain in self.permissions.allow_domains):
-            return Decision(True, f"domaine autorisé : {host}", "network", url)
+            return Decision(True, f"allowed domain: {host}", "network", url)
         return Decision(
             False,
-            f"domaine non autorisé : {host} (allowlist : {', '.join(self.permissions.allow_domains)})",
+            f"domain not allowed: {host} (allowlist: {', '.join(self.permissions.allow_domains)})",
             "network",
             url,
         )

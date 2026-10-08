@@ -17,7 +17,7 @@ from .runner import Runner
 
 app = typer.Typer(
     add_completion=False,
-    help="Runner Choregos : exécute une étape d'agent et publie son StageResult.",
+    help="Choregos runner: runs an agent step and publishes its StageResult.",
 )
 
 
@@ -28,7 +28,7 @@ def run(
     workspace: Annotated[Path | None, typer.Option("--workspace")] = None,
     write_result_url: Annotated[Path | None, typer.Option("--write-result-url")] = None,
     write_status: Annotated[Path | None, typer.Option("--write-status")] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="ne pousse pas la branche")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="do not push the branch")] = False,
 ) -> None:
     """Exécute l'étape désignée par `--run-id` et sort avec le code documenté (§2.2)."""
     reset_settings_cache()
@@ -78,9 +78,9 @@ def validate(path: Annotated[Path, typer.Argument()] = Path(".choregos/result.js
 
     load = load_result(path)
     if load.ok and load.result is not None:
-        typer.echo(f"valide — status={load.result.status} : {load.result.summary}")
+        typer.echo(f"valid — status={load.result.status}: {load.result.summary}")
         raise typer.Exit(0)
-    typer.echo(load.error or "invalide", err=True)
+    typer.echo(load.error or "invalid", err=True)
     raise typer.Exit(int(Exit.INVALID_RESULT))
 
 
