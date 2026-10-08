@@ -311,6 +311,14 @@ class RunTicket(Dto):
     comments: list[RunTicketComment] = Field(default_factory=list)
 
 
+class GitToken(Dto):
+    """Un jeton git pour UN run : celui de l'App, limité à son dépôt, une heure (S22-07)."""
+
+    token: str | None = None
+    expires_at: datetime | None = None
+    repository: str | None = None
+
+
 class CiLogs(Dto):
     logs: str = ""
     ref: str | None = None

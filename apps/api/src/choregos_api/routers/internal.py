@@ -23,6 +23,7 @@ from ..errors import ApiError, conflict, not_found
 from ..schemas import (
     CiLogs,
     FindingAck,
+    GitToken,
     QuestionIn,
     RunEventsBatch,
     RunTicket,
@@ -333,6 +334,47 @@ async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
             RunTicketComment(author=c.get("author", ""), body=c.get("body", ""), ts=c.get("ts", utcnow()))
             for c in documents.get("comments", [])
         ],
+    )
+
+
+def depot_github(url: str) -> str | None:
+    """`owner/name` d'une URL GitHub en https, `None` sinon (un dépôt ailleurs n'a pas d'App)."""
+    import re
+
+    trouve = re.fullmatch(r"https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?", url.strip())
+    return f"{trouve.group(1)}/{trouve.group(2)}" if trouve else None
+
+
+@router.post("/runs/{id}/git-token", response_model=GitToken, operation_id="postRunGitToken")
+async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
+    """Le jeton git du run (docs/security.md : « émis par run, portée du dépôt, 1 h, en mémoire »).
+
+    La page le promettait, le code ne le faisait pas : le runner clonait sans identifiant, et un dépôt
+    privé — le bac à sable du locataire dev, le 08/10 — rendait « Repository not found » à chaque run
+    (S22-07). Le jeton est un jeton d'installation de l'App, restreint au SEUL dépôt du run et à
+    `contents: write` ; sans App, ou hors de GitHub, il est nul et le run clone sans.
+    """
+    import os
+    from datetime import UTC, datetime
+
+    import httpx
+    from choregos_adapters.github import RUNNER_PERMISSIONS, GitHubAppAuth
+
+    run, _item, _project = await _run_and_item(session, id)
+    if run.result is not None:
+        raise conflict("result already posted for this run")
+    url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
+    depot = depot_github(url)
+    app_id = os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
+    cle = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
+    if depot is None or not app_id or not cle:
+        return GitToken(token=None, repository=depot)
+    auth = GitHubAppAuth(app_id=app_id, private_key=cle)
+    async with httpx.AsyncClient(timeout=20) as client:
+        # Cloner et pousser sa branche : `contents: write`, rien d'autre — la PR, la plateforme l'ouvre.
+        jeton = await auth.token_for(client, depot, permissions=RUNNER_PERMISSIONS, ttl_s=3600)
+    return GitToken(
+        token=jeton.token, expires_at=datetime.fromtimestamp(jeton.expires_at, tz=UTC), repository=depot
     )
 
 

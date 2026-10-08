@@ -143,7 +143,10 @@ class Workspace:
             await self.git("config", "commit.gpgsign", "false")
             self._exclude_runner_files()
             return
-        url = _with_token(repo.url, token)
+        # Le jeton ne s'écrit nulle part : ni dans l'URL d'`origin` (donc dans `.git/config`, que
+        # l'agent lit), ni sur disque. Il passe en en-tête, commande par commande (S22-07).
+        url = repo.url
+        avec = _entete(token)
         if not (self.path / ".git").exists():
             init = await self.git("init", "--initial-branch", repo.base_branch)
             if not init.ok:
@@ -157,16 +160,16 @@ class Workspace:
         await self.git("config", "advice.detachedHead", "false")
 
         fetch = await self.git(
-            "fetch", "--depth", str(repo.clone_depth), "origin", repo.base_branch, timeout=600.0
+            *avec, "fetch", "--depth", str(repo.clone_depth), "origin", repo.base_branch, timeout=600.0
         )
         if not fetch.ok:
             raise WorkspaceError(f"fetch failed: {_redact(fetch.output, token)}")
         await self.git("branch", "-f", repo.base_branch, "FETCH_HEAD")
 
         # La branche de travail existe-t-elle déjà côté distant (rejeu, étape suivante) ?
-        remote = await self.git("ls-remote", "--heads", "origin", repo.work_branch)
+        remote = await self.git(*avec, "ls-remote", "--heads", "origin", repo.work_branch)
         if remote.ok and repo.work_branch in remote.stdout:
-            await self.git("fetch", "--depth", str(repo.clone_depth), "origin", repo.work_branch)
+            await self.git(*avec, "fetch", "--depth", str(repo.clone_depth), "origin", repo.work_branch)
             checkout = await self.git("checkout", "-B", repo.work_branch, "FETCH_HEAD")
         else:
             checkout = await self.git("checkout", "-B", repo.work_branch, repo.base_branch)
@@ -295,11 +298,18 @@ class Workspace:
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     async def push(self, branch: str, token: str | None = None) -> CommandResult:
-        if token:
-            remote = await self.git("remote", "get-url", "origin")
-            url = _with_token(remote.stdout.strip(), token)
-            await self.git("remote", "set-url", "origin", url)
-        return await self.git("push", "--set-upstream", "origin", branch, timeout=300.0)
+        resultat = await self.git(*_entete(token), "push", "--set-upstream", "origin", branch, timeout=300.0)
+        return CommandResult(resultat.code, _redact(resultat.stdout, token), _redact(resultat.stderr, token))
+
+
+def _entete(token: str | None) -> list[str]:
+    """`-c http.extraHeader=…` : le jeton pour UNE commande git, sans rien écrire (S22-07)."""
+    if not token:
+        return []
+    import base64
+
+    valeur = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    return ["-c", f"http.extraHeader=Authorization: Basic {valeur}"]
 
 
 def _with_token(url: str, token: str | None) -> str:

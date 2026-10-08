@@ -904,6 +904,13 @@ export type TimelineEntry = {
   cost_usd?: number | null;
 };
 
+export type GitToken = {
+  token: string | null;
+  expires_at?: string | null;
+  /** `owner/name`: the only repository the token opens. */
+  repository?: string | null;
+};
+
 /** A work item's path through its workflow (S22-01). `graph` and `process` describe the version the item is pinned to, not the project's current one; `moves` and `steps` are in time order. */
 export type WorkItemJourney = {
   work_item_id: string;
@@ -1541,6 +1548,7 @@ export interface Operations {
   events: Array<RunEventIn>;
 }; response: void };
   postRunFinding: { method: "POST"; path: "/internal/runs/{id}/findings"; body: Finding; response: FindingAck };
+  postRunGitToken: { method: "POST"; path: "/internal/runs/{id}/git-token"; body: never; response: GitToken };
   postRunQuestion: { method: "POST"; path: "/internal/runs/{id}/question"; body: {
   text: string;
   options?: Array<string>;

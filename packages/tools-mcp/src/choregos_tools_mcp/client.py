@@ -95,6 +95,12 @@ class InternalClient:
     async def fetch_ticket(self) -> dict[str, Any]:
         return dict(await self._request("GET", "/ticket"))
 
+    async def fetch_git_token(self) -> str | None:
+        """Le jeton git du run (S22-07) : limité à son dépôt, une heure ; `None` sans App ou hors GitHub."""
+        payload = await self._request("POST", "/git-token")
+        jeton = (payload or {}).get("token")
+        return str(jeton) if jeton else None
+
     async def fetch_ci_logs(self, tail: int = 500) -> str:
         payload = await self._request("GET", "/ci-logs", params={"tail": tail})
         return str((payload or {}).get("logs", ""))
