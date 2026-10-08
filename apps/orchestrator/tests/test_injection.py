@@ -87,7 +87,7 @@ async def test_en_warn_l_injection_est_journalisee_et_l_etape_part_quand_meme(se
     (event,) = await _evenements(setup)
     assert event.payload["mode"] == "warn"
     motifs = {s["motif"] for s in event.payload["suspicions"]}
-    assert {"ignorer les instructions précédentes", "envoi vers une URL"} <= motifs
+    assert {"ignore the previous instructions", "sending to a URL"} <= motifs
     assert all(s["source"] == "ticket.body" for s in event.payload["suspicions"])
 
 

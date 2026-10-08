@@ -37,5 +37,5 @@ def test_un_greffon_declare_son_coffre() -> None:
     secrets.declarer_un_resolveur("vault", lambda chemin: f"lu:{chemin}")
     assert secrets.resoudre("vault:kv/jira#token") == "lu:kv/jira#token"
     assert "vault" in secrets.schemas()
-    with pytest.raises(ValueError, match="déjà déclaré"):
+    with pytest.raises(ValueError, match="already declared"):
         secrets.declarer_un_resolveur("vault", lambda chemin: chemin)

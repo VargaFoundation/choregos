@@ -108,7 +108,7 @@ def evaluate(name: str, ctx: GateContext, params: dict[str, Any] | None = None) 
     """Évalue une gate du registre. Une gate inconnue est une erreur de configuration."""
     fn = _REGISTRY.get(name)
     if fn is None:
-        raise GateError(f"gate inconnue : {name} (connues : {', '.join(known_gates())})")
+        raise GateError(f"unknown gate: {name} (known: {', '.join(known_gates())})")
     return fn(ctx, params or {})
 
 
@@ -131,7 +131,7 @@ def _sans_diff(name: str) -> GateOutcome:
     return GateOutcome(
         name,
         False,
-        detail="diff indisponible : cette garantie n'a pas pu être évaluée (connecteur SCM)",
+        detail="diff unavailable: this guarantee could not be evaluated (SCM connector)",
     )
 
 
@@ -141,12 +141,12 @@ def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         return _sans_diff("scope_respected")
     allowed = params.get("paths") or ctx.allowed_paths
     if not allowed:
-        return GateOutcome("scope_respected", True, detail="aucun périmètre déclaré")
+        return GateOutcome("scope_respected", True, detail="no allowed paths declared")
     out = [p for p in ctx.changed_files if not matches_any(p, list(allowed))]
     return GateOutcome(
         "scope_respected",
         not out,
-        detail="périmètre respecté" if not out else f"{len(out)} fichier(s) hors périmètre",
+        detail="within the allowed paths" if not out else f"{len(out)} file(s) outside the allowed paths",
         annotations=out,
     )
 
@@ -154,7 +154,7 @@ def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 @gate("evidence_present")
 def _evidence_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.result is None:
-        return GateOutcome("evidence_present", False, detail="aucun résultat d'étape")
+        return GateOutcome("evidence_present", False, detail="no stage result")
     ev = ctx.result.evidence
     missing: list[str] = []
     if ev.tests_passed is None:
@@ -166,11 +166,11 @@ def _evidence_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if params.get("require_typecheck", False) and ev.typecheck is None:
         missing.append("typecheck")
     if ev.tests_passed is False:
-        return GateOutcome("evidence_present", False, detail="les tests échouent")
+        return GateOutcome("evidence_present", False, detail="tests are failing")
     return GateOutcome(
         "evidence_present",
         not missing,
-        detail="preuves complètes" if not missing else f"preuves manquantes : {', '.join(missing)}",
+        detail="evidence complete" if not missing else f"missing evidence: {', '.join(missing)}",
     )
 
 
@@ -192,15 +192,15 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         # `allow_empty: true` reste possible pour une transition dont les sorties sont
         # facultatives, mais il faut alors l'écrire.
         if params.get("allow_empty"):
-            return GateOutcome("outputs_present", True, detail="aucune sortie déclarée (toléré)")
+            return GateOutcome("outputs_present", True, detail="no output declared (tolerated)")
         return GateOutcome(
             "outputs_present",
             False,
-            detail="aucune sortie déclarée : la transition demande cette garantie sans dire "
-            "quoi produire (`outputs:`), ou `allow_empty: true` pour l'assumer",
+            detail="no output declared: the transition asks for this guarantee without saying "
+            "what to produce (`outputs:`), or `allow_empty: true` to accept it",
         )
     if ctx.result is None:
-        return GateOutcome("outputs_present", False, detail="aucun résultat d'étape")
+        return GateOutcome("outputs_present", False, detail="no stage result")
     # `StageOutputs` tolère les champs supplémentaires (rôles custom) : c'est ce qui permet
     # à un métier de nommer ses propres sorties sans toucher au contrat.
     produced = ctx.result.outputs.model_dump(exclude_none=True)
@@ -208,7 +208,7 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     return GateOutcome(
         "outputs_present",
         not missing,
-        detail="sorties présentes" if not missing else f"sorties manquantes : {', '.join(missing)}",
+        detail="outputs present" if not missing else f"missing outputs: {', '.join(missing)}",
         annotations=missing,
     )
 
@@ -226,9 +226,9 @@ def _action_succeeded(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     """
     statut = ctx.action_status
     if statut is None or statut not in ACTION_REGLEE:
-        return GateOutcome("action_succeeded", False, pending=True, detail=f"action {statut or 'à proposer'}")
+        return GateOutcome("action_succeeded", False, pending=True, detail=f"action {statut or 'to propose'}")
     if statut == "succeeded":
-        return GateOutcome("action_succeeded", True, detail="action réussie")
+        return GateOutcome("action_succeeded", True, detail="action succeeded")
     return GateOutcome("action_succeeded", False, detail=f"action {statut}")
 
 
@@ -247,7 +247,7 @@ def _tool_called(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         return GateOutcome(
             "tool_called",
             False,
-            detail="aucun outil exigé : la garantie demande `tools: [...]` pour avoir de quoi vérifier",
+            detail="no tool required: the guarantee needs `tools: [...]` to have something to check",
         )
     appeles = set(ctx.tool_calls)
     manquants = [t for t in exiges if t not in appeles]
@@ -255,9 +255,9 @@ def _tool_called(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         "tool_called",
         not manquants,
         detail=(
-            f"outils appelés : {', '.join(exiges)}"
+            f"tools called: {', '.join(exiges)}"
             if not manquants
-            else f"outils exigés mais jamais appelés (au registre) : {', '.join(manquants)}"
+            else f"tools required but never called (per the ledger): {', '.join(manquants)}"
         ),
         annotations=manquants,
     )
@@ -283,19 +283,19 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     required = [str(k) for k in (params.get("keys") or [])]
     if not required:
         if params.get("allow_empty"):
-            return GateOutcome("evidence_facts", True, detail="aucun fait exigé (toléré)")
+            return GateOutcome("evidence_facts", True, detail="no fact required (tolerated)")
         return GateOutcome(
-            "evidence_facts", False, detail="aucun fait exigé : `keys:` manquant sur la garantie"
+            "evidence_facts", False, detail="no fact required: `keys:` missing on the guarantee"
         )
     if ctx.result is None:
-        return GateOutcome("evidence_facts", False, detail="aucun résultat d'étape")
+        return GateOutcome("evidence_facts", False, detail="no stage result")
     facts = ctx.result.evidence.facts or {}
     manquants = [key for key in required if key not in facts]
     if manquants:
         return GateOutcome(
             "evidence_facts",
             False,
-            detail=f"faits manquants : {', '.join(manquants)}",
+            detail=f"missing facts: {', '.join(manquants)}",
             annotations=manquants,
         )
     # Un booléen est un entier en Python : `piece_identite: false` passerait un `min: 0`
@@ -313,11 +313,11 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     # paramètre ne doit pas être un mot réservé du format qui le porte.
     faux = [key for key in (params.get("must_be_true") or []) if facts.get(key) is not True]
     if insuffisants or faux:
-        detail = " ; ".join(
-            filter(None, [", ".join(insuffisants), ("faux : " + ", ".join(faux)) if faux else ""])
+        detail = "; ".join(
+            filter(None, [", ".join(insuffisants), ("false: " + ", ".join(faux)) if faux else ""])
         )
         return GateOutcome("evidence_facts", False, detail=detail, annotations=insuffisants + faux)
-    return GateOutcome("evidence_facts", True, detail=f"faits vérifiés : {', '.join(sorted(required))}")
+    return GateOutcome("evidence_facts", True, detail=f"facts checked: {', '.join(sorted(required))}")
 
 
 @gate("diff_size_max", needs=("scm",))
@@ -329,19 +329,19 @@ def _diff_size_max(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     files = len(ctx.changed_files)
     lines = ctx.additions + ctx.deletions
     if files > max_files:
-        return GateOutcome("diff_size_max", False, detail=f"{files} fichiers modifiés > {max_files}")
+        return GateOutcome("diff_size_max", False, detail=f"{files} files changed > {max_files}")
     if lines > max_lines:
-        return GateOutcome("diff_size_max", False, detail=f"{lines} lignes modifiées > {max_lines}")
-    return GateOutcome("diff_size_max", True, detail=f"{files} fichiers / {lines} lignes")
+        return GateOutcome("diff_size_max", False, detail=f"{lines} lines changed > {max_lines}")
+    return GateOutcome("diff_size_max", True, detail=f"{files} files / {lines} lines")
 
 
 SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("clé AWS", r"AKIA[0-9A-Z]{16}"),
-    ("clé privée", r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-    ("token GitHub", r"gh[pousr]_[A-Za-z0-9]{20,}"),
-    ("clé Anthropic", r"sk-ant-[A-Za-z0-9_-]{20,}"),
-    ("clé OpenAI", r"sk-(?:proj-)?[A-Za-z0-9]{32,}"),
-    ("token Slack", r"xox[baprs]-[A-Za-z0-9-]{10,}"),
+    ("AWS key", r"AKIA[0-9A-Z]{16}"),
+    ("private key", r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    ("GitHub token", r"gh[pousr]_[A-Za-z0-9]{20,}"),
+    ("Anthropic key", r"sk-ant-[A-Za-z0-9_-]{20,}"),
+    ("OpenAI key", r"sk-(?:proj-)?[A-Za-z0-9]{32,}"),
+    ("Slack token", r"xox[baprs]-[A-Za-z0-9-]{10,}"),
     ("JWT", r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
 )
 
@@ -363,7 +363,7 @@ def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     return GateOutcome(
         "no_secrets",
         not found,
-        detail="aucun secret détecté" if not found else f"secrets détectés : {', '.join(found)}",
+        detail="no secret detected" if not found else f"secrets detected: {', '.join(found)}",
         annotations=found,
     )
 
@@ -372,12 +372,12 @@ def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     threshold = float(params.get("x", params.get("min", 0.0)))
     if ctx.result is None or ctx.result.evidence.coverage_delta is None:
-        return GateOutcome("coverage_delta_min", False, detail="delta de couverture inconnu")
+        return GateOutcome("coverage_delta_min", False, detail="coverage delta unknown")
     delta = ctx.result.evidence.coverage_delta
     return GateOutcome(
         "coverage_delta_min",
         delta >= threshold,
-        detail=f"couverture {delta:+.2f} (seuil {threshold:+.2f})",
+        detail=f"coverage {delta:+.2f} (threshold {threshold:+.2f})",
     )
 
 
@@ -387,7 +387,7 @@ def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome
 @gate("ci_green", asynchronous=True, needs=("ci",))
 def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.ci_status is None:
-        return GateOutcome("ci_green", False, pending=True, detail="CI en attente")
+        return GateOutcome("ci_green", False, pending=True, detail="CI pending")
     ok = ctx.ci_status in {"success", "succeeded", "neutral"}
     return GateOutcome("ci_green", ok, detail=f"CI {ctx.ci_status}")
 
@@ -395,7 +395,7 @@ def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 @gate("review_approved", asynchronous=True, needs=("scm",))
 def _review_approved(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.review_state is None:
-        return GateOutcome("review_approved", False, pending=True, detail="review en attente")
+        return GateOutcome("review_approved", False, pending=True, detail="review pending")
     ok = ctx.review_state == "approved"
     return GateOutcome("review_approved", ok, detail=f"review {ctx.review_state}")
 
@@ -408,24 +408,24 @@ def _scans_ok(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
             return GateOutcome(
                 "scans_ok",
                 False,
-                detail="aucun scan de sécurité déclaré sur la PR : ajoutez semgrep/trivy/gitleaks "
-                "à la CI, ou retirez la gate `scans_ok` du workflow",
+                detail="no security scan declared on the PR: add semgrep/trivy/gitleaks "
+                "to the CI, or remove the `scans_ok` gate from the workflow",
             )
-        return GateOutcome("scans_ok", False, pending=True, detail="scans en attente")
+        return GateOutcome("scans_ok", False, pending=True, detail="scans pending")
     failed = [name for name in required if ctx.scans.get(name, "pending") not in {"ok", "passed", "skipped"}]
     pending = [name for name in required if ctx.scans.get(name) is None]
     if pending:
-        return GateOutcome("scans_ok", False, pending=True, detail=f"scans en attente : {', '.join(pending)}")
+        return GateOutcome("scans_ok", False, pending=True, detail=f"scans pending: {', '.join(pending)}")
     return GateOutcome(
-        "scans_ok", not failed, detail="scans OK" if not failed else f"échec : {', '.join(failed)}"
+        "scans_ok", not failed, detail="scans OK" if not failed else f"failed: {', '.join(failed)}"
     )
 
 
 @gate("provenance_signed", asynchronous=True, needs=("ci",))
 def _provenance_signed(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.signed is None:
-        return GateOutcome("provenance_signed", False, pending=True, detail="signature en attente")
-    return GateOutcome("provenance_signed", ctx.signed, detail="signé" if ctx.signed else "non signé")
+        return GateOutcome("provenance_signed", False, pending=True, detail="signature pending")
+    return GateOutcome("provenance_signed", ctx.signed, detail="signed" if ctx.signed else "not signed")
 
 
 @gate("flag_present", asynchronous=True)
@@ -433,12 +433,12 @@ def _flag_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     """Gate S9-06 : un ticket `risk: high` doit nommer un feature flag qui existe réellement."""
     name = params.get("name") or ctx.required_flag
     if not name:
-        return GateOutcome("flag_present", False, detail="aucun feature flag nommé dans la spec")
+        return GateOutcome("flag_present", False, detail="no feature flag named in the spec")
     ok = name in ctx.flags
     return GateOutcome(
         "flag_present",
         ok,
-        detail=f"flag `{name}` " + ("présent" if ok else "absent du code / du fournisseur de flags"),
+        detail=f"flag `{name}` " + ("present" if ok else "missing from the code / the flag provider"),
     )
 
 
@@ -446,7 +446,7 @@ def _flag_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 def _external(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     url = str(params.get("url", ""))
     if url not in ctx.external_results:
-        return GateOutcome("external", False, pending=True, detail=f"attente de {url}")
+        return GateOutcome("external", False, pending=True, detail=f"waiting for {url}")
     ok = ctx.external_results[url]
     return GateOutcome("external", ok, detail=f"{url} → {'ok' if ok else 'ko'}")
 

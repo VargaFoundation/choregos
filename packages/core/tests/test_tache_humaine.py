@@ -50,10 +50,10 @@ def test_une_tache_bien_formee_est_valide_et_se_dit_en_clair() -> None:
     assert rapport.valid, rapport.as_dict()
     etape = to_process(workflow)[0]
     assert etape["task"] == (
-        "done «Remettre le badge» (filling `badge_uid`) and attested «J'ai remis le badge en main propre à "
-        "son porteur»"
+        "done “Remettre le badge” (filling `badge_uid`) and attested “J'ai remis le badge en main propre à "
+        "son porteur”"
     )
-    assert "once they have done «Remettre le badge»" in etape["sentence"]
+    assert "once they have done “Remettre le badge”" in etape["sentence"]
 
 
 CHAMP = "          badge_uid: {type: string, minLength: 8}"

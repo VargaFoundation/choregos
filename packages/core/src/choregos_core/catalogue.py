@@ -114,7 +114,7 @@ class OutilCatalogue(Model):
         employer. Le dire au chargement du catalogue vaut mieux qu'au premier appel.
         """
         if (self.http is None) == (self.mcp is None):
-            raise ValueError(f"l'outil {self.name} doit déclarer `http:` ou `mcp:`, et un seul")
+            raise ValueError(f"the tool {self.name} must declare `http:` or `mcp:`, and only one")
         return self
 
     def ouvert_a(self, groupes: list[str]) -> bool:
@@ -158,7 +158,7 @@ def valider_les_arguments(outil: OutilCatalogue, arguments: dict[str, Any]) -> N
     except jsonschema.ValidationError as exc:
         chemin = "/".join(str(p) for p in exc.absolute_path) or "(racine)"
         raise ArgumentRefuseError(
-            f"argument refusé par le schéma de {outil.name} en {chemin} : {exc.message}"
+            f"argument refused by the schema of {outil.name} at {chemin}: {exc.message}"
         ) from exc
 
 
@@ -194,13 +194,13 @@ def _url_de(gabarit: str, arguments: dict[str, Any]) -> str:
         return url
     decoupe, attendu = urlsplit(url), urlsplit(prefixe)
     if (decoupe.scheme, decoupe.netloc) != (attendu.scheme, attendu.netloc):
-        raise ArgumentRefuseError(f"un argument a déplacé l'hôte de l'appel : {url}")
+        raise ArgumentRefuseError(f"an argument moved the call's host: {url}")
     normalise = posixpath.normpath(decoupe.path)
     if decoupe.path.endswith("/") and not normalise.endswith("/"):
         normalise += "/"
     if not normalise.startswith(attendu.path):
         raise ArgumentRefuseError(
-            f"un argument est sorti du chemin de l'outil : {normalise} n'est pas sous {attendu.path}"
+            f"an argument left the tool's path: {normalise} is not under {attendu.path}"
         )
     return urlunsplit((decoupe.scheme, decoupe.netloc, normalise, decoupe.query, decoupe.fragment))
 

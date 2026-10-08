@@ -18,6 +18,7 @@ des clés, pas du texte.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 import re
 from collections.abc import Iterator
@@ -126,3 +127,56 @@ def test_aucun_fichier_depose_ni_skill_n_est_en_francais(chemin: pathlib.Path) -
     prose = _prose(chemin.read_text(encoding="utf-8"))
     fautes = [ligne.strip()[:80] for ligne in prose.splitlines() if ressemble_a_du_francais(ligne)]
     assert not fautes, "du français dans un fichier livré :\n  " + "\n  ".join(fautes)
+
+
+# ───────────────────── ce que le code DIT : les messages (S21-10 et suivantes) ─────────────────────
+
+#: Ce qui reste en français dans le code, et pourquoi. Une ligne ici est une décision, pas un oubli.
+FRANCAIS_VOULU = {
+    # Les motifs de la garde contre l'injection reconnaissent AUSSI une injection écrite en français.
+    "packages/core/src/choregos_core/injection.py",
+}
+
+
+def _chaines_parlees(chemin: pathlib.Path) -> Iterator[tuple[int, str]]:
+    """Les chaînes d'un module qui peuvent arriver à quelqu'un : ni docstrings, ni commentaires
+    sous forme de chaîne, ni motifs d'expression régulière ; une f-string se lit sans ses trous."""
+    arbre = ast.parse(chemin.read_text(encoding="utf-8"))
+    muettes: set[int] = set()
+    for noeud in ast.walk(arbre):
+        if isinstance(noeud, ast.Expr) and isinstance(noeud.value, ast.Constant):
+            muettes.add(id(noeud.value))
+        if isinstance(noeud, ast.JoinedStr):
+            muettes.update(id(v) for v in noeud.values)
+            texte = "".join(
+                v.value for v in noeud.values if isinstance(v, ast.Constant) and isinstance(v.value, str)
+            )
+            yield noeud.lineno, texte
+    for noeud in ast.walk(arbre):
+        if (
+            isinstance(noeud, ast.Constant)
+            and isinstance(noeud.value, str)
+            and id(noeud) not in muettes
+            and "\\b" not in noeud.value
+        ):
+            yield noeud.lineno, noeud.value
+
+
+def _francais_d_un_paquet(racine: str) -> list[str]:
+    fautes = []
+    for chemin in sorted((RACINE / racine).rglob("*.py")):
+        relatif = str(chemin.relative_to(RACINE))
+        if relatif in FRANCAIS_VOULU or "/tests/" in relatif:
+            continue
+        fautes += [
+            f"{relatif}:{ligne}: {texte[:90]!r}"
+            for ligne, texte in _chaines_parlees(chemin)
+            if ressemble_a_du_francais(texte)
+        ]
+    return fautes
+
+
+def test_les_messages_du_coeur_sont_en_anglais() -> None:
+    """Validateur, analyseur, carte, garanties, moteur, éditions typées, politique, secrets (S21-10)."""
+    fautes = _francais_d_un_paquet("packages/core/src/choregos_core")
+    assert not fautes, "du français dans ce que le cœur dit :\n  " + "\n  ".join(fautes)

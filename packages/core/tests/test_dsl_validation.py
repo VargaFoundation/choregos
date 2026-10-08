@@ -203,7 +203,7 @@ def test_error_message_carries_line_and_column() -> None:
     issue = next(i for i in report.errors if i.code == "state.unknown")
     assert issue.line and issue.line > 0
     assert "transitions[0].to" in (issue.path or "")
-    assert "ligne" in issue.format()
+    assert "line" in issue.format()
 
 
 def test_13_garantie_sans_matiere() -> None:

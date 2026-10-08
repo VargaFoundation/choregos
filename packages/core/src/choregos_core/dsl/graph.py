@@ -91,21 +91,21 @@ def to_graph(wf: Workflow) -> dict[str, Any]:
                     "wildcard": wildcard,
                 }
             )
-            add(src, t.on_reject, "reject", "rejet", actor=t.by)
+            add(src, t.on_reject, "reject", "if rejected", actor=t.by)
             if t.on_fail is not None:
-                add(src, t.on_fail.to, "retry", f"échec (≤{t.on_fail.max_attempts})")
-                add(src, t.on_fail.escalate_to, "escalate", "échecs épuisés")
+                add(src, t.on_fail.to, "retry", f"on failure (≤{t.on_fail.max_attempts})")
+                add(src, t.on_fail.escalate_to, "escalate", "when retries run out")
             if t.on_changes_requested is not None:
-                add(src, t.on_changes_requested.to, "retry", "changements demandés")
-                add(src, t.on_changes_requested.escalate_to, "escalate", "revues épuisées")
+                add(src, t.on_changes_requested.to, "retry", "on changes requested")
+                add(src, t.on_changes_requested.escalate_to, "escalate", "when reviews run out")
 
     defaults = wf.defaults
     if defaults and defaults.from_any_agent_state:
         d = defaults.from_any_agent_state
         for src in agent_states:
             add(src, d.on_question, "default", "question")
-            add(src, d.on_budget_exceeded, "default", "budget dépassé")
-            add(src, d.on_timeout, "default", "délai dépassé")
+            add(src, d.on_budget_exceeded, "default", "budget exceeded")
+            add(src, d.on_timeout, "default", "timeout")
     if defaults and defaults.needs_human and defaults.needs_human.on_abandon:
         # Même convention que le validateur : l'état où un humain est garé.
         for name, state in wf.states.items():

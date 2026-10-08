@@ -33,9 +33,9 @@ class Quota:
         if not _CPU.match(self.cpu):
             raise ValueError(f"quota CPU illisible : {self.cpu!r} (ex. `8`, `500m`)")
         if not _MEMOIRE.match(self.memoire):
-            raise ValueError(f"quota mémoire illisible : {self.memoire!r} (ex. `16Gi`)")
+            raise ValueError(f"unreadable memory quota: {self.memoire!r} (e.g. `16Gi`)")
         if self.pods < 1:
-            raise ValueError("un quota de pods est au moins 1")
+            raise ValueError("a pods quota is at least 1")
 
 
 DEFAUT = Quota()

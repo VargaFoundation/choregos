@@ -397,7 +397,7 @@ async def test_un_run_mort_dit_le_code_de_sortie_du_runner_et_ce_qu_il_signifie(
     )
     assert statut.state == "failed"
     assert statut.exit_code == 30, "le dernier pod fait foi"
-    assert "runner sorti en 30 (Error : backend agent injoignable)" in statut.message
+    assert "runner sorti en 30 (Error : agent backend unreachable)" in statut.message
     assert "backoff limit" in statut.message
 
 

@@ -69,7 +69,7 @@ def parse_workflow(text: str, *, strict: bool = True) -> tuple[Workflow, Validat
 
     if not isinstance(source, dict):
         raise ValidationError(
-            [Issue("yaml.not_a_mapping", "le document doit être un objet YAML", None)], subject="workflow"
+            [Issue("yaml.not_a_mapping", "the document must be a YAML object", None)], subject="workflow"
         )
 
     document = dict(source)

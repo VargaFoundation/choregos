@@ -27,7 +27,7 @@ def test_un_agent_ses_sorties_ses_garanties_et_ses_reprises() -> None:
     phrase = str(sourcing["sentence"])
     assert "the agent `sourceur`" in phrase and "it produced `profils`" in phrase
     assert "the declared outputs are present" in phrase
-    assert "retries up to 2 time(s)" in phrase and "«Needs a human»" in phrase
+    assert "retries up to 2 time(s)" in phrase and "“Needs a human”" in phrase
 
 
 def test_une_personne_son_delai_et_le_rejet() -> None:
@@ -35,7 +35,7 @@ def test_une_personne_son_delai_et_le_rejet() -> None:
     assert validation["actor_type"] == "human"
     phrase = str(validation["sentence"])
     assert "a person of group `staffing-managers`, within 48 h" in phrase
-    assert "If rejected, back to «Sourcing»" in phrase and "times out after 72 h" in phrase
+    assert "If rejected, back to “Sourcing”" in phrase and "times out after 72 h" in phrase
 
 
 def test_ce_que_fait_la_plateforme_se_dit_en_clair() -> None:

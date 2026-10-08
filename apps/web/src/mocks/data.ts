@@ -506,7 +506,7 @@ export const workflowValidation: WorkflowValidation = {
       on_fail: null,
       on_reject: null,
       timeout_hours: null,
-      sentence: "From «To triage», the agent `refiner` (role refine, model profile:standard) moves the item to «Ready» once it produced `spec_markdown`.",
+      sentence: "From “To triage”, the agent `refiner` (role refine, model profile:standard) moves the item to “Ready” once it produced `spec_markdown`.",
     },
     {
       id: "t-implement",
@@ -519,10 +519,10 @@ export const workflowValidation: WorkflowValidation = {
       who: "the agent `dev` (role implement, model profile:by_size)",
       outputs: [],
       gates: [{ name: "scope_respected", summary: "the agent stayed within its allowed paths" }],
-      on_fail: "On failure it retries up to 2 time(s) from «Ready», then goes to «Needs a human».",
+      on_fail: "On failure it retries up to 2 time(s) from “Ready”, then goes to “Needs a human”.",
       on_reject: null,
       timeout_hours: 72,
-      sentence: "From «Ready», the agent `dev` (role implement, model profile:by_size) moves the item to «Done» once the agent stayed within its allowed paths. It times out after 72 h.",
+      sentence: "From “Ready”, the agent `dev` (role implement, model profile:by_size) moves the item to “Done” once the agent stayed within its allowed paths. It times out after 72 h.",
     },
   ],
 };
@@ -1160,7 +1160,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
         { id: "c-argo", kind: "cd", type: "argocd", config: {}, secret_refs: {}, status: "error" },
       ],
     ],
-    // Un tracker interne : la demande se pose dans la console (le board offre « new request »).
+    // Un tracker interne : la demande se pose dans la console (le board offre “ new request ”).
     [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
     [/^\/work-items\/[^/]+\/runs$/, runs],

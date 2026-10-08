@@ -54,7 +54,7 @@ async def test_renommer_un_etat_a_effet_l_ecrit_d_abord(client: AsyncClient, adm
     assert reponse.status_code == 200, reponse.text
     corps = reponse.json()
     assert "does: open_pr" in corps["yaml"] and "pr_open" not in corps["yaml"]
-    assert any("désormais écrit" in n for n in corps["notices"])
+    assert any("is now written" in n for n in corps["notices"])
     annulee = await client.post(
         "/api/v1/workflows/edit", json={"yaml": corps["yaml"], "operations": corps["inverse"]}
     )

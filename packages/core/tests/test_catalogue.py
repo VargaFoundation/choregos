@@ -82,14 +82,14 @@ def test_un_outil_a_une_source_et_une_seule() -> None:
     chargement vaut mieux qu'au premier appel."""
     import pytest as _pytest
 
-    with _pytest.raises(ValueError, match="doit déclarer"):
+    with _pytest.raises(ValueError, match="must declare"):
         charger_catalogue("outils:\n  - {name: vide, description: d, provider: p}")
 
     deux = MCP_DISTANT.replace(
         "    credential_env: FOURNISSEUR_MCP_KEY",
         "    credential_env: FOURNISSEUR_MCP_KEY\n    http: { url: https://exemple }",
     )
-    with _pytest.raises(ValueError, match="doit déclarer"):
+    with _pytest.raises(ValueError, match="must declare"):
         charger_catalogue(deux)
 
 
@@ -159,7 +159,7 @@ def test_un_argument_ne_peut_pas_remonter_le_chemin_de_l_url() -> None:
     # d'entrée du même hôte. C'est la comparaison au préfixe qui refuse.
     with pytest.raises(ArgumentRefuseError) as refus:
         construire_requete(outil, {"owner": "..", "repo": "user"}, None)
-    assert "sorti du chemin" in str(refus.value), refus.value
+    assert "left the tool's path" in str(refus.value), refus.value
 
     # Une valeur qui tenterait d'ajouter un segment, une requête ou un fragment est encodée.
     requete = construire_requete(outil, {"owner": "org", "repo": "d?token=x#y"}, None)

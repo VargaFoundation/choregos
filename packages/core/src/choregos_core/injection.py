@@ -21,7 +21,7 @@ MOTIFS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"[^.\n]{0,30}\b(instructions?|prompts?|rules?|guidelines?)\b",
             re.I,
         ),
-        "ignorer les instructions précédentes",
+        "ignore the previous instructions",
     ),
     (
         re.compile(
@@ -29,17 +29,17 @@ MOTIFS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"[^.\n]{0,30}\b(précédentes?|antérieures?|initiales?|système)\b",
             re.I,
         ),
-        "ignorer les instructions précédentes",
+        "ignore the previous instructions",
     ),
     (
         re.compile(
             r"\byou are now\b|\btu es (maintenant|désormais)\b|\bvous êtes (maintenant|désormais)\b", re.I
         ),
-        "réassignation de rôle",
+        "role reassignment",
     ),
     (
         re.compile(r"\b(new|updated|real|actual) (system )?(instructions?|prompt)\s*:", re.I),
-        "nouvelles instructions",
+        "new instructions",
     ),
     (
         re.compile(
@@ -47,13 +47,13 @@ MOTIFS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"\b(system prompt|instructions|your prompt)\b",
             re.I,
         ),
-        "exfiltration du prompt",
+        "prompt exfiltration",
     ),
     (
         re.compile(
             r"\b(affiche|révèle|montre|répète)\b[^.\n]{0,30}\b(prompt|instructions) (système|initial)", re.I
         ),
-        "exfiltration du prompt",
+        "prompt exfiltration",
     ),
     (
         re.compile(
@@ -61,21 +61,21 @@ MOTIFS: tuple[tuple[re.Pattern[str], str], ...] = (
             r"|\bne (dis|parle)\b[^.\n]{0,20}\b(utilisateur|humain)\b",
             re.I,
         ),
-        "dissimulation à l'humain",
+        "hiding from the human",
     ),
     (
         re.compile(
             r"\b(send|post|upload|exfiltrate|transmit|envoie|poste|transmets)\b[^.\n]{0,60}\bhttps?://", re.I
         ),
-        "envoi vers une URL",
+        "sending to a URL",
     ),
-    (re.compile(r"\b(curl|wget)\b[^|\n]{0,80}\|\s*(ba)?sh\b", re.I), "exécution d'un script téléchargé"),
+    (re.compile(r"\b(curl|wget)\b[^|\n]{0,80}\|\s*(ba)?sh\b", re.I), "running a downloaded script"),
     (
         re.compile(r"</?\s*(system|assistant|instructions)\s*>|\[/?INST\]|<\|im_start\|>|<\|system\|>", re.I),
-        "balises de prompt",
+        "prompt tags",
     ),
-    (re.compile(r"\b(BEGIN|END) (SYSTEM|HIDDEN) (PROMPT|INSTRUCTIONS)\b", re.I), "balises de prompt"),
-    (re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{200,}={0,2}(?![A-Za-z0-9+/])"), "charge encodée"),
+    (re.compile(r"\b(BEGIN|END) (SYSTEM|HIDDEN) (PROMPT|INSTRUCTIONS)\b", re.I), "prompt tags"),
+    (re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{200,}={0,2}(?![A-Za-z0-9+/])"), "encoded payload"),
 )
 
 

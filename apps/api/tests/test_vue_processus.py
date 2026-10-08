@@ -15,5 +15,5 @@ async def test_la_validation_dit_chaque_transition_en_clair(client: AsyncClient)
     assert reponse.status_code == 200, reponse.text
     etapes = reponse.json()["process"]
     assert len(etapes) == 5
-    assert all(e["sentence"].startswith("From «") for e in etapes)
+    assert all(e["sentence"].startswith("From “") for e in etapes)
     assert {e["actor_type"] for e in etapes} == {"agent", "human"}

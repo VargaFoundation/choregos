@@ -85,9 +85,9 @@ def _tache(t: Transition) -> str | None:
     if t.task is None:
         return None
     champs = ", ".join(f"`{nom}`" for nom in (t.task.form.get("properties") or {}))
-    texte = f"done «{t.task.title or t.to}» (filling {champs})"
+    texte = f"done “{t.task.title or t.to}” (filling {champs})"
     if t.task.attest:
-        texte += f" and attested «{t.task.attest}»"
+        texte += f" and attested “{t.task.attest}”"
     return texte
 
 
@@ -105,7 +105,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
         if t.outputs:
             conditions.append("it produced " + ", ".join(f"`{o}`" for o in t.outputs))
         conditions += [g["summary"] for g in garanties]
-        phrase = f"From «{_affiche(wf, t.from_)}», {qui} moves the item to «{_affiche(wf, t.to)}»"
+        phrase = f"From “{_affiche(wf, t.from_)}”, {qui} moves the item to “{_affiche(wf, t.to)}”"
         action = _action(t)
         if action:
             phrase += f", after {action},"
@@ -119,11 +119,11 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
         if t.on_fail is not None:
             reprise, escalade = _affiche(wf, t.on_fail.to), _affiche(wf, t.on_fail.escalate_to)
             echec = (
-                f"On failure it retries up to {t.on_fail.max_attempts} time(s) from «{reprise}», "
-                f"then goes to «{escalade}»."
+                f"On failure it retries up to {t.on_fail.max_attempts} time(s) from “{reprise}”, "
+                f"then goes to “{escalade}”."
             )
             phrase += " " + echec
-        rejet = f"If rejected, back to «{_affiche(wf, t.on_reject)}»." if t.on_reject else None
+        rejet = f"If rejected, back to “{_affiche(wf, t.on_reject)}”." if t.on_reject else None
         if rejet:
             phrase += " " + rejet
         if t.timeout_hours:

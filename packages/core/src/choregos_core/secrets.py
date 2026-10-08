@@ -31,10 +31,10 @@ class ReferenceInvalide(ValueError):  # noqa: N818 - un refus motivé, rendu en 
 
 def _environnement(nom: str) -> str:
     if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", nom):
-        raise ReferenceInvalide(f"`env:{nom}` : un nom de variable en MAJUSCULES est attendu")
+        raise ReferenceInvalide(f"`env:{nom}`: an UPPERCASE variable name is expected")
     valeur = os.environ.get(nom)
     if not valeur:
-        raise SecretIntrouvable(f"`env:{nom}` : la variable n'est pas posée dans ce processus")
+        raise SecretIntrouvable(f"`env:{nom}`: the variable is not set in this process")
     return valeur
 
 
@@ -44,9 +44,9 @@ _RESOLVEURS: dict[str, Callable[[str], str]] = {"env": _environnement}
 def declarer_un_resolveur(schema: str, resoudre_: Callable[[str], str]) -> None:
     """Appelée par un greffon à son chargement : `schema` (`vault`, `infisical`…) et sa lecture."""
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", schema):
-        raise ValueError(f"schéma de secret invalide : {schema!r}")
+        raise ValueError(f"invalid secret scheme: {schema!r}")
     if schema in _RESOLVEURS and _RESOLVEURS[schema] is not resoudre_:
-        raise ValueError(f"schéma de secret déjà déclaré : {schema}")
+        raise ValueError(f"secret scheme already declared: {schema}")
     _RESOLVEURS[schema] = resoudre_
 
 
@@ -60,12 +60,11 @@ def verifier(reference: str) -> None:
     m = _REFERENCE.match(reference or "")
     if m is None:
         raise ReferenceInvalide(
-            "une référence de secret est attendue (`env:NOM`), pas une valeur : un secret ne "
-            "s'écrit jamais en clair"
+            "a secret reference is expected (`env:NAME`), not a value: a secret is never written in clear"
         )
     if m.group(1) not in _RESOLVEURS:
         raise ReferenceInvalide(
-            f"schéma de secret inconnu : `{m.group(1)}` (connus : {', '.join(sorted(_RESOLVEURS))})"
+            f"unknown secret scheme: `{m.group(1)}` (known: {', '.join(sorted(_RESOLVEURS))})"
         )
 
 

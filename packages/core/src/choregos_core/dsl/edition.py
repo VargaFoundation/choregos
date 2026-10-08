@@ -177,8 +177,8 @@ def editer(texte: str, operations: list[Any]) -> Edition:
             etapes = [*ecrites, operation]
             if ecrites:
                 edition.avertissements.append(
-                    f"l'effet que portait le nom `{operation.from_}` est désormais écrit "
-                    "(`does`, `production`) : le renommage ne change pas ce que fait le workflow"
+                    f"the effect the name `{operation.from_}` carried is now written "
+                    "(`does`, `production`): the rename does not change what the workflow does"
                 )
         for etape in etapes:
             appliquer = _APPLICATIONS[etape.op]
@@ -204,8 +204,8 @@ def _effets_a_ecrire(texte: str, nom: str) -> list[Any]:
         if transition.get("to") == nom and transition.get("by") in systemes and not transition.get("does"):
             if not transition.get("id"):
                 raise EditionRefusee(
-                    f"la transition vers `{nom}` n'a pas d'`id` : son effet ne peut pas s'écrire avant le "
-                    "renommage — donnez-lui un `id`, ou écrivez `does` à la main"
+                    f"the transition to `{nom}` has no `id`: its effect cannot be written before the "
+                    "rename — give it an `id`, or write `does` by hand"
                 )
             ecrites.append(SetTransition(id=str(transition["id"]), field="does", value=effet))
     etat = (donnees.get("states") or {}).get(nom)
@@ -221,9 +221,9 @@ def _composer(texte: str) -> MappingNode:
     try:
         racine = yaml.compose(texte, Loader=yaml.SafeLoader)
     except yaml.YAMLError as erreur:
-        raise EditionRefusee(f"YAML illisible : {erreur}") from erreur
+        raise EditionRefusee(f"unreadable YAML: {erreur}") from erreur
     if not isinstance(racine, MappingNode):
-        raise EditionRefusee("le document doit être un objet YAML")
+        raise EditionRefusee("the document must be a YAML object")
     return racine
 
 
@@ -331,9 +331,7 @@ class _Collection:
 
     def _figer(self, i: int) -> None:
         if self.premier_fige and not self.en_flow and i == 0:
-            raise EditionRefusee(
-                f"le premier champ de `{self.nom}` partage la ligne du tiret : modifiez le YAML"
-            )
+            raise EditionRefusee(f"the first field of `{self.nom}` shares the dash's line: edit the YAML")
 
     def retirer(self, i: int) -> tuple[str, str]:
         """Le texte sans l'élément `i`, et le texte retiré (pour l'inverse)."""
@@ -355,7 +353,7 @@ class _Collection:
     def _position(self, i: int) -> int:
         n = self.taille
         if not 0 <= i <= n:
-            raise EditionRefusee(f"place {i} hors de `{self.nom}` ({n} éléments)")
+            raise EditionRefusee(f"position {i} outside `{self.nom}` ({n} items)")
         if i < n:
             self._figer(i)
         if self.en_flow:
@@ -365,7 +363,7 @@ class _Collection:
             return bornes[i][0] if i < n else bornes[-1][1]
         blocs = self._blocs()
         if not blocs:
-            raise EditionRefusee(f"`{self.nom}` est vide : écrivez-la en flow (`[]` ou `{{}}`)")
+            raise EditionRefusee(f"`{self.nom}` is empty: write it in flow style (`[]` or `{{}}`)")
         return blocs[i][0] if i < n else blocs[-1][1]
 
     def inserer_brut(self, i: int, brut: str) -> str:
@@ -405,26 +403,26 @@ def _element_de_sequence(texte: str, nom: str, element: Node) -> _Collection:
 def _collection(texte: str, parent: Node, nom: str) -> _Collection:
     trouve = _cle(parent, nom)
     if trouve is None:
-        raise EditionRefusee(f"pas de `{nom}` ici")
+        raise EditionRefusee(f"no `{nom}` here")
     cle, noeud = trouve
     if not isinstance(noeud, MappingNode | SequenceNode):
-        raise EditionRefusee(f"`{nom}` n'est pas une collection")
+        raise EditionRefusee(f"`{nom}` is not a collection")
     return _sous_collection(texte, cle, noeud)
 
 
 def _modifier_cle(texte: str, porteur: _Collection, op: _SetField) -> tuple[str, dict[str, Any]]:
     """`field` d'un élément : écrite, remplacée, retirée ou réinsérée ; rend de quoi l'annuler."""
     if not isinstance(porteur.noeud, MappingNode):
-        raise EditionRefusee(f"`{porteur.nom}` n'est pas un objet")
+        raise EditionRefusee(f"`{porteur.nom}` is not an object")
     trouve = _cle(porteur.noeud, op.field)
     if op.text is not None:
         if trouve is not None:
-            raise EditionRefusee(f"`{op.field}` existe déjà")
+            raise EditionRefusee(f"`{op.field}` already exists")
         place = porteur.taille if op.index is None else op.index
         return porteur.inserer_brut(place, op.text), {"field": op.field, "unset": True}
     if op.unset:
         if trouve is None:
-            raise EditionRefusee(f"`{op.field}` n'existe pas")
+            raise EditionRefusee(f"`{op.field}` does not exist")
         place = _index_de_cle(porteur.noeud, op.field)
         sans, retire = porteur.retirer(place)
         return sans, {"field": op.field, "text": retire, "index": place}
@@ -433,7 +431,7 @@ def _modifier_cle(texte: str, porteur: _Collection, op: _SetField) -> tuple[str,
         return porteur.inserer(porteur.taille, f"{op.field}: {nouveau}"), {"field": op.field, "unset": True}
     valeur = trouve[1]
     if isinstance(valeur, MappingNode | SequenceNode) and not valeur.flow_style:
-        raise EditionRefusee(f"`{op.field}` est écrit en bloc : modifiez-le dans le YAML")
+        raise EditionRefusee(f"`{op.field}` is written in block style: edit it in the YAML")
     debut, fin = int(valeur.start_mark.index), int(valeur.end_mark.index)
     return _greffer(texte, debut, fin, nouveau), {"field": op.field, "raw": texte[debut:fin]}
 
@@ -459,7 +457,7 @@ def _references_d_etat(racine: MappingNode, nom: str) -> list[ScalarNode]:
 
 def _a_effet(nom: str) -> list[str]:
     if nom.startswith(PREFIXES_A_EFFET):
-        return [f"l'état `{nom}` porte un effet par son nom (ouverture de PR, fusion, mise en production)"]
+        return [f"the state `{nom}` carries an effect through its name (opening a PR, merging, production)"]
     return []
 
 
@@ -471,12 +469,12 @@ def _etats(texte: str) -> tuple[MappingNode, _Collection]:
 def _add_state(texte: str, op: AddState) -> tuple[str, Any, list[str]]:
     _, etats = _etats(texte)
     if _cle(etats.noeud, op.name) is not None:
-        raise EditionRefusee(f"l'état `{op.name}` existe déjà")
+        raise EditionRefusee(f"the state `{op.name}` already exists")
     place = etats.taille if op.index is None else op.index
     if op.text is not None:
         return etats.inserer_brut(place, op.text), RemoveState(name=op.name), []
     if not IDENTIFIANT.match(op.name):
-        raise EditionRefusee(f"`{op.name}` n'est pas un nom d'état (minuscules, chiffres, `_`, `-`)")
+        raise EditionRefusee(f"`{op.name}` is not a state name (lowercase letters, digits, `_`, `-`)")
     spec = {"display": op.name, **(op.spec or {})}
     return etats.inserer(place, f"{op.name}: {_rendre(spec)}"), RemoveState(name=op.name), _a_effet(op.name)
 
@@ -484,12 +482,12 @@ def _add_state(texte: str, op: AddState) -> tuple[str, Any, list[str]]:
 def _remove_state(texte: str, op: RemoveState) -> tuple[str, Any, list[str]]:
     racine, etats = _etats(texte)
     if _cle(etats.noeud, op.name) is None:
-        raise EditionRefusee(f"l'état `{op.name}` n'existe pas")
+        raise EditionRefusee(f"the state `{op.name}` does not exist")
     references = _references_d_etat(racine, op.name)
     if references:
         lignes = sorted({r.start_mark.line + 1 for r in references})
         raise EditionRefusee(
-            f"l'état `{op.name}` est encore nommé ligne(s) {lignes} : retirez d'abord ses transitions"
+            f"the state `{op.name}` is still named on line(s) {lignes}: remove its transitions first"
         )
     place = _index_de_cle(etats.noeud, op.name)
     sans, retire = etats.retirer(place)
@@ -500,11 +498,11 @@ def _rename_state(texte: str, op: RenameState) -> tuple[str, Any, list[str]]:
     racine, etats = _etats(texte)
     trouve = _cle(etats.noeud, op.from_)
     if trouve is None:
-        raise EditionRefusee(f"l'état `{op.from_}` n'existe pas")
+        raise EditionRefusee(f"the state `{op.from_}` does not exist")
     if not IDENTIFIANT.match(op.to):
-        raise EditionRefusee(f"`{op.to}` n'est pas un nom d'état (minuscules, chiffres, `_`, `-`)")
+        raise EditionRefusee(f"`{op.to}` is not a state name (lowercase letters, digits, `_`, `-`)")
     if _cle(etats.noeud, op.to) is not None or _references_d_etat(racine, op.to):
-        raise EditionRefusee(f"`{op.to}` est déjà un état, ou déjà nommé dans le workflow")
+        raise EditionRefusee(f"`{op.to}` is already a state, or already named in the workflow")
     noeuds = [trouve[0], *_references_d_etat(racine, op.from_)]
     # De la fin vers le début : chaque greffe garde valides les positions des précédentes.
     for noeud in sorted(noeuds, key=lambda n: -int(n.start_mark.index)):
@@ -519,7 +517,7 @@ def _set_state(texte: str, op: SetState) -> tuple[str, Any, list[str]]:
     _, etats = _etats(texte)
     trouve = _cle(etats.noeud, op.name)
     if trouve is None:
-        raise EditionRefusee(f"l'état `{op.name}` n'existe pas")
+        raise EditionRefusee(f"the state `{op.name}` does not exist")
     nouveau, inverse = _modifier_cle(texte, _sous_collection(texte, trouve[0], trouve[1]), op)
     return nouveau, SetState(name=op.name, **inverse), []
 
@@ -541,7 +539,7 @@ def _transition(texte: str, ident: str) -> tuple[_Collection, int, Node]:
     for i, element in enumerate(transitions.noeud.value):
         if _id_de(element) == ident:
             return transitions, i, element
-    raise EditionRefusee(f"la transition `{ident}` n'existe pas")
+    raise EditionRefusee(f"the transition `{ident}` does not exist")
 
 
 def _add_transition(texte: str, op: AddTransition) -> tuple[str, Any, list[str]]:
@@ -552,15 +550,15 @@ def _add_transition(texte: str, op: AddTransition) -> tuple[str, Any, list[str]]
     else:
         spec = dict(op.transition or {})
         if not spec.get("from") or not spec.get("to"):
-            raise EditionRefusee("une transition exige `from` et `to`")
+            raise EditionRefusee("a transition requires `from` and `to`")
         ident = str(spec.pop("id", None) or f"t-{spec['from']}-{spec['to']}")
         if ident in {_id_de(e) for e in transitions.noeud.value}:
-            raise EditionRefusee(f"la transition `{ident}` existe déjà")
+            raise EditionRefusee(f"the transition `{ident}` already exists")
         rendu = _rendre({"id": ident, **spec})
         avec = transitions.inserer(place, rendu if transitions.en_flow else f"- {rendu}")
     ajoutee = _id_de(_transitions(avec).noeud.value[place])
     if ajoutee is None:
-        raise EditionRefusee("une transition ajoutée doit porter son `id`")
+        raise EditionRefusee("an added transition must carry its `id`")
     return avec, RemoveTransition(id=ajoutee), []
 
 
@@ -573,7 +571,7 @@ def _remove_transition(texte: str, op: RemoveTransition) -> tuple[str, Any, list
 def _set_transition(texte: str, op: SetTransition) -> tuple[str, Any, list[str]]:
     _, _, element = _transition(texte, op.id)
     if op.field == "id":
-        raise EditionRefusee("l'`id` d'une transition ne se modifie pas : retirez-la, puis ajoutez-la")
+        raise EditionRefusee("a transition's `id` cannot be changed: remove it, then add it again")
     nouveau, inverse = _modifier_cle(texte, _element_de_sequence(texte, f"transition {op.id}", element), op)
     return nouveau, SetTransition(id=op.id, **inverse), []
 
@@ -593,7 +591,7 @@ def _add_gate(texte: str, op: AddGate) -> tuple[str, Any, list[str]]:
     trouve = _cle(element, "gates")
     if trouve is None:
         if op.gate is None:
-            raise EditionRefusee("`gate` manquant")
+            raise EditionRefusee("`gate` missing")
         porteur = _element_de_sequence(texte, f"transition {op.transition}", element)
         nouveau, inverse = _modifier_cle(
             texte, porteur, SetTransition(id=op.transition, field="gates", value=[op.gate])
@@ -606,11 +604,11 @@ def _add_gate(texte: str, op: AddGate) -> tuple[str, Any, list[str]]:
     elif op.gate is not None:
         nom = op.gate if isinstance(op.gate, str) else str(op.gate.get("name"))
         if nom in {_nom_de_garantie(g) for g in garanties.noeud.value}:
-            raise EditionRefusee(f"la transition `{op.transition}` a déjà la garantie `{nom}`")
+            raise EditionRefusee(f"the transition `{op.transition}` already has the guarantee `{nom}`")
         rendu = _rendre(op.gate)
         avec = garanties.inserer(place, rendu if garanties.en_flow else f"- {rendu}")
     else:
-        raise EditionRefusee("`gate` manquant")
+        raise EditionRefusee("`gate` missing")
     apres = _valeur(_transition(avec, op.transition)[2], "gates")
     assert isinstance(apres, SequenceNode)
     nom_ajoute = _nom_de_garantie(apres.value[place]) or ""
@@ -621,13 +619,13 @@ def _remove_gate(texte: str, op: RemoveGate) -> tuple[str, Any, list[str]]:
     _, _, element = _transition(texte, op.transition)
     trouve = _cle(element, "gates")
     if trouve is None or not isinstance(trouve[1], SequenceNode):
-        raise EditionRefusee(f"la transition `{op.transition}` n'a pas de garanties")
+        raise EditionRefusee(f"the transition `{op.transition}` has no guarantees")
     garanties = _sous_collection(texte, trouve[0], trouve[1])
     rangs = [r for r, g in enumerate(trouve[1].value) if _nom_de_garantie(g) == op.name]
     if op.index is not None:
         rangs = [r for r in rangs if r == op.index]
     if not rangs:
-        raise EditionRefusee(f"la transition `{op.transition}` n'a pas la garantie `{op.name}`")
+        raise EditionRefusee(f"the transition `{op.transition}` does not have the guarantee `{op.name}`")
     sans, retire = garanties.retirer(rangs[0])
     return sans, AddGate(transition=op.transition, text=retire, index=rangs[0]), []
 
@@ -654,25 +652,25 @@ def _acteurs(texte: str) -> tuple[MappingNode, _Collection]:
 def _add_actor(texte: str, op: AddActor) -> tuple[str, Any, list[str]]:
     _, acteurs = _acteurs(texte)
     if _cle(acteurs.noeud, op.name) is not None:
-        raise EditionRefusee(f"l'acteur `{op.name}` existe déjà")
+        raise EditionRefusee(f"the actor `{op.name}` already exists")
     place = acteurs.taille if op.index is None else op.index
     if op.text is not None:
         return acteurs.inserer_brut(place, op.text), RemoveActor(name=op.name), []
     if not IDENTIFIANT.match(op.name):
-        raise EditionRefusee(f"`{op.name}` n'est pas un nom d'acteur (minuscules, chiffres, `_`, `-`)")
+        raise EditionRefusee(f"`{op.name}` is not an actor name (lowercase letters, digits, `_`, `-`)")
     if not op.spec or "type" not in op.spec:
-        raise EditionRefusee("un acteur exige son `type` : agent, human ou system")
+        raise EditionRefusee("an actor requires its `type`: agent, human or system")
     return acteurs.inserer(place, f"{op.name}: {_rendre(op.spec)}"), RemoveActor(name=op.name), []
 
 
 def _remove_actor(texte: str, op: RemoveActor) -> tuple[str, Any, list[str]]:
     racine, acteurs = _acteurs(texte)
     if _cle(acteurs.noeud, op.name) is None:
-        raise EditionRefusee(f"l'acteur `{op.name}` n'existe pas")
+        raise EditionRefusee(f"the actor `{op.name}` does not exist")
     references = _references_d_acteur(racine, op.name)
     if references:
         lignes = sorted({r.start_mark.line + 1 for r in references})
-        raise EditionRefusee(f"l'acteur `{op.name}` porte encore des transitions, ligne(s) {lignes}")
+        raise EditionRefusee(f"the actor `{op.name}` still carries transitions, line(s) {lignes}")
     place = _index_de_cle(acteurs.noeud, op.name)
     sans, retire = acteurs.retirer(place)
     return sans, AddActor(name=op.name, text=retire, index=place), []
@@ -682,7 +680,7 @@ def _set_actor(texte: str, op: SetActor) -> tuple[str, Any, list[str]]:
     _, acteurs = _acteurs(texte)
     trouve = _cle(acteurs.noeud, op.name)
     if trouve is None:
-        raise EditionRefusee(f"l'acteur `{op.name}` n'existe pas")
+        raise EditionRefusee(f"the actor `{op.name}` does not exist")
     nouveau, inverse = _modifier_cle(texte, _sous_collection(texte, trouve[0], trouve[1]), op)
     return nouveau, SetActor(name=op.name, **inverse), []
 

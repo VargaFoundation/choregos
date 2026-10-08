@@ -52,12 +52,12 @@ def test_direct_litellm_identifier() -> None:
 
 
 def test_unknown_profile_raises() -> None:
-    with pytest.raises(ModelResolutionError, match="profil de modèle inconnu"):
+    with pytest.raises(ModelResolutionError, match="unknown model profile"):
         resolver().resolve("profile:licorne")
 
 
 def test_model_absent_from_gateway_is_refused() -> None:
-    with pytest.raises(ModelResolutionError, match="pas listé au gateway"):
+    with pytest.raises(ModelResolutionError, match="not listed by the gateway"):
         resolver().resolve("openai/inconnu")
 
 
@@ -82,12 +82,12 @@ def test_backend_constraint_on_unresolved_alias_warns() -> None:
     blind = ModelResolver(gateway_url="http://litellm:4000")
     resolved = blind.resolve("profile:standard", backend="claude-code")
     assert resolved.validated
-    assert any("non résolu" in warning for warning in resolved.warnings)
+    assert any("unresolved alias" in warning for warning in resolved.warnings)
 
 
 def test_unvalidated_matrix_combination() -> None:
     r = resolver(validated_backends={"platform/strong": ["claude-code"]})
-    with pytest.raises(ModelResolutionError, match="matrice d'évals"):
+    with pytest.raises(ModelResolutionError, match="eval matrix"):
         r.resolve("profile:strong", backend="codex")
     permissive = r.resolve("profile:strong", backend="codex", allow_unvalidated=True)
     assert not permissive.validated
