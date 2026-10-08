@@ -1,6 +1,6 @@
 [project]
 name = "choregos-ontology"
-version = "0.17.1"
+version = "0.17.2"
 description = "Essai du socle (TRV-001 à 003) : ontologie en YAML, compilation, outils MCP générés, greffon du cœur"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
