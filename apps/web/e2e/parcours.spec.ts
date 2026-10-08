@@ -11,6 +11,15 @@ test("liste des projets et accès à un projet", async ({ page }) => {
   await page.getByRole("link", { name: "Billing API" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api$/);
   await expect(page.getByText("prs merged on first pass")).toBeVisible();
+  // Le titre est le nom du projet, le slug au-dessus (S23-04).
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Billing API");
+  await expect(page.getByText("project · billing-api")).toBeVisible();
+});
+
+test("board : une colonne d'un état que le workflow ne connaît pas le dit (S23-04)", async ({ page }) => {
+  await page.goto("/p/billing-api/board");
+  // Les tickets de démonstration sont dans des états qu'ignore la carte de default-simple.
+  await expect(page.getByText("not a state of this workflow").first()).toBeVisible();
 });
 
 test("board : colonnes du workflow et décision humaine", async ({ page }) => {

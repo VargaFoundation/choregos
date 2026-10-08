@@ -4,8 +4,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Eyebrow, Heading, tabClasses } from "@varga/design-system";
 import { Onglets } from "@/components/ui";
+import { api } from "@/lib/api";
 
 const TABS = [
   { suffix: "", label: "overview" },
@@ -29,12 +31,16 @@ export default function ProjectLayout({
 }) {
   const { slug } = use(params);
   const pathname = usePathname();
+  // Le titre est le NOM du projet (« Billing API »), comme sur sa carte dans la liste ; le slug
+  // reste lisible au-dessus, c'est celui des URL et de la CLI (S23-04). Même clé que la vue
+  // d'ensemble : une seule lecture.
+  const projet = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   return (
     <div className="space-y-8">
       <div className="space-y-4">
-        <Eyebrow>project</Eyebrow>
+        <Eyebrow>project · {slug}</Eyebrow>
         <Heading as="h1" size="xl">
-          {slug}
+          {projet.data?.name ?? slug}
         </Heading>
       </div>
       <Onglets aria-label="project sections">

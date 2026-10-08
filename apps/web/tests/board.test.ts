@@ -30,6 +30,8 @@ describe("les colonnes d'un board (ADR 0031, S16-10)", () => {
   it("gardent visible un ticket dans un état que le workflow ne connaît plus", () => {
     const columns = columnsFromGraph(graph, [ticket("b", "ancien_etat")]);
     expect(columns.at(-1)?.state).toBe("ancien_etat");
+    // Et la colonne le dit : seule elle est hors du workflow (S23-04).
+    expect(columns.filter((c) => c.horsWorkflow).map((c) => c.state)).toEqual(["ancien_etat"]);
   });
 
   it("ne montrent que les tickets du workflow ; ceux d'avant l'épingle vont au défaut", () => {
