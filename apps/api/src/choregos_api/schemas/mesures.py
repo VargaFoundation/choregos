@@ -50,7 +50,7 @@ class CrossBackendReport(Dto):
     cross_backend_required: bool = False
     same_backend: CrossBackendArm = Field(default_factory=CrossBackendArm)
     other_backend: CrossBackendArm = Field(default_factory=CrossBackendArm)
-    verdict: str = "échantillon insuffisant"
+    verdict: str = "not enough data"
     detail: str = ""
 
 

@@ -28,9 +28,6 @@ RESTE_EN_FRANCAIS = {
     ("activities/evals.py", "délai dépassé ("),
     # Une expression régulière, pas un texte.
     ("activities/findings.py", "[a-zà-ÿ0-9_]+"),
-    # Le verdict du rapport A/B de la mémoire est produit par l'API (`services/memoire.py`) et comparé
-    # ici : il change avec elle, pas seul.
-    ("activities/memory.py", "la mémoire ne paie pas"),
     # Les champs du board GitHub Projects d'un projet déjà provisionné : les renommer est une migration.
     ("activities/tracker.py", "Coût (€)"),
 }

@@ -88,9 +88,9 @@ def rendre(valeur: Any, contexte: dict[str, Any]) -> Any:
         try:
             return SandboxedEnvironment(undefined=StrictUndefined).from_string(valeur).render(**contexte)
         except UndefinedError as absente:
-            raise EffetRefuse(f"paramètre introuvable : {absente}") from absente
+            raise EffetRefuse(f"parameter not found: {absente}") from absente
         except TemplateError as refus:  # une syntaxe fausse, une sortie du bac à sable
-            raise EffetRefuse(f"gabarit refusé : {refus}") from refus
+            raise EffetRefuse(f"template refused: {refus}") from refus
     if isinstance(valeur, dict):
         return {cle: rendre(v, contexte) for cle, v in valeur.items()}
     if isinstance(valeur, list):
@@ -131,7 +131,7 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
         ligne is None
         or await politique_pour_le_projet(ctx.session, ctx.project, nom, operation) == "forbidden"
     ):
-        raise EffetRefuse(f"{nom}/{operation} est interdite à ce projet, ou inconnue")
+        raise EffetRefuse(f"{nom}/{operation} is forbidden to this project, or unknown")
     if ligne.input_schema:
         import jsonschema
 
@@ -145,7 +145,7 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
         if hasattr(client, "call_tool"):
             resultat = await client.call_tool(operation, arguments)
             if resultat.get("isError"):
-                raise EffetRefuse(f"{nom}/{operation} : le serveur a répondu une erreur")
+                raise EffetRefuse(f"{nom}/{operation}: the server answered with an error")
             # Ce que l'outil a STRUCTURÉ, quand il le fait : un effet suivant cite `effects[0].serial`
             # comme pour un connecteur typé, pas l'enveloppe du protocole (S20-07).
             structure = resultat.get("structuredContent")
@@ -173,7 +173,7 @@ async def _verifier(_ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, An
     condition = str(params.get("condition", "")).strip().lower()
     motif = str(params.get("motif") or params.get("condition") or "")
     if condition not in {"true", "1", "yes", "oui"}:
-        raise EffetRefuse(f"contrôle en échec : {motif}")
+        raise EffetRefuse(f"check failed: {motif}")
     return {"ok": True, "motif": motif}
 
 

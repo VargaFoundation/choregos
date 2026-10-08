@@ -176,7 +176,7 @@ async def test_une_operation_que_le_projet_s_interdit_ne_se_propose_pas_et_ne_s_
         )
         session.add(action)
         await session.flush()
-        with pytest.raises(EffetRefuse, match="interdite à ce projet"):
+        with pytest.raises(EffetRefuse, match="is forbidden to this project"):
             await effet("connector.call")(ContexteEffet(session, action, projet), appel)
     assert graph.comptes == {}, "approuvée ou non, une opération que le projet s'interdit ne part pas"
 
@@ -260,7 +260,7 @@ def test_un_gabarit_qui_sort_du_bac_a_sable_est_un_refus_pas_une_panne() -> None
     from choregos_api.effets import EffetRefuse, rendre
 
     for gabarit in ("{{ fields.__class__.__mro__ }}", "{{ fields.upn"):
-        with pytest.raises(EffetRefuse, match="gabarit refusé"):
+        with pytest.raises(EffetRefuse, match="template refused"):
             rendre(gabarit, {"fields": {"upn": "lea@acme.test"}})
 
 

@@ -14,9 +14,9 @@ vraies décisions. Le même parcours, sur des faux et en temps accéléré, est
   train promeut dans `/cd/mcp`.
 - **L'App GitHub de Choregos installée sur le dépôt bac à sable** — geste de la console GitHub ;
   son identifiant d'installation va dans `ESSAI_INSTALLATION`.
-- **Les groupes** `maintainers`, `product-owners`, `release-captains`, `architects` dans le
-  fournisseur d'identité, avec la personne qui décide dedans : une étape humaine adressée à un
-  groupe inconnu attend pour toujours.
+- **Qui décide** : les groupes `maintainers`, `product-owners`, `release-captains`, `architects`
+  disent à qui s'adresse une étape humaine ; trancher demande seulement le rôle `developer` (ou plus)
+  sur le projet, et le départ en production le rôle `release_captain`. Un administrateur peut tout.
 - La protection de `main` sur le bac à sable : checks requis (`ci / test`), **aucune revue requise**
   (la plateforme fusionne, les personnes décident dans Choregos).
 

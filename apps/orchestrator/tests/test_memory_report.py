@@ -48,7 +48,7 @@ async def test_le_rapport_est_poste_sur_le_canal_du_projet(setup: Fixture) -> No
     report = await memory_activities.memory_ab_report({"org": "varga", "weeks": 4, "notify": True})
 
     assert report["org"] == "varga"
-    assert report["verdict"] == "échantillon insuffisant", "trois tickets ne prouvent rien"
+    assert report["verdict"] == "not enough data", "trois tickets ne prouvent rien"
     titres = [message.title for _, message in setup.adapters.notify.sent]
     assert any("A/B report" in titre for titre in titres), titres
 

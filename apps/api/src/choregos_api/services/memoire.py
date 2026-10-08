@@ -117,23 +117,23 @@ def _ab_verdict(groups: dict[str, Any]) -> tuple[str, str]:
     avec, sans = groups["with_memory"], groups["without_memory"]
     if avec["tickets"] < MIN_TICKETS_PAR_GROUPE or sans["tickets"] < MIN_TICKETS_PAR_GROUPE:
         return (
-            "échantillon insuffisant",
-            f"{avec['tickets']} ticket(s) fermé(s) avec mémoire, {sans['tickets']} sans : "
-            f"il en faut {MIN_TICKETS_PAR_GROUPE} de chaque côté pour conclure.",
+            "not enough data",
+            f"{avec['tickets']} work item(s) closed with memory, {sans['tickets']} without: "
+            f"{MIN_TICKETS_PAR_GROUPE} are needed on each side to conclude.",
         )
     rate_avec, rate_sans = avec["first_pass_merge_rate"], sans["first_pass_merge_rate"]
     cost_avec, cost_sans = avec["cost_per_ticket_usd"], sans["cost_per_ticket_usd"]
     if rate_avec is None or rate_sans is None or cost_avec is None or cost_sans is None:
-        return ("échantillon insuffisant", "un des deux groupes n'a ni taux ni coût mesurable.")
+        return ("not enough data", "one of the two groups has no measurable rate or cost.")
     delta_rate = rate_avec - rate_sans
     delta_cost = cost_avec - cost_sans
     detail = (
-        f"premier passage : {rate_avec:.0%} avec mémoire contre {rate_sans:.0%} sans "
-        f"({delta_rate:+.1%}) · coût par ticket : {cost_avec:.2f} $ contre {cost_sans:.2f} $ "
+        f"first pass: {rate_avec:.0%} with memory against {rate_sans:.0%} without "
+        f"({delta_rate:+.1%}) · cost per work item: {cost_avec:.2f} $ against {cost_sans:.2f} $ "
         f"({delta_cost:+.2f} $)."
     )
     if delta_rate > 0.05 and delta_cost <= 0:
-        return ("la mémoire paie", detail)
+        return ("memory pays off", detail)
     if delta_rate < -0.05 or delta_cost > 0.2 * max(cost_sans, 0.01):
-        return ("la mémoire ne paie pas", detail)
-    return ("pas de différence nette", detail)
+        return ("memory does not pay off", detail)
+    return ("no clear difference", detail)

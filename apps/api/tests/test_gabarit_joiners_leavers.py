@@ -165,5 +165,5 @@ async def test_verifier_tient_ou_refuse_et_un_serveur_mcp_rend_ce_qu_il_a_struct
         )  # fmt: skip
         assert commande["serial"].startswith("PC-"), "l'objet structuré, pas l'enveloppe du protocole"
         assert (await effet("verifier")(ctx, {"condition": "True", "motif": "tout tient"}))["ok"] is True
-        with pytest.raises(EffetRefuse, match="contrôle en échec : le badge actif"):
+        with pytest.raises(EffetRefuse, match="check failed: le badge actif"):
             await effet("verifier")(ctx, {"condition": "False", "motif": "le badge actif"})

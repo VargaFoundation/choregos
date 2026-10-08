@@ -45,7 +45,7 @@ def _detail_de_la_decision(decision: dict[str, Any]) -> str:
     """Ce qu'une décision dit d'elle-même ; une tâche, sa preuve : la phrase attestée et les valeurs."""
     morceaux = []
     if decision.get("attestation"):
-        morceaux.append(f"attesté : « {decision['attestation']} »")
+        morceaux.append(f"attested: “{decision['attestation']}”")
     valeurs = dict(decision.get("values") or {})
     if valeurs:
         morceaux.append(", ".join(f"{nom} = {valeur}" for nom, valeur in sorted(valeurs.items())))
@@ -373,7 +373,7 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
             TimelineEntry(
                 ts=req.requested_at,
                 kind="decision",
-                title=f"demande humaine : {req.kind}",
+                title=f"human request: {req.kind}",
                 detail=str(req.payload.get("question") or req.payload.get("summary") or ""),
                 actor=req.decided_by,
                 actor_kind="user",
@@ -385,7 +385,7 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
                 TimelineEntry(
                     ts=req.decided_at,
                     kind="decision",
-                    title=f"décision : {(req.decision or {}).get('kind', 'répondu')}",
+                    title=f"decision: {(req.decision or {}).get('kind', 'answered')}",
                     detail=_detail_de_la_decision(req.decision or {}),
                     actor=req.decided_by,
                     actor_kind="user",

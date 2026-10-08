@@ -207,20 +207,20 @@ async def post_scope_change(
     current = list(run.allowed_paths or item.allowed_paths or [])
     new_paths = [p for p in body.paths if not matches_any(p, current)]
     if not new_paths:
-        return ScopeChangeDecision(decision="granted", allowed_paths=current, reason="déjà dans le périmètre")
+        return ScopeChangeDecision(
+            decision="granted", allowed_paths=current, reason="already within the scope"
+        )
     if any(engine.path_denied(p) for p in new_paths):
         return ScopeChangeDecision(
             decision="denied",
             allowed_paths=current,
-            reason="chemins interdits par la politique (deny_paths)",
+            reason="paths forbidden by the policy (deny_paths)",
         )
     if engine.scope_auto_grant(new_paths):
         granted = [*current, *new_paths]
         run.allowed_paths = granted
         item.allowed_paths = granted
-        return ScopeChangeDecision(
-            decision="granted", allowed_paths=granted, reason="accordé automatiquement"
-        )
+        return ScopeChangeDecision(decision="granted", allowed_paths=granted, reason="granted automatically")
 
     request_row = HumanRequest(
         work_item_id=item.id,
@@ -242,7 +242,7 @@ async def post_scope_change(
         kind="scope_change",
         paths=new_paths,
     )
-    return ScopeChangeDecision(decision="pending", allowed_paths=current, reason="soumis à un humain")
+    return ScopeChangeDecision(decision="pending", allowed_paths=current, reason="sent to a person")
 
 
 @router.post("/runs/{id}/question", status_code=status.HTTP_202_ACCEPTED, operation_id="postRunQuestion")
