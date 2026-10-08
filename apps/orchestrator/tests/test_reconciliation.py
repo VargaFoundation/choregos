@@ -184,3 +184,71 @@ async def test_la_cle_interne_suit_le_projet_et_ne_se_repete_pas(setup: Fixture)
         )
         await session.flush()
         assert (await cle_de_ticket_interne(session, bundle)).startswith("RH-")
+
+
+async def test_une_passe_qui_echoue_ne_tue_pas_la_boucle(temporal_env: Any) -> None:
+    """Le 08/10, sur le locataire dev, trois échecs sans App GitHub avaient laissé `reconcile-dev`
+    mort pour de bon : plus aucune issue `agent-ready` n'était lue (S22-06). Une passe qui échoue
+    est dite dans le statut, et la suivante repasse."""
+    import uuid
+
+    from choregos_orchestrator.workflows.reconciliation import TrackerReconciliation
+    from temporalio import activity
+    from temporalio.worker import Worker
+
+    appels: list[str] = []
+
+    @activity.defn(name="reconcile_tracker")
+    async def rattrapage_capricieux(payload: dict[str, Any]) -> dict[str, Any]:
+        appels.append(payload["project_slug"])
+        if len(appels) <= 3:  # les trois tentatives de la première passe
+            raise RuntimeError("[github] aucune authentification configurée")
+        return {"created": ["DEMO-1"], "started": ["DEMO-1"]}
+
+    client = temporal_env.client
+    async with (
+        Worker(client, task_queue="tracker", activities=[rattrapage_capricieux]),
+        Worker(client, task_queue="test", workflows=[TrackerReconciliation]),
+    ):
+        poignee = await client.start_workflow(
+            "TrackerReconciliation",
+            {"project_slug": "dev", "interval_seconds": 1},
+            id=f"reconcile-{uuid.uuid4()}",
+            task_queue="test",
+        )
+        statut: dict[str, Any] = {}
+        for _ in range(200):
+            statut = await poignee.query("status")
+            if statut["passes"] >= 2:
+                break
+            await temporal_env.sleep(1)
+        assert statut["passes"] >= 2, statut
+        assert statut["last"] == {"created": ["DEMO-1"], "started": ["DEMO-1"]}, statut
+        await poignee.signal("stop")
+        assert (await poignee.result())["stopped"] is True
+
+
+async def test_le_demarrage_relance_une_boucle_morte_mais_jamais_un_ticket(
+    setup: Fixture, monkeypatch: Any
+) -> None:
+    """Au démarrage du worker, une boucle de rattrapage morte en échec repart ; un ticket, lui, ne se
+    démarre jamais deux fois (S22-06)."""
+    from choregos_orchestrator import worker
+
+    demandes: list[tuple[str, bool]] = []
+
+    async def capter(
+        name: str, workflow_id: str, payload: dict[str, Any], *, relancer_si_echoue: bool = False
+    ) -> bool:
+        demandes.append((workflow_id, relancer_si_echoue))
+        return True
+
+    monkeypatch.setattr("choregos_orchestrator.train_client.start_workflow_once", capter)
+    await worker.start_reconciliation_loops()
+    assert demandes and all(relance for _, relance in demandes), demandes
+
+    import inspect
+
+    from choregos_orchestrator.train_client import start_workflow_once
+
+    assert inspect.signature(start_workflow_once).parameters["relancer_si_echoue"].default is False

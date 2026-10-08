@@ -31,7 +31,9 @@ def clear_fake_signals() -> None:
     _FAKE_STARTS.clear()
 
 
-async def start_workflow_once(name: str, workflow_id: str, payload: dict[str, Any]) -> bool:
+async def start_workflow_once(
+    name: str, workflow_id: str, payload: dict[str, Any], *, relancer_si_echoue: bool = False
+) -> bool:
     """Démarre un workflow s'il n'existe pas déjà sous cet identifiant.
 
     Rend `True` si ce démarrage-ci a créé le workflow. Un identifiant déterministe rend
@@ -57,7 +59,10 @@ async def start_workflow_once(name: str, workflow_id: str, payload: dict[str, An
             task_queue="orchestrator",
             # Déjà terminé pour ce ticket : on ne le relance pas. Déjà en cours : on reprend
             # la main sur l'existant plutôt que d'en créer un second.
-            id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+            # Une boucle (le rattrapage d'un projet) morte en échec repart ; un ticket, jamais.
+            id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY
+            if relancer_si_echoue
+            else WorkflowIDReusePolicy.REJECT_DUPLICATE,
             id_conflict_policy=WorkflowIDConflictPolicy.USE_EXISTING,
         )
     except WorkflowAlreadyStartedError:
