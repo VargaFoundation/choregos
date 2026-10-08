@@ -61,6 +61,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         ci_status = None
         review_state = None
         scans: dict[str, str] = {}
+        signed: bool | None = None
         if any(is_async_gate(g["name"]) for g in gates) and item.pr_url and depot is not None:
             repo = _repo_slug(depot.url)
             number = int(item.pr_url.rsplit("/", 1)[-1]) if item.pr_url.rsplit("/", 1)[-1].isdigit() else 0
@@ -74,6 +75,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                         for check in pr.checks
                         if check.name in {"semgrep", "trivy", "gitleaks"}
                     }
+                    signed = _provenance(pr.checks)
                 except Exception:
                     ci_status = None
 
@@ -97,6 +99,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             ci_status=ci_status,
             review_state=review_state,
             scans=scans,
+            signed=signed,
             flags=list(payload.get("flags", [])),
             expected_outputs=list(payload.get("expected_outputs", [])),
             # `needs_diff` dit qu'une garantie en dépend ; `diff` dit si on l'a obtenu.
@@ -214,3 +217,12 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         branch = bundle.config.branch_for(item.tracker_key)
         diff = await bundle.adapters.scm.compare(repo, depot.default_branch, branch)
         return [path for path in diff.paths() if not matches_any(path, allowed)]
+
+
+def _provenance(checks: list[Any]) -> bool | None:
+    """Un check de provenance terminé sur la PR (son nom contient `provenance`) : vrai s'il a réussi.
+    Aucun, ou pas encore terminé : on ne sait pas — la garantie le dira quand la CI aura fini."""
+    termines = [c for c in checks if "provenance" in c.name.lower() and c.conclusion]
+    if not termines:
+        return None
+    return all(c.conclusion == "success" for c in termines)

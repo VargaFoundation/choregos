@@ -122,6 +122,14 @@ def test_provenance_signed() -> None:
     assert evaluate("provenance_signed", GateContext(signed=False)).blocking
 
 
+def test_sans_check_de_provenance_la_ci_finie_la_garantie_echoue_au_lieu_d_attendre() -> None:
+    """Rien ne renseignait `signed` : la garantie attendait pour toujours (#283). La CI finie sans
+    check de provenance, elle échoue en disant quoi ajouter."""
+    sans = evaluate("provenance_signed", GateContext(ci_status="success"))
+    assert sans.blocking and not sans.pending
+    assert "no provenance check" in sans.detail
+
+
 def test_flag_present() -> None:
     assert evaluate("flag_present", GateContext(flags=["new-billing"]), {"name": "new-billing"}).passed
     out = evaluate("flag_present", GateContext(flags=[]), {"name": "new-billing"})

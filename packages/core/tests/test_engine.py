@@ -34,8 +34,11 @@ def test_select_transition_is_deterministic(simple: WorkflowEngine) -> None:
 
 def test_select_transition_prefers_explicit_outcome(auto: WorkflowEngine) -> None:
     assert auto.select_transition("pr_open").id == "t-merge"
-    assert auto.select_transition("pr_open", "ci_failed").id == "t-fix-ci"
-    assert auto.select_transition("pr_open", "t-fix-ci").id == "t-fix-ci"
+    assert auto.select_transition("pr_open", "t-merge").id == "t-merge"
+    # Le réparateur part de `fixing_ci`, où `t-merge` envoie une CI rouge (#284) : il y est le seul
+    # candidat, choisi avec ou sans résultat — depuis `pr_open`, il ne l'était jamais.
+    assert auto.select_transition("fixing_ci").id == "t-fix-ci"
+    assert auto.select_transition("fixing_ci", "ci_failed").id == "t-fix-ci"
 
 
 def test_select_transition_skips_repair_roles_by_default(auto: WorkflowEngine) -> None:
