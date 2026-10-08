@@ -4,12 +4,12 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
-import { Card, Label, Stat } from "@varga/design-system";
+import { Label, Stat } from "@varga/design-system";
 import { api } from "@/lib/api";
 import { eur, percent } from "@/lib/format";
 import type { DoraMetric } from "@/lib/types";
 import { MiseEnRoute } from "@/components/mise-en-route";
-import { CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
 
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);

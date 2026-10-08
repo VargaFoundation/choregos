@@ -57,13 +57,18 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
                 style={{ position: "absolute", top: (start + index) * ROW_HEIGHT, height: ROW_HEIGHT }}
                 className={cn(
                   "flex w-full items-center gap-3 border-b border-line/50 px-3",
-                  denied && "bg-danger/10 text-danger",
-                  isResult && "bg-ok/10 text-ok",
+                  // Un filet plutôt qu'un fond teinté : le rouge et le vert sur leur propre teinte ne
+                  // passaient pas 4,5:1 (axe, S23-05), et la couleur seule ne disait pas « refusé ».
+                  denied && "border-l-2 border-l-danger",
+                  isResult && "border-l-2 border-l-ok",
                 )}
               >
                 <span className="w-10 shrink-0 text-ink-muted">{event.seq}</span>
                 <span className="w-16 shrink-0 text-ink-muted">{shortDate(event.ts).slice(-5)}</span>
-                <span className="w-52 shrink-0">{event.type}</span>
+                <span className="w-52 shrink-0">
+                  {event.type}
+                  {denied && <span className="ml-1 font-medium text-danger">denied</span>}
+                </span>
                 <span className="truncate text-ink-muted">{summarize(event)}</span>
               </div>
             );

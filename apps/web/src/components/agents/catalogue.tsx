@@ -51,7 +51,9 @@ export function CatalogueDAgents({ org }: { org: string }) {
                   <th className="py-1 font-normal">role</th>
                   <th className="py-1 font-normal">what it does</th>
                   <th className="py-1 font-normal">in your organisation</th>
-                  <th className="py-1 font-normal" />
+                  <th className="py-1 font-normal">
+                    <span className="sr-only">actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

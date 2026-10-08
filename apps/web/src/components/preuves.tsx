@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Card } from "@varga/design-system";
-import { Empty } from "@/components/ui";
+import { Card, Empty } from "@/components/ui";
 import type { Run } from "@/lib/types";
 
 type Evidence = NonNullable<NonNullable<Run["result"]>["evidence"]>;

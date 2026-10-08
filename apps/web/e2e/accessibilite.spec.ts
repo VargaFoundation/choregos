@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 
 /**
  * Accessibilité mesurée, pas déclarée : axe passe sur les écrans principaux en mode démo.
- * Seules les violations « serious » et « critical » bloquent — les autres sont listées
- * dans le rapport, à corriger, pas à ignorer.
+ * Toute violation bloque, bonnes pratiques comprises (S23-05) : quand seules « serious » et
+ * « critical » bloquaient, 23 pages sur 36 sautaient du `h1` au `h3` sans que rien ne rougisse.
  */
 const PAGES = [
   "/",
@@ -49,8 +49,8 @@ for (const path of PAGES) {
   test(`${path} sans violation sérieuse`, async ({ page }) => {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
-    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
-    const bloquantes = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
+    const bloquantes = results.violations;
     expect(
       bloquantes.map((v) => `${v.id} (${v.impact}) : ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
     ).toEqual([]);
@@ -65,8 +65,8 @@ test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
   await panneau.getByLabel("label").fill("Nouvelles demandes");
   await panneau.getByRole("button", { name: "set label" }).click();
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
-  const bloquantes = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
+  const bloquantes = results.violations;
   expect(
     bloquantes.map((v) => `${v.id} (${v.impact}) : ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
   ).toEqual([]);
@@ -78,9 +78,9 @@ test("réglages : la section des connecteurs sans violation sérieuse", async ({
   await page.getByTestId("connecteur-tracker").getByRole("button", { name: "edit" }).click();
   const results = await new AxeBuilder({ page })
     .include('[data-testid="connecteurs"]')
-    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
     .analyze();
-  const bloquantes = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+  const bloquantes = results.violations;
   expect(
     bloquantes.map((v) => `${v.id} (${v.impact}) : ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
   ).toEqual([]);
@@ -166,3 +166,23 @@ test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", a
     expect(mesure.hautes, path).toEqual([]);
   }
 });
+
+/** Chaque page a son titre, et le premier arrêt de tabulation mène au contenu (S23-05). */
+test("titres de page distincts, et un lien d'évitement vers le contenu", async ({ page }) => {
+  const titres = new Map<string, string>();
+  for (const path of ["/", "/inbox", "/p/billing-api", "/p/billing-api/board", "/p/billing-api/items/w1", "/admin"]) {
+    await page.goto(path);
+    await expect(page).not.toHaveTitle("");
+    titres.set(await page.title(), path);
+  }
+  expect(titres.size).toBe(6);
+  await page.goto("/p/billing-api/board");
+  await expect(page).toHaveTitle("board · billing-api · choregos");
+  await page.keyboard.press("Tab");
+  const evitement = page.getByRole("link", { name: "skip to content" });
+  await expect(evitement).toBeFocused();
+  await expect(evitement).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("main#contenu")).toBeFocused();
+});
+

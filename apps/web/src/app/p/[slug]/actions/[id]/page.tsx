@@ -28,7 +28,7 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         <span aria-hidden className="text-ink-muted">
           /
         </span>
-        <Heading as="h1" size="lg">
+        <Heading as="h2" size="lg">
           {a.title}
         </Heading>
         <Statut statut={a.status} />
