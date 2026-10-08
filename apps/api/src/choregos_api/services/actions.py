@@ -69,7 +69,7 @@ async def politique_de_l_action(
         else:
             politique, sujet = politique_de_l_effet(nom), nom
         if politique != "allowed":
-            motifs.append(f"{sujet} : {politique}")
+            motifs.append(f"{sujet}: {politique}")
         if RANG[politique] > RANG[pire]:
             pire = politique
     return pire, motifs
@@ -96,12 +96,12 @@ async def proposer(
     }
     inconnus = sorted(nommes - connus)
     if inconnus:
-        raise unprocessable(f"effets inconnus : {', '.join(inconnus)} (connus : {', '.join(sorted(connus))})")
+        raise unprocessable(f"unknown effects: {', '.join(inconnus)} (known: {', '.join(sorted(connus))})")
     effets = [e.model_dump(by_alias=True, exclude_none=True) for e in corps.effects]
     pire, motifs = await politique_de_l_action(session, projet, effets, corps.params)
     if pire == "forbidden":
         interdits = [m for m in motifs if m.endswith("forbidden")]
-        raise unprocessable(f"action interdite à ce projet : {'; '.join(interdits)}")
+        raise unprocessable(f"action forbidden in this project: {'; '.join(interdits)}")
     action = Action(
         **({"id": action_id} if action_id else {}),
         org_id=projet.org_id,
@@ -296,23 +296,23 @@ async def decider(
 ) -> Action:
     if principal.kind != "user" or principal.authentifie_le is None:
         # Un jeton d'API, un client MCP : ils proposent, ils ne décident pas (ADR 0030).
-        raise forbidden("une décision se prend dans une session humaine (decision_requires_session)")
+        raise forbidden("a decision is made in a human session (decision_requires_session)")
     if decision == "reject" and not (raison or "").strip():
-        raise unprocessable("un rejet dit pourquoi")
+        raise unprocessable("a rejection must say why")
     action = (
         await session.execute(
             select(Action).where(Action.id == action_id, Action.project_id == projet.id).with_for_update()
         )
     ).scalar_one_or_none()
     if action is None:
-        raise ApiError(404, "Action introuvable", action_id)
+        raise ApiError(404, "Action not found", action_id)
     if action.status != ActionStatus.PENDING_APPROVAL.value:
-        raise conflict(f"l'action est déjà {action.status}")
+        raise conflict(f"the action is already {action.status}")
     approbation = action.approval or {}
     approbateurs = approbation.get("approvers") or [{"role": "project_owner", "min": 1}]
     requis = min(RANGS.get(str(a.get("role")), 3) for a in approbateurs)
     if rang(principal, org_slug, projet.slug) < requis:
-        raise forbidden("décider de cette action demande un rang d'approbateur")
+        raise forbidden("deciding this action needs an approver's rank")
     if approbation.get("separation_of_duties", True):
         propose_par = action.proposed_by or {}
         moi = principal.email.lower()
@@ -320,10 +320,10 @@ async def decider(
             await _proprietaire_de_l_agent(session, propose_par, projet.org_id)
         ) == moi:
             raise unprocessable(
-                "séparation des rôles : qui propose (ou possède l'agent qui propose) ne décide pas"
+                "separation of duties: whoever proposes (or owns the agent that proposes) does not decide"
             )
     if any(d.get("by", "").lower() == principal.email.lower() for d in action.decisions or []):
-        raise conflict("vous avez déjà décidé de cette action")
+        raise conflict("you have already decided this action")
     # `step_up_minutes` absent (`None`) : la règle n'exige pas d'authentification récente — ce que peut
     # dire une politique d'un greffon (l'ontologie) ; une action proposée par l'API en a toujours une.
     fraicheur = approbation.get("step_up_minutes", 10)
@@ -358,7 +358,7 @@ async def decider(
         .execution_options(synchronize_session=False)
     )
     if fait.rowcount != 1:  # type: ignore[attr-defined]
-        raise conflict("une autre décision vient d'être prise")
+        raise conflict("another decision has just been made")
     await session.refresh(action)
     await record(
         session,

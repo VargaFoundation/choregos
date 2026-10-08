@@ -89,12 +89,12 @@ def _verifier_les_effets(workflow: Any) -> None:
                     erreurs.append(
                         {
                             "loc": [f"/transitions/{index}/action/effects/{position}"],
-                            "msg": f"effet inconnu : {nom} (connus : {', '.join(sorted(connus))})",
+                            "msg": f"unknown effect: {nom} (known: {', '.join(sorted(connus))})",
                             "code": "action.effect_unknown",
                         }
                     )
     if erreurs:
-        raise unprocessable("workflow invalide", erreurs)
+        raise unprocessable("invalid workflow", erreurs)
 
 
 async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses options sont nommées
@@ -118,7 +118,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     workflow, report = parse_workflow(source_yaml, strict=False)
     if not report.valid:
         raise unprocessable(
-            "workflow invalide",
+            "invalid workflow",
             [
                 {"loc": [i.path or ""], "msg": i.message, "code": i.code, "line": i.line, "column": i.column}
                 for i in report.errors
@@ -127,13 +127,15 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     nom = workflow.metadata.name
     if nom_attendu is not None and nom != nom_attendu:
         raise unprocessable(
-            f"le YAML s'appelle `{nom}`, la route `{nom_attendu}` : `metadata.name` doit coïncider"
+            f"the YAML is named `{nom}`, the route `{nom_attendu}`: `metadata.name` must match"
         )
     _verifier_les_effets(workflow)
     actuelle = await workflow_actif(session, project.id, nom)
     if base_version is not None and (actuelle is None or actuelle.version != base_version):
-        lue = actuelle.version if actuelle is not None else "aucune"
-        raise conflict(f"`{nom}` a changé : vous éditiez la version {base_version}, l'active est {lue}")
+        lue = actuelle.version if actuelle is not None else "none"
+        raise conflict(
+            f"`{nom}` has changed: you were editing version {base_version}, the active one is {lue}"
+        )
     deja = (
         await session.execute(
             select(func.max(WorkflowDef.version)).where(
@@ -245,12 +247,12 @@ async def _publier_ce_que_livre_le_gabarit(
         parsed, report = parse_workflow(source, strict=False)
         if not report.valid:
             raise unprocessable(
-                f"le gabarit `{project.template_ref}` livre un workflow invalide",
+                f"template `{project.template_ref}` ships an invalid workflow",
                 [{"loc": [i.path or ""], "msg": i.message, "code": i.code} for i in report.errors],
             )
         nom = parsed.metadata.name
         if nom in lignes:
-            raise unprocessable(f"le gabarit `{project.template_ref}` livre deux fois le workflow `{nom}`")
+            raise unprocessable(f"template `{project.template_ref}` ships workflow `{nom}` twice")
         lignes[nom] = WorkflowDef(
             project_id=project.id,
             name=nom,
@@ -265,9 +267,7 @@ async def _publier_ce_que_livre_le_gabarit(
     inconnus = ({defaut} | {str(r.get("workflow")) for r in livree.routage}) - set(lignes)
     if inconnus:
         gabarit = project.template_ref
-        raise unprocessable(
-            f"le gabarit `{gabarit}` désigne des workflows qu'il ne livre pas : {sorted(inconnus)}"
-        )
+        raise unprocessable(f"template `{gabarit}` names workflows it does not ship: {sorted(inconnus)}")
     session.add_all(lignes.values())
     if not project.default_workflow:
         project.default_workflow = defaut

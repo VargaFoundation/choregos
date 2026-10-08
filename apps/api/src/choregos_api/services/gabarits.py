@@ -69,7 +69,7 @@ async def manifeste_du_gabarit(
     dossier = repertoire_des_gabarits() / nom
     chemin = dossier / "manifest.yaml"
     if not chemin.is_file():
-        raise unprocessable(f"gabarit `{template_ref}` introuvable")
+        raise unprocessable(f"template `{template_ref}` not found")
     return dict(yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}), dossier
 
 
@@ -94,11 +94,11 @@ def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
 def _chemin_du_gabarit(ref: str, dossier: Path | None) -> Path:
     """Un chemin que nomme le manifeste : dans le dossier du gabarit, jamais au-dehors."""
     if dossier is None:
-        raise unprocessable(f"`{ref}` : un gabarit publié en base ne porte aucun fichier")
+        raise unprocessable(f"`{ref}`: a template published in the database carries no file")
     racine = dossier.resolve()
     chemin = (racine / ref).resolve()
     if not chemin.is_relative_to(racine):
-        raise unprocessable(f"`{ref}` sort du dossier du gabarit")
+        raise unprocessable(f"`{ref}` goes outside the template's folder")
     return chemin
 
 
@@ -116,10 +116,10 @@ def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:
         return trouve.document
     chemin = _chemin_du_gabarit(ref, dossier)
     if not chemin.is_file():
-        raise unprocessable(f"`{ref}` : agent absent du gabarit")
+        raise unprocessable(f"`{ref}`: agent missing from the template")
     document = yaml.safe_load(chemin.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
-        raise unprocessable(f"`{ref}` : un agent se décrit par un objet (`slug`, `display_name`, `spec`)")
+        raise unprocessable(f"`{ref}`: an agent is described by an object (`slug`, `display_name`, `spec`)")
     return document
 
 
@@ -139,11 +139,11 @@ def _fichiers_du_dossier(ref: str, dossier: Path | None, quoi: str) -> dict[str,
     comme dans une archive (rien ne doit se lire hors du dossier)."""
     racine = _chemin_du_gabarit(ref, dossier)
     if not racine.is_dir():
-        raise unprocessable(f"`{ref}` : {quoi} absente du gabarit")
+        raise unprocessable(f"`{ref}`: {quoi} missing from the template")
     fichiers: dict[str, str] = {}
     for chemin in sorted(racine.rglob("*")):
         if chemin.is_symlink():
-            raise unprocessable(f"`{ref}` : lien symbolique refusé ({chemin.name})")
+            raise unprocessable(f"`{ref}`: symbolic link refused ({chemin.name})")
         if chemin.is_file():
             fichiers[chemin.relative_to(racine).as_posix()] = chemin.read_text(encoding="utf-8")
     return fichiers
@@ -155,14 +155,14 @@ def _source_du_workflow(ref: str, dossier: Path | None) -> str:
         try:
             return template_yaml(nom)
         except FileNotFoundError as erreur:
-            raise unprocessable(f"le gabarit livre `{ref}`, que la plateforme ne connaît pas") from erreur
+            raise unprocessable(f"the template ships `{ref}`, which the platform does not know") from erreur
     if dossier is None:
         raise unprocessable(
-            f"`{ref}` : un gabarit publié en base ne porte aucun fichier ; nommez `template:<nom>@<v>`"
+            f"`{ref}`: a template published in the database carries no file; name `template:<name>@<v>`"
         )
     chemin = _chemin_du_gabarit(ref, dossier)
     if not chemin.is_file():
-        raise unprocessable(f"`{ref}` : fichier absent du gabarit")
+        raise unprocessable(f"`{ref}`: file missing from the template")
     return chemin.read_text(encoding="utf-8")
 
 
@@ -172,16 +172,16 @@ def _source_de_la_politique(ref: str, dossier: Path | None) -> str:
     if not ref.startswith("preset:"):
         chemin = _chemin_du_gabarit(ref, dossier)
         if not chemin.is_file():
-            raise unprocessable(f"politique `{ref}` : fichier absent du gabarit")
+            raise unprocessable(f"policy `{ref}`: file missing from the template")
         return chemin.read_text(encoding="utf-8")
     nom = ref.removeprefix("preset:")
     if "/" in nom or nom.startswith("."):
-        raise unprocessable(f"politique `{ref}` : un preset se nomme, il ne se cherche pas dans un chemin")
+        raise unprocessable(f"policy `{ref}`: a preset is named, not looked up in a path")
     try:
         return preset_yaml(nom)
     except FileNotFoundError as erreur:
         raise unprocessable(
-            f"le gabarit livre la politique `{ref}`, que la plateforme ne connaît pas"
+            f"the template ships policy `{ref}`, which the platform does not know"
         ) from erreur
 
 

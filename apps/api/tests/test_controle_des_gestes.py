@@ -105,7 +105,7 @@ async def test_un_projet_de_trop_est_refuse_avant_d_etre_cree(
     avant = await _compter_projets()
     refus = await client.post("/api/v1/orgs/varga/projects", json=_projet("second"))
     assert refus.status_code == 409, refus.text
-    assert "plafond : varga a atteint son plafond de projets" in refus.text
+    assert "plafond: varga a atteint son plafond de projets" in refus.text
     assert await _compter_projets() == avant
     (demande,) = greffon["vues"]
     assert (demande.geste, demande.org, demande.cible) == ("project.create", "varga", {"slug": "second"})
@@ -149,7 +149,7 @@ async def test_une_approbation_sans_authentification_fraiche_est_refusee_en_401(
     greffon["fraicheur_s"] = -1  # aucune session n'est assez fraîche
     refus = await client.post(f"/api/v1/work-items/{item}/decisions", json={"kind": "approve"})
     assert refus.status_code == 401, refus.text
-    assert "fraicheur : approuver demande une authentification de moins de 5 minutes" in refus.text
+    assert "fraicheur: approuver demande une authentification de moins de 5 minutes" in refus.text
     assert "auth/login?reauth=1" in refus.text
     async with session_scope(orgs="*") as session:
         (demande,) = (await session.execute(select(HumanRequest))).scalars()

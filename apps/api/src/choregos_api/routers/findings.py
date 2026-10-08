@@ -73,7 +73,7 @@ async def act(id: str, body: FindingAction, session: Db, principal: Me) -> Findi
         raise not_found("Finding", id)
     project = await session.get(Project, row.project_id)
     if project is None:
-        raise not_found("Projet", row.project_id)
+        raise not_found("Project", row.project_id)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.FINDING_TRIAGE, org_slug, project.slug):
         raise forbidden()
@@ -92,7 +92,7 @@ async def act(id: str, body: FindingAction, session: Db, principal: Me) -> Findi
     elif body.action == "agent_ready":
         item = await session.get(WorkItem, row.created_work_item_id) if row.created_work_item_id else None
         if item is None:
-            raise not_found("Ticket créé pour ce finding", row.id)
+            raise not_found("Work item created for this finding", row.id)
         workflow_id = interpreter_id(project.slug, item.tracker_key)
         await get_temporal().start_interpreter(
             workflow_id,

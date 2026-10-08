@@ -51,7 +51,7 @@ async def test_un_admin_cree_une_organisation_un_developpeur_non(client: AsyncCl
 
     refus = await client.post("/api/v1/orgs", json={"slug": "filiale", "name": "La filiale"})
     assert refus.status_code == 409, refus.text
-    assert "communautaire" in refus.json()["detail"]
+    assert "community" in refus.json()["detail"]
 
     edition.declarer(edition.ENTREPRISE)
     try:

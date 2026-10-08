@@ -51,10 +51,10 @@ async def _load(session: Any, item_id: str) -> tuple[WorkItem, Project]:
             await session.execute(select(WorkItem).where(WorkItem.tracker_key == item_id).limit(1))
         ).scalar_one_or_none()
     if item is None:
-        raise not_found("Ticket", item_id)
+        raise not_found("Work item", item_id)
     project = await session.get(Project, item.project_id)
     if project is None:
-        raise not_found("Projet", item.project_id)
+        raise not_found("Project", item.project_id)
     return item, project
 
 
@@ -119,7 +119,7 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
     item, project = await _load(session, id)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
-        raise forbidden("changer les champs d'un ticket demande au moins le rôle developer")
+        raise forbidden("changing the fields of a work item needs at least the developer role")
     workflow = workflow_model(await workflow_du_ticket(session, item))
     champs = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
     valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
@@ -169,17 +169,17 @@ async def _completer_la_tache(
     formulaire = dict(payload.get("form") or {})
     hors = sorted(set(body.values) - set(formulaire.get("properties") or {}))
     if hors:
-        raise unprocessable(f"hors du formulaire de la tâche : {', '.join(hors)}")
+        raise unprocessable(f"not in the task's form: {', '.join(hors)}")
     erreurs = sorted(
         jsonschema.Draft202012Validator(formulaire).iter_errors(body.values), key=lambda e: list(e.path)
     )
     if erreurs:
         raise unprocessable(
-            "la tâche n'est pas remplie", [{"loc": ["values", *e.path], "msg": e.message} for e in erreurs]
+            "the task is not filled in", [{"loc": ["values", *e.path], "msg": e.message} for e in erreurs]
         )
     attest = payload.get("attest")
     if attest and not body.attested:
-        raise unprocessable(f"la tâche demande d'attester : « {attest} »")
+        raise unprocessable(f"the task asks you to attest: “{attest}”")
     workflow = workflow_model(await workflow_du_ticket(session, item))
     champs = {**(item.fields or {}), **body.values}
     valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
@@ -198,7 +198,7 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
     item, project = await _load(session, id)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_DECIDE, org_slug, project.slug):
-        raise forbidden("décider demande au moins le rôle developer")
+        raise forbidden("deciding needs at least the developer role")
 
     query = select(HumanRequest).where(
         HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None)
@@ -209,9 +209,9 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         await session.execute(query.order_by(HumanRequest.requested_at.desc()).limit(1))
     ).scalar_one_or_none()
     if request_row is None:
-        raise conflict("aucune demande humaine en attente sur ce ticket")
+        raise conflict("no human request is pending on this work item")
     if request_row.decided_at is not None:
-        raise conflict("cette demande a déjà été tranchée")
+        raise conflict("this request has already been decided")
     await controler(
         session,
         DemandeDeGeste(
@@ -231,9 +231,9 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
 
     tache = request_row.kind == HumanRequestKind.TASK.value
     if body.kind == "complete" and not tache:
-        raise unprocessable("seule une tâche se complète (`complete`) ; ici : approve, reject ou answer")
+        raise unprocessable("only a task is completed (`complete`); here: approve, reject or answer")
     if tache and body.kind not in {"complete", "reject"}:
-        raise unprocessable("une tâche se complète (`complete`, avec ses valeurs) ou se renvoie (`reject`)")
+        raise unprocessable("a task is completed (`complete`, with its values) or sent back (`reject`)")
     valeurs, attestation = (
         await _completer_la_tache(session, item, request_row, body) if body.kind == "complete" else ({}, None)
     )
@@ -296,19 +296,21 @@ async def _cible_de_migration(
     d'état avant d'avoir migré, et le mapping vérifié ici ne vaudrait plus : 409.
     """
     if not body.workflow_def_id:
-        raise unprocessable("migrate exige workflow_def_id : la version vers laquelle migrer le ticket")
+        raise unprocessable("migrate needs workflow_def_id: the version to migrate the work item to")
     ligne = await session.get(WorkflowDef, body.workflow_def_id)
     if ligne is None or ligne.project_id != project.id:
-        raise not_found("Définition de workflow", body.workflow_def_id)
+        raise not_found("Workflow definition", body.workflow_def_id)
     attend = select(HumanRequest.id).where(
         HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_(None)
     )
     if (await session.execute(attend.limit(1))).first() is not None:
-        raise conflict("le ticket attend une décision humaine : décidez, ou arrêtez-le, avant de le migrer")
+        raise conflict(
+            "the work item is waiting for a human decision: decide, or stop it, before migrating it"
+        )
     tourne = select(Run.id).where(Run.work_item_id == item.id, Run.status.in_(("queued", "running")))
     if (await session.execute(tourne.limit(1))).first() is not None:
         raise conflict(
-            "un run du ticket est en cours : mettez le ticket en pause, laissez le run finir, puis migrez"
+            "a run of this work item is in progress: pause the work item, let the run finish, then migrate"
         )
     cible = workflow_model(ligne)
     try:
@@ -326,7 +328,7 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
     item, project = await _load(session, id)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
-        raise forbidden("contrôler un ticket demande au moins le rôle developer")
+        raise forbidden("controlling a work item needs at least the developer role")
 
     if body.action == "mark_agent_ready":
         payload = {

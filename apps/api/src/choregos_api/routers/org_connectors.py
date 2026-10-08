@@ -50,7 +50,7 @@ def _administrer(principal: Me, org: str) -> None:
     """Déclarer un connecteur, ouvrir une opération, choisir ses groupes : décider de ce que
     l'organisation ouvre à ses projets. L'administrateur de l'organisation seul."""
     if not principal.can(Permission.TOOLS_GRANT, org):
-        raise forbidden(f"les connecteurs de {org} et leurs opérations se décident par son administrateur")
+        raise forbidden(f"the connectors of {org} and their operations are decided by its administrator")
 
 
 async def _instance(session: AsyncSession, organisation: Organization, nom: str) -> OrgConnector:
@@ -60,7 +60,7 @@ async def _instance(session: AsyncSession, organisation: Organization, nom: str)
         )
     ).scalar_one_or_none()
     if instance is None:
-        raise not_found("Connecteur", nom)
+        raise not_found("Connector", nom)
     return instance
 
 
@@ -80,7 +80,7 @@ async def _dto(session: AsyncSession, instance: OrgConnector) -> OrgConnectorDto
 @router.get("/orgs/{org}/connectors", response_model=list[OrgConnectorDto], operation_id="listOrgConnectors")
 async def list_org_connectors(org: str, session: Db, principal: Me) -> list[OrgConnectorDto]:
     if not principal.can(Permission.PROJECT_READ, org):
-        raise forbidden(f"les connecteurs de {org} se lisent par ses membres")
+        raise forbidden(f"the connectors of {org} are readable by its members only")
     organisation = await _organisation(session, org)
     instances = (
         await session.execute(
@@ -109,7 +109,7 @@ async def create_org_connector(
     if kind is None:
         sortes = sorted({k for k, t, _ in connector_types() if t == body.type})
         if len(sortes) != 1:
-            raise unprocessable(f"`{body.type}` : préciser la capacité (`kind`) parmi {sortes or 'aucune'}")
+            raise unprocessable(f"`{body.type}`: specify the capability (`kind`) among {sortes or 'none'}")
         kind = sortes[0]
     spec = spec_du_type(kind, body.type)
     verifier_les_secrets(spec, body.type, body.config, body.secret_refs)
@@ -121,7 +121,7 @@ async def create_org_connector(
         )
     ).first()
     if deja is not None:
-        raise conflict(f"un connecteur `{body.name}` existe déjà dans {org}")
+        raise conflict(f"a connector `{body.name}` already exists in {org}")
     instance = OrgConnector(
         org_id=organisation.id,
         name=body.name,
@@ -163,7 +163,7 @@ async def create_org_connector(
 @router.get("/orgs/{org}/connectors/{name}", response_model=OrgConnectorDto, operation_id="getOrgConnector")
 async def get_org_connector(org: str, name: Nom, session: Db, principal: Me) -> OrgConnectorDto:
     if not principal.can(Permission.PROJECT_READ, org):
-        raise forbidden(f"les connecteurs de {org} se lisent par ses membres")
+        raise forbidden(f"the connectors of {org} are readable by its members only")
     return await _dto(session, await _instance(session, await _organisation(session, org), name))
 
 
@@ -207,7 +207,7 @@ async def update_operation(
         )
     ).scalar_one_or_none()
     if ligne is None:
-        raise not_found("Opération", operation)
+        raise not_found("Operation", operation)
     if body.policy is not None:
         ligne.policy = body.policy
     if body.groups is not None:
@@ -253,7 +253,7 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
         config = configuration_resolue(instance.kind, instance.type, instance.config, instance.secret_refs)
         lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
         if lister is None:
-            raise unprocessable(f"`{instance.type}` ne découvre pas ses opérations : son type les déclare")
+            raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
         outils = await lister()
     except (ErreurMcp, SecretIntrouvable, httpx.HTTPError) as panne:
         instance.status, instance.last_check_at, instance.last_error = "error", utcnow(), str(panne)[:1000]
@@ -373,11 +373,11 @@ async def tighten_operation(
     visibles = {(o.connector, o.operation): o for o in await _operations_du_projet(ctx, session)}
     actuelle = visibles.get((connector, operation))
     if actuelle is None:
-        raise not_found("Opération", f"{connector}/{operation}")
+        raise not_found("Operation", f"{connector}/{operation}")
     if RANG[body.policy] < RANG[actuelle.org_policy]:
         raise unprocessable(
-            f"{connector}/{operation} est `{actuelle.org_policy}` dans l'organisation : un projet ne "
-            f"fait que resserrer, il ne passe pas à `{body.policy}`"
+            f"{connector}/{operation} is `{actuelle.org_policy}` in the organisation: a project can "
+            f"only narrow it, not move it to `{body.policy}`"
         )
     ligne = (
         await session.execute(

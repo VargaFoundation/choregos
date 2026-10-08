@@ -32,7 +32,7 @@ def exiger_une_authentification_fraiche(principal: Any, minutes: int, maintenant
         depuis = "an unknown time" if age is None else f"{age // 60} min"
         raise ApiError(
             401,
-            "Authentification trop ancienne",
+            "Authentication too old",
             f"this decision needs an authentication less than {minutes} min old; yours is {depuis} old",
             errors=[{"error": "step_up_required", "reauth": REAUTH}],
         )

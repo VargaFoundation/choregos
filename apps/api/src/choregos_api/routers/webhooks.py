@@ -192,9 +192,9 @@ async def github_webhook(
         # Sans secret, la signature n'était pas vérifiée du tout : n'importe qui pouvait
         # injecter des événements de tracker. Toléré seulement là où il n'y a pas de GitHub.
         if settings.env in {"staging", "prod"}:
-            raise unauthorized("webhook GitHub non configuré : CHOREGOS_GITHUB_WEBHOOK_SECRET manque")
+            raise unauthorized("GitHub webhook not configured: CHOREGOS_GITHUB_WEBHOOK_SECRET is missing")
     elif not verify_github_signature(settings.github_webhook_secret, body, x_hub_signature_256):
-        raise unauthorized("signature HMAC invalide")
+        raise unauthorized("invalid HMAC signature")
     if await _already_seen(session, "github", x_github_delivery or body_digest(body), x_github_event, body):
         return WebhookAck(accepted=True, duplicate=True)
 
@@ -231,9 +231,9 @@ async def tekton_webhook(
     fourni = x_choregos_secret or request.query_params.get("jeton", "")
     if not settings.generic_webhook_secret:
         if settings.env in {"staging", "prod"}:
-            raise unauthorized("webhook Tekton non configuré : CHOREGOS_GENERIC_WEBHOOK_SECRET manque")
+            raise unauthorized("Tekton webhook not configured: CHOREGOS_GENERIC_WEBHOOK_SECRET is missing")
     elif not verify_shared_secret(settings.generic_webhook_secret, fourni):
-        raise unauthorized("secret partagé invalide")
+        raise unauthorized("invalid shared secret")
     body = await request.body()
     if await _already_seen(session, "tekton", ce_id or body_digest(body), ce_type, body):
         return WebhookAck(accepted=True, duplicate=True)
@@ -275,7 +275,7 @@ async def argocd_webhook(
     body = await request.body()
     settings = get_settings()
     if not verify_shared_secret(settings.generic_webhook_secret, x_choregos_secret):
-        raise unauthorized("secret partagé invalide")
+        raise unauthorized("invalid shared secret")
     payload = json.loads(body or b"{}")
     app = payload.get("app", payload.get("application", ""))
     health = str(payload.get("health", payload.get("status", ""))).lower()
@@ -319,7 +319,7 @@ async def alertmanager_webhook(
     body = await request.body()
     settings = get_settings()
     if not verify_shared_secret(settings.generic_webhook_secret, x_choregos_secret):
-        raise unauthorized("secret partagé invalide")
+        raise unauthorized("invalid shared secret")
     payload = json.loads(body or b"{}")
     alerts = payload.get("alerts", [])
     count = 0
@@ -363,7 +363,7 @@ async def jira_webhook(
     """Jira Cloud ne signe pas ses webhooks : le secret partagé est la seule barrière."""
     body = await request.body()
     if not verify_shared_secret(get_settings().generic_webhook_secret, x_choregos_secret):
-        raise unauthorized("secret partagé invalide")
+        raise unauthorized("invalid shared secret")
     delivery = x_atlassian_webhook_identifier or body_digest(body)
     if await _already_seen(session, "jira", delivery, "jira", body):
         return WebhookAck(accepted=True, duplicate=True)
@@ -387,7 +387,7 @@ async def gitlab_webhook(
 ) -> WebhookAck:
     body = await request.body()
     if not verify_shared_secret(get_settings().generic_webhook_secret, x_gitlab_token):
-        raise unauthorized("jeton GitLab invalide")
+        raise unauthorized("invalid GitLab token")
     delivery = x_gitlab_event_uuid or body_digest(body)
     if await _already_seen(session, "gitlab", delivery, x_gitlab_event, body):
         return WebhookAck(accepted=True, duplicate=True)

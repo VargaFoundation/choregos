@@ -92,7 +92,7 @@ async def test_une_tache_se_remplit_s_atteste_et_ses_valeurs_deviennent_des_cham
     decisions = f"{base}/decisions"
 
     approuvee = await client.post(decisions, json={"kind": "approve"})
-    assert approuvee.status_code == 422 and "se complète" in approuvee.text
+    assert approuvee.status_code == 422 and "is completed" in approuvee.text
     vide = await client.post(decisions, json={"kind": "complete", "values": {}, "attested": True})
     assert vide.status_code == 422 and "badge_uid" in vide.text, "un champ requis manque"
     court = await client.post(
@@ -103,7 +103,7 @@ async def test_une_tache_se_remplit_s_atteste_et_ses_valeurs_deviennent_des_cham
         decisions,
         json={"kind": "complete", "values": {"badge_uid": "04A1B2C3", "upn": "x"}, "attested": True},
     )
-    assert hors.status_code == 422 and "hors du formulaire" in hors.text, (
+    assert hors.status_code == 422 and "not in the task's form" in hors.text, (
         "une tâche ne remplit que son formulaire"
     )
     sans = await client.post(decisions, json={"kind": "complete", "values": {"badge_uid": "04A1B2C3"}})
@@ -131,7 +131,7 @@ async def test_une_tache_impossible_se_renvoie_et_complete_ne_vaut_que_pour_une_
     ticket = await _ticket_qui_attend(client, project["id"], kind="approval")
     decisions = f"/api/v1/work-items/{ticket['id']}/decisions"
     refus = await client.post(decisions, json={"kind": "complete", "values": {"badge_uid": "04A1B2C3"}})
-    assert refus.status_code == 422 and "seule une tâche se complète" in refus.text
+    assert refus.status_code == 422 and "only a task is completed" in refus.text
 
     autre = await _ticket_qui_attend_encore(client, project["id"])
     renvoyee = await client.post(

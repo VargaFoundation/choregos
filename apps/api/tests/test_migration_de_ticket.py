@@ -112,7 +112,7 @@ async def test_un_ticket_occupe_ne_migre_pas(client: AsyncClient, project: dict[
         )
         session.add(demande)
     attend = await _migrer(client, ticket, workflow_def_id=cible, state_mapping=mapping)
-    assert attend.status_code == 409 and "décision" in attend.text, attend.text
+    assert attend.status_code == 409 and "decision" in attend.text, attend.text
 
     async with session_scope() as session:
         lue = await session.get(HumanRequest, demande.id)

@@ -71,7 +71,7 @@ class _Cles:
         if kid not in cles or time.monotonic() - horodatage > DUREE_DU_CACHE:
             cles = await self._charger(issuer)
         if kid not in cles:
-            raise JetonRefuse(f"clé `{kid}` inconnue de l'émetteur")
+            raise JetonRefuse(f"key `{kid}` unknown to the issuer")
         return cles[kid]
 
     def vider(self) -> None:
@@ -86,9 +86,9 @@ async def valider(brut: str, settings: Settings) -> dict[str, Any]:
     try:
         entete = jwt.get_unverified_header(brut)
     except jwt.PyJWTError as erreur:
-        raise JetonRefuse("jeton illisible") from erreur
+        raise JetonRefuse("unreadable token") from erreur
     if entete.get("alg") not in ALGORITHMES:
-        raise JetonRefuse(f"algorithme refusé : {entete.get('alg')}")
+        raise JetonRefuse(f"algorithm refused: {entete.get('alg')}")
     issuer = emetteur(settings)
     try:
         cle = await CLES.cle(issuer, str(entete.get("kid") or ""))
@@ -101,5 +101,5 @@ async def valider(brut: str, settings: Settings) -> dict[str, Any]:
             options={"require": ["exp", "iss", "aud", "sub"]},
         )
     except (jwt.PyJWTError, httpx.HTTPError) as erreur:
-        raise JetonRefuse(f"jeton refusé : {erreur}") from erreur
+        raise JetonRefuse(f"token refused: {erreur}") from erreur
     return revendications

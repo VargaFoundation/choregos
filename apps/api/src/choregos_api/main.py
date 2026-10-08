@@ -325,17 +325,17 @@ def create_app() -> FastAPI:
                 await conn.execute(text("SELECT 1"))
         except Exception as exc:
             return JSONResponse(
-                {"status": "not_ready", "detail": f"base : {str(exc)[:200]}"}, status_code=503
+                {"status": "not_ready", "detail": f"database: {str(exc)[:200]}"}, status_code=503
             )
         temporal = get_temporal()
         if isinstance(temporal, RealTemporal):
             try:
                 client = await asyncio.wait_for(temporal.client(), timeout=2.0)
                 if not await asyncio.wait_for(client.service_client.check_health(), timeout=2.0):
-                    raise RuntimeError("check_health a répondu non")
+                    raise RuntimeError("check_health answered no")
             except Exception as exc:
                 return JSONResponse(
-                    {"status": "not_ready", "detail": f"temporal : {str(exc)[:200]}"}, status_code=503
+                    {"status": "not_ready", "detail": f"temporal: {str(exc)[:200]}"}, status_code=503
                 )
         return {"status": "ready"}
 

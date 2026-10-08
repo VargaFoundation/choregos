@@ -58,7 +58,7 @@ async def choisir_workflow(
     if naissance.workflow:
         explicite = await workflow_actif(session, project.id, naissance.workflow)
         if explicite is None:
-            raise unprocessable(f"workflow `{naissance.workflow}` inconnu ou inactif dans ce projet")
+            raise unprocessable(f"workflow `{naissance.workflow}` is unknown or inactive in this project")
         return explicite
     etiquettes = set(naissance.labels)
     for regle in project.workflow_routing or []:
@@ -73,14 +73,14 @@ def valider_les_champs(schema: dict[str, Any] | None, champs: dict[str, Any], wo
     """Un champ hors du schéma, ou un champ requis absent : 422, avec son chemin."""
     if schema is None:
         if champs:
-            raise unprocessable(f"le workflow `{workflow}` ne déclare aucun champ (`metadata.inputs`)")
+            raise unprocessable(f"workflow `{workflow}` declares no field (`metadata.inputs`)")
         return
     import jsonschema
 
     erreurs = sorted(jsonschema.Draft202012Validator(schema).iter_errors(champs), key=lambda e: list(e.path))
     if erreurs:
         raise unprocessable(
-            f"champs refusés par le workflow `{workflow}`",
+            f"fields refused by workflow `{workflow}`",
             [{"loc": ["fields", *e.path], "msg": e.message} for e in erreurs],
         )
 

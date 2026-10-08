@@ -64,9 +64,9 @@ def installer(app: FastAPI, par_minute: int) -> Limiteur:
                 return JSONResponse(
                     {
                         "type": "about:blank",
-                        "title": "Trop de requêtes",
+                        "title": "Too many requests",
                         "status": 429,
-                        "detail": f"plus de {par_minute} requêtes par minute depuis cette adresse",
+                        "detail": f"more than {par_minute} requests per minute from this address",
                         "instance": request.url.path,
                     },
                     status_code=429,

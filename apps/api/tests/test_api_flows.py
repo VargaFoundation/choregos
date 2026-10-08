@@ -17,7 +17,7 @@ async def test_me_requires_session(client: AsyncClient) -> None:
     response = await client.get("/api/v1/me")
     assert response.status_code == 401
     assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.json()["title"] == "Non authentifié"
+    assert response.json()["title"] == "Not authenticated"
 
 
 async def test_login_and_me(client: AsyncClient, org: str) -> None:

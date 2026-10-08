@@ -327,7 +327,7 @@ async def callback(
     attendu = read_session(state, settings)
     poignee = read_session(request.cookies.get(OIDC_COOKIE, ""), settings)
     if not attendu or not poignee or attendu.get("n") != poignee.get("n"):
-        raise unauthorized("état de connexion invalide ou périmé : recommencer la connexion")
+        raise unauthorized("invalid or expired sign-in state: start the sign-in again")
     target = redirection_sure(str(attendu.get("r") or ""), settings)
     reauth = bool(poignee.get("a"))
 
@@ -355,7 +355,7 @@ async def callback(
                 },
             )
             if token_response.status_code >= 400:
-                raise unauthorized(f"échange OIDC refusé : {token_response.text[:200]}")
+                raise unauthorized(f"OIDC exchange refused: {token_response.text[:200]}")
             jetons = token_response.json()
             access_token = jetons["access_token"]
             auth_time = _auth_time(jetons.get("id_token"))
@@ -365,14 +365,14 @@ async def callback(
             # silencieuse ne vaut pas une authentification fraîche.
             if reauth and (auth_time is None or time.time() - auth_time > OIDC_HANDSHAKE_S):
                 raise unauthorized(
-                    "ré-authentification demandée, mais l'IdP ne l'a pas faite (`auth_time` absent ou "
-                    "ancien) : recommencer, ou vérifier que l'IdP honore `prompt=login`"
+                    "re-authentication was requested, but the IdP did not perform it (`auth_time` missing "
+                    "or too old): try again, or check that the IdP honours `prompt=login`"
                 )
             info = (
                 await client.get(endpoints["userinfo"], headers={"Authorization": f"Bearer {access_token}"})
             ).json()
         if not info.get("email"):
-            raise unauthorized("l'IdP n'a pas fourni d'e-mail : le scope `email` manque")
+            raise unauthorized("the IdP did not provide an e-mail: the `email` scope is missing")
         user = await _ensure_user(session, info["email"], info.get("name", ""), info.get("sub"))
         await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 
@@ -437,7 +437,7 @@ async def terminer_la_connexion(
     """
     reglages = settings or get_settings()
     if not email:
-        raise unauthorized("l'IdP n'a pas fourni d'e-mail")
+        raise unauthorized("the IdP did not provide an e-mail")
     user = await _ensure_user(session, email, nom, sujet)
     await _map_groups_to_roles(session, user, list(groupes), reglages)
     return await ouvrir_la_session(session, user, cible, reglages, canal=canal)
@@ -481,23 +481,25 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
     disait `choregos login --token` et rien ne pouvait produire ce jeton.
     """
     if principal.kind != "user":
-        raise unauthorized("seule une session humaine peut émettre un jeton")
+        raise unauthorized("only a human session can issue a token")
     portees = sorted(set(body.scopes))
     if "*" in portees and len(portees) > 1:
-        raise unprocessable("la portée `*` ne se combine pas : elle ouvre déjà l'API REST, pas la porte MCP")
+        raise unprocessable(
+            "the `*` scope does not combine with others: it opens the REST API, not the MCP gate"
+        )
     projet_id: str | None = None
     projet_nom: str | None = None
     if body.project is not None:
         if "*" in portees:
-            raise unprocessable("un projet ne borne qu'un jeton MCP (portée mcp:read ou mcp:write)")
+            raise unprocessable("only an MCP token (scope mcp:read or mcp:write) can be bound to a project")
         # Un jeton ne voit jamais plus que son humain : le projet doit lui être lisible, et un
         # projet illisible répond comme un projet inexistant.
         try:
             projet, org_slug = await resolve_project(session, body.project)
         except ApiError as erreur:
-            raise not_found("Projet", body.project) from erreur
+            raise not_found("Project", body.project) from erreur
         if not principal.can(Permission.PROJECT_READ, org_slug, projet.slug):
-            raise not_found("Projet", body.project)
+            raise not_found("Project", body.project)
         projet_id, projet_nom = projet.id, f"{org_slug}:{projet.slug}"
     raw, digest = generate_api_token()
     row = ApiToken(
@@ -528,7 +530,7 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
 async def revoke_my_token(id: str, session: Db, principal: Me) -> Response:
     row = await session.get(ApiToken, id)
     if row is None or row.user_id != principal.user_id:
-        raise not_found("Jeton", id)
+        raise not_found("Token", id)
     await session.delete(row)
     await record(session, principal, "token.revoke", org_id=None, target_type="api_token", target_id=id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

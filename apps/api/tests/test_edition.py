@@ -56,7 +56,7 @@ async def test_le_communautaire_refuse_une_seconde_organisation(
     reponse = await client.post("/api/v1/orgs", json={"slug": "seconde", "name": "Seconde"})
     assert reponse.status_code == 409, reponse.text
     detail = reponse.json()["detail"]
-    assert "communautaire" in detail and "0024" in detail, "le refus doit nommer la décision"
+    assert "community" in detail and "0024" in detail, "le refus doit nommer la décision"
 
 
 async def test_l_entreprise_la_laisse_passer(client: AsyncClient, org: str, admin: str) -> None:
@@ -93,8 +93,8 @@ async def test_sans_organisation_ce_n_est_pas_l_edition_qui_refuse(client: Async
     reponse = await client.post("/api/v1/orgs", json={"slug": "premiere", "name": "Première"})
     assert reponse.status_code == 403, reponse.text
     detail = reponse.json()["detail"]
-    assert "plateforme" in detail, f"le refus doit parler de droits, pas d'édition : {detail}"
-    assert "communautaire" not in detail, "ce n'est pas l'édition qui refuse ici"
+    assert "platform" in detail, f"le refus doit parler de droits, pas d'édition : {detail}"
+    assert "community" not in detail, "ce n'est pas l'édition qui refuse ici"
 
 
 async def test_administrer_la_plateforme_est_un_droit_sur_l_instance(

@@ -281,7 +281,9 @@ async def creer_un_ticket(
     est celui du workflow du projet, et l'interpréteur démarre tout de suite sauf `start=False`.
     """
     if not await le_tracker_est_interne(session, project):
-        raise conflict("ce projet reçoit ses tickets d'un tracker externe : créez la demande là-bas")
+        raise conflict(
+            "this project receives its work items from an external tracker: create the request there"
+        )
     key = await cle_de_ticket_interne(session, project)
     item = await nouveau_ticket(
         session,

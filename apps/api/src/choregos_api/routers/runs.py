@@ -28,7 +28,7 @@ async def _run(session: Any, run_id: str, principal: Any) -> tuple[Run, Project]
         raise not_found("Run", run_id)
     project = await session.get(Project, run.project_id)
     if project is None:
-        raise not_found("Projet", run.project_id)
+        raise not_found("Project", run.project_id)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
@@ -43,7 +43,7 @@ async def list_runs(id: str, session: Db, principal: Me) -> list[RunDto]:
             await session.execute(select(WorkItem).where(WorkItem.tracker_key == id).limit(1))
         ).scalar_one_or_none()
     if item is None:
-        raise not_found("Ticket", id)
+        raise not_found("Work item", id)
     project = await session.get(Project, item.project_id)
     _, org_slug = await resolve_project(session, item.project_id)
     if project is None or not principal.can(Permission.PROJECT_READ, org_slug, project.slug):

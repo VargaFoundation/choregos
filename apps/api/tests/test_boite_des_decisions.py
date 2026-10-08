@@ -55,7 +55,7 @@ async def test_un_outil_sous_validation_propose_une_action_et_rien_n_atteint_le_
     # Le propriétaire de l'agent (qui l'a créé) n'approuve pas les écritures de son agent.
     base_decision = f"/api/v1/projects/{project['id']}/actions/{action_id}/decision"
     refus = await client.post(base_decision, json={"decision": "approve"})
-    assert refus.status_code == 422 and "séparation" in refus.text
+    assert refus.status_code == 422 and "separation of duties" in refus.text
 
     membre = await client.post(
         "/api/v1/orgs/varga/members", json={"email": "rh@varga.dev", "role": "project_owner"}

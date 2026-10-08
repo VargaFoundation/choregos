@@ -97,7 +97,7 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
     )
     if errors:
         raise unprocessable(
-            "manifeste de template invalide",
+            "invalid template manifest",
             [{"loc": [".".join(str(p) for p in e.path)], "msg": e.message} for e in errors],
         )
 

@@ -80,7 +80,7 @@ async def test_un_projet_resserre_mais_ne_passe_jamais_approval_en_allowed(
         "lire_utilisateur": "allowed",
     }
     elargi = await client.put(f"{base}/creer_compte", json={"policy": "allowed"})
-    assert elargi.status_code == 422 and "resserrer" in elargi.text
+    assert elargi.status_code == 422 and "only narrow" in elargi.text
 
     resserre = await client.put(f"{base}/lire_utilisateur", json={"policy": "approval"})
     assert resserre.status_code == 200, resserre.text

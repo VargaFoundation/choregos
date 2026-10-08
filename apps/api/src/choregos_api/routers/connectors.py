@@ -76,8 +76,8 @@ async def put_connector(
         # d'adaptateur la refuse déjà ; on refuse aussi de l'ÉCRIRE, pour que l'erreur arrive
         # quand quelqu'un la choisit, pas au premier run de la nuit suivante.
         raise unprocessable(
-            "passerelle `direct` refusée sur cet environnement : elle ne mesure aucun coût et "
-            "n'applique aucun plafond. Utiliser `litellm`."
+            "the `direct` gateway is refused in this environment: it measures no cost and "
+            "enforces no cap. Use `litellm`."
         )
     from ..services.connecteurs import spec_du_type, verifier_les_secrets
 
@@ -155,7 +155,7 @@ async def test_connector(ctx: ProjectCtx, kind: Annotated[str, Path()], session:
         await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))
     ).scalar_one_or_none()
     if row is None:
-        raise not_found("Connecteur", kind)
+        raise not_found("Connector", kind)
 
     from choregos_adapters import build, configuration_resolue, fakes_enabled
 

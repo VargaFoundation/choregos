@@ -107,8 +107,8 @@ async def test_un_projet_ne_d_un_gabarit_a_deux_workflows_les_recoit(
 @pytest.mark.parametrize(
     ("defaults", "motif"),
     [
-        pytest.param({"workflows": ["../secret.yaml"]}, "sort du dossier", id="hors-du-dossier"),
-        pytest.param({"workflows": ["workflows/absent.yaml"]}, "absent", id="fichier-absent"),
+        pytest.param({"workflows": ["../secret.yaml"]}, "goes outside", id="hors-du-dossier"),
+        pytest.param({"workflows": ["workflows/absent.yaml"]}, "missing", id="fichier-absent"),
         pytest.param(
             {"workflows": ["workflows/arrivee.yaml"], "routing": [{"when": {}, "workflow": "offboarding"}]},
             "offboarding",
@@ -117,12 +117,12 @@ async def test_un_projet_ne_d_un_gabarit_a_deux_workflows_les_recoit(
         pytest.param({"workflows": ["template:inconnu@1"]}, "inconnu", id="gabarit-du-coeur-inconnu"),
         pytest.param(
             {"workflows": ["workflows/arrivee.yaml"], "policy": "/etc/passwd"},
-            "sort du dossier",
+            "goes outside",
             id="politique",
         ),
         pytest.param(
             {"workflows": ["workflows/arrivee.yaml"], "policy": "./absente.yaml"},
-            "absent",
+            "missing",
             id="politique-absente",
         ),
         pytest.param(

@@ -127,7 +127,7 @@ def test_engine_for_accepts_preset_yaml_and_object() -> None:
 
 
 def test_parse_policy_rejects_garbage() -> None:
-    with pytest.raises(ValidationError, match="politique"):
+    with pytest.raises(ValidationError, match="policy"):
         parse_policy("- juste une liste")
     with pytest.raises(ValidationError):
         parse_policy("apiVersion: choregos/v1\nkind: Policy\nmetadata: {name: X, version: 0}\n")
