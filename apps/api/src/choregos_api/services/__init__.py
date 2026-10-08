@@ -37,6 +37,7 @@ from .memoire import (
     _window_stats,
     memory_ab_comparison,
 )
+from .parcours import arete_du_deplacement, parcours
 from .projets import (
     first_pass_merge_rate,
     project_dto,
@@ -74,6 +75,7 @@ __all__ = [
     "_window_stats",
     "active_policy",
     "active_workflow",
+    "arete_du_deplacement",
     "choisir_workflow",
     "chronologie",
     "cle_de_ticket_interne",
@@ -86,6 +88,7 @@ __all__ = [
     "le_tracker_est_interne",
     "memory_ab_comparison",
     "nouveau_ticket",
+    "parcours",
     "persist_event",
     "policy_engine",
     "policy_model",

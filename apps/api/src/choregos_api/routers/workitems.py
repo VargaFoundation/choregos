@@ -25,6 +25,7 @@ from ..schemas import (
     WorkItemAction,
     WorkItemCreate,
     WorkItemDto,
+    WorkItemJourney,
     WorkItemPage,
     WorkItemUpdate,
 )
@@ -32,6 +33,7 @@ from ..services import (
     chronologie,
     creer_un_ticket,
     human_request_dto,
+    parcours,
     persist_event,
     work_item_dto,
     workflow_du_ticket,
@@ -154,6 +156,16 @@ async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
         raise forbidden()
 
     return await chronologie(session, item)
+
+
+@router.get("/work-items/{id}/journey", response_model=WorkItemJourney, operation_id="getWorkItemJourney")
+async def journey(id: str, session: Db, principal: Me) -> WorkItemJourney:
+    """Le parcours du ticket dans SON workflow, en une lecture : ce que la console anime (S22-01)."""
+    item, project = await _load(session, id)
+    _, org_slug = await resolve_project(session, project.id)
+    if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
+        raise forbidden()
+    return await parcours(session, item)
 
 
 async def _completer_la_tache(

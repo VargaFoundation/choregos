@@ -659,6 +659,8 @@ export type WorkflowGraph = {
     kind: string;
     terminal?: boolean;
     lane?: string;
+    /** The tracker column the state maps to; the console groups the path into stages by it. */
+    tracker_status?: string | null;
   }>;
   edges: Array<{
     id?: string | null;
@@ -670,8 +672,10 @@ export type WorkflowGraph = {
     wildcard?: boolean;
     actor?: string | null;
     actor_type?: string | null;
+    role?: string | null;
     gates?: Array<string>;
     via?: string | null;
+    timeout_hours?: number | null;
   }>;
 };
 
@@ -898,6 +902,58 @@ export type TimelineEntry = {
   actor_kind?: "user" | "agent" | "system";
   ref_id?: string | null;
   cost_usd?: number | null;
+};
+
+/** A work item's path through its workflow (S22-01). `graph` and `process` describe the version the item is pinned to, not the project's current one; `moves` and `steps` are in time order. */
+export type WorkItemJourney = {
+  work_item_id: string;
+  tracker_key?: string | null;
+  workflow_name?: string | null;
+  workflow_version?: number | null;
+  /** The workflow's initial state. */
+  initial?: string | null;
+  /** The state the item is in now. */
+  state: string;
+  closed?: boolean;
+  graph: WorkflowGraph;
+  process: Array<ProcessStep>;
+  moves: Array<JourneyMove>;
+  steps: Array<JourneyStep>;
+};
+
+/** The item left `from` for `to`. `transition_id` and `kind` say which edge of the graph carried it — `nominal` (the transition itself), `reject`, `changes_requested`, `retry` (a failure sent it back), `escalate`, `default` (from any agent state), `resume`, `start`, `migrated`, or `other` when the graph has no such edge. A retry that keeps the item in its state is not a move: it shows as a second step on the same transition. */
+export type JourneyMove = {
+  at: string;
+  from?: string | null;
+  to: string;
+  kind: "start" | "nominal" | "reject" | "changes_requested" | "retry" | "escalate" | "default" | "resume" | "migrated" | "other";
+  transition_id?: string | null;
+  reason?: string | null;
+};
+
+/** One thing an actor did for the item, on one transition: an agent run, a request to a person, or a governed action. `status` is the run's, the request's (`waiting`, `approved`, `rejected`, `answered`, `completed`, `scope_change`) or the action's. */
+export type JourneyStep = {
+  /** The run, request or action id: the one its own page reads. */
+  id: string;
+  kind: "agent" | "human" | "action";
+  transition_id?: string | null;
+  actor?: string | null;
+  role?: string | null;
+  attempt: number;
+  status: string;
+  started_at?: string | null;
+  ended_at?: string | null;
+  summary?: string | null;
+  /** The `verdict` output of a review, when the step wrote one. */
+  verdict?: string | null;
+  cost_usd?: number;
+  model?: string | null;
+  decided_by?: string | null;
+  due_at?: string | null;
+  /** What the platform measured for an agent run (tests, lint, coverage…). */
+  evidence?: {
+    [key: string]: unknown;
+  };
 };
 
 export type DecisionRequest = {
@@ -1431,6 +1487,7 @@ export interface Operations {
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
+  getWorkItemJourney: { method: "GET"; path: "/work-items/{id}/journey"; body: never; response: WorkItemJourney };
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };

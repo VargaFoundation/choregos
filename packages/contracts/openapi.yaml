@@ -623,6 +623,18 @@ paths:
       operationId: getWorkItemTimeline
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TimelineEntry" } } } } }
+  /work-items/{id}/journey:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: getWorkItemJourney
+      description: >-
+        The work item's path through its workflow, in one read: the map of the version it is pinned
+        to, every move from state to state with the transition that carried it, and every step an
+        actor took — agent runs, human requests, governed actions. The console animates it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemJourney" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /work-items/{id}/decisions:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -2215,6 +2227,7 @@ components:
               kind: { type: string }
               terminal: { type: boolean }
               lane: { type: string }
+              tracker_status: { type: [string, "null"], description: "The tracker column the state maps to; the console groups the path into stages by it." }
         edges:
           type: array
           items:
@@ -2231,8 +2244,10 @@ components:
               wildcard: { type: boolean }
               actor: { type: [string, "null"] }
               actor_type: { type: [string, "null"] }
+              role: { type: [string, "null"] }
               gates: { type: array, items: { type: string } }
               via: { type: [string, "null"] }
+              timeout_hours: { type: [integer, "null"] }
     WorkflowTemplate:
       type: object
       required: [name, version, display, yaml]
@@ -2480,6 +2495,64 @@ components:
         actor_kind: { type: string, enum: [user, agent, system], default: system }
         ref_id: { type: [string, "null"] }
         cost_usd: { type: [number, "null"] }
+    WorkItemJourney:
+      type: object
+      description: >-
+        A work item's path through its workflow (S22-01). `graph` and `process` describe the version
+        the item is pinned to, not the project's current one; `moves` and `steps` are in time order.
+      required: [work_item_id, state, graph, process, moves, steps]
+      properties:
+        work_item_id: { type: string }
+        tracker_key: { type: [string, "null"] }
+        workflow_name: { type: [string, "null"] }
+        workflow_version: { type: [integer, "null"] }
+        initial: { type: [string, "null"], description: The workflow's initial state. }
+        state: { type: string, description: The state the item is in now. }
+        closed: { type: boolean, default: false }
+        graph: { $ref: "#/components/schemas/WorkflowGraph" }
+        process: { type: array, items: { $ref: "#/components/schemas/ProcessStep" } }
+        moves: { type: array, items: { $ref: "#/components/schemas/JourneyMove" } }
+        steps: { type: array, items: { $ref: "#/components/schemas/JourneyStep" } }
+    JourneyMove:
+      type: object
+      description: >-
+        The item left `from` for `to`. `transition_id` and `kind` say which edge of the graph carried
+        it — `nominal` (the transition itself), `reject`, `changes_requested`, `retry` (a failure sent
+        it back), `escalate`, `default` (from any agent state), `resume`, `start`, `migrated`, or
+        `other` when the graph has no such edge. A retry that keeps the item in its state is not a
+        move: it shows as a second step on the same transition.
+      required: [at, to, kind]
+      properties:
+        at: { type: string, format: date-time }
+        from: { type: [string, "null"] }
+        to: { type: string }
+        kind: { type: string, enum: [start, nominal, reject, changes_requested, retry, escalate, default, resume, migrated, other] }
+        transition_id: { type: [string, "null"] }
+        reason: { type: [string, "null"] }
+    JourneyStep:
+      type: object
+      description: >-
+        One thing an actor did for the item, on one transition: an agent run, a request to a person,
+        or a governed action. `status` is the run's, the request's (`waiting`, `approved`, `rejected`,
+        `answered`, `completed`, `scope_change`) or the action's.
+      required: [id, kind, status, attempt]
+      properties:
+        id: { type: string, description: "The run, request or action id: the one its own page reads." }
+        kind: { type: string, enum: [agent, human, action] }
+        transition_id: { type: [string, "null"] }
+        actor: { type: [string, "null"] }
+        role: { type: [string, "null"] }
+        attempt: { type: integer, minimum: 1 }
+        status: { type: string }
+        started_at: { type: [string, "null"], format: date-time }
+        ended_at: { type: [string, "null"], format: date-time }
+        summary: { type: [string, "null"] }
+        verdict: { type: [string, "null"], description: "The `verdict` output of a review, when the step wrote one." }
+        cost_usd: { type: number, default: 0 }
+        model: { type: [string, "null"] }
+        decided_by: { type: [string, "null"] }
+        due_at: { type: [string, "null"], format: date-time }
+        evidence: { type: object, additionalProperties: true, description: "What the platform measured for an agent run (tests, lint, coverage…)." }
     DecisionRequest:
       type: object
       required: [kind]

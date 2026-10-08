@@ -134,6 +134,71 @@ class TimelineEntry(Dto):
     cost_usd: float | None = None
 
 
+JourneyMoveKind = Literal[
+    "start",
+    "nominal",
+    "reject",
+    "changes_requested",
+    "retry",
+    "escalate",
+    "default",
+    "resume",
+    "migrated",
+    "other",
+]
+
+
+class JourneyMove(Dto):
+    """Le ticket a quitté `from` pour `to`, et l'arête du graphe qui l'y a mené (S22-01)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    at: datetime
+    from_: str | None = Field(default=None, alias="from")
+    to: str
+    kind: JourneyMoveKind
+    transition_id: str | None = None
+    reason: str | None = None
+
+
+class JourneyStep(Dto):
+    """Ce qu'un acteur a fait pour le ticket, sur une transition : un run, une demande, une action."""
+
+    id: str
+    kind: Literal["agent", "human", "action"]
+    transition_id: str | None = None
+    actor: str | None = None
+    role: str | None = None
+    attempt: int = Field(default=1, ge=1)
+    status: str
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    summary: str | None = None
+    verdict: str | None = None
+    cost_usd: float = 0.0
+    model: str | None = None
+    decided_by: str | None = None
+    due_at: datetime | None = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkItemJourney(Dto):
+    """Le parcours d'un ticket dans SON workflow, en une lecture : la carte de la version où il est
+    épinglé, ses déplacements d'état en état, et chaque pas de chaque acteur (S22-01)."""
+
+    work_item_id: str
+    tracker_key: str | None = None
+    workflow_name: str | None = None
+    workflow_version: int | None = None
+    initial: str | None = None
+    state: str
+    closed: bool = False
+    graph: dict[str, Any]
+    process: list[dict[str, Any]] = Field(default_factory=list)
+    moves: list[JourneyMove] = Field(default_factory=list)
+    steps: list[JourneyStep] = Field(default_factory=list)
+
+
 class DecisionRequest(Dto):
     request_id: str | None = None
     kind: Literal["approve", "reject", "answer", "scope_change", "complete"]
