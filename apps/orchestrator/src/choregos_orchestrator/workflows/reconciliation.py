@@ -15,6 +15,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ActivityError
 
 from .planification import executer_activite
 
@@ -62,12 +63,19 @@ class TrackerReconciliation:
         params = ReconciliationInput(**payload)
         done = 0
         while not self.stopped and done < params.max_passes:
-            self.last = await executer_activite(
-                tracker_activities.reconcile_tracker,
-                {"project_slug": params.project_slug},
-                start_to_close_timeout=timedelta(minutes=5),
-                retry_policy=RETRY,
-            )
+            # Une passe qui échoue — tracker injoignable, App GitHub pas encore posée — ne tue pas la
+            # boucle : elle le dit dans son statut et repasse à l'intervalle suivant. Sur le locataire
+            # dev, le 08/10, trois échecs sans App avaient laissé `reconcile-dev` mort pour de bon,
+            # et les issues `agent-ready` n'étaient plus jamais lues (S22-06).
+            try:
+                self.last = await executer_activite(
+                    tracker_activities.reconcile_tracker,
+                    {"project_slug": params.project_slug},
+                    start_to_close_timeout=timedelta(minutes=5),
+                    retry_policy=RETRY,
+                )
+            except ActivityError as erreur:
+                self.last = {"error": str(erreur.cause or erreur)}
             done += 1
             self.passes = params.passes + done
             self.wake = False

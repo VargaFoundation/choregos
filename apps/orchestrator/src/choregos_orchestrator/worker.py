@@ -64,6 +64,8 @@ async def start_reconciliation_loops() -> list[str]:
             "TrackerReconciliation",
             f"reconcile-{slug}",
             {"project_slug": slug, "interval_seconds": settings.reconcile_interval_seconds},
+            # Une boucle morte en échec repart au démarrage du worker (S22-06).
+            relancer_si_echoue=True,
         )
         if fresh:
             started.append(slug)
