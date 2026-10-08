@@ -31,10 +31,10 @@ const PAGES = [
   "/p/billing-api/actions/act-poste",
   "/p/billing-api/actions/act-comptes",
   "/agents",
-  "/agents/coordinateur-onboarding",
-  "/agents/claude-de-lea",
+  "/agents/onboarding-coordinator",
+  "/agents/leas-claude-code",
   "/skills",
-  "/skills/procedure-onboarding",
+  "/skills/onboarding-procedure",
   "/p/billing-api/agents",
   "/p/billing-api/integrations/claude-desktop",
   "/p/billing-api/actions/pr1",
@@ -93,19 +93,19 @@ test("graphe de workflow : parcours au clavier et description de l'état", async
   await expect(focus).toContainText("Tab reaches the states");
 
   await graph.locator(".react-flow__node").first().focus();
-  await expect(focus).toHaveText("À trier (agent lane): → Prêt (by refiner).");
+  await expect(focus).toHaveText("To triage (agent lane): → Ready (by refiner).");
 
   await page.keyboard.press("ArrowRight");
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "ready");
   await expect(focus).toHaveText(
-    "Prêt (agent lane): → Fini (by dev, gates scope_respected); → Besoin d'un humain on échecs épuisés.",
+    "Ready (agent lane): → Done (by dev, gates scope_respected); → Needs a human on retries exhausted.",
   );
   // Au clavier comme au survol : les escalades de l'état parcouru se montrent, puis se replient.
   await expect(graph.locator(".react-flow__edge")).toHaveCount(3);
 
   await page.keyboard.press("ArrowRight");
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "done");
-  await expect(focus).toHaveText("Fini (terminal lane, terminal): no outgoing transition.");
+  await expect(focus).toHaveText("Done (terminal lane, terminal): no outgoing transition.");
   await expect(graph.locator(".react-flow__edge")).toHaveCount(2);
 
   // Au bout du workflow, → reste sur place ; Début revient au premier état.
@@ -113,7 +113,7 @@ test("graphe de workflow : parcours au clavier et description de l'état", async
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "done");
   await page.keyboard.press("Home");
   await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("data-id", "inbox");
-  await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("aria-label", /À trier, agent lane, 1 outgoing transition/);
+  await expect(graph.locator(".react-flow__node:focus")).toHaveAttribute("aria-label", /To triage, agent lane, 1 outgoing transition/);
 
   // Entrée sur un état ouvre son panneau : la carte se modifie au clavier aussi (S16-12).
   await page.keyboard.press("Enter");
