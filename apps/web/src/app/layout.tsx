@@ -23,16 +23,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Providers>
           <div className="flex min-h-screen flex-col">
             <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur-sm">
-              <Container size="wide" className="flex h-16 items-center gap-8">
+              <Container size="wide" className="flex h-16 items-center gap-4 sm:gap-8">
                 <Link href="/" className="no-underline">
                   <BrandMark name="choregos" product="varga foundation" />
                 </Link>
-                <TopNav />
-                {demo && (
-                  <span className="ml-auto whitespace-nowrap border border-line-strong px-2 py-0.5 text-xs text-ink-muted">
-                    demo · fixtures
-                  </span>
-                )}
+                <TopNav demo={demo} />
               </Container>
             </header>
             <main className="flex-1">
@@ -41,7 +36,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </Container>
             </main>
             <footer className="border-t border-line">
-              <Container size="wide" className="flex h-14 items-center justify-between text-xs text-ink-muted">
+              <Container
+                size="wide"
+                className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
+              >
                 <span>a ticket goes in, a controlled production release comes out.</span>
                 <span>apache 2.0</span>
               </Container>

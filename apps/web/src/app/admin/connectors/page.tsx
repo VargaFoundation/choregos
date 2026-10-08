@@ -50,7 +50,8 @@ export default function OrgConnectorsPage() {
           business systems (API)
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
-          Systems your agents act on through the operations their type declares — a directory, a device fleet, a carrier.
+          Systems your agents act on through the operations their type declares — a directory, a device fleet, a
+          carrier.
         </p>
         {lecture ??
           (metier.length === 0 ? (
@@ -65,8 +66,8 @@ export default function OrgConnectorsPage() {
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
           Tool servers Choregos calls over MCP: discover lists their tools, and each new tool is born closed. A
-          supplier&apos;s agent served over MCP is declared here — to Choregos it is a tool server. To let{" "}
-          <em>your</em> assistant call Choregos, see{" "}
+          supplier&apos;s agent served over MCP is declared here — to Choregos it is a tool server. To let <em>your</em>{" "}
+          assistant call Choregos, see{" "}
           <Link href="/integrations" className="underline">
             AI clients
           </Link>
@@ -124,21 +125,23 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
             : "this type declares no operation an agent can call."}
         </p>
       ) : (
-        <table className="w-full text-sm" data-testid={`operations-${instance.name}`}>
-          <thead className="text-left text-xs text-ink-muted">
-            <tr>
-              <th className="py-1 font-normal">operation</th>
-              <th className="py-1 font-normal">access</th>
-              <th className="py-1 font-normal">policy</th>
-              <th className="py-1 font-normal">project groups</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(instance.operations ?? []).map((operation) => (
-              <Operation key={operation.name} org={org} connecteur={instance.name} operation={operation} />
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid={`operations-${instance.name}`}>
+            <thead className="text-left text-xs text-ink-muted">
+              <tr>
+                <th className="py-1 font-normal">operation</th>
+                <th className="py-1 font-normal">access</th>
+                <th className="py-1 font-normal">policy</th>
+                <th className="py-1 font-normal">project groups</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(instance.operations ?? []).map((operation) => (
+                <Operation key={operation.name} org={org} connecteur={instance.name} operation={operation} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );

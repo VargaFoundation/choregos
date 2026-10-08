@@ -16,7 +16,9 @@ import type { WorkItemJourney } from "@/lib/types";
 /** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
 function enMouvement(journey: WorkItemJourney | undefined): boolean {
   if (!journey || journey.closed) return false;
-  return journey.steps.some((s) => !s.ended_at && ["queued", "running", "waiting", "pending_approval", "approved"].includes(s.status));
+  return journey.steps.some(
+    (s) => !s.ended_at && ["queued", "running", "waiting", "pending_approval", "approved"].includes(s.status),
+  );
 }
 
 export default function WorkItemPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
@@ -51,7 +53,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
             {data.tracker_key} · workflow {data.workflow_name} v{data.workflow_version}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <StateBadge state={data.state} display={data.state_display} />
           <CostChip costEur={data.totals?.cost_eur} tokensIn={data.totals?.tokens_in} />
           {gare(journey.data) && (
@@ -59,21 +61,19 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               Replay the stage
             </Button>
           )}
-          <Button onClick={() => control(data.paused ? "resume" : "pause")}>
-            {data.paused ? "Resume" : "Pause"}
-          </Button>
+          <Button onClick={() => control(data.paused ? "resume" : "pause")}>{data.paused ? "resume" : "pause"}</Button>
           <Button tone="danger" onClick={() => control("stop")}>
             stop
           </Button>
         </div>
       </div>
 
-      {(data.failure || (data.workflow_status && ["FAILED", "TERMINATED", "TIMED_OUT"].includes(data.workflow_status))) && (
+      {(data.failure ||
+        (data.workflow_status && ["FAILED", "TERMINATED", "TIMED_OUT"].includes(data.workflow_status))) && (
         <ErrorNote>
           <strong>This ticket is dead.</strong> Its interpreter stopped
           {data.workflow_status ? ` (${data.workflow_status})` : ""}
-          {data.failure?.activity ? ` in ${data.failure.activity}` : ""}: it will not move again until it is
-          restarted.
+          {data.failure?.activity ? ` in ${data.failure.activity}` : ""}: it will not move again until it is restarted.
           {data.failure?.message && <span className="mt-2 block font-mono text-xs">{data.failure.message}</span>}
           {data.failure?.at && <span className="mt-1 block text-xs">{relative(data.failure.at)}</span>}
         </ErrorNote>
@@ -113,36 +113,38 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="cost per stage" className="lg:col-span-2">
-          <table>
-            <thead>
-              <tr>
-                <th>stage</th>
-                <th>backend · model</th>
-                <th className="text-right">tokens</th>
-                <th className="text-right">cost</th>
-                <th>result</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(runs.data ?? []).map((run) => (
-                <tr key={run.id}>
-                  <td>
-                    <Link href={`/p/${slug}/runs/${run.id}`} className="no-underline">
-                      {run.stage_role} · {run.attempt}
-                    </Link>
-                  </td>
-                  <td className="text-xs text-ink-muted">
-                    {run.backend} · {(run.model ?? "").split("/").pop()}
-                  </td>
-                  <td className="text-right font-mono text-xs">
-                    {tokens(run.tokens?.tokens_in)} / {tokens(run.tokens?.tokens_out)}
-                  </td>
-                  <td className="text-right">{usd(run.cost_usd)}</td>
-                  <td className="max-w-80 truncate text-xs text-ink-muted">{run.result?.summary ?? run.status}</td>
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>stage</th>
+                  <th>backend · model</th>
+                  <th className="text-right">tokens</th>
+                  <th className="text-right">cost</th>
+                  <th>result</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(runs.data ?? []).map((run) => (
+                  <tr key={run.id}>
+                    <td>
+                      <Link href={`/p/${slug}/runs/${run.id}`} className="no-underline">
+                        {run.stage_role} · {run.attempt}
+                      </Link>
+                    </td>
+                    <td className="text-xs text-ink-muted">
+                      {run.backend} · {(run.model ?? "").split("/").pop()}
+                    </td>
+                    <td className="text-right font-mono text-xs">
+                      {tokens(run.tokens?.tokens_in)} / {tokens(run.tokens?.tokens_out)}
+                    </td>
+                    <td className="text-right">{usd(run.cost_usd)}</td>
+                    <td className="max-w-80 truncate text-xs text-ink-muted">{run.result?.summary ?? run.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {runs.data?.length === 0 && <Empty>no run yet</Empty>}
           <p className="mt-3 text-sm">
             Total {eur(data.totals?.cost_eur)}

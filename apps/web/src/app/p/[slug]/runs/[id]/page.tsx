@@ -58,7 +58,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
             kind={run.data.status === "succeeded" ? "terminal" : run.data.status === "failed" ? "blocked" : "work"}
           />
           {transcript.data?.url && (
-            <a href={transcript.data.url} className="text-xs text-ink-muted hover:text-ink" target="_blank" rel="noreferrer">
+            <a
+              href={transcript.data.url}
+              className="text-xs text-ink-muted hover:text-ink"
+              target="_blank"
+              rel="noreferrer"
+            >
               full transcript
             </a>
           )}
@@ -91,9 +96,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
               <li key={path}>{path}</li>
             ))}
           </ul>
-          <p className="mt-2 text-xs">
-            {run.data.result?.diagnostics?.permission_denials ?? 0} permission(s) refused
-          </p>
+          <p className="mt-2 text-xs">{run.data.result?.diagnostics?.permission_denials ?? 0} permission(s) refused</p>
         </Card>
       </div>
 
@@ -116,26 +119,28 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
         {(diff.data?.files ?? []).length === 0 ? (
           <Empty>no file changed</Empty>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>file</th>
-                <th className="text-right">+</th>
-                <th className="text-right">-</th>
-                <th>scope</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(diff.data?.files ?? []).map((file) => (
-                <tr key={file.path}>
-                  <td className="font-mono text-xs">{file.path}</td>
-                  <td className="text-right text-ok">+{file.additions}</td>
-                  <td className="text-right text-danger">−{file.deletions}</td>
-                  <td>{file.in_scope === false ? <span className="text-danger">out of scope</span> : "✓"}</td>
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>file</th>
+                  <th className="text-right">+</th>
+                  <th className="text-right">-</th>
+                  <th>scope</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(diff.data?.files ?? []).map((file) => (
+                  <tr key={file.path}>
+                    <td className="font-mono text-xs">{file.path}</td>
+                    <td className="text-right text-ok">+{file.additions}</td>
+                    <td className="text-right text-danger">−{file.deletions}</td>
+                    <td>{file.in_scope === false ? <span className="text-danger">out of scope</span> : "✓"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </div>

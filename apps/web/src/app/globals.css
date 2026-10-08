@@ -22,6 +22,29 @@
   --color-system: var(--varga-ink-muted);
 }
 
+/*
+ * Rien ne pousse la page hors de la fenêtre (S23-01) — deux causes, mesurées le 08/10 :
+ *
+ * - une case de grille s'élargissait pour son contenu (`min-width: auto`) : un tableau ou un bloc
+ *   de code poussait sa carte hors de la fenêtre au lieu de défiler dans sa case ;
+ * - un texte réservé aux lecteurs d'écran (`sr-only`, en position absolue) se place par rapport au
+ *   premier ancêtre positionné, PAS par rapport au conteneur qui défile : la dernière colonne du
+ *   board, hors champ dans son défilement, posait son libellé à 1125 px et faisait défiler la page.
+ *   Un conteneur qui défile devient donc ce premier ancêtre positionné.
+ *
+ * En couche `base` : une classe utilitaire (`min-w-…`, `absolute`, `sticky`) l'emporte toujours.
+ */
+@layer base {
+  .grid > * {
+    min-width: 0;
+  }
+  .overflow-auto,
+  .overflow-x-auto,
+  .overflow-x-scroll {
+    position: relative;
+  }
+}
+
 /* La carte d'un workflow se parcourt au clavier : la case sous le curseur doit se voir. */
 [data-etat]:focus-visible {
   outline: 2px solid var(--varga-focus);

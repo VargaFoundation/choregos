@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { entreeActive, NAV, TopNav } from "@/app/top-nav";
 
@@ -47,5 +47,25 @@ describe("la navigation d'en-tête (S21-03)", () => {
     for (const pathname of ["/", "/agents", "/skills", "/approvals", "/integrations", "/admin/connectors", "/p/x"]) {
       expect(NAV.filter((entree) => entreeActive(entree.href, pathname))).toHaveLength(1);
     }
+  });
+
+  it("se replie derrière « menu » : le panneau s'ouvre, se ferme sur Échap et rend le focus (S23-01)", () => {
+    const navigation = rendre("/p/billing-api");
+    const menu = screen.getByRole("button", { name: "menu" });
+    expect(menu).toHaveAttribute("aria-expanded", "false");
+    expect(navigation.querySelector("#menu-principal")).toBeNull();
+
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute("aria-expanded", "true");
+    const panneau = navigation.querySelector("#menu-principal");
+    expect(panneau).not.toBeNull();
+    // Les six entrées y sont, et celle de la page courante y est marquée.
+    expect(panneau?.querySelectorAll("a")).toHaveLength(NAV.length + 1); // + « sign in »
+    expect(panneau?.querySelector('a[aria-current="page"]')?.textContent).toBe("projects");
+
+    fireEvent.keyDown(menu, { key: "Escape" });
+    expect(menu).toHaveAttribute("aria-expanded", "false");
+    expect(navigation.querySelector("#menu-principal")).toBeNull();
+    expect(menu).toHaveFocus();
   });
 });

@@ -28,13 +28,13 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           aria-label="filter the journal"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
           placeholder="filter (permission, dod, result…)"
-          className="w-64 rounded border border-line bg-surface px-2 py-1 text-xs"
+          className="w-64 min-w-0 max-w-full rounded border border-line bg-surface px-2 py-1 text-xs"
         />
         <span className="text-xs text-ink-muted">
           {rows.length} event{rows.length > 1 ? "s" : ""}

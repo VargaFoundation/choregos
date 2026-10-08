@@ -29,7 +29,11 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const train = useQuery({ queryKey: ["train", slug, env], queryFn: () => api.train(slug, env), refetchInterval: 15_000 });
+  const train = useQuery({
+    queryKey: ["train", slug, env],
+    queryFn: () => api.train(slug, env),
+    refetchInterval: 15_000,
+  });
 
   async function act(action: "depart" | "freeze" | "unfreeze") {
     setError(null);
@@ -61,11 +65,15 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
         <div className="space-y-3">
           <p className="text-sm">
             pending batch: <strong>{data.batch_size}</strong> ticket(s)
-            {data.next_departure && <span className="text-ink-muted"> · departure {relative(data.next_departure)}</span>}
+            {data.next_departure && (
+              <span className="text-ink-muted"> · departure {relative(data.next_departure)}</span>
+            )}
             {!data.window_open && <span className="text-warn"> · outside the window</span>}
           </p>
           <ul className="font-mono text-xs text-ink-muted">
-            {data.pending_items?.map((key) => <li key={key}>{key}</li>)}
+            {data.pending_items?.map((key) => (
+              <li key={key}>{key}</li>
+            ))}
           </ul>
           {data.frozen && <ErrorNote>Train frozen: {data.freeze_reason ?? "no reason"}</ErrorNote>}
           <div className="flex flex-wrap items-center gap-2">
@@ -101,64 +109,70 @@ function History({ slug }: { slug: string }) {
   const releases = useQuery({ queryKey: ["releases", slug], queryFn: () => api.releases(slug) });
   return (
     <Card title="batch history">
-      <table>
-        <thead>
-          <tr>
-            <th>batch</th>
-            <th>env</th>
-            <th>status</th>
-            <th>tickets</th>
-            <th>when</th>
-            <th>verdict</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {(releases.data?.items ?? []).map((release) => (
-            <tr key={release.id}>
-              <td>R-{release.batch_no}</td>
-              <td>{release.env}</td>
-              <td>
-                <StateBadge
-                  state={release.status}
-                  display={release.status}
-                  kind={release.status === "done" ? "terminal" : release.status === "rolled_back" ? "blocked" : "work"}
-                />
-              </td>
-              <td>{release.items?.length ?? 0}</td>
-              <td title={shortDate(release.started_at)}>{relative(release.started_at)}</td>
-              <td className="text-xs text-ink-muted">{String(release.verdict?.reason ?? (release.verdict?.go ? "go" : ""))}</td>
-              <td>
-                {release.status === "awaiting_approval" && (
-                  <span className="flex gap-2">
-                    <Button
-                      tone="primary"
-                      onClick={async () => {
-                        if (!confirm(`Approve the production release of batch R-${release.batch_no}?`)) return;
-                        await api.approveRelease(release.id);
-                        queryClient.invalidateQueries({ queryKey: ["releases", slug] });
-                      }}
-                    >
-                      approve
-                    </Button>
-                    <Button
-                      tone="danger"
-                      onClick={async () => {
-                        const reason = prompt(`Abort batch R-${release.batch_no} — why?`);
-                        if (!reason) return;
-                        await api.abortRelease(release.id, reason);
-                        queryClient.invalidateQueries({ queryKey: ["releases", slug] });
-                      }}
-                    >
-                      abort
-                    </Button>
-                  </span>
-                )}
-              </td>
+      <div className="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>batch</th>
+              <th>env</th>
+              <th>status</th>
+              <th>tickets</th>
+              <th>when</th>
+              <th>verdict</th>
+              <th />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {(releases.data?.items ?? []).map((release) => (
+              <tr key={release.id}>
+                <td>R-{release.batch_no}</td>
+                <td>{release.env}</td>
+                <td>
+                  <StateBadge
+                    state={release.status}
+                    display={release.status}
+                    kind={
+                      release.status === "done" ? "terminal" : release.status === "rolled_back" ? "blocked" : "work"
+                    }
+                  />
+                </td>
+                <td>{release.items?.length ?? 0}</td>
+                <td title={shortDate(release.started_at)}>{relative(release.started_at)}</td>
+                <td className="text-xs text-ink-muted">
+                  {String(release.verdict?.reason ?? (release.verdict?.go ? "go" : ""))}
+                </td>
+                <td>
+                  {release.status === "awaiting_approval" && (
+                    <span className="flex gap-2">
+                      <Button
+                        tone="primary"
+                        onClick={async () => {
+                          if (!confirm(`Approve the production release of batch R-${release.batch_no}?`)) return;
+                          await api.approveRelease(release.id);
+                          queryClient.invalidateQueries({ queryKey: ["releases", slug] });
+                        }}
+                      >
+                        approve
+                      </Button>
+                      <Button
+                        tone="danger"
+                        onClick={async () => {
+                          const reason = prompt(`Abort batch R-${release.batch_no} — why?`);
+                          if (!reason) return;
+                          await api.abortRelease(release.id, reason);
+                          queryClient.invalidateQueries({ queryKey: ["releases", slug] });
+                        }}
+                      >
+                        abort
+                      </Button>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {releases.data?.items.length === 0 && <Empty>no batch</Empty>}
     </Card>
   );

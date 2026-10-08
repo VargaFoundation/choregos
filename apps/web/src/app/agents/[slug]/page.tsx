@@ -125,9 +125,11 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
                 {usd(m.cost_usd ?? 0)}
                 {Object.entries(m.cost_by_kind ?? {}).length > 0 && (
                   <span className="ml-1 text-xs text-ink-muted">
-                    ({Object.entries(m.cost_by_kind ?? {})
+                    (
+                    {Object.entries(m.cost_by_kind ?? {})
                       .map(([sorte, cout]) => `${sorte} ${usd(cout)}`)
-                      .join(", ")})
+                      .join(", ")}
+                    )
                   </span>
                 )}
               </dd>
@@ -141,24 +143,26 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
             </div>
           </dl>
           {(m.by_project ?? []).length > 0 && (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-ink-muted">
-                <tr>
-                  <th className="py-1 font-normal">project</th>
-                  <th className="py-1 font-normal">runs</th>
-                  <th className="py-1 font-normal">cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(m.by_project ?? []).map((ligne) => (
-                  <tr key={ligne.project} className="border-t border-line">
-                    <td className="py-1">{ligne.project}</td>
-                    <td>{ligne.runs}</td>
-                    <td>{usd(ligne.cost_usd)}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-ink-muted">
+                  <tr>
+                    <th className="py-1 font-normal">project</th>
+                    <th className="py-1 font-normal">runs</th>
+                    <th className="py-1 font-normal">cost</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(m.by_project ?? []).map((ligne) => (
+                    <tr key={ligne.project} className="border-t border-line">
+                      <td className="py-1">{ligne.project}</td>
+                      <td>{ligne.runs}</td>
+                      <td>{usd(ligne.cost_usd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -300,7 +304,12 @@ function NouvelleVersion({ org, agent, depart }: { org: string; agent: Agent; de
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">model</span>
-          <input className={champ} value={modele} onChange={(e) => setModele(e.target.value)} placeholder="profile:standard" />
+          <input
+            className={champ}
+            value={modele}
+            onChange={(e) => setModele(e.target.value)}
+            placeholder="profile:standard"
+          />
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">max turns</span>
@@ -340,7 +349,10 @@ function NouvelleVersion({ org, agent, depart }: { org: string; agent: Agent; de
 /** Les clients MCP qui incarnent cet agent : quand chacun a appelé, avec quoi ; en rattacher, détacher. */
 function Clients({ org, slug }: { org: string; slug: string }) {
   const client = useQueryClient();
-  const liens = useQuery({ queryKey: ["agent-credentials", org, slug], queryFn: () => api.agentCredentials(org, slug) });
+  const liens = useQuery({
+    queryKey: ["agent-credentials", org, slug],
+    queryFn: () => api.agentCredentials(org, slug),
+  });
   const jetons = useQuery({ queryKey: ["me-tokens"], queryFn: () => api.myTokens() });
   const [choisi, setChoisi] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);

@@ -48,42 +48,44 @@ export default function AgentsPage() {
         ) : agents.data.length === 0 ? (
           <Empty title="no agent yet">register one below, or from a project&apos;s implicit agents.</Empty>
         ) : (
-          <table className="w-full text-sm" data-testid="registre">
-            <thead className="text-left text-xs text-ink-muted">
-              <tr>
-                <th className="py-1 font-normal">agent</th>
-                <th className="py-1 font-normal">kind</th>
-                <th className="py-1 font-normal">status</th>
-                <th className="py-1 font-normal">version</th>
-                <th className="py-1 font-normal">owner</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agents.data.map((agent) => (
-                <tr key={agent.slug} className="border-t border-line" data-testid={`agent-${agent.slug}`}>
-                  <td className="py-2">
-                    <Link href={`/agents/${agent.slug}`} className="font-medium hover:underline">
-                      {agent.display_name}
-                    </Link>
-                    <span className="ml-2 text-xs text-ink-muted">{agent.slug}</span>
-                  </td>
-                  <td>
-                    <Badge tone={agent.kind === "external" ? "accent" : "neutral"}>{agent.kind}</Badge>
-                  </td>
-                  <td>
-                    <Badge tone={agent.status === "active" ? "ok" : "danger"}>{agent.status}</Badge>
-                  </td>
-                  <td>
-                    v{agent.latest_version}
-                    <span className="ml-2 text-xs text-ink-muted">
-                      {resumeDeLaVersion(agent.versions?.find((v) => v.version === agent.latest_version)?.spec)}
-                    </span>
-                  </td>
-                  <td className="text-xs text-ink-muted">{agent.owner ?? "—"}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="registre">
+              <thead className="text-left text-xs text-ink-muted">
+                <tr>
+                  <th className="py-1 font-normal">agent</th>
+                  <th className="py-1 font-normal">kind</th>
+                  <th className="py-1 font-normal">status</th>
+                  <th className="py-1 font-normal">version</th>
+                  <th className="py-1 font-normal">owner</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {agents.data.map((agent) => (
+                  <tr key={agent.slug} className="border-t border-line" data-testid={`agent-${agent.slug}`}>
+                    <td className="py-2">
+                      <Link href={`/agents/${agent.slug}`} className="font-medium hover:underline">
+                        {agent.display_name}
+                      </Link>
+                      <span className="ml-2 text-xs text-ink-muted">{agent.slug}</span>
+                    </td>
+                    <td>
+                      <Badge tone={agent.kind === "external" ? "accent" : "neutral"}>{agent.kind}</Badge>
+                    </td>
+                    <td>
+                      <Badge tone={agent.status === "active" ? "ok" : "danger"}>{agent.status}</Badge>
+                    </td>
+                    <td>
+                      v{agent.latest_version}
+                      <span className="ml-2 text-xs text-ink-muted">
+                        {resumeDeLaVersion(agent.versions?.find((v) => v.version === agent.latest_version)?.spec)}
+                      </span>
+                    </td>
+                    <td className="text-xs text-ink-muted">{agent.owner ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
       <CatalogueDAgents org={org} />
@@ -136,7 +138,12 @@ function NouvelAgent({ org }: { org: string }) {
       >
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">slug</span>
-          <input className={champ} value={slug} onChange={(e) => setSlug(e.target.value)} pattern="[a-z0-9][a-z0-9-]*" />
+          <input
+            className={champ}
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            pattern="[a-z0-9][a-z0-9-]*"
+          />
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">name</span>
@@ -153,11 +160,23 @@ function NouvelAgent({ org }: { org: string }) {
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">model (empty: the project&apos;s profile)</span>
-          <input className={champ} value={modele} onChange={(e) => setModele(e.target.value)} placeholder="profile:standard" />
+          <input
+            className={champ}
+            value={modele}
+            onChange={(e) => setModele(e.target.value)}
+            placeholder="profile:standard"
+          />
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">daily budget (USD, empty: none)</span>
-          <input className={champ} type="number" min={0} step="0.5" value={budget} onChange={(e) => setBudget(e.target.value)} />
+          <input
+            className={champ}
+            type="number"
+            min={0}
+            step="0.5"
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+          />
         </label>
         <div className="flex items-center gap-3 md:col-span-2">
           <Button type="submit" tone="accent" disabled={!slug}>
