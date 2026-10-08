@@ -350,4 +350,6 @@ async def test_une_demande_humaine_en_attente_se_voit_et_un_inconnu_ne_lit_rien(
     async with session_scope(orgs="*") as session:
         intrus = (await session.execute(select(User).where(User.email == "intrus@ailleurs.dev"))).scalar_one()
         await session.execute(delete(Membership).where(Membership.user_id == intrus.id))
-    assert (await client.get(f"/api/v1/work-items/{item['id']}/journey")).status_code == 403
+    # Sur PostgreSQL, la RLS cache déjà le ticket à ce compte (404) ; sur SQLite, c'est la garde de la
+    # route qui répond (403). Les deux disent la même chose : un inconnu ne lit rien — jamais 200.
+    assert (await client.get(f"/api/v1/work-items/{item['id']}/journey")).status_code in {403, 404}
