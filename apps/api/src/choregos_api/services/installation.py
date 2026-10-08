@@ -34,46 +34,62 @@ async def installer_ce_que_livre_le_gabarit(
 ) -> dict[str, list[str]]:
     """Rend ce qui a été installé : les noms des skills et des agents nés ici, des extensions
     installées et de celles qu'aucun greffon n'installe."""
-    installes: dict[str, list[str]] = {"skills": [], "agents": [], "extensions": [], "sans_greffon": []}
     auteur = f"template:{gabarit}"
-    for fichiers in livree.skills:
+    installes = await installer_skills_et_agents(
+        session, projet.org_id, livree.skills, livree.agents, auteur, quoi=f"le gabarit `{gabarit}`"
+    )
+    installes |= {"extensions": [], "sans_greffon": []}
+    await _installer_les_extensions(session, projet, livree, auteur, installes)
+    return installes
+
+
+async def installer_skills_et_agents(
+    session: AsyncSession,
+    org_id: Any,
+    skills: list[dict[str, str]],
+    agents: list[dict[str, Any]],
+    auteur: str,
+    *,
+    quoi: str,
+) -> dict[str, list[str]]:
+    """Des skills puis des agents dans une organisation, en version 1 quand ils n'y sont pas, JAMAIS
+    réécrits quand ils y sont — le chemin commun d'un gabarit (S20-07) et du catalogue (ADR 0040).
+    Un agent nomme ses skills par leur nom : elles s'installent d'abord."""
+    installes: dict[str, list[str]] = {"skills": [], "agents": []}
+    for fichiers in skills:
         try:
             tete = valider(fichiers)
         except SkillRefusee as refus:
-            raise unprocessable(f"le gabarit `{gabarit}` livre une skill refusée : {refus}") from refus
+            raise unprocessable(f"{quoi} delivers a refused skill: {refus}") from refus
         if (
-            await session.execute(
-                select(Skill.id).where(Skill.org_id == projet.org_id, Skill.slug == tete.name)
-            )
+            await session.execute(select(Skill.id).where(Skill.org_id == org_id, Skill.slug == tete.name))
         ).first():
             continue
-        skill = Skill(org_id=projet.org_id, slug=tete.name, description=tete.description, status="active")
+        skill = Skill(org_id=org_id, slug=tete.name, description=tete.description, status="active")
         session.add(skill)
         await session.flush()
         session.add(
             SkillVersion(
                 skill_id=skill.id,
-                org_id=projet.org_id,
+                org_id=org_id,
                 version=1,
                 files=dict(fichiers),
                 digest=empreinte(fichiers),
                 created_by=auteur,
             )
         )
-        await record(session, SYSTEM, "skill.publish", org_id=projet.org_id, target_type="skill",
+        await record(session, SYSTEM, "skill.publish", org_id=org_id, target_type="skill",
                      target_id=skill.id, version=1, via=auteur)  # fmt: skip
         installes["skills"].append(tete.name)
-    for document in livree.agents:
+    for document in agents:
         corps = AgentCreate.model_validate(document)
         erreurs_d_une_version(corps.spec)
         if (
-            await session.execute(
-                select(Agent.id).where(Agent.org_id == projet.org_id, Agent.slug == corps.slug)
-            )
+            await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == corps.slug))
         ).first():
             continue
         agent = Agent(
-            org_id=projet.org_id,
+            org_id=org_id,
             slug=corps.slug,
             kind=corps.kind,
             display_name=corps.display_name,
@@ -86,18 +102,17 @@ async def installer_ce_que_livre_le_gabarit(
         session.add(
             AgentVersion(
                 agent_id=agent.id,
-                org_id=projet.org_id,
+                org_id=org_id,
                 version=1,
                 spec=corps.spec.model_dump(mode="json"),
                 checksum=empreinte_de_l_agent(corps.spec),
                 created_by=auteur,
             )
         )
-        await record(session, SYSTEM, "agent.create", org_id=projet.org_id, target_type="agent",
+        await record(session, SYSTEM, "agent.create", org_id=org_id, target_type="agent",
                      target_id=agent.id, via=auteur)  # fmt: skip
         installes["agents"].append(corps.slug)
     await session.flush()
-    await _installer_les_extensions(session, projet, livree, auteur, installes)
     return installes
 
 

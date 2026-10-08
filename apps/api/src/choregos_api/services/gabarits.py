@@ -102,7 +102,18 @@ def _chemin_du_gabarit(ref: str, dossier: Path | None) -> Path:
     return chemin
 
 
+#: Un gabarit nomme un agent ou une skill du catalogue de la plateforme par `catalogue:<nom>` (ADR 0040).
+PREFIXE_CATALOGUE = "catalogue:"
+
+
 def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:
+    if ref.startswith(PREFIXE_CATALOGUE):
+        from choregos_core.catalogue_d_agents import entree
+
+        trouve = entree(ref.removeprefix(PREFIXE_CATALOGUE))
+        if trouve is None:
+            raise unprocessable(f"`{ref}`: the platform's catalogue has no such agent")
+        return trouve.document
     chemin = _chemin_du_gabarit(ref, dossier)
     if not chemin.is_file():
         raise unprocessable(f"`{ref}` : agent absent du gabarit")
@@ -113,6 +124,13 @@ def _document_de_l_agent(ref: str, dossier: Path | None) -> dict[str, Any]:
 
 
 def _fichiers_de_la_skill(ref: str, dossier: Path | None) -> dict[str, str]:
+    if ref.startswith(PREFIXE_CATALOGUE):
+        from choregos_core.catalogue_d_agents import fichiers_de_la_skill
+
+        try:
+            return fichiers_de_la_skill(ref.removeprefix(PREFIXE_CATALOGUE))
+        except KeyError as erreur:
+            raise unprocessable(f"`{ref}`: the platform's catalogue has no such skill") from erreur
     return _fichiers_du_dossier(ref, dossier, "skill")
 
 

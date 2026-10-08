@@ -21,6 +21,8 @@ from ..deps import Db, Me, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
+    AgentCatalogueEntry,
+    AgentCatalogueInstall,
     AgentCreate,
     AgentCredentialCreate,
     AgentCredentialDto,
@@ -551,3 +553,81 @@ async def detach_credential(org: str, slug: Slug, credential_id: str, session: D
         target_id=agent.id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ───────────────────────────── le catalogue (ADR 0040) ─────────────────────────────
+
+
+@router.get(
+    "/orgs/{org}/agent-catalogue",
+    response_model=list[AgentCatalogueEntry],
+    operation_id="listAgentCatalogue",
+)
+async def list_agent_catalogue(org: str, session: Db, principal: Me) -> list[AgentCatalogueEntry]:
+    """Les agents que la plateforme propose, et ce qu'il en est dans l'organisation : installé, en
+    quelle version, une mise à jour disponible — ou un agent de l'organisation qui porte ce nom."""
+    from ..services import catalogue_d_agents as catalogue
+
+    _lire(principal, org)
+    organisation = await _organisation(session, org)
+    rendu = []
+    for proposition in catalogue.catalogue():
+        etat = await catalogue.etat(session, organisation.id, proposition)
+        rendu.append(
+            AgentCatalogueEntry(
+                slug=proposition.slug,
+                kind=proposition.genre,
+                display_name=proposition.document["display_name"],
+                description=proposition.document.get("description"),
+                role=proposition.role,
+                summary=proposition.resume,
+                version=proposition.version,
+                skills=list(proposition.skills),
+                client=proposition.client,
+                reach=proposition.portee,
+                installed=etat.installe,
+                installed_version=etat.version_installee,
+                own_agent=etat.installe and not etat.du_catalogue,
+                update_available=etat.mise_a_jour,
+            )
+        )
+    return rendu
+
+
+@router.post(
+    "/orgs/{org}/agent-catalogue/{slug}/install",
+    response_model=AgentDto,
+    operation_id="installCatalogueAgent",
+)
+async def install_catalogue_agent(
+    org: str,
+    slug: Slug,
+    session: Db,
+    principal: Me,
+    response: Response,
+    body: AgentCatalogueInstall | None = None,
+) -> AgentDto:
+    """Installe l'agent en version 1 (201) ; déjà installé, `upgrade` publie la version suivante si le
+    catalogue a changé (200). Un agent de l'organisation du même nom n'est jamais touché (409)."""
+    from choregos_core.catalogue_d_agents import entree
+
+    from ..services import catalogue_d_agents as catalogue
+
+    _gerer(principal, org)
+    organisation = await _organisation(session, org)
+    proposition = entree(slug)
+    if proposition is None:
+        raise not_found("Catalogue agent", slug)
+    etat = await catalogue.etat(session, organisation.id, proposition)
+    if not etat.installe:
+        await catalogue.installer(session, organisation.id, proposition, principal)
+        response.status_code = status.HTTP_201_CREATED
+    elif not etat.du_catalogue:
+        raise conflict(
+            f"`{slug}` is an agent of {org} that does not come from the catalogue: it is left untouched"
+        )
+    elif not (body and body.upgrade):
+        raise conflict(f"`{slug}` is already installed: ask for `upgrade` to publish the catalogue's version")
+    else:
+        await catalogue.mettre_a_jour(session, organisation.id, proposition, principal)
+    return await _dto(session, await _agent(session, organisation, slug), avec_versions=True)

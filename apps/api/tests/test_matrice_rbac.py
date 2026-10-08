@@ -47,6 +47,7 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("audit:read", "GET", "/api/v1/audit", None),
         ("platform:admin", "PUT", "/api/v1/platform/backends", {"name": "claude-code", "enabled": True}),
         ("project:delete", "DELETE", f"/api/v1/projects/{project_id}", None),
+        ("agent:manage", "POST", "/api/v1/orgs/varga/agent-catalogue/triager/install", {}),
     ]
 
 
