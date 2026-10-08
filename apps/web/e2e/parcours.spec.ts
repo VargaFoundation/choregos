@@ -343,7 +343,9 @@ test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", as
 });
 
 test("la boîte des décisions : une action proposée par un agent attend une personne", async ({ page }) => {
+  // L'ancienne adresse mène à l'inbox (S23-02).
   await page.goto("/approvals");
+  await expect(page).toHaveURL(/\/inbox$/);
   const boite = page.getByTestId("boite");
   await expect(boite).toContainText("Order Léa's laptop");
   await expect(boite).toContainText("proposed by the agent onboarding-coordinator");
@@ -368,3 +370,21 @@ test("agents : le catalogue s'installe, et Claude Code se connecte en un clic", 
   await expect(page.getByTestId("extrait-claude-code")).toContainText("chg_demo_shown_once");
   await expect(page.getByTestId("client-catalogue-chatgpt")).toContainText("not available here");
 });
+
+test("inbox : un ticket arrêté sur une demande humaine s'y décide, et l'en-tête le compte (S23-02)", async ({ page }) => {
+  await page.goto("/");
+  // Un ticket (Spec to approve) et deux actions attendent quelqu'un.
+  await expect(page.getByRole("link", { name: /^inbox/ })).toContainText("3");
+  await page.getByRole("link", { name: /^inbox/ }).click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  const ticket = page.getByTestId("attente-w2");
+  await expect(ticket).toContainText("Export invoices as PDF");
+  await expect(ticket).toContainText("Approval of the specification requested");
+  await expect(ticket).toContainText("billing-api · varga/billing-api#124 · Spec to approve · asked");
+  await expect(ticket).toContainText("due in 21 hours");
+  await ticket.getByRole("button", { name: "approve" }).click();
+  await expect(ticket.getByRole("alert")).toHaveCount(0);
+  await ticket.getByRole("link", { name: "Export invoices as PDF" }).click();
+  await expect(page).toHaveURL(/\/p\/billing-api\/items\/w2$/);
+});
+

@@ -39,6 +39,8 @@ const nextConfig = {
     return [
       { source: "/p/:slug/proposals", destination: "/p/:slug/actions", permanent: true },
       { source: "/p/:slug/proposals/:id", destination: "/p/:slug/actions/:id", permanent: true },
+      // La boîte des décisions est devenue l'inbox (S23-02) : tickets ET actions qui attendent quelqu'un.
+      { source: "/approvals", destination: "/inbox", permanent: true },
     ];
   },
   async headers() {

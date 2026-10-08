@@ -28,7 +28,7 @@ const PAGES = [
   "/p/billing-api/items/w1",
   "/p/billing-api/items/w2",
   "/p/billing-api/runs/r3",
-  "/approvals",
+  "/inbox",
   "/agents",
   "/agents/onboarding-coordinator",
   "/skills",
