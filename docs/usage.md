@@ -631,6 +631,13 @@ lint, typing, coverage — or, for work that has none of those, the facts the bu
 When an agent is blocked it does not guess: it asks, the ticket moves to a waiting state, a
 human is notified with an SLA, and the answer resumes the workflow where it stopped.
 
+A ticket's whole path reads in one call: `GET /work-items/{id}/journey` returns the map of the
+workflow version the ticket is pinned to, every move from state to state with the edge that
+carried it (`nominal`, `reject`, `changes_requested`, `retry`, `escalate`, `default`, `resume`…),
+and every step an actor took on each transition — agent runs with their verdict and evidence,
+requests to people and what they decided, governed actions, release-train departures that carry
+the ticket.
+
 ## 7. Day-2 knobs
 
 | Symptom | Knob |
