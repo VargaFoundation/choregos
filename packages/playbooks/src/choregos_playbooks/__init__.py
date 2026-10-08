@@ -127,6 +127,8 @@ def _template_name(path: Path, role: str) -> str:
 
 
 INVARIANTS = """- Write `.choregos/result.json`, conforming to the contract, before you finish.
+- Write in English everything a person will read — the summary, the documents you produce, your
+  questions, your findings — even when the work item, its fields or its names are in another language.
 - Never widen the scope yourself: call `request_scope_change(paths, justification)`.
 - A problem out of scope is reported with `report_finding(...)`; it is not fixed.
 - Prefer `ask_human(question)` to an assumption that commits the product.

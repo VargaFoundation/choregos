@@ -38,7 +38,8 @@ import httpx
 #: Exigée par `client()` : aucun locataire n'est supposé — Choregos est un projet ouvert.
 URL = os.environ.get("CHOREGOS_DEV_URL", "").rstrip("/")
 FAUX = os.environ.get("ESSAI_FAUX_URL", "http://choregos-demo-fakes:8090").rstrip("/")
-PROJET = "rh"
+#: Le slug du projet RH ; une démo en anglais à côté d'un `rh` né en français prend un autre nom.
+PROJET = os.environ.get("ESSAI_RH_PROJET", "rh")
 TERMINAUX = {"pret", "clos"}
 #: Ce que les agents du gabarit demandent (`model: profile:standard`), et le backend qui les fait
 #: tourner : un projet neuf reçoit `claude-code` et aucun profil, ce que le dev ne sert pas — le premier
@@ -170,7 +171,7 @@ def arrivee(dans_jours: int = -1) -> None:
     org = exiger("CHOREGOS_DEV_ORG")
     date = (dt.date.today() + dt.timedelta(days=dans_jours)).isoformat()
     champs = {"nom": "Léa Martin", "upn": f"lea.{int(time.time())}@demo.test", "date_arrivee": date,
-              "poste": "Développeuse", "groupe": "devs", "groupe_sensible": "prod-lecture",
+              "poste": "Developer", "groupe": "devs", "groupe_sensible": "prod-lecture",
               "adresse": "12 rue de la Paix, Paris"}  # fmt: skip
     with client() as http:
         jeton = lire(http.post("/me/tokens", json={"name": "essai-rh", "scopes": ["mcp:write"]}), 201)
@@ -180,7 +181,7 @@ def arrivee(dans_jours: int = -1) -> None:
                 headers={"Authorization": f"Bearer {jeton['token']}"},
                 json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                       "params": {"name": "create_work_item",
-                                 "arguments": {"title": f"Arrivée de {champs['nom']}",
+                                 "arguments": {"title": f"Joiner: {champs['nom']}",
                                                "workflow": "onboarding",
                                                "fields": champs}}},
                 timeout=60,
@@ -253,7 +254,7 @@ def depart(cle_arrivee: str) -> None:
             serie = lire(http.get(f"/projects/{projet['id']}/actions/{poste['id']}"), 200)["journal"][0][
                 "result"
             ]["serial"]
-        corps = {"title": f"Départ de {champs['nom']}", "labels": ["depart"],
+        corps = {"title": f"Leaver: {champs['nom']}", "labels": ["depart"],
                  "fields": {"nom": champs["nom"], "upn": champs["upn"],
                             "date_depart": dt.date.today().isoformat(), "badge_uid": champs["badge_uid"],
                             "serial": serie, "adresse": champs["adresse"]}}  # fmt: skip
