@@ -170,6 +170,9 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows\/default-simple$/);
   await expect(page.getByTestId("process-step-t-implement")).toContainText("the agent stayed within its allowed paths");
   await page.getByRole("link", { name: "map" }).click();
+  // La carte s'ouvre en serpentin (S22-05) ; la liste à plat est à un onglet.
+  await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
+  await page.getByRole("button", { name: "list" }).click();
   // Les défauts partent de chaque état d'agent : la légende les dit une fois, la carte ne les dessine pas.
   await expect(page.getByTestId("workflow-defaults").getByRole("listitem")).toHaveCount(2);
   // Le chemin nominal se lit seul : une escalade se montre autour de son état, ou toutes sur demande.
@@ -185,7 +188,7 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
 });
 
 test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map");
+  await page.goto("/p/billing-api/workflows/default-simple/map?vue=list");
   const carte = page.getByTestId("workflow-graph");
   await carte.getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");

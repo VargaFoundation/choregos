@@ -105,11 +105,15 @@ export function enClair(nom: string): string {
   return mots ? mots[0]!.toUpperCase() + mots.slice(1) : nom;
 }
 
-function genreDe(arete: AreteDuGraphe): Genre {
+/** Le couloir d'un état dit qui en sort (`dsl/graph.py`) : ce qu'on lit quand l'arête ne nomme pas son acteur. */
+const GENRE_DU_COULOIR: Record<string, Genre> = { agent: "agent", human: "human", train: "train", system: "platform" };
+
+function genreDe(arete: AreteDuGraphe, couloir?: string): Genre {
   if (arete.via === "release_train" || arete.actor_type === "train") return "train";
   if (arete.actor_type === "agent") return "agent";
   if (arete.actor_type === "human") return "human";
-  return "platform";
+  if (arete.actor_type) return "platform";
+  return GENRE_DU_COULOIR[couloir ?? ""] ?? "platform";
 }
 
 /** `on failure (≤3)` → 3 ; une demande de changements ne dit pas sa borne dans le graphe. */
@@ -142,8 +146,9 @@ function etapeDe(
   process: Map<string, ProcessStep>,
   nom: (e: string) => string,
   surLeChemin: boolean,
+  couloir?: string,
 ): Etape {
-  const genre = genreDe(arete);
+  const genre = genreDe(arete, couloir);
   const etape = process.get(arete.id ?? "");
   const libelle =
     genre === "train" ? "Release train" : genre === "platform" ? "Platform" : enClair(arete.actor ?? arete.role ?? "actor");
@@ -177,7 +182,7 @@ export function modeler(journey: Pick<WorkItemJourney, "graph" | "process" | "in
   const etapes: Etape[] = [];
   for (let i = 0; i + 1 < chemin.length; i += 1) {
     const arete = aretes.find((a) => estNominale(a) && a.from === chemin[i] && a.to === chemin[i + 1]);
-    if (arete) etapes.push(etapeDe(arete, aretes, process, nom, true));
+    if (arete) etapes.push(etapeDe(arete, aretes, process, nom, true, parEtat.get(arete.from)?.lane));
   }
   const parId = new Map(etapes.map((e) => [e.id, e]));
   const etapeQuiQuitte = (etat: string) => etapes.find((e) => e.de === etat);
@@ -188,7 +193,7 @@ export function modeler(journey: Pick<WorkItemJourney, "graph" | "process" | "in
     if (surLeChemin.has(noeud.id)) continue;
     const sortie = aretes.find((a) => estNominale(a) && a.from === noeud.id && surLeChemin.has(a.to));
     if (!sortie) continue;
-    const etape = etapeDe(sortie, aretes, process, nom, false);
+    const etape = etapeDe(sortie, aretes, process, nom, false, noeud.lane);
     const sources = etapes
       .filter((e) => aretes.some((a) => a.from === e.de && a.to === noeud.id && SECONDAIRES.has(a.kind ?? "")))
       .map((e) => e.id);
@@ -467,4 +472,15 @@ export function raconter(modele: Modele, deplacement: JourneyMove | null): strin
     default:
       return `It moved to ${vers}.`;
   }
+}
+
+/**
+ * La carte d'un workflow sans ticket (S22-05) : sa structure, rien de franchi, rien en cours. Chaque
+ * étape est « à venir » ; la carte la colore alors par qui la porte.
+ */
+export function structure(modele: Modele): Instant {
+  const etapes = new Map<string, EtatEtape>();
+  for (const id of modele.parId.keys()) etapes.set(id, { statut: "a_venir", tentatives: [], tours: 0, verdict: null });
+  const arcs = new Map(modele.arcs.map((a) => [a.cle, { fois: 0, dernier: false }]));
+  return { t: Number.NEGATIVE_INFINITY, etat: "", etapes, visites: new Set(), arcs, dernier: null, phase: null };
 }

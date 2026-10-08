@@ -39,6 +39,7 @@ const PAGES = [
   "/p/billing-api/integrations/claude-desktop",
   "/p/billing-api/actions/pr1",
   "/p/billing-api/workflows/release-full/map",
+  "/p/billing-api/workflows/release-full/map?vue=list",
   // Le parcours animé d'un ticket (S22-02) : en cours, et fini.
   "/p/billing-api/items/w1",
   "/p/billing-api/items/w4",
@@ -58,7 +59,7 @@ for (const path of PAGES) {
 
 /** La carte en cours d'édition (S16-12) : le panneau d'un état et le brouillon passent axe aussi. */
 test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map");
+  await page.goto("/p/billing-api/workflows/default-simple/map?vue=list");
   await page.getByTestId("workflow-graph").getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
   await panneau.getByLabel("label").fill("Nouvelles demandes");
@@ -90,7 +91,7 @@ test("réglages : la section des connecteurs sans violation sérieuse", async ({
  * les transitions, et l'état sous le curseur est décrit (aria-live) sous la carte.
  */
 test("graphe de workflow : parcours au clavier et description de l'état", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map");
+  await page.goto("/p/billing-api/workflows/default-simple/map?vue=list");
   const carte = page.getByTestId("workflow-graph");
   await expect(carte.locator("[data-etat]")).toHaveCount(4);
   const focus = page.getByTestId("workflow-graph-focus");
