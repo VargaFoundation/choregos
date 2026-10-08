@@ -37,8 +37,12 @@ def _capacites(*textes: str) -> list[str]:
 
 
 @pytest.mark.parametrize("nom", TEMPLATE_NAMES)
-def test_un_gabarit_logiciel_exige_depot_ci_et_train(nom: str) -> None:
-    assert {"scm", "ci", "cd"} <= set(_capacites(template_yaml(nom)))
+def test_un_gabarit_logiciel_exige_depot_et_train_pas_de_ci(nom: str) -> None:
+    """Les checks de la PR se lisent par le dépôt : GitHub Actions suffit, sans connecteur `ci` (S21-23)."""
+    trouvees = {e.capacite: e for e in exigences([parse_workflow(template_yaml(nom))[0]])}
+    assert {"scm", "cd"} <= set(trouvees)
+    raisons = trouvees["ci"].raisons if "ci" in trouvees else ()
+    assert all("provenance_signed" in raison for raison in raisons), raisons
 
 
 def test_un_processus_rh_n_exige_ni_depot_ni_ci_ni_train() -> None:
@@ -54,9 +58,9 @@ def test_chaque_exigence_dit_pourquoi_et_d_ou() -> None:
     assert len(set(scm.raisons)) == len(scm.raisons), "sans doublon"
 
 
-def test_une_garantie_qui_lit_la_ci_l_exige_meme_dans_un_processus_rh() -> None:
+def test_une_garantie_qui_lit_les_checks_d_une_pr_exige_un_depot_meme_dans_un_processus_rh() -> None:
     avec_ci = ARRIVEE.replace("gates: [outputs_present]", "gates: [outputs_present, ci_green]")
-    assert "ci" in _capacites(avec_ci)
+    assert "scm" in _capacites(avec_ci) and "ci" not in _capacites(avec_ci)
 
 
 def test_chaque_garantie_du_coeur_sait_ce_qu_elle_lit() -> None:
@@ -64,7 +68,7 @@ def test_chaque_garantie_du_coeur_sait_ce_qu_elle_lit() -> None:
     connecteur dont elle a besoin — et la garantie échouerait au premier run."""
     lisent = {g: gate_needs(g) for g in known_gates()}
     assert lisent["scope_respected"] == {"scm"}
-    assert lisent["ci_green"] == {"ci"}
+    assert lisent["ci_green"] == lisent["scans_ok"] == {"scm"}, "les checks de la PR, lus par le dépôt"
     assert lisent["outputs_present"] == frozenset()
 
 

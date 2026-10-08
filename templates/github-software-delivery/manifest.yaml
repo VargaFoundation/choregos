@@ -1,0 +1,68 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: github-software-delivery
+  version: 1.0.0
+  display: GitHub · software delivery (fix, study, feature)
+  description: >-
+    Three workflows for a software team on GitHub, run by agents from the catalogue. A bug or a small
+    fix goes from the issue to production with no human (dev-simple). A study ends with one
+    architecture decision record in MADR 4 format, approved by the architects and merged, never
+    deployed (study). A feature waits for three people: a product owner on the specification, a
+    maintainer on the pull request, a release captain on production (dev-complex). Checks run in
+    GitHub Actions; the release train deploys.
+requires:
+  # Les checks de la PR se lisent par le dépôt : GitHub Actions suffit, pas de connecteur `ci`.
+  # Sur un locataire de démonstration, le `cd` peut être le type `demo` ; en vrai, Argo CD.
+  connectors:
+    tracker: github-issues
+    scm: github
+    cd: argocd
+defaults:
+  workflows: [./workflows/dev-simple.yaml, ./workflows/study.yaml, ./workflows/dev-complex.yaml]
+  default_workflow: dev-simple
+  # La première règle qui correspond l'emporte : une étude d'abord, une fonctionnalité ensuite.
+  routing:
+    - when: { labels_any: [study, adr, spike] }
+      workflow: study
+    - when: { labels_any: [feature, epic, complex] }
+      workflow: dev-complex
+    - when: { labels_any: [bug, fix, chore] }
+      workflow: dev-simple
+  policy: ./policy.yaml
+  # Les agents que les workflows nomment s'installent d'eux-mêmes (ADR 0040) ; la liste dit ce que le
+  # gabarit apporte à l'organisation.
+  skills: [catalogue:madr-4]
+  agents:
+    - catalogue:triager
+    - catalogue:spec-writer
+    - catalogue:planner
+    - catalogue:developer
+    - catalogue:tester
+    - catalogue:reviewer
+    - catalogue:security-reviewer
+    - catalogue:review-responder
+    - catalogue:ci-fixer
+    - catalogue:release-notes-writer
+    - catalogue:prod-verifier
+    - catalogue:researcher
+    - catalogue:architect
+inputs:
+  - { name: repo, type: github-repo, required: true, description: "owner/name of the application repository" }
+  - { name: default_branch, type: string, default: main }
+  - { name: language, type: enum, values: [python, node, go, java, dotnet, other], default: python }
+steps:
+  - github.install_app
+  - github.ensure_labels:
+      labels:
+        bug: d73a4a
+        fix: d73a4a
+        chore: c5def5
+        study: 1d76db
+        adr: 1d76db
+        spike: 1d76db
+        feature: 0e8a16
+        epic: 0e8a16
+        complex: 5319e7
+  - github.ensure_webhooks:
+      events: [issues, issue_comment, pull_request, pull_request_review, check_suite]

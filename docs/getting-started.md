@@ -72,13 +72,16 @@ it has a budget.
 | :-- | :-- |
 | `github-tekton-argo-k8s` | you have a cluster and run the agents there |
 | `github-aca` | you are on Azure and want no Kubernetes pool for agents: runs are Container Apps *jobs*, billed by the second |
+| `github-software-delivery` | a software team on GitHub Actions, run by agents from the catalogue: a fix ships with no human (`dev-simple`), a study ends with a merged MADR 4 decision record (`study`), a feature waits for a product owner, a maintainer and a release captain (`dev-complex`) — see its [README](../templates/github-software-delivery/README.md) |
 | `joiners-leavers` | HR, no repository: arrivals and departures, two workflows, two agents, two skills — every write into the directory, the device manager, the carrier or the badge readers is a governed action |
 | *none* | a project with no repository, or one whose connectors you attach yourself |
 
 `templates/<name>/manifest.yaml` lists a template's inputs, required connectors and steps. A
 template can also ship **agents and skills** (`defaults.agents`, `defaults.skills`): they enter the
-organisation when a project is born from it, in version 1 — never rewritten when they are already
-there, so what the organisation changed since stays. And it names the organisation connectors its
+organisation when a project is born from it, in version 1 (`catalogue:<slug>` names one from the
+platform's catalogue) — never rewritten when they are already
+there, so what the organisation changed since stays. It can ship its own policy (`policy:
+./policy.yaml`) instead of a preset. And it names the organisation connectors its
 workflows call (`requires.org_connectors`: `annuaire: identity`…), for the administrator to declare.
 
 What only a plugin understands, a template ships as an **extension** (`defaults.extensions`, a name →

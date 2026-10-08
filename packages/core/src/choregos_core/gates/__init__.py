@@ -446,7 +446,8 @@ def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-@gate("coverage_delta_min", needs=("ci",))
+# La couverture que le runner MESURE dans le dépôt cloné : un dépôt, pas une CI (S21-23).
+@gate("coverage_delta_min", needs=("scm",))
 def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     threshold = float(params.get("x", params.get("min", 0.0)))
     if ctx.result is None or ctx.result.evidence.coverage_delta is None:
@@ -462,7 +463,10 @@ def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome
 # ───────────────────────────── gates asynchrones ─────────────────────────────
 
 
-@gate("ci_green", asynchronous=True, needs=("ci",))
+# `ci_green` et `scans_ok` lisent les checks de la PR À TRAVERS LE DÉPÔT (`scm.get_pr`, dans
+# `activities/gates.py`) — GitHub Actions comme Tekton. Ils déclaraient un `ci` que rien ne lisait :
+# un projet sur GitHub Actions se voyait réclamer un Tekton qu'il n'a pas (S21-23).
+@gate("ci_green", asynchronous=True, needs=("scm",))
 def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.ci_status is None:
         return GateOutcome("ci_green", False, pending=True, detail="CI pending")
@@ -478,7 +482,7 @@ def _review_approved(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     return GateOutcome("review_approved", ok, detail=f"review {ctx.review_state}")
 
 
-@gate("scans_ok", asynchronous=True, needs=("ci",))
+@gate("scans_ok", asynchronous=True, needs=("scm",))
 def _scans_ok(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     required = list(params.get("scanners") or sorted(ctx.scans) or ["semgrep", "trivy", "gitleaks"])
     if not ctx.scans:

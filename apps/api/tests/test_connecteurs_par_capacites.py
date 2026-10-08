@@ -42,7 +42,8 @@ async def test_un_projet_rh_n_affiche_ni_depot_ni_ci_ni_train(
 ) -> None:
     pid = project["id"]
     logiciel = [r["capability"] for r in (await client.get(f"/api/v1/projects/{pid}/requirements")).json()]
-    assert {"scm", "ci", "cd"} <= set(logiciel), "le gabarit par défaut livre du logiciel"
+    assert {"scm", "cd"} <= set(logiciel), "le gabarit par défaut livre du logiciel"
+    assert "ci" not in logiciel, "les checks de la PR se lisent par le dépôt (S21-23)"
 
     assert (
         await client.put(f"/api/v1/projects/{pid}/workflows/arrivee", json={"yaml": ARRIVEE})

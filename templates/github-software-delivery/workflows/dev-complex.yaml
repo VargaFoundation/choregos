@@ -1,0 +1,179 @@
+# Une fonctionnalité, ou tout ce qui n'est pas petit : la même chaîne que `dev-simple`, avec trois
+# décisions humaines — la spec (product owners), la pull request (maintainers), la mise en production
+# (release captains, par le train : ADR 0041).
+#
+# Un refus renvoie le travail avec sa raison (`human_feedback`). Une CI rouge après l'approbation de
+# la PR part chez le réparateur, puis la PR redemande une approbation : ce qui a changé n'a pas été vu.
+# Staging d'abord, sans approbation ; la prod ensuite, sous le capitaine.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: dev-complex
+  version: 1
+  description: "A feature or a large change: specification approved by a product owner, plan, implementation, tests, agent and security reviews, release notes, pull request approved by a maintainer, staging, production approved by a release captain, production check."
+initial: inbox
+actors:
+  triager: { type: agent, role: triage, agent: triager, model: "profile:cheap" }
+  spec_writer: { type: agent, role: refine, agent: spec-writer, model: "profile:standard" }
+  planner: { type: agent, role: plan, agent: planner, model: "profile:standard" }
+  developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
+  tester: { type: agent, role: verify, agent: tester, model: "profile:standard" }
+  reviewer: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
+  security_reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
+  notes_writer: { type: agent, role: release_notes, agent: release-notes-writer, model: "profile:cheap" }
+  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard" }
+  prod_verifier: { type: agent, role: verify_prod, agent: prod-verifier, model: "profile:standard" }
+  platform: { type: system }
+  product_owners: { type: human, group: product-owners, sla_hours: 24 }
+  maintainers: { type: human, group: maintainers, sla_hours: 24 }
+  captain: { type: human, group: release-captains, sla_hours: 4 }
+states:
+  inbox: { display: To triage, kind: wait, tracker: { status: Todo } }
+  triaged: { display: Triaged, tracker: { status: Triaged } }
+  awaiting_spec_approval: { display: Specification to approve, kind: wait, tracker: { status: Needs review } }
+  spec_approved: { display: Specification approved, tracker: { status: Ready } }
+  planned: { display: Planned, tracker: { status: Ready } }
+  implemented: { display: Implemented, tracker: { status: In progress } }
+  tested: { display: Tested, tracker: { status: In progress } }
+  reviewed: { display: Reviewed by an agent, tracker: { status: In progress } }
+  secured: { display: Security reviewed, tracker: { status: In progress } }
+  addressing_review: { display: Addressing the review, tracker: { status: In progress } }
+  notes_written: { display: Release notes written, tracker: { status: In progress } }
+  awaiting_pr_approval: { display: Pull request to approve, kind: wait, tracker: { status: In review } }
+  pr_approved: { display: Pull request approved, tracker: { status: In review } }
+  fixing_ci: { display: Fixing the CI, tracker: { status: In progress } }
+  integrated: { display: Merged, tracker: { status: Merged } }
+  staged: { display: In staging, tracker: { status: Staging } }
+  live: { display: In production, production: true, tracker: { status: Deployed } }
+  verified: { display: Verified in production, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-triage
+    from: inbox
+    to: triaged
+    by: triager
+    outputs: [size, risk]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-specify
+    from: triaged
+    to: awaiting_spec_approval
+    by: spec_writer
+    inputs: [human_feedback]
+    outputs: [spec_markdown, allowed_paths]
+    on_fail: { to: triaged, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-spec
+    from: awaiting_spec_approval
+    to: spec_approved
+    by: product_owners
+    on_reject: triaged
+  - id: t-plan
+    from: spec_approved
+    to: planned
+    by: planner
+    outputs: [plan_markdown]
+    on_fail: { to: spec_approved, max_attempts: 2, escalate_to: needs_human }
+  - id: t-implement
+    from: planned
+    to: implemented
+    by: developer
+    inputs: [test_report, human_feedback]
+    gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }]
+    on_fail: { to: planned, max_attempts: 3, escalate_to: needs_human }
+  - id: t-test
+    from: implemented
+    to: tested
+    by: tester
+    outputs: [test_report]
+    gates: [evidence_present]
+    on_fail: { to: planned, max_attempts: 3, escalate_to: needs_human }
+  - id: t-review
+    from: tested
+    to: reviewed
+    by: reviewer
+    outputs: [review_markdown, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-security-review
+    from: reviewed
+    to: secured
+    by: security_reviewer
+    outputs: [security_review_markdown, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-address-review
+    from: addressing_review
+    to: implemented
+    by: responder
+    inputs: [review_markdown, security_review_markdown, human_feedback]
+    outputs: [review_markdown]
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-release-notes
+    from: secured
+    to: notes_written
+    by: notes_writer
+    outputs: [release_notes_markdown]
+    on_fail: { to: secured, max_attempts: 2, escalate_to: needs_human }
+  - id: t-open-pr
+    from: notes_written
+    to: awaiting_pr_approval
+    by: platform
+    does: open_pr
+    on_fail: { to: notes_written, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-pr
+    from: awaiting_pr_approval
+    to: pr_approved
+    by: maintainers
+    on_reject: addressing_review
+  - id: t-merge
+    from: pr_approved
+    to: integrated
+    by: platform
+    does: merge_pr
+    gates: [ci_green]
+    timeout_hours: 24
+    on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
+  - id: t-fix-ci
+    from: fixing_ci
+    to: awaiting_pr_approval
+    by: ci_fixer
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+  - id: t-stage
+    from: integrated
+    to: staged
+    via: release_train
+    train: { env: staging }
+    timeout_hours: 72
+  - id: t-release
+    from: staged
+    to: live
+    via: release_train
+    train: { env: prod, approval: captain }
+    timeout_hours: 96
+  - id: t-verify-prod
+    from: live
+    to: verified
+    by: prod_verifier
+    outputs: [verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+      - { name: evidence_facts, params: { keys: [smoke_ok], must_be_true: [smoke_ok] } }
+    on_fail: { to: live, max_attempts: 1, escalate_to: needs_human }
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: maintainers
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned
