@@ -8,7 +8,7 @@ metadata:
   labels:
     app.kubernetes.io/part-of: choregos
 spec:
-  description: Exécute une étape d'agent Choregos et publie son StageResult.
+  description: Runs a Choregos agent stage and publishes its StageResult.
   params:
     - { name: run-id, type: string }
     - { name: api-url, type: string }
@@ -16,10 +16,10 @@ spec:
     - { name: tools-image, type: string, default: "ghcr.io/vargafoundation/choregos-tools:1.0.0" }
   workspaces:
     - name: source
-      description: Espace de travail éphémère du run (PVC volumeClaimTemplate)
+      description: The run's ephemeral workspace (PVC volumeClaimTemplate)
   results:
-    - { name: result-url, description: URL du StageResult publié }
-    - { name: status, description: statut final du run }
+    - { name: result-url, description: URL of the published StageResult }
+    - { name: status, description: final status of the run }
   stepTemplate:
     securityContext:
       runAsNonRoot: true

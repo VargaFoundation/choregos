@@ -2,14 +2,14 @@ apiVersion: choregos.dev/v1alpha1
 kind: ActionType
 metadata:
   name: consigner_le_badge
-  displayName: Consigner le badge
-  description: "Inscrit au registre le badge remis en main propre et activé, sous l'UID que la tâche a saisi."
+  displayName: Record the badge
+  description: "Records the badge handed over in person and activated, under the UID the task captured."
 spec:
   target: {objectType: collaborateur, cardinality: one}
   parameters:
     uid: {type: string, required: true}
   preconditions:
-    - {name: pas_parti, expr: "target.statut != 'parti'", message: "On n'active pas de badge pour une personne partie."}
+    - {name: pas_parti, expr: "target.statut != 'parti'", message: "No badge is activated for a person who has left."}
   permissions:
     propose: [agent:coordinateur-onboarding, role:contributor]
     approve: policy:rh

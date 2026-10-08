@@ -1,37 +1,37 @@
-# joiners-leavers — arrivées et départs
+# joiners-leavers — joiners and leavers
 
-Deux workflows (`workflows/onboarding.yaml`, `workflows/offboarding.yaml`), deux agents
-(`agents/`) et deux skills (`skills/`), installés dans l'organisation quand un projet naît du
-gabarit. Les workflows appellent cinq connecteurs de l'**organisation**, par leur nom ; les
-déclarer est le geste de son administrateur :
+Two workflows (`workflows/onboarding.yaml`, `workflows/offboarding.yaml`), two agents (`agents/`)
+and two skills (`skills/`), installed in the organisation when a project is born from the
+template. The workflows call five **organisation** connectors, by name; declaring them is the
+organisation administrator's job:
 
-| Nom | Capacité | Pour |
+| Name | Capability | For |
 |:--|:--|:--|
-| `annuaire` | `identity` (`entra`) | le compte, ses groupes, ses sessions |
-| `parc` | `mdm` | l'inscription et l'effacement du poste |
-| `transporteur` | `shipping` | l'expédition et la reprise du poste |
-| `lecteurs` | `access_control` | le badge |
-| `fournisseur` | `mcp` | la commande du poste à l'agent du fournisseur |
+| `annuaire` | `identity` (`entra`) | the account, its groups, its sessions |
+| `parc` | `mdm` | enrolling and wiping the laptop |
+| `transporteur` | `shipping` | shipping and collecting the laptop |
+| `lecteurs` | `access_control` | the badge |
+| `fournisseur` | `mcp` | ordering the laptop from the supplier's agent |
 
-Une demande étiquetée `offboarding` ou `depart` naît dans le workflow de départ ; toute autre,
-dans celui d'arrivée.
+A request labelled `offboarding` or `depart` is born in the offboarding workflow; any other, in
+the onboarding one.
 
-## Le registre (`ontology/`)
+## The registry (`ontology/`)
 
-Quand le greffon de l'ontologie est actif (`CHOREGOS_ESSAI_ONTOLOGIE=1`), le projet naît avec le
-registre de ce qu'une arrivée ouvre et de ce qu'un départ doit fermer : `collaborateur`, `contrat`,
-`account` (et ses groupes), `group`, `materiel`, `badge`, et leurs liens. Le Claude d'une RH
-l'interroge à la porte MCP du projet (`collaborateur_search`, `badge_porteur`…). Sans le greffon, le
-projet naît sans registre, et le journal d'audit le dit.
+When the ontology plugin is active (`CHOREGOS_ESSAI_ONTOLOGIE=1`), the project is born with the
+registry of what an onboarding opens and what an offboarding must close: `collaborateur`,
+`contrat`, `account` (and its groups), `group`, `materiel`, `badge`, and their links. An HR
+person's Claude queries it through the project's MCP gate (`collaborateur_search`,
+`badge_porteur`…). Without the plugin, the project is born without a registry, and the audit log
+says so.
 
-Le registre se tient par des actions de l'ontologie, jouées comme toute action gouvernée :
+The registry is kept by ontology actions, played like any governed action:
 
-| Action | Risque | Qui décide |
+| Action | Risk | Who decides |
 |:--|:--|:--|
-| `consigner_une_arrivee` | faible | la politique |
-| `consigner_le_compte`, `consigner_le_poste`, `consigner_le_badge` | faible | la politique |
-| `constater_un_depart` (compte, badge et poste fermés au registre) | moyen | un responsable, ré-authentifié |
+| `consigner_une_arrivee` | low | the policy |
+| `consigner_le_compte`, `consigner_le_poste`, `consigner_le_badge` | low | the policy |
+| `constater_un_depart` (account, badge and laptop closed in the registry) | medium | a manager, re-authenticated |
 
-Les workflows n'écrivent pas encore au registre : ils agissent sur l'annuaire, le parc et les
-lecteurs. Le consigner est le geste de l'agent ou de la RH, en attendant la réconciliation
-quotidienne.
+The workflows do not write to the registry yet: they act on the directory, the fleet and the
+readers. Recording it is the agent's or HR's job, until the daily reconciliation exists.

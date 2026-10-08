@@ -55,3 +55,4 @@ nine records did not exist.
 | [0036](0036-un-gabarit-livre-ce-qu-un-greffon-installe.md) | A template ships what a plugin installs (`defaults.extensions`); without the plugin the project is born without it, and the audit says so | accepted |
 | [0037](0037-les-effets-d-un-workflow-s-ecrivent.md) | What a workflow does is written (`does`, `production`), not carried by a state's name; names are still read for older workflows, and a rename writes the effect down first | accepted |
 | [0038](0038-un-editeur-yaml-empaquete.md) | The console's YAML editor is bundled CodeMirror, its workflow map is plain HTML; nothing is fetched from a third party at run time | accepted |
+| [0039](0039-tout-ce-qu-un-utilisateur-lit-est-en-anglais.md) | Everything a user reads is in English; identifiers and machine codes do not change, code and `docs/plan` stay in French | accepted |

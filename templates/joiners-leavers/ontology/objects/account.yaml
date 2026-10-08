@@ -1,6 +1,6 @@
 apiVersion: choregos.dev/v1alpha1
 kind: ObjectType
-metadata: {name: account, displayName: Compte, description: "Le compte de l'annuaire ouvert pour une personne, et ses groupes.", owner: it}
+metadata: {name: account, displayName: Account, description: "The directory account opened for a person, and its groups.", owner: it}
 spec:
   datasource: comptes
   primaryKey: upn

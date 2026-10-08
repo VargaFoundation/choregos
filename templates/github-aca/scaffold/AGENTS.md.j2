@@ -1,22 +1,22 @@
-# {{ project.display_name or project.slug }} — instructions pour les agents
+# {{ project.display_name or project.slug }} — instructions for agents
 
-## Contexte
-{{ project.description | default("Ce dépôt est piloté par Choregos : un ticket `agent-ready` déclenche un workflow, un agent travaille dans une branche, une PR est ouverte et relue.") }}
+## Context
+{{ project.description | default("This repository is driven by Choregos: an `agent-ready` work item starts a workflow, an agent works on a branch, a pull request is opened and reviewed.") }}
 
-## Commandes
-- Tests : `{{ project.repo.test_command or "make test" }}`
-- Lint : `{{ project.repo.lint_command or "make lint" }}`
-- Typage : `{{ project.repo.typecheck_command or "make typecheck" }}`
+## Commands
+- Tests: `{{ project.repo.test_command or "make test" }}`
+- Lint: `{{ project.repo.lint_command or "make lint" }}`
+- Type check: `{{ project.repo.typecheck_command or "make typecheck" }}`
 
 ## Conventions
-- Langage principal : {{ project.repo.language or "à préciser" }}
-- Commits conventionnels (`fix(scope): …`), une intention par commit.
-- Branche de travail : `{{ project.repo.branch_prefix }}<numéro-du-ticket>`.
-- Toute écriture hors des chemins autorisés du ticket est refusée par la plateforme.
+- Main language: {{ project.repo.language or "to be stated" }}
+- Conventional commits (`fix(scope): …`), one intent per commit.
+- Work branch: `{{ project.repo.branch_prefix }}<work-item-number>`.
+- The platform refuses any write outside the work item's allowed paths.
 
 ## Definition of done
-Tests verts, lint vert, typage vert, critères d'acceptation de la spec couverts par des tests,
-`.choregos/result.json` conforme au contrat.
+Tests green, lint green, type check green, the spec's acceptance criteria covered by tests,
+`.choregos/result.json` conforming to the contract.
 
-## Hors périmètre
-Un problème découvert hors du ticket se **signale** (`report_finding`) et ne se corrige pas ici.
+## Out of scope
+A problem found outside the work item is **reported** (`report_finding`), not fixed here.

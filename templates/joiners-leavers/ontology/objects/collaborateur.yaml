@@ -1,6 +1,6 @@
 apiVersion: choregos.dev/v1alpha1
 kind: ObjectType
-metadata: {name: collaborateur, displayName: Collaborateur, description: "Une personne qui arrive, est là, ou est partie.", owner: rh}
+metadata: {name: collaborateur, displayName: Employee, description: "A person who is joining, is here, or has left.", owner: rh}
 spec:
   datasource: collaborateurs
   primaryKey: matricule

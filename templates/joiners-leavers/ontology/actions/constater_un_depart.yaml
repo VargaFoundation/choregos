@@ -2,17 +2,17 @@ apiVersion: choregos.dev/v1alpha1
 kind: ActionType
 metadata:
   name: constater_un_depart
-  displayName: Constater un départ
-  description: "Déclare la personne partie et ferme au registre ce que le workflow de départ a coupé : son compte, son badge, et son poste repris."
+  displayName: Record a leaver
+  description: "Declares the person gone and closes in the registry what the offboarding workflow cut: their account, their badge, and their collected laptop."
 spec:
   target: {objectType: collaborateur, cardinality: one}
   parameters:
     date_depart: {type: date, required: true}
     upn: {type: string, required: true}
-    badge: {type: string, required: true, description: "L'UID du badge coupé."}
-    numero_de_serie: {type: string, required: true, description: "Le poste repris."}
+    badge: {type: string, required: true, description: "The UID of the cut badge."}
+    numero_de_serie: {type: string, required: true, description: "The collected laptop."}
   preconditions:
-    - {name: pas_deja_parti, expr: "target.statut != 'parti'", message: "Cette personne est déjà partie."}
+    - {name: pas_deja_parti, expr: "target.statut != 'parti'", message: "This person has already left."}
   permissions:
     propose: [agent:coordinateur-offboarding, role:contributor]
     approve: policy:rh

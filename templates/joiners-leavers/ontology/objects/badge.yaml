@@ -1,6 +1,6 @@
 apiVersion: choregos.dev/v1alpha1
 kind: ObjectType
-metadata: {name: badge, displayName: Badge, description: "Le badge NFC remis en main propre, actif jusqu'au départ.", owner: services-generaux}
+metadata: {name: badge, displayName: Badge, description: "The NFC badge handed over in person, active until the person leaves.", owner: services-generaux}
 spec:
   datasource: badges
   primaryKey: uid

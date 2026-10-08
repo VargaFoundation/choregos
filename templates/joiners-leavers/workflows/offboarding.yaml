@@ -7,18 +7,18 @@ kind: Workflow
 metadata:
   name: offboarding
   version: 1
-  description: Un départ — à J0 le compte, les sessions et le badge coupés ; le poste repris, reçu, effacé.
+  description: A leaver — on the last day the account, sessions and badge are cut; the laptop is collected, received and wiped.
   inputs:
     type: object
     required: [nom, upn, date_depart, badge_uid, serial, adresse]
     properties:
-      nom: { type: string, title: Nom complet }
-      upn: { type: string, title: Identifiant (UPN) }
-      date_depart: { type: string, format: date, title: Date de départ }
-      badge_uid: { type: string, title: UID du badge }
-      serial: { type: string, title: Numéro de série du poste }
-      adresse: { type: string, title: Adresse de reprise du poste }
-      etat_du_poste: { type: string, title: État du poste reçu }
+      nom: { type: string, title: Full name }
+      upn: { type: string, title: Sign-in name (UPN) }
+      date_depart: { type: string, format: date, title: Last day }
+      badge_uid: { type: string, title: Badge UID }
+      serial: { type: string, title: Laptop serial number }
+      adresse: { type: string, title: Laptop pick-up address }
+      etat_du_poste: { type: string, title: Condition of the returned laptop }
 initial: demande
 actors:
   coordinateur: { type: agent, role: coordination, agent: coordinateur-offboarding, max_turns: 30, max_minutes: 15 }
@@ -26,15 +26,15 @@ actors:
   it: { type: human, group: it, sla_hours: 48 }
   plateforme: { type: system }
 states:
-  demande: { display: Départ annoncé, kind: wait }
-  plan: { display: Plan de départ proposé, kind: wait }
-  valide: { display: Plan validé, kind: wait }
-  coupe: { display: Accès coupés, kind: wait }
-  reprise: { display: Reprise du poste planifiée, kind: wait }
-  recu: { display: Poste reçu, kind: wait }
-  efface: { display: Poste effacé, kind: wait }
-  a_revoir: { display: À revoir, kind: wait }
-  clos: { display: Départ clos, terminal: true }
+  demande: { display: Leave announced, kind: wait }
+  plan: { display: Leaver plan proposed, kind: wait }
+  valide: { display: Plan approved, kind: wait }
+  coupe: { display: Access cut, kind: wait }
+  reprise: { display: Laptop pick-up scheduled, kind: wait }
+  recu: { display: Laptop received, kind: wait }
+  efface: { display: Laptop wiped, kind: wait }
+  a_revoir: { display: To review, kind: wait }
+  clos: { display: Leaver closed, terminal: true }
 transitions:
   - id: t-plan
     from: demande
@@ -57,8 +57,8 @@ transitions:
     by: plateforme
     action:
       kind: depart.coupure
-      title: "Couper les accès de {{ fields.nom }}"
-      justification: "départ le {{ fields.date_depart }}"
+      title: "Cut the access of {{ fields.nom }}"
+      justification: "last day {{ fields.date_depart }}"
       params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}" }
       effects:
         - effect: connector.call
@@ -76,7 +76,7 @@ transitions:
     by: plateforme
     action:
       kind: depart.reprise
-      title: "Reprendre le poste {{ fields.serial }}"
+      title: "Collect laptop {{ fields.serial }}"
       params: { reference: "{{ work_item.key }}-retour", adresse: "{{ fields.adresse }}" }
       effects:
         - effect: connector.call
@@ -91,14 +91,14 @@ transitions:
     to: recu
     by: it
     task:
-      title: Réceptionner le poste
-      instructions: Vérifier que le numéro de série reçu est bien celui du poste repris, et dire son état.
+      title: Receive the laptop
+      instructions: Check that the serial number received is the one of the collected laptop, and record its condition.
       form:
         type: object
         required: [etat_du_poste]
         properties:
-          etat_du_poste: { type: string, title: État du poste reçu, enum: [intact, abime, manquant] }
-      attest: J'ai reçu ce poste et vérifié son numéro de série
+          etat_du_poste: { type: string, title: Condition of the returned laptop, enum: [intact, abime, manquant] }
+      attest: I received this laptop and checked its serial number
     on_reject: a_revoir
 
   - id: t-effacement
@@ -107,7 +107,7 @@ transitions:
     by: plateforme
     action:
       kind: depart.effacement
-      title: "Effacer le poste {{ fields.serial }}"
+      title: "Wipe laptop {{ fields.serial }}"
       params: { serial: "{{ fields.serial }}" }
       effects:
         - effect: connector.call
@@ -120,7 +120,7 @@ transitions:
     by: plateforme
     action:
       kind: depart.controle
-      title: "Contrôle du départ de {{ fields.nom }}"
+      title: "Check the offboarding of {{ fields.nom }}"
       params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}", serial: "{{ fields.serial }}" }
       effects:
         - effect: connector.call
@@ -134,5 +134,5 @@ transitions:
             condition: >-
               {{ (effects[0].user is none or not effects[0].user.accountEnabled)
                  and not effects[1].active and effects[2].state == 'wiped' }}
-            motif: le compte désactivé, le badge coupé, le poste effacé
+            motif: the account disabled, the badge cut, the laptop wiped
     on_fail: { to: efface, max_attempts: 2, escalate_to: a_revoir }

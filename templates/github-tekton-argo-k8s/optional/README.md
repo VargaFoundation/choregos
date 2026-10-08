@@ -1,11 +1,11 @@
-# Add-ons GitHub optionnels
+# Optional GitHub add-ons
 
-Ces workflows ne font **pas** partie du cœur de Choregos : ils ajoutent des interactions
-directes avec un agent depuis GitHub, en marge de la plateforme. Ils sont **désactivés par
-défaut** ; copiez-les dans `.github/workflows/` du projet si vous les voulez.
+These workflows are **not** part of Choregos's core: they add direct interactions with an agent
+from GitHub, beside the platform. They are **disabled by default**; copy them into the project's
+`.github/workflows/` if you want them.
 
-- `claude-mention.yml` — répondre à `@claude` dans une issue ou une PR.
-- `claude-code-review.yml` — revue automatique d'une PR.
+- `claude-mention.yml` — answer `@claude` in an issue or a pull request.
+- `claude-code-review.yml` — automatic review of a pull request.
 
-Sachez ce que vous perdez en les utilisant hors plateforme : pas de budget par run,
-pas de gates, pas de périmètre autorisé, pas de coût dans le ticket.
+Know what you give up by using them outside the platform: no budget per run, no gates, no
+allowed paths, no cost on the work item.

@@ -5,9 +5,9 @@ metadata:
   version: 1.0.0
   display: GitHub · Tekton · Argo CD · Kubernetes
   description: >-
-    La stack jour 1 de Choregos : les tickets vivent dans GitHub Issues et Projects v2,
-    la CI et les runs d'agents tournent sur Tekton, le déploiement passe par Argo CD et
-    Argo Rollouts, la prod est protégée par le release train.
+    Choregos's day-one stack: work items live in GitHub Issues and Projects v2, CI and agent
+    runs execute on Tekton, deployment goes through Argo CD and Argo Rollouts, and production is
+    guarded by the release train.
 requires:
   connectors:
     tracker: github-issues
@@ -28,13 +28,13 @@ defaults:
   # (docs/adr/0011-retrait-d-openhands.md).
   agent: claude-code
 inputs:
-  - { name: repo, type: github-repo, required: true, description: "owner/name du dépôt applicatif" }
+  - { name: repo, type: github-repo, required: true, description: "owner/name of the application repository" }
   - { name: default_branch, type: string, default: main }
   - { name: language, type: enum, values: [python, node, go, java, dotnet, other], default: python }
   - { name: envs, type: list, default: [dev, staging, prod] }
-  - { name: cluster, type: cluster-ref, description: "cluster cible pour les runners et les déploiements" }
-  - { name: gitops_repo, type: string, description: "dépôt GitOps des environnements" }
-  - { name: project_number, type: int, description: "numéro du board Projects v2" }
+  - { name: cluster, type: cluster-ref, description: "target cluster for the runners and the deployments" }
+  - { name: gitops_repo, type: string, description: "GitOps repository of the environments" }
+  - { name: project_number, type: int, description: "number of the Projects v2 board" }
   - { name: slack_channel, type: string, default: "#choregos" }
 steps:
   - github.install_app

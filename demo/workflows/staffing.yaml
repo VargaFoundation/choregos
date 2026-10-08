@@ -15,19 +15,19 @@ kind: Workflow
 metadata:
   name: staffing
   version: 1
-  description: Besoin de staffing → sourcing → qualification → validation humaine → proposition.
+  description: Staffing need → sourcing → qualification → human approval → proposal.
 actors:
   sourceur: { type: agent, role: sourcing, model: "profile:standard", max_turns: 20, max_minutes: 10 }
   evaluateur: { type: agent, role: qualification, model: "profile:standard", max_turns: 20, max_minutes: 10 }
   manager: { type: human, group: staffing-managers, sla_hours: 48 }
 states:
-  demande: { display: Besoin reçu, kind: wait }
+  demande: { display: Need received, kind: wait }
   sourcing: { display: Sourcing }
   qualification: { display: Qualification }
-  a_valider: { display: À valider, kind: wait }
-  proposee: { display: Proposition envoyée, terminal: true }
-  needs_human: { display: Intervention humaine, kind: wait }
-  abandonnee: { display: Abandonnée, terminal: true }
+  a_valider: { display: To approve, kind: wait }
+  proposee: { display: Proposal sent, terminal: true }
+  needs_human: { display: Needs a human, kind: wait }
+  abandonnee: { display: Abandoned, terminal: true }
 transitions:
   - id: t-sourcing
     from: demande

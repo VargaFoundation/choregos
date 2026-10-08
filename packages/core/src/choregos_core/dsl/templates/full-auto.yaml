@@ -4,7 +4,7 @@ kind: Workflow
 metadata:
   name: full-auto
   version: 1
-  description: Triage, cadrage, implémentation, vérification et merge automatiques ; la prod reste un verrou.
+  description: "Automatic triage, refinement, implementation, verification and merge; production stays locked behind a captain."
 actors:
   sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
   refiner: { type: agent, role: refine, model: "profile:standard" }
@@ -15,18 +15,18 @@ actors:
   ci: { type: system }
   captain: { type: human, group: release-captains, sla_hours: 4 }
 states:
-  inbox: { display: À trier, kind: wait, tracker: { status: Todo } }
-  triaged: { display: Trié, tracker: { status: Triaged } }
-  ready: { display: Prêt, tracker: { status: Ready } }
-  in_progress: { display: En cours, tracker: { status: In progress } }
-  verifying: { display: Vérification, tracker: { status: Verifying } }
-  reviewing: { display: Relecture agent, tracker: { status: Reviewing } }
-  pr_open: { display: PR ouverte, kind: wait, tracker: { status: In review } }
-  fixing_ci: { display: Correction CI, tracker: { status: Fixing CI } }
-  merged: { display: Fusionné, tracker: { status: Merged } }
-  deployed_prod: { display: En production, terminal: true, tracker: { status: Done }, production: true }
-  needs_human: { display: Intervention humaine, kind: wait, tracker: { status: Blocked } }
-  abandoned: { display: Abandonné, terminal: true, tracker: { status: Cancelled } }
+  inbox: { display: To triage, kind: wait, tracker: { status: Todo } }
+  triaged: { display: Triaged, tracker: { status: Triaged } }
+  ready: { display: Ready, tracker: { status: Ready } }
+  in_progress: { display: In progress, tracker: { status: In progress } }
+  verifying: { display: Verifying, tracker: { status: Verifying } }
+  reviewing: { display: Agent review, tracker: { status: Reviewing } }
+  pr_open: { display: PR open, kind: wait, tracker: { status: In review } }
+  fixing_ci: { display: Fixing CI, tracker: { status: Fixing CI } }
+  merged: { display: Merged, tracker: { status: Merged } }
+  deployed_prod: { display: In production, terminal: true, tracker: { status: Done }, production: true }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
 transitions:
   - id: t-triage
     from: inbox

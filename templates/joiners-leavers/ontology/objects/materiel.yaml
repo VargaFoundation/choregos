@@ -1,6 +1,6 @@
 apiVersion: choregos.dev/v1alpha1
 kind: ObjectType
-metadata: {name: materiel, displayName: Poste, description: "Le poste confié à une personne, du bon de commande à l'effacement.", owner: it}
+metadata: {name: materiel, displayName: Laptop, description: "The laptop entrusted to a person, from the purchase order to the wipe.", owner: it}
 spec:
   datasource: materiels
   primaryKey: numero_de_serie

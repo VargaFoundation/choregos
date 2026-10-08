@@ -27,7 +27,7 @@ def test_un_agent_ses_sorties_ses_garanties_et_ses_reprises() -> None:
     phrase = str(sourcing["sentence"])
     assert "the agent `sourceur`" in phrase and "it produced `profils`" in phrase
     assert "the declared outputs are present" in phrase
-    assert "retries up to 2 time(s)" in phrase and "«Intervention humaine»" in phrase
+    assert "retries up to 2 time(s)" in phrase and "«Needs a human»" in phrase
 
 
 def test_une_personne_son_delai_et_le_rejet() -> None:
