@@ -25,6 +25,12 @@ with workflow.unsafe.imports_passed_through():
 
 DEFAULT_RETRY = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=2))
 NO_RETRY = RetryPolicy(maximum_attempts=1)
+#: Un environnement `auto_sync` prévient ses tickets (#278, S21-27). Avant ce marqueur, le train y
+#: attendait `abort` sans rien lire, et un ticket qui y montait attendait 72 h puis un humain.
+AUTO_SYNC_PREVIENT = "auto-sync-previent"
+#: Combien de fois, et à quel rythme, on regarde l'environnement avant de conclure.
+ESSAIS_AUTO_SYNC = 30
+PAUSE_AUTO_SYNC = timedelta(minutes=2)
 
 
 @dataclass
@@ -136,7 +142,10 @@ class ReleaseTrain:
         if config.get("mode") == "auto_sync":
             # Pas de train : Argo suit `main`. Le workflow reste vivant pour les requêtes.
             self.status = "auto_sync"
-            await _wait(lambda: self.abort_requested)
+            if not workflow.patched(AUTO_SYNC_PREVIENT):
+                await _wait(lambda: self.abort_requested)
+                return {"status": "auto_sync"}
+            await self._suivre_la_synchro(params, payload)
             return {"status": "auto_sync"}
 
         departures = 0
@@ -159,6 +168,36 @@ class ReleaseTrain:
                     }
                 )
         return {"status": self.status, "batches": departures}
+
+    async def _suivre_la_synchro(self, params: TrainInput, payload: dict[str, Any]) -> None:
+        """`auto_sync` : chaque ticket qui monte attend que l'environnement soit sain, puis est prévenu."""
+        while not self.abort_requested:
+            await _wait(lambda: bool(self.batch) or self.abort_requested)
+            if self.abort_requested:
+                return
+            items, self.batch = list(self.batch), []
+            synchro = f"auto-sync-{params.env}-{self.batch_no}"
+            self.batch_no += 1
+            for essai in range(ESSAIS_AUTO_SYNC):
+                verdict = await executer_activite(
+                    train_activities.confirmer_auto_sync,
+                    {
+                        "project_slug": params.project_slug,
+                        "env": params.env,
+                        "items": [str(item.get("work_item_key") or "") for item in items],
+                        "sync_id": synchro,
+                        "conclure": essai == ESSAIS_AUTO_SYNC - 1,
+                    },
+                    start_to_close_timeout=timedelta(minutes=2),
+                    retry_policy=DEFAULT_RETRY,
+                )
+                if verdict.get("ok") is not None or self.abort_requested:
+                    break
+                await _wait(lambda: self.abort_requested, PAUSE_AUTO_SYNC)
+            if workflow.info().get_current_history_length() > 15_000:
+                workflow.continue_as_new(
+                    {**payload, "carried_items": self.batch, "batch_no": self.batch_no, "frozen": self.frozen}
+                )
 
     async def _collect(self, config: dict[str, Any]) -> None:
         """Attend le cron, le lot plein, un départ manuel ou un hotfix."""
