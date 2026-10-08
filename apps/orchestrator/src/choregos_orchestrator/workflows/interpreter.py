@@ -243,7 +243,7 @@ class WorkflowInterpreter:
         if self.version_des_champs == 0:  # un `fields_changed` arrivé avant la lecture est plus récent
             self.champs = dict(context.get("fields") or {})
 
-        await self._mirror(params, "démarrage")
+        await self._mirror(params, "started")
 
         while not engine.is_terminal(self.state) and not self.stopped:
             await workflow.wait_condition(lambda: not self.paused or self.stopped)
@@ -265,7 +265,7 @@ class WorkflowInterpreter:
                 if moved is None:
                     break
                 self.state = moved
-                await self._mirror(params, "événement externe")
+                await self._mirror(params, "external event")
                 continue
 
             kind = engine.actor_kind(transition)
@@ -404,7 +404,7 @@ class WorkflowInterpreter:
                 update={
                     "status": StageStatus.NEEDS_HUMAN,
                     "reason": "budget",
-                    "summary": f"{result.summary} (budget du ticket dépassé)",
+                    "summary": f"{result.summary} (work item budget exceeded)",
                 }
             )
         for request in result.scope_changes_requested:
@@ -499,7 +499,7 @@ class WorkflowInterpreter:
             waited += step
             if received is False:  # wait_condition a expiré sans signal
                 continue
-        return [GateOutcome(name=name, passed=False, detail="délai dépassé") for name in names]
+        return [GateOutcome(name=name, passed=False, detail="timed out") for name in names]
 
     def _absorb(self, event: dict[str, Any]) -> None:
         """Traduit un événement entrant en `last_outcome` pour la prochaine sélection."""
@@ -533,7 +533,7 @@ class WorkflowInterpreter:
                 },
             )
         else:
-            kind, payload = "approval", {"summary": f"Validation requise pour passer à `{transition.to}`"}
+            kind, payload = "approval", {"summary": f"Approval needed to move to `{transition.to}`"}
         request = await self._create_request(
             params,
             transition,
@@ -556,7 +556,7 @@ class WorkflowInterpreter:
                     tracker_activities.close_human_request,
                     {
                         "request_id": decision.get("request_id") or self.pending_request,
-                        "decided_by": decision.get("decided_by", "humain"),
+                        "decided_by": decision.get("decided_by", "a person"),
                         "decision": decision,
                     },
                     start_to_close_timeout=timedelta(seconds=30),
@@ -576,9 +576,9 @@ class WorkflowInterpreter:
                 await self._remind(params, actor, transition)
         escalate = engine.timeout_state() or transition.from_
         return (
-            engine.after_human(transition, approved=False, reason="délai d'attente humain dépassé")
+            engine.after_human(transition, approved=False, reason="no human decision in time")
             if transition.on_reject
-            else _decision(escalate, "délai humain dépassé")
+            else _decision(escalate, "no human decision in time")
         )
 
     async def _remind(self, params: InterpreterInput, actor: Any, transition: Any) -> None:
@@ -591,8 +591,8 @@ class WorkflowInterpreter:
             {
                 "project_id": params.project_id,
                 "message": Message(
-                    title=f"Rappel : {params.tracker_key} attend une décision",
-                    body=f"Transition `{transition.key}` en attente depuis {sla} h.",
+                    title=f"Reminder: {params.tracker_key} is waiting for a decision",
+                    body=f"Transition `{transition.key}` has been waiting for {sla} h.",
                     severity="warning",
                 ).model_dump(mode="json"),
             },
@@ -688,7 +688,7 @@ class WorkflowInterpreter:
         )
         if proposee.get("refus"):
             refus = GateOutcome(
-                "action_succeeded", False, detail=f"action impossible à proposer : {proposee['refus']}"
+                "action_succeeded", False, detail=f"the action cannot be proposed: {proposee['refus']}"
             )
             return engine.after_gates(transition, [refus], self.attempts[transition.key])
         action_id, statut = str(proposee["action_id"]), str(proposee["status"])
@@ -826,7 +826,7 @@ class WorkflowInterpreter:
             retry_policy=DEFAULT_RETRY,
         )
         self.state = etat
-        await self._mirror(params, f"migré vers {cible.metadata.name}@{cible.metadata.version}")
+        await self._mirror(params, f"migrated to {cible.metadata.name}@{cible.metadata.version}")
         return WorkflowEngine(cible)
 
     def _migrate(self, engine: WorkflowEngine) -> WorkflowEngine:

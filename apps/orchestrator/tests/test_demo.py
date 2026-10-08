@@ -30,10 +30,10 @@ async def test_demo_runs_end_to_end(tmp_path: Path, monkeypatch: Any, capsys: An
 
     assert code == 0
     output = capsys.readouterr().out
-    assert "état final du ticket : deployed_prod" in output
-    assert "Choregos — suivi" in output, "le commentaire de suivi est écrit dans le ticket"
+    assert "final state          : deployed_prod" in output
+    assert "Choregos — progress" in output, "le commentaire de suivi est écrit dans le ticket"
     assert "agent refine" in output and "agent implement" in output and "agent verify" in output
-    assert "Validation" in output, "l'étape humaine apparaît dans le tableau"
-    assert "findings déposés     : 1" in output
-    assert "PR ouverte           : https://" in output
+    assert "| Approval |" in output, "l'étape humaine apparaît dans le tableau"
+    assert "findings filed       : 1" in output
+    assert "pull request         : https://" in output
     assert os.environ["CHOREGOS_FAKES"] == "1"

@@ -349,7 +349,7 @@ async def test_sans_rapport_dans_le_delai_la_preuve_echoue(
     await temporal.sleep(timedelta(minutes=16))  # l'échéance de l'action passe, dans Temporal
     dossier = await _jusqu_a(client, projet, verification["proposal"], "failed", "succeeded")
     assert dossier["status"] == "failed"
-    assert "délai dépassé" in dossier["error"]
+    assert "timed out" in dossier["error"]
 
 
 async def test_l_agent_propose_par_son_serveur_mcp(app: Any, it4it: dict[str, str]) -> None:

@@ -97,7 +97,7 @@ async def test_sans_pr_d_infra_le_train_ne_commente_rien(setup: Fixture) -> None
     )
 
     assert outcome["applied"] == []
-    assert "aucune PR d'infra" in outcome["skipped"]
+    assert "no infrastructure pull request" in outcome["skipped"]
     assert setup.adapters.scm.comments == []
 
 
@@ -120,7 +120,7 @@ async def test_sans_atlantis_configure_rien_ne_se_passe(setup: Fixture) -> None:
         {"project_slug": setup.project_slug, "env": "prod", "release_id": release_id}
     )
 
-    assert "atlantis non configuré" in outcome["skipped"]
+    assert "Atlantis is not configured" in outcome["skipped"]
     assert setup.adapters.scm.comments == []
 
 
@@ -140,7 +140,7 @@ async def test_une_url_de_pr_illisible_est_refusee(setup: Fixture) -> None:
     )
 
     assert outcome["ok"] is False
-    assert "illisible" in outcome["reason"]
+    assert "unreadable" in outcome["reason"]
 
 
 async def test_la_pr_d_infra_declaree_par_l_agent_suit_le_ticket(setup: Fixture) -> None:

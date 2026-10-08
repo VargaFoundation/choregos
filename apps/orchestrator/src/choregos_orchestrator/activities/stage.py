@@ -315,7 +315,7 @@ async def _admettre(
         await verifier(demande)
     except AdmissionRefusee as refus:
         raise ApplicationError(
-            f"run refusé avant démarrage — {refus}", type="admission_refused", non_retryable=True
+            f"run refused before it started — {refus}", type="admission_refused", non_retryable=True
         ) from refus
 
 
@@ -381,7 +381,7 @@ def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPa
         except TemplateError as erreur:
             qui = f"{agent.agent.slug}@{agent.version}"
             raise ApplicationError(
-                f"les instructions de l'agent `{qui}` ne se rendent pas : {erreur}",
+                f"the instructions of the agent `{qui}` do not render: {erreur}",
                 type="InstructionsInvalides",
                 non_retryable=True,
             ) from erreur
@@ -413,8 +413,8 @@ async def _budget_du_jour(session: Any, bundle: Any, agent: Any) -> None:
     depense = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
     if depense >= plafond:
         raise ApplicationError(
-            f"run refusé avant démarrage — l'agent `{agent.agent.slug}` a dépensé {depense:.2f} $ "
-            f"aujourd'hui, pour un budget du jour de {plafond:.2f} $",
+            f"run refused before it started — the agent `{agent.agent.slug}` spent {depense:.2f} $ "
+            f"today, for a daily budget of {plafond:.2f} $",
             type="admission_refused",
             non_retryable=True,
         )
@@ -442,7 +442,8 @@ async def _skills_de_l_agent(session: Any, bundle: Any, agent: Any) -> list[Skil
         ).scalar_one_or_none()
         if ligne is None:
             raise ApplicationError(
-                f"l'agent `{agent.agent.slug}` porte la skill `{demandee.slug}`, absente de la bibliothèque",
+                f"the agent `{agent.agent.slug}` carries the skill `{demandee.slug}`, "
+                "which is not in the library",
                 type="SkillAbsente",
                 non_retryable=True,
             )

@@ -86,8 +86,8 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 if origin is not None:
                     await bundle.adapters.tracker.comment(
                         origin.tracker_key,
-                        f"<!-- choregos:finding-duplicate -->\nOccurrence supplémentaire "
-                        f"({candidate.occurrences}) signalée par un agent : {row.evidence}",
+                        f"<!-- choregos:finding-duplicate -->\nOne more occurrence "
+                        f"({candidate.occurrences}) reported by an agent: {row.evidence}",
                     )
                 await persist_event(
                     session,
@@ -132,7 +132,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
             await bundle.adapters.tracker.link(key, origin.tracker_key, "origin")
             await bundle.adapters.tracker.comment(
                 origin.tracker_key,
-                f"<!-- choregos:finding -->\nFinding déposé pendant ce ticket : {key} "
+                f"<!-- choregos:finding -->\nFinding filed during this work item: {key} "
                 f"({row.type}, {row.severity}).",
             )
         if bundle.engine.notify_finding(row.severity):
@@ -175,22 +175,22 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
 def _ticket_body(row: Finding, origin: WorkItem | None, public_url: str, slug: str) -> str:
     return "\n".join(
         [
-            "## Origine",
-            f"- Ticket : {origin.tracker_key if origin else '—'}",
-            f"- Run : {public_url}/p/{slug}/runs/{row.origin_run_id}" if row.origin_run_id else "- Run : —",
+            "## Origin",
+            f"- Work item: {origin.tracker_key if origin else '—'}",
+            f"- Run: {public_url}/p/{slug}/runs/{row.origin_run_id}" if row.origin_run_id else "- Run: —",
             "",
-            "## Problème",
-            f"- Type : `{row.type}` · Sévérité : `{row.severity}` · Estimation : `{row.estimate or '?'}`",
+            "## Problem",
+            f"- Type: `{row.type}` · Severity: `{row.severity}` · Estimate: `{row.estimate or '?'}`",
             "",
-            "## Preuve",
+            "## Evidence",
             f"```\n{row.evidence}\n```",
             "",
-            "## Correction suggérée",
-            row.suggested_fix or "_à qualifier_",
+            "## Suggested fix",
+            row.suggested_fix or "_to be assessed_",
             "",
-            "## Pourquoi hors périmètre",
-            "Détecté pendant un autre ticket ; corriger ici aurait élargi le périmètre "
-            "et rendu la revue plus difficile.",
+            "## Why it is out of scope",
+            "Found during another work item; fixing it there would have widened the scope "
+            "and made the review harder.",
         ]
     )
 
@@ -224,9 +224,9 @@ async def finding_quality_ratio(payload: dict[str, Any]) -> dict[str, Any]:
             await bundle.adapters.notify.send(
                 bundle.config.notify.slack_channel or "#choregos",
                 Message(
-                    title=f"Findings : {ratio:.0%} de faux positifs sur 30 jours",
-                    body=f"Seuil {threshold:.0%} dépassé — revoir l'invariant "
-                    "« ne signale que ce qui est actionnable ».",
+                    title=f"Findings: {ratio:.0%} false positives over 30 days",
+                    body=f"Threshold {threshold:.0%} exceeded — review the rule "
+                    "“only report what can be acted on”.",
                     severity="warning",
                 ),
             )

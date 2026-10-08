@@ -89,7 +89,7 @@ async def test_default_simple_full_traversal(setup: Fixture, temporal_env: Any, 
     assert outcome["state"] == "deployed_prod"
     assert outcome["cost_usd"] >= 0
     comment = setup.adapters.tracker.status_comment(setup.tracker_key)
-    assert comment is not None and "Choregos — suivi" in comment
+    assert comment is not None and "Choregos — progress" in comment
     assert "agent refine" in comment and "agent implement" in comment
 
 

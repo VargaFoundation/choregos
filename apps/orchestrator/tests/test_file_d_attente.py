@@ -201,7 +201,8 @@ async def test_un_run_jamais_admis_echoue_sur_la_file_et_retire_son_job(setup: F
         }
     )
     assert resultat["status"] == "queue_timed_out"
-    assert resultat["result"]["reason"] == "queue_timeout" and "jamais admis" in resultat["result"]["summary"]
+    assert resultat["result"]["reason"] == "queue_timeout"
+    assert "never admitted" in resultat["result"]["summary"]
     assert executeur.annules == [f"run-{run_id}"], (
         "le Job suspendu est retiré : il ne bloquera pas les suivants"
     )

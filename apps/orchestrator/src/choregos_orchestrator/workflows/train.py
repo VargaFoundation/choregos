@@ -225,7 +225,7 @@ class ReleaseTrain:
             retry_policy=DEFAULT_RETRY,
         )
         if not promoted.get("ok"):
-            return await self._rollback(params, config, "promotion impossible")
+            return await self._rollback(params, config, "promotion failed")
 
         self.status = str(ReleaseStatus.STAGING)
         soak_minutes = int(
@@ -238,7 +238,7 @@ class ReleaseTrain:
             retry_policy=NO_RETRY,
         )
         if not smoke.get("ok"):
-            return await self._rollback(params, config, "smoke tests en échec")
+            return await self._rollback(params, config, "smoke tests failed")
 
         soak = await executer_activite(
             train_activities.soak,
@@ -252,7 +252,7 @@ class ReleaseTrain:
             retry_policy=NO_RETRY,
         )
         if not soak.get("ok"):
-            return await self._rollback(params, config, "SLO dégradés pendant le soak")
+            return await self._rollback(params, config, "SLOs degraded during the soak")
 
         # L'approbation de la politique, OU celle qu'un ticket du lot apporte de son workflow (ADR
         # 0041) : un correctif part seul, une fonctionnalité attend son capitaine. Un embarquement
@@ -282,12 +282,12 @@ class ReleaseTrain:
                     {
                         "release_id": self.current_release,
                         "status": "collecting",
-                        "reason": "approbation refusée",
+                        "reason": "approval refused",
                     },
                     start_to_close_timeout=timedelta(minutes=1),
                     retry_policy=DEFAULT_RETRY,
                 )
-                return {"frozen": False, "reason": "approbation refusée"}
+                return {"frozen": False, "reason": "approval refused"}
 
         # L'infra passe avant le code : appliquer Terraform après le canary reviendrait à
         # envoyer du code en production sur une infra qui ne l'attend pas encore.
@@ -303,7 +303,7 @@ class ReleaseTrain:
             retry_policy=NO_RETRY,
         )
         if terraform.get("ok") is False:
-            return await self._rollback(params, config, terraform.get("reason", "apply Terraform en échec"))
+            return await self._rollback(params, config, terraform.get("reason", "Terraform apply failed"))
 
         self.status = str(ReleaseStatus.PROMOTING)
         canary = config.get("canary") or {}
@@ -325,7 +325,7 @@ class ReleaseTrain:
                 retry_policy=NO_RETRY,
             )
             if not analysis.get("ok"):
-                return await self._rollback(params, config, analysis.get("reason", "analyse canary KO"))
+                return await self._rollback(params, config, analysis.get("reason", "canary analysis failed"))
 
         self.status = str(ReleaseStatus.VERIFYING)
         verdict = await executer_activite(
@@ -335,9 +335,7 @@ class ReleaseTrain:
             retry_policy=NO_RETRY,
         )
         if not verdict.get("ok"):
-            return await self._rollback(
-                params, config, verdict.get("reason", "vérification post-déploiement KO")
-            )
+            return await self._rollback(params, config, verdict.get("reason", "post-deployment check failed"))
 
         self.status = str(ReleaseStatus.DONE)
         await executer_activite(

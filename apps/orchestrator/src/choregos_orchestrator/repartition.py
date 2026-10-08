@@ -66,7 +66,7 @@ for _file, _noms in ACTIVITES_PAR_FILE.items():
     for _nom in _noms:
         if _nom in FILE_PAR_ACTIVITE:  # pragma: no cover - garde de cohérence de la table
             raise RuntimeError(
-                f"l'activité {_nom!r} est déclarée dans deux files : {FILE_PAR_ACTIVITE[_nom]!r} et {_file!r}"
+                f"the activity {_nom!r} is declared on two queues: {FILE_PAR_ACTIVITE[_nom]!r} and {_file!r}"
             )
         FILE_PAR_ACTIVITE[_nom] = _file
 del _file, _noms, _nom

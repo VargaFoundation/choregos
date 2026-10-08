@@ -60,7 +60,7 @@ async def charger_l_action(action_id: str) -> dict[str, Any]:
         if await session.get(Action, action_id) is None:
             # Démarrée par la requête qui l'a décidée, AVANT que celle-ci ne valide sa transaction :
             # la ligne peut ne pas être encore visible. Une erreur passagère, que Temporal retente.
-            raise ApplicationError(f"action {action_id} pas encore visible", type="ActionPasEncoreVisible")
+            raise ApplicationError(f"action {action_id} not visible yet", type="ActionPasEncoreVisible")
         action, _projet = await _charger(session, action_id)
         if action.status == ActionStatus.APPROVED.value:
             action.status = ActionStatus.RUNNING.value
@@ -148,12 +148,12 @@ async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
             await session.execute(select(ActionEffect).where(ActionEffect.key == cle))
         ).scalar_one_or_none()
         if ligne is None or ligne.status != "done":
-            return {"key": cle, "undone": False, "reason": "pas fait"}
+            return {"key": cle, "undone": False, "reason": "not done"}
         compensation = (action.effects or [])[position].get("compensate")
         if not compensation:
             ligne.status = "compensation_failed"
-            ligne.error = "aucune compensation déclarée"
-            return {"key": cle, "undone": False, "reason": "aucune compensation déclarée"}
+            ligne.error = "no compensation declared"
+            return {"key": cle, "undone": False, "reason": "no compensation declared"}
         contexte = {
             "params": action.params or {},
             "effects": await _faits(session, action_id, position),
@@ -246,7 +246,7 @@ async def proposer_l_action_de_transition(entree: dict[str, Any]) -> dict[str, A
         projet = await session.get(Project, entree["project_id"])
         item = await session.get(WorkItem, entree["work_item_id"])
         if projet is None or item is None:
-            return {"refus": "ticket ou projet introuvable"}
+            return {"refus": "work item or project not found"}
         try:
             action = await proposer_pour_une_transition(
                 session,

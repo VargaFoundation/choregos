@@ -25,8 +25,8 @@ def _depot(bundle: Any) -> Any:
     """
     if bundle.config.repo is None:
         raise ValueError(
-            f"le projet {bundle.slug} n'a pas de dépôt : cette étape suppose un SCM "
-            "(ouverture de PR, branche, checks). Retirer la transition, ou déclarer un dépôt."
+            f"the project {bundle.slug} has no repository: this step needs an SCM "
+            "(pull request, branch, checks). Remove the transition, or declare a repository."
         )
     return bundle.config.repo
 
@@ -75,7 +75,7 @@ async def enqueue_merge(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         if not item.pr_url:
-            return {"enqueued": False, "reason": "aucune PR"}
+            return {"enqueued": False, "reason": "no pull request"}
         repo = _repo_slug(_depot(bundle).url)
         number = int(item.pr_url.rsplit("/", 1)[-1])
         await bundle.adapters.scm.enqueue_merge(PrRef(repo=repo, number=number))
