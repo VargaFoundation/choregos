@@ -137,3 +137,29 @@ test("les barres d'onglets ne défilent pas en hauteur : Windows y dessinait ses
     expect(deborde, `${chemin} · ${nom}`).toBe(0);
   }
 });
+
+/** L'en-tête tient sur une ligne à 1280 px (S21-03) : six entrées, l'organisation, la session. */
+test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const path of ["/", "/skills", "/integrations", "/admin"]) {
+    await page.goto(path);
+    await expect(page.getByRole("link", { name: "skills" })).toBeVisible();
+    // La session arrive après la page : l'en-tête ne porte son poids réel (organisation, personne,
+    // déconnexion) qu'une fois qu'elle est là.
+    await expect(page.getByRole("button", { name: "sign out" })).toBeVisible();
+    // Mesurer avant les polices, c'est mesurer la police de repli : plus étroite, elle ne casse rien.
+    await page.evaluate(() => document.fonts.ready);
+    const mesure = await page.evaluate(() => ({
+      largeur: document.documentElement.scrollWidth,
+      fenetre: document.documentElement.clientWidth,
+      // L'en-tête a une hauteur fixe : un libellé qui passe à la ligne déborde DEDANS sans la changer.
+      // Ce qui se mesure, c'est chaque élément de la navigation : une ligne de texte, pas trois (la
+      // marque, elle, est dessinée sur deux lignes).
+      hautes: [...document.querySelectorAll('nav[aria-label="main navigation"] :is(a, button, span, select)')]
+        .filter((el) => el.getBoundingClientRect().height > 30)
+        .map((el) => (el.textContent ?? "").trim()),
+    }));
+    expect(mesure.largeur, path).toBeLessThanOrEqual(mesure.fenetre);
+    expect(mesure.hautes, path).toEqual([]);
+  }
+});

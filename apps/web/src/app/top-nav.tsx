@@ -9,14 +9,22 @@ import { EditionBadge } from "@/components/edition";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
-const NAV = [
+// Les skills ont leur entrée (revue du 07/10 : « il n'y a pas de lien direct dans le menu »).
+// « AI clients » plutôt qu'« integrations » : la page sert aux assistants qui entrent DANS Choregos,
+// quand les connecteurs (administration) sont ce vers quoi Choregos sort. Les libellés sont courts :
+// à 1280 px, l'en-tête doit tenir sur une ligne sans défiler (mesuré, S21-03).
+export const NAV = [
   { href: "/", label: "projects" },
-  // La bibliothèque de skills se range sous les agents : ce qu'ils savent faire.
-  { href: "/agents", label: "agents", aussi: "/skills" },
+  { href: "/agents", label: "agents" },
+  { href: "/skills", label: "skills" },
   { href: "/approvals", label: "approvals" },
-  { href: "/integrations", label: "integrations" },
-  { href: "/admin", label: "administration" },
+  { href: "/integrations", label: "AI clients" },
+  { href: "/admin", label: "admin" },
 ];
+
+export function entreeActive(href: string, pathname: string): boolean {
+  return href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(href);
+}
 
 /** La navigation d'en-tête : liens, organisation courante, et qui est connecté. */
 export function TopNav() {
@@ -25,25 +33,26 @@ export function TopNav() {
   // L'édition ne change pas pendant une session : une seule lecture suffit.
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   return (
-    <nav className="flex flex-1 items-center gap-8" aria-label="main navigation">
+    <nav className="flex flex-1 items-center gap-6" aria-label="main navigation">
       {NAV.map((entry) => {
-        const active =
-          entry.href === "/"
-            ? pathname === "/" || pathname.startsWith("/p/")
-            : pathname.startsWith(entry.href) || Boolean(entry.aussi && pathname.startsWith(entry.aussi));
+        const active = entreeActive(entry.href, pathname);
         return (
           <Link
             key={entry.href}
             href={entry.href}
             aria-current={active ? "page" : undefined}
-            className={navLinkClasses(active)}
+            className={`${navLinkClasses(active)} whitespace-nowrap`}
           >
             {entry.label}
           </Link>
         );
       })}
-      <div className="ml-auto flex items-center gap-4 text-xs">
-        {edition.data && <EditionBadge edition={edition.data.edition} />}
+      <div className="ml-auto flex items-center gap-4 whitespace-nowrap text-xs">
+        {edition.data && (
+          <span className="hidden xl:inline-flex">
+            <EditionBadge edition={edition.data.edition} />
+          </span>
+        )}
         {orgs.length > 1 ? (
           <label className="flex items-center gap-2">
             <span className="text-ink-muted">organisation</span>
@@ -61,7 +70,9 @@ export function TopNav() {
             </select>
           </label>
         ) : (
-          <span className="text-ink-muted">organisation {org}</span>
+          <span className="text-ink-muted" title="current organisation">
+            org {org}
+          </span>
         )}
         {me ? (
           <>

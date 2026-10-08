@@ -2,6 +2,7 @@
 "use client";
 
 import { Eyebrow, Heading } from "@varga/design-system";
+import { Glossaire } from "@/components/glossaire";
 import { Empty } from "@/components/ui";
 import { estClient } from "@/lib/integrations";
 import { IntegrationsPanel } from "./panel";
@@ -19,15 +20,16 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
     <div className="space-y-6">
       {!projet && (
         <div className="space-y-2">
-          <Eyebrow>connect your agent</Eyebrow>
+          <Eyebrow>integrations · MCP</Eyebrow>
           <Heading as="h1" size="xl">
-            integrations
+            connect a client
           </Heading>
           <p className="max-w-3xl text-sm text-ink-muted">
             Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work
             items, and tells you what waits for your decision — with your rights, never more. It never decides: you
             do, in the console.
           </p>
+          <Glossaire ici="clients" />
         </div>
       )}
       {estClient(client) ? (
