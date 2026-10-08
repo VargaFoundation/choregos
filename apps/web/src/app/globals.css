@@ -27,3 +27,65 @@
   outline: 2px solid var(--varga-focus);
   outline-offset: 4px;
 }
+
+/*
+ * Le parcours d'un ticket (S22-02) : ce qui tourne pulse, ce qu'on attend d'une personne pulse plus
+ * lentement, un tronçon franchi se trace. Rien ne bouge pour qui a demandé moins de mouvement.
+ */
+@keyframes parcours-pouls {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+@keyframes parcours-clignote {
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes parcours-trace {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.parcours-pouls,
+.parcours-pouls-lent {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: parcours-pouls 1.6s ease-out infinite;
+}
+.parcours-pouls-lent {
+  animation-duration: 2.8s;
+}
+.parcours-pouls-point {
+  animation: parcours-clignote 1.4s ease-in-out infinite;
+}
+.parcours-trace {
+  animation: parcours-trace 700ms ease-out both;
+}
+.parcours-trait,
+.parcours-forme {
+  transition:
+    stroke 300ms ease,
+    fill 300ms ease,
+    stroke-width 300ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .parcours-pouls,
+  .parcours-pouls-lent,
+  .parcours-pouls-point,
+  .parcours-trace {
+    animation: none;
+  }
+  .parcours-anime {
+    display: none;
+  }
+}

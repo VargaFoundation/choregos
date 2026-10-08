@@ -6,9 +6,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
 import { DecisionBar } from "@/components/decision-bar";
+import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur, relative, shortDate, tokens, usd } from "@/lib/format";
+import type { WorkItemJourney } from "@/lib/types";
+
+/** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
+function enMouvement(journey: WorkItemJourney | undefined): boolean {
+  if (!journey || journey.closed) return false;
+  return journey.steps.some((s) => !s.ended_at && ["queued", "running", "waiting", "pending_approval", "approved"].includes(s.status));
+}
 
 export default function WorkItemPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params);
@@ -16,6 +24,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
   const timeline = useQuery({ queryKey: ["timeline", id], queryFn: () => api.timeline(id) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
+  const journey = useQuery({
+    queryKey: ["journey", id],
+    queryFn: () => api.journey(id),
+    refetchInterval: (query) => (enMouvement(query.state.data) ? 4000 : false),
+  });
 
   if (item.error) return <ErrorNote>{(item.error as Error).message}</ErrorNote>;
   if (!item.data) return <Empty>loading…</Empty>;
@@ -73,6 +86,24 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           />
         </Card>
       )}
+
+      <Card title="journey">
+        {journey.data ? (
+          <CarteDuParcours
+            journey={journey.data}
+            slug={slug}
+            itemId={id}
+            onDecided={() => {
+              void queryClient.invalidateQueries({ queryKey: ["journey", id] });
+              void queryClient.invalidateQueries({ queryKey: ["item", id] });
+            }}
+          />
+        ) : journey.error ? (
+          <p className="text-sm text-ink-muted">the journey cannot be read: {(journey.error as Error).message}</p>
+        ) : (
+          <Empty>loading the journey…</Empty>
+        )}
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="cost per stage" className="lg:col-span-2">
