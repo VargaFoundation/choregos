@@ -143,6 +143,20 @@ def test_les_invariants_le_contrat_et_le_cadre_sont_en_anglais(nom: str, texte: 
     assert not fautes, f"du français dans {nom} :\n  " + "\n  ".join(fautes)
 
 
+LANGUE_DE_SORTIE = "Write in English everything a person will read"
+
+
+@pytest.mark.parametrize("role", sorted(KNOWN_ROLES))
+def test_chaque_role_demande_d_ecrire_en_anglais(role: str) -> None:
+    # Un agent écrit dans la langue de ce qu'il lit : un ticket aux champs français (« Léa Martin »,
+    # « 12 rue de la Paix ») faisait écrire un plan en français à un agent tout en anglais (08/10).
+    assert LANGUE_DE_SORTIE in render_playbook(role, **VARIABLES)
+
+
+def test_un_agent_du_registre_recoit_la_consigne_de_langue_dans_son_cadre() -> None:
+    assert LANGUE_DE_SORTIE in cadrer("Prepare the onboarding plan.")
+
+
 def test_le_task_md_et_le_context_md_du_runner_sont_en_anglais() -> None:
     from choregos_runner.workspace import _context_markdown, _task_markdown
 
