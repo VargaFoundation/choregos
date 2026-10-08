@@ -1233,6 +1233,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],
     [/^\/projects\/[^/]+\/policy$/, { name: "solo", version: 1, yaml: "budgets:\n  per_ticket_usd: 25\n", is_active: true }],
     [/^\/orgs\/[^/]+\/projects$/, projects],
+    [/^\/projects\/[^/]*checkout-web$/, projects.items[1]],
     [/^\/projects\/[^/]+$/, projects.items[0]],
     // Checkout Web se provisionne : pas encore de ticket — la boîte ne compte pas deux fois ceux de Billing API.
     [/^\/projects\/[^/]*checkout-web\/work-items$/, { items: [], meta: { has_more: false } }],

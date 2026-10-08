@@ -52,6 +52,12 @@ and *add a connector* for the rest. `GET /connectors/types` reads the adapter re
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
 draws the form from it) and its **secret fields**.
 
+Until a project can run, its overview opens on a **getting started** list: provisioned, a workflow
+published, each required capability covered (by the project's connector, tested, or by the
+platform's default), no configured connector failing its last test, and a first request — each
+missing step says why and links to where it is fixed. The list disappears once every step is done.
+Human groups are not checked yet.
+
 A secret is never written in `config` — a secret field there is refused (`422`). It is named by
 **reference**, field by field, and resolved when the adapter is built, in the process that uses it:
 
