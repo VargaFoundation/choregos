@@ -169,7 +169,7 @@ test("workflows : un libellé changé sur la carte se lit dans la vue processus,
   await page.getByRole("link", { name: "process" }).click();
   await expect(page.getByTestId("process-step-t-refine")).toContainText("Nouvelles demandes");
   await brouillon.getByRole("button", { name: "publish v2" }).click();
-  await expect(brouillon.getByRole("status")).toHaveText("default-simple v2 published");
+  await expect(brouillon.getByRole("status")).toHaveText("default-simple v2 published — running items finish on their version");
 });
 
 test("workflows : la vue processus ouvre le panneau d'une étape, son délai prérempli", async ({ page }) => {

@@ -352,8 +352,9 @@ export const api = {
   /** Des opérations typées, greffées dans le texte ; rien n'est enregistré (S16-11). */
   editWorkflow: (yaml: string, operations: WorkflowOperation[]) =>
     request<WorkflowEditResult>("/workflows/edit", { method: "POST", body: JSON.stringify({ yaml, operations }) }),
-  validateWorkflow: (yaml: string) =>
-    request<WorkflowValidation>("/workflows/validate", { method: "POST", body: JSON.stringify({ yaml }) }),
+  /** `signal` : une validation que la frappe a dépassée s'annule plutôt que d'écrire un verdict périmé. */
+  validateWorkflow: (yaml: string, signal?: AbortSignal) =>
+    request<WorkflowValidation>("/workflows/validate", { method: "POST", body: JSON.stringify({ yaml }), signal }),
   policy: (id: string) => request<PolicyDef>(`/projects/${qualify(id)}/policy`),
 
   workItems: (id: string, params?: Record<string, string>) =>
