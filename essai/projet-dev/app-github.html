@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  L'App GitHub du locataire dev, par le « manifest flow » de GitHub (S21-29) : ouvrir ce fichier dans
+  un navigateur connecté à GitHub, cliquer, confirmer chez GitHub. GitHub redirige ensuite vers
+  localhost avec `?code=…` (la page ne s'affiche pas : copier le code depuis la barre d'adresse), puis :
+
+    gh api -X POST app-manifests/<code>/conversions > app.json   # id, pem, webhook_secret — un SECRET
+
+  `id` → GITHUB_APP_ID et `pem` → GITHUB_APP_PRIVATE_KEY dans Infisical (projet choregos, env dev, /app),
+  puis supprimer app.json. Installer l'App sur DiametralGroup/choregos-sandbox-dev depuis
+  https://github.com/apps/choregos-diametral-dev/installations/new ; l'identifiant d'installation est
+  dans l'URL de la page de l'installation.
+
+  Webhook inactif : l'hôte du locataire est interne, GitHub ne le joint pas ; le rattrapage périodique
+  de l'orchestrateur lit les issues `agent-ready`, et la CI se lit sur la PR.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Choregos — GitHub App for the dev tenant</title>
+  </head>
+  <body>
+    <h1>Create the Choregos GitHub App on DiametralGroup</h1>
+    <form action="https://github.com/organizations/DiametralGroup/settings/apps/new?state=choregos-dev" method="post">
+      <input type="hidden" name="manifest" id="manifest" />
+      <button type="submit">Create the app on GitHub</button>
+    </form>
+    <script>
+      document.getElementById("manifest").value = JSON.stringify({
+        name: "choregos-diametral-dev",
+        url: "http://choregos.internal.dev.diametral.com",
+        description: "Choregos on the Diametral dev tenant: agents open, update and merge pull requests under policy.",
+        hook_attributes: { url: "http://choregos.internal.dev.diametral.com/api/v1/webhooks/github", active: false },
+        redirect_url: "http://localhost:8787/",
+        public: false,
+        default_permissions: {
+          contents: "write",
+          pull_requests: "write",
+          issues: "write",
+          checks: "write",
+          statuses: "read",
+          metadata: "read",
+        },
+        default_events: [],
+      });
+    </script>
+  </body>
+</html>
