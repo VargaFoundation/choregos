@@ -355,3 +355,32 @@ transitions:
 """
     _, report = parse_workflow(yaml_text, strict=False)
     assert any(e.code == "actor.unknown" and "fantome" in e.message for e in report.errors), report.errors
+
+
+def _avec_garantie(nom: str, params: str = "") -> str:
+    """default-simple, avec une garantie de plus sur t-verify."""
+    from choregos_core.dsl import template_yaml
+
+    garantie = f"{{ name: {nom}{', params: ' + params if params else ''} }}"
+    return template_yaml("default-simple").replace(
+        "    by: checker\n    gates: [evidence_present]",
+        f"    by: checker\n    gates: [evidence_present, {garantie}]",
+    )
+
+
+def test_outputs_in_sans_values_est_refusee() -> None:
+    from choregos_core.dsl import parse_workflow
+
+    _, rapport = parse_workflow(_avec_garantie("outputs_in"), strict=False)
+    assert "gate.sans_matiere" in {e.code for e in rapport.errors}
+    _, rapport = parse_workflow(
+        _avec_garantie("outputs_in", "{ values: { verdict: [approve] } }"), strict=False
+    )
+    assert "gate.sans_matiere" not in {e.code for e in rapport.errors}
+
+
+def test_markdown_sections_sans_chemins_est_refusee() -> None:
+    from choregos_core.dsl import parse_workflow
+
+    _, rapport = parse_workflow(_avec_garantie("markdown_sections"), strict=False)
+    assert "gate.sans_matiere" in {e.code for e in rapport.errors}
