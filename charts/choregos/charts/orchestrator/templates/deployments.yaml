@@ -81,6 +81,14 @@ spec:
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
               valueFrom:
                 secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: run-token-private-key }
+            # L'App GitHub : le tracker lit les issues `agent-ready`, l'exécuteur ouvre et fusionne les
+            # PR. Seule l'API la recevait : le rattrapage échouait en « aucune authentification
+            # configurée » sur un locataire qui avait pourtant son App (S22-04). Optionnelle, comme
+            # dans l'API : un locataire sans GitHub n'en a pas.
+            - name: CHOREGOS_GITHUB_APP_ID
+              valueFrom: { secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: github-app-id, optional: true } }
+            - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: github-app-private-key, optional: true } }
             # Le service interne de l'API : c'est ce que les agents rappellent, jamais
             # l'URL publique, qu'un pod ne sait pas résoudre.
             - name: CHOREGOS_INTERNAL_API_URL
