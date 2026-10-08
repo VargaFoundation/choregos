@@ -69,7 +69,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
         {!version.data ? (
           <p className="text-sm text-ink-muted">reading the files…</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-[14rem,1fr]" data-testid="fichiers">
+          <div className="grid gap-4 md:grid-cols-[14rem_1fr]" data-testid="fichiers">
             <ul className="space-y-1 text-xs">
               {fichiers.map((nom) => (
                 <li key={nom}>

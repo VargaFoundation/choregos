@@ -93,7 +93,7 @@ export default function YamlPage({
     return <ErrorNote>{String(definition.error)}</ErrorNote>;
   if (!definition.data) return <Empty>reading the workflow…</Empty>;
   return (
-    <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+    <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
       <Card
         title={`${name} — YAML`}
         action={

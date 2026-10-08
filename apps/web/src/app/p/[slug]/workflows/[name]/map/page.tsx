@@ -33,7 +33,7 @@ export default function MapPage() {
   const noeud = choix?.kind === "node" ? noeuds.find((n) => n.id === choix.id) : undefined;
   const arete = choix?.kind === "edge" ? (areteDessinee(graph, choix.id) as Arete | undefined) : undefined;
   return (
-    <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+    <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
       <Card title="map">
         <div className="space-y-3">
           <WorkflowLegend graph={graph} />

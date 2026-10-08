@@ -215,7 +215,7 @@ function Specification({ spec }: { spec: AgentSpec }) {
   return (
     <div className="space-y-3 text-sm" data-testid="version">
       <p className="text-ink-muted">{resumeDeLaVersion(spec)}</p>
-      <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5 text-xs">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
         <dt className="text-ink-muted">model</dt>
         <dd>{spec.model ?? "the project's profile"}</dd>
         <dt className="text-ink-muted">backend</dt>
