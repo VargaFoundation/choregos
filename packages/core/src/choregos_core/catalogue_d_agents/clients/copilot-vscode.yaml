@@ -1,0 +1,16 @@
+catalogue:
+  version: 1
+  role: external
+  client: vscode
+  # `always` : il appelle depuis le poste de la personne ; `cloud` : depuis le cloud de son éditeur —
+  # il ne se propose que si la porte MCP accepte l'OAuth, qu'un client est enregistré, et que l'adresse est en https.
+  reach: always
+  summary: GitHub Copilot in VS Code acting through the MCP gate, with its person's rights intersected with this agent's.
+agent:
+  slug: copilot-vscode
+  kind: external
+  display_name: GitHub Copilot in VS Code
+  description: GitHub Copilot in VS Code, connected to Choregos through the MCP gate. It acts with its person's rights, never more, and never decides.
+  # Une version vide : les droits de sa personne, jamais plus (ADR 0033). `connect` avec
+  # `read_only` publie à la place la lecture seule (`list_*`, `describe_*`, `search_*`, `get_*`, `summarize_*`).
+  spec: {}
