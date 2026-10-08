@@ -2,44 +2,84 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@varga/design-system";
 import { estUneReference } from "@/components/connecteurs";
+import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
+import { Glossaire } from "@/components/glossaire";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorOperation, OperationPatch, OrgConnector } from "@/lib/types";
 
 const POLITIQUES = ["allowed", "approval", "forbidden"] as const;
 const TON = { allowed: "ok", approval: "warn", forbidden: "danger" } as const;
 
 /**
- * Les connecteurs de l'organisation (ADR 0034) : un annuaire, un gestionnaire de parc, un serveur
- * MCP — déclarés une fois, nommés ; pour chaque opération, la politique et les groupes de projets
- * qui y ont droit. Seul l'administrateur de l'organisation en décide ; un projet ne fait que
- * resserrer.
+ * Les connecteurs (ADR 0034), rangés par ce qu'ils SONT (revue du 07/10 : « ça mélange des agents,
+ * des MCPs et des connecteurs API, c'est flou ») : les systèmes métier de l'organisation, qui déclarent
+ * leurs opérations ; ses serveurs MCP, dont on découvre les outils ; et, en lecture, les outils de
+ * livraison de chaque projet, qui se règlent dans le projet. Seul l'administrateur de l'organisation
+ * décide des deux premiers ; un projet ne fait que resserrer.
  */
 export default function OrgConnectorsPage() {
   const { org } = useSession();
   const instances = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  const { metier, mcp } = rangerLesConnecteurs(instances.data ?? []);
+  const lecture = instances.error ? (
+    <ErrorNote>{String(instances.error)}</ErrorNote>
+  ) : !instances.data ? (
+    <p className="text-sm text-ink-muted">reading…</p>
+  ) : null;
   return (
-    <div className="space-y-4">
-      <p className="max-w-3xl text-sm text-ink-muted">
-        A connector of the organisation is declared once and shared by its projects. Each operation is allowed,
-        needs an approval (a governed action), or is forbidden — and opens to the project groups you name (none:
-        every project). A project can tighten an operation, never widen it.
-      </p>
-      {instances.error ? (
-        <ErrorNote>{String(instances.error)}</ErrorNote>
-      ) : !instances.data ? (
-        <p className="text-sm text-ink-muted">reading…</p>
-      ) : instances.data.length === 0 ? (
-        <Empty title="no connector yet">declare one below.</Empty>
-      ) : (
-        instances.data.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
-      )}
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <p className="max-w-3xl text-sm text-ink-muted">
+          A connector is a system Choregos reaches out to. Those of the organisation are declared once and shared by its
+          projects: each operation is allowed, needs an approval (a governed action), or is forbidden — and opens to the
+          project groups you name (none: every project). A project can tighten an operation, never widen it.
+        </p>
+        <Glossaire ici="connectors" ouvert />
+      </div>
+      <section className="space-y-3" aria-labelledby="business" data-testid="section-metier">
+        <h2 id="business" className="text-lg font-semibold">
+          business systems (API)
+        </h2>
+        <p className="max-w-3xl text-sm text-ink-muted">
+          Systems your agents act on through the operations their type declares — a directory, a device fleet, a carrier.
+        </p>
+        {lecture ??
+          (metier.length === 0 ? (
+            <Empty title="no business system yet">declare one below.</Empty>
+          ) : (
+            metier.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
+          ))}
+      </section>
+      <section className="space-y-3" aria-labelledby="mcp" data-testid="section-mcp">
+        <h2 id="mcp" className="text-lg font-semibold">
+          MCP servers
+        </h2>
+        <p className="max-w-3xl text-sm text-ink-muted">
+          Tool servers Choregos calls over MCP: discover lists their tools, and each new tool is born closed. A
+          supplier&apos;s agent served over MCP is declared here — to Choregos it is a tool server. To let{" "}
+          <em>your</em> assistant call Choregos, see{" "}
+          <Link href="/integrations" className="underline">
+            AI clients
+          </Link>
+          .
+        </p>
+        {lecture ??
+          (mcp.length === 0 ? (
+            <Empty title="no MCP server yet">declare one below, type “MCP server”.</Empty>
+          ) : (
+            mcp.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
+          ))}
+      </section>
+      <OutilsDeLivraison org={org} />
       <Declarer org={org} />
     </div>
   );
@@ -61,7 +101,7 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
   }
   const action = (
     <span className="inline-flex items-center gap-2">
-      <Badge tone="neutral">{instance.kind}</Badge>
+      <Badge tone="neutral">{libelleDeSorte(instance.kind)}</Badge>
       {instance.kind === "mcp" && (
         <Button size="sm" onClick={() => void decouvrir()}>
           discover
@@ -187,7 +227,12 @@ function Declarer({ org }: { org: string }) {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [references, setReferences] = useState<Record<string, string>>({});
   const [erreur, setErreur] = useState<string | null>(null);
-  const candidats = (types.data ?? []).filter((t) => !["tracker", "scm", "ci", "cd", "runtime", "memory", "gateway"].includes(t.kind));
+  // Les outils de livraison d'un projet se règlent dans le projet : ils ne se déclarent pas ici.
+  const candidats = (types.data ?? []).filter((t) => !estUneSorteDuProjet(t.kind));
+  const familles = [
+    { titre: "business systems (API)", types: candidats.filter((t) => t.kind !== "mcp") },
+    { titre: "MCP servers", types: candidats.filter((t) => t.kind === "mcp") },
+  ].filter((famille) => famille.types.length > 0);
   const type = candidats.find((t) => `${t.kind}/${t.type}` === choix);
   const schema = (type?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
   const illisibles = Object.values(references).filter((v) => v && !estUneReference(v));
@@ -247,10 +292,14 @@ function Declarer({ org }: { org: string }) {
                 }}
               >
                 <option value="">—</option>
-                {candidats.map((t) => (
-                  <option key={`${t.kind}/${t.type}`} value={`${t.kind}/${t.type}`}>
-                    {t.display} ({t.kind})
-                  </option>
+                {familles.map((famille) => (
+                  <optgroup key={famille.titre} label={famille.titre}>
+                    {famille.types.map((t) => (
+                      <option key={`${t.kind}/${t.type}`} value={`${t.kind}/${t.type}`}>
+                        {t.display} — {libelleDeSorte(t.kind)}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>

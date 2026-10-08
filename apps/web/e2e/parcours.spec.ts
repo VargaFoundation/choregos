@@ -281,6 +281,21 @@ test("connecteurs de l'organisation : chaque opération porte sa politique ; un 
   await expect(choix.locator("option")).toHaveText(["as the organisation", "approval", "forbidden"]);
 });
 
+test("connecteurs : systèmes métier, serveurs MCP et outils de livraison des projets, chacun dans sa section", async ({
+  page,
+}) => {
+  await page.goto("/admin/connectors");
+  await expect(page.getByTestId("glossaire")).toHaveAttribute("open", "");
+  await expect(page.getByTestId("section-metier")).toContainText("entra-acme");
+  await expect(page.getByTestId("section-metier")).toContainText("directory (identity)");
+  await expect(page.getByTestId("section-mcp")).toContainText("supplier-agent");
+  await expect(page.getByTestId("section-metier")).not.toContainText("supplier-agent");
+  await expect(page.getByTestId("livraison-checkout-web")).toContainText("work tracker: jira");
+  await expect(page.getByTestId("livraison-checkout-web")).toContainText("deployment: argocd");
+  await page.getByTestId("livraison-checkout-web").getByRole("link", { name: "settings" }).click();
+  await expect(page).toHaveURL(/\/p\/checkout-web\/settings$/);
+});
+
 test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", async ({ page }) => {
   await page.goto("/admin/connectors");
   await expect(page.getByLabel("policy of order_laptop")).toHaveValue("forbidden");
