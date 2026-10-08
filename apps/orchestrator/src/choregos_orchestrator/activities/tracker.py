@@ -258,6 +258,9 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="close_human_request")
 async def close_human_request(payload: dict[str, Any]) -> dict[str, Any]:
+    """Clôt la demande et garde la raison d'un refus là où l'agent suivant la lit : une transition
+    qui déclare `inputs: [human_feedback]` la reçoit. Elle se perdait — l'agent refaisait le même
+    travail sans savoir pourquoi on le lui renvoyait. Une approbation l'efface : elle a servi."""
     async with db() as session:
         row = await session.get(HumanRequest, payload["request_id"]) if payload.get("request_id") else None
         if row is None:
@@ -266,7 +269,23 @@ async def close_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             row.decided_at = utcnow()
             row.decided_by = payload.get("decided_by", "système")
             row.decision = payload.get("decision", {})
+            await _garder_la_raison(session, row, dict(payload.get("decision") or {}))
         return {"closed": True}
+
+
+async def _garder_la_raison(session: Any, demande: HumanRequest, decision: dict[str, Any]) -> None:
+    item = await session.get(WorkItem, demande.work_item_id)
+    if item is None:
+        return
+    documents = dict(item.documents or {})
+    raison = str(decision.get("reason") or "").strip()
+    if decision.get("approved"):
+        documents.pop("human_feedback", None)
+    elif raison:
+        documents["human_feedback"] = raison
+    else:
+        return
+    item.documents = documents
 
 
 @activity.defn(name="notify")

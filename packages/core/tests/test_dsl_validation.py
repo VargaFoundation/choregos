@@ -384,3 +384,16 @@ def test_markdown_sections_sans_chemins_est_refusee() -> None:
 
     _, rapport = parse_workflow(_avec_garantie("markdown_sections"), strict=False)
     assert "gate.sans_matiere" in {e.code for e in rapport.errors}
+
+
+def test_sans_agent_qui_ecrit_du_code_une_pr_n_exige_pas_de_verify() -> None:
+    """Une étude fusionne un ADR : il n'y a rien à tester avant sa PR (S21-22). Un agent `implement`
+    sans `verify` reste averti."""
+    etude = BASE.format(
+        transitions="  - { id: t-adr, from: inbox, to: doing, by: dev }\n"
+        "  - { id: t-pr, from: doing, to: done, by: ci, does: open_pr }"
+    )
+    _, avec_code = parse_workflow(etude, strict=False)
+    assert "workflow.no_verify_before_pr" in {w.code for w in avec_code.warnings}
+    _, sans_code = parse_workflow(etude.replace("role: implement", "role: architect"), strict=False)
+    assert "workflow.no_verify_before_pr" not in {w.code for w in sans_code.warnings}

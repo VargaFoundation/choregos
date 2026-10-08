@@ -79,7 +79,7 @@ def livraison(manifeste: dict[str, Any], dossier: Path | None) -> Livraison:
     refs = list(defauts.get("workflows") or ([defauts["workflow"]] if defauts.get("workflow") else []))
     return Livraison(
         workflows=[_source_du_workflow(ref, dossier) for ref in refs or [WORKFLOW_SANS_GABARIT]],
-        politique=_source_de_la_politique(str(defauts.get("policy") or POLITIQUE_SANS_GABARIT)),
+        politique=_source_de_la_politique(str(defauts.get("policy") or POLITIQUE_SANS_GABARIT), dossier),
         defaut=defauts.get("default_workflow"),
         routage=list(defauts.get("routing") or []),
         agents=[_document_de_l_agent(str(ref), dossier) for ref in defauts.get("agents") or []],
@@ -166,10 +166,17 @@ def _source_du_workflow(ref: str, dossier: Path | None) -> str:
     return chemin.read_text(encoding="utf-8")
 
 
-def _source_de_la_politique(ref: str) -> str:
+def _source_de_la_politique(ref: str, dossier: Path | None) -> str:
+    """`preset:<nom>`, ou un fichier du gabarit (`./policy.yaml`) : un gabarit de livraison logicielle
+    a ses budgets et ses trains, qu'aucun preset ne porte (S21-22). Un chemin reste dans le dossier."""
+    if not ref.startswith("preset:"):
+        chemin = _chemin_du_gabarit(ref, dossier)
+        if not chemin.is_file():
+            raise unprocessable(f"politique `{ref}` : fichier absent du gabarit")
+        return chemin.read_text(encoding="utf-8")
     nom = ref.removeprefix("preset:")
-    if nom == ref or "/" in nom or nom.startswith("."):
-        raise unprocessable(f"politique `{ref}` : seule la forme `preset:<nom>` est livrable par un gabarit")
+    if "/" in nom or nom.startswith("."):
+        raise unprocessable(f"politique `{ref}` : un preset se nomme, il ne se cherche pas dans un chemin")
     try:
         return preset_yaml(nom)
     except FileNotFoundError as erreur:

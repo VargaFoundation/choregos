@@ -29,7 +29,9 @@ from choregos_contracts.workflow import effet_de_la_transition, est_un_etat_de_p
 from ..gates import gate_needs
 
 #: Les rôles dont le playbook travaille dans un dépôt : ils lisent un diff, poussent une branche.
-ROLES_DANS_UN_DEPOT = frozenset({"implement", "fix_ci", "address_review", "review", "release_notes"})
+ROLES_DANS_UN_DEPOT = frozenset(
+    {"implement", "fix_ci", "address_review", "review", "release_notes", "architect"}
+)
 #: Ceux qui relancent la CI en plus.
 ROLES_SUR_LA_CI = frozenset({"fix_ci"})
 #: Ceux qui regardent la production.
