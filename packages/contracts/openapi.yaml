@@ -1524,6 +1524,19 @@ paths:
       parameters: [{ name: tail, in: query, schema: { type: integer, default: 500, maximum: 5000 } }]
       responses:
         "200": { description: Logs, content: { application/json: { schema: { type: object, properties: { logs: { type: string }, ref: { type: string } } } } } }
+  /internal/runs/{id}/git-token:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: postRunGitToken
+      description: >-
+        A git token for THIS run: an installation token of the platform's GitHub App, scoped to the
+        run's repository alone, with `contents: write`, valid one hour. `token` is null when the
+        repository is not on GitHub or when no App is configured: the run then clones without one.
+      responses:
+        "200": { description: The token, or null, content: { application/json: { schema: { $ref: "#/components/schemas/GitToken" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
   /integrations:
     get:
       tags: [session]
@@ -2495,6 +2508,13 @@ components:
         actor_kind: { type: string, enum: [user, agent, system], default: system }
         ref_id: { type: [string, "null"] }
         cost_usd: { type: [number, "null"] }
+    GitToken:
+      type: object
+      required: [token]
+      properties:
+        token: { type: [string, "null"] }
+        expires_at: { type: [string, "null"], format: date-time }
+        repository: { type: [string, "null"], description: "`owner/name`: the only repository the token opens." }
     WorkItemJourney:
       type: object
       description: >-

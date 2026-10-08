@@ -286,3 +286,45 @@ async def test_le_travail_commite_par_l_agent_est_pousse_quand_meme(
     assert outcome.exit_code is Exit.OK
     assert outcome.result is not None
     assert outcome.result.artifacts.commits, "le commit de l'agent compte comme du travail"
+
+
+async def test_le_jeton_git_du_run_sert_au_clone_et_ne_s_ecrit_nulle_part(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """`docs/security.md` : « émis par run, portée du dépôt, 1 h, injecté en mémoire » (S22-07). Le
+    runner le demande, s'en sert — et il n'apparaît ni dans `.git/config`, que l'agent lit, ni dans
+    le journal, ni dans le résultat."""
+    agent_script(
+        {
+            "turns": [
+                {
+                    "messages": ["ok"],
+                    "writes": [{"path": "src/orders.py", "content": "x = 1\n"}],
+                    "result": valid_result(),
+                }
+            ]
+        },
+        stage_input,
+        runner_settings.workspace,
+    )
+    client = FakeInternalClient(stage_input)
+    client.git_token = "ghs_secret_du_run"
+    runner = Runner(runner_settings, client)  # type: ignore[arg-type]
+    outcome = await runner.execute(stage_input, client)  # type: ignore[arg-type]
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    assert client.git_token_calls == 1
+    config = (Path(runner_settings.workspace) / ".git" / "config").read_text()
+    assert "ghs_secret_du_run" not in config and "x-access-token" not in config
+    assert "ghs_secret_du_run" not in json.dumps(client.events)
+    assert "ghs_secret_du_run" not in outcome.result.model_dump_json()  # type: ignore[union-attr]
+
+
+async def test_le_jeton_passe_en_entete_pour_une_seule_commande() -> None:
+    import base64
+
+    from choregos_runner.workspace import _entete
+
+    assert _entete(None) == []
+    cle, valeur = _entete("ghs_x")
+    assert cle == "-c" and valeur.startswith("http.extraHeader=Authorization: Basic ")
+    assert base64.b64decode(valeur.rsplit(" ", 1)[1]).decode() == "x-access-token:ghs_x"

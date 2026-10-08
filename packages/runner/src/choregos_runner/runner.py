@@ -96,6 +96,8 @@ class Runner:
         self.started = time.monotonic()
         #: L'index des skills qu'un backend ne lit pas lui-même, ajouté au prompt.
         self.index_des_skills = ""
+        #: Le jeton git du run (S22-07) : en mémoire seulement, pour le clone et le push.
+        self.jeton_git: str | None = None
 
     async def run(self) -> RunOutcome:
         client = self.client or InternalClient(
@@ -141,9 +143,11 @@ class Runner:
         except Exception as exc:  # perdre ses outils ne doit pas empêcher l'étape
             await journal.record("tools.local", {"demarre": False, "error": str(exc)[:300]})
 
-        # 2. clone et branche
+        # 2. clone et branche — avec le jeton git du run (S22-07) : sans lui, un dépôt privé rendait
+        # « Repository not found ». Il reste en mémoire, jamais dans le workspace ni dans le journal.
+        await self._demander_le_jeton_git(client, journal, stage_input)
         try:
-            await workspace.prepare(stage_input)
+            await workspace.prepare(stage_input, token=self.jeton_git)
         except Exception as exc:
             await journal.record("run.failed", {"phase": "clone", "error": str(exc)[:500]})
             await journal.flush()
@@ -311,6 +315,17 @@ class Runner:
         elapsed = time.monotonic() - self.started
         return max(30.0, budget_seconds - elapsed)
 
+    async def _demander_le_jeton_git(
+        self, client: InternalClient, journal: EventJournal, stage_input: StageInput
+    ) -> None:
+        """Le jeton git du run, gardé en mémoire (S22-07). Sans lui, un dépôt public se clone encore."""
+        if stage_input.repo is None:
+            return
+        try:
+            self.jeton_git = await client.fetch_git_token()
+        except Exception as exc:
+            await journal.record("git.token", {"ok": False, "error": str(exc)[:300]})
+
     async def _publish(
         self,
         client: InternalClient,
@@ -337,7 +352,7 @@ class Runner:
         # disparaît — l'étape suivante trouvait alors le dépôt inchangé et concluait que
         # rien n'avait été fait.
         if (sha or commits) and stage_input.repo and not self.settings.dry_run:
-            push = await workspace.push(stage_input.repo.work_branch)
+            push = await workspace.push(stage_input.repo.work_branch, token=self.jeton_git)
             await journal.record("git.push", {"ok": push.ok, "output": push.output[-500:]})
             if not push.ok:
                 # Une poussée ratée est la fin silencieuse la plus coûteuse : le résultat dit
