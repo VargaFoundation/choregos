@@ -92,9 +92,12 @@ def test_les_familles_sont_des_types_de_connecteurs_et_demo_est_refuse_en_produc
 ) -> None:
     from choregos_adapters import build, connector_types
 
-    familles = {
+    demos = {
         k: {o.name: o.default_policy for o in s.operations} for k, t, s in connector_types() if t == "demo"
     }
+    # Le `cd` de démonstration (S21-24) n'expose rien : c'est le train qui l'appelle, jamais un agent.
+    assert demos.pop("cd") == {}
+    familles = demos
     assert familles == {
         "mdm": {"enroll_device": "approval", "wipe_device": "approval", "device_status": "allowed"},
         "shipping": {

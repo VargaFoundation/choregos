@@ -7,8 +7,9 @@ poste (l'orchestrateur) et le courtier qui relit son état (l'API) verraient deu
 ils n'en voient qu'un. L'application est un appelable ASGI nu — le paquet des adaptateurs ne dépend
 d'aucun cadriciel — que `uvicorn` sert : `python -m choregos_adapters.fakes.serveur`.
 
-- `/{mdm,shipping,access_control,fournisseur}/mcp` : chaque faux en serveur MCP (`serveur_mcp`),
-  ce que joint un connecteur `demo` qui porte une `url`, ou un connecteur `mcp` ;
+- `/{mdm,shipping,access_control,fournisseur,cd}/mcp` : chaque faux en serveur MCP (`serveur_mcp`),
+  ce que joint un connecteur `demo` qui porte une `url`, ou un connecteur `mcp` — `cd` est
+  l'environnement que promeut le train d'un projet de démonstration (S21-24) ;
 - `/graph/v1.0/…` et `/login/{tenant}/oauth2/v2.0/token` : le faux Microsoft Graph, ce que joint un
   connecteur `entra` dont `graph_url` et `login_url` désignent ce service ;
 - `/healthz`.
@@ -26,6 +27,7 @@ from typing import Any
 
 import httpx
 
+from .cd_de_demo import FakeCdDeDemo
 from .entra import FakeEntra
 from .mcp import FakeMcpServer
 from .rh import FAUX_PAR_FAMILLE, FakeFournisseur, FauxMetier, serveur_mcp
@@ -39,6 +41,8 @@ class ApplicationDeDemo:
         self.annuaire = FakeEntra(secret_attendu=jeton)
         self.faux: dict[str, FauxMetier] = {famille: classe() for famille, classe in FAUX_PAR_FAMILLE.items()}
         self.faux["fournisseur"] = FakeFournisseur()
+        # L'environnement que promeut le train d'un projet de démonstration (S21-24).
+        self.faux["cd"] = FakeCdDeDemo()
         self.serveurs: dict[str, FakeMcpServer] = {
             nom: serveur_mcp(faux, jeton=jeton) for nom, faux in self.faux.items()
         }
