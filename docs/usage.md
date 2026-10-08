@@ -638,6 +638,18 @@ and every step an actor took on each transition — agent runs with their verdic
 requests to people and what they decided, governed actions, release-train departures that carry
 the ticket.
 
+The work item's page draws that journey and animates it. The workflow's path snakes across the
+page; each step is a shape for who carries it — a circle for an agent, a circle with a person for a
+human decision, a square for the platform, a pill for the release train — and says in words what it
+is doing: in progress (turquoise, pulsing), waiting for a person (pulsing slowly), sent back (amber),
+done (green), failed (red). A review that asks for changes, a test run that fails, a rejection draw
+an amber arc and count their rounds ("approved in round 2"); a detour — addressing a review, fixing
+the CI — hangs under the step that sends there. **Live** follows the work item as it moves;
+**Replay** plays its life back event by event at 0.5×, 1× or 2×, and a stage at the bottom jumps
+there. Clicking a step opens its panel: one tab per attempt, what the agent did (gates, access with
+refusals first, files changed), its log — live while it runs — and, for a person still awaited, the
+decision itself.
+
 ## 7. Day-2 knobs
 
 | Symptom | Knob |

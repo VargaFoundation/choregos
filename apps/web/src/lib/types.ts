@@ -54,6 +54,9 @@ export type {
   WorkflowValidation,
   WorkItem as WorkItemDto,
   WorkItemPage,
+  WorkItemJourney,
+  JourneyMove,
+  JourneyStep,
 } from "@choregos/contracts/api";
 
 import type { Operations } from "@choregos/contracts/api";

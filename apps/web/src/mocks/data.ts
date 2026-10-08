@@ -42,6 +42,7 @@ import type {
   WorkItemDto,
   WorkItemPage,
 } from "@/lib/types";
+import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 
 const now = new Date();
 const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
@@ -260,6 +261,66 @@ function run(id: string, role: string, status: string, cost: number, summary: st
     },
   } as Run;
 }
+
+/**
+ * Le détail d'un ticket, accordé à son parcours (S22-02) : `#123` court dans `dev-complex`, sa revue de
+ * sécurité tourne. La liste du board garde ses fixtures — ses colonnes sont celles du workflow par défaut.
+ */
+export function ticketDetaille(id: string): WorkItemDto {
+  const base = workItems.items.find((i) => i.id === id) ?? workItems.items[0]!;
+  if (base.id !== "w1") return base;
+  return {
+    ...base,
+    state: "reviewed",
+    state_display: "Reviewed by an agent",
+    workflow_name: "dev-complex",
+    workflow_version: 1,
+    current_run: {
+      id: "r-security-review-1",
+      status: "running",
+      stage_role: "review",
+      attempt: 1,
+      backend: "claude-code",
+      model: "profile:standard",
+      cost_usd: 0.21,
+      started_at: iso(6),
+    },
+  };
+}
+
+/** Les deux parcours du mode démo, exposés pour la vérification de langue des fixtures. */
+export const parcoursDeDemonstration = [parcoursEnCours(), parcoursTermine()];
+
+/** Ce à quoi l'agent a touché, replié depuis son journal (`/runs/{id}/access`). */
+export const runAccess = {
+  evenements: 64,
+  refus: 1,
+  acces: [
+    { nature: "read", cible: "src/billing/totals.py", demandes: 6, refus: 0 },
+    { nature: "write", cible: "src/billing/totals.py", demandes: 3, refus: 0 },
+    { nature: "write", cible: "tests/billing/test_totals.py", demandes: 2, refus: 0 },
+    { nature: "execute", cible: "make test", demandes: 4, refus: 0 },
+    {
+      nature: "write",
+      cible: "src/billing/rates.py",
+      demandes: 1,
+      refus: 1,
+      motifs: ["outside the allowed paths: use report_finding or request_scope_change"],
+    },
+  ],
+};
+
+/** Ce que le run a changé (`/runs/{id}/diff`). */
+export const runDiff = {
+  base: "main",
+  head: "choregos/billing-api-123",
+  additions: 58,
+  deletions: 11,
+  files: [
+    { path: "src/billing/totals.py", status: "modified", additions: 31, deletions: 9, in_scope: true },
+    { path: "tests/billing/test_totals.py", status: "modified", additions: 27, deletions: 2, in_scope: true },
+  ],
+};
 
 export const runEvents: RunEventDto[] = [
   { seq: 1, type: "run.started", ts: iso(60), payload: { role: "implement" } },
@@ -1131,6 +1192,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   if (agentLu) return (agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
+  // Le parcours d'un ticket et son détail, par identifiant : chacun le sien (S22-02).
+  const parcours = /^\/work-items\/([^/]+)\/journey$/.exec(route ?? "");
+  if (parcours) return parcoursDe(parcours[1]!) as T;
+  const ticket = /^\/work-items\/([^/]+)$/.exec(route ?? "");
+  if (ticket) return ticketDetaille(ticket[1]!) as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   const table: Array<[RegExp, unknown]> = [
@@ -1197,9 +1263,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
     [/^\/work-items\/[^/]+\/runs$/, runs],
-    [/^\/work-items\/[^/]+$/, workItems.items[0]],
     [/^\/runs\/[^/]+\/events$/, runEvents],
-    [/^\/runs\/[^/]+\/diff$/, { files: [], additions: 0, deletions: 0 }],
+    [/^\/runs\/[^/]+\/access$/, runAccess],
+    [/^\/runs\/[^/]+\/diff$/, runDiff],
     [/^\/runs\/[^/]+$/, runs[2]],
     [/^\/audit$/, { items: [], meta: { has_more: false } }],
   ];

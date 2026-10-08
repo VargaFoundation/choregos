@@ -39,6 +39,9 @@ const PAGES = [
   "/p/billing-api/integrations/claude-desktop",
   "/p/billing-api/actions/pr1",
   "/p/billing-api/workflows/release-full/map",
+  // Le parcours animé d'un ticket (S22-02) : en cours, et fini.
+  "/p/billing-api/items/w1",
+  "/p/billing-api/items/w4",
 ];
 
 for (const path of PAGES) {

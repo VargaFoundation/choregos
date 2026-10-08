@@ -72,6 +72,7 @@ import type {
   WorkflowTemplate,
   WorkflowValidation,
   WorkItemDto,
+  WorkItemJourney,
   WorkItemPage,
 } from "./types";
 
@@ -376,6 +377,8 @@ export const api = {
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),
   workItem: (id: string) => request<WorkItemDto>(`/work-items/${id}`),
   timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
+  /** Le parcours du ticket dans SON workflow, en une lecture : ce que la carte animée dessine (S22-01). */
+  journey: (id: string) => request<WorkItemJourney>(`/work-items/${id}/journey`),
   decide: (id: string, body: unknown) =>
     request<unknown>(`/work-items/${id}/decisions`, { method: "POST", body: JSON.stringify(body) }),
   action: (id: string, action: string) =>

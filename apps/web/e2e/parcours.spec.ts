@@ -26,6 +26,39 @@ test("ticket : coûts par étape et timeline", async ({ page }) => {
   await expect(page.getByText("Timeline")).toBeVisible();
 });
 
+test("ticket : le parcours se suit en direct, se rejoue, et chaque agent montre ce qu'il a fait (S22-02)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/p/billing-api/items/w1");
+  const parcours = page.getByTestId("parcours");
+  await expect(parcours.getByTestId("parcours-maintenant")).toContainText("now in Reviewed by an agent");
+  await expect(parcours.getByTestId("etape-t-security-review")).toHaveAttribute("data-statut", "en_cours");
+  await expect(parcours.getByTestId("tour-t-test")).toHaveText("passed in round 3");
+  // La carte tient dans la page : elle s'allonge, elle ne déborde pas.
+  const debord = await page.evaluate(() => {
+    const carte = document.querySelector('[data-testid="parcours"]')!.getBoundingClientRect();
+    return { droite: carte.right, fenetre: document.documentElement.clientWidth };
+  });
+  expect(debord.droite).toBeLessThanOrEqual(debord.fenetre);
+
+  await parcours.getByRole("button", { name: "2×" }).click();
+  await parcours.getByRole("button", { name: "Replay the journey" }).click();
+  await expect(parcours.getByTestId("parcours-moment")).toContainText("/ 30");
+  await expect(parcours.getByTestId("etape-t-triage")).toHaveAttribute("data-statut", "fait", { timeout: 5000 });
+  await parcours.getByRole("button", { name: "Pause the replay" }).click();
+  await parcours.getByRole("navigation", { name: "stages of the journey" }).getByRole("button", { name: /In progress/ }).click();
+  await expect(parcours.getByTestId("etape-t-implement")).toHaveAttribute("data-statut", "en_cours");
+  await parcours.getByRole("button", { name: /^Live/ }).click();
+
+  await parcours.getByTestId("etape-t-test").click();
+  const panneau = page.getByTestId("panneau-parcours");
+  await expect(panneau).toBeVisible();
+  await panneau.getByTestId("tentative-r-test-1").click();
+  await expect(panneau).toContainText("2 tests fail: rounding of partial credit notes.");
+  await expect(panneau.getByTestId("ce-qu-il-a-fait")).toContainText("src/billing/rates.py");
+  await panneau.getByRole("tab", { name: "Log" }).click();
+  await expect(panneau.getByTestId("live-log")).toContainText("session/request_permission");
+});
+
 test("run : journal ACP avec permissions refusées mises en évidence", async ({ page }) => {
   await page.goto("/p/billing-api/runs/r3");
   await expect(page.getByText("ACP journal")).toBeVisible();
