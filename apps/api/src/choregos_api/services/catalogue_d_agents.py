@@ -163,6 +163,22 @@ async def _mettre_a_jour_la_skill(session: AsyncSession, org_id: Any, nom: str, 
                  version=derniere + 1, via=qui)  # fmt: skip
 
 
+def offre(entree_: EntreeDuCatalogue, settings: Any) -> tuple[bool, str | None]:
+    """Un client qui appelle depuis le cloud de son éditeur (claude.ai, ChatGPT) n'est proposé que si
+    la porte l'accepte : OAuth activé, un client enregistré pour lui, une adresse en https. La règle
+    est celle de la page des clients (`etatDuClient`) : rien n'est listé qui ne marcherait pas."""
+    if entree_.portee != "cloud":
+        return True, None
+    manque = []
+    if not settings.mcp_oauth_enabled:
+        manque.append("the MCP gate does not accept OAuth (`global.mcp.oauth`)")
+    elif entree_.client not in settings.mcp_oauth_clients:
+        manque.append(f"no OAuth client is registered for `{entree_.client}`")
+    if not str(settings.public_url).startswith("https://"):
+        manque.append("the console's public address is not https")
+    return (not manque), ("; ".join(manque) or None)
+
+
 def agents_nommes(workflow: Workflow) -> set[str]:
     """Les agents du registre que les acteurs d'un workflow nomment (`agent: slug[@version]`)."""
     return {
@@ -201,4 +217,5 @@ __all__ = [
     "installer",
     "installer_les_agents_nommes",
     "mettre_a_jour",
+    "offre",
 ]

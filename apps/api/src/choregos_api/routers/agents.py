@@ -17,10 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Agent, AgentCredential, AgentVersion, ApiToken, Organization, ProjectAgent, User
-from ..deps import Db, Me, ProjectCtx
+from ..deps import Config, Db, Me, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
+    AgentCatalogueConnect,
+    AgentCatalogueConnection,
     AgentCatalogueEntry,
     AgentCatalogueInstall,
     AgentCreate,
@@ -33,6 +35,7 @@ from ..schemas import (
     AgentProjectMetrics,
     AgentSpec,
     AgentVersionDto,
+    ApiTokenCreated,
     ProjectAgentDto,
     ProjectAgentPut,
 )
@@ -563,7 +566,9 @@ async def detach_credential(org: str, slug: Slug, credential_id: str, session: D
     response_model=list[AgentCatalogueEntry],
     operation_id="listAgentCatalogue",
 )
-async def list_agent_catalogue(org: str, session: Db, principal: Me) -> list[AgentCatalogueEntry]:
+async def list_agent_catalogue(
+    org: str, session: Db, principal: Me, settings: Config
+) -> list[AgentCatalogueEntry]:
     """Les agents que la plateforme propose, et ce qu'il en est dans l'organisation : installé, en
     quelle version, une mise à jour disponible — ou un agent de l'organisation qui porte ce nom."""
     from ..services import catalogue_d_agents as catalogue
@@ -573,6 +578,7 @@ async def list_agent_catalogue(org: str, session: Db, principal: Me) -> list[Age
     rendu = []
     for proposition in catalogue.catalogue():
         etat = await catalogue.etat(session, organisation.id, proposition)
+        offert, raison = catalogue.offre(proposition, settings)
         rendu.append(
             AgentCatalogueEntry(
                 slug=proposition.slug,
@@ -589,6 +595,8 @@ async def list_agent_catalogue(org: str, session: Db, principal: Me) -> list[Age
                 installed_version=etat.version_installee,
                 own_agent=etat.installe and not etat.du_catalogue,
                 update_available=etat.mise_a_jour,
+                offered=offert,
+                unavailable_reason=raison,
             )
         )
     return rendu
@@ -631,3 +639,87 @@ async def install_catalogue_agent(
     else:
         await catalogue.mettre_a_jour(session, organisation.id, proposition, principal)
     return await _dto(session, await _agent(session, organisation, slug), avec_versions=True)
+
+
+@router.post(
+    "/orgs/{org}/agent-catalogue/{slug}/connect",
+    response_model=AgentCatalogueConnection,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="connectCatalogueClient",
+)
+async def connect_catalogue_client(
+    org: str,
+    slug: Slug,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    body: AgentCatalogueConnect | None = None,
+) -> AgentCatalogueConnection:
+    """Connecte un client de la porte MCP en un clic (ADR 0040) : son agent externe — créé par un
+    administrateur la première fois, rejoint ensuite par chaque membre —, puis un jeton `mcp:*`
+    frappé pour la personne et rattaché à l'agent, rendu UNE fois. Pour un client qui appelle depuis
+    le cloud de son éditeur, pas de jeton : le client OAuth que l'IdP a enregistré est rattaché."""
+    from datetime import timedelta
+
+    from choregos_core.catalogue_d_agents import entree
+
+    from ..security import generate_api_token
+    from ..services import catalogue_d_agents as catalogue
+    from .auth import _token_dto
+
+    corps = body or AgentCatalogueConnect()
+    _lire(principal, org)
+    if principal.kind != "user":
+        raise forbidden("a client is connected by a person, from a session")
+    proposition = entree(slug)
+    if proposition is None or proposition.genre != "external":
+        raise not_found("Catalogue client", slug)
+    offert, raison = catalogue.offre(proposition, settings)
+    if not offert:
+        raise conflict(f"`{slug}` is not offered here: {raison}")
+    organisation = await _organisation(session, org)
+    agent = (
+        await session.execute(select(Agent).where(Agent.org_id == organisation.id, Agent.slug == slug))
+    ).scalar_one_or_none()
+    if agent is None:
+        _gerer(principal, org)
+        await catalogue.installer(session, organisation.id, proposition, principal)
+        agent = await _agent(session, organisation, slug)
+    elif agent.kind != "external":
+        raise conflict(f"`{slug}` is an internal agent of {org}: it cannot carry a client")
+    jeton = None
+    client_oauth = None
+    if proposition.portee == "cloud":
+        client_oauth = settings.mcp_oauth_clients[str(proposition.client)].client_id
+        deja = (
+            await session.execute(
+                select(AgentCredential.id).where(
+                    AgentCredential.org_id == organisation.id, AgentCredential.client_id == client_oauth
+                )
+            )
+        ).first()
+        if deja is None:
+            session.add(AgentCredential(org_id=organisation.id, agent_id=agent.id, kind="oauth_client",
+                                        client_id=client_oauth, created_by=principal.email))  # fmt: skip
+    else:
+        brut, empreinte_du_jeton = generate_api_token()
+        ligne = ApiToken(
+            user_id=principal.user_id,
+            name=str(proposition.document["display_name"]),
+            hash=empreinte_du_jeton,
+            scopes=["mcp:read"] if corps.read_only else ["mcp:write"],
+            expires_at=utcnow() + timedelta(days=corps.expires_in_days) if corps.expires_in_days else None,
+        )
+        session.add(ligne)
+        await session.flush()
+        session.add(AgentCredential(org_id=organisation.id, agent_id=agent.id, kind="token",
+                                    api_token_id=ligne.id, created_by=principal.email))  # fmt: skip
+        await record(session, principal, "token.create", org_id=None, target_type="api_token",
+                     target_id=ligne.id, scopes=list(ligne.scopes or []))  # fmt: skip
+        jeton = ApiTokenCreated(**_token_dto(ligne).model_dump(), token=brut)
+    await session.flush()
+    await record(session, principal, "agent.credential.attach", org_id=organisation.id, target_type="agent",
+                 target_id=agent.id, via="catalogue")  # fmt: skip
+    return AgentCatalogueConnection(
+        agent=await _dto(session, agent, avec_versions=True), token=jeton, oauth_client_id=client_oauth
+    )

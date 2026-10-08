@@ -505,6 +505,22 @@ export type AgentCatalogueEntry = {
   /** an agent of the organisation has this name and does not come from the catalogue */
   own_agent?: boolean;
   update_available?: boolean;
+  /** false for a client the gate does not accept yet (OAuth, registered client, https) */
+  offered?: boolean;
+  unavailable_reason?: string | null;
+};
+
+export type AgentCatalogueConnect = {
+  /** a `mcp:read` token instead of `mcp:write` */
+  read_only?: boolean;
+  expires_in_days?: number | null;
+};
+
+export type AgentCatalogueConnection = {
+  agent: Agent;
+  /** returned once; none for a client that signs in with OAuth */
+  token?: ApiTokenCreated | null;
+  oauth_client_id?: string | null;
 };
 
 export type AgentCatalogueInstall = {
@@ -1308,6 +1324,7 @@ export interface Operations {
   result: unknown;
   remaining?: number;
 } };
+  connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };

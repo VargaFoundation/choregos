@@ -215,7 +215,7 @@ test("board par workflow : la demande choisit son workflow, et ses champs en vie
 
 test("agents : le registre, et un Claude Code connecté qui agit comme agent externe", async ({ page }) => {
   await page.goto("/agents");
-  await expect(page.getByRole("heading", { name: "agents" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "agents", exact: true })).toBeVisible();
   await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("Onboarding coordinator");
   await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("1 skill");
   // Le jeton du Claude Code de Léa a appelé la porte : connecté, et rattaché à son agent externe.
@@ -319,4 +319,16 @@ test("la boîte des décisions : une action proposée par un agent attend une pe
   await page.goto("/p/billing-api/actions/act-comptes");
   await expect(page.getByTestId("decisions")).toContainText("approve by lea@varga.dev");
   await expect(page.getByTestId("effet-1")).toContainText("key act-comptes:1 · 2 attempt(s)");
+});
+
+test("agents : le catalogue s'installe, et Claude Code se connecte en un clic", async ({ page }) => {
+  await page.goto("/agents");
+  const catalogue = page.getByTestId("catalogue");
+  await expect(catalogue.getByTestId("catalogue-developer")).toContainText("not installed");
+  await expect(catalogue.getByTestId("catalogue-reviewer")).toContainText("an update is available");
+  await catalogue.getByTestId("catalogue-developer").getByRole("button", { name: "install" }).click();
+  const claude = page.getByTestId("client-catalogue-claude-code");
+  await claude.getByRole("button", { name: "connect" }).click();
+  await expect(page.getByTestId("extrait-claude-code")).toContainText("chg_demo_shown_once");
+  await expect(page.getByTestId("client-catalogue-chatgpt")).toContainText("not available here");
 });

@@ -74,6 +74,8 @@ export type {
 /** Le registre d'agents et la bibliothèque de skills (ADR 0033). */
 export type {
   Agent,
+  AgentCatalogueConnection,
+  AgentCatalogueEntry,
   AgentCreate,
   AgentCredential,
   AgentMetrics,

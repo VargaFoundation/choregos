@@ -1137,6 +1137,22 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agent-catalogue/{slug}/connect:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: connectCatalogueClient
+      description: Connects an AI client of the catalogue in one click (ADR 0040). Its external agent is created by an administrator the first time and joined by any member afterwards; a `mcp:write` (or `mcp:read`) token is minted for the caller, attached to the agent and returned once. A client that calls from its vendor's cloud gets no token — the OAuth client the identity provider registered is attached — and is refused (409) when the gate does not accept it.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentCatalogueConnect" } } }
+      responses:
+        "201": { description: Connected, content: { application/json: { schema: { $ref: "#/components/schemas/AgentCatalogueConnection" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/skills:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -2043,6 +2059,20 @@ components:
         installed_version: { type: [integer, "null"] }
         own_agent: { type: boolean, description: "an agent of the organisation has this name and does not come from the catalogue" }
         update_available: { type: boolean }
+        offered: { type: boolean, description: "false for a client the gate does not accept yet (OAuth, registered client, https)" }
+        unavailable_reason: { type: [string, "null"] }
+    AgentCatalogueConnect:
+      type: object
+      properties:
+        read_only: { type: boolean, default: false, description: "a `mcp:read` token instead of `mcp:write`" }
+        expires_in_days: { type: [integer, "null"], default: 30, minimum: 1, maximum: 365 }
+    AgentCatalogueConnection:
+      type: object
+      required: [agent]
+      properties:
+        agent: { $ref: "#/components/schemas/Agent" }
+        token: { oneOf: [{ $ref: "#/components/schemas/ApiTokenCreated" }, { type: "null" }], description: "returned once; none for a client that signs in with OAuth" }
+        oauth_client_id: { type: [string, "null"] }
     AgentCatalogueInstall:
       type: object
       properties:

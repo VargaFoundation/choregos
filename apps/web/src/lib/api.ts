@@ -15,6 +15,8 @@ import type {
   OrgConnectorCreate,
   ProjectOperation,
   ProjectRequirement,
+  AgentCatalogueConnection,
+  AgentCatalogueEntry,
   AgentCreate,
   AgentCredential,
   AgentMetrics,
@@ -207,6 +209,19 @@ export const api = {
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
+  /** Le catalogue de la plateforme (ADR 0040) : ce qu'il propose, ce qui en est installé. */
+  agentCatalogue: (org: string) => request<AgentCatalogueEntry[]>(`/orgs/${org}/agent-catalogue`),
+  installCatalogueAgent: (org: string, slug: string, upgrade = false) =>
+    request<Agent>(`/orgs/${org}/agent-catalogue/${slug}/install`, {
+      method: "POST",
+      body: JSON.stringify({ upgrade }),
+    }),
+  /** Un client en un clic : son agent externe, un jeton `mcp:*` rendu une fois, ou son client OAuth. */
+  connectCatalogueClient: (org: string, slug: string, readOnly = false) =>
+    request<AgentCatalogueConnection>(`/orgs/${org}/agent-catalogue/${slug}/connect`, {
+      method: "POST",
+      body: JSON.stringify({ read_only: readOnly }),
+    }),
   agentCredentials: (org: string, slug: string) =>
     request<AgentCredential[]>(`/orgs/${org}/agents/${slug}/credentials`),
   attachAgentToken: (org: string, slug: string, tokenId: string) =>
