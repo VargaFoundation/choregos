@@ -485,7 +485,7 @@ export const workflowValidation: WorkflowValidation = {
       { id: "t-refine", from: "inbox", to: "ready", kind: "nominal", label: "t-refine", actor: "refiner", gates: [] },
       { id: "t-implement", from: "ready", to: "done", kind: "nominal", label: "t-implement", actor: "dev", gates: ["scope_respected"] },
       // Une escalade : la carte ne la montre qu'autour de son état, ou sur demande.
-      { id: "ready->needs_human:escalate:retries exhausted", from: "ready", to: "needs_human", kind: "escalate", label: "retries exhausted" },
+      { id: "ready->needs_human:escalate:when retries run out", from: "ready", to: "needs_human", kind: "escalate", label: "when retries run out" },
       { id: "inbox->needs_human:default:question", from: "inbox", to: "needs_human", kind: "default", label: "question" },
       { id: "ready->needs_human:default:question", from: "ready", to: "needs_human", kind: "default", label: "question" },
       { id: "ready->needs_human:default:budget", from: "ready", to: "needs_human", kind: "default", label: "budget exceeded" },
@@ -559,6 +559,79 @@ export const hotfix: WorkflowDef = {
       },
     },
   } as unknown as WorkflowDef["json"],
+};
+
+/**
+ * Un workflow de dix-huit états (S21-07) : treize sur le chemin nominal, cinq à côté (cadrage repris,
+ * réponses à la revue, correction de CI, intervention humaine, abandon). C'est la taille où l'ancienne
+ * carte ne tenait plus : elle doit se lire sans zoom.
+ */
+const ETATS_LONGS: [string, string, string][] = [
+  ["inbox", "To triage", "agent"],
+  ["triaged", "Triaged", "agent"],
+  ["awaiting_spec_approval", "Spec to approve", "human"],
+  ["planning", "Planning", "agent"],
+  ["ready", "Ready", "agent"],
+  ["in_progress", "In progress", "agent"],
+  ["verifying", "Verifying", "agent"],
+  ["agent_review", "Agent review", "system"],
+  ["pr_open", "PR open", "system"],
+  ["merged", "Merged", "train"],
+  ["deployed_staging", "In staging", "train"],
+  ["deployed_prod", "In production", "agent"],
+  ["verified_prod", "Verified in production", "terminal"],
+  ["refining", "Refining", "agent"],
+  ["addressing_review", "Addressing the review", "agent"],
+  ["fixing_ci", "Fixing CI", "system"],
+  ["needs_human", "Needs a human", "human"],
+  ["abandoned", "Abandoned", "terminal"],
+];
+const nominale = (id: string, from: string, to: string, actor: string | null, gates: string[] = [], via: string | null = null) => ({
+  id, from, to, kind: "nominal", label: actor ?? via ?? "", wildcard: false, actor, gates, via, timeout_hours: null,
+});
+const issue = (from: string, to: string, kind: string, label: string) => ({ id: `${from}->${to}:${kind}:${label}`, from, to, kind, label, wildcard: false, gates: [] });
+export const releaseFullValidation: WorkflowValidation = {
+  valid: true,
+  errors: [],
+  warnings: [],
+  graph: {
+    nodes: ETATS_LONGS.map(([id, display, lane]) => ({ id, display, lane, kind: lane === "terminal" ? "terminal" : "work", terminal: lane === "terminal" })),
+    edges: [
+      nominale("t-triage", "inbox", "triaged", "sorter"),
+      nominale("t-refine", "triaged", "awaiting_spec_approval", "refiner"),
+      nominale("t-approve-spec", "awaiting_spec_approval", "planning", "owner"),
+      issue("awaiting_spec_approval", "refining", "reject", "if rejected"),
+      nominale("t-refine-again", "refining", "awaiting_spec_approval", "refiner"),
+      nominale("t-plan", "planning", "ready", "planner"),
+      nominale("t-implement", "ready", "in_progress", "dev", ["scope_respected", "no_secrets", "diff_size_max"]),
+      issue("ready", "ready", "retry", "on failure (≤3)"),
+      issue("ready", "needs_human", "escalate", "when retries run out"),
+      nominale("t-verify", "in_progress", "verifying", "checker", ["evidence_present", "coverage_delta_min"]),
+      nominale("t-agent-review", "verifying", "agent_review", "reviewer"),
+      issue("verifying", "addressing_review", "retry", "on changes requested"),
+      nominale("t-address-review", "addressing_review", "verifying", "responder"),
+      nominale("t-open-pr", "agent_review", "pr_open", "ci", ["evidence_present", "scope_respected"]),
+      nominale("t-fix-ci", "pr_open", "fixing_ci", "fixer"),
+      nominale("t-back-to-pr", "fixing_ci", "pr_open", "ci"),
+      nominale("t-merge", "pr_open", "merged", "ci", ["ci_green", "review_approved", "scans_ok", "provenance_signed"]),
+      nominale("t-deploy-staging", "merged", "deployed_staging", null, [], "release_train"),
+      nominale("t-deploy-prod", "deployed_staging", "deployed_prod", null, [], "release_train"),
+      nominale("t-verify-prod", "deployed_prod", "verified_prod", "sentinel"),
+      nominale("t-human-review", "needs_human", "in_progress", "maintainer"),
+      issue("needs_human", "abandoned", "reject", "if rejected"),
+      issue("inbox", "needs_human", "default", "question"),
+      issue("ready", "needs_human", "default", "question"),
+    ],
+  },
+  process: [],
+};
+const releaseFull: WorkflowDef = {
+  ...workflow,
+  name: "release-full",
+  version: 1,
+  is_default: false,
+  yaml: "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: release-full, version: 1 }\nstates: {}\n",
+  json: { metadata: { name: "release-full", version: 1 }, initial: "inbox", actors: { owner: { type: "human", group: "product-owners", sla_hours: 24 } } } as unknown as WorkflowDef["json"],
 };
 
 /** Deux versions : la v2, active, ajoute une garantie au passage en revue. */
@@ -938,6 +1011,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && path === "/workflows/validate") {
     // Comme l'API : un texte sans `states:` n'est pas un workflow, et ne se dessine pas.
     const texte = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
+    if (/name: release-full/.test(texte)) return releaseFullValidation as T;
     if (!/^states:/m.test(texte)) {
       return { valid: false, errors: [{ code: "workflow.states", message: "a workflow declares its states", line: 1, column: 1 }], warnings: [] } as T;
     }
@@ -1071,6 +1145,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows$/, workflowSummaries],
     [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
     [/^\/projects\/[^/]+\/workflows\/hotfix$/, hotfix],
+    [/^\/projects\/[^/]+\/workflows\/release-full$/, releaseFull],
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],

@@ -141,19 +141,20 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await expect(page.getByTestId("workflow-defaults").getByRole("listitem")).toHaveCount(2);
   // Le chemin nominal se lit seul : une escalade se montre autour de son état, ou toutes sur demande.
   const carte = page.getByTestId("workflow-graph");
-  await expect(carte.locator(".react-flow__edge")).toHaveCount(2);
-  await carte.locator('.react-flow__node[data-id="ready"]').hover();
-  await expect(carte.locator(".react-flow__edge")).toHaveCount(3);
+  await expect(carte.getByRole("list", { name: "nominal path" }).locator(":scope > li")).toHaveCount(3);
+  await expect(carte.getByTestId("secondaires-ready")).toHaveCount(0);
+  await carte.getByTestId("etat-ready").hover();
+  await expect(carte.getByTestId("secondaires-ready")).toContainText("when retries run out → Needs a human");
   await page.mouse.move(0, 0);
-  await expect(carte.locator(".react-flow__edge")).toHaveCount(2);
+  await expect(carte.getByTestId("secondaires-ready")).toHaveCount(0);
   await page.getByLabel(/show every retry, rejection and escalation/).check();
-  await expect(carte.locator(".react-flow__edge")).toHaveCount(3);
+  await expect(carte.getByTestId("secondaires-ready")).toBeVisible();
 });
 
 test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/map");
   const carte = page.getByTestId("workflow-graph");
-  await carte.locator('.react-flow__node[data-id="inbox"]').click();
+  await carte.getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
   await panneau.getByLabel("label").fill("Nouvelles demandes");
   await panneau.getByRole("button", { name: "set label" }).click();
@@ -163,7 +164,7 @@ test("workflows : un libellé changé sur la carte se lit dans la vue processus,
   await expect(brouillon).toContainText("1 change not published yet");
   await brouillon.getByText("last change").click();
   await expect(page.getByTestId("dernier-diff")).toContainText("+  inbox: { display: Nouvelles demandes, kind: wait }");
-  await expect(carte.locator('.react-flow__node[data-id="inbox"]')).toContainText("Nouvelles demandes");
+  await expect(carte.getByTestId("etat-inbox")).toContainText("Nouvelles demandes");
 
   // La vue processus lit le même brouillon ; publier crée la version suivante de celle qui a été lue.
   await page.getByRole("link", { name: "process" }).click();

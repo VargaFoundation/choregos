@@ -1,8 +1,9 @@
-# 0038 — The console's YAML editor is bundled CodeMirror; nothing is fetched from a third party at run time
+# 0038 — The console's YAML editor is bundled CodeMirror, its workflow map is plain HTML; nothing is fetched from a third party at run time
 
 - **Status**: accepted, 2026-10-07
-- **Concerns**: the console (`apps/web`): `components/yaml-editor.tsx`, the CSP in `src/proxy.ts`,
-  the bundle budget (`scripts/bundle-budget.mjs`); follows [ADR 0023](0023-editer-un-workflow-depuis-la-console.md)
+- **Concerns**: the console (`apps/web`): `components/yaml-editor.tsx`, `components/workflows/carte/`,
+  the CSP in `src/proxy.ts`, the bundle budget (`scripts/bundle-budget.mjs`); follows
+  [ADR 0023](0023-editer-un-workflow-depuis-la-console.md)
 
 ## Context
 
@@ -28,11 +29,21 @@ the console's budget is 600 kB per chunk and 1,600 kB in total, enforced in CI.
    their line (diagnostics in the gutter); it adds no rule of its own.
 4. **The editor is themed with the design system's tokens** (`--varga-*`), so light and dark
    follow without code, and the gutter passes the AA contrast that axe measures.
+5. **The workflow map is plain HTML and CSS, flat and vertical** (S21-07). The same review found the
+   React Flow map unreadable: swimlanes by actor type and breadth-first columns overflowed at 11 to 18
+   states and opened at 0.8 zoom. The nominal path is now one column of cards, top to bottom, each
+   coloured by who moves the work item and saying it in words; what leaves the path (retries,
+   rejections, escalations, human waits) sits in a column beside it, with where each state is reached
+   from. Native buttons give the tab order and accessible names; there is no pan and no zoom, and the
+   page prints. `@xyflow/react` is removed.
 
 ## Consequences
 
-- The bundle grows by about 365 kB (1,531 kB of 1,600 measured at the time); the workflow map,
-  rewritten without React Flow (S21-07), gives some of it back.
+- With CodeMirror in and React Flow out, the console's chunks total 1,364 kB of 1,600 on a clean build
+  (the largest, CodeMirror's, 351 kB of 600). A measure taken over an existing `.next` counts stale
+  chunks too: measure on a clean build, as CI does.
+- The map is a reading of the graph, not a drawing tool: edges are not routed between arbitrary
+  cards, and a state that is neither on the path nor reached from it is listed beside it.
 - CodeMirror's YAML support is syntax highlighting and bracket matching, not schema completion.
   Completion from `workflow.schema.json` would be an addition, not a dependency change.
 - `pnpm`'s minimum release age applies: versions published the same day are refused rather than
