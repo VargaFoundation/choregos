@@ -18,6 +18,7 @@ import {
   type Modele,
   raconter,
   type StatutEtape,
+  structure,
 } from "./modele";
 import { PanneauDEtape } from "./panneau-d-etape";
 
@@ -116,6 +117,72 @@ export function CarteDuParcours({
         )}
       </div>
       <Phases journey={journey} modele={modele} instant={instant} images={images} onAller={lecteur.allerA} />
+    </section>
+  );
+}
+
+const LEGENDE_DES_GENRES: [Etape["genre"], string][] = [
+  ["agent", "agent"],
+  ["human", "person"],
+  ["platform", "platform"],
+  ["train", "release train"],
+];
+
+/**
+ * La carte d'un workflow, sans ticket (S22-05 ; « l'affichage est très linéaire, pas comme les
+ * captures ») : le même serpentin que le parcours d'un ticket — boucles en arcs, détours sous leur
+ * rangée, une forme par porteur —, mais rien n'y bouge : chaque case prend la couleur de qui la porte.
+ * Cliquer une case rend son identifiant de transition, que la page d'édition ouvre dans son panneau.
+ */
+export function CarteEnSerpentin({
+  graph,
+  process,
+  initial,
+  choix = null,
+  onChoisir,
+  largeurInitiale = 1100,
+}: {
+  graph: WorkItemJourney["graph"];
+  process: WorkItemJourney["process"];
+  initial?: string | null;
+  choix?: string | null;
+  onChoisir?: (transitionId: string) => void;
+  largeurInitiale?: number;
+}) {
+  const modele = useMemo(() => modeler({ graph, process: process ?? [], initial: initial ?? null }), [graph, process, initial]);
+  const instant = useMemo(() => structure(modele), [modele]);
+  const [cadre, largeur] = useLargeur(largeurInitiale);
+  const placement = useMemo(() => placer(modele, largeur), [modele, largeur]);
+  return (
+    <section className="space-y-3" data-testid="carte-en-serpentin" aria-label="workflow diagram">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" aria-label="who carries each step">
+        {LEGENDE_DES_GENRES.map(([genre, libelle]) => (
+          <li key={genre} className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              className="inline-block size-3 rounded-full border-2"
+              style={{ borderColor: COULEUR_DU_GENRE[genre] }}
+            />
+            {libelle}
+          </li>
+        ))}
+        <li className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="inline-block h-0.5 w-4 border-t-2 border-dashed border-line-strong" />
+          sent back, or a detour
+        </li>
+      </ul>
+      <div ref={cadre} className="min-w-0">
+        <Carte
+          modele={modele}
+          placement={placement}
+          instant={instant}
+          cle=""
+          choix={choix}
+          onChoisir={(id) => onChoisir?.(id)}
+          statique
+        />
+        <Exceptions modele={modele} instant={instant} />
+      </div>
     </section>
   );
 }
@@ -268,6 +335,7 @@ function Carte({
   cle,
   choix,
   onChoisir,
+  statique = false,
 }: {
   modele: Modele;
   placement: Placement;
@@ -275,6 +343,8 @@ function Carte({
   cle: string;
   choix: string | null;
   onChoisir: (id: string) => void;
+  /** La carte d'un workflow sans ticket : chaque case prend la couleur de qui la porte (S22-05). */
+  statique?: boolean;
 }) {
   const toutes = useMemo(() => [...modele.etapes, ...modele.detours.map((d) => d.etape)], [modele]);
   const fini = instant.etat === modele.chemin.at(-1);
@@ -402,14 +472,16 @@ function Carte({
             const point = placement.etapes.get(etape.id);
             const etat = instant.etapes.get(etape.id);
             if (!point || !etat) return null;
-            return <Case key={etape.id} etape={etape} etat={etat} point={point} choisie={choix === etape.id} />;
+            return (
+              <Case key={etape.id} etape={etape} etat={etat} point={point} choisie={choix === etape.id} statique={statique} />
+            );
           })}
         </svg>
         <Libelle
           point={placement.debut}
           largeur={placement.largeur / placement.colonnes}
           titre="Work item in"
-          sous={cle}
+          sous={statique ? modele.nom(modele.chemin[0] ?? "") : cle}
           decalage={30}
         />
         <Libelle
@@ -432,6 +504,7 @@ function Carte({
               largeur={placement.largeur / placement.colonnes}
               choisie={choix === etape.id}
               onChoisir={() => onChoisir(etape.id)}
+              statique={statique}
             />
           );
         })}
@@ -454,10 +527,30 @@ function Borne({ point, atteinte = false }: { point: Point; atteinte?: boolean }
 }
 
 /** La forme d'une case : le rond d'un agent, la silhouette d'une personne, le carré de la plateforme, la gélule du train. */
-function Case({ etape, etat, point, choisie }: { etape: Etape; etat: EtatEtape; point: Point; choisie: boolean }) {
-  const couleur = COULEUR[etat.statut];
+/** Sans ticket, la couleur dit qui porte l'étape : turquoise l'agent, noir la personne, gris la plateforme, vert le train. */
+const COULEUR_DU_GENRE: Record<Etape["genre"], string> = {
+  agent: "var(--varga-accent-strong)",
+  human: "var(--varga-ink)",
+  platform: "var(--varga-ink-muted)",
+  train: "var(--varga-ok)",
+};
+
+function Case({
+  etape,
+  etat,
+  point,
+  choisie,
+  statique = false,
+}: {
+  etape: Etape;
+  etat: EtatEtape;
+  point: Point;
+  choisie: boolean;
+  statique?: boolean;
+}) {
+  const couleur = statique ? COULEUR_DU_GENRE[etape.genre] : COULEUR[etat.statut];
   const vivante = etat.statut === "en_cours" || etat.statut === "attend";
-  const plein = etat.statut !== "a_venir";
+  const plein = statique || etat.statut !== "a_venir";
   const fond = etat.statut === "en_cours" ? "var(--varga-accent-soft)" : "var(--varga-surface)";
   const { x, y } = point;
   return (
@@ -586,6 +679,7 @@ function BoutonDEtape({
   largeur,
   choisie,
   onChoisir,
+  statique = false,
 }: {
   etape: Etape;
   etat: EtatEtape;
@@ -593,6 +687,7 @@ function BoutonDEtape({
   largeur: number;
   choisie: boolean;
   onChoisir: () => void;
+  statique?: boolean;
 }) {
   const detail = detailDe(etape, etat);
   const tour = tourDe(etape, etat);
@@ -604,7 +699,7 @@ function BoutonDEtape({
   }[etape.genre];
   const etiquette = [
     `${etape.libelle}, ${genre}, ${etape.action}`,
-    LIBELLE_DU_STATUT[etat.statut],
+    statique ? null : LIBELLE_DU_STATUT[etat.statut],
     tour,
     detail,
     `${etat.tentatives.length} attempt${etat.tentatives.length === 1 ? "" : "s"}`,
