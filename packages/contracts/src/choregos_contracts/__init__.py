@@ -138,7 +138,7 @@ def load_schema(name: str) -> dict[str, Any]:
     """Charge un JSON Schema par nom de fichier (ex. `workflow.schema.json`)."""
     path = schemas_dir() / name
     if not path.exists():
-        raise FileNotFoundError(f"schéma introuvable : {path}")
+        raise FileNotFoundError(f"schema not found: {path}")
     with path.open(encoding="utf-8") as fh:
         data: dict[str, Any] = json.load(fh)
     return data

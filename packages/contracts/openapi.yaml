@@ -3,14 +3,14 @@ info:
   title: Choregos API
   version: 0.16.4
   description: |
-    API de la plateforme Choregos. Le front et le CLI ne consomment que cette API.
-    Auth : session OIDC (cookie) ou `Authorization: Bearer <api_token>`.
-    Les routes `/internal/*` sont réservées aux runners et authentifiées par un JWT de run (ES256).
-    Erreurs : RFC 9457 (`application/problem+json`). Pagination par curseur (`cursor`, `limit`).
+    The Choregos platform API. The console and the CLI use this API and nothing else.
+    Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
+    The `/internal/*` routes are reserved for runners and authenticated by a run JWT (ES256).
+    Errors: RFC 9457 (`application/problem+json`). Cursor pagination (`cursor`, `limit`).
   license: { name: Apache-2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
 servers:
   - url: /api/v1
-    description: Base de l'API
+    description: API base
 security:
   - session: []
   - bearer: []
@@ -37,7 +37,7 @@ paths:
     get:
       tags: [session]
       operationId: getMe
-      summary: Utilisateur courant, organisations et rôles
+      summary: The current user, their organisations and roles
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -45,19 +45,19 @@ paths:
     get:
       tags: [session]
       operationId: listMyTokens
-      summary: Les jetons d'API de l'appelant (jamais leur valeur)
+      summary: The caller's API tokens (never their value)
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ApiToken" } } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [session]
       operationId: createMyToken
-      summary: Émet un jeton porteur ; le clair n'est rendu qu'une fois
+      summary: Issue a bearer token; its plaintext is returned only once
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ApiTokenCreate" } } }
       responses:
-        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/ApiTokenCreated" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ApiTokenCreated" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -65,11 +65,11 @@ paths:
     delete:
       tags: [session]
       operationId: revokeMyToken
-      summary: Révoque un jeton de l'appelant
+      summary: Revoke one of the caller's tokens
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
-        "204": { description: Révoqué }
+        "204": { description: Revoked }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
   /auth/login:
@@ -77,45 +77,45 @@ paths:
       tags: [session]
       operationId: authLogin
       security: []
-      summary: Redirige vers l'IdP OIDC
+      summary: Redirect to the OIDC IdP
       parameters:
         - { name: redirect_to, in: query, schema: { type: string } }
       responses:
-        "307": { description: Redirection vers l'IdP }
+        "307": { description: Redirect to the IdP }
   /auth/callback:
     get:
       tags: [session]
       operationId: authCallback
       security: []
-      summary: Callback OIDC (code → session)
+      summary: OIDC callback (code → session)
       parameters:
         - { name: code, in: query, required: true, schema: { type: string } }
         - { name: state, in: query, required: true, schema: { type: string } }
       responses:
-        "307": { description: Redirection vers l'application }
+        "307": { description: Redirect to the application }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /auth/logout:
     post:
       tags: [session]
       operationId: authLogout
-      responses: { "204": { description: Session fermée } }
+      responses: { "204": { description: Session closed } }
   /orgs:
     get:
       tags: [projects]
       operationId: listOrgs
-      summary: Les organisations de l'appelant, avec son rôle
+      summary: The caller's organisations, with their role
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Org" } } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [projects]
       operationId: createOrg
-      summary: Crée une organisation ; l'appelant en devient administrateur
+      summary: Create an organisation; the caller becomes its administrator
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgCreate" } } }
       responses:
-        "201": { description: Créée, content: { application/json: { schema: { $ref: "#/components/schemas/Org" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Org" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}:
@@ -123,7 +123,7 @@ paths:
     patch:
       tags: [projects]
       operationId: updateOrg
-      summary: Renomme une organisation — son nom par son administrateur, son slug par l'administrateur de la plateforme
+      summary: Rename an organisation — its name by its administrator, its slug by the platform administrator
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgUpdate" } } }
@@ -148,7 +148,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ProjectCreate" } } }
       responses:
-        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -170,7 +170,7 @@ paths:
     delete:
       tags: [projects]
       operationId: deleteProject
-      responses: { "204": { description: Archivé }, "409": { $ref: "#/components/responses/Conflict" } }
+      responses: { "204": { description: Archived }, "409": { $ref: "#/components/responses/Conflict" } }
   /projects/{id}/provision:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -179,11 +179,11 @@ paths:
       requestBody:
         content: { application/json: { schema: { $ref: "#/components/schemas/ProvisionRequest" } } }
       responses:
-        "202": { description: Provisioning démarré, content: { application/json: { schema: { $ref: "#/components/schemas/ProvisionStatus" } } } }
+        "202": { description: Provisioning started, content: { application/json: { schema: { $ref: "#/components/schemas/ProvisionStatus" } } } }
     get:
       tags: [projects]
       operationId: getProvisionStatus
-      summary: État du provisioning (SSE si Accept text/event-stream)
+      summary: Provisioning status (SSE when Accept is text/event-stream)
       responses:
         "200":
           description: OK
@@ -195,7 +195,7 @@ paths:
     post:
       tags: [projects]
       operationId: suspendProject
-      responses: { "200": { description: Suspendu, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } } }
+      responses: { "200": { description: Suspended, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } } }
   /projects/{id}/connectors:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -220,12 +220,12 @@ paths:
       tags: [connectors]
       operationId: testConnector
       responses:
-        "200": { description: Résultat du test, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorTestResult" } } } }
+        "200": { description: Test result, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorTestResult" } } } }
   /connectors/types:
     get:
       tags: [connectors]
       operationId: listConnectorTypes
-      description: Les types que le registre connaît — ceux du cœur et ceux des greffons — avec leurs capacités, le schéma de leur configuration et leurs champs secrets (ADR 0034).
+      description: The types the registry knows — the core's and the plugins' — with their capabilities, their configuration schema and their secret fields (ADR 0034).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConnectorType" } } } } }
   /projects/{id}/requirements:
@@ -233,7 +233,7 @@ paths:
     get:
       tags: [connectors]
       operationId: listProjectRequirements
-      description: Ce que les workflows actifs du projet exigent de ses connecteurs, et pourquoi ; le connecteur qui couvre chaque capacité, sinon le type par défaut de la plateforme (ADR 0034).
+      description: What the project's active workflows require of its connectors, and why; the connector that covers each capability, otherwise the platform's default type (ADR 0034).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectRequirement" } } } } }
   /orgs/{org}/connectors:
@@ -241,18 +241,18 @@ paths:
     get:
       tags: [connectors]
       operationId: listOrgConnectors
-      description: Les connecteurs de l'organisation et leurs opérations (ADR 0034) ; ses membres les lisent.
+      description: The organisation's connectors and their operations (ADR 0034); its members can read them.
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrgConnector" } } } } }
     post:
       tags: [connectors]
       operationId: createOrgConnector
-      description: Une instance naît avec les opérations que son type déclare — une lecture permise, une écriture soumise à validation. L'administrateur de l'organisation seul.
+      description: An instance starts with the operations its type declares — a read allowed, a write subject to approval. The organisation's administrator only.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnectorCreate" } } }
       responses:
-        "201": { description: Déclaré, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -270,7 +270,7 @@ paths:
       tags: [connectors]
       operationId: deleteOrgConnector
       responses:
-        "204": { description: Retiré, avec ses opérations }
+        "204": { description: "Removed, with its operations" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /orgs/{org}/connectors/{name}/discover:
     parameters:
@@ -279,12 +279,12 @@ paths:
     post:
       tags: [connectors]
       operationId: discoverConnectorOperations
-      description: Demande au serveur MCP ses outils et en tire le diff — un outil nouveau naît fermé (forbidden), un schéma qui dérive referme l'opération, un outil retiré disparaît (ADR 0034).
+      description: Ask the MCP server for its tools and derive the diff — a new tool starts closed (forbidden), a drifting schema closes the operation again, a removed tool disappears (ADR 0034).
       responses:
-        "200": { description: Le diff, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorDiscovery" } } } }
+        "200": { description: The diff, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectorDiscovery" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
-        "502": { description: Le serveur n'a pas répondu, ou a refusé la clé du connecteur }
+        "502": { description: "The server did not answer, or refused the connector's key" }
   /orgs/{org}/connectors/{name}/operations/{operation}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -293,7 +293,7 @@ paths:
     patch:
       tags: [connectors]
       operationId: updateConnectorOperation
-      description: La politique, les groupes de projets, le prix d'une opération — la décision de l'administrateur de l'organisation (le second verrou de l'ADR 0014).
+      description: An operation's policy, project groups and price — the decision of the organisation's administrator (the second lock of ADR 0014).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OperationPatch" } } }
@@ -306,7 +306,7 @@ paths:
     get:
       tags: [connectors]
       operationId: listProjectOperations
-      description: Les opérations ouvertes au projet (leurs groupes croisent les siens), avec la politique de l'organisation, la sienne et l'effective.
+      description: The operations open to the project (their groups intersect its own), with the organisation's policy, the project's and the effective one.
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectOperation" } } } } }
   /projects/{id}/operations/{connector}/{operation}:
@@ -317,7 +317,7 @@ paths:
     put:
       tags: [connectors]
       operationId: tightenProjectOperation
-      description: Un projet resserre une opération ; il ne l'élargit jamais (422).
+      description: A project tightens an operation; it never widens it (422).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ProjectOperationPut" } } }
@@ -328,9 +328,9 @@ paths:
     delete:
       tags: [connectors]
       operationId: relaxProjectOperation
-      description: Retire ce que le projet resserrait ; l'opération revient à la politique de l'organisation.
+      description: Remove what the project tightened; the operation falls back to the organisation's policy.
       responses:
-        "204": { description: Retiré }
+        "204": { description: Removed }
   /projects/{id}/actions:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -339,16 +339,16 @@ paths:
       parameters:
         - { name: status, in: query, required: false, schema: { type: string } }
       responses:
-        "200": { description: Les actions du projet et le journal de leurs effets, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Action" } } } } }
+        "200": { description: The project's actions and the log of their effects, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Action" } } } } }
     post:
       tags: [actions]
       operationId: proposeAction
-      description: Une action gouvernée en attente de décision (ADR 0035). Ses effets doivent être déclarés (`declarer_un_effet`) ; rien ne s'exécute avant l'approbation.
+      description: A governed action awaiting a decision (ADR 0035). Its effects must be declared (`declarer_un_effet`); nothing runs before the approval.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ActionCreate" } } }
       responses:
-        "201": { description: Proposée, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
+        "201": { description: Proposed, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/actions:
@@ -356,7 +356,7 @@ paths:
     get:
       tags: [actions]
       operationId: listOrgActions
-      description: La boîte des décisions — les actions des projets de l'organisation que l'appelant voit ; `status=pending_approval` pour ce qui attend quelqu'un.
+      description: The decision inbox — the actions of the organisation's projects that the caller can see; `status=pending_approval` for what is waiting for someone.
       parameters:
         - { name: status, in: query, required: false, schema: { type: string } }
       responses:
@@ -369,7 +369,7 @@ paths:
       tags: [actions]
       operationId: getAction
       responses:
-        "200": { description: L'action et son journal, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
+        "200": { description: The action and its log, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/actions/{action_id}/decision:
     parameters:
@@ -378,13 +378,13 @@ paths:
     post:
       tags: [actions]
       operationId: decideAction
-      description: Approuver (session humaine récente — 401 `step_up_required` sinon) ou rejeter (avec une raison). Qui propose ne décide pas ; de deux approbations simultanées une seule démarre `action-<id>` dans Temporal, et rien ne s'exécute dans cette requête.
+      description: Approve (a recent human session — 401 `step_up_required` otherwise) or reject (with a reason). Whoever proposes does not decide; of two simultaneous approvals only one starts `action-<id>` in Temporal, and nothing runs within this request.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ActionDecision" } } }
       responses:
-        "200": { description: Décidée, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
-        "401": { description: "Authentification trop ancienne : `errors[0].error` vaut `step_up_required`" }
+        "200": { description: Decided, content: { application/json: { schema: { $ref: "#/components/schemas/Action" } } } }
+        "401": { description: "Authentication too old: `errors[0].error` is `step_up_required`" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -409,7 +409,7 @@ paths:
     get:
       tags: [workflows]
       operationId: listWorkflows
-      summary: Les workflows du projet — un actif par nom, le défaut marqué (ADR 0031)
+      summary: The project's workflows — one active per name, the default one marked (ADR 0031)
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowSummary" } } } } }
   /projects/{id}/workflows/{name}:
@@ -425,7 +425,7 @@ paths:
     put:
       tags: [workflows]
       operationId: putNamedWorkflow
-      summary: Publie la version suivante de CE workflow ; `base_version` périmée → 409
+      summary: Publish the next version of THIS workflow; a stale `base_version` → 409
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowPut" } } }
@@ -440,9 +440,9 @@ paths:
     post:
       tags: [workflows]
       operationId: deactivateWorkflow
-      summary: Désactive un workflow ; refusé pour le défaut ou une cible de routage. Les tickets épinglés finissent sur leur version
+      summary: Deactivate a workflow; refused for the default one or a routing target. Pinned tickets finish on their version
       responses:
-        "204": { description: Désactivé }
+        "204": { description: Deactivated }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /projects/{id}/workflows/{name}/versions:
@@ -462,7 +462,7 @@ paths:
     post:
       tags: [workflows]
       operationId: restoreWorkflowVersion
-      summary: Republie une ancienne version comme la suivante — rien n'est écrasé
+      summary: Republish an old version as the next one — nothing is overwritten
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDef" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -490,32 +490,32 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidateRequest" } } }
       responses:
-        "200": { description: Rapport de validation, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidation" } } } }
+        "200": { description: Validation report, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidation" } } } }
   /workflows/edit:
     post:
       tags: [workflows]
       operationId: editWorkflow
       description: >-
-        Applique des opérations typées à un YAML de workflow, greffées dans le texte : le reste du
-        document, commentaires et style compris, ne bouge pas. Rien n'est enregistré ; `inverse`
-        défait les opérations, dans l'ordre où le jouer (ADR 0031).
+        Apply typed operations to a workflow YAML, grafted into the text: the rest of the document,
+        comments and style included, does not move. Nothing is saved; `inverse` undoes the
+        operations, in the order in which to apply it (ADR 0031).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowEditRequest" } } }
       responses:
-        "200": { description: Le texte édité, validé, et son inverse, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowEditResult" } } } }
+        "200": { description: "The edited text, validated, and its inverse", content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowEditResult" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /ui/admin-sections:
     get:
       tags: [ui]
       operationId: listAdminSections
       description: >-
-        Les sections d'administration que les greffons déclarent (ADR 0032), filtrées par la
-        permission et la portée de l'appelant ; `org` restreint celles d'organisation à celle-là.
+        The administration sections the plugins declare (ADR 0032), filtered by the caller's
+        permission and scope; `org` restricts the organisation sections to that one.
       parameters:
         - { name: org, in: query, required: false, schema: { type: string } }
       responses:
-        "200": { description: Les sections visibles, content: { application/json: { schema: { type: array, items: { $ref: "./schemas/ui-manifest.schema.json" } } } } }
+        "200": { description: The visible sections, content: { application/json: { schema: { type: array, items: { $ref: "./schemas/ui-manifest.schema.json" } } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /workflows/templates:
     get:
@@ -584,12 +584,12 @@ paths:
     post:
       tags: [work-items]
       operationId: createWorkItem
-      summary: Pose une demande dans Choregos (tracker interne seulement)
+      summary: File a request in Choregos (internal tracker only)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemCreate" } } }
       responses:
-        "201": { description: Créée, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
   /work-items/{id}:
@@ -603,11 +603,11 @@ paths:
     patch:
       tags: [work-items]
       operationId: updateWorkItem
-      summary: Changer les champs d'un ticket
+      summary: Change a ticket's fields
       description: >-
-        Les champs donnés remplacent les siens, `null` en retire un ; l'ensemble est validé par
-        `metadata.inputs` du workflow épinglé. L'interpréteur l'apprend (`fields_changed`) : une date
-        d'arrivée déplacée réarme l'action qui l'attend (S20-05).
+        The given fields replace the ticket's own, `null` removes one; the whole is validated by the
+        pinned workflow's `metadata.inputs`. The interpreter is told (`fields_changed`): a moved
+        start date re-arms the action waiting for it (S20-05).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemUpdate" } } }
@@ -632,7 +632,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/DecisionRequest" } } }
       responses:
-        "202": { description: Décision transmise au workflow, content: { application/json: { schema: { $ref: "#/components/schemas/HumanRequest" } } } }
+        "202": { description: Decision passed on to the workflow, content: { application/json: { schema: { $ref: "#/components/schemas/HumanRequest" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
   /work-items/{id}/actions:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -640,13 +640,14 @@ paths:
       tags: [work-items]
       operationId: postWorkItemAction
       description: >-
-        `migrate` exige `workflow_def_id`, une définition du projet ; l'état courant du ticket doit y
-        exister, ou être mappé par `state_mapping` — sinon 422, et rien n'est transmis.
+        `migrate` requires `workflow_def_id`, a definition of the project; the ticket's current
+        state must exist in it, or be mapped by `state_mapping` — otherwise 422, and nothing is
+        passed on.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemAction" } } }
       responses:
-        "202": { description: Action transmise }
+        "202": { description: Action passed on }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -670,7 +671,7 @@ paths:
     get:
       tags: [runs]
       operationId: getRunEvents
-      summary: Journal ACP du run (SSE si Accept text/event-stream)
+      summary: The run's ACP log (SSE when Accept is text/event-stream)
       parameters:
         - { name: after_seq, in: query, schema: { type: integer } }
         - { name: Last-Event-ID, in: header, schema: { type: string } }
@@ -685,18 +686,18 @@ paths:
     get:
       tags: [runs]
       operationId: getRunAccess
-      summary: Ce à quoi l'agent a touché — fichiers, commandes, réseau, outils — et les refus.
+      summary: What the agent touched — files, commands, network, tools — and the denials.
       responses:
         "200":
-          description: Fiche d'accès du run
+          description: The run's access report
           content:
             application/json:
               schema:
                 type: object
                 required: [evenements, refus, acces]
                 properties:
-                  evenements: { type: integer, description: Événements du journal parcourus }
-                  refus: { type: integer, description: Nombre total de demandes refusées }
+                  evenements: { type: integer, description: Log events scanned }
+                  refus: { type: integer, description: Total number of denied requests }
                   cout_outils_eur: { type: number }
                   acces:
                     type: array
@@ -715,7 +716,7 @@ paths:
       tags: [runs]
       operationId: getRunTranscript
       responses:
-        "200": { description: URL signée ou contenu JSONL, content: { application/json: { schema: { $ref: "#/components/schemas/ArtifactRef" } } } }
+        "200": { description: Signed URL or JSONL content, content: { application/json: { schema: { $ref: "#/components/schemas/ArtifactRef" } } } }
   /runs/{id}/diff:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -754,7 +755,7 @@ paths:
     post:
       tags: [trains]
       operationId: departTrain
-      responses: { "202": { description: Départ demandé }, "409": { $ref: "#/components/responses/Conflict" } }
+      responses: { "202": { description: Departure requested }, "409": { $ref: "#/components/responses/Conflict" } }
   /projects/{id}/trains/{env}/freeze:
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
@@ -763,13 +764,13 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 3 } } } } }
-      responses: { "202": { description: Gel demandé } }
+      responses: { "202": { description: Freeze requested } }
   /projects/{id}/trains/{env}/unfreeze:
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
       tags: [trains]
       operationId: unfreezeTrain
-      responses: { "202": { description: Dégel demandé } }
+      responses: { "202": { description: Unfreeze requested } }
   /releases/{id}/approve:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -777,7 +778,7 @@ paths:
       operationId: approveRelease
       requestBody:
         content: { application/json: { schema: { type: object, properties: { note: { type: string } } } } }
-      responses: { "202": { description: Approbation transmise }, "403": { $ref: "#/components/responses/Forbidden" } }
+      responses: { "202": { description: Approval passed on }, "403": { $ref: "#/components/responses/Forbidden" } }
   /releases/{id}/abort:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -785,7 +786,7 @@ paths:
       operationId: abortRelease
       requestBody:
         content: { application/json: { schema: { type: object, properties: { reason: { type: string } } } } }
-      responses: { "202": { description: Abandon transmis } }
+      responses: { "202": { description: Abort passed on } }
   /projects/{id}/findings:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -840,13 +841,13 @@ paths:
       operationId: reimportMemory
       requestBody:
         content: { application/json: { schema: { type: object, properties: { sources: { type: array, items: { type: string } } } } } }
-      responses: { "202": { description: Import planifié } }
+      responses: { "202": { description: Import scheduled } }
   /orgs/{org}/memory/ab-report:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
       tags: [memory]
       operationId: getMemoryAbReport
-      summary: Projets avec et sans mémoire, comparés sur le premier passage et le coût
+      summary: Projects with and without memory, compared on first pass and cost
       parameters:
         - { name: weeks, in: query, schema: { type: integer, minimum: 1, maximum: 52, default: 4 } }
       responses:
@@ -867,19 +868,19 @@ paths:
     get:
       tags: [costs]
       operationId: exportProjectCostsCsv
-      summary: Le rapport de coûts en CSV (séparateur `;`, BOM UTF-8)
+      summary: The cost report as CSV (`;` separator, UTF-8 BOM)
       parameters:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
-        "200": { description: Rapport de coûts en CSV, content: { text/csv: { schema: { type: string } } } }
+        "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [costs]
       operationId: getProjectCrossBackend
-      summary: Revues par un autre backend contre revues par le même
+      summary: Reviews by another backend versus reviews by the same one
       parameters:
         - { name: since, in: query, schema: { type: string, format: date } }
       responses:
@@ -889,7 +890,7 @@ paths:
     get:
       tags: [costs]
       operationId: getProjectDora
-      summary: Les quatre mesures DORA, dérivées des déploiements enregistrés
+      summary: The four DORA metrics, derived from the recorded deployments
       parameters:
         - { name: env, in: query, schema: { type: string, default: prod } }
         - { name: since, in: query, schema: { type: string, format: date } }
@@ -919,7 +920,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/TemplateUpsert" } } }
       responses:
-        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateSummary" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateSummary" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
   /templates/{name}:
     parameters: [{ name: name, in: path, required: true, schema: { type: string } }]
@@ -985,7 +986,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/MembershipUpsert" } } }
       responses:
-        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/Membership" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Membership" } } } }
   /orgs/{org}/members/{user_id}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -994,12 +995,12 @@ paths:
       tags: [admin]
       operationId: removeMember
       description: >-
-        Retire l'appartenance d'une personne à l'organisation — ou au seul projet nommé par
-        `project`. Le dernier administrateur de l'organisation ne se retire pas (409).
+        Remove a person's membership of the organisation — or of the single project named by
+        `project`. The organisation's last administrator cannot be removed (409).
       parameters:
         - { name: project, in: query, required: false, schema: { type: string } }
       responses:
-        "204": { description: Retirée }
+        "204": { description: Removed }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1008,18 +1009,18 @@ paths:
     get:
       tags: [agents]
       operationId: listAgents
-      description: Le registre d'agents de l'organisation (ADR 0033).
+      description: The organisation's agent registry (ADR 0033).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
     post:
       tags: [agents]
       operationId: createAgent
-      description: Crée un agent et sa version 1 ; `agent:manage` (org_admin).
+      description: Create an agent and its version 1; `agent:manage` (org_admin).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentCreate" } } }
       responses:
-        "201": { description: Créé, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents/{slug}:
@@ -1030,12 +1031,12 @@ paths:
       tags: [agents]
       operationId: getAgent
       responses:
-        "200": { description: L'agent et ses versions, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "200": { description: The agent and its versions, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       tags: [agents]
       operationId: updateAgent
-      description: Nom, description, expiration, état ; `revoked` est définitif.
+      description: Name, description, expiry, status; `revoked` is final.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentPatch" } } }
@@ -1049,7 +1050,7 @@ paths:
     get:
       tags: [agents]
       operationId: getAgentMetrics
-      description: Les runs de l'agent sur la période, leur issue et leur coût — modèles et outils —, par projet ; ce qu'il a dépensé aujourd'hui.
+      description: The agent's runs over the period, their outcome and their cost — models and tools — by project; what it spent today.
       parameters:
         - { name: days, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
       responses:
@@ -1063,16 +1064,16 @@ paths:
       tags: [agents]
       operationId: listAgentCredentials
       responses:
-        "200": { description: Les clients de l'agent externe, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCredential" } } } } }
+        "200": { description: The external agent's clients, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCredential" } } } } }
     post:
       tags: [agents]
       operationId: attachAgentCredential
-      description: Rattache un jeton `mcp:*` ou un client OAuth à un agent `external` ; ses droits deviennent ceux de l'humain intersectés avec ceux de la version de l'agent (ADR 0033).
+      description: Attach a `mcp:*` token or an OAuth client to an `external` agent; its rights become the human's, intersected with those of the agent's version (ADR 0033).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentCredentialCreate" } } }
       responses:
-        "201": { description: Rattaché, content: { application/json: { schema: { $ref: "#/components/schemas/AgentCredential" } } } }
+        "201": { description: Attached, content: { application/json: { schema: { $ref: "#/components/schemas/AgentCredential" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/credentials/{credential_id}:
@@ -1084,7 +1085,7 @@ paths:
       tags: [agents]
       operationId: detachAgentCredential
       responses:
-        "204": { description: Détaché }
+        "204": { description: Detached }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/versions:
     parameters:
@@ -1093,12 +1094,12 @@ paths:
     post:
       tags: [agents]
       operationId: publishAgentVersion
-      description: Publie la version suivante ; aucune n'est réécrite.
+      description: Publish the next version; none is ever rewritten.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSpec" } } }
       responses:
-        "201": { description: Publiée, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
+        "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents/{slug}/versions/{version}:
     parameters:
@@ -1158,18 +1159,18 @@ paths:
     get:
       tags: [agents]
       operationId: listSkills
-      description: La bibliothèque de skills de l'organisation (ADR 0033).
+      description: The organisation's skill library (ADR 0033).
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skill" } } } } }
     post:
       tags: [agents]
       operationId: createSkill
-      description: Une skill neuve, version 1, nommée par son SKILL.md ; aucune permission déclarée (`allowed-tools` refusé).
+      description: A new skill, version 1, named by its SKILL.md; no declared permission (`allowed-tools` is refused).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/SkillFiles" } } }
       responses:
-        "201": { description: Créée, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/skills/import:
@@ -1177,12 +1178,12 @@ paths:
     post:
       tags: [agents]
       operationId: importSkill
-      description: Une archive zip ; zip-slip, liens symboliques, plus de 64 fichiers ou 512 Kio sont refusés.
+      description: A zip archive; zip-slip, symbolic links, more than 64 files or 512 KiB are refused.
       requestBody:
         required: true
         content: { application/zip: { schema: { type: string, format: binary } } }
       responses:
-        "201": { description: Publiée, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/skills/{slug}:
     parameters:
@@ -1192,7 +1193,7 @@ paths:
       tags: [agents]
       operationId: getSkill
       responses:
-        "200": { description: La skill et ses versions, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        "200": { description: The skill and its versions, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/skills/{slug}/versions:
     parameters:
@@ -1205,7 +1206,7 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/SkillFiles" } } }
       responses:
-        "201": { description: Publiée, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
+        "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/skills/{slug}/versions/{version}:
     parameters:
@@ -1216,7 +1217,7 @@ paths:
       tags: [agents]
       operationId: getSkillVersion
       responses:
-        "200": { description: La version et ses fichiers, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
+        "200": { description: The version and its files, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/agents:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -1224,7 +1225,7 @@ paths:
       tags: [agents]
       operationId: listProjectAgents
       responses:
-        "200": { description: Les versions épinglées, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectAgent" } } } } }
+        "200": { description: The pinned versions, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectAgent" } } } } }
   /projects/{id}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -1232,7 +1233,7 @@ paths:
     put:
       tags: [agents]
       operationId: pinProjectAgent
-      description: Épingle une version ; une surcharge qui élargit la version reçoit 422.
+      description: Pin a version; an override that widens the version gets 422.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentPut" } } }
@@ -1244,7 +1245,7 @@ paths:
       tags: [agents]
       operationId: unpinProjectAgent
       responses:
-        "204": { description: Désépinglé }
+        "204": { description: Unpinned }
         "404": { $ref: "#/components/responses/NotFound" }
   /audit:
     get:
@@ -1268,7 +1269,7 @@ paths:
         - { name: X-Hub-Signature-256, in: header, required: true, schema: { type: string } }
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses:
-        "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /webhooks/jira:
     post:
@@ -1277,7 +1278,7 @@ paths:
       operationId: jiraWebhook
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/gitlab:
     post:
       tags: [webhooks]
@@ -1287,7 +1288,7 @@ paths:
         - { name: X-Gitlab-Token, in: header, required: true, schema: { type: string } }
         - { name: X-Gitlab-Event, in: header, required: true, schema: { type: string } }
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/tekton:
     post:
       tags: [webhooks]
@@ -1297,7 +1298,7 @@ paths:
         - { name: ce-type, in: header, required: true, schema: { type: string } }
         - { name: ce-id, in: header, required: true, schema: { type: string } }
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/argocd:
     post:
       tags: [webhooks]
@@ -1305,7 +1306,7 @@ paths:
       operationId: argocdWebhook
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/alertmanager:
     post:
       tags: [webhooks]
@@ -1313,7 +1314,7 @@ paths:
       operationId: alertmanagerWebhook
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-      responses: { "202": { description: Accepté, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /internal/runs/{id}/input:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1321,20 +1322,20 @@ paths:
       security: [{ runToken: [] }]
       operationId: getRunInput
       responses:
-        "200": { description: StageInput du run, content: { application/json: { schema: { $ref: "#/components/schemas/StageInput" } } } }
+        "200": { description: The run's StageInput, content: { application/json: { schema: { $ref: "#/components/schemas/StageInput" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { description: Résultat déjà posté (le runner doit sortir en 0), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "409": { description: Result already posted (the runner must exit with 0), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/events:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
       tags: [internal]
       security: [{ runToken: [] }]
       operationId: postRunEvents
-      summary: Journal ACP en lot (idempotent par `seq`)
+      summary: ACP log in a batch (idempotent by `seq`)
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [events], properties: { events: { type: array, items: { $ref: "#/components/schemas/RunEventIn" } } } } } }
-      responses: { "202": { description: Accepté } }
+      responses: { "202": { description: Accepted } }
   /internal/runs/{id}/result:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -1343,7 +1344,7 @@ paths:
       operationId: postRunResult
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/StageResult" } } } }
       responses:
-        "200": { description: Enregistré (idempotent) }
+        "200": { description: Recorded (idempotent) }
         "422": { $ref: "#/components/responses/ValidationError" }
   /internal/runs/{id}/findings:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -1353,17 +1354,17 @@ paths:
       operationId: postRunFinding
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/Finding" } } } }
       responses:
-        "201": { description: Finding enregistré, content: { application/json: { schema: { $ref: "#/components/schemas/FindingAck" } } } }
-        "429": { description: Plafond de findings atteint, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "201": { description: Finding recorded, content: { application/json: { schema: { $ref: "#/components/schemas/FindingAck" } } } }
+        "429": { description: Findings cap reached, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /projects/{id}/tools:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [projects]
       operationId: getProjectTools
-      summary: Le catalogue d'outils du déploiement, et ce que ce projet peut appeler.
+      summary: The deployment's tool catalogue, and what this project may call.
       responses:
         "200":
-          description: Catalogue annoté
+          description: Annotated catalogue
           content:
             application/json:
               schema:
@@ -1392,10 +1393,10 @@ paths:
       tags: [internal]
       security: [{ runToken: [] }]
       operationId: getRunTools
-      summary: Les outils du catalogue que CE run peut appeler, au format MCP.
+      summary: The catalogue tools THIS run may call, in MCP format.
       responses:
         "200":
-          description: Liste d'outils
+          description: Tool list
           content:
             application/json:
               schema:
@@ -1418,20 +1419,20 @@ paths:
       tags: [internal]
       security: [{ runToken: [] }]
       operationId: callRunTool
-      summary: Appelle un outil du catalogue pour ce run. La clé du fournisseur reste côté plateforme.
+      summary: Call a catalogue tool for this run. The provider's key stays on the platform side.
       description: |
-        Une LECTURE permise est un appel direct. Une ÉCRITURE — même permise — est une action
-        gouvernée (ADR 0034 §7) : approuvée par la politique, jouée par l'ActionWorkflow, faite une
-        fois ; le courtier en attend l'issue (bornée) et rend ce que le serveur a répondu, avec
-        `result.action` ; au-delà, `status_code` 202 et l'identifiant de l'action. Le même appel
-        (run, outil, arguments) rend la même action. Une écriture sous validation (`approval`) rend
-        202 : une personne en décide.
+        An allowed READ is a direct call. A WRITE — even an allowed one — is a governed action
+        (ADR 0034 §7): approved by the policy, run by the ActionWorkflow, done once; the broker
+        waits (for a bounded time) for its outcome and returns what the server answered, with
+        `result.action`; beyond that, `status_code` 202 and the action's id. The same call
+        (run, tool, arguments) returns the same action. A write under approval (`approval`) returns
+        202: a person decides.
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
       responses:
         "200":
-          description: Réponse du fournisseur, telle quelle
+          description: The provider's response, as is
           content:
             application/json:
               schema:
@@ -1441,8 +1442,8 @@ paths:
                   status_code: { type: integer }
                   result: {}
                   remaining: { type: integer, nullable: true }
-        "404": { description: Outil inconnu ou non autorisé au projet, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
-        "429": { description: Plafond d'appels d'outils atteint, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "404": { description: "Unknown tool, or not allowed for the project", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "429": { description: Tool call cap reached, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/scope-change:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -1453,7 +1454,7 @@ paths:
         required: true
         content: { application/json: { schema: { type: object, required: [paths, justification], properties: { paths: { type: array, items: { type: string } }, justification: { type: string } } } } }
       responses:
-        "200": { description: Décision, content: { application/json: { schema: { $ref: "#/components/schemas/ScopeChangeDecision" } } } }
+        "200": { description: Decision, content: { application/json: { schema: { $ref: "#/components/schemas/ScopeChangeDecision" } } } }
   /internal/runs/{id}/question:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -1463,7 +1464,7 @@ paths:
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, required: [text], properties: { text: { type: string }, options: { type: array, items: { type: string } } } } } }
-      responses: { "202": { description: Question transmise ; le run doit se terminer en needs_human } }
+      responses: { "202": { description: Question passed on; the run must end in needs_human } }
   /internal/runs/{id}/context:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1479,17 +1480,17 @@ paths:
       security: [{ runToken: [] }]
       operationId: getRunTicket
       responses:
-        "200": { description: Ticket et documents liés, content: { application/json: { schema: { $ref: "#/components/schemas/RunTicket" } } } }
+        "200": { description: Ticket and linked documents, content: { application/json: { schema: { $ref: "#/components/schemas/RunTicket" } } } }
   /internal/runs/{id}/skills:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [internal]
       security: [{ runToken: [] }]
       operationId: getRunSkills
-      description: Les fichiers des skills que le StageInput du run nomme (ADR 0033) ; le runner recalcule leur empreinte avant de les poser.
+      description: The files of the skills the run's StageInput names (ADR 0033); the runner recomputes their digest before writing them.
       responses:
         "200":
-          description: Une entrée par skill
+          description: One entry per skill
           content:
             application/json:
               schema:
@@ -1515,7 +1516,7 @@ paths:
     get:
       tags: [session]
       operationId: getIntegrations
-      summary: Où connecter un client MCP (Claude Code, Cursor…) à cette plateforme (ADR 0030)
+      summary: Where to connect an MCP client (Claude Code, Cursor…) to this platform (ADR 0030)
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Integrations" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1526,7 +1527,7 @@ paths:
       tags: [session]
       security: []
       operationId: edition
-      summary: Quelle édition tourne, et ce qu'elle s'autorise (ADR 0024)
+      summary: Which edition is running, and what it allows itself (ADR 0024)
       responses:
         "200":
           description: OK
@@ -1540,12 +1541,12 @@ paths:
                   features: { type: array, items: { type: string } }
                   version: { type: string }
   /readyz:
-    get: { tags: [session], security: [], operationId: readyz, responses: { "200": { description: OK }, "503": { description: Non prêt } } }
+    get: { tags: [session], security: [], operationId: readyz, responses: { "200": { description: OK }, "503": { description: Not ready } } }
 components:
   securitySchemes:
     session: { type: apiKey, in: cookie, name: choregos_session }
     bearer: { type: http, scheme: bearer, bearerFormat: choregos-api-token }
-    runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: JWT de run signé ES256, aud=internal }
+    runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Run JWT signed with ES256, aud=internal" }
   parameters:
     Id: { name: id, in: path, required: true, schema: { type: string } }
     Org: { name: org, in: path, required: true, schema: { type: string } }
@@ -1554,25 +1555,25 @@ components:
       name: kind
       in: path
       required: true
-      description: une capacité ; le registre dit lesquelles existent (`GET /connectors/types`, ADR 0034)
+      description: a capability; the registry says which ones exist (`GET /connectors/types`, ADR 0034)
       schema: { type: string, pattern: "^[a-z][a-z0-9_]{1,31}$" }
     Cursor: { name: cursor, in: query, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
   responses:
     Unauthorized:
-      description: Non authentifié
+      description: Not authenticated
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
     Forbidden:
-      description: Interdit (RBAC)
+      description: Forbidden (RBAC)
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
     NotFound:
-      description: Introuvable
+      description: Not found
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
     Conflict:
-      description: Conflit d'état
+      description: State conflict
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
     ValidationError:
-      description: Entité non traitable
+      description: Unprocessable entity
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
   schemas:
     Problem:
@@ -1708,11 +1709,11 @@ components:
       required: [kind, type, status]
       properties:
         id: { type: string }
-        kind: { type: string, description: "une capacité (ADR 0034) : tracker, scm, ci, cd, runtime, memory, notify, gateway — ou celle qu'un type de greffon déclare (identity, mcp…)" }
+        kind: { type: string, description: "a capability (ADR 0034): tracker, scm, ci, cd, runtime, memory, notify, gateway — or one a plugin type declares (identity, mcp…)" }
         type: { type: string }
         config: { type: object, additionalProperties: true }
         secret_ref: { type: [string, "null"] }
-        secret_refs: { type: object, additionalProperties: { type: string }, description: "les secrets, champ par champ, en références (`env:NOM`) — jamais leur valeur (ADR 0034)" }
+        secret_refs: { type: object, additionalProperties: { type: string }, description: "the secrets, field by field, as references (`env:NAME`) — never their value (ADR 0034)" }
         status: { type: string, enum: [unknown, ok, degraded, error] }
         last_check_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
@@ -1721,7 +1722,7 @@ components:
       required: [type, config]
       properties:
         type: { type: string }
-        config: { type: object, additionalProperties: true, description: "sans champ secret : un secret en clair reçoit 422" }
+        config: { type: object, additionalProperties: true, description: "no secret field: a plaintext secret gets 422" }
         secret_ref: { type: [string, "null"] }
         secret_refs: { type: object, additionalProperties: { type: string } }
     ConnectorTestResult:
@@ -1747,8 +1748,8 @@ components:
         display: { type: string }
         available: { type: boolean, default: true }
         config_schema: { type: object, additionalProperties: true }
-        capabilities: { type: array, items: { type: string }, description: "ce que le type sait faire : tracker, scm, identity, mcp…" }
-        secret_fields: { type: array, items: { type: string }, description: les clefs de configuration qui sont des secrets }
+        capabilities: { type: array, items: { type: string }, description: "what the type can do: tracker, scm, identity, mcp…" }
+        secret_fields: { type: array, items: { type: string }, description: the configuration keys that are secrets }
     ConnectorOperation:
       type: object
       required: [name, access, policy]
@@ -1756,10 +1757,10 @@ components:
         name: { type: string }
         access: { type: string, enum: [read, write] }
         policy: { type: string, enum: [allowed, approval, forbidden] }
-        groups: { type: array, items: { type: string }, description: "les groupes de projets qui y ont droit ; aucun : tous" }
+        groups: { type: array, items: { type: string }, description: "the project groups entitled to it; none: all of them" }
         price_usd: { type: [number, "null"] }
         schema_digest: { type: [string, "null"] }
-        input_schema: { type: [object, "null"], additionalProperties: true, description: "le schéma d'entrée que le courtier annonce à l'agent et vérifie avant l'appel" }
+        input_schema: { type: [object, "null"], additionalProperties: true, description: "the input schema the broker announces to the agent and checks before the call" }
         description: { type: [string, "null"] }
     ConnectorDiscovery:
       type: object
@@ -1817,9 +1818,9 @@ components:
       type: object
       required: [effect]
       properties:
-        effect: { type: string, description: "un effet déclaré : connector.call, ou celui d'un greffon" }
-        with: { type: object, additionalProperties: true, description: "ses paramètres, rendus en Jinja isolé avec `params` et `effects`" }
-        compensate: { type: [object, "null"], additionalProperties: true, description: "{effect, with} : ce qui le défait si une suite échoue (`result` y cite sa réponse)" }
+        effect: { type: string, description: "a declared effect: connector.call, or a plugin's" }
+        with: { type: object, additionalProperties: true, description: "its parameters, rendered in sandboxed Jinja with `params` and `effects`" }
+        compensate: { type: [object, "null"], additionalProperties: true, description: "{effect, with}: what undoes it if a later effect fails (`result` quotes its response there)" }
     ActionApproval:
       type: object
       properties:
@@ -1852,7 +1853,7 @@ components:
     ActionEffect:
       type: object
       required: [position, key, effect, status]
-      description: Un effet sous sa clé (`<action>:<n>`) — consigné avant d'être tenté, confirmé après.
+      description: An effect under its key (`<action>:<n>`) — recorded before it is attempted, confirmed after.
       properties:
         position: { type: integer }
         key: { type: string }
@@ -1865,7 +1866,7 @@ components:
     Action:
       type: object
       required: [id, origin, kind, title, status]
-      description: Une action gouvernée (ADR 0035) et le journal de ses effets.
+      description: A governed action (ADR 0035) and the log of its effects.
       properties:
         id: { type: string }
         origin: { type: string, enum: [ontology, tool, transition] }
@@ -1890,12 +1891,12 @@ components:
     ProjectRequirement:
       type: object
       required: [capability, reasons]
-      description: Une capacité que les workflows du projet exigent, et pourquoi (ADR 0034).
+      description: A capability the project's workflows require, and why (ADR 0034).
       properties:
         capability: { type: string }
         reasons: { type: array, items: { type: string } }
         connector: { oneOf: [{ $ref: "#/components/schemas/Connector" }, { type: "null" }] }
-        default_type: { type: [string, "null"], description: "le type que la plateforme prend quand aucun connecteur ne la couvre" }
+        default_type: { type: [string, "null"], description: "the type the platform uses when no connector covers it" }
     WorkflowDef:
       type: object
       required: [name, version, source, yaml, checksum, is_active]
@@ -1918,7 +1919,7 @@ components:
         yaml: { type: string }
         source: { type: string, enum: [repo, platform, template], default: platform }
         activate: { type: boolean, default: true }
-        base_version: { type: [integer, "null"], description: "La version active que l'éditeur a lue : périmée → 409." }
+        base_version: { type: [integer, "null"], description: "The active version the editor read: stale → 409." }
     WorkflowSummary:
       type: object
       required: [name, version, is_default, open_items]
@@ -1927,7 +1928,7 @@ components:
         version: { type: integer }
         description: { type: [string, "null"] }
         is_default: { type: boolean }
-        open_items: { type: integer, description: "Tickets non clos épinglés à l'une de ses versions." }
+        open_items: { type: integer, description: "Open tickets pinned to one of its versions." }
         created_by: { type: [string, "null"] }
         updated_at: { type: [string, "null"], format: date-time }
     WorkflowRouting:
@@ -1964,7 +1965,7 @@ components:
         process: { type: array, items: { $ref: "#/components/schemas/ProcessStep" } }
     ProcessStep:
       type: object
-      description: Une transition dite en clair — la vue « processus » (ADR 0031).
+      description: A transition in plain words — the process view (ADR 0031).
       required: [id, from, to, actor, actor_type, who, sentence]
       properties:
         id: { type: string }
@@ -1985,8 +1986,9 @@ components:
       type: object
       required: [op]
       description: >-
-        Une opération typée. `op` dit laquelle ; les autres champs dépendent d'elle (`name`, `spec`,
-        `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`).
+        A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`,
+        `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`,
+        `index`).
       properties:
         op:
           type: string
@@ -2007,9 +2009,9 @@ components:
           required: [yaml, diff, inverse, notices]
           properties:
             yaml: { type: string }
-            diff: { type: string, description: diff unifié du texte d'origine au texte édité }
+            diff: { type: string, description: unified diff from the original text to the edited text }
             inverse: { type: array, items: { $ref: "#/components/schemas/WorkflowOperation" } }
-            notices: { type: array, items: { type: string }, description: "ce qu'une opération change au-delà du texte (un état à effet renommé…)" }
+            notices: { type: array, items: { type: string }, description: "what an operation changes beyond the text (a state with effects renamed…)" }
     AgentLimits:
       type: object
       properties:
@@ -2022,7 +2024,7 @@ components:
         daily_usd: { type: [number, "null"], exclusiveMinimum: 0 }
     AgentSpec:
       type: object
-      description: Ce qu'une version d'agent est ; elle ne se modifie jamais (ADR 0033).
+      description: What an agent version is; it never changes (ADR 0033).
       properties:
         instructions: { type: string, maxLength: 65536 }
         model: { type: [string, "null"] }
@@ -2141,12 +2143,12 @@ components:
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
         revoked_at: { type: [string, "null"], format: date-time }
-        token_name: { type: [string, "null"], description: le nom du jeton rattaché }
-        last_used_at: { type: [string, "null"], format: date-time, description: "le dernier appel du jeton à la porte MCP : la console dit « connecté »" }
-        last_client: { type: [string, "null"], description: "le client de ce dernier appel (`User-Agent`, tronqué)" }
+        token_name: { type: [string, "null"], description: the name of the attached token }
+        last_used_at: { type: [string, "null"], format: date-time, description: "the token's last call to the MCP gate: the console shows it as connected" }
+        last_client: { type: [string, "null"], description: "the client of that last call (`User-Agent`, truncated)" }
     AgentOverrides:
       type: object
-      description: Ce qu'un projet change d'une version — seulement resserrer.
+      description: What a project changes in a version — tightening only.
       properties:
         limits: { $ref: "#/components/schemas/AgentLimits" }
         budget: { $ref: "#/components/schemas/AgentBudget" }
@@ -2169,7 +2171,7 @@ components:
       type: object
       required: [files]
       properties:
-        files: { type: object, additionalProperties: { type: string }, description: chemin relatif → texte }
+        files: { type: object, additionalProperties: { type: string }, description: relative path → text }
     SkillVersion:
       type: object
       required: [version, digest]
@@ -2224,7 +2226,7 @@ components:
               to: { type: string }
               kind:
                 type: string
-                description: "`nominal` pour une transition du YAML ; `reject`, `resume`, `escalate`, `default`… pour les arêtes secondaires (rendues en pointillés)."
+                description: "`nominal` for a transition of the YAML; `reject`, `resume`, `escalate`, `default`… for the secondary edges (drawn dashed)."
               label: { type: string }
               wildcard: { type: boolean }
               actor: { type: [string, "null"] }
@@ -2318,7 +2320,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 200 }
     OrgUpdate:
       type: object
-      description: Ce qui change d'une organisation ; le slug est dans chaque URL et chaque adresse MCP.
+      description: What changes in an organisation; the slug is in every URL and every MCP address.
       properties:
         slug: { type: [string, "null"], pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
@@ -2331,32 +2333,32 @@ components:
         size: { type: [string, "null"], enum: [S, M, L, XL, null] }
         risk: { type: [string, "null"], enum: [low, medium, high, null] }
         start: { type: boolean, default: true }
-        workflow: { type: [string, "null"], description: "Le workflow où le ticket naît ; sinon le routage, sinon le défaut (ADR 0031)." }
-        labels: { type: array, items: { type: string }, description: "Lues par les règles de routage." }
-        fields: { type: object, additionalProperties: true, description: "Les champs du ticket, validés par `metadata.inputs` de son workflow." }
+        workflow: { type: [string, "null"], description: "The workflow the ticket starts in; otherwise the routing, otherwise the default one (ADR 0031)." }
+        labels: { type: array, items: { type: string }, description: "Read by the routing rules." }
+        fields: { type: object, additionalProperties: true, description: "The ticket's fields, validated by its workflow's `metadata.inputs`." }
     WorkItemUpdate:
       type: object
       required: [fields]
       additionalProperties: false
       properties:
-        fields: { type: object, additionalProperties: true, description: "Les champs qui changent ; `null` en retire un." }
+        fields: { type: object, additionalProperties: true, description: "The fields that change; `null` removes one." }
     Integrations:
       type: object
       required: [mcp_url, protocol_versions, oauth, version]
       properties:
-        mcp_url: { type: string, description: "L'URL de la porte MCP ; celle d'un projet y ajoute `/projects/{org}:{slug}`." }
+        mcp_url: { type: string, description: "The MCP gate's URL; a project's adds `/projects/{org}:{slug}` to it." }
         protocol_versions: { type: array, items: { type: string } }
         oauth:
           type: object
           required: [enabled]
           properties:
-            enabled: { type: boolean, description: "Faux tant que la porte n'accepte que des jetons à portée." }
+            enabled: { type: boolean, description: "False as long as the gate accepts only scoped tokens." }
             authorization_server: { type: [string, "null"] }
             clients:
               type: object
               description: >-
-                Les clients que l'IdP a enregistrés pour la porte, par client de la page Integrations
-                (`claude-code`, `claude-ai`…) : la page en tire la commande exacte.
+                The clients the IdP registered for the gate, by client of the Integrations page
+                (`claude-code`, `claude-ai`…): the page derives the exact command from them.
               additionalProperties:
                 type: object
                 required: [client_id]
@@ -2364,14 +2366,14 @@ components:
                   client_id: { type: string }
                   callback_port:
                     type: [integer, "null"]
-                    description: "Le port de la redirection locale `http://localhost:PORT/callback` enregistrée chez l'IdP."
+                    description: "The port of the local redirect `http://localhost:PORT/callback` registered with the IdP."
         version: { type: string }
     TokenScope:
       type: string
       enum: ["*", "mcp:read", "mcp:write"]
       description: >-
-        `*` : l'API REST et la CLI. `mcp:read`, `mcp:write` : la porte MCP seulement (ADR 0030) —
-        un tel jeton est refusé par l'API REST, et la porte refuse `*`.
+        `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP gate only (ADR 0030) — such
+        a token is refused by the REST API, and the gate refuses `*`.
     ApiTokenCreate:
       type: object
       required: [name]
@@ -2383,7 +2385,7 @@ components:
           minItems: 1
           items: { $ref: "#/components/schemas/TokenScope" }
           default: ["*"]
-        project: { type: [string, "null"], description: "`org:slug` : borne un jeton MCP à un seul projet." }
+        project: { type: [string, "null"], description: "`org:slug`: bounds an MCP token to a single project." }
     ApiToken:
       type: object
       required: [id, name, created_at, scopes]
@@ -2394,18 +2396,18 @@ components:
         expires_at: { type: [string, "null"], format: date-time }
         last_used_at: { type: [string, "null"], format: date-time }
         scopes: { type: array, items: { $ref: "#/components/schemas/TokenScope" } }
-        project: { type: [string, "null"], description: "`org:slug` du projet lié, s'il y en a un." }
-        last_client: { type: [string, "null"], description: "Le client du dernier appel (`User-Agent`, tronqué)." }
+        project: { type: [string, "null"], description: "`org:slug` of the linked project, if there is one." }
+        last_client: { type: [string, "null"], description: "The client of the last call (`User-Agent`, truncated)." }
     ApiTokenCreated:
       allOf:
         - $ref: "#/components/schemas/ApiToken"
         - type: object
           required: [token]
           properties:
-            token: { type: string, description: "Le jeton en clair, rendu une seule fois." }
+            token: { type: string, description: "The plaintext token, returned only once." }
     WorkflowFailure:
       type: object
-      description: Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage.
+      description: Why a ticket's interpreter died. The ticket will not move again without a restart.
       required: [message]
       properties:
         message: { type: string }
@@ -2416,7 +2418,7 @@ components:
       type: object
       required: [id, project_slug, tracker_key, title, state, totals]
       properties:
-        fields: { type: object, additionalProperties: true, description: "Les champs du ticket (ADR 0031)." }
+        fields: { type: object, additionalProperties: true, description: "The ticket's fields (ADR 0031)." }
         id: { type: string }
         project_slug: { type: string }
         tracker_key: { type: string }
@@ -2432,7 +2434,7 @@ components:
         temporal_wf_id: { type: [string, "null"] }
         workflow_status:
           type: [string, "null"]
-          description: Statut Temporal du workflow, si demandé et connu. FAILED, TERMINATED ou TIMED_OUT = le ticket est mort.
+          description: The workflow's Temporal status, when requested and known. FAILED, TERMINATED or TIMED_OUT = the ticket is dead.
         failure:
           oneOf: [{ $ref: "#/components/schemas/WorkflowFailure" }, { type: "null" }]
         paused: { type: boolean, default: false }
@@ -2487,8 +2489,8 @@ components:
         answer: { type: [string, "null"] }
         reason: { type: [string, "null"] }
         granted_paths: { type: array, items: { type: string } }
-        values: { type: object, additionalProperties: true, description: "`complete` : les valeurs du formulaire de la tâche, versées dans les champs du ticket." }
-        attested: { type: boolean, default: false, description: "`complete` : la personne atteste la phrase de la tâche." }
+        values: { type: object, additionalProperties: true, description: "`complete`: the values of the task's form, written into the ticket's fields." }
+        attested: { type: boolean, default: false, description: "`complete`: the person attests the task's statement." }
     HumanRequest:
       type: object
       required: [id, kind, requested_at]
@@ -2885,7 +2887,7 @@ components:
         key: { type: string }
         title: { type: string }
         body: { type: string }
-        fields: { type: object, additionalProperties: true, description: "Les champs du ticket (ADR 0031)." }
+        fields: { type: object, additionalProperties: true, description: "The ticket's fields (ADR 0031)." }
         url: { type: [string, "null"] }
         spec_markdown: { type: [string, "null"] }
         plan_markdown: { type: [string, "null"] }

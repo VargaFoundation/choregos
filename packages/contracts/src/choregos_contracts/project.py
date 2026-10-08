@@ -126,13 +126,13 @@ class ProjectConfig(Strict):
         sur un message qui ne parlerait pas du dépôt absent.
         """
         if self.repo is None:
-            raise ValueError(f"le projet {self.slug} n'a pas de dépôt")
+            raise ValueError(f"the project {self.slug} has no repository")
         return self.repo.url
 
     def branch_for(self, key: str, slug_hint: str = "") -> str:
         """Nom de branche déterministe pour un ticket."""
         if self.repo is None:
-            raise ValueError(f"le projet {self.slug} n'a pas de dépôt")
+            raise ValueError(f"the project {self.slug} has no repository")
         number = key.rsplit("#", 1)[-1] if "#" in key else key.replace("/", "-")
         suffix = f"-{slug_hint}" if slug_hint else ""
         return f"{self.repo.branch_prefix}{number}{suffix}"

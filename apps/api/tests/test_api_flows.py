@@ -415,7 +415,7 @@ async def test_un_projet_sans_depot_se_cree(client: AsyncClient, admin: str) -> 
 
     config = ProjectConfig.model_validate(reponse.json()["config"])
     assert not config.has_repo
-    with pytest.raises(ValueError, match="n'a pas de dépôt"):
+    with pytest.raises(ValueError, match="has no repository"):
         _ = config.repo_url
 
 

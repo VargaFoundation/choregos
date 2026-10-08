@@ -128,14 +128,14 @@ export type ProvisionStatus = {
 
 export type Connector = {
   id?: string;
-  /** une capacité (ADR 0034) : tracker, scm, ci, cd, runtime, memory, notify, gateway — ou celle qu'un type de greffon déclare (identity, mcp…) */
+  /** a capability (ADR 0034): tracker, scm, ci, cd, runtime, memory, notify, gateway — or one a plugin type declares (identity, mcp…) */
   kind: string;
   type: string;
   config?: {
     [key: string]: unknown;
   };
   secret_ref?: string | null;
-  /** les secrets, champ par champ, en références (`env:NOM`) — jamais leur valeur (ADR 0034) */
+  /** the secrets, field by field, as references (`env:NAME`) — never their value (ADR 0034) */
   secret_refs?: {
     [key: string]: string;
   };
@@ -146,7 +146,7 @@ export type Connector = {
 
 export type ConnectorUpsert = {
   type: string;
-  /** sans champ secret : un secret en clair reçoit 422 */
+  /** no secret field: a plaintext secret gets 422 */
   config: {
     [key: string]: unknown;
   };
@@ -173,9 +173,9 @@ export type ConnectorType = {
   config_schema: {
     [key: string]: unknown;
   };
-  /** ce que le type sait faire : tracker, scm, identity, mcp… */
+  /** what the type can do: tracker, scm, identity, mcp… */
   capabilities?: Array<string>;
-  /** les clefs de configuration qui sont des secrets */
+  /** the configuration keys that are secrets */
   secret_fields?: Array<string>;
 };
 
@@ -183,11 +183,11 @@ export type ConnectorOperation = {
   name: string;
   access: "read" | "write";
   policy: "allowed" | "approval" | "forbidden";
-  /** les groupes de projets qui y ont droit ; aucun : tous */
+  /** the project groups entitled to it; none: all of them */
   groups?: Array<string>;
   price_usd?: number | null;
   schema_digest?: string | null;
-  /** le schéma d'entrée que le courtier annonce à l'agent et vérifie avant l'appel */
+  /** the input schema the broker announces to the agent and checks before the call */
   input_schema?: {
     [key: string]: unknown;
   } | null;
@@ -251,13 +251,13 @@ export type ProjectOperationPut = {
 };
 
 export type ActionEffectSpec = {
-  /** un effet déclaré : connector.call, ou celui d'un greffon */
+  /** a declared effect: connector.call, or a plugin's */
   effect: string;
-  /** ses paramètres, rendus en Jinja isolé avec `params` et `effects` */
+  /** its parameters, rendered in sandboxed Jinja with `params` and `effects` */
   with?: {
     [key: string]: unknown;
   };
-  /** {effect, with} : ce qui le défait si une suite échoue (`result` y cite sa réponse) */
+  /** {effect, with}: what undoes it if a later effect fails (`result` quotes its response there) */
   compensate?: {
     [key: string]: unknown;
   } | null;
@@ -289,7 +289,7 @@ export type ActionDecision = {
   reason?: string | null;
 };
 
-/** Un effet sous sa clé (`<action>:<n>`) — consigné avant d'être tenté, confirmé après. */
+/** An effect under its key (`<action>:<n>`) — recorded before it is attempted, confirmed after. */
 export type ActionEffect = {
   position: number;
   key: string;
@@ -303,7 +303,7 @@ export type ActionEffect = {
   finished_at?: string | null;
 };
 
-/** Une action gouvernée (ADR 0035) et le journal de ses effets. */
+/** A governed action (ADR 0035) and the log of its effects. */
 export type Action = {
   id: string;
   origin: "ontology" | "tool" | "transition";
@@ -339,12 +339,12 @@ export type Action = {
   journal?: Array<ActionEffect>;
 };
 
-/** Une capacité que les workflows du projet exigent, et pourquoi (ADR 0034). */
+/** A capability the project's workflows require, and why (ADR 0034). */
 export type ProjectRequirement = {
   capability: string;
   reasons: Array<string>;
   connector?: Connector | null;
-  /** le type que la plateforme prend quand aucun connecteur ne la couvre */
+  /** the type the platform uses when no connector covers it */
   default_type?: string | null;
 };
 
@@ -366,7 +366,7 @@ export type WorkflowPut = {
   yaml: string;
   source?: "repo" | "platform" | "template";
   activate?: boolean;
-  /** La version active que l'éditeur a lue : périmée → 409. */
+  /** The active version the editor read: stale → 409. */
   base_version?: number | null;
 };
 
@@ -375,7 +375,7 @@ export type WorkflowSummary = {
   version: number;
   description?: string | null;
   is_default: boolean;
-  /** Tickets non clos épinglés à l'une de ses versions. */
+  /** Open tickets pinned to one of its versions. */
   open_items: number;
   created_by?: string | null;
   updated_at?: string | null;
@@ -408,7 +408,7 @@ export type WorkflowValidation = {
   process?: Array<ProcessStep>;
 };
 
-/** Une transition dite en clair — la vue « processus » (ADR 0031). */
+/** A transition in plain words — the process view (ADR 0031). */
 export type ProcessStep = {
   id: string;
   from: string;
@@ -429,7 +429,7 @@ export type ProcessStep = {
   sentence: string;
 };
 
-/** Une opération typée. `op` dit laquelle ; les autres champs dépendent d'elle (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
+/** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
 export type WorkflowOperation = {
   op: "add_state" | "remove_state" | "rename_state" | "set_state" | "add_transition" | "remove_transition" | "set_transition" | "add_gate" | "remove_gate" | "add_actor" | "remove_actor" | "set_actor";
   [key: string]: unknown;
@@ -442,10 +442,10 @@ export type WorkflowEditRequest = {
 
 export type WorkflowEditResult = WorkflowValidation & {
   yaml: string;
-  /** diff unifié du texte d'origine au texte édité */
+  /** unified diff from the original text to the edited text */
   diff: string;
   inverse: Array<WorkflowOperation>;
-  /** ce qu'une opération change au-delà du texte (un état à effet renommé…) */
+  /** what an operation changes beyond the text (a state with effects renamed…) */
   notices: Array<string>;
 };
 
@@ -459,7 +459,7 @@ export type AgentBudget = {
   daily_usd?: number | null;
 };
 
-/** Ce qu'une version d'agent est ; elle ne se modifie jamais (ADR 0033). */
+/** What an agent version is; it never changes (ADR 0033). */
 export type AgentSpec = {
   instructions?: string;
   model?: string | null;
@@ -591,15 +591,15 @@ export type AgentCredential = {
   created_by?: string | null;
   created_at?: string | null;
   revoked_at?: string | null;
-  /** le nom du jeton rattaché */
+  /** the name of the attached token */
   token_name?: string | null;
-  /** le dernier appel du jeton à la porte MCP : la console dit « connecté » */
+  /** the token's last call to the MCP gate: the console shows it as connected */
   last_used_at?: string | null;
-  /** le client de ce dernier appel (`User-Agent`, tronqué) */
+  /** the client of that last call (`User-Agent`, truncated) */
   last_client?: string | null;
 };
 
-/** Ce qu'un projet change d'une version — seulement resserrer. */
+/** What a project changes in a version — tightening only. */
 export type AgentOverrides = {
   limits?: AgentLimits;
   budget?: AgentBudget;
@@ -619,7 +619,7 @@ export type ProjectAgent = {
 };
 
 export type SkillFiles = {
-  /** chemin relatif → texte */
+  /** relative path → text */
   files: {
     [key: string]: string;
   };
@@ -664,7 +664,7 @@ export type WorkflowGraph = {
     id?: string | null;
     from: string;
     to: string;
-    /** `nominal` pour une transition du YAML ; `reject`, `resume`, `escalate`, `default`… pour les arêtes secondaires (rendues en pointillés). */
+    /** `nominal` for a transition of the YAML; `reject`, `resume`, `escalate`, `default`… for the secondary edges (drawn dashed). */
     kind?: string;
     label?: string;
     wildcard?: boolean;
@@ -750,7 +750,7 @@ export type OrgCreate = {
   name: string;
 };
 
-/** Ce qui change d'une organisation ; le slug est dans chaque URL et chaque adresse MCP. */
+/** What changes in an organisation; the slug is in every URL and every MCP address. */
 export type OrgUpdate = {
   slug?: string | null;
   name?: string | null;
@@ -762,36 +762,36 @@ export type WorkItemCreate = {
   size?: "S" | "M" | "L" | "XL" | null;
   risk?: "low" | "medium" | "high" | null;
   start?: boolean;
-  /** Le workflow où le ticket naît ; sinon le routage, sinon le défaut (ADR 0031). */
+  /** The workflow the ticket starts in; otherwise the routing, otherwise the default one (ADR 0031). */
   workflow?: string | null;
-  /** Lues par les règles de routage. */
+  /** Read by the routing rules. */
   labels?: Array<string>;
-  /** Les champs du ticket, validés par `metadata.inputs` de son workflow. */
+  /** The ticket's fields, validated by its workflow's `metadata.inputs`. */
   fields?: {
     [key: string]: unknown;
   };
 };
 
 export type WorkItemUpdate = {
-  /** Les champs qui changent ; `null` en retire un. */
+  /** The fields that change; `null` removes one. */
   fields: {
     [key: string]: unknown;
   };
 };
 
 export type Integrations = {
-  /** L'URL de la porte MCP ; celle d'un projet y ajoute `/projects/{org}:{slug}`. */
+  /** The MCP gate's URL; a project's adds `/projects/{org}:{slug}` to it. */
   mcp_url: string;
   protocol_versions: Array<string>;
   oauth: {
-    /** Faux tant que la porte n'accepte que des jetons à portée. */
+    /** False as long as the gate accepts only scoped tokens. */
     enabled: boolean;
     authorization_server?: string | null;
-    /** Les clients que l'IdP a enregistrés pour la porte, par client de la page Integrations (`claude-code`, `claude-ai`…) : la page en tire la commande exacte. */
+    /** The clients the IdP registered for the gate, by client of the Integrations page (`claude-code`, `claude-ai`…): the page derives the exact command from them. */
     clients?: {
       [key: string]: {
         client_id: string;
-        /** Le port de la redirection locale `http://localhost:PORT/callback` enregistrée chez l'IdP. */
+        /** The port of the local redirect `http://localhost:PORT/callback` registered with the IdP. */
         callback_port?: number | null;
       };
     };
@@ -799,14 +799,14 @@ export type Integrations = {
   version: string;
 };
 
-/** `*` : l'API REST et la CLI. `mcp:read`, `mcp:write` : la porte MCP seulement (ADR 0030) — un tel jeton est refusé par l'API REST, et la porte refuse `*`. */
+/** `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP gate only (ADR 0030) — such a token is refused by the REST API, and the gate refuses `*`. */
 export type TokenScope = "*" | "mcp:read" | "mcp:write";
 
 export type ApiTokenCreate = {
   name: string;
   expires_in_days?: number | null;
   scopes?: Array<TokenScope>;
-  /** `org:slug` : borne un jeton MCP à un seul projet. */
+  /** `org:slug`: bounds an MCP token to a single project. */
   project?: string | null;
 };
 
@@ -817,18 +817,18 @@ export type ApiToken = {
   expires_at?: string | null;
   last_used_at?: string | null;
   scopes: Array<TokenScope>;
-  /** `org:slug` du projet lié, s'il y en a un. */
+  /** `org:slug` of the linked project, if there is one. */
   project?: string | null;
-  /** Le client du dernier appel (`User-Agent`, tronqué). */
+  /** The client of the last call (`User-Agent`, truncated). */
   last_client?: string | null;
 };
 
 export type ApiTokenCreated = ApiToken & {
-  /** Le jeton en clair, rendu une seule fois. */
+  /** The plaintext token, returned only once. */
   token: string;
 };
 
-/** Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage. */
+/** Why a ticket's interpreter died. The ticket will not move again without a restart. */
 export type WorkflowFailure = {
   message: string;
   activity?: string | null;
@@ -837,7 +837,7 @@ export type WorkflowFailure = {
 };
 
 export type WorkItem = {
-  /** Les champs du ticket (ADR 0031). */
+  /** The ticket's fields (ADR 0031). */
   fields?: {
     [key: string]: unknown;
   };
@@ -854,7 +854,7 @@ export type WorkItem = {
   workflow_name?: string | null;
   workflow_version?: number | null;
   temporal_wf_id?: string | null;
-  /** Statut Temporal du workflow, si demandé et connu. FAILED, TERMINATED ou TIMED_OUT = le ticket est mort. */
+  /** The workflow's Temporal status, when requested and known. FAILED, TERMINATED or TIMED_OUT = the ticket is dead. */
   workflow_status?: string | null;
   failure?: WorkflowFailure | null;
   paused?: boolean;
@@ -906,11 +906,11 @@ export type DecisionRequest = {
   answer?: string | null;
   reason?: string | null;
   granted_paths?: Array<string>;
-  /** `complete` : les valeurs du formulaire de la tâche, versées dans les champs du ticket. */
+  /** `complete`: the values of the task's form, written into the ticket's fields. */
   values?: {
     [key: string]: unknown;
   };
-  /** `complete` : la personne atteste la phrase de la tâche. */
+  /** `complete`: the person attests the task's statement. */
   attested?: boolean;
 };
 
@@ -1271,7 +1271,7 @@ export type RunTicket = {
   key: string;
   title: string;
   body?: string;
-  /** Les champs du ticket (ADR 0031). */
+  /** The ticket's fields (ADR 0031). */
   fields?: {
     [key: string]: unknown;
   };
@@ -1386,9 +1386,9 @@ export interface Operations {
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
-  /** Événements du journal parcourus */
+  /** Log events scanned */
   evenements: number;
-  /** Nombre total de demandes refusées */
+  /** Total number of denied requests */
   refus: number;
   cout_outils_eur?: number;
   acces: Array<{

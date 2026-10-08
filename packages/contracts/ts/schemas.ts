@@ -20,7 +20,7 @@ export type ContextPackMemory = {
   };
 };
 
-/** Sélection de mémoire injectée dans un stage, sous budget de tokens. Contenu **non fiable** : données, jamais instructions. */
+/** The memory selected for a stage, within a token budget. **Untrusted** content: data, never instructions. */
 export type ContextPack = {
   schema: "choregos/ContextPack/v1";
   query: string;
@@ -41,7 +41,7 @@ export type ContextPack = {
   generated_at?: string;
 };
 
-/** Événement interne au format CloudEvents 1.0 (docs/plan/01 §1.7). */
+/** An internal event, CloudEvents 1.0 (docs/plan/01 §1.7). */
 export type Event = {
   specversion: "1.0";
   id: string;
@@ -57,19 +57,19 @@ export type Event = {
   };
 };
 
-/** Problème découvert hors périmètre par un agent. */
+/** A problem an agent found outside its scope. */
 export type Finding = {
   title: string;
   type: "perf" | "bug" | "security" | "tech-debt" | "docs" | "flaky-test" | "ux";
   severity: "low" | "medium" | "high" | "critical";
-  /** chemin:ligne, sortie de test, requête… */
+  /** path:line, test output, query… */
   evidence: string;
   suggested_fix?: string;
   estimate?: "S" | "M" | "L";
   out_of_scope_reason?: string;
 };
 
-/** Décision humaine acheminée vers un WorkflowInterpreter (front, board, commentaire, Slack, CLI). */
+/** A person's decision, routed to a WorkflowInterpreter (console, board, comment, Slack, CLI). */
 export type HumanDecision = {
   request_id?: string | null;
   kind: "approval" | "question" | "scope_change" | "task";
@@ -77,28 +77,28 @@ export type HumanDecision = {
   answer?: string | null;
   granted_paths?: Array<string>;
   reason?: string | null;
-  /** Une tâche : les valeurs saisies, versées dans les champs du ticket. */
+  /** A task: the values entered, written to the work item's fields. */
   values?: {
     [key: string]: unknown;
   };
-  /** Une tâche : la phrase attestée, telle qu'elle a été montrée. */
+  /** A task: the attested sentence, as it was shown. */
   attestation?: string | null;
   decided_by: string;
   decided_at: string;
   channel?: "web" | "tracker" | "slack" | "cli" | "api" | "board";
 };
 
-/** Événement externe normalisé par un adaptateur (docs/plan/01 §1.7). */
+/** An external event, normalised by an adapter (docs/plan/01 §1.7). */
 export type InboundEvent = {
   type: "tracker.item.created" | "tracker.item.updated" | "tracker.item.moved" | "tracker.item.commented" | "tracker.item.labeled" | "tracker.item.closed" | "scm.pr.opened" | "scm.pr.synchronized" | "scm.pr.review_submitted" | "scm.pr.merged" | "scm.pr.closed" | "scm.check.completed" | "ci.run.started" | "ci.run.succeeded" | "ci.run.failed" | "cd.app.synced" | "cd.app.degraded" | "cd.rollout.completed" | "cd.rollout.aborted" | "alert.fired" | "alert.resolved" | "human.decision";
   /** github, jira, gitlab, tekton, argocd, alertmanager, slack, web, cli */
   source: string;
-  /** Identifiant unique de livraison (dédup/rejeu). */
+  /** Unique delivery identifier (deduplication, replay). */
   delivery_id: string;
   ts: string;
   project_slug?: string | null;
   work_item_key?: string | null;
-  /** Identité externe à l'origine de l'événement. */
+  /** The external identity behind the event. */
   actor?: string | null;
   payload?: {
     [key: string]: unknown;
@@ -115,10 +115,10 @@ export type PolicyApprovalRule = {
 
 export type PolicyTrainEnv = {
   mode?: "auto_sync" | "train";
-  /** Cron (5 champs), fuseau du projet. */
+  /** Cron (5 fields), in the project's time zone. */
   schedule?: string;
   timezone?: string;
-  /** Fenêtres autorisées, ex. 'Mon-Thu 09:00-18:00'. */
+  /** Allowed windows, e.g. 'Mon-Thu 09:00-18:00'. */
   windows?: Array<string>;
   batch_min?: number;
   batch_max?: number;
@@ -151,7 +151,7 @@ export type PolicyTrainEnv = {
   };
 };
 
-/** Politique d'un projet : budgets, approbations, tentatives, périmètre, sandbox, findings, release train. */
+/** A project's policy: budgets, approvals, attempts, scope, sandbox, findings, release train. */
 export type Policy = {
   apiVersion: "choregos/v1";
   kind: "Policy";
@@ -162,14 +162,14 @@ export type Policy = {
     description?: string;
   };
   budgets?: {
-    /** Plafond de coût par ticket, par taille. */
+    /** Cost ceiling per work item, by size. */
     ticket_usd?: {
       S?: number;
       M?: number;
       L?: number;
       XL?: number;
     };
-    /** Plafond par étape : rôle → taille → USD. La clé `default` s'applique aux rôles non listés. */
+    /** Ceiling per step: role → size → USD. The `default` key applies to the roles not listed. */
     stage_usd?: {
       [key: string]: {
         S?: number;
@@ -187,7 +187,7 @@ export type Policy = {
     daily_project_usd?: number;
     alert_at_ratio?: number;
   };
-  /** Règles d'approbation humaine par type de décision. */
+  /** Human approval rules, by kind of decision. */
   approvals?: {
     spec?: PolicyApprovalRule;
     merge?: PolicyApprovalRule;
@@ -215,9 +215,9 @@ export type Policy = {
       deny_by_default?: boolean;
     };
     llm_security_analyzer?: boolean;
-    /** Demande de permission de nature inconnue : laissée passer et journalisée (allow) ou refusée (reject) */
+    /** A permission request of an unknown kind: let through and logged (allow), or refused (reject) */
     unknown_requests?: "allow" | "reject";
-    /** Injection de prompt repérée dans ce que l'agent va lire : journaliser (warn), arrêter l'étape (block), ne pas regarder (ignore) */
+    /** A prompt injection spotted in what the agent will read: log it (warn), stop the step (block), do not look (ignore) */
     prompt_injection?: "ignore" | "warn" | "block";
   };
   findings?: {
@@ -236,11 +236,11 @@ export type Policy = {
     read_timeout_ms?: number;
   };
   review?: {
-    /** Le backend de review doit différer de celui de l'implémentation. */
+    /** The review backend must differ from the implementation's. */
     cross_backend?: boolean;
     require_human_for_risk?: Array<"low" | "medium" | "high">;
   };
-  /** Configuration par environnement (docs/plan/05 §5.2). */
+  /** Configuration per environment (docs/plan/05 §5.2). */
   release_train?: {
     [key: string]: PolicyTrainEnv;
   };
@@ -254,7 +254,7 @@ export type ProjectProfile = string | {
   max_turns_factor?: number;
 };
 
-/** Configuration d'un projet Choregos (colonne `projects.config`). */
+/** A Choregos project's configuration (the `projects.config` column). */
 export type Project = {
   slug: string;
   org: string;
@@ -276,7 +276,7 @@ export type Project = {
     allowed_backends?: Array<string>;
   };
   models?: {
-    /** Surcharges projet : nom de profil → identifiant LiteLLM. */
+    /** Project overrides: profile name → LiteLLM identifier. */
     profiles?: {
       [key: string]: ProjectProfile;
     };
@@ -287,27 +287,27 @@ export type Project = {
     path_prefix?: string;
     apps?: Array<string>;
   };
-  /** Référence de cluster (executor). */
+  /** Cluster reference (executor). */
   cluster?: string;
   notify?: {
     slack_channel?: string;
     emails?: Array<string>;
   };
-  /** Outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun. ['*'] ouvre tout le catalogue. */
+  /** Catalogue tools this project may call, by name. Empty = none. ['*'] opens the whole catalogue. */
   tools?: Array<string>;
-  /** Groupes de l'organisation auxquels ce projet appartient. Ils décident de ce que le déploiement lui ouvre dans le catalogue d'outils. */
+  /** The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue. */
   groups?: Array<string>;
   labels?: {
     [key: string]: string;
   };
 };
 
-/** Contrat orchestrateur → runner (docs/plan/01 §1.5). */
+/** Orchestrator → runner contract (docs/plan/01 §1.5). */
 export type StageInput = {
   schema: "choregos/StageInput/v1";
   run_id: string;
   attempt: number;
-  /** En-tête W3C traceparent propagé au runner. */
+  /** W3C traceparent header, passed on to the runner. */
   trace_parent?: string;
   project: {
     slug: string;
@@ -315,7 +315,7 @@ export type StageInput = {
     test_command?: string;
     lint_command?: string;
     typecheck_command?: string;
-    /** Commandes qui MESURENT un fait booléen : nom du fait → commande, code de sortie 0 = vrai. Le runner les exécute après l'étape et le fait mesuré écrase celui que l'agent a déclaré, comme les tests écrasent tests_passed. À la racine de la configuration du projet (dod.facts), pas sous repo : un projet sans dépôt doit pouvoir prouver quelque chose. */
+    /** Commands that MEASURE a boolean fact: fact name → command, exit code 0 = true. The runner runs them after the step, and the measured fact overrides the one the agent declared, as the tests override tests_passed. At the root of the project's configuration (dod.facts), not under repo: a project without a repository must be able to prove something. */
     fact_commands?: {
       [key: string]: string;
     };
@@ -366,10 +366,10 @@ export type StageInput = {
     params?: {
       [key: string]: unknown;
     };
-    /** Modèle réel derrière l'alias de plateforme : ce que vérifie un backend contraint. */
+    /** The real model behind the platform alias: what a constrained backend checks. */
     provider_model?: string | null;
   };
-  /** Clé virtuelle du run (budget = budget de l'étape). */
+  /** The run's virtual key (budget = the step's budget). */
   gateway_key?: string;
   budget: {
     usd: number;
@@ -381,7 +381,7 @@ export type StageInput = {
   playbook: {
     ref: string;
     prompt_url?: string | null;
-    /** Prompt rendu en clair (dev et fakes). */
+    /** The rendered prompt in plain text (dev and fakes). */
     prompt?: string | null;
   };
   tools?: {
@@ -407,7 +407,7 @@ export type StageInput = {
     api_url: string;
     run_token: string;
   };
-  /** Les skills de l'agent du registre (ADR 0033) : nom, version, empreinte. Le runner lit les fichiers par l'API interne et vérifie l'empreinte avant de les poser. */
+  /** The registry agent's skills (ADR 0033): name, version, digest. The runner reads the files through the internal API and checks the digest before laying them down. */
   skills?: Array<{
     slug: string;
     version: number;
@@ -415,11 +415,11 @@ export type StageInput = {
   }>;
 };
 
-/** Contrat runner → orchestrateur (docs/plan/01 §1.6). L'agent écrit .choregos/result.json ; le runner complète artifacts/evidence/diagnostics. */
+/** Runner → orchestrator contract (docs/plan/01 §1.6). The agent writes .choregos/result.json; the runner completes artifacts/evidence/diagnostics. */
 export type StageResult = {
   schema: "choregos/StageResult/v1";
   status: "done" | "blocked" | "needs_human" | "failed";
-  /** Cause quand status != done : limit, budget, scope, invalid_result, agent_error, ci… */
+  /** Cause when status != done: limit, budget, scope, invalid_result, agent_error, ci… */
   reason?: string | null;
   summary: string;
   outputs?: {
@@ -446,7 +446,7 @@ export type StageResult = {
     };
   };
   evidence?: {
-    /** Preuves nommées par le métier (evidence_facts). Valeurs simples : un nombre, un booléen, une date ou un mot se vérifient. */
+    /** Evidence named by the business (evidence_facts). Simple values: a number, a boolean, a date or a word can be checked. */
     facts?: {
       [key: string]: string | number | number | boolean;
     } | null;
@@ -480,7 +480,7 @@ export type StageResult = {
   };
 };
 
-/** Manifeste d'un template de stack (docs/plan/03 §3.2). */
+/** A stack template's manifest (docs/plan/03 §3.2). */
 export type Template = {
   apiVersion: "choregos/v1";
   kind: "Template";
@@ -491,26 +491,26 @@ export type Template = {
     description?: string;
   };
   requires: {
-    /** kind → type attendu, ex. tracker: github-issues */
+    /** kind → expected type, e.g. tracker: github-issues */
     connectors: {
       [key: string]: string;
     };
     cluster_capabilities?: Array<string>;
-    /** Fournisseurs de ressources Azure à enregistrer, ex. Microsoft.App/managedEnvironments */
+    /** Azure resource providers to register, e.g. Microsoft.App/managedEnvironments */
     azure_capabilities?: Array<string>;
-    /** les connecteurs de l'ORGANISATION que les workflows appellent, par leur nom → leur capacité (S20-07), ex. annuaire: identity */
+    /** the ORGANISATION's connectors that the workflows call, by name → capability (S20-07), e.g. annuaire: identity */
     org_connectors?: {
       [key: string]: string;
     };
   };
   defaults: {
-    /** un seul workflow : la forme d'avant `workflows` */
+    /** a single workflow: the form used before `workflows` */
     workflow?: string;
-    /** les workflows livrés (ADR 0031) : `template:<nom>@<v>`, un gabarit du cœur, ou un chemin relatif au dossier du gabarit (`workflows/arrivee.yaml`) */
+    /** the workflows shipped (ADR 0031): `template:<name>@<v>`, a core template, or a path relative to the template's folder (`workflows/arrivee.yaml`) */
     workflows?: Array<string>;
-    /** le nom du workflow par défaut ; sinon le premier livré */
+    /** the default workflow's name; otherwise the first one shipped */
     default_workflow?: string;
-    /** les règles de routage du projet, comme PUT /projects/{id}/workflow-routing */
+    /** the project's routing rules, as PUT /projects/{id}/workflow-routing */
     routing?: Array<{
       when: {
         labels_any?: Array<string>;
@@ -522,11 +522,11 @@ export type Template = {
     policy?: string;
     models?: string;
     agent?: string;
-    /** les agents installés dans l'organisation à la naissance d'un projet, s'ils n'y sont pas : des fichiers du gabarit, au format de `POST /orgs/{org}/agents` (S20-07) */
+    /** the agents installed in the organisation when a project is born, if they are not there: files of the template in the `POST /orgs/{org}/agents` format, or `catalogue:<slug>` (S20-07, ADR 0040) */
     agents?: Array<string>;
-    /** les skills installées de même : des dossiers du gabarit, chacun avec son SKILL.md (S20-07) */
+    /** the skills installed the same way: folders of the template, each with its SKILL.md, or `catalogue:<slug>` (S20-07) */
     skills?: Array<string>;
-    /** ce qu'un GREFFON installe dans le projet à sa naissance : un nom d'installateur → un dossier du gabarit (`ontology: ./ontology`). Sans greffon pour l'installer, le projet naît sans, et le journal d'audit le dit (S20-09) */
+    /** what a PLUGIN installs in the project when it is born: an installer name → a folder of the template (`ontology: ./ontology`). Without a plugin to install it, the project is born without it, and the audit log says so (S20-09) */
     extensions?: {
       [key: string]: string;
     };
@@ -539,7 +539,7 @@ export type Template = {
     values?: Array<string>;
     description?: string;
   }>;
-  /** les étapes de provisioning ; aucune pour un projet sans dépôt (S20-07) */
+  /** the provisioning steps; none for a project without a repository (S20-07) */
   steps: Array<string | {
     [key: string]: {
       [key: string]: unknown;
@@ -554,7 +554,7 @@ export type UiManifestForm = {
   kind: "form";
   title: string;
   description?: string;
-  /** le JSON Schema des valeurs ; la console en tire le formulaire */
+  /** the JSON Schema of the values; the console derives the form from it */
   schema: {
     [key: string]: unknown;
   };
@@ -585,12 +585,12 @@ export type UiManifestAction = {
   description?: string;
   path: UiManifestPath;
   method?: "POST" | "PUT" | "PATCH" | "DELETE";
-  /** la phrase à confirmer avant d'agir */
+  /** the sentence to confirm before acting */
   confirm?: string;
   danger?: boolean;
-  /** le geste exige une authentification fraîche */
+  /** the gesture requires a fresh sign-in */
   reauth?: boolean;
-  /** le JSON Schema des paramètres demandés avant d'agir */
+  /** the JSON Schema of the parameters asked for before acting */
   params?: {
     [key: string]: unknown;
   };
@@ -606,17 +606,17 @@ export type UiManifestSecretOnce = {
   params?: {
     [key: string]: unknown;
   };
-  /** le champ de la réponse qui porte le secret, montré une fois et jamais gardé */
+  /** the response field that carries the secret, shown once and never kept */
   secret_field: string;
 };
 
-/** Une section d'administration déclarée par un greffon, en DONNÉES : la console la rend avec ses propres blocs, aucun code du greffon n'y tourne (ADR 0032). Les chemins sont relatifs à /api/v1 ; `{org}` vaut l'organisation courante, `{id}` l'identifiant de la ligne. */
+/** An administration section declared by a plugin, as DATA: the console renders it with its own blocks, no plugin code runs there (ADR 0032). Paths are relative to /api/v1; `{org}` is the current organisation, `{id}` the row's identifier. */
 export type UiManifest = {
   id: string;
   title: string;
   description?: string;
   scope: "platform" | "organisation";
-  /** une permission du cœur, ex. member:manage ; platform:admin pour la portée plateforme */
+  /** a core permission, e.g. member:manage; platform:admin for the platform scope */
   permission: string;
   blocks: Array<UiManifestForm | UiManifestTable | UiManifestAction | UiManifestSecretOnce>;
 };
@@ -629,18 +629,18 @@ export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSy
 
 export type WorkflowAgentActor = {
   type: "agent";
-  /** Rôle de l'agent. Les rôles du paquet — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — gardent leur sens ; un métier nomme les siens (`sourcing`, `instruction_dossier`), et le playbook se résout par le nom du rôle. */
+  /** The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name. */
   role: string;
-  /** profile:<name>, profile:by_size, ou un identifiant LiteLLM direct. */
+  /** profile:<name>, profile:by_size, or a direct LiteLLM identifier. */
   model?: string;
-  /** Backend ACP imposé (sinon défaut du projet). */
+  /** The ACP backend to use (otherwise the project's default). */
   backend?: string;
   fresh_context?: boolean;
   max_turns?: number;
   max_minutes?: number;
-  /** Nom du playbook (défaut : le rôle). */
+  /** The playbook's name (default: the role). */
   playbook?: string;
-  /** Un agent du registre (ADR 0033) : `slug`, ou `slug@version`. Sa version — l'épinglée du projet, sinon la dernière — fixe instructions, modèle, limites et budget ; ses instructions priment sur le playbook. */
+  /** A registry agent (ADR 0033): `slug`, or `slug@version`. Its version — the project's pinned one, otherwise the latest — sets the instructions, model, limits and budget; its instructions take precedence over the playbook. */
   agent?: string;
 };
 
@@ -663,7 +663,7 @@ export type WorkflowState = {
   };
   terminal?: boolean;
   kind?: "work" | "wait" | "terminal";
-  /** Un état de production : il ne s'atteint que par `via: release_train` (avant #175 : le préfixe `deployed_prod` du nom). */
+  /** A production state: it can only be reached `via: release_train` (before #175: the name's `deployed_prod` prefix). */
   production?: boolean;
 };
 
@@ -713,7 +713,7 @@ export type WorkflowActionApproval = {
   separation_of_duties?: boolean;
 };
 
-/** titre, justification et paramètres rendus avec les champs du ticket ; une validation humaine quand une opération l'exige ou quand `approval` est déclaré */
+/** title, reason and parameters rendered with the work item's fields; a human approval when an operation requires one or when `approval` is declared */
 export type WorkflowTransitionAction = {
   kind: string;
   title: string;
@@ -723,22 +723,22 @@ export type WorkflowTransitionAction = {
   };
   effects: Array<WorkflowActionEffect>;
   approval?: WorkflowActionApproval;
-  /** pas avant cette date, tirée d'un champ du ticket : `fields.date_arrivee - 10d` */
+  /** not before this date, taken from a work item's field: `fields.date_arrivee - 10d` */
   not_before?: string;
 };
 
 export type WorkflowTask = {
   title?: string;
   instructions?: string;
-  /** un JSON Schema d'objet ; chaque propriété est un champ du ticket */
+  /** an object JSON Schema; each property is a field of the work item */
   form: {
     [key: string]: unknown;
   };
-  /** ce que la personne atteste, mot pour mot */
+  /** what the person attests, word for word */
   attest?: string;
 };
 
-/** DSL de workflow Choregos : machine à états déclarative par projet (docs/plan/01 §1.4). */
+/** Choregos workflow DSL: a declarative state machine per project (docs/plan/01 §1.4). */
 export type Workflow = {
   apiVersion: "choregos/v1";
   kind: "Workflow";
@@ -760,7 +760,7 @@ export type Workflow = {
   };
   transitions: Array<WorkflowTransition>;
   defaults?: WorkflowDefaults;
-  /** Où commence le workflow. Facultatif : le parseur y écrit le premier état déclaré (§1.4). Le champ existe parce que l'ordre des clés d'un objet ne survit pas à un stockage jsonb, et qu'un workflow qui croit commencer par son état terminal clôt le ticket sans rien faire. */
+  /** Where the workflow starts. Optional: the parser writes the first declared state there (§1.4). The field exists because the order of an object's keys does not survive jsonb storage, and a workflow that believes it starts at its terminal state closes the work item without doing anything. */
   initial?: string;
 };
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/inbound-event.schema.json",
   "title": "InboundEvent",
-  "description": "Événement externe normalisé par un adaptateur (docs/plan/01 §1.7).",
+  "description": "An external event, normalised by an adapter (docs/plan/01 §1.7).",
   "type": "object",
   "required": ["type", "source", "delivery_id", "ts"],
   "additionalProperties": false,
@@ -21,11 +21,11 @@
       ]
     },
     "source": { "type": "string", "description": "github, jira, gitlab, tekton, argocd, alertmanager, slack, web, cli" },
-    "delivery_id": { "type": "string", "description": "Identifiant unique de livraison (dédup/rejeu)." },
+    "delivery_id": { "type": "string", "description": "Unique delivery identifier (deduplication, replay)." },
     "ts": { "type": "string", "format": "date-time" },
     "project_slug": { "type": ["string", "null"] },
     "work_item_key": { "type": ["string", "null"] },
-    "actor": { "type": ["string", "null"], "description": "Identité externe à l'origine de l'événement." },
+    "actor": { "type": ["string", "null"], "description": "The external identity behind the event." },
     "payload": { "type": "object", "additionalProperties": true, "default": {} }
   }
 }

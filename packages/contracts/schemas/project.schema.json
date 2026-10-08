@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/project.schema.json",
   "title": "Project",
-  "description": "Configuration d'un projet Choregos (colonne `projects.config`).",
+  "description": "A Choregos project's configuration (the `projects.config` column).",
   "type": "object",
   "required": [
     "slug",
@@ -106,7 +106,7 @@
       "properties": {
         "profiles": {
           "type": "object",
-          "description": "Surcharges projet : nom de profil → identifiant LiteLLM.",
+          "description": "Project overrides: profile name → LiteLLM identifier.",
           "additionalProperties": {
             "$ref": "#/$defs/profile"
           }
@@ -139,7 +139,7 @@
     },
     "cluster": {
       "type": "string",
-      "description": "Référence de cluster (executor)."
+      "description": "Cluster reference (executor)."
     },
     "notify": {
       "type": "object",
@@ -158,7 +158,7 @@
       }
     },
     "tools": {
-      "description": "Outils du catalogue que ce projet peut appeler, par leur nom. Vide = aucun. ['*'] ouvre tout le catalogue.",
+      "description": "Catalogue tools this project may call, by name. Empty = none. ['*'] opens the whole catalogue.",
       "type": "array",
       "items": {
         "type": "string"
@@ -166,7 +166,7 @@
       "default": []
     },
     "groups": {
-      "description": "Groupes de l'organisation auxquels ce projet appartient. Ils décident de ce que le déploiement lui ouvre dans le catalogue d'outils.",
+      "description": "The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue.",
       "type": "array",
       "items": {
         "type": "string"

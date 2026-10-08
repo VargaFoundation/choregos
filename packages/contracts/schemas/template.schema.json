@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/template.schema.json",
   "title": "Template",
-  "description": "Manifeste d'un template de stack (docs/plan/03 §3.2).",
+  "description": "A stack template's manifest (docs/plan/03 §3.2).",
   "type": "object",
   "required": ["apiVersion", "kind", "metadata", "requires", "defaults", "inputs", "steps"],
   "additionalProperties": false,
@@ -28,18 +28,18 @@
         "connectors": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "description": "kind → type attendu, ex. tracker: github-issues"
+          "description": "kind → expected type, e.g. tracker: github-issues"
         },
         "cluster_capabilities": { "type": "array", "items": { "type": "string" } },
         "azure_capabilities": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Fournisseurs de ressources Azure à enregistrer, ex. Microsoft.App/managedEnvironments"
+          "description": "Azure resource providers to register, e.g. Microsoft.App/managedEnvironments"
         },
         "org_connectors": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "description": "les connecteurs de l'ORGANISATION que les workflows appellent, par leur nom → leur capacité (S20-07), ex. annuaire: identity"
+          "description": "the ORGANISATION's connectors that the workflows call, by name → capability (S20-07), e.g. annuaire: identity"
         }
       }
     },
@@ -47,17 +47,17 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "workflow": { "type": "string", "description": "un seul workflow : la forme d'avant `workflows`" },
+        "workflow": { "type": "string", "description": "a single workflow: the form used before `workflows`" },
         "workflows": {
           "type": "array",
           "minItems": 1,
           "items": { "type": "string" },
-          "description": "les workflows livrés (ADR 0031) : `template:<nom>@<v>`, un gabarit du cœur, ou un chemin relatif au dossier du gabarit (`workflows/arrivee.yaml`)"
+          "description": "the workflows shipped (ADR 0031): `template:<name>@<v>`, a core template, or a path relative to the template's folder (`workflows/arrivee.yaml`)"
         },
-        "default_workflow": { "type": "string", "description": "le nom du workflow par défaut ; sinon le premier livré" },
+        "default_workflow": { "type": "string", "description": "the default workflow's name; otherwise the first one shipped" },
         "routing": {
           "type": "array",
-          "description": "les règles de routage du projet, comme PUT /projects/{id}/workflow-routing",
+          "description": "the project's routing rules, as PUT /projects/{id}/workflow-routing",
           "items": {
             "type": "object",
             "required": ["when", "workflow"],
@@ -82,18 +82,18 @@
         "agents": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "les agents installés dans l'organisation à la naissance d'un projet, s'ils n'y sont pas : des fichiers du gabarit, au format de `POST /orgs/{org}/agents` (S20-07)"
+          "description": "the agents installed in the organisation when a project is born, if they are not there: files of the template in the `POST /orgs/{org}/agents` format, or `catalogue:<slug>` (S20-07, ADR 0040)"
         },
         "skills": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "les skills installées de même : des dossiers du gabarit, chacun avec son SKILL.md (S20-07)"
+          "description": "the skills installed the same way: folders of the template, each with its SKILL.md, or `catalogue:<slug>` (S20-07)"
         },
         "extensions": {
           "type": "object",
           "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
           "additionalProperties": { "type": "string" },
-          "description": "ce qu'un GREFFON installe dans le projet à sa naissance : un nom d'installateur → un dossier du gabarit (`ontology: ./ontology`). Sans greffon pour l'installer, le projet naît sans, et le journal d'audit le dit (S20-09)"
+          "description": "what a PLUGIN installs in the project when it is born: an installer name → a folder of the template (`ontology: ./ontology`). Without a plugin to install it, the project is born without it, and the audit log says so (S20-09)"
         }
       }
     },
@@ -116,7 +116,7 @@
     },
     "steps": {
       "type": "array",
-      "description": "les étapes de provisioning ; aucune pour un projet sans dépôt (S20-07)",
+      "description": "the provisioning steps; none for a project without a repository (S20-07)",
       "items": {
         "oneOf": [
           { "type": "string" },

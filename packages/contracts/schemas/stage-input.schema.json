@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/stage-input.schema.json",
   "title": "StageInput",
-  "description": "Contrat orchestrateur → runner (docs/plan/01 §1.5).",
+  "description": "Orchestrator → runner contract (docs/plan/01 §1.5).",
   "type": "object",
   "required": [
     "schema",
@@ -33,7 +33,7 @@
     },
     "trace_parent": {
       "type": "string",
-      "description": "En-tête W3C traceparent propagé au runner."
+      "description": "W3C traceparent header, passed on to the runner."
     },
     "project": {
       "type": "object",
@@ -63,7 +63,7 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Commandes qui MESURENT un fait booléen : nom du fait → commande, code de sortie 0 = vrai. Le runner les exécute après l'étape et le fait mesuré écrase celui que l'agent a déclaré, comme les tests écrasent tests_passed. À la racine de la configuration du projet (dod.facts), pas sous repo : un projet sans dépôt doit pouvoir prouver quelque chose."
+          "description": "Commands that MEASURE a boolean fact: fact name → command, exit code 0 = true. The runner runs them after the step, and the measured fact overrides the one the agent declared, as the tests override tests_passed. At the root of the project's configuration (dod.facts), not under repo: a project without a repository must be able to prove something."
         }
       }
     },
@@ -263,13 +263,13 @@
             "string",
             "null"
           ],
-          "description": "Modèle réel derrière l'alias de plateforme : ce que vérifie un backend contraint."
+          "description": "The real model behind the platform alias: what a constrained backend checks."
         }
       }
     },
     "gateway_key": {
       "type": "string",
-      "description": "Clé virtuelle du run (budget = budget de l'étape)."
+      "description": "The run's virtual key (budget = the step's budget)."
     },
     "budget": {
       "type": "object",
@@ -327,7 +327,7 @@
             "string",
             "null"
           ],
-          "description": "Prompt rendu en clair (dev et fakes)."
+          "description": "The rendered prompt in plain text (dev and fakes)."
         }
       }
     },
@@ -421,7 +421,7 @@
     },
     "skills": {
       "type": "array",
-      "description": "Les skills de l'agent du registre (ADR 0033) : nom, version, empreinte. Le runner lit les fichiers par l'API interne et vérifie l'empreinte avant de les poser.",
+      "description": "The registry agent's skills (ADR 0033): name, version, digest. The runner reads the files through the internal API and checks the digest before laying them down.",
       "items": {
         "type": "object",
         "additionalProperties": false,
