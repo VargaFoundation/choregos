@@ -32,6 +32,7 @@ with workflow.unsafe.imports_passed_through():
     from choregos_contracts.workflow import effet_de_la_transition
     from choregos_core import WorkflowEngine
     from choregos_core.dsl.dates import DateIllisible, echeance
+    from choregos_core.dsl.trains import approbation_du_train, env_du_train
     from choregos_core.gates import ACTION_REGLEE, GateOutcome
 
     from ..activities import actions as action_activities
@@ -78,6 +79,10 @@ RELECTURE_D_UNE_ACTION = timedelta(hours=6)
 #: Une transition humaine peut être une TÂCHE : un formulaire, une attestation (S20-06). Avant ce
 #: marqueur, toute transition humaine demandait une approbation.
 TACHES_HUMAINES = "taches-humaines"
+#: Le train porte au ticket la fin de SON départ, et l'approbation que son workflow exige (ADR 0041,
+#: S21-21). Avant ce marqueur, le ticket prenait pour sien tout événement `cd.*`, quel qu'en soit
+#: l'environnement : le staging terminé valait la prod.
+TRAIN_PAR_ENVIRONNEMENT = "train-par-environnement"
 
 
 @dataclass
@@ -742,15 +747,21 @@ class WorkflowInterpreter:
         return False
 
     async def _run_train(self, params: InterpreterInput, engine: WorkflowEngine, transition: Any) -> Any:
-        env = transition.train.env if transition.train else "prod"
+        """Embarque le ticket, puis attend que SON train ait livré — `finish_release` et `rollback` le
+        préviennent (ADR 0041). L'approbation que le workflow exige voyage avec lui jusqu'au départ."""
+        env = env_du_train(transition)
+        par_environnement = workflow.patched(TRAIN_PAR_ENVIRONNEMENT)
+        embarquement: dict[str, Any] = {
+            "project_id": params.project_id,
+            "project_slug": params.project_slug,
+            "work_item_id": params.work_item_id,
+            "env": env,
+        }
+        if par_environnement:
+            embarquement["approval"] = dict(approbation_du_train(engine.wf, transition))
         await executer_activite(
             signal_train,
-            {
-                "project_id": params.project_id,
-                "project_slug": params.project_slug,
-                "work_item_id": params.work_item_id,
-                "env": env,
-            },
+            embarquement,
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )
@@ -761,6 +772,11 @@ class WorkflowInterpreter:
             await wait_signal(lambda: bool(self.inbox) or self.stopped, step)
             while self.inbox:
                 event = self.inbox.popleft()
+                if par_environnement and not _de_cet_environnement(event, env):
+                    # Le staging terminé n'est pas la prod : un ticket qui prend deux trains de
+                    # suite recevait le second pour livré dès que le premier l'était.
+                    self._absorb(event)
+                    continue
                 if event.get("type") in {"cd.rollout.completed", "cd.app.synced"}:
                     return engine.after_train(transition, ok=True)
                 if event.get("type") in {"cd.rollout.aborted", "cd.app.degraded"}:
@@ -897,3 +913,10 @@ def _decision(state: str, reason: str) -> Any:
     from choregos_core import Decision
 
     return Decision(next_state=state, escalated=True, reason=reason)
+
+
+def _de_cet_environnement(event: dict[str, Any], env: str) -> bool:
+    """Un événement de déploiement compte pour le train qui attend s'il vise son environnement.
+    Sans environnement dit — un événement porté à la main, d'avant ADR 0041 —, il compte."""
+    vise = (event.get("payload") or {}).get("env")
+    return vise is None or str(vise) == env

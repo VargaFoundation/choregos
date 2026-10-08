@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from choregos_api.db.models import Deployment, Finding, Project, Release, WorkItem
+from choregos_api.logging import get_logger
 from choregos_api.services import persist_event
 from choregos_contracts import EventType
 from choregos_core import Change, Message, PrRef, utcnow
@@ -17,6 +18,8 @@ from temporalio import activity
 
 from ..config import get_settings
 from .base import db, project_bundle
+
+logger = get_logger("choregos.train")
 
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
@@ -329,7 +332,8 @@ async def verify_prod(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="finish_release")
 async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
-    """Clôture : notes de version, tickets marqués déployés, événement, notification."""
+    """Clôture : notes de version, tickets marqués déployés, événement, notification — et chaque
+    ticket du lot prévenu que SON train a livré (ADR 0041) : il attendait un `cd.*` que rien n'envoyait."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         release = await session.get(Release, payload["release_id"])
@@ -341,15 +345,8 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
         await _close_deployment(session, release.id, "succeeded")
         notes = _release_notes(release)
         release.notes = notes
-        for item in release.items:
-            row = (
-                await session.execute(
-                    select(WorkItem).where(
-                        WorkItem.project_id == bundle.project.id,
-                        WorkItem.tracker_key == item.get("work_item_key"),
-                    )
-                )
-            ).scalar_one_or_none()
+        tickets = await _tickets_du_lot(session, bundle, release)
+        for row in tickets.values():
             if row is not None:
                 documents = dict(row.documents or {})
                 documents["deployed_release"] = release.id
@@ -372,7 +369,56 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
                 severity="success",
             ),
         )
-        return {"ok": True, "notes": notes}
+        prevenir = _destinataires(bundle.slug, tickets)
+        env = release.env
+    # Après la validation de la transaction : le ticket prévenu relit une release terminée.
+    await _prevenir_les_tickets(prevenir, "cd.rollout.completed", payload["release_id"], env)
+    return {"ok": True, "notes": notes}
+
+
+async def _tickets_du_lot(session: Any, bundle: Any, release: Release) -> dict[str, WorkItem | None]:
+    tickets: dict[str, WorkItem | None] = {}
+    for item in release.items:
+        cle = str(item.get("work_item_key") or "")
+        tickets[cle] = (
+            await session.execute(
+                select(WorkItem).where(WorkItem.project_id == bundle.project.id, WorkItem.tracker_key == cle)
+            )
+        ).scalar_one_or_none()
+    return tickets
+
+
+def _destinataires(slug: str, tickets: dict[str, WorkItem | None]) -> list[tuple[str, str]]:
+    """L'interpréteur de chaque ticket connu : celui qu'il a consigné, sinon son identifiant déterministe."""
+    from choregos_api.temporal import interpreter_id
+
+    return [
+        (row.temporal_wf_id or interpreter_id(slug, cle), cle)
+        for cle, row in tickets.items()
+        if row is not None
+    ]
+
+
+async def _prevenir_les_tickets(
+    destinataires: list[tuple[str, str]], type_: str, release_id: str, env: str
+) -> None:
+    """Un signal `inbound` par ticket, comme un événement de CD. L'identifiant de livraison est stable :
+    une activité rejouée renvoie le même. Un ticket arrêté entre-temps n'écoute plus — ce n'est pas
+    une panne du train, il ne doit pas faire échouer sa clôture."""
+    for workflow_id, cle in destinataires:
+        evenement = {
+            "type": type_,
+            "source": "release-train",
+            "delivery_id": f"{release_id}:{cle}",
+            "work_item_key": cle,
+            "payload": {"env": env, "release_id": release_id},
+        }
+        try:
+            await activity.client().get_workflow_handle(workflow_id).signal("inbound", evenement)
+        except Exception as erreur:
+            logger.warning(
+                "ticket non prévenu", workflow_id=workflow_id, release=release_id, erreur=str(erreur)
+            )
 
 
 def _release_notes(release: Release) -> str:
@@ -386,6 +432,7 @@ def _release_notes(release: Release) -> str:
 @activity.defn(name="rollback")
 async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
     """Rollback : abandon du rollout, release marquée, incident enregistré, alerte envoyée."""
+    prevenir: list[tuple[str, str]] = []
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         release = await session.get(Release, payload["release_id"])
@@ -393,6 +440,7 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
         for app in apps:
             await bundle.adapters.cd.abort_rollout(app)
         if release is not None:
+            prevenir = _destinataires(bundle.slug, await _tickets_du_lot(session, bundle, release))
             release.status = "rolled_back"
             release.ended_at = utcnow()
             release.verdict = {"go": False, "reason": payload.get("reason", "")}
@@ -437,7 +485,9 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
                 severity="error",
             ),
         )
-        return {"ok": True}
+    # Le ticket attendait son train jusqu'au délai, puis finissait chez un humain sans savoir pourquoi.
+    await _prevenir_les_tickets(prevenir, "cd.rollout.aborted", payload["release_id"], payload["env"])
+    return {"ok": True}
 
 
 @activity.defn(name="mark_release")

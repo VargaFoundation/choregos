@@ -61,9 +61,12 @@ class ReleaseTrain:
 
     @workflow.signal
     def merged(self, payload: dict[str, Any]) -> None:
-        """Un ticket fusionné monte dans le train. Un doublon ne compte qu'une fois."""
-        if any(item.get("work_item_key") == payload.get("work_item_key") for item in self.batch):
-            return
+        """Un ticket fusionné monte dans le train. Un doublon ne compte qu'une fois — mais l'approbation
+        qu'il apporte s'ajoute : le webhook embarque le ticket sans elle, l'interpréteur avec."""
+        for item in self.batch:
+            if item.get("work_item_key") == payload.get("work_item_key"):
+                item["approval"] = _cumul(item.get("approval"), payload.get("approval"))
+                return
         self.batch.append(payload)
         labels = payload.get("labels") or []
         if "hotfix" in labels:
@@ -251,7 +254,10 @@ class ReleaseTrain:
         if not soak.get("ok"):
             return await self._rollback(params, config, "SLO dégradés pendant le soak")
 
-        approval = config.get("approval") or {}
+        # L'approbation de la politique, OU celle qu'un ticket du lot apporte de son workflow (ADR
+        # 0041) : un correctif part seul, une fonctionnalité attend son capitaine. Un embarquement
+        # d'avant ne porte pas `approval` ; le calcul rend alors la politique seule, comme avant.
+        approval = _approbation_du_depart(config.get("approval") or {}, items)
         if approval.get("required"):
             self.status = str(ReleaseStatus.AWAITING_APPROVAL)
             self.approved = None
@@ -366,6 +372,26 @@ class ReleaseTrain:
             self.freeze_reason = reason
             self.status = str(ReleaseStatus.FROZEN)
         return {"frozen": self.frozen, "reason": reason}
+
+
+def _cumul(une: dict[str, Any] | None, autre: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Deux exigences d'approbation d'un même ticket : exigée si l'une l'exige, le premier groupe dit."""
+    if not une or not autre:
+        return une or autre
+    return {
+        "required": bool(une.get("required") or autre.get("required")),
+        "group": une.get("group") or autre.get("group"),
+    }
+
+
+def _approbation_du_depart(politique: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Exigée si la politique OU un ticket du lot l'exige. Le groupe : celui de la politique s'il est
+    dit, sinon celui du premier ticket qui en nomme un ; le délai reste celui de la politique."""
+    exigences = [i["approval"] for i in items if (i.get("approval") or {}).get("required")]
+    if not exigences:
+        return politique
+    groupe = politique.get("group") or next((e.get("group") for e in exigences if e.get("group")), None)
+    return {**politique, "required": True, "group": groupe}
 
 
 async def _wait(condition: Any, timeout: timedelta | None = None) -> bool:  # noqa: ASYNC109
