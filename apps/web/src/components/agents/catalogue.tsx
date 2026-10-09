@@ -67,11 +67,13 @@ export function CatalogueDAgents({ org }: { org: string }) {
       </Card>
       <Card title="connect an AI client">
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
-          Assistants that reach in through the MCP gate, with your rights, never more — they never decide. Connecting
-          one registers it as an external agent and gives you its configuration, once.{" "}
+          Assistants that reach in through the MCP door — they never decide. Connecting one here registers it as an
+          external agent: its calls carry the agent&apos;s name and limits, within your rights, and you get its
+          configuration once. To connect one simply as yourself, see{" "}
           <Link href="/integrations" className="underline">
-            all clients and their set-up
+            AI clients
           </Link>
+          .
         </p>
         <ul className="space-y-2" data-testid="clients-du-catalogue">
           {clients.map((entree) => (
@@ -143,7 +145,7 @@ function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogu
     try {
       setConnexion(await api.connectCatalogueClient(org, entree.slug, lecture));
       await client.invalidateQueries({ queryKey: ["agents", org] });
-      await client.invalidateQueries({ queryKey: ["me-tokens"] });
+      await client.invalidateQueries({ queryKey: ["tokens"] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "connection refused");
     }

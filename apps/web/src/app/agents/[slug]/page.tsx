@@ -456,7 +456,7 @@ function Clients({ org, slug }: { org: string; slug: string }) {
     queryKey: ["agent-credentials", org, slug],
     queryFn: () => api.agentCredentials(org, slug),
   });
-  const jetons = useQuery({ queryKey: ["me-tokens"], queryFn: () => api.myTokens() });
+  const jetons = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
   const [choisi, setChoisi] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const rattaches = new Set((liens.data ?? []).map((l) => l.token_id));

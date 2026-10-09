@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
@@ -52,7 +53,15 @@ export default function AdminPage() {
           </ul>
         </Card>
 
-        <Card title="my API tokens">
+        {/* Un jeton, un nom, un endroit (S23-14) : « API token » ici, « token for Claude Code » dans les
+            clients, « MCP client » dans les agents — trois noms pour le même objet, sous deux clés de
+            cache. Ici la liste de TOUS les jetons de la personne, et leur révocation ; les deux autres
+            pages renvoient ici. */}
+        <Card title="my access tokens">
+          <p className="mb-3 text-xs text-ink-muted" id="jetons">
+            Every token you hold: for the API and the CLI, or for an AI client at the MCP door (created from{" "}
+            <Link href="/integrations">AI clients</Link> or <Link href="/agents">agents</Link>).
+          </p>
           {/* Le clair n'existe qu'ici, une fois : il n'est jamais stocké ni réaffiché. */}
           {tokenClair && (
             <div className="mb-3 border border-line border-l-2 border-l-accent bg-surface p-3 text-sm">
@@ -77,7 +86,7 @@ export default function AdminPage() {
               />
             </label>
             <Button size="sm" tone="primary" type="submit">
-              mint a token (90 days)
+              create an API token (90 days)
             </Button>
           </form>
           <ul className="space-y-1 text-xs">
@@ -87,7 +96,7 @@ export default function AdminPage() {
                   <span className="font-mono">{token.name}</span>
                   <span className="text-ink-muted">
                     {" "}
-                    · expires {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
+                    · {porteeDuJeton(token.scopes)} · expires {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
                     {token.last_used_at ? shortDate(token.last_used_at) : "—"}
                   </span>
                 </span>
@@ -105,10 +114,18 @@ export default function AdminPage() {
               </li>
             ))}
           </ul>
-          <EtatDeLecture lecture={tokens} quoi="your tokens" />
+          <EtatDeLecture lecture={tokens} quoi="your access tokens" />
           {tokens.data?.length === 0 && <Empty>no token</Empty>}
         </Card>
       </div>
     </div>
   );
+}
+
+/** Ce qu'un jeton ouvre, en mots : l'API (et la CLI), ou la porte MCP d'un client d'IA. */
+function porteeDuJeton(scopes: string[] | null | undefined): string {
+  const liste = scopes ?? [];
+  if (liste.length > 0 && liste.every((s) => s.startsWith("mcp:")))
+    return liste.includes("mcp:write") ? "AI client, can open work items" : "AI client, read-only";
+  return "API and CLI";
 }

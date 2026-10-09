@@ -15,7 +15,7 @@ export const NOTIONS: { cle: NotionDuGlossaire; terme: string; href: string; def
     terme: "Agent",
     href: "/agents",
     definition:
-      "does the work of a workflow step: instructions, a model, the skills it carries and the tools it may call. Choregos runs it, under a budget.",
+      "does the work of a workflow step: instructions, a model, the skills it carries and the tools it may call. An internal agent runs in Choregos, under a budget; an external agent is an AI client registered here, whose calls carry its name and limits.",
   },
   {
     cle: "skills",
@@ -35,7 +35,7 @@ export const NOTIONS: { cle: NotionDuGlossaire; terme: string; href: string; def
     terme: "Client",
     href: "/integrations",
     definition:
-      "an AI assistant that reaches IN to Choregos through its MCP gate — Claude Code, Cursor, ChatGPT — with its human's rights, never more. It never decides.",
+      "an AI assistant that reaches IN to Choregos through its MCP door — Claude Code, Cursor, ChatGPT — with its human's access token: their rights, never more, fewer once registered as an external agent. It never decides.",
   },
 ];
 
