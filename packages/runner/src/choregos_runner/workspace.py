@@ -239,6 +239,13 @@ class Workspace:
             "points to a commit — without it, no diff can be measured"
         )
 
+    async def head_sha(self) -> str:
+        """Le commit où le run commence : la base, ou le dernier commit de la branche du ticket."""
+        resolved = await self.git("rev-parse", "--verify", "HEAD^{commit}")
+        if not resolved.ok or not resolved.stdout.strip():
+            raise WorkspaceError(f"HEAD does not resolve after checkout: {resolved.output}")
+        return resolved.stdout.strip()
+
     async def changed_files(self, base: str) -> list[str]:
         """Fichiers modifiés depuis la base, y compris ceux qui ne sont pas encore indexés."""
         # `base HEAD` et pas `base...HEAD` : la seconde forme exige une base de fusion, que
