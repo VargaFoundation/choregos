@@ -429,3 +429,18 @@ test("board : ce qui attend une personne se dit en tête, et y mène même hors 
   await expect(sommaire.getByRole("link")).toHaveCount(await page.locator("section[id^=colonne-]").count());
   await expect(sommaire).toContainText("1 waiting");
 });
+
+test("coûts : un écran, une devise, et un graphe qui se lit (S23-10)", async ({ page }) => {
+  for (const chemin of ["/p/billing-api", "/p/billing-api/items/w1", "/p/billing-api/board"]) {
+    await page.goto(chemin);
+    await page.waitForLoadState("networkidle");
+    // L'écran d'un ticket mêlait le total en € et ses runs en US$ ; la vue d'ensemble convertissait à 0,92.
+    await expect(page.locator("main")).not.toContainText("€");
+  }
+  await page.goto("/p/billing-api");
+  const graphe = page.getByTestId("graphe-des-couts");
+  await expect(graphe.getByRole("img")).toHaveAttribute("aria-label", /^cost per day, 14 days: highest US\$/);
+  await expect(page.getByText("daily budget")).toBeVisible();
+  await graphe.getByText("as a table").click();
+  await expect(graphe.getByRole("table", { name: "cost per day" }).getByRole("row")).toHaveCount(15);
+});

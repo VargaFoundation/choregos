@@ -15,7 +15,7 @@ describe("composants transverses", () => {
   });
 
   it("marque le dépassement de budget", () => {
-    const { container } = render(<CostChip costEur={30} budgetEur={25} />);
+    const { container } = render(<CostChip costUsd={30} budgetUsd={25} />);
     expect(container.querySelector(".text-danger")).not.toBeNull();
   });
 

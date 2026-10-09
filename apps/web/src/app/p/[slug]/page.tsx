@@ -6,7 +6,8 @@ import Link from "next/link";
 import { use } from "react";
 import { Label, Stat } from "@varga/design-system";
 import { api } from "@/lib/api";
-import { eur, percent } from "@/lib/format";
+import { percent, usd } from "@/lib/format";
+import { GrapheDesCouts } from "@/components/graphe-des-couts";
 import type { DoraMetric } from "@/lib/types";
 import { MiseEnRoute } from "@/components/mise-en-route";
 import { Card, CostChip, Empty, ErrorNote, EtatDeLecture, StateBadge } from "@/components/ui";
@@ -33,7 +34,6 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
   if (project.error) return <ErrorNote>{(project.error as Error).message}</ErrorNote>;
   const stats = project.data?.stats;
   const rows = costs.data?.rows ?? [];
-  const max = Math.max(1, ...rows.map((row) => row.cost_eur));
   const actifs = stats?.active_work_items ?? 0;
 
   return (
@@ -98,20 +98,12 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           <Empty>no spend recorded.</Empty>
         ) : (
           <>
-            <div className="flex h-40 items-end gap-1.5 border-b border-ink" role="img" aria-label="cost per day">
-              {rows.map((row) => (
-                <div
-                  key={row.key}
-                  title={`${row.key} — ${eur(row.cost_eur)} (${row.runs} runs)`}
-                  style={{ height: `${Math.max(3, (row.cost_eur / max) * 100)}%` }}
-                  className="flex-1 bg-agent transition-opacity hover:opacity-70"
-                />
-              ))}
-            </div>
+            <GrapheDesCouts rows={rows} />
             <div className="mt-4 flex flex-wrap gap-x-10 gap-y-3">
-              <Stat value={eur(costs.data?.total.cost_eur)} label="total" />
+              <Stat value={usd(costs.data?.total.cost_usd)} label="total" />
               <Stat
-                value={costs.data?.total.budget_usd ? eur(costs.data.total.budget_usd * 0.92) : "—"}
+                // En dollars, comme il est déclaré : le taux 0,92 codé ici ne suivait pas celui de l'API.
+                value={costs.data?.total.budget_usd ? usd(costs.data.total.budget_usd) : "—"}
                 label="daily budget"
               />
               {(parNature.data?.rows ?? [])
@@ -121,7 +113,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                   return (
                     <Stat
                       key={row.key}
-                      value={eur(row.cost_eur)}
+                      value={usd(row.cost_usd)}
                       label={`catalogue tools · ${appels} call${appels > 1 ? "s" : ""}`}
                     />
                   );
@@ -182,7 +174,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                       </td>
                       <td className="text-ink-muted">{item.size ?? "—"}</td>
                       <td className="text-right">
-                        <CostChip costEur={item.totals?.cost_eur} />
+                        <CostChip costUsd={item.totals?.cost_usd} />
                       </td>
                     </tr>
                   ))}

@@ -8,7 +8,7 @@ import { Connecteurs } from "@/components/connecteurs";
 import { OperationsDuProjet } from "@/components/operations-du-projet";
 import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
 import { api } from "@/lib/api";
-import { eur } from "@/lib/format";
+import { eur, usd } from "@/lib/format";
 import type { ProjectModels } from "@/lib/types";
 
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
@@ -150,7 +150,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                     {entry.success_rate != null ? `${Math.round(entry.success_rate * 100)} %` : "—"}
                   </td>
                   <td className="text-right">
-                    {entry.median_cost_usd != null ? `${entry.median_cost_usd.toFixed(2)} $` : "—"}
+                    {entry.median_cost_usd != null ? usd(entry.median_cost_usd) : "—"}
                   </td>
                   <td>{entry.with_memory == null ? "—" : entry.with_memory ? "with" : "without"}</td>
                 </tr>
