@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { use, useState } from "react";
 import { Connecteurs } from "@/components/connecteurs";
 import { OperationsDuProjet } from "@/components/operations-du-projet";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur } from "@/lib/format";
 import type { ProjectModels } from "@/lib/types";
@@ -158,7 +158,8 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
             </tbody>
           </table>
         </div>
-        {(matrix.data?.entries ?? []).length === 0 && <Empty>no eval published yet</Empty>}
+        <EtatDeLecture lecture={matrix} quoi="the eval matrix" />
+        {matrix.data && (matrix.data.entries ?? []).length === 0 && <Empty>no eval published yet</Empty>}
       </Card>
     </div>
   );

@@ -199,6 +199,42 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Ce que montre une lecture tant qu'elle n'a rien de bon à montrer (S23-08) : son échec, avec un
+ * moyen de relire, ou son chargement — jamais « rien » ni « vide ». Avant, une API en panne
+ * affichait « no spend recorded. », « no batch », « measurements being computed. » ou un
+ * « loading… » sans fin : une panne passait pour un projet calme. Une lecture désactivée (une
+ * recherche pas encore lancée) ne dit rien.
+ */
+export function EtatDeLecture({
+  lecture,
+  quoi,
+}: {
+  lecture: { data: unknown; error: unknown; fetchStatus: string; refetch: () => unknown; isRefetching?: boolean };
+  /** Ce qui se lit, dans une phrase : « the costs », « the batches ». */
+  quoi: string;
+}) {
+  if (lecture.error) {
+    const message = lecture.error instanceof Error ? lecture.error.message : String(lecture.error);
+    return (
+      <ErrorNote>
+        could not {lecture.data === undefined ? "read" : "refresh"} {quoi}: {message}.{" "}
+        <button type="button" className="underline" onClick={() => void lecture.refetch()} disabled={lecture.isRefetching}>
+          {lecture.isRefetching ? "retrying…" : "retry"}
+        </button>
+      </ErrorNote>
+    );
+  }
+  if (lecture.data === undefined && lecture.fetchStatus !== "idle") {
+    return (
+      <p className="text-sm text-ink-muted" role="status">
+        reading {quoi}…
+      </p>
+    );
+  }
+  return null;
+}
+
+/**
  * La barre d'onglets du design system, sans la barre de défilement VERTICALE qu'elle portait.
  *
  * L'onglet actif descend d'un pixel (`-mb-px`) pour poser son trait sur le filet de la barre ; dans

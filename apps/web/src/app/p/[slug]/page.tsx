@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { eur, percent } from "@/lib/format";
 import type { DoraMetric } from "@/lib/types";
 import { MiseEnRoute } from "@/components/mise-en-route";
-import { Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Card, CostChip, Empty, ErrorNote, EtatDeLecture, StateBadge } from "@/components/ui";
 
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -39,6 +39,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
   return (
     <div className="space-y-6">
       <MiseEnRoute slug={slug} projet={project.data} />
+      {enCours && !provisioning.data && <EtatDeLecture lecture={provisioning} quoi="the provisioning" />}
       {enCours && provisioning.data && (
         <Card eyebrow="provisioning" title={`${provisioning.data.status} · ${provisioning.data.current_step ?? "—"}`}>
           <ol className="space-y-1 text-sm">
@@ -91,7 +92,9 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           </a>
         }
       >
-        {rows.length === 0 ? (
+        {!costs.data ? (
+          <EtatDeLecture lecture={costs} quoi="the costs" />
+        ) : rows.length === 0 ? (
           <Empty>no spend recorded.</Empty>
         ) : (
           <>
@@ -130,7 +133,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
       <Card eyebrow="delivery" title="dora">
         {dora.data === undefined ? (
-          <Empty>measurements being computed.</Empty>
+          <EtatDeLecture lecture={dora} quoi="the delivery measures" />
         ) : dora.data.deployments === 0 ? (
           <Empty>no production deployment recorded in the window.</Empty>
         ) : (
@@ -145,38 +148,48 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
       <Card eyebrow="tickets" title="most recent" padding="none" className="overflow-hidden">
         <div className="px-6 pb-2">
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>ticket</th>
-                  <th>title</th>
-                  <th>state</th>
-                  <th>size</th>
-                  <th className="text-right">cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(items.data?.items ?? []).slice(0, 8).map((item) => (
-                  <tr key={item.id} className="transition-colors hover:bg-surface-muted">
-                    <td className="whitespace-nowrap text-ink-muted">{item.tracker_key}</td>
-                    <td>
-                      <Link href={`/p/${slug}/items/${item.id}`} className="no-underline hover:underline">
-                        {item.title}
-                      </Link>
-                    </td>
-                    <td>
-                      <StateBadge state={item.state} display={item.state_display} />
-                    </td>
-                    <td className="text-ink-muted">{item.size ?? "—"}</td>
-                    <td className="text-right">
-                      <CostChip costEur={item.totals?.cost_eur} />
-                    </td>
+          {!items.data ? (
+            <div className="pb-4">
+              <EtatDeLecture lecture={items} quoi="the tickets" />
+            </div>
+          ) : items.data.items.length === 0 ? (
+            <div className="pb-4">
+              <Empty>no ticket yet — a request filed on the board lands here.</Empty>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ticket</th>
+                    <th>title</th>
+                    <th>state</th>
+                    <th>size</th>
+                    <th className="text-right">cost</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {(items.data?.items ?? []).slice(0, 8).map((item) => (
+                    <tr key={item.id} className="transition-colors hover:bg-surface-muted">
+                      <td className="whitespace-nowrap text-ink-muted">{item.tracker_key}</td>
+                      <td>
+                        <Link href={`/p/${slug}/items/${item.id}`} className="no-underline hover:underline">
+                          {item.title}
+                        </Link>
+                      </td>
+                      <td>
+                        <StateBadge state={item.state} display={item.state_display} />
+                      </td>
+                      <td className="text-ink-muted">{item.size ?? "—"}</td>
+                      <td className="text-right">
+                        <CostChip costEur={item.totals?.cost_eur} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </Card>
     </div>

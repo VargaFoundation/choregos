@@ -4,7 +4,7 @@
 import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 import { GesteConfirme } from "@/components/geste-confirme";
@@ -61,7 +61,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
       action={data && <StateBadge state={data.status} display={data.status} kind={data.frozen ? "blocked" : "work"} />}
     >
       {!data ? (
-        <Empty>loading…</Empty>
+        <EtatDeLecture lecture={train} quoi={`the ${env} train`} />
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
@@ -179,6 +179,7 @@ function History({ slug }: { slug: string }) {
           </tbody>
         </table>
       </div>
+      <EtatDeLecture lecture={releases} quoi="the batches" />
       {releases.data?.items.length === 0 && <Empty>no batch</Empty>}
     </Card>
   );

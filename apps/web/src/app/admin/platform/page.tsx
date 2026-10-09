@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Card, Empty, StateBadge } from "@/components/ui";
+import { Card, Empty, EtatDeLecture, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 
 /** Ce que la plateforme sait faire tourner : les backends d'agent et les exécuteurs déclarés. */
@@ -25,7 +25,8 @@ export default function PlatformPage() {
             </li>
           ))}
         </ul>
-        {(backends.data ?? []).length === 0 && <Empty>no backend registered</Empty>}
+        <EtatDeLecture lecture={backends} quoi="the agent backends" />
+        {backends.data?.length === 0 && <Empty>no backend registered</Empty>}
       </Card>
       <Card title="executors">
         <ul className="space-y-1 text-xs">
@@ -36,7 +37,8 @@ export default function PlatformPage() {
             </li>
           ))}
         </ul>
-        {(executors.data ?? []).length === 0 && <Empty>no executor registered</Empty>}
+        <EtatDeLecture lecture={executors} quoi="the executors" />
+        {executors.data?.length === 0 && <Empty>no executor registered</Empty>}
       </Card>
     </div>
   );

@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -103,7 +103,8 @@ export default function AdminPage() {
               </li>
             ))}
           </ul>
-          {(tokens.data ?? []).length === 0 && <Empty>no token</Empty>}
+          <EtatDeLecture lecture={tokens} quoi="your tokens" />
+          {tokens.data?.length === 0 && <Empty>no token</Empty>}
         </Card>
 
       </div>
