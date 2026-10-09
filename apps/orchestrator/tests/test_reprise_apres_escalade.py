@@ -118,3 +118,38 @@ async def test_replay_hors_d_un_ticket_gare_est_oublie(
         assert await _runs(setup) == 1
         await handle.signal("control", {"action": "stop"})
         await handle.result()
+
+
+async def test_une_relance_qui_ne_peut_pas_jouer_ne_boucle_pas(
+    setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un historique d'avant le marqueur — `patched` y a répondu non, et le SDK mémorise la
+    réponse : `rerun_stage` ne peut pas jouer. Il doit être oublié. Sur le locataire dev (09/10),
+    il restait en place, et le ticket recréait une demande d'abandon toutes les 4 s."""
+    from choregos_orchestrator.workflows import interpreter
+
+    vrai = interpreter.workflow.patched
+    monkeypatch.setattr(
+        interpreter.workflow,
+        "patched",
+        lambda marqueur: False if marqueur == interpreter.REPRISE_APRES_ESCALADE else vrai(marqueur),
+    )
+    scripted(setup.adapters, ECHEC, ECHEC)
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "needs_human")
+        await _wait_until(handle, "l'abandon est proposé", lambda s: s["pending_request"])
+        await handle.signal("control", {"action": "rerun_stage"})
+        import asyncio
+
+        # Pas de pause ici : elle arrêtait la boucle au premier tour, et masquait le défaut. Une
+        # attente qui boucle se voit à son historique, qui grossit à chaque demande recréée ; une
+        # attente qui attend ne bouge pas.
+        await asyncio.sleep(2)
+        avant = len((await handle.fetch_history()).events)
+        await asyncio.sleep(3)
+        apres = len((await handle.fetch_history()).events)
+        assert apres == avant, f"la relance a fait boucler l'attente humaine ({avant} → {apres} événements)"
+        assert (await handle.query("status"))["state"] == "needs_human"
+        await handle.signal("control", {"action": "stop"})
+        await handle.result()

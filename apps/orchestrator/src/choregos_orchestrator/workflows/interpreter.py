@@ -576,7 +576,7 @@ class WorkflowInterpreter:
             )
             if self.stopped:
                 return None
-            if self._relance_jouable() and workflow.patched(REPRISE_APRES_ESCALADE):
+            if self._relance_acceptee():
                 return await self._reprendre("replay requested", self.pending_request)
             if self.decisions:
                 decision = self.decisions.popleft()
@@ -841,6 +841,19 @@ class WorkflowInterpreter:
             self.relance = False
         return self.relance
 
+    def _relance_acceptee(self) -> bool:
+        """La relance demandée joue-t-elle ? Sinon elle est OUBLIÉE : laissée en place, elle tenait
+        vraie la condition d'attente, et `_wait_human` consommait son délai d'une heure fictive par
+        tour — sur le locataire dev, le 09/10, une demande d'abandon recréée toutes les 4 s.
+
+        C'est le cas d'un historique où `patched` a déjà répondu non : le SDK MÉMORISE la réponse
+        pour toute l'exécution, et un ticket qui avait reçu une réponse avant le marqueur ne prend
+        jamais le nouveau chemin. Il faut alors le réinitialiser avant cette réponse."""
+        if self._relance_jouable() and workflow.patched(REPRISE_APRES_ESCALADE):
+            return True
+        self.relance = False
+        return False
+
     def _reponse_qui_reprend(self, decision: dict[str, Any]) -> bool:
         """Une RÉPONSE à une question, sur un ticket garé : `on_answer: resume`."""
         return (
@@ -946,7 +959,7 @@ class WorkflowInterpreter:
                     or self._relance_jouable()
                 )
             )
-            if self._relance_jouable() and workflow.patched(REPRISE_APRES_ESCALADE):
+            if self._relance_acceptee():
                 return (await self._reprendre("replay requested", self.pending_request)).next_state
             if self.migration and not (self.inbox or self.decisions or self.stopped):
                 if workflow.patched(MIGRATION_PAR_DEFINITION):
