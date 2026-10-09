@@ -257,6 +257,11 @@ curl         $API/projects/acme:hr/workflows                                    
   (`422`). The singular `workflow:` of older manifests still works.
 - The default and a routing target cannot be deactivated; a deactivated workflow takes no new
   item, and its pinned items finish on their version.
+- In the console, the project's **workflows** page does the same: **make default** and
+  **deactivate** on each workflow (both confirmed; deactivate is offered only when the workflow is
+  neither the default nor a routing target, and says why otherwise), and a **routing** card that
+  adds, orders and removes rules as a draft, saved in one gesture. A new workflow cannot take the
+  name of an existing one: publishing it would replace that workflow's active version.
 - **Moving a running item to another version** is explicit:
 
   ```bash
@@ -305,6 +310,9 @@ time limit and its removal. Each change is one operation. The map and the proces
 from the same draft, which shows its last diff and undoes change by change (undo replays the
 inverse). Nothing is saved before **publish**, which sends the text with the version that was
 read: if someone published meanwhile, the console says so (`409`) instead of overwriting.
+**add a step**, at the end of the process view and beside the map, adds a transition from any
+state to an existing or a new one without choosing a state first. The draft survives a detour
+through another page of the console (it is kept for the browser tab), and **discard** asks first.
 
 ### Workflows outside software
 
@@ -441,7 +449,8 @@ tokens, each with its last call and the client that made it. A Claude Code that 
 shows as *connected*; **register as an external agent** creates the agent (with its human's tools,
 or read-only ones) and attaches the token, and its calls then carry the agent. An agent's page gives
 its last 30 days (runs, success rate, cost, today against its daily budget), its versions, a new
-version started from the latest, and — for an external agent — the clients acting as it. **skills**
+version started from the latest — where skills are attached or removed, each either at its latest
+version (read at every run) or pinned to one — and, for an external agent, the clients acting as it. **skills**
 is the library: import a zip, read each version's files, see which agents carry it. A project's
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).

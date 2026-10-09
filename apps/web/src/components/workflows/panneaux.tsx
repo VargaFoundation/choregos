@@ -30,10 +30,6 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
   const brouillon = useBrouillon();
   const [libelle, setLibelle] = useState(noeud.display);
   const [nom, setNom] = useState(noeud.id);
-  const [vers, setVers] = useState("");
-  const [nouveau, setNouveau] = useState("");
-  const [par, setPar] = useState(acteurs[0] ?? "");
-  const cible = vers === NOUVEL_ETAT ? nouveau.trim() : vers;
   return (
     <Card title={`state ${noeud.id}`}>
       <div className="space-y-3 text-sm" data-testid="panneau-etat">
@@ -67,60 +63,91 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
             rename
           </Button>
         </form>
-        {!noeud.terminal && (
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const transition = operations.ajouterUneTransition(noeud.id, cible, par);
-              const gestes = vers === NOUVEL_ETAT ? [operations.ajouterUnEtat(cible, cible), transition] : [transition];
-              void brouillon.appliquer(...gestes).then((ok) => {
-                if (!ok) return;
-                setVers("");
-                setNouveau("");
-              });
-            }}
-          >
-            <label className="flex-1 space-y-1">
-              <span className="text-xs text-ink-muted">new transition to</span>
-              <select className={champ} value={vers} onChange={(event) => setVers(event.target.value)}>
-                <option value="">—</option>
-                {etats
-                  .filter((etat) => etat.id !== noeud.id)
-                  .map((etat) => (
-                    <option key={etat.id} value={etat.id}>
-                      {etat.display}
-                    </option>
-                  ))}
-                <option value={NOUVEL_ETAT}>a new state…</option>
-              </select>
-            </label>
-            {vers === NOUVEL_ETAT && (
-              <label className="flex-1 space-y-1">
-                <span className="text-xs text-ink-muted">name of the new state</span>
-                <input className={champ} value={nouveau} onChange={(event) => setNouveau(event.target.value)} />
-              </label>
-            )}
-            <label className="flex-1 space-y-1">
-              <span className="text-xs text-ink-muted">by</span>
-              <select className={champ} value={par} onChange={(event) => setPar(event.target.value)}>
-                {acteurs.map((acteur) => (
-                  <option key={acteur} value={acteur}>
-                    {acteur}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button size="sm" type="submit" disabled={!cible || !par}>
-              add
-            </Button>
-          </form>
-        )}
+        {!noeud.terminal && <FormulaireDEtape depart={noeud.id} etats={etats} acteurs={acteurs} />}
         <Button size="sm" tone="danger" onClick={() => void brouillon.appliquer(operations.retirerLEtat(noeud.id))}>
           remove this state
         </Button>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Une étape de plus : d'un état, vers un état existant ou nouveau, portée par un acteur. L'état et la
+ * transition partent ensemble et s'annulent ensemble. Sans `depart`, on choisit d'où l'on part.
+ */
+export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; etats: Noeud[]; acteurs: string[] }) {
+  const brouillon = useBrouillon();
+  const [de, setDe] = useState(depart ?? "");
+  const [vers, setVers] = useState("");
+  const [nouveau, setNouveau] = useState("");
+  const [par, setPar] = useState(acteurs[0] ?? "");
+  const origine = depart ?? de;
+  const cible = vers === NOUVEL_ETAT ? nouveau.trim() : vers;
+  return (
+    <form
+      className="flex flex-wrap items-end gap-2"
+      aria-label={depart ? `new transition from ${depart}` : "new step"}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const transition = operations.ajouterUneTransition(origine, cible, par);
+        const gestes = vers === NOUVEL_ETAT ? [operations.ajouterUnEtat(cible, cible), transition] : [transition];
+        void brouillon.appliquer(...gestes).then((ok) => {
+          if (!ok) return;
+          setVers("");
+          setNouveau("");
+        });
+      }}
+    >
+      {!depart && (
+        <label className="flex-1 space-y-1">
+          <span className="text-xs text-ink-muted">from</span>
+          <select className={champ} value={de} onChange={(event) => setDe(event.target.value)}>
+            <option value="">—</option>
+            {etats
+              .filter((etat) => !etat.terminal)
+              .map((etat) => (
+                <option key={etat.id} value={etat.id}>
+                  {etat.display}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
+      <label className="flex-1 space-y-1">
+        <span className="text-xs text-ink-muted">{depart ? "new transition to" : "to"}</span>
+        <select className={champ} value={vers} onChange={(event) => setVers(event.target.value)}>
+          <option value="">—</option>
+          {etats
+            .filter((etat) => etat.id !== origine)
+            .map((etat) => (
+              <option key={etat.id} value={etat.id}>
+                {etat.display}
+              </option>
+            ))}
+          <option value={NOUVEL_ETAT}>a new state…</option>
+        </select>
+      </label>
+      {vers === NOUVEL_ETAT && (
+        <label className="flex-1 space-y-1">
+          <span className="text-xs text-ink-muted">name of the new state</span>
+          <input className={champ} value={nouveau} onChange={(event) => setNouveau(event.target.value)} />
+        </label>
+      )}
+      <label className="flex-1 space-y-1">
+        <span className="text-xs text-ink-muted">by</span>
+        <select className={champ} value={par} onChange={(event) => setPar(event.target.value)}>
+          {acteurs.map((acteur) => (
+            <option key={acteur} value={acteur}>
+              {acteur}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Button size="sm" type="submit" disabled={!origine || !cible || !par || brouillon.occupe}>
+        add
+      </Button>
+    </form>
   );
 }
 

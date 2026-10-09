@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { Button, ErrorNote } from "@/components/ui";
+import { Button, ErrorNote, PhraseDuMoteur } from "@/components/ui";
 
 type Ton = "default" | "primary" | "accent" | "danger";
 
@@ -100,7 +100,11 @@ export function Confirmation({ question, confirmer, ton = "danger", raison, acti
           cancel
         </Button>
       </span>
-      {erreur && <ErrorNote>{erreur}</ErrorNote>}
+      {erreur && (
+        <ErrorNote>
+          <PhraseDuMoteur texte={erreur} />
+        </ErrorNote>
+      )}
     </div>
   );
 }

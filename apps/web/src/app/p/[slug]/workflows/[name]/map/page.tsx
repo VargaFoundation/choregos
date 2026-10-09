@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { CarteDuWorkflow } from "@/components/workflows/carte/carte-du-workflow";
 import { areteDeLaCarte, type NoeudDuGraphe } from "@/components/workflows/carte/disposition";
-import { PanneauDEtat, PanneauDeTransition } from "@/components/workflows/panneaux";
+import { FormulaireDEtape, PanneauDEtat, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
 
 type Definition = { initial?: string; actors?: Record<string, { type?: string; group?: string; sla_hours?: number }> };
@@ -82,9 +82,16 @@ export default function MapPage() {
         {noeud && <PanneauDEtat key={`n-${noeud.id}`} noeud={noeud} etats={noeuds} acteurs={acteurs} />}
         {arete && <PanneauDeTransition key={`e-${arete.id ?? arete.from}`} arete={arete} acteurs={acteurs} />}
         {!noeud && !arete && (
-          <Empty title="edit the workflow">
-            choose a step on the diagram, or a state in the list view (click, or Tab then Enter).
-          </Empty>
+          <>
+            <Empty title="edit the workflow">
+              choose a step on the diagram, or a state in the list view (click, or Tab then Enter).
+            </Empty>
+            {/* Ajouter une étape ne demandait pas moins que la vue liste, un état choisi, puis « a new
+                state… » dans une liste : introuvable (seconde passe du 08/10, S23-13). */}
+            <Card title="add a step">
+              <FormulaireDEtape etats={noeuds} acteurs={acteurs} />
+            </Card>
+          </>
         )}
       </div>
     </div>

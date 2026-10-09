@@ -6,7 +6,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 import { Badge, Heading } from "@varga/design-system";
 import { estUnClientMcp, etatDuClient, resumeDeLaVersion } from "@/components/agents/registre";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -173,8 +173,14 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
 /** Les versions : immuables. En publier une autre, c'est partir de la dernière et la changer. */
 function Versions({ org, agent }: { org: string; agent: Agent }) {
   const versions = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version);
-  const [choisie, setChoisie] = useState(agent.latest_version);
+  // Sans choix, la dernière : une version qu'on vient de publier s'affiche d'elle-même.
+  const [choix, setChoisie] = useState<number | null>(null);
+  const choisie = choix ?? agent.latest_version;
   const version = versions.find((v) => v.version === choisie) ?? versions[0];
+  // Le message de publication vit ICI : le formulaire se remonte quand la version publiée arrive
+  // (clé `latest_version`), et l'emportait avec lui — selon la vitesse de la relecture, on le voyait
+  // ou pas (S23-13, vu en CI).
+  const [publiee, setPubliee] = useState<string | null>(null);
   return (
     <>
       <Card
@@ -208,7 +214,18 @@ function Versions({ org, agent }: { org: string; agent: Agent }) {
         )}
       </Card>
       {agent.status !== "revoked" && (
-        <NouvelleVersion key={agent.latest_version} org={org} agent={agent} depart={versions[0]?.spec ?? {}} />
+        <NouvelleVersion
+          key={agent.latest_version}
+          org={org}
+          agent={agent}
+          depart={versions[0]?.spec ?? {}}
+          onPubliee={setPubliee}
+        />
+      )}
+      {publiee && (
+        <p className="text-sm" role="status">
+          {publiee}
+        </p>
       )}
     </>
   );
@@ -259,14 +276,33 @@ function Specification({ spec }: { spec: AgentSpec }) {
 }
 
 /** Une nouvelle version : la dernière, changée. Rien n'est réécrit ; le projet épinglé ne bouge pas. */
-function NouvelleVersion({ org, agent, depart }: { org: string; agent: Agent; depart: AgentSpec }) {
+function NouvelleVersion({
+  org,
+  agent,
+  depart,
+  onPubliee,
+}: {
+  org: string;
+  agent: Agent;
+  depart: AgentSpec;
+  onPubliee: (message: string) => void;
+}) {
   const client = useQueryClient();
   const [instructions, setInstructions] = useState(depart.instructions ?? "");
   const [modele, setModele] = useState(depart.model ?? "");
   const [tours, setTours] = useState(depart.limits?.max_turns?.toString() ?? "");
   const [quotidien, setQuotidien] = useState(depart.budget?.daily_usd?.toString() ?? "");
+  // Les skills se rattachent ici (seconde passe du 08/10, S23-13) : la page les montrait, et rien
+  // dans la console ne permettait d'en donner une à un agent — il fallait l'API ou la CLI.
+  const [competences, setCompetences] = useState(depart.skills ?? []);
+  const [ajout, setAjout] = useState("");
+  const [versionDAjout, setVersionDAjout] = useState("");
+  const bibliotheque = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
+  const disponibles = (bibliotheque.data ?? []).filter(
+    (skill) => skill.status !== "archived" && !competences.some((c) => c.slug === skill.slug),
+  );
+  const choisie = disponibles.find((skill) => skill.slug === ajout);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [fait, setFait] = useState<string | null>(null);
   async function publier() {
     setErreur(null);
     const spec: AgentSpec = {
@@ -275,10 +311,11 @@ function NouvelleVersion({ org, agent, depart }: { org: string; agent: Agent; de
       model: modele || null,
       limits: { ...depart.limits, max_turns: tours ? Number(tours) : null },
       budget: { ...depart.budget, daily_usd: quotidien ? Number(quotidien) : null },
+      skills: competences,
     };
     try {
       const publiee = await api.publishAgentVersion(org, agent.slug, spec);
-      setFait(`v${publiee.version} published: projects keep the version they pinned`);
+      onPubliee(`v${publiee.version} published: projects keep the version they pinned`);
       await client.invalidateQueries({ queryKey: ["agent", org, agent.slug] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "publication refused");
@@ -326,15 +363,81 @@ function NouvelleVersion({ org, agent, depart }: { org: string; agent: Agent; de
             onChange={(e) => setQuotidien(e.target.value)}
           />
         </label>
+        <fieldset className="space-y-2 md:col-span-3" data-testid="skills-de-la-version">
+          <legend className="text-xs text-ink-muted">skills</legend>
+          {competences.length === 0 ? (
+            <p className="text-xs text-ink-muted">none — the playbook of its role is all it reads.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {competences.map((competence) => (
+                <li key={competence.slug} className="inline-flex items-center gap-1 border border-line px-2 py-0.5 text-xs">
+                  {competence.slug}
+                  {competence.version ? `@${competence.version}` : " (latest)"}
+                  <button
+                    type="button"
+                    className="ml-1 text-ink-muted hover:text-ink"
+                    onClick={() => setCompetences(competences.filter((c) => c.slug !== competence.slug))}
+                  >
+                    remove<span className="sr-only"> {competence.slug}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs text-ink-muted">add a skill</span>
+              <select
+                className={champ}
+                value={ajout}
+                onChange={(e) => {
+                  setAjout(e.target.value);
+                  setVersionDAjout("");
+                }}
+              >
+                <option value="">—</option>
+                {disponibles.map((skill) => (
+                  <option key={skill.slug} value={skill.slug}>
+                    {skill.slug}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {choisie && (
+              <label className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs text-ink-muted">version</span>
+                <select className={champ} value={versionDAjout} onChange={(e) => setVersionDAjout(e.target.value)}>
+                  <option value="">latest, read at each run</option>
+                  {Array.from({ length: choisie.latest_version }, (_, i) => choisie.latest_version - i).map((v) => (
+                    <option key={v} value={v}>
+                      v{v}, pinned
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <Button
+              size="sm"
+              disabled={!choisie}
+              onClick={() => {
+                if (!choisie) return;
+                setCompetences([
+                  ...competences,
+                  versionDAjout ? { slug: choisie.slug, version: Number(versionDAjout) } : { slug: choisie.slug },
+                ]);
+                setAjout("");
+                setVersionDAjout("");
+              }}
+            >
+              attach
+            </Button>
+          </div>
+          <EtatDeLecture lecture={bibliotheque} quoi="the skill library" />
+        </fieldset>
         <div className="flex items-center gap-3 md:col-span-3">
           <Button type="submit" tone="accent">
             publish v{agent.latest_version + 1}
           </Button>
-          {fait && (
-            <span className="text-sm" role="status">
-              {fait}
-            </span>
-          )}
         </div>
         {erreur && (
           <div className="md:col-span-3">

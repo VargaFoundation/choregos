@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { ActorIcon, Button, Card, Empty, ErrorNote, PhraseDuMoteur, StateBadge } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
-import { PanneauDeTransition } from "@/components/workflows/panneaux";
+import { FormulaireDEtape, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
 
 const GENRE: Record<string, string> = {
@@ -28,8 +28,21 @@ export default function ProcessPage() {
   const etapes = brouillon.process;
   const acteurs = Object.keys(brouillon.definition.data?.json?.actors ?? {});
   if (!etapes) return <Empty>reading the workflow…</Empty>;
+  const ajouter = (
+    <Card title="add a step">
+      <FormulaireDEtape
+        etats={(brouillon.graph?.nodes ?? []) as { id: string; display: string; terminal?: boolean }[]}
+        acteurs={acteurs}
+      />
+    </Card>
+  );
   if (etapes.length === 0)
-    return <Empty title="no transition">this workflow has no step yet.</Empty>;
+    return (
+      <div className="space-y-3">
+        <Empty title="no transition">this workflow has no step yet.</Empty>
+        {ajouter}
+      </div>
+    );
   return (
     <div className="space-y-3">
       {brouillon.grapheObsolete && <TexteIllisible />}
@@ -123,6 +136,7 @@ export default function ProcessPage() {
           </li>
         ))}
       </ol>
+      {ajouter}
     </div>
   );
 }

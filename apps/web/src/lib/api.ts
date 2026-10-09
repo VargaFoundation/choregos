@@ -364,6 +364,15 @@ export const api = {
       { method: "POST" },
     ),
   workflowRouting: (id: string) => request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`),
+  /** Le défaut et les règles, d'un bloc : l'API refuse un workflow inconnu ou inactif (422). */
+  putWorkflowRouting: (id: string, routing: WorkflowRouting) =>
+    request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`, {
+      method: "PUT",
+      body: JSON.stringify(routing),
+    }),
+  /** Plus de ticket neuf ; l'API refuse le défaut et la cible d'une règle (409). */
+  deactivateWorkflow: (id: string, name: string) =>
+    request<void>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/deactivate`, { method: "POST" }),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
   /** Des opérations typées, greffées dans le texte ; rien n'est enregistré (S16-11). */
   editWorkflow: (yaml: string, operations: WorkflowOperation[]) =>
