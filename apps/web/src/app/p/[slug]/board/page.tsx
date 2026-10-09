@@ -92,6 +92,10 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
               <StateBadge state={column.state} display={column.display} kind={column.kind} />
               <span className="text-xs text-ink-muted">{column.items.length}</span>
             </header>
+            {column.horsWorkflow && (
+              // Sans ce mot, une colonne « In progress » après « Done » ne se comprenait pas (audit du 08/10).
+              <p className="text-xs text-ink-muted">not a state of this workflow — tickets left here by an older version</p>
+            )}
             {column.items.map((item) => (
               <Card key={item.id} className="p-3">
                 <div className="flex items-start justify-between gap-2">

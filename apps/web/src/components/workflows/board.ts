@@ -7,6 +7,8 @@ export interface Column {
   /** Le genre que le workflow déclare ; absent, le badge le déduit du nom de l'état. */
   kind?: string;
   items: WorkItemDto[];
+  /** L'état n'est pas dans ce workflow (ticket migré, ancien) : la colonne le dit (S23-04). */
+  horsWorkflow?: boolean;
 }
 
 /**
@@ -26,7 +28,7 @@ export function columnsFromGraph(graph: WorkflowGraph | undefined, items: WorkIt
   const columns: Column[] = declared.map((entry) => ({ ...entry, items: byState.get(entry.state) ?? [] }));
   for (const [state, stateItems] of byState) {
     if (!columns.some((column) => column.state === state)) {
-      columns.push({ state, display: stateItems[0]?.state_display ?? state, items: stateItems });
+      columns.push({ state, display: stateItems[0]?.state_display ?? state, items: stateItems, horsWorkflow: true });
     }
   }
   return columns.filter((column) => column.items.length > 0 || declared.length <= 12);
