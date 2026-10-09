@@ -112,6 +112,7 @@ test("un brouillon survit à un détour par une autre page de la console (S23-06
   await expect(page.getByRole("button", { name: "publish v2" })).toBeEnabled();
   // Abandonner l'efface pour de bon.
   await page.getByRole("button", { name: "discard" }).click();
+  await page.getByRole("button", { name: "discard my changes" }).click();
   await expect(page.getByTestId("brouillon")).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).not.toContainText("# still here");

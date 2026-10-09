@@ -7,6 +7,7 @@ import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { GesteConfirme } from "@/components/geste-confirme";
 
 /**
  * L'administration, vue d'ensemble : la session et mes jetons d'API. Les membres, l'audit, la
@@ -88,15 +89,17 @@ export default function AdminPage() {
                     {token.last_used_at ? shortDate(token.last_used_at) : "—"}
                   </span>
                 </span>
-                <Button
-                  size="sm"
-                  tone="danger"
-                  onClick={() =>
-                    void api.revokeToken(token.id).then(() => queryClient.invalidateQueries({ queryKey: ["tokens"] }))
-                  }
+                <GesteConfirme
+                  tonDuBouton="danger"
+                  question={`revoke ${token.name}? every client using it is refused from its next call — a token does not come back.`}
+                  confirmer={`revoke ${token.name}`}
+                  action={async () => {
+                    await api.revokeToken(token.id);
+                    await queryClient.invalidateQueries({ queryKey: ["tokens"] });
+                  }}
                 >
                   revoke
-                </Button>
+                </GesteConfirme>
               </li>
             ))}
           </ul>

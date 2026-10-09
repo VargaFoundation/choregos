@@ -4,7 +4,7 @@
 import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { use } from "react";
+import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { gare } from "@/components/parcours/modele";
@@ -12,6 +12,7 @@ import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from 
 import { api } from "@/lib/api";
 import { eur, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
+import { GesteConfirme } from "@/components/geste-confirme";
 
 /** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
 function enMouvement(journey: WorkItemJourney | undefined): boolean {
@@ -24,6 +25,7 @@ function enMouvement(journey: WorkItemJourney | undefined): boolean {
 export default function WorkItemPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params);
   const queryClient = useQueryClient();
+  const [erreurDeControle, setErreurDeControle] = useState<string | null>(null);
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
   const timeline = useQuery({ queryKey: ["timeline", id], queryFn: () => api.timeline(id) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
@@ -39,7 +41,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
 
   async function control(action: string) {
     await api.action(id, action);
-    queryClient.invalidateQueries({ queryKey: ["item", id] });
+    await queryClient.invalidateQueries({ queryKey: ["item", id] });
   }
 
   return (
@@ -57,17 +59,36 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           <StateBadge state={data.state} display={data.state_display} />
           <CostChip costEur={data.totals?.cost_eur} tokensIn={data.totals?.tokens_in} />
           {gare(journey.data) && (
-            <Button onClick={() => control("rerun_stage")} aria-label="Replay the stage that escalated">
+            <GesteConfirme
+              ton="accent"
+              question="replay the stage that escalated? an agent runs it again from the start — a new run, billed."
+              confirmer="replay the stage"
+              action={() => control("rerun_stage")}
+            >
               Replay the stage
-            </Button>
+            </GesteConfirme>
           )}
-          <Button onClick={() => control(data.paused ? "resume" : "pause")}>{data.paused ? "resume" : "pause"}</Button>
-          <Button tone="danger" onClick={() => control("stop")}>
-            stop
+          <Button
+            onClick={() =>
+              void control(data.paused ? "resume" : "pause").catch((cause: unknown) =>
+                setErreurDeControle(cause instanceof Error ? cause.message : "refused"),
+              )
+            }
+          >
+            {data.paused ? "resume" : "pause"}
           </Button>
+          <GesteConfirme
+            tonDuBouton="danger"
+            question="stop this ticket? its run is cancelled and it leaves the workflow — it does not resume, it has to be filed again."
+            confirmer="stop the ticket"
+            action={() => control("stop")}
+          >
+            stop
+          </GesteConfirme>
         </div>
       </div>
 
+      {erreurDeControle && <ErrorNote>{erreurDeControle}</ErrorNote>}
       {(data.failure ||
         (data.workflow_status && ["FAILED", "TERMINATED", "TIMED_OUT"].includes(data.workflow_status))) && (
         <ErrorNote>

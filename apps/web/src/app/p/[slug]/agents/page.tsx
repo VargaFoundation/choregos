@@ -16,6 +16,7 @@ import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Agent, ProjectAgent } from "@/lib/types";
+import { GesteConfirme } from "@/components/geste-confirme";
 
 const champ = "w-full rounded border border-line bg-surface px-2 py-1.5 text-sm";
 
@@ -55,7 +56,6 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
 
 function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent }) {
   const client = useQueryClient();
-  const [erreur, setErreur] = useState<string | null>(null);
   const resserre = Object.values(epingle.overrides ?? {}).some((valeur) => valeur != null);
   return (
     <li className="flex flex-wrap items-center gap-3 text-sm">
@@ -66,19 +66,17 @@ function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent })
       {resserre && <Badge tone="warn">tightened</Badge>}
       <span className="text-xs text-ink-muted">{resumeDeLaVersion(epingle.effective)}</span>
       <span className="ml-auto">
-        <Button
-          size="sm"
-          onClick={() =>
-            void api
-              .unpinProjectAgent(projet, epingle.agent)
-              .then(() => client.invalidateQueries({ queryKey: ["project-agents", projet] }))
-              .catch((cause: unknown) => setErreur(cause instanceof Error ? cause.message : "refused"))
-          }
+        <GesteConfirme
+          question={`unpin ${epingle.agent}? its workflows run its latest version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
+          confirmer={`unpin ${epingle.agent}`}
+          action={async () => {
+            await api.unpinProjectAgent(projet, epingle.agent);
+            await client.invalidateQueries({ queryKey: ["project-agents", projet] });
+          }}
         >
           unpin
-        </Button>
+        </GesteConfirme>
       </span>
-      {erreur && <ErrorNote>{erreur}</ErrorNote>}
     </li>
   );
 }

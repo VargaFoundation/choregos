@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { GesteConfirme } from "@/components/geste-confirme";
 import { Button, ErrorNote } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
 
@@ -31,9 +32,15 @@ export function BarreDuBrouillon() {
             <Button size="sm" onClick={() => void brouillon.annuler()} disabled={brouillon.occupe}>
               undo
             </Button>
-            <Button size="sm" onClick={brouillon.abandonner} disabled={brouillon.occupe}>
+            <GesteConfirme
+              tonDuBouton="default"
+              question={`discard ${brouillon.enAttente} unpublished change${brouillon.enAttente > 1 ? "s" : ""}? the workflow goes back to v${brouillon.definition.data?.version ?? "?"} — undo cannot bring them back.`}
+              confirmer="discard my changes"
+              action={brouillon.recharger}
+              disabled={brouillon.occupe}
+            >
               discard
-            </Button>
+            </GesteConfirme>
             <Button
               size="sm"
               tone="primary"
