@@ -154,7 +154,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                     <Link href={`/p/${slug}/items/${item.id}`} className="text-sm font-medium no-underline">
                       {item.title}
                     </Link>
-                    <CostChip costEur={item.totals?.cost_eur} tokensIn={item.totals?.tokens_in} />
+                    <CostChip costUsd={item.totals?.cost_usd} tokensIn={item.totals?.tokens_in} />
                   </div>
                   <p className="mt-1 font-mono text-xs text-ink-muted">{item.tracker_key}</p>
                   {item.current_run && (

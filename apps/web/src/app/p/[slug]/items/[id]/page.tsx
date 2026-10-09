@@ -10,7 +10,7 @@ import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { gare } from "@/components/parcours/modele";
 import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
-import { eur, relative, shortDate, tokens, usd } from "@/lib/format";
+import { relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
 
@@ -57,7 +57,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <StateBadge state={data.state} display={data.state_display} />
-          <CostChip costEur={data.totals?.cost_eur} tokensIn={data.totals?.tokens_in} />
+          <CostChip costUsd={data.totals?.cost_usd} tokensIn={data.totals?.tokens_in} />
           {gare(journey.data) && (
             <GesteConfirme
               ton="accent"
@@ -168,7 +168,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           </div>
           {runs.data?.length === 0 && <Empty>no run yet</Empty>}
           <p className="mt-3 text-sm">
-            Total {eur(data.totals?.cost_eur)}
+            Total {usd(data.totals?.cost_usd)}
             {data.estimate?.median_usd ? (
               <span className="text-ink-muted">
                 {" "}

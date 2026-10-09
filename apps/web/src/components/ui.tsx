@@ -21,7 +21,7 @@ import {
   type Tone,
 } from "@varga/design-system";
 import { cn } from "@/lib/cn";
-import { eur, tokens } from "@/lib/format";
+import { tokens, usd } from "@/lib/format";
 
 /** Le genre d'un état du workflow, tel que le DSL le déclare. */
 const STATE_TONES: Record<string, Tone> = {
@@ -65,18 +65,23 @@ export function StateBadge({
   );
 }
 
+/**
+ * Le coût d'un ticket ou d'un run, en dollars : c'est la monnaie de tout ce qu'un agent dépense
+ * (prix des modèles, budgets, estimations), et l'écran d'un ticket mêlait € et US$ (S23-10). La
+ * console ne convertit rien : l'API garde chaque écriture avec son taux du jour.
+ */
 export function CostChip({
-  costEur,
+  costUsd,
   tokensIn,
   tokensOut,
-  budgetEur,
+  budgetUsd,
 }: {
-  costEur: number | null | undefined;
+  costUsd: number | null | undefined;
   tokensIn?: number;
   tokensOut?: number;
-  budgetEur?: number | null;
+  budgetUsd?: number | null;
 }) {
-  const over = budgetEur != null && costEur != null && costEur > budgetEur;
+  const over = budgetUsd != null && costUsd != null && costUsd > budgetUsd;
   const title =
     tokensIn || tokensOut ? `${tokens(tokensIn)} tokens in / ${tokens(tokensOut)} out` : undefined;
   return (
@@ -84,8 +89,8 @@ export function CostChip({
       title={title}
       className={cn("inline-flex items-baseline gap-1 text-xs tabular-nums", over ? "text-danger" : "text-ink")}
     >
-      {eur(costEur)}
-      {budgetEur != null && <span className="text-ink-muted">/ {eur(budgetEur)}</span>}
+      {usd(costUsd)}
+      {budgetUsd != null && <span className="text-ink-muted">/ {usd(budgetUsd)}</span>}
     </span>
   );
 }
