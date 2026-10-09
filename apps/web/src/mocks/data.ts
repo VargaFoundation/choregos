@@ -1127,8 +1127,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return editionSimulee(corps.yaml, corps.operations) as T;
   }
   if (method === "PUT" && /^\/projects\/[^/]+\/workflows\/[^/]+$/.test(path)) {
-    // Publier crée la version suivante de celle qui a été lue (S16-02).
-    const corps = JSON.parse(String(init.body ?? "{}")) as { yaml: string; base_version?: number | null };
+    // Publier crée la version suivante de celle qui a été lue (S16-02) ; créer un nom pris est refusé (#336).
+    const corps = JSON.parse(String(init.body ?? "{}")) as { yaml: string; base_version?: number | null; create_only?: boolean };
+    const nom = decodeURIComponent(path.split("/").at(-1)!);
+    if (corps.create_only) {
+      if (workflowSummaries.some((w) => w.name === nom))
+        throw new ApiError(409, { detail: `\`${nom}\` already exists: open it to publish its next version, or choose another name` });
+      workflowSummaries.push({ name: nom, version: 1, is_default: false, open_items: 0, created_by: me.email, updated_at: new Date().toISOString() });
+      return { ...workflow, name: nom, yaml: corps.yaml, version: 1, is_default: false } as T;
+    }
     return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
   }
   const [chemin] = path.split("?");

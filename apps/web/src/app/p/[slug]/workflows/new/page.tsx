@@ -8,7 +8,7 @@ import { use, useState } from "react";
 import { Field, Input, Select } from "@varga/design-system";
 import { Button, Card, ErrorNote } from "@/components/ui";
 import { renommer } from "@/components/workflows/renommer";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 
 const NOM = /^[a-z][a-z0-9-]{0,62}$/;
 
@@ -18,7 +18,8 @@ const NOM = /^[a-z][a-z0-9-]{0,62}$/;
  *
  * Le PUT par nom publie la version suivante d'un workflow qui existe déjà : nommer « onboarding » un
  * nouveau workflow remplaçait l'onboarding actif par le gabarit, sans un mot (seconde passe du 08/10,
- * S23-06). Le nom est vérifié pendant la frappe, puis relu juste avant de publier.
+ * S23-06). Le nom est vérifié pendant la frappe ; l'API, elle, refuse de créer un nom pris (`create_only`,
+ * #336) — deux créations à la même seconde ne s'écrasent plus.
  */
 export default function NewWorkflowPage({
   params,
@@ -51,15 +52,13 @@ export default function NewWorkflowPage({
     setEnvoi(true);
     setErreur(null);
     try {
-      // La liste en cache peut dater : on la relit, au plus près de l'écriture.
-      const relus = await existants.refetch();
-      if (relus.error) throw relus.error;
-      if (relus.data?.some((w) => w.name === nom)) return;
-      await api.putWorkflowNamed(slug, nom, renommer(choisi.yaml, nom));
+      await api.createWorkflow(slug, nom, renommer(choisi.yaml, nom));
       await client.invalidateQueries({ queryKey: ["workflows", slug] });
       router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}/yaml`);
     } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "publication refused");
+      // Créé ailleurs entre-temps : la liste relue le dit, sous le nom, avec le lien vers lui.
+      if (cause instanceof ApiError && cause.status === 409) await existants.refetch();
+      else setErreur(cause instanceof Error ? cause.message : "publication refused");
     } finally {
       setEnvoi(false);
     }

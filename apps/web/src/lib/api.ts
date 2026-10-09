@@ -355,6 +355,12 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ yaml, base_version: baseVersion ?? null }),
     }),
+  /** Crée un workflow : un nom déjà pris, actif ou non, répond 409 et rien n'est publié (#336). */
+  createWorkflow: (id: string, name: string, yaml: string) =>
+    request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      body: JSON.stringify({ yaml, create_only: true }),
+    }),
   workflowVersions: (id: string, name: string) =>
     request<WorkflowDef[]>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions`),
   /** Republie une version passée comme la suivante : rien n'est réécrit, l'historique s'allonge. */

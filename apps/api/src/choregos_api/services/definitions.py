@@ -16,6 +16,7 @@ from choregos_core import (
 )
 from choregos_core.dsl import dump_workflow
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
@@ -97,6 +98,17 @@ def _verifier_les_effets(workflow: Any) -> None:
         raise unprocessable("invalid workflow", erreurs)
 
 
+async def derniere_version(session: AsyncSession, project_id: Any, nom: str) -> int | None:
+    """La plus haute version d'un workflow de ce nom, active ou non ; `None` s'il n'a jamais existé."""
+    return (
+        await session.execute(
+            select(func.max(WorkflowDef.version)).where(
+                WorkflowDef.project_id == project_id, WorkflowDef.name == nom
+            )
+        )
+    ).scalar()
+
+
 async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses options sont nommées
     session: AsyncSession,
     principal: Any,
@@ -108,6 +120,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     base_version: int | None = None,
     nom_attendu: str | None = None,
     devient_le_defaut: bool = False,
+    creation_seule: bool = False,
 ) -> WorkflowDef:
     """Le SEUL chemin d'écriture d'un workflow (ADR 0031) : l'alias, le PUT par nom, la restauration.
 
@@ -136,13 +149,12 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         raise conflict(
             f"`{nom}` has changed: you were editing version {base_version}, the active one is {lue}"
         )
-    deja = (
-        await session.execute(
-            select(func.max(WorkflowDef.version)).where(
-                WorkflowDef.project_id == project.id, WorkflowDef.name == nom
-            )
-        )
-    ).scalar()
+    deja = await derniere_version(session, project.id, nom)
+    # Créer n'écrase rien (#336) : sans ce garde, nommer un nouveau workflow comme un ancien publiait
+    # le texte comme version suivante de l'ancien, et la vérification de la console ne fermait pas
+    # la course entre deux créations à la même seconde.
+    if creation_seule and deja is not None:
+        raise conflict(f"`{nom}` already exists: open it to publish its next version, or choose another name")
     version = workflow.metadata.version if deja is None or deja < workflow.metadata.version else deja + 1
     if activate and actuelle is not None:
         actuelle.is_active = False
@@ -158,7 +170,19 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         is_active=activate,
         created_by=getattr(principal, "email", None),
     )
-    session.add(row)
+    if creation_seule:
+        # Deux créations du même nom à la même seconde passent toutes deux le garde ci-dessus : la
+        # contrainte (projet, nom, version) départage, et la seconde reçoit le même 409.
+        try:
+            async with session.begin_nested():
+                session.add(row)
+                await session.flush()
+        except IntegrityError as erreur:
+            raise conflict(
+                f"`{nom}` already exists: open it to publish its next version, or choose another name"
+            ) from erreur
+    else:
+        session.add(row)
     if activate and (devient_le_defaut or not project.default_workflow):
         project.default_workflow = nom
     await session.flush()
