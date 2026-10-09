@@ -19,7 +19,8 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
     if (!filter) return events;
     const needle = filter.toLowerCase();
     return events.filter(
-      (event) => event.type.toLowerCase().includes(needle) || JSON.stringify(event.payload).toLowerCase().includes(needle),
+      (event) =>
+        event.type.toLowerCase().includes(needle) || JSON.stringify(event.payload).toLowerCase().includes(needle),
     );
   }, [events, filter]);
 
@@ -28,14 +29,16 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          aria-label="filter the journal"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="filter (permission, dod, result…)"
-          className="w-64 min-w-0 max-w-full rounded border border-line bg-surface px-2 py-1 text-xs"
-        />
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">filter the journal</span>
+          <input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="filter (permission, dod, result…)"
+            className="w-64 min-w-0 max-w-full rounded border border-line bg-surface px-2 py-1 text-xs"
+          />
+        </label>
         <span className="text-xs text-ink-muted">
           {rows.length} event{rows.length > 1 ? "s" : ""}
         </span>
@@ -82,7 +85,7 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
 function summarize(event: RunEventDto): string {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   if (event.type === "session/request_permission") {
-    return `${payload.allowed ? "allowed" : "REFUSED"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
+    return `${payload.allowed ? "allowed" : "refused"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
   }
   if (event.type === "session/update") return String(payload.text ?? JSON.stringify(payload));
   return JSON.stringify(payload);

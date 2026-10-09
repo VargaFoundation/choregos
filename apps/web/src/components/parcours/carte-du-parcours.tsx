@@ -713,7 +713,7 @@ function BoutonDEtape({
       data-statut={etat.statut}
       aria-label={etiquette}
       aria-pressed={choisie}
-      title={etape.phrase ?? undefined}
+      title={etape.phrase?.replaceAll("`", "") ?? undefined}
       onClick={onChoisir}
       className="group absolute flex flex-col items-center rounded text-center focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{ left: point.x - (largeur - 8) / 2, top: point.y - RAYON - 4, width: largeur - 8 }}

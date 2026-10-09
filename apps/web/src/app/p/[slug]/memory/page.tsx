@@ -34,19 +34,21 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
     <div className="grid gap-4 lg:grid-cols-2">
       <Card title="search">
         <form
-          className="mb-3 flex gap-2"
+          className="mb-3 flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             setSubmitted(query);
           }}
         >
-          <input
-            aria-label="search the memory"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="rounding, incident, test convention…"
-            className="flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
-          />
+          <label className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-xs text-ink-muted">search the memory</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="rounding, incident, test convention…"
+              className="flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+            />
+          </label>
           <Button type="submit" tone="primary">
             search
           </Button>
@@ -72,21 +74,23 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
       <Card title="facts proposed by agents">
         {error && <ErrorNote>{error}</ErrorNote>}
         <ul className="space-y-3">
-          {(pending.data ?? []).filter((memory) => memory.id).map((memory) => (
-            <li key={memory.id} className="rounded border border-line border-l-2 border-l-warn bg-surface p-3">
-              <p className="font-mono text-xs">{memory.subject}</p>
-              <p className="mt-1 text-sm">{memory.content}</p>
-              <p className="mt-1 text-xs text-ink-muted">proposed by run {memory.proposed_by ?? "—"}</p>
-              <div className="mt-2 flex gap-2">
-                <Button tone="primary" onClick={() => decide(memory.id ?? "", "accept")}>
-                  accept
-                </Button>
-                <Button tone="danger" onClick={() => decide(memory.id ?? "", "reject")}>
-                  reject
-                </Button>
-              </div>
-            </li>
-          ))}
+          {(pending.data ?? [])
+            .filter((memory) => memory.id)
+            .map((memory) => (
+              <li key={memory.id} className="rounded border border-line border-l-2 border-l-warn bg-surface p-3">
+                <p className="font-mono text-xs">{memory.subject}</p>
+                <p className="mt-1 text-sm">{memory.content}</p>
+                <p className="mt-1 text-xs text-ink-muted">proposed by run {memory.proposed_by ?? "—"}</p>
+                <div className="mt-2 flex gap-2">
+                  <Button tone="primary" onClick={() => decide(memory.id ?? "", "accept")}>
+                    accept
+                  </Button>
+                  <Button tone="danger" onClick={() => decide(memory.id ?? "", "reject")}>
+                    reject
+                  </Button>
+                </div>
+              </li>
+            ))}
         </ul>
         <EtatDeLecture lecture={pending} quoi="the proposed facts" />
         {pending.data?.length === 0 && <Empty>no pending fact</Empty>}

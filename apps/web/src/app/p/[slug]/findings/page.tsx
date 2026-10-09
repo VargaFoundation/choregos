@@ -39,18 +39,20 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
     <Card
       title="findings"
       action={
-        <select
-          aria-label="filter by status"
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-          className="rounded border border-line bg-surface px-2 py-1 text-sm"
-        >
-          <option value="">all</option>
-          <option value="pending">to triage</option>
-          <option value="created">ticket created</option>
-          <option value="duplicate">duplicates</option>
-          <option value="dismissed">dismissed</option>
-        </select>
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-ink-muted">filter by status</span>
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+            className="rounded border border-line bg-surface px-2 py-1 text-sm"
+          >
+            <option value="">all</option>
+            <option value="pending">to triage</option>
+            <option value="created">ticket created</option>
+            <option value="duplicate">duplicates</option>
+            <option value="dismissed">dismissed</option>
+          </select>
+        </label>
       }
     >
       {error && <ErrorNote>{error}</ErrorNote>}

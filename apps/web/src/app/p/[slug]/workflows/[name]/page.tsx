@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { ActorIcon, Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { ActorIcon, Button, Card, Empty, ErrorNote, PhraseDuMoteur, StateBadge } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { PanneauDeTransition } from "@/components/workflows/panneaux";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
@@ -41,7 +41,7 @@ export default function ProcessPage() {
                 <div className="flex items-start gap-2">
                   <p className="flex-1 text-sm">
                     <span className="mr-2 text-ink-muted">{index + 1}.</span>
-                    {etape.sentence}
+                    <PhraseDuMoteur texte={etape.sentence} />
                   </p>
                   <Button size="sm" onClick={() => setOuverte(ouverte === etape.id ? null : etape.id)}>
                     {ouverte === etape.id ? "close" : `edit ${etape.id}`}
@@ -60,7 +60,9 @@ export default function ProcessPage() {
                       kind={GENRE[etape.actor_type] ?? "system"}
                       name={etape.actor}
                     />
-                    <span className="text-ink-muted">{etape.who}</span>
+                    <span className="text-ink-muted">
+                      <PhraseDuMoteur texte={etape.who} />
+                    </span>
                   </dd>
                   {etape.gates && etape.gates.length > 0 && (
                     <>

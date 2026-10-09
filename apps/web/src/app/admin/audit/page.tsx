@@ -47,14 +47,30 @@ export default function AuditPage() {
       }
     >
       <form
-        className="mb-3 flex flex-wrap items-center gap-2 text-sm"
+        className="mb-3 flex flex-wrap items-end gap-2 text-sm"
         onSubmit={(event) => {
           event.preventDefault();
           setFiltres({ actor: acteur.trim(), target_type: cible.trim() });
         }}
       >
-        <input aria-label="actor" value={acteur} onChange={(event) => setActeur(event.target.value)} placeholder="actor (e-mail, agent)" className="rounded border border-line bg-surface px-2 py-1" />
-        <input aria-label="target type" value={cible} onChange={(event) => setCible(event.target.value)} placeholder="target type (work_item, user…)" className="rounded border border-line bg-surface px-2 py-1" />
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">actor</span>
+          <input
+            value={acteur}
+            onChange={(event) => setActeur(event.target.value)}
+            placeholder="actor (e-mail, agent)"
+            className="rounded border border-line bg-surface px-2 py-1"
+          />
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">target type</span>
+          <input
+            value={cible}
+            onChange={(event) => setCible(event.target.value)}
+            placeholder="target type (work_item, user…)"
+            className="rounded border border-line bg-surface px-2 py-1"
+          />
+        </label>
         <Button size="sm" type="submit">
           filter
         </Button>

@@ -120,7 +120,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
           </p>
         )}
         <p className="mt-2 text-xs text-ink-muted">
-          a project&apos;s tool list (`tools`, `groups`) is set in its configuration — it is reviewed like code.
+          a project&apos;s tool list (<code>tools</code>, <code>groups</code>) is set in its configuration — it is reviewed like code.
         </p>
       </Card>
 

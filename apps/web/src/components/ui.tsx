@@ -21,7 +21,7 @@ import {
   type Tone,
 } from "@varga/design-system";
 import { cn } from "@/lib/cn";
-import { tokens, usd } from "@/lib/format";
+import { libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
 
 /** Le genre d'un état du workflow, tel que le DSL le déclare. */
 const STATE_TONES: Record<string, Tone> = {
@@ -60,7 +60,7 @@ export function StateBadge({
   const tone = state.includes("needs_human") || state.includes("blocked") ? "danger" : (STATE_TONES[resolved] ?? "accent");
   return (
     <Badge tone={tone} title={state}>
-      {display ?? state}
+      {display && display !== state ? display : libelleDeCode(state)}
     </Badge>
   );
 }
@@ -183,11 +183,33 @@ export function Button({
       disabled={disabled}
       title={title}
       aria-describedby={decritPar}
+      // Au doigt, 44 px de haut au moins (WCAG 2.5.8, S23-11) : `sm` en faisait 32.
+      className="pointer-coarse:min-h-11"
       variant={TONE_TO_VARIANT[tone]}
       size={size}
     >
       {children}
     </VargaButton>
+  );
+}
+
+/**
+ * Une phrase du moteur, dont les noms (un agent, un champ produit) sont entre backticks : ils se
+ * lisent comme du code, sans les backticks (S23-11).
+ */
+export function PhraseDuMoteur({ texte }: { texte: string }) {
+  return (
+    <>
+      {segmentsDeCode(texte).map((segment, index) =>
+        segment.code ? (
+          <code key={index} className="font-mono text-[0.92em]">
+            {segment.texte}
+          </code>
+        ) : (
+          <span key={index}>{segment.texte}</span>
+        ),
+      )}
+    </>
   );
 }
 
