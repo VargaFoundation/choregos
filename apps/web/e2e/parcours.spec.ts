@@ -412,3 +412,20 @@ test("mise en route : un projet neuf dit ce qui lui manque ; un projet qui tourn
   await expect(page.getByTestId("mise-en-route")).toHaveCount(0);
 });
 
+
+test("board : ce qui attend une personne se dit en tête, et y mène même hors champ (S23-09)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/p/billing-api/board");
+  const attentes = page.getByTestId("attentes-du-board");
+  await expect(attentes).toContainText("1 ticket waits for a person");
+  const carte = page.locator("#carte-w2");
+  // Sans le bandeau, la carte était dans une colonne hors champ, sans indice.
+  await expect(carte).not.toBeInViewport();
+  await attentes.getByRole("link").first().click();
+  await expect(carte).toBeInViewport();
+  await expect(carte.getByRole("button", { name: "approve" })).toBeVisible();
+  // Le sommaire nomme chaque colonne, même hors champ, et dit où l'on attend.
+  const sommaire = page.getByRole("navigation", { name: "columns of the board" });
+  await expect(sommaire.getByRole("link")).toHaveCount(await page.locator("section[id^=colonne-]").count());
+  await expect(sommaire).toContainText("1 waiting");
+});

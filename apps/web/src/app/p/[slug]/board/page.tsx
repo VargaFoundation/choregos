@@ -31,12 +31,19 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   const { definition, validation } = useWorkflow(slug, choisi);
   const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   // Quand le tracker est interne, la demande se pose ICI — sinon elle vient de GitHub/Jira.
-  const trackerInterne = (connectors.data ?? []).some((c) => c.kind === "tracker" && ["internal", "fake"].includes(c.type));
+  const trackerInterne = (connectors.data ?? []).some(
+    (c) => c.kind === "tracker" && ["internal", "fake"].includes(c.type),
+  );
   const [nouvelle, setNouvelle] = useState(false);
 
   if (items.error) return <ErrorNote>{(items.error as Error).message}</ErrorNote>;
 
   const columns = columnsFromGraph(validation.data?.graph, itemsOf(items.data?.items ?? [], choisi, choisi === defaut));
+  // Ce qui attend une personne, et où : sur grand écran les colonnes du bout sortent du champ, et la
+  // seule carte avec un bouton « approve » s'y trouvait sans indice (seconde passe du 08/10, S23-09).
+  const enAttente = columns.flatMap((column) =>
+    column.items.filter((item) => item.pending_request).map((item) => ({ item, column })),
+  );
 
   return (
     <div className="space-y-3">
@@ -85,58 +92,107 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         />
       )}
       {items.isLoading && <Empty>loading…</Empty>}
-      <div className="grid gap-3 overflow-x-auto md:grid-flow-col md:auto-cols-[minmax(260px,1fr)]">
+      {enAttente.length > 0 && (
+        <div
+          className="border border-line border-l-2 border-l-warn bg-surface p-3 text-sm"
+          data-testid="attentes-du-board"
+        >
+          <p className="font-medium">
+            {enAttente.length} ticket{enAttente.length > 1 ? "s" : ""} wait{enAttente.length > 1 ? "" : "s"} for a
+            person
+          </p>
+          <ul className="mt-1 space-y-1">
+            {enAttente.map(({ item, column }) => (
+              <li key={item.id}>
+                <a href={`#carte-${item.id}`}>{item.title}</a>
+                <span className="text-ink-muted"> · in {column.display}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {columns.length > 0 && (
+        // Le sommaire des colonnes : chacune y est, même hors champ, avec ce qu'elle tient.
+        <nav aria-label="columns of the board" className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {columns.map((column) => {
+            const attentes = column.items.filter((item) => item.pending_request).length;
+            return (
+              <a key={column.state} href={`#colonne-${column.state}`} className="text-ink-muted hover:text-ink">
+                {column.display} <span className="tabular-nums">{column.items.length}</span>
+                {attentes > 0 && <span className="font-medium text-warn"> · {attentes} waiting</span>}
+              </a>
+            );
+          })}
+        </nav>
+      )}
+      <div className="grid gap-3 overflow-x-auto pb-2 md:grid-flow-col md:auto-cols-[minmax(260px,1fr)]">
         {columns.map((column) => (
-          <section key={column.state} className="space-y-2">
+          <section
+            key={column.state}
+            id={`colonne-${column.state}`}
+            aria-label={`${column.display}, ${column.items.length} ticket${column.items.length > 1 ? "s" : ""}`}
+            className="scroll-mt-20 space-y-2"
+          >
             <header className="flex items-center justify-between">
               <StateBadge state={column.state} display={column.display} kind={column.kind} />
               <span className="text-xs text-ink-muted">{column.items.length}</span>
             </header>
             {column.horsWorkflow && (
               // Sans ce mot, une colonne « In progress » après « Done » ne se comprenait pas (audit du 08/10).
-              <p className="text-xs text-ink-muted">not a state of this workflow — tickets left here by an older version</p>
+              <p className="text-xs text-ink-muted">
+                not a state of this workflow — tickets left here by an older version
+              </p>
             )}
             {column.items.map((item) => (
-              <Card key={item.id} className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <Link href={`/p/${slug}/items/${item.id}`} className="text-sm font-medium no-underline">
-                    {item.title}
-                  </Link>
-                  <CostChip costEur={item.totals?.cost_eur} tokensIn={item.totals?.tokens_in} />
-                </div>
-                <p className="mt-1 font-mono text-xs text-ink-muted">{item.tracker_key}</p>
-                {item.current_run && (
-                  <p className="mt-2 flex items-center gap-2 text-xs">
-                    <ActorIcon kind="agent" name={`${item.current_run.stage_role} · attempt ${item.current_run.attempt}`} />
-                    <span className="text-ink-muted">{item.current_run.status}</span>
-                  </p>
-                )}
-                {item.failure && (
-                  <p className="mt-1 text-xs font-medium text-danger" title={item.failure.message}>
-                    dead · {item.failure.activity ?? "interpreter"}
-                  </p>
-                )}
-                {item.pending_request && (
-                  <div className="mt-2 space-y-2 border border-line border-l-2 border-l-warn bg-surface p-2">
-                    <p className="text-xs text-warn">
-                      {String(item.pending_request.payload?.summary ?? item.pending_request.kind)} ·{" "}
-                      {relative(item.pending_request.requested_at)}
-                    </p>
-                    {item.pending_request.kind === "task" ? (
-                      // Un formulaire et une attestation ne tiennent pas dans une carte : la page du ticket.
-                      <Link href={`/p/${slug}/items/${item.id}`} className="text-xs">
-                        do the task
-                      </Link>
-                    ) : (
-                      <DecisionBar
-                        itemId={item.id}
-                        kind={item.pending_request.kind}
-                        onDone={() => queryClient.invalidateQueries({ queryKey: ["items", slug] })}
-                      />
-                    )}
+              <div
+                key={item.id}
+                id={`carte-${item.id}`}
+                className="scroll-mt-20 target:outline target:outline-2 target:outline-accent"
+              >
+                <Card className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link href={`/p/${slug}/items/${item.id}`} className="text-sm font-medium no-underline">
+                      {item.title}
+                    </Link>
+                    <CostChip costEur={item.totals?.cost_eur} tokensIn={item.totals?.tokens_in} />
                   </div>
-                )}
-              </Card>
+                  <p className="mt-1 font-mono text-xs text-ink-muted">{item.tracker_key}</p>
+                  {item.current_run && (
+                    <p className="mt-2 flex items-center gap-2 text-xs">
+                      <ActorIcon
+                        kind="agent"
+                        name={`${item.current_run.stage_role} · attempt ${item.current_run.attempt}`}
+                      />
+                      <span className="text-ink-muted">{item.current_run.status}</span>
+                    </p>
+                  )}
+                  {item.failure && (
+                    <p className="mt-1 text-xs font-medium text-danger" title={item.failure.message}>
+                      dead · {item.failure.activity ?? "interpreter"}
+                    </p>
+                  )}
+                  {item.pending_request && (
+                    <div className="mt-2 space-y-2 border border-line border-l-2 border-l-warn bg-surface p-2">
+                      <p className="text-xs text-warn">
+                        {String(item.pending_request.payload?.summary ?? item.pending_request.kind)} ·{" "}
+                        {relative(item.pending_request.requested_at)}
+                      </p>
+                      {item.pending_request.kind === "task" ? (
+                        // Un formulaire et une attestation ne tiennent pas dans une carte : la page du ticket.
+                        <Link href={`/p/${slug}/items/${item.id}`} className="text-xs">
+                          do the task
+                        </Link>
+                      ) : (
+                        <DecisionBar
+                          itemId={item.id}
+                          kind={item.pending_request.kind}
+                          onDone={() => queryClient.invalidateQueries({ queryKey: ["items", slug] })}
+                        />
+                      )}
+                    </div>
+                  )}
+                </Card>
+              </div>
             ))}
           </section>
         ))}
@@ -289,7 +345,12 @@ function ChampDeDemande({
   }
   if (champ.control === "choice") {
     return (
-      <select aria-label={libelle} value={String(valeur ?? "")} onChange={(event) => onChange(event.target.value)} className={classes}>
+      <select
+        aria-label={libelle}
+        value={String(valeur ?? "")}
+        onChange={(event) => onChange(event.target.value)}
+        className={classes}
+      >
         <option value="">{libelle}</option>
         {champ.choices?.map((choix) => (
           <option key={choix} value={choix}>
@@ -299,7 +360,8 @@ function ChampDeDemande({
       </select>
     );
   }
-  const type = champ.control === "date" ? "date" : champ.control === "number" || champ.control === "integer" ? "number" : "text";
+  const type =
+    champ.control === "date" ? "date" : champ.control === "number" || champ.control === "integer" ? "number" : "text";
   return (
     <input
       aria-label={libelle}
