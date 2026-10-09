@@ -42,6 +42,7 @@ import type {
   WorkItemDto,
   WorkItemPage,
 } from "@/lib/types";
+import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 
 const now = new Date();
@@ -1131,6 +1132,28 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
   }
   const [chemin] = path.split("?");
+  // Le routage et la désactivation changent l'état de la démo, le temps de la page : les écrans se
+  // relisent comme sur la vraie API, et les mêmes refus s'y jouent (S23-13).
+  if (method === "PUT" && /^\/projects\/[^/]+\/workflow-routing$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as WorkflowRouting;
+    const actifs = new Set(workflowSummaries.map((w) => w.name));
+    const inconnus = [corps.default, ...corps.rules.map((r) => r.workflow)].filter((n) => !actifs.has(n));
+    if (inconnus.length) throw new ApiError(422, { detail: `unknown or inactive workflow(s): ${inconnus.join(", ")}` });
+    workflowRouting.default = corps.default;
+    workflowRouting.rules = corps.rules;
+    for (const w of workflowSummaries) w.is_default = w.name === corps.default;
+    return workflowRouting as T;
+  }
+  const desactive = /^\/projects\/[^/]+\/workflows\/([^/]+)\/deactivate$/.exec(chemin ?? "");
+  if (method === "POST" && desactive) {
+    const nom = decodeURIComponent(desactive[1]!);
+    if (nom === workflowRouting.default)
+      throw new ApiError(409, { detail: `\`${nom}\` is the default workflow: choose another one before deactivating it` });
+    if (workflowRouting.rules.some((r) => r.workflow === nom))
+      throw new ApiError(409, { detail: `\`${nom}\` is the target of a routing rule: remove the rule first` });
+    workflowSummaries.splice(workflowSummaries.findIndex((w) => w.name === nom), 1);
+    return undefined as T;
+  }
   const agentEcrit = /^\/orgs\/[^/]+\/agents\/([^/]+)(\/[a-z]+)?$/.exec(chemin ?? "");
   if (method === "POST" && /^\/orgs\/[^/]+\/agents$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentCreate;
@@ -1161,8 +1184,12 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     } as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
+    // La version publiée s'ajoute à l'agent, le temps de la page : sa fiche la relit (S23-13).
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
-    return { version: agent.latest_version + 1, spec: JSON.parse(String(init.body ?? "{}")), checksum: "sha256:suivante" } as T;
+    const version = { version: agent.latest_version + 1, spec: JSON.parse(String(init.body ?? "{}")), checksum: "sha256:suivante", created_by: me.email };
+    agent.latest_version = version.version;
+    agent.versions = [version, ...(agent.versions ?? [])];
+    return version as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/credentials") {
     const corps = JSON.parse(String(init.body ?? "{}")) as { token_id?: string };
@@ -1201,7 +1228,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return actions.filter((a) => !statut || a.status === statut) as T;
   }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
-  if (agentLu) return (agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
+  // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
+  if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
   // Le parcours d'un ticket et son détail, par identifiant : chacun le sien (S22-02).
   const parcours = /^\/work-items\/([^/]+)\/journey$/.exec(route ?? "");
   if (parcours) return parcoursDe(parcours[1]!) as T;

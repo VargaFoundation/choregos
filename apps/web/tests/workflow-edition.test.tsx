@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
 import { BrouillonProvider, useBrouillon } from "@/components/workflows/brouillon";
 import { operations } from "@/components/workflows/operations";
-import { PanneauDEtat, PanneauDeTransition } from "@/components/workflows/panneaux";
+import { FormulaireDEtape, PanneauDEtat, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { ApiError, api } from "@/lib/api";
 import type { WorkflowEditResult, WorkflowOperation } from "@/lib/types";
 import fixture from "./fixtures/gestes-de-la-console.json";
@@ -206,6 +206,28 @@ describe("les panneaux de la carte et de la vue processus", () => {
       ]),
     );
     expect(panneau).toBeInTheDocument();
+  });
+
+  it("une étape s'ajoute sans choisir d'état d'abord : on dit d'où elle part (S23-13)", async () => {
+    vi.mocked(api.editWorkflow).mockResolvedValue(resultat(YAML, []));
+    await rendre(
+      <>
+        <Sonde />
+        <FormulaireDEtape etats={etats} acteurs={["refiner", "owner"]} />
+      </>,
+    );
+    const ajouter = screen.getByRole("button", { name: "add" });
+    expect(ajouter).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("from"), { target: { value: "inbox" } });
+    fireEvent.change(screen.getByLabelText("to"), { target: { value: "(new)" } });
+    fireEvent.change(screen.getByLabelText("name of the new state"), { target: { value: "in_review" } });
+    fireEvent.click(ajouter);
+    await waitFor(() =>
+      expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [
+        operations.ajouterUnEtat("in_review", "in_review"),
+        operations.ajouterUneTransition("inbox", "in_review", "refiner"),
+      ]),
+    );
   });
 
   it("le panneau d'une transition émet l'acteur, la garantie, le délai et leur retrait", async () => {
