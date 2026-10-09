@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { TBody, TD, TH, THead, TR, Table } from "@varga/design-system";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 
@@ -112,6 +112,7 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
           ))}
         </TBody>
       </Table>
+      <EtatDeLecture lecture={findings} quoi="the findings" />
       {findings.data?.items.length === 0 && <Empty>no finding</Empty>}
     </Card>
   );
