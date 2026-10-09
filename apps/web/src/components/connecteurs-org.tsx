@@ -73,7 +73,7 @@ export function OutilsDeLivraison({ org }: { org: string }) {
         ) : !projets.data ? (
           <p className="text-ink-muted">reading the projects…</p>
         ) : lignes.length === 0 ? (
-          <p className="text-ink-muted">no project yet.</p>
+          <p className="text-ink-muted">No project yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full" data-testid="outils-de-livraison">
@@ -121,7 +121,7 @@ export function OutilsDeLivraison({ org }: { org: string }) {
           </div>
         )}
         {projets.data?.meta?.has_more && (
-          <p className="text-xs text-ink-muted">and more projects: see the projects page.</p>
+          <p className="text-xs text-ink-muted">And more projects: see the projects page.</p>
         )}
       </div>
     </Card>

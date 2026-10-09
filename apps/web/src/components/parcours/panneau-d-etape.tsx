@@ -274,7 +274,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
       <section>
         <h4 className="text-xs uppercase tracking-wide text-ink-muted">gates</h4>
         {garanties.length === 0 ? (
-          <p className="text-xs text-ink-muted">no gate evaluated on this run.</p>
+          <p className="text-xs text-ink-muted">No gate evaluated on this run.</p>
         ) : (
           <ul className="space-y-0.5">
             {garanties.map((g, i) => (
@@ -299,7 +299,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
           access {acces.data ? `· ${acces.data.evenements} events, ${acces.data.refus} refused` : ""}
         </h4>
         {lignes.length === 0 ? (
-          <p className="text-xs text-ink-muted">no access recorded.</p>
+          <p className="text-xs text-ink-muted">No access recorded.</p>
         ) : (
           <ul className="space-y-0.5 text-xs">
             {[...lignes]

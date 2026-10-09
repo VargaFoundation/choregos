@@ -88,7 +88,7 @@ describe("le catalogue d'agents dans la console (S21-18)", () => {
     rendre();
     const chatgpt = await screen.findByTestId("client-catalogue-chatgpt");
     expect(chatgpt).toHaveTextContent("not available here");
-    expect(chatgpt).toHaveTextContent("why: no OAuth here");
+    expect(chatgpt).toHaveTextContent("Why: no OAuth here");
     expect(within(chatgpt).queryByRole("button", { name: "connect" })).toBeNull();
   });
 });

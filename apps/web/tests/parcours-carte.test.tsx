@@ -60,7 +60,7 @@ describe("la carte animée du parcours (S22-02)", () => {
   it("Replay rejoue la vie événement par événement, à la vitesse choisie, et le raconte", () => {
     vi.useFakeTimers();
     rendre();
-    fireEvent.click(screen.getByRole("button", { name: "Replay the journey" }));
+    fireEvent.click(screen.getByRole("button", { name: "replay the journey" }));
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("1 / 30");
     expect(statut("t-triage")).toBe("en_cours");
     expect(statut("t-security-review")).toBe("a_venir");
@@ -71,13 +71,13 @@ describe("la carte animée du parcours (S22-02)", () => {
     });
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 30");
     expect(statut("t-triage")).toBe("fait");
-    fireEvent.click(screen.getByRole("button", { name: "Pause the replay" }));
+    fireEvent.click(screen.getByRole("button", { name: "pause the replay" }));
     act(() => {
       vi.advanceTimersByTime(5000);
     });
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 30");
     // Le direct revient où en est le ticket.
-    fireEvent.click(screen.getByRole("button", { name: /^Live/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^live/ }));
     expect(statut("t-security-review")).toBe("en_cours");
   });
 

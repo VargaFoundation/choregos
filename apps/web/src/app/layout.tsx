@@ -49,7 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 size="wide"
                 className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
               >
-                <span>a ticket goes in, a controlled production release comes out.</span>
+                <span>A ticket goes in, a controlled production release comes out.</span>
                 <span>apache 2.0</span>
               </Container>
             </footer>

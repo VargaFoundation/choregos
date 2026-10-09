@@ -24,7 +24,7 @@ export default function ProjectsPage() {
           <Heading as="h1" size="xl">
             projects
           </Heading>
-          <Lead>each project runs its own workflows: a request comes in, agents and people move it on under the rules you set, and every step leaves its evidence.</Lead>
+          <Lead>Each project runs its own workflows: a request comes in, agents and people move it on under the rules you set, and every step leaves its evidence.</Lead>
         </div>
         <Link href="/projects/new" className={buttonClasses("primary", "md")}>
           new project
@@ -68,6 +68,7 @@ export default function ProjectsPage() {
               className="h-full"
               eyebrow={project.slug}
               title={project.name}
+              titreDonnee
               action={
                 <StateBadge
                   state={project.status}

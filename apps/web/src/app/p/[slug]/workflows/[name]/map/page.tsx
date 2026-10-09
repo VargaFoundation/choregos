@@ -84,7 +84,7 @@ export default function MapPage() {
         {!noeud && !arete && (
           <>
             <Empty title="edit the workflow">
-              choose a step on the diagram, or a state in the list view (click, or Tab then Enter).
+              Choose a step on the diagram, or a state in the list view (click, or Tab then Enter).
             </Empty>
             {/* Ajouter une étape ne demandait pas moins que la vue liste, un état choisi, puis « a new
                 state… » dans une liste : introuvable (seconde passe du 08/10, S23-13). */}

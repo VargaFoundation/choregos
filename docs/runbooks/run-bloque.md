@@ -36,7 +36,7 @@ slot (`runner.maxActive`), and the run says so (ADR 0013).
    choregos items action <ticket-id> stop
    ```
    The `cancel_run` activity deletes the `PipelineRun` and its Secret.
-3. **Replay the stage** once the cause is fixed:
+3. **replay the stage** once the cause is fixed:
    ```bash
    choregos items action <ticket-id> rerun_stage
    ```

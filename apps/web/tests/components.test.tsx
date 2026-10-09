@@ -74,7 +74,7 @@ describe("preuves d'une étape", () => {
 
   it("ne montre pas une grille de tirets quand il n'y a aucune preuve", () => {
     render(<Preuves evidence={{}} />);
-    expect(screen.getByText(/no evidence recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/No evidence recorded/)).toBeInTheDocument();
   });
 });
 
@@ -101,7 +101,7 @@ describe("fiche d'accès", () => {
 
   it("ne prétend rien quand il n'y a rien", () => {
     render(<Acces />);
-    expect(screen.getByText(/no access recorded/)).toBeInTheDocument();
+    expect(screen.getByText(/No access recorded/)).toBeInTheDocument();
   });
 });
 
@@ -133,7 +133,7 @@ describe("garanties", () => {
 
   it("dit quand aucune garantie n'a été évaluée, plutôt qu'un ✓ à vide", () => {
     render(<Garanties events={[events[0]!]} />);
-    expect(screen.getByText(/no gate evaluated/)).toBeInTheDocument();
+    expect(screen.getByText(/No gate evaluated/)).toBeInTheDocument();
   });
 });
 

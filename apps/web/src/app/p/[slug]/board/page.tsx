@@ -113,7 +113,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
       )}
       {columns.length > 0 && (
         // Le sommaire des colonnes : chacune y est, même hors champ, avec ce qu'elle tient.
-        <nav aria-label="columns of the board" className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <nav aria-label="columns of the board" data-donnee className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {columns.map((column) => {
             const attentes = column.items.filter((item) => item.pending_request).length;
             return (

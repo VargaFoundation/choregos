@@ -46,7 +46,7 @@ export default function AgentsPage() {
         ) : !agents.data ? (
           <p className="text-sm text-ink-muted">reading the registry…</p>
         ) : agents.data.length === 0 ? (
-          <Empty title="no agent yet">register one below, or from a project&apos;s implicit agents.</Empty>
+          <Empty title="no agent yet">Register one below, or from a project&apos;s implicit agents.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="registre">

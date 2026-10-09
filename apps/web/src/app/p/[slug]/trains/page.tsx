@@ -57,7 +57,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
   const data = train.data;
   return (
     <Card
-      title={`Environment ${env}`}
+      title={`environment ${env}`}
       action={data && <StateBadge state={data.status} display={data.status} kind={data.frozen ? "blocked" : "work"} />}
     >
       {!data ? (

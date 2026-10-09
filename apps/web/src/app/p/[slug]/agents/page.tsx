@@ -38,7 +38,7 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
           <p className="text-sm text-ink-muted">reading…</p>
         ) : epingles.data.length === 0 ? (
           <Empty title="nothing pinned">
-            a workflow actor that names an agent runs its latest version; pin one to hold it, and tighten it.
+            A workflow actor that names an agent runs its latest version; pin one to hold it, and tighten it.
           </Empty>
         ) : (
           <ul className="space-y-3" data-testid="epingles">
@@ -189,7 +189,7 @@ function Implicites({ projet, org, registre }: { projet: string; org: string; re
           their own. Register one, then name it in the workflow (<code>agent: its-slug</code>).
         </p>
         {implicites.length === 0 ? (
-          <p className="text-sm text-ink-muted">none: every agent of this project&apos;s workflows is in the registry.</p>
+          <p className="text-sm text-ink-muted">None: every agent of this project&apos;s workflows is in the registry.</p>
         ) : (
           <ul className="space-y-2" data-testid="implicites">
             {implicites.map((implicite) => (

@@ -54,7 +54,7 @@ export default function SkillsPage() {
         ) : !skills.data ? (
           <p className="text-sm text-ink-muted">reading the library…</p>
         ) : skills.data.length === 0 ? (
-          <Empty title="no skill yet">import a zip below.</Empty>
+          <Empty title="no skill yet">Import a zip below.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="bibliotheque">

@@ -32,10 +32,10 @@ function Connexion() {
         <Heading as="h1" size="xl">
           sign in
         </Heading>
-        <Lead>a ticket goes in, a controlled production release comes out. but first, who are you?</Lead>
+        <Lead>A ticket goes in, a controlled production release comes out. But first, who are you?</Lead>
       </div>
       {IS_MOCK ? (
-        <p className="text-sm text-ink-muted">demo mode: the session is simulated, nothing to do here.</p>
+        <p className="text-sm text-ink-muted">Demo mode: the session is simulated, nothing to do here.</p>
       ) : (
         <a href={api.loginUrl(next)} className={buttonClasses("primary", "md")}>
           continue with the identity provider

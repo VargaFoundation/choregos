@@ -31,7 +31,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         <span aria-hidden className="text-ink-muted">
           /
         </span>
-        <Heading as="h1" size="lg">
+        <Heading as="h1" size="lg" data-donnee>
           {a.display_name}
         </Heading>
         <span className="text-sm text-ink-muted">{a.slug}</span>
@@ -269,7 +269,7 @@ function Specification({ spec }: { spec: AgentSpec }) {
           {spec.instructions}
         </pre>
       ) : (
-        <p className="text-xs text-ink-muted">no instructions: the playbook of its role speaks.</p>
+        <p className="text-xs text-ink-muted">No instructions: the playbook of its role speaks.</p>
       )}
     </div>
   );
@@ -366,7 +366,7 @@ function NouvelleVersion({
         <fieldset className="space-y-2 md:col-span-3" data-testid="skills-de-la-version">
           <legend className="text-xs text-ink-muted">skills</legend>
           {competences.length === 0 ? (
-            <p className="text-xs text-ink-muted">none — the playbook of its role is all it reads.</p>
+            <p className="text-xs text-ink-muted">None — the playbook of its role is all it reads.</p>
           ) : (
             <ul className="flex flex-wrap gap-2">
               {competences.map((competence) => (
@@ -475,7 +475,7 @@ function Clients({ org, slug }: { org: string; slug: string }) {
     <Card title="MCP clients acting as this agent">
       <div className="space-y-3">
         {(liens.data ?? []).length === 0 ? (
-          <p className="text-sm text-ink-muted">no client yet: attach one of your MCP tokens below.</p>
+          <p className="text-sm text-ink-muted">No client yet: attach one of your MCP tokens below.</p>
         ) : (
           <ul className="space-y-2" data-testid="clients-de-l-agent">
             {(liens.data ?? []).map((lien) => {

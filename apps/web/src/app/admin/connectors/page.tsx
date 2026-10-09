@@ -63,7 +63,7 @@ export default function OrgConnectorsPage() {
         </p>
         {lecture ??
           (metier.length === 0 ? (
-            <Empty title="no business system yet">declare one below.</Empty>
+            <Empty title="no business system yet">Declare one below.</Empty>
           ) : (
             metier.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
           ))}

@@ -39,7 +39,7 @@ export default function ProcessPage() {
   if (etapes.length === 0)
     return (
       <div className="space-y-3">
-        <Empty title="no transition">this workflow has no step yet.</Empty>
+        <Empty title="no transition">This workflow has no step yet.</Empty>
         {ajouter}
       </div>
     );

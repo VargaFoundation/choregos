@@ -63,7 +63,7 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
       ) : (
         <>
           <p className="mt-2 text-xs text-ink-muted">
-            this installation runs the community core: one organisation. The enterprise edition adds:
+            This installation runs the community core: one organisation. The enterprise edition adds:
           </p>
           <ul className="mt-1 space-y-1 text-xs" aria-label="what the enterprise edition adds">
             {FONCTIONS_ENTREPRISE.map(([cle, libelle]) => (

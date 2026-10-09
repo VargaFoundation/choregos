@@ -45,7 +45,7 @@ export default function InboxPage() {
         {!boite.pret ? (
           <p className="text-sm text-ink-muted">reading…</p>
         ) : boite.tickets.length === 0 ? (
-          <Empty title="no ticket waits">every ticket in flight is in the hands of an agent or the platform.</Empty>
+          <Empty title="no ticket waits">Every ticket in flight is in the hands of an agent or the platform.</Empty>
         ) : (
           <ul className="divide-y divide-line" data-testid="tickets-en-attente">
             {boite.tickets.map(({ item, demande, enRetard }) => (
@@ -95,7 +95,7 @@ export default function InboxPage() {
         {!boite.pret ? (
           <p className="text-sm text-ink-muted">reading…</p>
         ) : boite.actions.length === 0 ? (
-          <Empty title="nothing waits">no action needs a decision.</Empty>
+          <Empty title="nothing waits">No action needs a decision.</Empty>
         ) : (
           <ul className="space-y-2" data-testid="boite">
             {boite.actions.map((action) => (

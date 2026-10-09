@@ -101,7 +101,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
       </Card>
       <Card title="carried by">
         {(skill.data.used_by ?? []).length === 0 ? (
-          <p className="text-sm text-ink-muted">no agent names it yet.</p>
+          <p className="text-sm text-ink-muted">No agent names it yet.</p>
         ) : (
           <ul className="flex flex-wrap gap-3 text-sm">
             {(skill.data.used_by ?? []).map((agent) => (

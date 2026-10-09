@@ -63,7 +63,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Heading as="h2" size="lg">
-            Run {run.data.stage_role} · attempt {run.data.attempt}
+            run {run.data.stage_role} · attempt {run.data.attempt}
           </Heading>
           <p className="font-mono text-xs text-ink-muted">
             {run.data.backend} · {run.data.model} · executor {run.data.executor_kind ?? "—"}

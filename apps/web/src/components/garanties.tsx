@@ -50,7 +50,7 @@ export function Garanties({ events }: { events: RunEventDto[] }) {
       }
     >
       {verdicts.length === 0 ? (
-        <Empty>no gate evaluated on this run (the transition declares none, or the stage did not complete).</Empty>
+        <Empty>No gate evaluated on this run (the transition declares none, or the stage did not complete).</Empty>
       ) : (
         <ul className="space-y-2">
           {[...verdicts]

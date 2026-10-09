@@ -95,7 +95,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         {!costs.data ? (
           <EtatDeLecture lecture={costs} quoi="the costs" />
         ) : rows.length === 0 ? (
-          <Empty>no spend recorded.</Empty>
+          <Empty>No spend recorded.</Empty>
         ) : (
           <>
             <GrapheDesCouts rows={rows} />
@@ -127,7 +127,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         {dora.data === undefined ? (
           <EtatDeLecture lecture={dora} quoi="the delivery measures" />
         ) : dora.data.deployments === 0 ? (
-          <Empty>no production deployment recorded in the window.</Empty>
+          <Empty>No production deployment recorded in the window.</Empty>
         ) : (
           <div className="grid border-t border-line sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="deployment frequency" metric={dora.data.deployment_frequency} />
@@ -146,7 +146,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
             </div>
           ) : items.data.items.length === 0 ? (
             <div className="pb-4">
-              <Empty>no ticket yet — a request filed on the board lands here.</Empty>
+              <Empty>No ticket yet — a request filed on the board lands here.</Empty>
             </div>
           ) : (
             <div className="overflow-x-auto">

@@ -41,7 +41,7 @@ export function CatalogueDAgents({ org }: { org: string }) {
         {!catalogue.data ? (
           <p className="text-sm text-ink-muted">reading the catalogue…</p>
         ) : internes.length === 0 ? (
-          <Empty title="empty catalogue">this deployment ships no agent.</Empty>
+          <Empty title="empty catalogue">This deployment ships no agent.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="catalogue">
@@ -179,7 +179,7 @@ function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogu
         )}
       </div>
       {!entree.offered && entree.unavailable_reason && (
-        <p className="text-xs text-ink-muted">why: {entree.unavailable_reason}</p>
+        <p className="text-xs text-ink-muted">Why: {entree.unavailable_reason}</p>
       )}
       {connexion?.oauth_client_id && (
         <p className="text-sm" role="status">

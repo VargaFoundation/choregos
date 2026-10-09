@@ -31,7 +31,7 @@ export function Preuves({ evidence }: { evidence?: Evidence }) {
   return (
     <Card title="evidence">
       {lignes.length === 0 ? (
-        <Empty>no evidence recorded.</Empty>
+        <Empty>No evidence recorded.</Empty>
       ) : (
         <ul className="space-y-1 text-sm">
           {lignes.map(([nom, valeur]) => (
