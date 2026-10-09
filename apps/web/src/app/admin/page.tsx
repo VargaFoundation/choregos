@@ -61,19 +61,21 @@ export default function AdminPage() {
             </div>
           )}
           <form
-            className="mb-3 flex flex-wrap items-center gap-2 text-sm"
+            className="mb-3 flex flex-wrap items-end gap-2 text-sm"
             onSubmit={(event) => {
               event.preventDefault();
               void frapper();
             }}
           >
-            <input
-              aria-label="token name"
-              value={tokenName}
-              onChange={(event) => setTokenName(event.target.value)}
-              placeholder="cli"
-              className="min-w-0 flex-1 rounded border border-line bg-surface px-2 py-1"
-            />
+            <label className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-xs text-ink-muted">token name</span>
+              <input
+                value={tokenName}
+                onChange={(event) => setTokenName(event.target.value)}
+                placeholder="cli"
+                className="min-w-0 flex-1 rounded border border-line bg-surface px-2 py-1"
+              />
+            </label>
             <Button size="sm" tone="primary" type="submit">
               mint a token (90 days)
             </Button>
@@ -106,7 +108,6 @@ export default function AdminPage() {
           <EtatDeLecture lecture={tokens} quoi="your tokens" />
           {tokens.data?.length === 0 && <Empty>no token</Empty>}
         </Card>
-
       </div>
     </div>
   );

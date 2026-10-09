@@ -10,7 +10,7 @@ import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { gare } from "@/components/parcours/modele";
 import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
-import { relative, shortDate, tokens, usd } from "@/lib/format";
+import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
 
@@ -93,7 +93,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         (data.workflow_status && ["FAILED", "TERMINATED", "TIMED_OUT"].includes(data.workflow_status))) && (
         <ErrorNote>
           <strong>This ticket is dead.</strong> Its interpreter stopped
-          {data.workflow_status ? ` (${data.workflow_status})` : ""}
+          {data.workflow_status ? ` (${libelleDeCode(data.workflow_status)})` : ""}
           {data.failure?.activity ? ` in ${data.failure.activity}` : ""}: it will not move again until it is restarted.
           {data.failure?.message && <span className="mt-2 block font-mono text-xs">{data.failure.message}</span>}
           {data.failure?.at && <span className="mt-1 block text-xs">{relative(data.failure.at)}</span>}

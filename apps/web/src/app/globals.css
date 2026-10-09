@@ -45,6 +45,22 @@
   }
 }
 
+/*
+ * Un tableau qui défile dans sa case le montre (S23-11) : sur téléphone, les colonnes d'action
+ * sortaient du champ sans indice. Une ombre se pose sur le bord où il reste à lire — les deux
+ * premiers fonds suivent le contenu (`local`) et couvrent l'ombre quand on est au bout, les deux
+ * suivants restent au bord (`scroll`). Le tableau du design system pose son propre conteneur.
+ */
+.overflow-x-auto:has(> table) {
+  background:
+    linear-gradient(to right, var(--color-surface) 30%, transparent) left center / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--color-surface) 30%, transparent) right center / 2.5rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.18), transparent) left center / 0.75rem 100% no-repeat
+      scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.18), transparent) right center / 0.75rem 100%
+      no-repeat scroll;
+}
+
 /* La carte d'un workflow se parcourt au clavier : la case sous le curseur doit se voir. */
 [data-etat]:focus-visible {
   outline: 2px solid var(--varga-focus);

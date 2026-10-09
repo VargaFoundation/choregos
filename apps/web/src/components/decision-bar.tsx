@@ -46,16 +46,18 @@ export function DecisionBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-end gap-2">
       {kind === "question" ? (
         <>
-          <input
-            aria-label="answer"
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            placeholder="your answer…"
-            className="min-w-0 flex-1 basis-64 rounded border border-line bg-surface px-2 py-1.5 text-sm"
-          />
+          <label className="flex min-w-0 flex-1 basis-64 flex-col gap-1">
+            <span className="text-xs text-ink-muted">answer</span>
+            <input
+              value={answer}
+              onChange={(event) => setAnswer(event.target.value)}
+              placeholder="your answer…"
+              className="rounded border border-line bg-surface px-2 py-1.5 text-sm"
+            />
+          </label>
           <Button tone="primary" disabled={busy || !answer} onClick={() => send("answer")}>
             answer
           </Button>
@@ -65,13 +67,15 @@ export function DecisionBar({
           <Button tone="primary" disabled={busy} onClick={() => send("approve")}>
             approve
           </Button>
-          <input
-            aria-label="reason for sending back"
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            placeholder="reason (if sent back)"
-            className="min-w-48 rounded border border-line bg-surface px-2 py-1.5 text-sm"
-          />
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-xs text-ink-muted">reason for sending back</span>
+            <input
+              value={answer}
+              onChange={(event) => setAnswer(event.target.value)}
+              placeholder="reason (if sent back)"
+              className="min-w-48 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+            />
+          </label>
           <Button tone="danger" disabled={busy} onClick={() => send("reject")}>
             send back
           </Button>

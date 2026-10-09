@@ -54,6 +54,22 @@ export function shortDate(timestamp: string | null | undefined): string {
   );
 }
 
+/**
+ * Un code d'état lu par une personne (S23-11) : `rolled_back` → « rolled back », `FAILED` →
+ * « failed ». La console affichait les codes de l'API tels quels quand l'état n'avait pas de libellé.
+ */
+export function libelleDeCode(code: string): string {
+  return code.replace(/_/g, " ").toLowerCase();
+}
+
+/** Les segments entre backticks d'une phrase du moteur (`refiner`, `spec_markdown`) : du code. */
+export function segmentsDeCode(texte: string): { code: boolean; texte: string }[] {
+  return texte
+    .split("`")
+    .map((morceau, index) => ({ code: index % 2 === 1, texte: morceau }))
+    .filter((segment) => segment.texte !== "");
+}
+
 /** Ratio affiché en pourcentage, sans fausse précision. */
 export function percent(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";

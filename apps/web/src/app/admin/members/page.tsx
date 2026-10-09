@@ -48,41 +48,48 @@ export default function MembersPage() {
   return (
     <Card title={`members of ${org}`}>
       <form
-        className="mb-4 flex flex-wrap items-center gap-2 text-sm"
+        className="mb-4 flex flex-wrap items-end gap-2 text-sm"
         onSubmit={(event) => {
           event.preventDefault();
           void agir(
-            () => api.addMember(org, { email: invite.email, role: invite.role, project_slug: invite.project_slug || null }),
+            () =>
+              api.addMember(org, { email: invite.email, role: invite.role, project_slug: invite.project_slug || null }),
             `${invite.email} invited as ${invite.role}`,
           ).then(() => setInvite({ email: "", role: "developer", project_slug: "" }));
         }}
       >
-        <input
-          aria-label="member e-mail"
-          value={invite.email}
-          onChange={(event) => setInvite((i) => ({ ...i, email: event.target.value }))}
-          placeholder="alice@example.org"
-          className="rounded border border-line bg-surface px-2 py-1"
-        />
-        <select
-          aria-label="role"
-          value={invite.role}
-          onChange={(event) => setInvite((i) => ({ ...i, role: event.target.value as Role }))}
-          className="rounded border border-line bg-surface px-2 py-1"
-        >
-          {ROLES.map((role) => (
-            <option key={role} value={role}>
-              {role}
-            </option>
-          ))}
-        </select>
-        <input
-          aria-label="project (optional)"
-          value={invite.project_slug}
-          onChange={(event) => setInvite((i) => ({ ...i, project_slug: event.target.value }))}
-          placeholder="project (empty = whole organisation)"
-          className="rounded border border-line bg-surface px-2 py-1"
-        />
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">member e-mail</span>
+          <input
+            value={invite.email}
+            onChange={(event) => setInvite((i) => ({ ...i, email: event.target.value }))}
+            placeholder="alice@example.org"
+            className="rounded border border-line bg-surface px-2 py-1"
+          />
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">role</span>
+          <select
+            value={invite.role}
+            onChange={(event) => setInvite((i) => ({ ...i, role: event.target.value as Role }))}
+            className="rounded border border-line bg-surface px-2 py-1"
+          >
+            {ROLES.map((role) => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">project (optional)</span>
+          <input
+            value={invite.project_slug}
+            onChange={(event) => setInvite((i) => ({ ...i, project_slug: event.target.value }))}
+            placeholder="project (empty = whole organisation)"
+            className="rounded border border-line bg-surface px-2 py-1"
+          />
+        </label>
         <Button size="sm" tone="primary" type="submit" disabled={!invite.email}>
           invite
         </Button>
@@ -134,7 +141,11 @@ export default function MembersPage() {
                     {nouveauRole?.cle === cle && (
                       <div className="mt-2 max-w-sm">
                         <Confirmation
-                          ton={soi(membership.email) && rang(nouveauRole.role) < rang(membership.role) ? "danger" : "primary"}
+                          ton={
+                            soi(membership.email) && rang(nouveauRole.role) < rang(membership.role)
+                              ? "danger"
+                              : "primary"
+                          }
                           question={
                             soi(membership.email) && rang(nouveauRole.role) < rang(membership.role)
                               ? `this is you: as ${nouveauRole.role} you lose what ${membership.role} lets you do, and cannot give it back to yourself.`

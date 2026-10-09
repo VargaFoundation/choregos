@@ -7,7 +7,7 @@ import { useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { verdictsDe } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
-import { Empty } from "@/components/ui";
+import { Empty, PhraseDuMoteur } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { duration, relative, shortDate, usd } from "@/lib/format";
@@ -74,7 +74,11 @@ export function PanneauDEtape({
       {(etape.phrase || (process?.gates ?? []).length > 0) && (
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer text-ink-muted">what this step does</summary>
-          {etape.phrase && <p className="mt-1 text-ink-muted">{etape.phrase}</p>}
+          {etape.phrase && (
+            <p className="mt-1 text-ink-muted">
+              <PhraseDuMoteur texte={etape.phrase} />
+            </p>
+          )}
           {(process?.gates ?? []).length > 0 && (
             <ul className="mt-1 space-y-0.5 text-xs text-ink-muted">
               {process!.gates!.map((g) => (

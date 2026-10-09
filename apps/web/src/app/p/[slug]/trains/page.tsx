@@ -77,7 +77,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
             ))}
           </ul>
           {data.frozen && <ErrorNote>Train frozen: {data.freeze_reason ?? "no reason"}</ErrorNote>}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <Button tone="primary" onClick={() => act("depart")} disabled={data.frozen || data.batch_size === 0}>
               depart now
             </Button>
@@ -85,13 +85,15 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
               <Button onClick={() => act("unfreeze")}>unfreeze</Button>
             ) : (
               <>
-                <input
-                  aria-label="freeze reason"
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  placeholder="freeze reason (required)"
-                  className="min-w-56 rounded border border-line bg-surface px-2 py-1.5 text-sm"
-                />
+                <label className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs text-ink-muted">freeze reason</span>
+                  <input
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    placeholder="freeze reason (required)"
+                    className="min-w-56 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+                  />
+                </label>
                 <Button tone="danger" onClick={() => act("freeze")}>
                   freeze
                 </Button>
