@@ -507,7 +507,7 @@ export type AgentCatalogueEntry = {
   /** an agent of the organisation has this name and does not come from the catalogue */
   own_agent?: boolean;
   update_available?: boolean;
-  /** false for a client the gate does not accept yet (OAuth, registered client, https) */
+  /** false for a client the door does not accept yet (OAuth, registered client, https) */
   offered?: boolean;
   unavailable_reason?: string | null;
 };
@@ -595,7 +595,7 @@ export type AgentCredential = {
   revoked_at?: string | null;
   /** the name of the attached token */
   token_name?: string | null;
-  /** the token's last call to the MCP gate: the console shows it as connected */
+  /** the token's last call to the MCP door: the console shows it as connected */
   last_used_at?: string | null;
   /** the client of that last call (`User-Agent`, truncated) */
   last_client?: string | null;
@@ -786,14 +786,14 @@ export type WorkItemUpdate = {
 };
 
 export type Integrations = {
-  /** The MCP gate's URL; a project's adds `/projects/{org}:{slug}` to it. */
+  /** The MCP door's URL; a project's adds `/projects/{org}:{slug}` to it. */
   mcp_url: string;
   protocol_versions: Array<string>;
   oauth: {
-    /** False as long as the gate accepts only scoped tokens. */
+    /** False as long as the door accepts only scoped tokens. */
     enabled: boolean;
     authorization_server?: string | null;
-    /** The clients the IdP registered for the gate, by client of the Integrations page (`claude-code`, `claude-ai`…): the page derives the exact command from them. */
+    /** The clients the IdP registered for the door, by client of the Integrations page (`claude-code`, `claude-ai`…): the page derives the exact command from them. */
     clients?: {
       [key: string]: {
         client_id: string;
@@ -805,7 +805,7 @@ export type Integrations = {
   version: string;
 };
 
-/** `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP gate only (ADR 0030) — such a token is refused by the REST API, and the gate refuses `*`. */
+/** `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP door only (ADR 0030) — such a token is refused by the REST API, and the door refuses `*`. */
 export type TokenScope = "*" | "mcp:read" | "mcp:write";
 
 export type ApiTokenCreate = {

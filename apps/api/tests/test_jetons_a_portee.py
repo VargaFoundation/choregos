@@ -39,7 +39,7 @@ async def test_un_jeton_mcp_est_refuse_par_l_api_rest(client: AsyncClient, admin
     ):
         reponse = await client.request(methode, chemin, headers=entete, json=corps)
         assert reponse.status_code == 403, f"{methode} {chemin} : {reponse.status_code} {reponse.text}"
-        assert "MCP gate" in reponse.json()["detail"]
+        assert "MCP door" in reponse.json()["detail"]
 
 
 async def test_toute_l_api_ne_se_combine_pas(client: AsyncClient, admin: str) -> None:

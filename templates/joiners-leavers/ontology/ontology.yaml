@@ -6,7 +6,7 @@ spec:
     The registry of what an onboarding opens and what an offboarding must close: the person and
     their contract, their account and groups, their laptop, their badge. The workflows act on the
     directory, the device fleet and the badge readers; this registry keeps what they opened, and an
-    HR person's Claude queries it through the MCP gate — who among the leavers still holds an
+    HR person's Claude queries it through the MCP door — who among the leavers still holds an
     active badge?
   defaults:
     sensitivity: internal
