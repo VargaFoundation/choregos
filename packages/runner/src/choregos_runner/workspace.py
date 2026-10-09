@@ -193,6 +193,9 @@ class Workspace:
         ".mypy_cache/",
         "node_modules/",
         ".venv/",
+        # Le cache de pip qu'un agent pose dans le dépôt (`PIP_CACHE_DIR=.cache/pip`) : 42 fichiers
+        # dans le commit de la spec de #6, sur le locataire dev, le 09/10 (S22-13).
+        ".cache/",
     )
 
     def exclude(self, paths: list[str]) -> None:
