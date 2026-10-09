@@ -31,6 +31,38 @@ export const DELAI_DE_VALIDATION_MS = 400;
 export type Brouillon = ReturnType<typeof useBrouillonInterne>;
 
 /**
+ * Le brouillon survit à la navigation dans la console (S23-06) : `beforeunload` ne retient que le
+ * rechargement et la fermeture de l'onglet — un clic sur « board » démontait le contexte et le
+ * brouillon partait avec, sans un mot. Il est gardé dans le stockage de l'onglet, et repris au retour
+ * avec sa version de départ : si une autre a été publiée entre-temps, le conflit se dit comme avant.
+ */
+export function cleDuBrouillon(slug: string, name: string): string {
+  return `choregos.brouillon.${slug}.${name}`;
+}
+
+function lireLeBrouillon(cle: string): Etat | null {
+  try {
+    const brut = window.sessionStorage.getItem(cle);
+    if (!brut) return null;
+    const lu = JSON.parse(brut) as Etat;
+    return typeof lu?.yaml === "string" && typeof lu.versionDeBase === "number" && Array.isArray(lu.gestes)
+      ? { ...lu, frappeEnCours: false }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function garderLeBrouillon(cle: string, etat: Etat | null) {
+  try {
+    if (etat) window.sessionStorage.setItem(cle, JSON.stringify(etat));
+    else window.sessionStorage.removeItem(cle);
+  } catch {
+    // Stockage refusé (navigation privée, quota) : le brouillon vit comme avant, le temps de la page.
+  }
+}
+
+/**
  * Le brouillon d'un workflow, SEUL état des trois vues (S21-06) : la frappe dans l'onglet YAML, les
  * gestes de la carte et de la vue processus écrivent dans le même texte, et une seule publication
  * l'envoie. Avant, l'onglet YAML tenait son propre texte : deux boutons « publish », et le brouillon
@@ -49,6 +81,9 @@ function useBrouillonInterne(slug: string, name: string) {
   const [erreur, setErreur] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [conflit409, setConflit409] = useState(false);
+  // `undefined` jusqu'à la lecture du brouillon gardé : avant, écrire « rien » l'effacerait.
+  const [repris, setRepris] = useState<Etat | null | undefined>(undefined);
+  const cle = cleDuBrouillon(slug, name);
   const base = definition.data?.yaml ?? "";
   const yaml = etat?.yaml ?? base;
 
@@ -96,6 +131,19 @@ function useBrouillonInterne(slug: string, name: string) {
   );
 
   useEffect(() => arreterLaValidation, [arreterLaValidation]);
+
+  // Le stockage n'existe que dans le navigateur : la reprise attend le montage.
+  useEffect(() => {
+    const garde = lireLeBrouillon(cle);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- lu une fois, au montage, hors du rendu serveur
+    setEtat(garde);
+    setRepris(garde);
+    if (garde) valider(garde.yaml);
+  }, [cle, valider]);
+
+  useEffect(() => {
+    if (repris !== undefined) garderLeBrouillon(cle, etat);
+  }, [cle, etat, repris]);
 
   // Quitter la page avec un brouillon non publié : le navigateur demande confirmation.
   useEffect(() => {
@@ -258,6 +306,8 @@ function useBrouillonInterne(slug: string, name: string) {
     definition,
     yaml,
     enAttente: etat?.gestes.length ?? 0,
+    /** Le brouillon vient d'une visite précédente dans cet onglet, et rien n'y a touché depuis. */
+    repris: Boolean(etat && repris && etat.yaml === repris.yaml),
     graph: affiche?.graph ?? undefined,
     process: affiche?.process ?? undefined,
     /** Vrai quand la carte montre le dernier texte valide, pas le texte courant. */

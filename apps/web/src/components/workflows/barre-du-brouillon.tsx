@@ -21,6 +21,7 @@ export function BarreDuBrouillon() {
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm">
             {brouillon.enAttente} change{brouillon.enAttente > 1 ? "s" : ""} not published yet
+            {brouillon.repris && <span className="text-ink-muted"> — kept from your last visit</span>}
             {validation.etat === "en_cours" && <span className="text-ink-muted"> — validating…</span>}
             {validation.etat === "a_jour" && !brouillon.valide && (
               <span className="text-danger"> — the workflow would be invalid</span>

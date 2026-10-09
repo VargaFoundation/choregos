@@ -96,3 +96,37 @@ test("un texte invalide se souligne dans la marge et interdit de publier", async
   await page.getByRole("link", { name: "map", exact: true }).click();
   await expect(page.getByTestId("texte-illisible")).toBeVisible();
 });
+
+test("un brouillon survit à un détour par une autre page de la console (S23-06)", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/default-simple/yaml");
+  await page.getByLabel("YAML of default-simple").click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("# still here");
+  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  // Une autre page du projet démonte le brouillon : avant, il partait sans un mot.
+  await page.getByRole("link", { name: "board", exact: true }).click();
+  await expect(page).toHaveURL(/\/board$/);
+  await page.goBack();
+  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet — kept from your last visit");
+  await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# still here");
+  await expect(page.getByRole("button", { name: "publish v2" })).toBeEnabled();
+  // Abandonner l'efface pour de bon.
+  await page.getByRole("button", { name: "discard" }).click();
+  await expect(page.getByTestId("brouillon")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByTestId("yaml-editor").locator(".cm-content")).not.toContainText("# still here");
+});
+
+test("un nouveau workflow ne prend pas le nom d'un workflow qui existe (S23-06)", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/new");
+  const nom = page.getByLabel("name");
+  await nom.fill("default-simple");
+  await expect(page.getByText("a workflow named default-simple already exists")).toBeVisible();
+  await expect(page.getByRole("button", { name: "publish default-simple" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "open default-simple" })).toHaveAttribute(
+    "href",
+    "/p/billing-api/workflows/default-simple",
+  );
+  await nom.fill("offboarding");
+  await expect(page.getByRole("button", { name: "publish offboarding" })).toBeEnabled();
+});

@@ -4,6 +4,7 @@
 import { cn } from "@/lib/cn";
 import { Heading, Numeral } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Card, ErrorNote } from "@/components/ui";
@@ -33,6 +34,12 @@ export default function NewProjectPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Ce qui a déjà été créé : un échec au milieu ne se rejoue pas depuis le début (S23-06). Avant, le
+  // projet était créé, le tracker refusé, et « create » renvoyait ensuite 409 pour toujours.
+  const [fait, setFait] = useState<{ projet: { id: string; slug: string } | null; tracker: boolean }>({
+    projet: null,
+    tracker: false,
+  });
   const [form, setForm] = useState({
     template: "",
     slug: "",
@@ -56,6 +63,7 @@ export default function NewProjectPage() {
   async function create() {
     setBusy(true);
     setError(null);
+    let projet = fait.projet;
     try {
       const config: Record<string, unknown> = { slug: form.slug, org };
       if (!form.sansDepot) {
@@ -67,20 +75,55 @@ export default function NewProjectPage() {
         if (form.gitops) config.gitops = { repo_url: form.gitops, apps: [form.slug] };
       }
       if (form.channel) config.notify = { slack_channel: form.channel };
-      const project = await api.createProject(org, {
-        slug: form.slug,
-        name: form.name || form.slug,
-        template_ref: avecTemplate ? form.template : null,
-        config,
-      });
-      await api.putConnector(project.id, "tracker", { type: form.tracker, config: {} });
-      if (avecTemplate) await api.provision(project.id);
-      router.push(`/p/${project.slug}`);
+      if (!projet) {
+        const cree = await api.createProject(org, {
+          slug: form.slug,
+          name: form.name || form.slug,
+          template_ref: avecTemplate ? form.template : null,
+          config,
+        });
+        projet = { id: cree.id, slug: cree.slug };
+        setFait({ projet, tracker: false });
+      }
+      if (!fait.tracker) {
+        await api.putConnector(projet.id, "tracker", { type: form.tracker, config: {} });
+        setFait({ projet, tracker: true });
+      }
+      if (avecTemplate) await api.provision(projet.id);
+      router.push(`/p/${projet.slug}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "creation refused");
+      const message = cause instanceof Error ? cause.message : "refused";
+      setError(
+        projet
+          ? `${projet.slug} was created, but ${fait.tracker ? "provisioning" : "connecting its tracker"} failed: ${message}`
+          : `creation refused: ${message}`,
+      );
       setBusy(false);
     }
   }
+
+  const raisonDAttente =
+    step === 1 && !form.slug
+      ? "an identifier is needed to go on"
+      : step === 1 && !slugValid
+        ? "the identifier is not valid yet"
+        : step === 1 && !repoValid
+          ? form.repo
+            ? "the repository is not valid yet"
+            : "a repository is needed — or tick “no code repository” in the first step"
+          : null;
+
+  const recapitulatif: [string, string][] = [
+    ["organisation", org],
+    ["template", form.sansDepot ? "none — no code repository" : form.template || "none"],
+    ["identifier", form.slug],
+    ["display name", form.name || form.slug],
+    ["repository", form.sansDepot ? "none" : form.repo],
+    ...(form.sansDepot ? [] : ([["main language", form.language]] as [string, string][])),
+    ["tracker", TRACKERS.find((t) => t.value === form.tracker)?.label ?? form.tracker],
+    ...(form.sansDepot ? [] : ([["GitOps repository", form.gitops]] as [string, string][])),
+    ["Slack channel", form.channel],
+  ];
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -203,37 +246,53 @@ export default function NewProjectPage() {
         )}
 
         {step === 3 && (
-          <dl className="space-y-2 text-sm">
-            {Object.entries(form).map(([key, value]) => (
-              <div key={key} className="flex justify-between gap-4">
-                <dt className="text-ink-muted">{key}</dt>
-                <dd className="font-mono text-xs">{String(value) || "—"}</dd>
+          <dl className="space-y-2 text-sm" data-testid="recapitulatif">
+            {recapitulatif.map(([libelle, valeur]) => (
+              <div key={libelle} className="flex justify-between gap-4">
+                <dt className="text-ink-muted">{libelle}</dt>
+                <dd className="min-w-0 break-all text-right">{valeur || "—"}</dd>
               </div>
             ))}
-            <div className="flex justify-between gap-4">
-              <dt className="text-ink-muted">organisation</dt>
-              <dd className="font-mono text-xs">{org}</dd>
-            </div>
           </dl>
         )}
 
-        {error && <ErrorNote>{error}</ErrorNote>}
+        {error && (
+          <ErrorNote>
+            {error}
+            {fait.projet && (
+              <>
+                {" "}
+                — retrying goes on from there, or <Link href={`/p/${fait.projet.slug}`}>open the project</Link>.
+              </>
+            )}
+          </ErrorNote>
+        )}
 
-        <div className="mt-4 flex justify-between">
-          <Button onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0}>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <Button
+            onClick={() => setStep((current) => Math.max(0, current - 1))}
+            // Le projet existe : revenir changer son identifiant ne le renommerait pas.
+            disabled={step === 0 || fait.projet !== null}
+          >
             previous
           </Button>
+          {raisonDAttente && (
+            <p className="ml-auto text-xs text-ink-muted" id="raison-d-attente">
+              {raisonDAttente}
+            </p>
+          )}
           {step < STEPS.length - 1 ? (
             <Button
               tone="primary"
               onClick={() => setStep((current) => current + 1)}
-              disabled={step === 1 && (!slugValid || !repoValid)}
+              disabled={raisonDAttente !== null}
+              aria-describedby={raisonDAttente ? "raison-d-attente" : undefined}
             >
               next
             </Button>
           ) : (
             <Button tone="primary" onClick={create} disabled={busy || !slugValid || !repoValid}>
-              {avecTemplate ? "create and provision" : "create"}
+              {fait.projet ? "retry" : avecTemplate ? "create and provision" : "create"}
             </Button>
           )}
         </div>

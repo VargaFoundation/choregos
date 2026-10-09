@@ -2,6 +2,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { Field, Input, Select } from "@varga/design-system";
@@ -14,6 +15,10 @@ const NOM = /^[a-z][a-z0-9-]{0,62}$/;
 /**
  * Un workflow de plus dans le projet, à partir d'un gabarit : il naît actif, à côté des autres, et
  * ne reçoit une demande que si elle le nomme ou si une règle de routage l'y envoie.
+ *
+ * Le PUT par nom publie la version suivante d'un workflow qui existe déjà : nommer « onboarding » un
+ * nouveau workflow remplaçait l'onboarding actif par le gabarit, sans un mot (seconde passe du 08/10,
+ * S23-06). Le nom est vérifié pendant la frappe, puis relu juste avant de publier.
  */
 export default function NewWorkflowPage({
   params,
@@ -34,13 +39,22 @@ export default function NewWorkflowPage({
   const choisi = templates.data?.find(
     (t) => t.name === (gabarit || templates.data?.[0]?.name),
   );
+  const existants = useQuery({
+    queryKey: ["workflows", slug],
+    queryFn: () => api.workflows(slug),
+  });
   const nomValide = NOM.test(nom);
+  const pris = existants.data?.some((w) => w.name === nom) ?? false;
 
   async function publier() {
-    if (!choisi || !nomValide) return;
+    if (!choisi || !nomValide || pris) return;
     setEnvoi(true);
     setErreur(null);
     try {
+      // La liste en cache peut dater : on la relit, au plus près de l'écriture.
+      const relus = await existants.refetch();
+      if (relus.error) throw relus.error;
+      if (relus.data?.some((w) => w.name === nom)) return;
       await api.putWorkflowNamed(slug, nom, renommer(choisi.yaml, nom));
       await client.invalidateQueries({ queryKey: ["workflows", slug] });
       router.push(`/p/${slug}/workflows/${encodeURIComponent(nom)}/yaml`);
@@ -57,14 +71,16 @@ export default function NewWorkflowPage({
         <Field
           label="name"
           hint={
-            nom && !nomValide
+            nom && (!nomValide || pris)
               ? undefined
               : "lowercase letters, digits and dashes — e.g. offboarding"
           }
           error={
             nom && !nomValide
               ? "lowercase letters, digits and dashes only"
-              : undefined
+              : pris
+                ? `a workflow named ${nom} already exists — publishing would replace its active version`
+                : undefined
           }
         >
           {(props) => (
@@ -91,11 +107,21 @@ export default function NewWorkflowPage({
             </Select>
           )}
         </Field>
+        {pris && (
+          <p className="text-sm">
+            <Link
+              href={`/p/${slug}/workflows/${encodeURIComponent(nom)}`}
+            >
+              open {nom}
+            </Link>{" "}
+            to change it, or choose another name.
+          </p>
+        )}
         {erreur && <ErrorNote>{erreur}</ErrorNote>}
         <Button
           tone="accent"
           onClick={publier}
-          disabled={!nomValide || !choisi || envoi}
+          disabled={!nomValide || !choisi || envoi || pris || !existants.data}
         >
           publish {nom || "the workflow"}
         </Button>

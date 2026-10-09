@@ -155,9 +155,12 @@ export function Button({
   type = "button",
   title,
   size = "md",
+  "aria-describedby": decritPar,
 }: {
   children: ReactNode;
   onClick?: () => void;
+  /** Ce qui explique le bouton — pourquoi il attend, ce qu'il va faire. */
+  "aria-describedby"?: string;
   /**
    * `primary` : la décision d'un humain (approuver) — noir, une par vue.
    * `accent` : ce qui déclenche une machine (lancer, provisionner) — turquoise.
@@ -174,6 +177,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-describedby={decritPar}
       variant={TONE_TO_VARIANT[tone]}
       size={size}
     >
