@@ -8,7 +8,7 @@ import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { gare } from "@/components/parcours/modele";
-import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, FilDAriane, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
@@ -46,6 +46,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
 
   return (
     <div className="space-y-4">
+      <FilDAriane etapes={[{ href: `/p/${slug}/board`, label: "board" }, { label: data.tracker_key }]} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Heading as="h2" size="lg">

@@ -8,7 +8,7 @@ import { LiveLog } from "@/components/live-log";
 import { Acces } from "@/components/acces";
 import { Garanties } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
-import { Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Card, Empty, ErrorNote, FilDAriane, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { useEventStream } from "@/lib/sse";
@@ -16,8 +16,15 @@ import type { RunEventDto } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
 
 export default function RunPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
-  const { id } = use(params);
+  const { slug, id } = use(params);
   const run = useQuery({ queryKey: ["run", id], queryFn: () => api.run(id) });
+  // Le ticket du run, pour le fil d'Ariane : même clé que sa page, une seule lecture.
+  const idDuTicket = run.data?.work_item_id;
+  const ticket = useQuery({
+    queryKey: ["item", idDuTicket],
+    queryFn: () => api.workItem(idDuTicket!),
+    enabled: Boolean(idDuTicket),
+  });
   const [relance, setRelance] = useState(false);
   const stored = useQuery({ queryKey: ["run-events", id], queryFn: () => api.runEvents(id) });
   const diff = useQuery({ queryKey: ["run-diff", id], queryFn: () => api.runDiff(id) });
@@ -44,6 +51,15 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
 
   return (
     <div className="space-y-4">
+      <FilDAriane
+        etapes={[
+          { href: `/p/${slug}/board`, label: "board" },
+          ...(idDuTicket
+            ? [{ href: `/p/${slug}/items/${idDuTicket}`, label: ticket.data?.tracker_key ?? "ticket" }]
+            : []),
+          { label: `run ${run.data.stage_role} · attempt ${run.data.attempt}` },
+        ]}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Heading as="h2" size="lg">

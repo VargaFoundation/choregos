@@ -46,13 +46,21 @@ export default function ProjectLayout({
       <Onglets aria-label="project sections">
         {TABS.map((tab) => {
           const href = `/p/${slug}${tab.suffix}`;
-          // Les intégrations (un sous-onglet par client), les propositions (une page par proposition)
-          // et les workflows (une page par workflow) gardent leur onglet actif sous elles.
-          const active = ["/integrations", "/workflows"].includes(tab.suffix)
+          // Les intégrations (un sous-onglet par client), les actions (une page par action) et les
+          // workflows (une page par workflow) gardent leur onglet actif sous elles ; un ticket et ses
+          // runs sont ceux du board (S23-12 : leurs pages n'avaient aucun onglet actif).
+          const active = ["/integrations", "/workflows", "/actions"].includes(tab.suffix)
             ? pathname.startsWith(href)
-            : pathname === href;
+            : tab.suffix === "/board"
+              ? pathname === href || pathname.startsWith(`/p/${slug}/items/`) || pathname.startsWith(`/p/${slug}/runs/`)
+              : pathname === href;
           return (
-            <Link key={tab.suffix} href={href} aria-current={active ? "page" : undefined} className={tabClasses(active)}>
+            <Link
+              key={tab.suffix}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={tabClasses(active)}
+            >
               {tab.label}
             </Link>
           );

@@ -315,7 +315,7 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
         <ul className="ml-auto flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted" aria-label="legend">
           {LEGENDE.map(([statut, libelle]) => (
             <li key={statut} className="inline-flex items-center gap-1.5">
-              <span aria-hidden className="inline-block h-0.5 w-4" style={{ background: COULEUR[statut] }} />
+              <Pastille statut={statut} />
               {libelle}
             </li>
           ))}
@@ -325,6 +325,31 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
         {recit || (direct ? "Live: the map follows the work item. Replay plays its life back, event by event." : "")}
       </p>
     </div>
+  );
+}
+
+/**
+ * La pastille d'un statut dans la légende, dessinée comme la case de la carte (S23-12) : un trait
+ * de couleur ne suffisait pas — « in progress » (turquoise) et « done » (vert) se confondaient.
+ * Ce qui vit porte un anneau autour, ce qui tourne est rempli ; ce qui est fait ne porte ni l'un
+ * ni l'autre.
+ */
+function Pastille({ statut }: { statut: StatutEtape }) {
+  const vivante = statut === "en_cours" || statut === "attend";
+  return (
+    <span
+      aria-hidden
+      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full border"
+      style={{ borderColor: vivante ? COULEUR[statut] : "transparent" }}
+    >
+      <span
+        className="size-2.5 rounded-full border-2"
+        style={{
+          borderColor: COULEUR[statut],
+          background: statut === "en_cours" ? "var(--varga-accent-soft)" : "var(--varga-surface)",
+        }}
+      />
+    </span>
   );
 }
 

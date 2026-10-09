@@ -444,3 +444,31 @@ test("coûts : un écran, une devise, et un graphe qui se lit (S23-10)", async (
   await graphe.getByText("as a table").click();
   await expect(graphe.getByRole("table", { name: "cost per day" }).getByRole("row")).toHaveCount(15);
 });
+
+test("repérage : un ticket et un run ont leur fil d'Ariane, et l'onglet board reste actif (S23-12)", async ({ page }) => {
+  await page.goto("/p/billing-api/items/w1");
+  const onglets = page.getByRole("navigation", { name: "project sections" });
+  await expect(onglets.getByRole("link", { name: "board" })).toHaveAttribute("aria-current", "page");
+  const fil = page.getByRole("navigation", { name: "breadcrumb" });
+  await expect(fil.getByRole("link", { name: "board" })).toHaveAttribute("href", "/p/billing-api/board");
+
+  await page.goto("/p/billing-api/runs/r3");
+  await expect(onglets.getByRole("link", { name: "board" })).toHaveAttribute("aria-current", "page");
+  await expect(fil.getByRole("link")).toHaveCount(2);
+  await expect(fil.locator("[aria-current=page]")).toContainText("attempt");
+
+  await page.goto("/p/billing-api/actions/act-poste");
+  await expect(onglets.getByRole("link", { name: "actions" })).toHaveAttribute("aria-current", "page");
+});
+
+test("repérage : la légende du parcours distingue « in progress » et « done » autrement que par la couleur (S23-12)", async ({ page }) => {
+  await page.goto("/p/billing-api/items/w1");
+  const legende = page.getByRole("list", { name: "legend" });
+  const pastille = (libelle: string) =>
+    legende.getByRole("listitem").filter({ hasText: libelle }).locator("span[aria-hidden]").first();
+  const enCours = await pastille("in progress").evaluate((e) => getComputedStyle(e).borderTopColor);
+  const fait = await pastille("done").evaluate((e) => getComputedStyle(e).borderTopColor);
+  // Ce qui vit porte un anneau ; ce qui est fait n'en porte pas.
+  expect(enCours).not.toBe("rgba(0, 0, 0, 0)");
+  expect(fait).toBe("rgba(0, 0, 0, 0)");
+});
