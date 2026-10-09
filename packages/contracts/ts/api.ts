@@ -368,6 +368,8 @@ export type WorkflowPut = {
   activate?: boolean;
   /** The active version the editor read: stale → 409. */
   base_version?: number | null;
+  /** Create a new workflow: a workflow of that name already exists (active or not) → 409, nothing is published. */
+  create_only?: boolean;
 };
 
 export type WorkflowSummary = {

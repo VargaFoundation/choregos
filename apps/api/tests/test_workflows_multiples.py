@@ -145,3 +145,42 @@ async def test_le_routage_choisit_par_etiquette_et_le_defaut_sinon(
 async def test_un_workflow_demande_inconnu_est_refuse(client: AsyncClient, project: dict[str, Any]) -> None:
     reponse = await _naitre(client, project["id"], workflow="fantome")
     assert reponse.status_code == 422, reponse.text
+
+
+async def test_creer_ne_republie_pas_un_workflow_existant(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """#336 : `create_only` refuse un nom pris, actif ou désactivé, et ne publie rien."""
+    pid = project["id"]
+    assert (await _publier(client, pid, "onboarding", create_only=True)).status_code == 200
+    deuxieme = await _publier(client, pid, "onboarding", create_only=True)
+    assert deuxieme.status_code == 409, deuxieme.text
+    assert "already exists" in deuxieme.json()["detail"]
+    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()
+    assert [v["version"] for v in versions] == [1]
+    # Désactivé, le nom reste pris : le recréer republierait son histoire.
+    assert (await _publier(client, pid, "offboarding", create_only=True)).status_code == 200
+    assert (await client.post(f"/api/v1/projects/{pid}/workflows/offboarding/deactivate")).status_code == 204
+    assert (await _publier(client, pid, "offboarding", create_only=True)).status_code == 409
+    # Sans `create_only`, rien ne change : la version suivante se publie.
+    assert (await _publier(client, pid, "onboarding")).json()["version"] == 2
+
+
+async def test_deux_creations_simultanees_l_une_recoit_409(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: Any
+) -> None:
+    """La course que la lecture ne voit pas : l'autre création est écrite entre la lecture et l'écriture."""
+    from choregos_api.services import definitions
+
+    pid = project["id"]
+    assert (await _publier(client, pid, "onboarding", create_only=True)).status_code == 200
+
+    async def personne(*_: Any) -> None:
+        return None
+
+    monkeypatch.setattr(definitions, "derniere_version", personne)
+    seconde = await _publier(client, pid, "onboarding", create_only=True)
+    assert seconde.status_code == 409, seconde.text
+    monkeypatch.undo()
+    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()
+    assert len(versions) == 1

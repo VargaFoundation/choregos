@@ -210,6 +210,7 @@ async def put_named_workflow(name: str, ctx: ProjectCtx, body: WorkflowPut, sess
         activate=body.activate,
         base_version=body.base_version,
         nom_attendu=name,
+        creation_seule=body.create_only,
     )
     return _dto(row, ctx.project)
 

@@ -229,6 +229,7 @@ delivery flow and a maintenance flow in a platform team ([ADR 0031](adr/0031-plu
 
 ```bash
 curl -X PUT  $API/projects/acme:hr/workflows/onboarding  -d '{"yaml": "..."}'   # publishes the next version
+curl -X PUT  $API/projects/acme:hr/workflows/leaver -d '{"yaml": "...", "create_only": true}'  # creates; a taken name → 409
 curl -X PUT  $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding",
   "rules": [{"when": {"labels_any": ["leaver"]}, "workflow": "offboarding"}]}'
 curl         $API/projects/acme:hr/workflows                                    # one active version per name

@@ -425,7 +425,7 @@ paths:
     put:
       tags: [workflows]
       operationId: putNamedWorkflow
-      summary: Publish the next version of THIS workflow; a stale `base_version` → 409
+      summary: Publish the next version of THIS workflow; a stale `base_version`, or `create_only` on an existing name → 409
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowPut" } } }
@@ -1945,6 +1945,7 @@ components:
         source: { type: string, enum: [repo, platform, template], default: platform }
         activate: { type: boolean, default: true }
         base_version: { type: [integer, "null"], description: "The active version the editor read: stale → 409." }
+        create_only: { type: boolean, default: false, description: "Create a new workflow: a workflow of that name already exists (active or not) → 409, nothing is published." }
     WorkflowSummary:
       type: object
       required: [name, version, is_default, open_items]

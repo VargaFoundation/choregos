@@ -33,6 +33,8 @@ class WorkflowPut(Dto):
     activate: bool = True
     #: La version active que l'éditeur a lue : si une autre a été publiée depuis, 409.
     base_version: int | None = None
+    #: Créer, pas republier : un workflow de ce nom, actif ou non, répond 409 (#336).
+    create_only: bool = False
 
 
 class WorkflowSummaryDto(Dto):
