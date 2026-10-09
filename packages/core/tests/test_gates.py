@@ -100,6 +100,9 @@ def test_ci_green_is_pending_then_decides() -> None:
     assert evaluate("ci_green", GateContext(ci_status="success")).passed
     failed = evaluate("ci_green", GateContext(ci_status="failure"))
     assert failed.blocking
+    # Ce que `checks_conclusion` rend tant qu'un check tourne : en attente, pas rouge (S22-14).
+    en_cours = evaluate("ci_green", GateContext(ci_status="pending"))
+    assert en_cours.pending and not en_cours.blocking
 
 
 def test_review_approved() -> None:
