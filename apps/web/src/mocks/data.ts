@@ -405,6 +405,15 @@ export const releases: ReleasePage = {
       ended_at: iso(60 * 49),
       verdict: { go: false, reason: "canary analysis failed: 5xx > 1%" },
     },
+    {
+      id: "rel3",
+      project_slug: "billing-api",
+      env: "prod",
+      batch_no: 43,
+      status: "awaiting_approval",
+      items: [{ work_item_key: "varga/billing-api#124", sha: "b7c8d9", title: "Idempotent refund endpoint" }],
+      started_at: iso(30),
+    },
   ],
   meta: { has_more: false },
 };

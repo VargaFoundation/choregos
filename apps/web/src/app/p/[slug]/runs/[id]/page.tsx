@@ -3,20 +3,22 @@
 
 import { Heading } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
-import { use } from "react";
+import { use, useState } from "react";
 import { LiveLog } from "@/components/live-log";
 import { Acces } from "@/components/acces";
 import { Garanties } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
-import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { useEventStream } from "@/lib/sse";
 import type { RunEventDto } from "@/lib/types";
+import { GesteConfirme } from "@/components/geste-confirme";
 
 export default function RunPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { id } = use(params);
   const run = useQuery({ queryKey: ["run", id], queryFn: () => api.run(id) });
+  const [relance, setRelance] = useState(false);
   const stored = useQuery({ queryKey: ["run-events", id], queryFn: () => api.runEvents(id) });
   const diff = useQuery({ queryKey: ["run-diff", id], queryFn: () => api.runDiff(id) });
   // Ce à quoi l'agent a touché, replié depuis le journal : les 200 événements bruts
@@ -67,13 +69,22 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
               full transcript
             </a>
           )}
-          <Button
-            onClick={() => {
-              if (run.data?.work_item_id) void api.action(run.data.work_item_id, "rerun_stage");
-            }}
-          >
-            Replay the stage
-          </Button>
+          {run.data.work_item_id && (
+            <GesteConfirme
+              ton="accent"
+              question={`replay this stage? an agent runs it again from the start — a new run, billed like this one (${usd(run.data.cost_usd)}).`}
+              confirmer="replay the stage"
+              action={() => api.action(run.data!.work_item_id!, "rerun_stage")}
+              onFait={() => setRelance(true)}
+            >
+              replay the stage
+            </GesteConfirme>
+          )}
+          {relance && (
+            <span className="text-xs" role="status">
+              replay asked — the new run appears on the ticket
+            </span>
+          )}
         </div>
       </div>
 

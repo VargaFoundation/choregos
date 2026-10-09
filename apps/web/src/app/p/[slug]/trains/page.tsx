@@ -7,6 +7,7 @@ import { use, useState } from "react";
 import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
+import { GesteConfirme } from "@/components/geste-confirme";
 
 const ENVS = ["prod", "staging"];
 
@@ -145,28 +146,31 @@ function History({ slug }: { slug: string }) {
                 </td>
                 <td>
                   {release.status === "awaiting_approval" && (
-                    <span className="flex gap-2">
-                      <Button
-                        tone="primary"
-                        onClick={async () => {
-                          if (!confirm(`Approve the production release of batch R-${release.batch_no}?`)) return;
+                    <span className="flex flex-wrap gap-2">
+                      <GesteConfirme
+                        tonDuBouton="primary"
+                        ton="primary"
+                        question={`approve the production release of batch R-${release.batch_no}? its ${release.items?.length ?? 0} item(s) go to ${release.env}.`}
+                        confirmer={`approve R-${release.batch_no}`}
+                        action={async () => {
                           await api.approveRelease(release.id);
-                          queryClient.invalidateQueries({ queryKey: ["releases", slug] });
+                          await queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                         }}
                       >
                         approve
-                      </Button>
-                      <Button
-                        tone="danger"
-                        onClick={async () => {
-                          const reason = prompt(`Abort batch R-${release.batch_no} — why?`);
-                          if (!reason) return;
-                          await api.abortRelease(release.id, reason);
-                          queryClient.invalidateQueries({ queryKey: ["releases", slug] });
+                      </GesteConfirme>
+                      <GesteConfirme
+                        tonDuBouton="danger"
+                        question={`abort batch R-${release.batch_no}? nothing of it reaches ${release.env}.`}
+                        confirmer={`abort R-${release.batch_no}`}
+                        raison={{ label: "why", requise: true }}
+                        action={async (raison) => {
+                          await api.abortRelease(release.id, raison);
+                          await queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                         }}
                       >
                         abort
-                      </Button>
+                      </GesteConfirme>
                     </span>
                   )}
                 </td>

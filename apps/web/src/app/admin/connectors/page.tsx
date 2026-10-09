@@ -15,9 +15,17 @@ import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorOperation, OperationPatch, OrgConnector } from "@/lib/types";
+import { Confirmation } from "@/components/geste-confirme";
 
 const POLITIQUES = ["allowed", "approval", "forbidden"] as const;
 const TON = { allowed: "ok", approval: "warn", forbidden: "danger" } as const;
+/** Du plus libre au plus strict : passer à un rang plus bas assouplit, et se confirme (S23-07). */
+const RIGUEUR = { allowed: 0, approval: 1, forbidden: 2 } as const;
+const CE_QUE_CA_PERMET = {
+  allowed: "agents run it without asking anyone",
+  approval: "agents run it once a person approves",
+  forbidden: "nobody runs it",
+} as const;
 
 /**
  * Les connecteurs (ADR 0034), rangés par ce qu'ils SONT (revue du 07/10 : « ça mélange des agents,
@@ -151,6 +159,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
   const client = useQueryClient();
   const [groupes, setGroupes] = useState((operation.groups ?? []).join(", "));
   const [erreur, setErreur] = useState<string | null>(null);
+  const [assouplir, setAssouplir] = useState<OperationPatch["policy"] | null>(null);
   async function changer(corps: OperationPatch) {
     setErreur(null);
     try {
@@ -181,8 +190,17 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
         <select
           id={`politique-${connecteur}-${operation.name}`}
           className="rounded border border-line bg-surface px-2 py-1 text-sm"
-          value={operation.policy}
-          onChange={(event) => void changer({ policy: event.target.value as OperationPatch["policy"] })}
+          value={assouplir ?? operation.policy}
+          onChange={(event) => {
+            const choisie = event.target.value as keyof typeof RIGUEUR;
+            const actuelle = operation.policy as keyof typeof RIGUEUR;
+            // Resserrer s'applique tout de suite ; assouplir ouvre une écriture à des agents : on le dit d'abord.
+            if (RIGUEUR[choisie] < (RIGUEUR[actuelle] ?? 2)) setAssouplir(choisie);
+            else {
+              setAssouplir(null);
+              void changer({ policy: choisie });
+            }
+          }}
         >
           {POLITIQUES.map((p) => (
             <option key={p} value={p}>
@@ -193,6 +211,21 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
         <span className="ml-2">
           <Badge tone={TON[operation.policy as keyof typeof TON] ?? "neutral"}>{operation.policy}</Badge>
         </span>
+        {assouplir && (
+          <div className="mt-2 max-w-sm">
+            <Confirmation
+              ton="primary"
+              question={`loosen ${operation.name} to ${assouplir}? ${CE_QUE_CA_PERMET[assouplir as keyof typeof CE_QUE_CA_PERMET] ?? ""}, in every project it applies to.`}
+              confirmer={`set ${assouplir}`}
+              action={async () => {
+                await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir });
+                await client.invalidateQueries({ queryKey: ["org-connectors", org] });
+              }}
+              onFait={() => setAssouplir(null)}
+              onAnnuler={() => setAssouplir(null)}
+            />
+          </div>
+        )}
       </td>
       <td>
         <form
