@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from choregos_api.db.models import CostLedger, Run
@@ -88,6 +89,10 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 select(CostLedger.model).where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
             )
             appels = [str(m) for m in rows.scalars() if m]
+        # Le périmètre se juge sur ce que le RUN a écrit, depuis le commit où il a commencé (S22-11) :
+        # depuis la base, il comptait le travail des étapes d'avant. Sur le locataire dev, le 09/10,
+        # l'ADR de l'étude #5 rougissait sur le Makefile qu'avait poussé l'étape de cadrage.
+        perimetre_du_run = await _diff_du_run(bundle, result, branch, gates) if diff is not None else None
         context = GateContext(
             result=result,
             tool_calls=appels,
@@ -114,6 +119,11 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 max_files, max_lines = bundle.engine.max_diff()
                 params.setdefault("files", max_files)
                 params.setdefault("lines", max_lines)
+            if gate["name"] == "scope_respected" and perimetre_du_run is not None:
+                outcomes.append(
+                    evaluate(gate["name"], replace(context, changed_files=perimetre_du_run), params)
+                )
+                continue
             outcomes.append(evaluate(gate["name"], context, params))
 
         await _publish_check_runs(bundle, item, outcomes, result)
@@ -129,6 +139,21 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             }
             for o in outcomes
         ]
+
+
+async def _diff_du_run(
+    bundle: Any, result: StageResult | None, branch: str, gates: list[dict[str, Any]]
+) -> list[str] | None:
+    """Les fichiers que le run a changés, depuis le commit où il a commencé ; `None` quand le run
+    ne le dit pas (un runner d'avant S22-11) ou que la comparaison échoue : le diff du ticket vaut."""
+    depart = (result.artifacts.reports.get("start_commit") if result else None) or ""
+    if not depart or not any(g["name"] == "scope_respected" for g in gates) or bundle.config.repo is None:
+        return None
+    try:
+        diff = await bundle.adapters.scm.compare(_repo_slug(bundle.config.repo.url), depart, branch)
+    except Exception:
+        return None
+    return list(diff.paths())
 
 
 def texte_ajoute(patch: str) -> str:

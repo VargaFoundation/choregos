@@ -41,6 +41,9 @@ from .workspace import Workspace, workspace_env
 MAX_RESULT_REPAIRS = 2
 MAX_SCOPE_REMINDERS = 1
 
+#: La clé, dans `artifacts.reports`, du commit où le run commence (S22-11).
+RAPPORT_DEPART = "start_commit"
+
 
 @dataclass
 class RunOutcome:
@@ -267,7 +270,7 @@ class Runner:
                         ),
                         diagnostics=diagnostics,
                     )
-                    await self._publish(client, journal, workspace, stage_input, final, base)
+                    await self._publish(client, journal, workspace, stage_input, final, base, depart)
                     return RunOutcome(Exit.INVALID_RESULT, final, detail=detail)
         except AgentUnreachableError as exc:
             await journal.record("agent.unreachable", {"error": str(exc)[:500]})
@@ -282,7 +285,7 @@ class Runner:
             diagnostics=diagnostics,
             scope_blocked=scope_result.remaining if scope_result else None,
         )
-        final = await self._publish(client, journal, workspace, stage_input, final, base)
+        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
         await arreter_outils(outils)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
@@ -339,6 +342,7 @@ class Runner:
         stage_input: StageInput,
         result: StageResult,
         base: str,
+        depart: str = "",
     ) -> StageResult:
         """Commit, push, transcript, puis dépôt du résultat (étapes 11 et 12)."""
         commit_message = _commit_message(stage_input, result)
@@ -348,6 +352,10 @@ class Runner:
         result.artifacts.commits = commits or result.artifacts.commits
         if stage_input.repo:
             result.artifacts.branch = stage_input.repo.work_branch
+            if depart:
+                # Le commit où ce run a commencé : la garde de périmètre mesure depuis lui (S22-11),
+                # pas depuis la base, qui compterait le travail des étapes d'avant.
+                result.artifacts.reports[RAPPORT_DEPART] = depart
         result.evidence.diff_lines = additions + deletions
         result.evidence.diff_files = len(await workspace.changed_files(base))
 

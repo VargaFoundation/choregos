@@ -117,6 +117,10 @@ async def test_le_travail_des_etapes_precedentes_n_est_pas_impute_au_run(
     assert not [e for e in client.events if e["type"] == "scope.reverted"]
     workspace = Path(runner_settings.workspace)
     assert (workspace / "src" / "billing.py").read_text() == "RATE = 0.3\n", "le travail d'avant est gardé"
+    # Le commit où ce run a commencé : la garde `scope_respected` de l'orchestrateur mesure depuis lui.
+    depart = outcome.result.artifacts.reports.get("start_commit")
+    assert depart, outcome.result.artifacts.reports
+    assert outcome.result.artifacts.commits and depart not in outcome.result.artifacts.commits
 
 
 async def test_dangerous_command_is_refused(stage_input: StageInput, runner_settings: Any) -> None:
