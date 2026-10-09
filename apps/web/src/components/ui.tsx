@@ -9,6 +9,7 @@
  */
 "use client";
 
+import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 import {
   Alert,
@@ -210,6 +211,33 @@ export function PhraseDuMoteur({ texte }: { texte: string }) {
         ),
       )}
     </>
+  );
+}
+
+/**
+ * Où l'on est, et le chemin pour remonter (S23-12) : la page d'un ticket et celle d'un run
+ * n'avaient ni onglet actif ni fil — on n'y savait pas d'où l'on venait.
+ */
+export function FilDAriane({ etapes }: { etapes: { href?: string; label: ReactNode }[] }) {
+  return (
+    <nav aria-label="breadcrumb" className="text-sm">
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-muted">
+        {etapes.map((etape, index) => (
+          <li key={index} className="flex min-w-0 items-center gap-2">
+            {index > 0 && <span aria-hidden>/</span>}
+            {etape.href ? (
+              <Link href={etape.href} className="hover:underline">
+                {etape.label}
+              </Link>
+            ) : (
+              <span aria-current="page" className="truncate text-ink">
+                {etape.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
