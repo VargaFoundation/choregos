@@ -184,6 +184,7 @@ function item(
           kind: "approval",
           payload: { summary: "Approval of the specification requested" },
           requested_at: iso(180),
+          due_at: iso(-60 * 21),
         }
       : undefined,
     created_at: iso(60 * 20),
@@ -1233,6 +1234,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/policy$/, { name: "solo", version: 1, yaml: "budgets:\n  per_ticket_usd: 25\n", is_active: true }],
     [/^\/orgs\/[^/]+\/projects$/, projects],
     [/^\/projects\/[^/]+$/, projects.items[0]],
+    // Checkout Web se provisionne : pas encore de ticket — la boîte ne compte pas deux fois ceux de Billing API.
+    [/^\/projects\/[^/]*checkout-web\/work-items$/, { items: [], meta: { has_more: false } }],
     [/^\/projects\/[^/]+\/work-items$/, workItems],
     [/^\/projects\/[^/]+\/findings$/, findings],
     [/^\/projects\/[^/]+\/releases$/, releases],

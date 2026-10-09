@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { navLinkClasses } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { EditionBadge } from "@/components/edition";
+import { useADecider } from "@/lib/a-decider";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { useSession } from "@/lib/session";
@@ -19,7 +20,7 @@ export const NAV = [
   { href: "/", label: "projects" },
   { href: "/agents", label: "agents" },
   { href: "/skills", label: "skills" },
-  { href: "/approvals", label: "approvals" },
+  { href: "/inbox", label: "inbox" },
   { href: "/integrations", label: "AI clients" },
   { href: "/admin", label: "admin" },
 ];
@@ -41,6 +42,8 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
   const { me, orgs, org, choisirOrg, deconnecter } = useSession();
   // L'édition ne change pas pendant une session : une seule lecture suffit.
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
+  // Ce qui attend une personne se compte dans l'en-tête, sur chaque page (S23-02).
+  const aDecider = useADecider(org).total;
   const [ouvert, setOuvert] = useState(false);
   const bouton = useRef<HTMLButtonElement>(null);
   // Changer de page referme le menu — ajusté pendant le rendu, comme la session : un effet le
@@ -79,6 +82,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
           )}
         >
           {entry.label}
+          {entry.href === "/inbox" && aDecider > 0 && <Compte n={aDecider} />}
         </Link>
       );
     });
@@ -146,6 +150,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
           {ouvert ? <path d="M3 3l10 10M13 3L3 13" /> : <path d="M2 4h12M2 8h12M2 12h12" />}
         </svg>
         menu
+        {aDecider > 0 && <Compte n={aDecider} />}
       </button>
       {ouvert && (
         <div
@@ -162,5 +167,15 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
         </div>
       )}
     </nav>
+  );
+}
+
+/** Le nombre de choses qui attendent quelqu'un : lu à voix haute comme tel, pas comme un chiffre nu. */
+function Compte({ n }: { n: number }) {
+  return (
+    <span className="ml-1.5 inline-flex min-w-5 items-center justify-center bg-inverse px-1 text-xs tabular-nums text-inverse-ink">
+      <span aria-hidden>{n}</span>
+      <span className="sr-only">, {n} waiting</span>
+    </span>
   );
 }

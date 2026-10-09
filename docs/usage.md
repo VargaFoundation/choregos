@@ -511,6 +511,12 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   under the same id, and its page says what it acts on (action type, targets, parameters), what its
   effects returned and what its evidence collected. The former `/p/<project>/proposals[/<id>]` links
   redirect there.
+- **Waiting for a person**: the console's **inbox** (`/inbox`, top bar, with a count) lists what
+  cannot move until someone decides, across the organisation's projects: tickets stopped on a human
+  request (approval, question, scope change, task — overdue first, then the nearest due date, then
+  the oldest), decided in place as on the board, and the actions waiting for approval. Groups are
+  not checked yet: everyone sees everything that waits, including what is addressed to others. The
+  former `/approvals` link redirects there.
 
 The core ships two effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP

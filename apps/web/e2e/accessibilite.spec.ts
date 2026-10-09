@@ -26,7 +26,7 @@ const PAGES = [
   "/admin/edition",
   "/admin/x/scim",
   "/integrations",
-  "/approvals",
+  "/inbox",
   "/p/billing-api/actions",
   "/p/billing-api/actions/act-poste",
   "/p/billing-api/actions/act-comptes",

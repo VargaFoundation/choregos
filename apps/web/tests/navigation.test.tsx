@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { entreeActive, NAV, TopNav } from "@/app/top-nav";
 
@@ -10,7 +10,19 @@ vi.mock("@/lib/session", () => ({
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
-  return { ...reel, api: { ...reel.api, edition: vi.fn().mockResolvedValue({ edition: "community" }) } };
+  return {
+    ...reel,
+    api: {
+      ...reel.api,
+      edition: vi.fn().mockResolvedValue({ edition: "community" }),
+      projects: vi.fn().mockResolvedValue({ items: [{ slug: "billing-api" }], meta: { has_more: false } }),
+      workItems: vi.fn().mockResolvedValue({
+        items: [{ id: "w2", pending_request: { id: "hr", kind: "approval", payload: {}, requested_at: "2026-10-08T10:00:00Z" } }],
+        meta: { has_more: false },
+      }),
+      orgActions: vi.fn().mockResolvedValue([{ id: "a1" }, { id: "a2" }]),
+    },
+  };
 });
 
 function rendre(pathname: string) {
@@ -44,14 +56,14 @@ describe("la navigation d'en-tête (S21-03)", () => {
 
   it("les projets restent actifs dans un projet, et une seule entrée l'est à la fois", () => {
     expect(entreeActive("/", "/p/billing-api/board")).toBe(true);
-    for (const pathname of ["/", "/agents", "/skills", "/approvals", "/integrations", "/admin/connectors", "/p/x"]) {
+    for (const pathname of ["/", "/agents", "/skills", "/inbox", "/integrations", "/admin/connectors", "/p/x"]) {
       expect(NAV.filter((entree) => entreeActive(entree.href, pathname))).toHaveLength(1);
     }
   });
 
   it("se replie derrière « menu » : le panneau s'ouvre, se ferme sur Échap et rend le focus (S23-01)", () => {
     const navigation = rendre("/p/billing-api");
-    const menu = screen.getByRole("button", { name: "menu" });
+    const menu = screen.getByRole("button", { name: /^menu/ });
     expect(menu).toHaveAttribute("aria-expanded", "false");
     expect(navigation.querySelector("#menu-principal")).toBeNull();
 
@@ -67,5 +79,14 @@ describe("la navigation d'en-tête (S21-03)", () => {
     expect(menu).toHaveAttribute("aria-expanded", "false");
     expect(navigation.querySelector("#menu-principal")).toBeNull();
     expect(menu).toHaveFocus();
+  });
+
+  it("l'inbox compte ce qui attend une personne : un ticket et deux actions (S23-02)", async () => {
+    rendre("/");
+    const inbox = screen.getByRole("link", { name: /^inbox/ });
+    expect(inbox).toHaveAttribute("href", "/inbox");
+    expect(await within(inbox).findByText(", 3 waiting")).toBeInTheDocument();
+    // Replié, le bouton du menu le dit aussi.
+    expect(await within(screen.getByRole("button", { name: /^menu/ })).findByText(", 3 waiting")).toBeInTheDocument();
   });
 });
