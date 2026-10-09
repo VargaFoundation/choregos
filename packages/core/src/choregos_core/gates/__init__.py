@@ -468,7 +468,10 @@ def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome
 # un projet sur GitHub Actions se voyait réclamer un Tekton qu'il n'a pas (S21-23).
 @gate("ci_green", asynchronous=True, needs=("scm",))
 def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
-    if ctx.ci_status is None:
+    # `pending` est ce que rend `checks_conclusion` tant qu'un check tourne : le prendre pour un
+    # échec escaladait un ticket dont la CI, verte 13 s plus tard, n'avait pas fini (#5 du
+    # locataire dev, 09/10 — S22-14).
+    if ctx.ci_status in (None, "pending"):
         return GateOutcome("ci_green", False, pending=True, detail="CI pending")
     ok = ctx.ci_status in {"success", "succeeded", "neutral"}
     return GateOutcome("ci_green", ok, detail=f"CI {ctx.ci_status}")
