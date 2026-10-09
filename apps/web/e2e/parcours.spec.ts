@@ -388,3 +388,18 @@ test("inbox : un ticket arrêté sur une demande humaine s'y décide, et l'en-t�
   await expect(page).toHaveURL(/\/p\/billing-api\/items\/w2$/);
 });
 
+test("mise en route : un projet neuf dit ce qui lui manque ; un projet qui tourne n'en dit rien (S23-03)", async ({ page }) => {
+  await page.goto("/p/checkout-web");
+  const liste = page.getByTestId("mise-en-route");
+  await expect(liste).toBeVisible();
+  await expect(page.getByTestId("etape-provisioning")).toContainText("provisioning is running");
+  await expect(page.getByTestId("etape-connecteur-cd")).toContainText("argocd: its last test failed");
+  await expect(page.getByTestId("etape-premier-ticket")).toContainText("(to do)");
+  await page.getByTestId("etape-connecteur-cd").getByRole("link", { name: "settings" }).click();
+  await expect(page).toHaveURL(/\/p\/checkout-web\/settings$/);
+
+  await page.goto("/p/billing-api");
+  await expect(page.getByText("prs merged on first pass")).toBeVisible();
+  await expect(page.getByTestId("mise-en-route")).toHaveCount(0);
+});
+

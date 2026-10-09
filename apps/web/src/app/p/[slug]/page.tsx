@@ -8,6 +8,7 @@ import { Card, Label, Stat } from "@varga/design-system";
 import { api } from "@/lib/api";
 import { eur, percent } from "@/lib/format";
 import type { DoraMetric } from "@/lib/types";
+import { MiseEnRoute } from "@/components/mise-en-route";
 import { CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
 
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
@@ -37,6 +38,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="space-y-6">
+      <MiseEnRoute slug={slug} projet={project.data} />
       {enCours && provisioning.data && (
         <Card eyebrow="provisioning" title={`${provisioning.data.status} · ${provisioning.data.current_step ?? "—"}`}>
           <ol className="space-y-1 text-sm">
