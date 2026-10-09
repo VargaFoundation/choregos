@@ -40,12 +40,16 @@ export function ClientsMcp({ org, clients, agents }: { org: string; clients: Api
     }
   });
   return (
-    <Card title="your MCP clients">
+    <Card title="your AI clients">
+      <p className="mb-3 text-xs text-ink-muted">
+        Your access tokens for the MCP door, and the AI client behind each once it has called. Every token is listed,
+        and revoked, in <Link href="/admin">admin › my access tokens</Link>.
+      </p>
       {clients.length === 0 ? (
-        <Empty title="no MCP client">
-          connect Claude Code or another MCP client from{" "}
+        <Empty title="no AI client">
+          connect Claude Code or another client from{" "}
           <Link href="/integrations" className="underline">
-            integrations
+            AI clients
           </Link>
           : it appears here once it has called.
         </Empty>

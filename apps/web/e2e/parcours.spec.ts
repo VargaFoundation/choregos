@@ -103,7 +103,7 @@ test("connexion : la page existe et dit ce qu'elle attend", async ({ page }) => 
 
 test("administration : membres et jetons ont un écran", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page.getByRole("button", { name: /mint a token/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /create an API token/ })).toBeVisible();
   await page.getByRole("link", { name: "members" }).click();
   await expect(page.getByText(/members of/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^remove / }).first()).toBeVisible();
@@ -141,7 +141,7 @@ test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async (
   await expect(page.getByRole("heading", { name: "connect a client" })).toBeVisible();
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp");
   await expect(page.getByTestId("snippet")).toContainText("claude mcp add --transport http choregos");
-  await page.getByRole("button", { name: "create a token for Claude Code" }).click();
+  await page.getByRole("button", { name: "create an access token" }).click();
   await expect(page.getByTestId("snippet")).toContainText("chg_demo_jeton_affiche_une_fois");
   await expect(page.getByTestId("connection-status")).toBeVisible();
 });
@@ -471,4 +471,22 @@ test("repérage : la légende du parcours distingue « in progress » et « done
   // Ce qui vit porte un anneau ; ce qui est fait n'en porte pas.
   expect(enCours).not.toBe("rgba(0, 0, 0, 0)");
   expect(fait).toBe("rgba(0, 0, 0, 0)");
+});
+
+test("un jeton, un nom, un endroit : les trois pages parlent d'« access token » et mènent à la liste (S23-14)", async ({ page }) => {
+  await page.goto("/admin");
+  const liste = page.getByRole("heading", { name: "my access tokens" });
+  await expect(liste).toBeVisible();
+  // La liste dit ce que chaque jeton ouvre : l'API, ou la porte MCP d'un client.
+  await expect(page.getByText(/· (API and CLI|AI client, (read-only|can open work items)) ·/).first()).toBeVisible();
+
+  await page.goto("/integrations/claude-code");
+  await expect(page.getByText(/Connected this way, Claude Code acts as you/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "admin › my access tokens" })).toHaveAttribute("href", "/admin");
+
+  await page.goto("/agents");
+  await expect(page.getByRole("heading", { name: "your AI clients" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "admin › my access tokens" })).toHaveAttribute("href", "/admin");
+  await expect(page.getByText(/To connect one simply as yourself/)).toBeVisible();
+  await expect(page.locator("main")).not.toContainText(/your MCP clients|mint a token|API token/);
 });

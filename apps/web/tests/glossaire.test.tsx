@@ -33,4 +33,12 @@ describe("le glossaire des quatre notions (S21-03)", () => {
       "a person approves what the policy asks",
     ]);
   });
+
+  it("ne contredit pas le registre : un client enregistré est un agent externe (S23-14)", () => {
+    render(<Glossaire ici="agents" ouvert />);
+    const glossaire = screen.getByTestId("glossaire");
+    expect(glossaire).toHaveTextContent(/an external agent is an AI client registered here/);
+    expect(glossaire).toHaveTextContent(/fewer once registered as an external agent/);
+    expect(glossaire).not.toHaveTextContent(/MCP gate/);
+  });
 });

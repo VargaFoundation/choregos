@@ -23,7 +23,7 @@ const champ = "w-full rounded border border-line bg-surface px-2 py-1.5 text-sm"
 export default function AgentsPage() {
   const { org } = useSession();
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
-  const jetons = useQuery({ queryKey: ["me-tokens"], queryFn: () => api.myTokens() });
+  const jetons = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
   const clients = (jetons.data ?? []).filter(estUnClientMcp);
   return (
     <div className="space-y-6">
@@ -35,7 +35,7 @@ export default function AgentsPage() {
         <p className="max-w-3xl text-sm text-ink-muted">
           An agent is an object of the organisation: its instructions, model, skills and tools live in versions that
           never change; a project pins one and may only tighten it. An <em>external</em> agent is an assistant — a
-          Claude Code, a Cursor — that reaches in through the MCP gate and acts with its human&apos;s rights, never
+          Claude Code, a Cursor — that reaches in through the MCP door and acts with its human&apos;s rights, never
           more.
         </p>
         <Glossaire ici="agents" />

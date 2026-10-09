@@ -35,11 +35,11 @@ describe("la page Integrations propose l'authentification unique (S15-09)", () =
     rendre("claude-code");
     const extrait = await screen.findByText(/--client-id choregos-claude-code --callback-port 33418/);
     expect(extrait).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /create a token/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create an access token/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "use an MCP token instead" }));
     expect(await screen.findByText(/--header "Authorization: Bearer \$CHOREGOS_TOKEN"/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /create a token/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create an access token/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "sign in with single sign-on instead" }));
     expect(await screen.findByText(/--client-id choregos-claude-code/)).toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("la page Integrations propose l'authentification unique (S15-09)", () =
   it("un client que l'IdP ne connaît pas garde son jeton, sans proposer l'authentification unique", async () => {
     vi.mocked(api.integrations).mockResolvedValue(AVEC_OAUTH);
     rendre("cursor");
-    expect(await screen.findByRole("button", { name: /create a token/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /create an access token/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "use an MCP token instead" })).not.toBeInTheDocument();
   });
 });

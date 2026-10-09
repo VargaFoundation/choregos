@@ -165,10 +165,13 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                   </select>
                 </label>
                 <Button tone="accent" onClick={() => void frapper()}>
-                  create a token for {info.label}
+                  create an access token
                 </Button>
                 <p className="text-xs text-ink-muted">
-                  an MCP token opens the MCP door only: the REST API refuses it, and it can never decide.
+                  it opens the MCP door only: the REST API refuses it, and it can never decide. Connected this way,{" "}
+                  {info.label} acts as you. To give it a name, limits and an audit trail of its own, connect it from{" "}
+                  <Link href="/agents">agents</Link> instead: it becomes an external agent. Every token is listed, and
+                  revoked, in <Link href="/admin">admin › my access tokens</Link>.
                 </p>
               </div>
             )}
