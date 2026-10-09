@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aLInstant, debutDePhase, instants, modeler, raconter } from "@/components/parcours/modele";
+import { aLInstant, debutDePhase, gare, instants, modeler, raconter } from "@/components/parcours/modele";
 import { parcoursEnAttente, parcoursEnCours, parcoursTermine } from "@/mocks/parcours";
 
 // Une horloge fixe : deux lectures du même parcours donnent la même carte.
@@ -136,5 +136,23 @@ describe("le modèle d'un parcours (S22-02)", () => {
         modele.phases.find((p) => p.libelle === "Deployed")!,
       ),
     ).toBeNull();
+  });
+});
+
+describe("un ticket garé se reprend (#313)", () => {
+  const dernier = (kind: string) => ({
+    ...enCours,
+    moves: [...enCours.moves, { at: "2026-10-08T11:59:00Z", from: "triaged", to: "needs_human", kind, transition_id: "t-implement", reason: null }],
+  });
+
+  it("escaladé, ou arrêté par une question : « Replay the stage » est offert", () => {
+    expect(gare(dernier("escalate") as typeof enCours)).toBe(true);
+    expect(gare(dernier("default") as typeof enCours)).toBe(true);
+  });
+
+  it("sur sa route, ou clos : rien à reprendre", () => {
+    expect(gare(dernier("nominal") as typeof enCours)).toBe(false);
+    expect(gare({ ...dernier("escalate"), closed: true } as typeof enCours)).toBe(false);
+    expect(gare(undefined)).toBe(false);
   });
 });
