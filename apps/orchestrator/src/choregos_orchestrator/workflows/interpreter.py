@@ -30,7 +30,7 @@ FILE_MAX_MINUTES = 360
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus, Workflow
     from choregos_contracts.workflow import effet_de_la_transition
-    from choregos_core import WorkflowEngine
+    from choregos_core import Decision, WorkflowEngine
     from choregos_core.dsl.dates import DateIllisible, echeance
     from choregos_core.dsl.trains import approbation_du_train, env_du_train
     from choregos_core.gates import ACTION_REGLEE, GateOutcome
@@ -83,6 +83,10 @@ TACHES_HUMAINES = "taches-humaines"
 #: S21-21). Avant ce marqueur, le ticket prenait pour sien tout événement `cd.*`, quel qu'en soit
 #: l'environnement : le staging terminé valait la prod.
 TRAIN_PAR_ENVIRONNEMENT = "train-par-environnement"
+#: Un ticket garé par une question ou une escalade REPREND (#313) : une réponse, ou « Replay the
+#: stage », le ramène à l'état d'où il est parti, avec un budget de tentatives neuf. Avant ce
+#: marqueur, `on_answer: resume` était déclaré et rien ne le jouait : seul l'abandon en sortait.
+REPRISE_APRES_ESCALADE = "resume-after-escalation"
 
 
 @dataclass
@@ -97,6 +101,10 @@ class InterpreterInput:
     attempts: dict[str, int] = field(default_factory=dict)
     cost_usd: float = 0.0
     history_threshold: int = HISTORY_THRESHOLD
+    #: Les tentatives déjà comptées quand le ticket a repris, par transition (voir `_essais`).
+    attempts_reset: dict[str, int] = field(default_factory=dict)
+    #: D'où reprendre un ticket garé : `[état garé, état d'origine, transition]`.
+    parked: list[str] | None = None
 
 
 @dataclass
@@ -140,6 +148,13 @@ class WorkflowInterpreter:
         #: Ce que le ticket attend : la date d'une action, l'action elle-même.
         self.attente: str | None = None
         self.action_en_cours: str | None = None
+        #: Le ticket garé (question, escalade) et d'où il reprendra : `(garé, origine, transition)`.
+        self.reprise: tuple[str, str, str] | None = None
+        #: Les tentatives d'avant la dernière reprise : un numéro de run ne se réutilise pas (il
+        #: fait l'identifiant du run), le budget de tentatives, lui, repart de zéro.
+        self.remises: Counter[str] = Counter()
+        #: « Replay the stage » demandé (`rerun_stage`), pas encore joué.
+        self.relance: bool = False
 
     # ───────────────────────── signaux et requêtes ─────────────────────────
 
@@ -184,6 +199,8 @@ class WorkflowInterpreter:
             self.workflow_override = message.get("workflow", message)
             self.state_mapping = dict(message.get("state_mapping", {}))
             self.migration = dict(message)
+        elif action == "rerun_stage":
+            self.relance = True
 
     @workflow.query
     def status(self) -> dict[str, Any]:
@@ -230,6 +247,9 @@ class WorkflowInterpreter:
 
     async def _run(self, params: InterpreterInput, payload: dict[str, Any]) -> dict[str, Any]:
         self.attempts.update(params.attempts)
+        self.remises.update(params.attempts_reset)
+        if params.parked:
+            self.reprise = (params.parked[0], params.parked[1], params.parked[2])
         self.cost_usd = params.cost_usd
 
         context = await executer_activite(
@@ -280,6 +300,7 @@ class WorkflowInterpreter:
 
             if decision is None:
                 continue
+            self._noter_la_reprise(engine, transition, kind, decision)
             self.state = decision.next_state
             await self._mirror(params, decision.reason)
 
@@ -290,6 +311,8 @@ class WorkflowInterpreter:
                         "resume_from": self.state,
                         "attempts": dict(self.attempts),
                         "cost_usd": self.cost_usd,
+                        "attempts_reset": dict(self.remises),
+                        "parked": list(self.reprise) if self.reprise else None,
                     }
                 )
 
@@ -309,7 +332,7 @@ class WorkflowInterpreter:
         actor = engine.agent_of(transition)
         if actor is None:
             return engine.retry_or_escalate(
-                transition, self.attempts[transition.key], "acteur agent introuvable"
+                transition, self._essais(transition.key), "acteur agent introuvable"
             )
         key = transition.key
         attempt = self.attempts[key]
@@ -410,7 +433,7 @@ class WorkflowInterpreter:
         for request in result.scope_changes_requested:
             await self._request_scope_change(params, transition, request)
 
-        decision = engine.after_stage(transition, result, self.attempts[key], outcomes)
+        decision = engine.after_stage(transition, result, self._essais(key), outcomes)
         if decision.next_state == engine.question_state() and result.status is StageStatus.NEEDS_HUMAN:
             await self._create_request(
                 params,
@@ -547,11 +570,20 @@ class WorkflowInterpreter:
         waited = timedelta()
         step = timedelta(hours=1)
         while waited < timeout:
-            got = await wait_signal(lambda: bool(self.decisions) or self.stopped, min(step, timeout - waited))
+            got = await wait_signal(
+                lambda: bool(self.decisions) or self.stopped or self._relance_jouable(),
+                min(step, timeout - waited),
+            )
             if self.stopped:
                 return None
+            if self._relance_jouable() and workflow.patched(REPRISE_APRES_ESCALADE):
+                return await self._reprendre("replay requested", self.pending_request)
             if self.decisions:
                 decision = self.decisions.popleft()
+                if self._reponse_qui_reprend(decision):
+                    return await self._reprendre(
+                        "answered", decision.get("request_id"), decision, self.pending_request
+                    )
                 await executer_activite(
                     tracker_activities.close_human_request,
                     {
@@ -662,7 +694,7 @@ class WorkflowInterpreter:
                 start_to_close_timeout=timedelta(minutes=3),
                 retry_policy=DEFAULT_RETRY,
             )
-        return engine.after_gates(transition, outcomes, self.attempts[key])
+        return engine.after_gates(transition, outcomes, self._essais(key))
 
     async def _run_action(
         self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, tentative: int
@@ -690,7 +722,7 @@ class WorkflowInterpreter:
             refus = GateOutcome(
                 "action_succeeded", False, detail=f"the action cannot be proposed: {proposee['refus']}"
             )
-            return engine.after_gates(transition, [refus], self.attempts[transition.key])
+            return engine.after_gates(transition, [refus], self._essais(transition.key))
         action_id, statut = str(proposee["action_id"]), str(proposee["status"])
         self.action_en_cours = action_id
         while statut not in ACTION_REGLEE and not self.stopped:
@@ -714,7 +746,7 @@ class WorkflowInterpreter:
             update={"gates": [g for g in transition.gates if g.name != "action_succeeded"]}
         )
         outcomes = await self._gates(params, autres, self.last_run or "")
-        return engine.after_action(transition, statut, outcomes, self.attempts[transition.key])
+        return engine.after_action(transition, statut, outcomes, self._essais(transition.key))
 
     async def _attendre_la_date(self, expression: str) -> bool:
         """Attend `not_before`, RECALCULÉ à chaque changement des champs : déplacer la date
@@ -785,6 +817,63 @@ class WorkflowInterpreter:
             waited += step
         return engine.after_train(transition, ok=False)
 
+    # ───────────────────────── reprise d'un ticket garé ─────────────────────────
+
+    def _noter_la_reprise(self, engine: WorkflowEngine, transition: Any, kind: str, decision: Any) -> None:
+        """Une étape qui gare le ticket — question, escalade — dit d'où il reprendra."""
+        if (
+            kind != "human"
+            and decision.next_state != transition.from_
+            and (decision.escalated or decision.next_state == engine.question_state())
+        ):
+            self.reprise = (decision.next_state, transition.from_, transition.key)
+
+    def _essais(self, cle: str) -> int:
+        """Les tentatives qui comptent pour `max_attempts` : celles d'après la dernière reprise."""
+        return self.attempts[cle] - self.remises[cle]
+
+    def _est_gare(self) -> bool:
+        return self.reprise is not None and self.reprise[0] == self.state
+
+    def _relance_jouable(self) -> bool:
+        """« Replay the stage » ne joue que sur un ticket garé ; ailleurs, il est oublié."""
+        if self.relance and not self._est_gare():
+            self.relance = False
+        return self.relance
+
+    def _reponse_qui_reprend(self, decision: dict[str, Any]) -> bool:
+        """Une RÉPONSE à une question, sur un ticket garé : `on_answer: resume`."""
+        return (
+            decision.get("kind") == "question"
+            and self._est_gare()
+            and workflow.patched(REPRISE_APRES_ESCALADE)
+        )
+
+    async def _reprendre(self, pourquoi: str, *demandes: Any) -> Decision:
+        """Ramène le ticket garé à l'état d'où il est parti : les demandes en attente sont closes
+        (l'abandon proposé n'a plus d'objet), le budget de tentatives de l'étape repart de zéro."""
+        assert self.reprise is not None
+        _, origine, cle = self.reprise
+        reponse = next((d for d in demandes if isinstance(d, dict)), None)
+        for demande in dict.fromkeys(d for d in demandes if isinstance(d, str) and d):
+            await executer_activite(
+                tracker_activities.close_human_request,
+                {
+                    "request_id": demande,
+                    "decided_by": (reponse or {}).get("decided_by", "the platform"),
+                    "decision": reponse
+                    if reponse and reponse.get("request_id") == demande
+                    else {"approved": False, "superseded": f"the work item resumed ({pourquoi})"},
+                },
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=DEFAULT_RETRY,
+            )
+        self.pending_request = None
+        self.relance = False
+        self.reprise = None
+        self.remises[cle] = self.attempts[cle]
+        return Decision(next_state=origine, reason=f"{pourquoi}: resumes at `{origine}`")
+
     # ───────────────────────── utilitaires ─────────────────────────
 
     async def _migrer(self, params: InterpreterInput, engine: WorkflowEngine) -> WorkflowEngine:
@@ -849,8 +938,16 @@ class WorkflowInterpreter:
         """
         while not self.stopped:
             await workflow.wait_condition(
-                lambda: bool(self.inbox) or bool(self.decisions) or self.stopped or bool(self.migration)
+                lambda: (
+                    bool(self.inbox)
+                    or bool(self.decisions)
+                    or self.stopped
+                    or bool(self.migration)
+                    or self._relance_jouable()
+                )
             )
+            if self._relance_jouable() and workflow.patched(REPRISE_APRES_ESCALADE):
+                return (await self._reprendre("replay requested", self.pending_request)).next_state
             if self.migration and not (self.inbox or self.decisions or self.stopped):
                 if workflow.patched(MIGRATION_PAR_DEFINITION):
                     return _MIGRATION
@@ -867,6 +964,9 @@ class WorkflowInterpreter:
                 self._absorb(event)
             while self.decisions:
                 decision = self.decisions.popleft()
+                if self._reponse_qui_reprend(decision):
+                    reprise = await self._reprendre("answered", decision.get("request_id"), decision)
+                    return reprise.next_state
                 if decision.get("approved"):
                     transitions = engine.wf.transitions_from(self.state)
                     if transitions:

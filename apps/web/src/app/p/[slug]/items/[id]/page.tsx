@@ -7,6 +7,7 @@ import Link from "next/link";
 import { use } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
+import { gare } from "@/components/parcours/modele";
 import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur, relative, shortDate, tokens, usd } from "@/lib/format";
@@ -53,6 +54,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         <div className="flex items-center gap-2">
           <StateBadge state={data.state} display={data.state_display} />
           <CostChip costEur={data.totals?.cost_eur} tokensIn={data.totals?.tokens_in} />
+          {gare(journey.data) && (
+            <Button onClick={() => control("rerun_stage")} aria-label="Replay the stage that escalated">
+              Replay the stage
+            </Button>
+          )}
           <Button onClick={() => control(data.paused ? "resume" : "pause")}>
             {data.paused ? "Resume" : "Pause"}
           </Button>

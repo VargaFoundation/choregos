@@ -113,6 +113,8 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
         infra_pr = result.artifacts.reports.get("infra_pr")
         if infra_pr:
             documents["infra_pr_url"] = infra_pr
+        if result.status == StageStatus.DONE:
+            documents.pop("human_answer", None)  # la réponse a servi à l'étape qui la demandait
         item.documents = documents
         if result.artifacts.pr_url:
             item.pr_url = result.artifacts.pr_url

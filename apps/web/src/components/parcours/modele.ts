@@ -484,3 +484,10 @@ export function structure(modele: Modele): Instant {
   const arcs = new Map(modele.arcs.map((a) => [a.cle, { fois: 0, dernier: false }]));
   return { t: Number.NEGATIVE_INFINITY, etat: "", etapes, visites: new Set(), arcs, dernier: null, phase: null };
 }
+
+/** Garé par une escalade ou une question : le dernier déplacement l'y a mené, et le ticket vit encore.
+ * « Replay the stage » le ramène à l'étape d'où il est parti (`rerun_stage`, #313). */
+export function gare(journey: WorkItemJourney | undefined): boolean {
+  const dernier = journey?.moves.at(-1);
+  return !!journey && !journey.closed && !!dernier && ["escalate", "default"].includes(dernier.kind);
+}

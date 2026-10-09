@@ -269,7 +269,9 @@ async def close_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             row.decided_at = utcnow()
             row.decided_by = payload.get("decided_by", "the platform")
             row.decision = payload.get("decision", {})
-            await _garder_la_raison(session, row, dict(payload.get("decision") or {}))
+        # Même close par l'API avant que l'activité ne passe — c'est le cas d'une réponse —, la
+        # demande dépose sa raison ou sa réponse là où l'agent suivant la lit.
+        await _garder_la_raison(session, row, dict(payload.get("decision") or {}))
         return {"closed": True}
 
 
@@ -278,6 +280,14 @@ async def _garder_la_raison(session: Any, demande: HumanRequest, decision: dict[
     if item is None:
         return
     documents = dict(item.documents or {})
+    reponse = str(decision.get("answer") or "").strip()
+    if decision.get("kind") == "question" and reponse:
+        # La réponse va à l'agent qui reprend (#313), quelles que soient les entrées qu'il déclare :
+        # elle tranche la question qui l'avait arrêté, et se perdait.
+        question = str((demande.payload or {}).get("question") or "").strip()
+        documents["human_answer"] = f"Question: {question}\n\nAnswer: {reponse}" if question else reponse
+        item.documents = documents
+        return
     raison = str(decision.get("reason") or "").strip()
     if decision.get("approved"):
         documents.pop("human_feedback", None)

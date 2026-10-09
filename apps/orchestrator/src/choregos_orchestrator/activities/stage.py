@@ -354,6 +354,18 @@ async def _context_pack(bundle: Any, item: Any, plan: StagePlan) -> ContextPack:
 
 
 def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None) -> str:
+    texte = _rendre_le_playbook(plan, bundle, item, context, agent)
+    reponse = str((item.documents or {}).get("human_answer") or "").strip()
+    if not reponse:
+        return texte
+    # Une personne a répondu à la question qui avait arrêté le ticket (#313) : l'agent qui reprend
+    # la lit en tête, sans que l'auteur du workflow ait eu à la déclarer en entrée.
+    return f"## A person answered the question that stopped this work item\n\n{reponse}\n\n---\n\n{texte}"
+
+
+def _rendre_le_playbook(
+    plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None
+) -> str:
     from choregos_playbooks import cadrer, render_playbook
 
     documents = item.documents or {}
