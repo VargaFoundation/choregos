@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -92,6 +93,37 @@ def test_resultat_absent_puis_repare(tmp_path: Path) -> None:
     path.write_text('{"status": "licorne", "summary": "x"}', encoding="utf-8")
     error = load_result(path).error or ""
     assert "contract" in error and "status" in error
+
+
+def test_une_sortie_declaree_absente_repart_en_reparation(tmp_path: Path) -> None:
+    """Le triage de #4 (locataire dev, 09/10) : `size` et `risk` rangés dans une sortie à lui."""
+    path = tmp_path / "result.json"
+    imbrique = {
+        "status": "done",
+        "summary": "trié",
+        "outputs": {"triage": '{"size": "S", "risk": "medium"}'},
+    }
+    path.write_text(json.dumps(imbrique), encoding="utf-8")
+    load = load_result(path, ["size", "risk"])
+    assert not load.ok
+    assert "`size`" in (load.error or "") and "`risk`" in (load.error or "")
+    assert load_result(path).ok, "sans sorties déclarées, rien ne change"
+
+    path.write_text(json.dumps({**imbrique, "outputs": {"size": "S", "risk": "medium"}}), encoding="utf-8")
+    assert load_result(path, ["size", "risk"]).ok
+
+    question = {"status": "needs_human", "summary": "une question", "outputs": {}}
+    path.write_text(json.dumps(question), encoding="utf-8")
+    assert load_result(path, ["size", "risk"]).ok, "une étape qui ne finit pas n'a pas à les rendre"
+
+
+def test_la_tache_nomme_les_sorties_attendues(stage_input) -> None:  # type: ignore[no-untyped-def]
+    from choregos_runner.workspace import _task_markdown
+
+    entree = stage_input.model_copy(
+        update={"transition": stage_input.transition.model_copy(update={"outputs": ["size", "risk"]})}
+    )
+    assert "`size`, `risk`" in _task_markdown(entree)
 
 
 def test_les_preuves_mesurees_ecrasent_les_preuves_declarees() -> None:

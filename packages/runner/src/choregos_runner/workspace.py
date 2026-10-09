@@ -350,6 +350,16 @@ def _task_markdown(stage_input: StageInput) -> str:
         "",
         "## Expected output",
         "Write `.choregos/result.json`, conforming to the `choregos/StageResult/v1` contract.",
+        *(
+            [
+                "When you finish (`status: done`), `outputs` holds exactly these keys, each at the top "
+                "level of `outputs`: "
+                + ", ".join(f"`{nom}`" for nom in stage_input.transition.outputs)
+                + ".",
+            ]
+            if stage_input.transition.outputs
+            else []
+        ),
     ]
     return "\n".join(lines) + "\n"
 
