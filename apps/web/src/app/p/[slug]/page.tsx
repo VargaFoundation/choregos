@@ -143,36 +143,38 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
       <Card eyebrow="tickets" title="most recent" padding="none" className="overflow-hidden">
         <div className="px-6 pb-2">
-          <table>
-            <thead>
-              <tr>
-                <th>ticket</th>
-                <th>title</th>
-                <th>state</th>
-                <th>size</th>
-                <th className="text-right">cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(items.data?.items ?? []).slice(0, 8).map((item) => (
-                <tr key={item.id} className="transition-colors hover:bg-surface-muted">
-                  <td className="whitespace-nowrap text-ink-muted">{item.tracker_key}</td>
-                  <td>
-                    <Link href={`/p/${slug}/items/${item.id}`} className="no-underline hover:underline">
-                      {item.title}
-                    </Link>
-                  </td>
-                  <td>
-                    <StateBadge state={item.state} display={item.state_display} />
-                  </td>
-                  <td className="text-ink-muted">{item.size ?? "—"}</td>
-                  <td className="text-right">
-                    <CostChip costEur={item.totals?.cost_eur} />
-                  </td>
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>ticket</th>
+                  <th>title</th>
+                  <th>state</th>
+                  <th>size</th>
+                  <th className="text-right">cost</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(items.data?.items ?? []).slice(0, 8).map((item) => (
+                  <tr key={item.id} className="transition-colors hover:bg-surface-muted">
+                    <td className="whitespace-nowrap text-ink-muted">{item.tracker_key}</td>
+                    <td>
+                      <Link href={`/p/${slug}/items/${item.id}`} className="no-underline hover:underline">
+                        {item.title}
+                      </Link>
+                    </td>
+                    <td>
+                      <StateBadge state={item.state} display={item.state_display} />
+                    </td>
+                    <td className="text-ink-muted">{item.size ?? "—"}</td>
+                    <td className="text-right">
+                      <CostChip costEur={item.totals?.cost_eur} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Card>
     </div>
@@ -200,9 +202,7 @@ function Metric({ label, metric, ratio }: { label: string; metric: DoraMetric; r
       <p className="mt-2 font-display text-2xl leading-none font-bold tracking-tight tabular-nums">{value}</p>
       <p className="mt-3 text-xs text-ink-muted">
         <span
-          className={
-            { ok: "text-ok", warn: "text-warn", danger: "text-danger", ink: "text-ink-muted" }[level.tone]
-          }
+          className={{ ok: "text-ok", warn: "text-warn", danger: "text-danger", ink: "text-ink-muted" }[level.tone]}
         >
           {level.label}
         </span>

@@ -63,33 +63,33 @@ export function Acces({ acces }: { acces?: AccesRun }) {
               </ul>
             </div>
           )}
-          <table>
-            <thead>
-              <tr>
-                <th>kind</th>
-                <th>target</th>
-                <th>requests</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((ligne) => (
-                <tr key={`${ligne.nature}:${ligne.cible}`}>
-                  <td className="text-xs">{LIBELLE[ligne.nature] ?? ligne.nature}</td>
-                  <td>
-                    <span className="font-mono text-xs break-all">{ligne.cible}</span>
-                  </td>
-                  <td className="text-xs">
-                    {ligne.demandes}
-                    {ligne.refus > 0 && <span className="text-danger"> · {ligne.refus} refused</span>}
-                  </td>
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>kind</th>
+                  <th>target</th>
+                  <th>requests</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lignes.map((ligne) => (
+                  <tr key={`${ligne.nature}:${ligne.cible}`}>
+                    <td className="text-xs">{LIBELLE[ligne.nature] ?? ligne.nature}</td>
+                    <td>
+                      <span className="font-mono text-xs break-all">{ligne.cible}</span>
+                    </td>
+                    <td className="text-xs">
+                      {ligne.demandes}
+                      {ligne.refus > 0 && <span className="text-danger"> · {ligne.refus} refused</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {acces?.cout_outils_eur ? (
-            <p className="mt-2 text-xs text-ink-muted">
-              catalogue tools: {acces.cout_outils_eur.toFixed(4)} €
-            </p>
+            <p className="mt-2 text-xs text-ink-muted">catalogue tools: {acces.cout_outils_eur.toFixed(4)} €</p>
           ) : null}
         </>
       )}

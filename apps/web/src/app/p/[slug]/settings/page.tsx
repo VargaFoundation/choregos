@@ -82,35 +82,37 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         {(tools.data?.tools ?? []).length === 0 ? (
           <Empty>no tool declared by the deployment.</Empty>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>tool</th>
-                <th>provider</th>
-                <th>open to</th>
-                <th>per call</th>
-                <th>this project</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(tools.data?.tools ?? []).map((tool) => (
-                <tr key={tool.name}>
-                  <td>
-                    <span className="font-mono text-xs">{tool.name}</span>
-                    <p className="text-xs text-ink-muted">{tool.description}</p>
-                  </td>
-                  <td className="text-xs">
-                    {tool.provider}
-                    {tool.source === "mcp" ? " · remote MCP" : ""}
-                    {tool.needs_credential ? " · platform key" : " · no key"}
-                  </td>
-                  <td className="text-xs">{(tool.groups ?? []).join(", ") || "everyone"}</td>
-                  <td className="text-xs">{eur(tool.price_eur ?? 0)}</td>
-                  <td className="text-xs">{tool.allowed ? "allowed" : "—"}</td>
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>tool</th>
+                  <th>provider</th>
+                  <th>open to</th>
+                  <th>per call</th>
+                  <th>this project</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(tools.data?.tools ?? []).map((tool) => (
+                  <tr key={tool.name}>
+                    <td>
+                      <span className="font-mono text-xs">{tool.name}</span>
+                      <p className="text-xs text-ink-muted">{tool.description}</p>
+                    </td>
+                    <td className="text-xs">
+                      {tool.provider}
+                      {tool.source === "mcp" ? " · remote MCP" : ""}
+                      {tool.needs_credential ? " · platform key" : " · no key"}
+                    </td>
+                    <td className="text-xs">{(tool.groups ?? []).join(", ") || "everyone"}</td>
+                    <td className="text-xs">{eur(tool.price_eur ?? 0)}</td>
+                    <td className="text-xs">{tool.allowed ? "allowed" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {tools.data?.allows_all && (
           <p className="mt-2 text-xs text-ink-muted">
@@ -118,8 +120,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
           </p>
         )}
         <p className="mt-2 text-xs text-ink-muted">
-          a project&apos;s tool list (`tools`, `groups`) is set in its configuration — it is reviewed like
-          code.
+          a project&apos;s tool list (`tools`, `groups`) is set in its configuration — it is reviewed like code.
         </p>
       </Card>
 
@@ -127,30 +128,36 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         <p className="mb-2 text-sm text-ink-muted">
           Published by the nightly evals: an unvalidated combination is refused on save.
         </p>
-        <table>
-          <thead>
-            <tr>
-              <th>backend</th>
-              <th>model</th>
-              <th>validated</th>
-              <th className="text-right">success</th>
-              <th className="text-right">median cost</th>
-              <th>memory</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(matrix.data?.entries ?? []).map((entry, index) => (
-              <tr key={index}>
-                <td>{entry.backend}</td>
-                <td className="font-mono text-xs">{entry.model}</td>
-                <td>{entry.validated ? "✓" : <span className="text-danger">✗</span>}</td>
-                <td className="text-right">{entry.success_rate != null ? `${Math.round(entry.success_rate * 100)} %` : "—"}</td>
-                <td className="text-right">{entry.median_cost_usd != null ? `${entry.median_cost_usd.toFixed(2)} $` : "—"}</td>
-                <td>{entry.with_memory == null ? "—" : entry.with_memory ? "with" : "without"}</td>
+        <div className="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>backend</th>
+                <th>model</th>
+                <th>validated</th>
+                <th className="text-right">success</th>
+                <th className="text-right">median cost</th>
+                <th>memory</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(matrix.data?.entries ?? []).map((entry, index) => (
+                <tr key={index}>
+                  <td>{entry.backend}</td>
+                  <td className="font-mono text-xs">{entry.model}</td>
+                  <td>{entry.validated ? "✓" : <span className="text-danger">✗</span>}</td>
+                  <td className="text-right">
+                    {entry.success_rate != null ? `${Math.round(entry.success_rate * 100)} %` : "—"}
+                  </td>
+                  <td className="text-right">
+                    {entry.median_cost_usd != null ? `${entry.median_cost_usd.toFixed(2)} $` : "—"}
+                  </td>
+                  <td>{entry.with_memory == null ? "—" : entry.with_memory ? "with" : "without"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {(matrix.data?.entries ?? []).length === 0 && <Empty>no eval published yet</Empty>}
       </Card>
     </div>
@@ -173,8 +180,7 @@ function PolicyEditor({ yaml, onSave }: { yaml: string; onSave: (yaml: string) =
         </Button>
       </div>
       <p className="text-xs text-ink-muted">
-        budgets, approvals, attempts, scope: the same policy the orchestrator applies. The server
-        validates it on save.
+        budgets, approvals, attempts, scope: the same policy the orchestrator applies. The server validates it on save.
       </p>
     </div>
   );
@@ -208,7 +214,7 @@ function ModelsEditor({
             value={profils[profil] ?? ""}
             placeholder={models?.inherited?.[profil] ? `inherited: ${models.inherited[profil]}` : "platform/standard"}
             onChange={(event) => setProfils((p) => ({ ...p, [profil]: event.target.value }))}
-            className="w-64 rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
+            className="w-64 min-w-0 rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
           />
         </label>
       ))}

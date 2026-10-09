@@ -60,7 +60,7 @@ export default function AdminPage() {
             </div>
           )}
           <form
-            className="mb-3 flex items-center gap-2 text-sm"
+            className="mb-3 flex flex-wrap items-center gap-2 text-sm"
             onSubmit={(event) => {
               event.preventDefault();
               void frapper();
@@ -71,7 +71,7 @@ export default function AdminPage() {
               value={tokenName}
               onChange={(event) => setTokenName(event.target.value)}
               placeholder="cli"
-              className="rounded border border-line bg-surface px-2 py-1"
+              className="min-w-0 flex-1 rounded border border-line bg-surface px-2 py-1"
             />
             <Button size="sm" tone="primary" type="submit">
               mint a token (90 days)

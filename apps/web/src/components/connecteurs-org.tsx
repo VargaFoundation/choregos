@@ -75,48 +75,52 @@ export function OutilsDeLivraison({ org }: { org: string }) {
         ) : lignes.length === 0 ? (
           <p className="text-ink-muted">no project yet.</p>
         ) : (
-          <table className="w-full" data-testid="outils-de-livraison">
-            <thead className="text-left text-xs text-ink-muted">
-              <tr>
-                <th className="py-1 font-normal">project</th>
-                <th className="py-1 font-normal">configured tools</th>
-                <th className="py-1 font-normal" />
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((ligne) => (
-                <tr key={ligne.slug} className="border-t border-line" data-testid={`livraison-${ligne.slug}`}>
-                  <td className="py-2 font-medium">{ligne.nom}</td>
-                  <td className="py-2">
-                    {ligne.refus ? (
-                      <span className="text-xs text-ink-muted">{ligne.refus}</span>
-                    ) : !ligne.outils ? (
-                      <span className="text-xs text-ink-muted">reading…</span>
-                    ) : ligne.outils.length === 0 ? (
-                      <span className="text-xs text-ink-muted">platform defaults only</span>
-                    ) : (
-                      <span className="flex flex-wrap gap-2">
-                        {ligne.outils.map((outil) => (
-                          <span key={outil.kind} title={`status: ${outil.status}`}>
-                            <Badge tone={outil.status === "error" ? "danger" : "neutral"}>
-                              {libelleDeSorte(outil.kind)}: {outil.type}
-                            </Badge>
-                          </span>
-                        ))}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right">
-                    <Link href={`/p/${ligne.slug}/settings`} className="text-xs underline">
-                      settings
-                    </Link>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full" data-testid="outils-de-livraison">
+              <thead className="text-left text-xs text-ink-muted">
+                <tr>
+                  <th className="py-1 font-normal">project</th>
+                  <th className="py-1 font-normal">configured tools</th>
+                  <th className="py-1 font-normal" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lignes.map((ligne) => (
+                  <tr key={ligne.slug} className="border-t border-line" data-testid={`livraison-${ligne.slug}`}>
+                    <td className="py-2 font-medium">{ligne.nom}</td>
+                    <td className="py-2">
+                      {ligne.refus ? (
+                        <span className="text-xs text-ink-muted">{ligne.refus}</span>
+                      ) : !ligne.outils ? (
+                        <span className="text-xs text-ink-muted">reading…</span>
+                      ) : ligne.outils.length === 0 ? (
+                        <span className="text-xs text-ink-muted">platform defaults only</span>
+                      ) : (
+                        <span className="flex flex-wrap gap-2">
+                          {ligne.outils.map((outil) => (
+                            <span key={outil.kind} title={`status: ${outil.status}`}>
+                              <Badge tone={outil.status === "error" ? "danger" : "neutral"}>
+                                {libelleDeSorte(outil.kind)}: {outil.type}
+                              </Badge>
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right">
+                      <Link href={`/p/${ligne.slug}/settings`} className="text-xs underline">
+                        settings
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-        {projets.data?.meta?.has_more && <p className="text-xs text-ink-muted">and more projects: see the projects page.</p>}
+        {projets.data?.meta?.has_more && (
+          <p className="text-xs text-ink-muted">and more projects: see the projects page.</p>
+        )}
       </div>
     </Card>
   );

@@ -26,22 +26,24 @@ export function OperationsDuProjet({ slug }: { slug: string }) {
   if (!operations.data || operations.data.length === 0) return null;
   return (
     <Card title="operations of the organisation's connectors" className="lg:col-span-2">
-      <table className="w-full text-sm" data-testid="operations-du-projet">
-        <thead className="text-left text-xs text-ink-muted">
-          <tr>
-            <th className="py-1 font-normal">connector</th>
-            <th className="py-1 font-normal">operation</th>
-            <th className="py-1 font-normal">organisation</th>
-            <th className="py-1 font-normal">this project</th>
-            <th className="py-1 font-normal">effective</th>
-          </tr>
-        </thead>
-        <tbody>
-          {operations.data.map((o) => (
-            <Ligne key={`${o.connector}/${o.operation}`} slug={slug} operation={o} />
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm" data-testid="operations-du-projet">
+          <thead className="text-left text-xs text-ink-muted">
+            <tr>
+              <th className="py-1 font-normal">connector</th>
+              <th className="py-1 font-normal">operation</th>
+              <th className="py-1 font-normal">organisation</th>
+              <th className="py-1 font-normal">this project</th>
+              <th className="py-1 font-normal">effective</th>
+            </tr>
+          </thead>
+          <tbody>
+            {operations.data.map((o) => (
+              <Ligne key={`${o.connector}/${o.operation}`} slug={slug} operation={o} />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
@@ -94,14 +96,19 @@ function Ligne({ slug, operation }: { slug: string; operation: ProjectOperation 
         </select>
         {operation.project_policy && (
           <span className="ml-2">
-            <Button size="sm" onClick={() => void agir(() => api.relaxProjectOperation(slug, operation.connector, operation.operation))}>
+            <Button
+              size="sm"
+              onClick={() => void agir(() => api.relaxProjectOperation(slug, operation.connector, operation.operation))}
+            >
               reset
             </Button>
           </span>
         )}
       </td>
       <td>
-        <Badge tone={TON[operation.effective_policy as keyof typeof TON] ?? "neutral"}>{operation.effective_policy}</Badge>
+        <Badge tone={TON[operation.effective_policy as keyof typeof TON] ?? "neutral"}>
+          {operation.effective_policy}
+        </Badge>
       </td>
     </tr>
   );

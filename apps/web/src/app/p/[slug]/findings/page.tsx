@@ -3,6 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
+import { TBody, TD, TH, THead, TR, Table } from "@varga/design-system";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
@@ -53,60 +54,64 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
       }
     >
       {error && <ErrorNote>{error}</ErrorNote>}
-      <table>
-        <thead>
-          <tr>
-            <th>severity</th>
-            <th>type</th>
-            <th>title</th>
-            <th>evidence</th>
-            <th>origin</th>
-            <th>status</th>
-            <th>actions</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <THead>
+          <TR>
+            <TH>severity</TH>
+            <TH>type</TH>
+            <TH>title</TH>
+            <TH>evidence</TH>
+            <TH>origin</TH>
+            <TH>status</TH>
+            <TH>actions</TH>
+          </TR>
+        </THead>
+        <TBody>
           {(findings.data?.items ?? []).map((finding) => (
-            <tr key={finding.id}>
-              <td className={SEVERITY_TONE[finding.severity] ?? ""}>{finding.severity}</td>
-              <td>{finding.type}</td>
-              <td>
+            <TR key={finding.id}>
+              <TD className={SEVERITY_TONE[finding.severity] ?? ""}>{finding.severity}</TD>
+              <TD>{finding.type}</TD>
+              <TD>
                 {finding.title}
                 {(finding.occurrences ?? 1) > 1 && (
                   <span className="ml-2 rounded bg-surface-muted px-1 text-xs">×{finding.occurrences}</span>
                 )}
-              </td>
-              <td className="max-w-72 truncate font-mono text-xs text-ink-muted" title={finding.evidence}>
+              </TD>
+              <TD className="max-w-72 truncate font-mono text-xs text-ink-muted" title={finding.evidence}>
                 {finding.evidence}
-              </td>
-              <td className="font-mono text-xs">{finding.origin_work_item_key ?? "—"}</td>
-              <td>
+              </TD>
+              <TD className="font-mono text-xs">{finding.origin_work_item_key ?? "—"}</TD>
+              <TD>
                 {finding.status}
                 {finding.created_work_item_key && (
                   <span className="ml-1 font-mono text-xs text-ink-muted">→ {finding.created_work_item_key}</span>
                 )}
                 <span className="ml-2 text-xs text-ink-muted">{relative(finding.created_at)}</span>
-              </td>
-              <td className="space-x-1 whitespace-nowrap">
-                {finding.status === "pending" && (
-                  <Button tone="primary" onClick={() => act(finding.id, "create_ticket")}>
-                    create the ticket
+              </TD>
+              <TD className="whitespace-nowrap">
+                <div className="flex gap-1">
+                  {finding.status === "pending" && (
+                    <Button size="sm" onClick={() => act(finding.id, "create_ticket")}>
+                      create the ticket
+                    </Button>
+                  )}
+                  {finding.status === "created" && (
+                    <Button size="sm" onClick={() => act(finding.id, "agent_ready")}>
+                      make agent-ready
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => act(finding.id, "mark_duplicate")}>
+                    duplicate
                   </Button>
-                )}
-                {finding.status === "created" && (
-                  <Button tone="primary" onClick={() => act(finding.id, "agent_ready")}>
-                    Make agent-ready
+                  <Button size="sm" tone="danger" onClick={() => act(finding.id, "dismiss")}>
+                    dismiss
                   </Button>
-                )}
-                <Button onClick={() => act(finding.id, "mark_duplicate")}>duplicate</Button>
-                <Button tone="danger" onClick={() => act(finding.id, "dismiss")}>
-                  dismiss
-                </Button>
-              </td>
-            </tr>
+                </div>
+              </TD>
+            </TR>
           ))}
-        </tbody>
-      </table>
+        </TBody>
+      </Table>
       {findings.data?.items.length === 0 && <Empty>no finding</Empty>}
     </Card>
   );

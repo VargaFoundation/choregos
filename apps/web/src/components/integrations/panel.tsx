@@ -93,7 +93,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
               <>the door serves every project you can read; tools take a project argument.</>
             )}
           </p>
-          <p className="mt-2 text-sm">
+          <p className="mt-2 break-all text-sm">
             MCP URL <Code data-testid="mcp-url">{url}</Code>
           </p>
 
@@ -111,8 +111,8 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
           ) : (
             <Alert tone="warn" title="not reachable from here yet" className="mt-4">
               {info.label} calls MCP servers from its vendor&apos;s network and signs in with OAuth. It needs a public
-              HTTPS address for <Code>/mcp</Code> and OAuth on the door — the next step of ADR 0030. A platform behind
-              a VPN stays out of its reach: use Claude Code or Claude Desktop meanwhile.
+              HTTPS address for <Code>/mcp</Code> and OAuth on the door — the next step of ADR 0030. A platform behind a
+              VPN stays out of its reach: use Claude Code or Claude Desktop meanwhile.
             </Alert>
           )}
           {aussiParJeton && (
@@ -177,26 +177,28 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
       </div>
 
       <Card title="which client reaches what">
-        <table aria-label="capabilities">
-          <thead>
-            <tr>
-              <th>client</th>
-              <th>calls from</th>
-              <th>signs in with</th>
-              <th>here and now</th>
-            </tr>
-          </thead>
-          <tbody>
-            {CLIENTS.map((c) => etatDuClient(c, url, oauth)).map((c) => (
-              <tr key={c.id}>
-                <td>{c.label}</td>
-                <td className="text-xs">{c.calls_from}</td>
-                <td className="text-xs">{c.auth}</td>
-                <td className="text-xs">{c.status}</td>
+        <div className="overflow-x-auto">
+          <table aria-label="capabilities">
+            <thead>
+              <tr>
+                <th>client</th>
+                <th>calls from</th>
+                <th>signs in with</th>
+                <th>here and now</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {CLIENTS.map((c) => etatDuClient(c, url, oauth)).map((c) => (
+                <tr key={c.id}>
+                  <td>{c.label}</td>
+                  <td className="text-xs">{c.calls_from}</td>
+                  <td className="text-xs">{c.auth}</td>
+                  <td className="text-xs">{c.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Card title="when it does not connect">
@@ -214,12 +216,12 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
             ChatGPT refuse it.
           </li>
           <li>
-            <strong>an internal host</strong> — claude.ai and ChatGPT call from their vendor&apos;s cloud
-            (Anthropic: 160.79.104.0/21) and cannot reach a host behind your VPN; Claude Code can.
+            <strong>an internal host</strong> — claude.ai and ChatGPT call from their vendor&apos;s cloud (Anthropic:
+            160.79.104.0/21) and cannot reach a host behind your VPN; Claude Code can.
           </li>
           <li>
-            <strong>a tool is missing</strong> — a read-only token, a role without the right, or a project whose
-            tracker is external.
+            <strong>a tool is missing</strong> — a read-only token, a role without the right, or a project whose tracker
+            is external.
           </li>
         </ul>
       </Card>

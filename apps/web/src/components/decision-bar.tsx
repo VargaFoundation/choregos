@@ -54,7 +54,7 @@ export function DecisionBar({
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
             placeholder="your answer…"
-            className="min-w-64 flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+            className="min-w-0 flex-1 basis-64 rounded border border-line bg-surface px-2 py-1.5 text-sm"
           />
           <Button tone="primary" disabled={busy || !answer} onClick={() => send("answer")}>
             answer

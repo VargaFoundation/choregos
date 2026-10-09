@@ -14,7 +14,8 @@ import type { AgentCatalogueConnection, AgentCatalogueEntry } from "@/lib/types"
 export function etatDeLEntree(entree: AgentCatalogueEntry): { libelle: string; action: "install" | "update" | null } {
   if (entree.own_agent) return { libelle: "your organisation has its own agent with this name", action: null };
   if (!entree.installed) return { libelle: "not installed", action: "install" };
-  if (entree.update_available) return { libelle: `installed v${entree.installed_version} — an update is available`, action: "update" };
+  if (entree.update_available)
+    return { libelle: `installed v${entree.installed_version} — an update is available`, action: "update" };
   return { libelle: `installed v${entree.installed_version}`, action: null };
 }
 
@@ -33,37 +34,39 @@ export function CatalogueDAgents({ org }: { org: string }) {
     <>
       <Card title="catalogue — ready-made agents">
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
-          Agents the platform ships, one per role. Installing makes one an agent of your organisation, version 1: it uses
-          your project&apos;s model and runtime, and you can tune it by publishing your own versions. A workflow that names
-          one installs it by itself.
+          Agents the platform ships, one per role. Installing makes one an agent of your organisation, version 1: it
+          uses your project&apos;s model and runtime, and you can tune it by publishing your own versions. A workflow
+          that names one installs it by itself.
         </p>
         {!catalogue.data ? (
           <p className="text-sm text-ink-muted">reading the catalogue…</p>
         ) : internes.length === 0 ? (
           <Empty title="empty catalogue">this deployment ships no agent.</Empty>
         ) : (
-          <table className="w-full text-sm" data-testid="catalogue">
-            <thead className="text-left text-xs text-ink-muted">
-              <tr>
-                <th className="py-1 font-normal">agent</th>
-                <th className="py-1 font-normal">role</th>
-                <th className="py-1 font-normal">what it does</th>
-                <th className="py-1 font-normal">in your organisation</th>
-                <th className="py-1 font-normal" />
-              </tr>
-            </thead>
-            <tbody>
-              {internes.map((entree) => (
-                <LigneDuCatalogue key={entree.slug} org={org} entree={entree} />
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="catalogue">
+              <thead className="text-left text-xs text-ink-muted">
+                <tr>
+                  <th className="py-1 font-normal">agent</th>
+                  <th className="py-1 font-normal">role</th>
+                  <th className="py-1 font-normal">what it does</th>
+                  <th className="py-1 font-normal">in your organisation</th>
+                  <th className="py-1 font-normal" />
+                </tr>
+              </thead>
+              <tbody>
+                {internes.map((entree) => (
+                  <LigneDuCatalogue key={entree.slug} org={org} entree={entree} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
       <Card title="connect an AI client">
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
-          Assistants that reach in through the MCP gate, with your rights, never more — they never decide. Connecting one
-          registers it as an external agent and gives you its configuration, once.{" "}
+          Assistants that reach in through the MCP gate, with your rights, never more — they never decide. Connecting
+          one registers it as an external agent and gives you its configuration, once.{" "}
           <Link href="/integrations" className="underline">
             all clients and their set-up
           </Link>
@@ -176,14 +179,13 @@ function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogu
       )}
       {connexion?.oauth_client_id && (
         <p className="text-sm" role="status">
-          Registered as an external agent: add Choregos in {entree.display_name} with the address {url} — it signs you in.
+          Registered as an external agent: add Choregos in {entree.display_name} with the address {url} — it signs you
+          in.
         </p>
       )}
       {code && (
         <div className="space-y-1" data-testid={`extrait-${entree.slug}`}>
-          <p className="text-xs text-ink-muted">
-            {code.where} — the token is shown once; it is not kept here.
-          </p>
+          <p className="text-xs text-ink-muted">{code.where} — the token is shown once; it is not kept here.</p>
           <pre className="overflow-x-auto rounded border border-line bg-surface-muted p-2 text-xs">{code.code}</pre>
         </div>
       )}

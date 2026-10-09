@@ -21,35 +21,40 @@ export default function ProjectActionsPage({ params }: { params: Promise<{ slug:
       ) : actions.data.length === 0 ? (
         <Empty title="no action yet">a tool under approval, or a step that writes elsewhere, proposes one.</Empty>
       ) : (
-        <table className="w-full text-sm" data-testid="actions">
-          <thead className="text-left text-xs text-ink-muted">
-            <tr>
-              <th className="py-1 font-normal">action</th>
-              <th className="py-1 font-normal">status</th>
-              <th className="py-1 font-normal">proposed by</th>
-              <th className="py-1 font-normal">effects</th>
-            </tr>
-          </thead>
-          <tbody>
-            {actions.data.map((action) => (
-              <tr key={action.id} className="border-t border-line">
-                <td className="py-2">
-                  <Link href={`/p/${slug}/actions/${action.id}`} className="font-medium hover:underline">
-                    {action.title}
-                  </Link>
-                  <span className="ml-2 text-xs text-ink-muted">{action.created_at ? relative(action.created_at) : ""}</span>
-                </td>
-                <td>
-                  <Statut statut={action.status} />
-                </td>
-                <td className="text-xs">{propose(action.proposed_by)}</td>
-                <td className="text-xs text-ink-muted">
-                  {(action.journal ?? []).filter((e) => e.status === "done").length}/{(action.effects ?? []).length} done
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="actions">
+            <thead className="text-left text-xs text-ink-muted">
+              <tr>
+                <th className="py-1 font-normal">action</th>
+                <th className="py-1 font-normal">status</th>
+                <th className="py-1 font-normal">proposed by</th>
+                <th className="py-1 font-normal">effects</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {actions.data.map((action) => (
+                <tr key={action.id} className="border-t border-line">
+                  <td className="py-2">
+                    <Link href={`/p/${slug}/actions/${action.id}`} className="font-medium hover:underline">
+                      {action.title}
+                    </Link>
+                    <span className="ml-2 text-xs text-ink-muted">
+                      {action.created_at ? relative(action.created_at) : ""}
+                    </span>
+                  </td>
+                  <td>
+                    <Statut statut={action.status} />
+                  </td>
+                  <td className="text-xs">{propose(action.proposed_by)}</td>
+                  <td className="text-xs text-ink-muted">
+                    {(action.journal ?? []).filter((e) => e.status === "done").length}/{(action.effects ?? []).length}{" "}
+                    done
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );
