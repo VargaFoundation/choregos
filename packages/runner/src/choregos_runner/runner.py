@@ -241,14 +241,14 @@ class Runner:
                     scope_result = await check_scope(workspace, depart, guards.allowed_paths)
 
                 # 10. résultat
-                load = load_result(workspace.result_path())
+                load = load_result(workspace.result_path(), list(stage_input.transition.outputs))
                 while not load.ok and repairs < MAX_RESULT_REPAIRS:
                     repairs += 1
                     await journal.record("result.repair", {"attempt": repairs, "error": load.error})
                     await agent.prompt(
                         repair_prompt(load, workspace.result_path()), timeout=self._remaining(budget_seconds)
                     )
-                    load = load_result(workspace.result_path())
+                    load = load_result(workspace.result_path(), list(stage_input.transition.outputs))
                 agent_result = load.result
                 diagnostics = Diagnostics(
                     turns=agent.outcome.turns,

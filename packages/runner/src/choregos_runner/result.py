@@ -37,8 +37,13 @@ class ResultLoad:
         return self.result is not None
 
 
-def load_result(path: Path) -> ResultLoad:
-    """Lit et valide le fichier. Toute erreur est formulée pour être renvoyée à l'agent."""
+def load_result(path: Path, declarees: list[str] | None = None) -> ResultLoad:
+    """Lit et valide le fichier. Toute erreur est formulée pour être renvoyée à l'agent.
+
+    `declarees` : les sorties que la transition déclare. Un résultat `done` qui en omet une
+    repart en réparation (S22-12) — sur le locataire dev, le 09/10, un triage rendait
+    une sortie `triage` (du JSON en texte) au lieu de `size` et `risk`, et la garde `outputs_in`
+    escaladait un ticket qui était, en fait, triable."""
     if not path.exists():
         return ResultLoad(None, error=f"`{path.name}` is missing: write it before you finish.")
     raw = path.read_text(encoding="utf-8")
@@ -54,9 +59,30 @@ def load_result(path: Path) -> ResultLoad:
         return ResultLoad(None, error="the document must be a JSON object.", raw=raw)
     payload.setdefault("schema", "choregos/StageResult/v1")
     try:
-        return ResultLoad(StageResult.model_validate(payload), raw=raw)
+        resultat = StageResult.model_validate(payload)
     except ValidationError as exc:
         return ResultLoad(None, error=_explain(exc), raw=raw)
+    manquantes = _sorties_manquantes(resultat, declarees or [])
+    if manquantes:
+        attendues = ", ".join(f"`{nom}`" for nom in declarees or [])
+        return ResultLoad(
+            None,
+            error=(
+                f"`outputs` lacks {', '.join(f'`{nom}`' for nom in manquantes)}: this step declares "
+                f"{attendues}, each a key of `outputs` of its own — not nested in another output."
+            ),
+            raw=raw,
+        )
+    return ResultLoad(resultat, raw=raw)
+
+
+def _sorties_manquantes(resultat: StageResult, declarees: list[str]) -> list[str]:
+    """Les sorties déclarées qu'un résultat `done` n'écrit pas. Une étape qui ne finit pas —
+    une question, un échec — n'a pas à les rendre."""
+    if resultat.status is not StageStatus.DONE:
+        return []
+    ecrites = resultat.outputs.model_dump(exclude_none=True)
+    return [nom for nom in declarees if ecrites.get(nom) in (None, "", [], {})]
 
 
 def _explain(exc: ValidationError) -> str:
