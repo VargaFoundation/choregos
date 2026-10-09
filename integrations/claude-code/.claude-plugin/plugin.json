@@ -1,7 +1,7 @@
 {
   "name": "choregos",
   "displayName": "Choregos",
-  "version": "0.17.6",
+  "version": "0.17.7",
   "description": "Connect Claude Code to Choregos: follow work items, open requests, see what waits for your decision.",
   "author": { "name": "Varga Foundation", "url": "https://github.com/VargaFoundation" },
   "homepage": "https://github.com/VargaFoundation/choregos/blob/main/docs/integrations.md",
