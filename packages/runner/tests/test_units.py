@@ -587,6 +587,8 @@ def test_le_bruit_d_execution_n_entre_pas_dans_le_commit_du_run(tmp_path) -> Non
 
     (depot / "__pycache__").mkdir()
     (depot / "__pycache__" / "panier.cpython-312.pyc").write_bytes(b"\x00")
+    (depot / ".cache" / "pip" / "http-v2").mkdir(parents=True)
+    (depot / ".cache" / "pip" / "http-v2" / "0a1b.body").write_bytes(b"\x00")
     (depot / "src.py").write_text("x = 1\n")
 
     vus = subprocess.run(
@@ -598,6 +600,7 @@ def test_le_bruit_d_execution_n_entre_pas_dans_le_commit_du_run(tmp_path) -> Non
     ).stdout
     assert "src.py" in vus
     assert "__pycache__" not in vus
+    assert ".cache" not in vus, "le cache de pip d'un agent n'entre pas dans le commit (S22-13)"
 
 
 def test_un_agent_muet_est_nomme_comme_tel() -> None:
