@@ -19,7 +19,7 @@ export default function ProjectActionsPage({ params }: { params: Promise<{ slug:
       {!actions.data ? (
         <p className="text-sm text-ink-muted">reading…</p>
       ) : actions.data.length === 0 ? (
-        <Empty title="no action yet">a tool under approval, or a step that writes elsewhere, proposes one.</Empty>
+        <Empty title="no action yet">A tool under approval, or a step that writes elsewhere, proposes one.</Empty>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="actions">

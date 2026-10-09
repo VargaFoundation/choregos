@@ -131,12 +131,21 @@ export function ActorIcon({ kind, name }: { kind: string; name?: string | null }
  * page, axe relevait un saut de niveau (`heading-order`) sur 23 pages sur 36, et un lecteur d'écran
  * qui parcourt la page par titres cherchait des sections qui n'existaient pas.
  */
-export function Card({ title, ...props }: ComponentProps<typeof VargaCard>) {
+export function Card({
+  title,
+  titreDonnee,
+  ...props
+}: ComponentProps<typeof VargaCard> & {
+  /** Le titre est une donnée (le nom d'un projet) : il garde sa casse (ADR 0042). */
+  titreDonnee?: boolean;
+}) {
   return (
     <VargaCard
       title={
         typeof title === "string" ? (
-          <h2 className="font-display text-base font-bold tracking-tight text-ink">{title}</h2>
+          <h2 className="font-display text-base font-bold tracking-tight text-ink" data-donnee={titreDonnee || undefined}>
+            {title}
+          </h2>
         ) : (
           title
         )

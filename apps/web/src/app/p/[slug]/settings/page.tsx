@@ -80,7 +80,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
 
       <Card title="tool catalogue">
         {(tools.data?.tools ?? []).length === 0 ? (
-          <Empty>no tool declared by the deployment.</Empty>
+          <Empty>No tool declared by the deployment.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table>
@@ -181,7 +181,7 @@ function PolicyEditor({ yaml, onSave }: { yaml: string; onSave: (yaml: string) =
         </Button>
       </div>
       <p className="text-xs text-ink-muted">
-        budgets, approvals, attempts, scope: the same policy the orchestrator applies. The server validates it on save.
+        Budgets, approvals, attempts, scope: the same policy the orchestrator applies. The server validates it on save.
       </p>
     </div>
   );

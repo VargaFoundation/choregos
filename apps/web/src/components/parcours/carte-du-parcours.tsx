@@ -241,11 +241,11 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
         {lecteur.enLecture ? (
           <button
             type="button"
-            aria-label="Pause the replay"
+            aria-label="pause the replay"
             className={cn(bouton, "border-ink bg-ink text-surface")}
             onClick={lecteur.pause}
           >
-            <span aria-hidden>❚❚</span> Pause
+            <span aria-hidden>❚❚</span> pause
           </button>
         ) : (
           <button
@@ -253,9 +253,9 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
             className={cn(bouton, "border-ink bg-ink text-surface")}
             onClick={lecteur.lire}
             disabled={images.length === 0}
-            aria-label={direct ? "Replay the journey" : "Play the replay"}
+            aria-label={direct ? "replay the journey" : "play the replay"}
           >
-            <span aria-hidden>▶</span> {direct ? "Replay" : "Play"}
+            <span aria-hidden>▶</span> {direct ? "replay" : "play"}
           </button>
         )}
         <button
@@ -263,9 +263,9 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
           className={cn(bouton, "border-line-strong hover:border-ink")}
           onClick={lecteur.recommencer}
           disabled={images.length === 0}
-          aria-label="Restart the replay"
+          aria-label="restart the replay"
         >
-          <span aria-hidden>↺</span> Restart
+          <span aria-hidden>↺</span> restart
         </button>
         <span className="inline-flex overflow-hidden rounded border border-line-strong" role="group" aria-label="speed">
           {VITESSES.map((v) => (
@@ -291,10 +291,10 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
             direct ? "border-accent-strong text-accent-strong" : "border-line-strong text-ink-muted hover:text-ink",
           )}
           onClick={lecteur.direct}
-          aria-label="Live: follow the work item"
+          aria-label="live: follow the work item"
         >
           <span aria-hidden className={cn("inline-block size-1.5 rounded-full bg-current", direct && "parcours-pouls-point")} />
-          Live
+          live
         </button>
         {!direct && images.length > 0 && (
           <label className="ml-1 inline-flex min-w-48 flex-1 items-center gap-2 text-xs text-ink-muted">
@@ -736,6 +736,7 @@ function BoutonDEtape({
       type="button"
       data-testid={`etape-${etape.id}`}
       data-statut={etat.statut}
+      data-donnee
       aria-label={etiquette}
       aria-pressed={choisie}
       title={etape.phrase?.replaceAll("`", "") ?? undefined}

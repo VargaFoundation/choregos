@@ -49,7 +49,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       <FilDAriane etapes={[{ href: `/p/${slug}/board`, label: "board" }, { label: data.tracker_key }]} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Heading as="h2" size="lg">
+          <Heading as="h2" size="lg" data-donnee>
             {data.title}
           </Heading>
           <p className="font-mono text-xs text-ink-muted">
@@ -66,7 +66,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               confirmer="replay the stage"
               action={() => control("rerun_stage")}
             >
-              Replay the stage
+              replay the stage
             </GesteConfirme>
           )}
           <Button

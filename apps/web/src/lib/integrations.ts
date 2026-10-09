@@ -60,7 +60,7 @@ export const CLIENTS: ReadonlyArray<ClientInfo> = [
     auth: "OAuth",
     status: "needs a public HTTPS address and OAuth",
   },
-  { id: "other", label: "Other MCP client", calls_from: "your machine", auth: "MCP token", status: "ready" },
+  { id: "other", label: "other MCP client", calls_from: "your machine", auth: "MCP token", status: "ready" },
   { id: "cli", label: "CLI", calls_from: "your machine", auth: "full-access token", status: "ready" },
   { id: "rest", label: "REST API", calls_from: "your machine", auth: "full-access token", status: "ready" },
 ];

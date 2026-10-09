@@ -46,7 +46,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
       }
     >
       {lignes.length === 0 ? (
-        <Empty>no access recorded for this run.</Empty>
+        <Empty>No access recorded for this run.</Empty>
       ) : (
         <>
           {refuses.length > 0 && (

@@ -86,11 +86,11 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
           <p className="text-sm text-ink-muted">
             {portee ? (
               <>
-                the door of project <Code>{portee}</Code>: tools need no project argument, and the token is bound to
+                The door of project <Code>{portee}</Code>: tools need no project argument, and the token is bound to
                 this project.
               </>
             ) : (
-              <>the door serves every project you can read; tools take a project argument.</>
+              <>The door serves every project you can read; tools take a project argument.</>
             )}
           </p>
           <p className="mt-2 break-all text-sm">
@@ -168,7 +168,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                   create an access token
                 </Button>
                 <p className="text-xs text-ink-muted">
-                  it opens the MCP door only: the REST API refuses it, and it can never decide. Connected this way,{" "}
+                  It opens the MCP door only: the REST API refuses it, and it can never decide. Connected this way,{" "}
                   {info.label} acts as you. To give it a name, limits and an audit trail of its own, connect it from{" "}
                   <Link href="/agents">agents</Link> instead: it becomes an external agent. Every token is listed, and
                   revoked, in <Link href="/admin">admin › my access tokens</Link>.

@@ -28,7 +28,7 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         <span aria-hidden className="text-ink-muted">
           /
         </span>
-        <Heading as="h2" size="lg">
+        <Heading as="h2" size="lg" data-donnee>
           {a.title}
         </Heading>
         <Statut statut={a.status} />
@@ -43,7 +43,7 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         {a.status === "pending_approval" ? (
           <DecisionDAction projet={slug} action={a} />
         ) : (a.decisions ?? []).length === 0 ? (
-          <p className="text-sm text-ink-muted">no decision recorded.</p>
+          <p className="text-sm text-ink-muted">No decision recorded.</p>
         ) : null}
         {(a.decisions ?? []).length > 0 && (
           <ul className="mt-2 space-y-1 text-sm" data-testid="decisions">

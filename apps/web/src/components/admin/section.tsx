@@ -214,7 +214,7 @@ function BoutonDAction({
   return (
     <div className="space-y-2 rounded border border-line p-2" role="group" aria-label={`confirm ${action.label}`}>
       {action.confirm && <p className="text-sm">{action.confirm}</p>}
-      {action.reauth && <p className="text-xs text-ink-muted">you may be asked to sign in again.</p>}
+      {action.reauth && <p className="text-xs text-ink-muted">You may be asked to sign in again.</p>}
       {params && <SchemaForm schema={params} value={valeurs} onChange={setValeurs} />}
       <span className="inline-flex gap-2">
         <Button
@@ -267,7 +267,7 @@ function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
       {bloc.description && <p className="mb-3 text-sm text-ink-muted">{bloc.description}</p>}
       {secret ? (
         <div className="space-y-2" data-testid="secret-once">
-          <p className="text-sm text-warn">copy it now: it is shown once, and Choregos does not keep it.</p>
+          <p className="text-sm text-warn">Copy it now: it is shown once, and Choregos does not keep it.</p>
           <input readOnly aria-label={`${bloc.label}: the secret`} value={secret} className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-sm" />
           <Button size="sm" onClick={() => setSecret(null)}>
             I have copied it

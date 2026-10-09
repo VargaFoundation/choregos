@@ -39,7 +39,7 @@ export default function ProjectLayout({
     <div className="space-y-8">
       <div className="space-y-4">
         <Eyebrow>project · {slug}</Eyebrow>
-        <Heading as="h1" size="xl">
+        <Heading as="h1" size="xl" data-donnee>
           {projet.data?.name ?? slug}
         </Heading>
       </div>

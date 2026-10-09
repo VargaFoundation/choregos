@@ -67,7 +67,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
         </Link>
       </div>
 
-      {workflows.data?.length === 0 && <Empty title="no workflow">publish one from a template.</Empty>}
+      {workflows.data?.length === 0 && <Empty title="no workflow">Publish one from a template.</Empty>}
       <ul className="grid gap-4 md:grid-cols-2" aria-label="workflows">
         {workflows.data?.map((workflow) => (
           <li key={workflow.name}>
@@ -253,7 +253,7 @@ function Routage({
         default, <strong className="text-ink">{routing.default || "—"}</strong>.
       </p>
       {courantes.length === 0 ? (
-        <p className="text-ink-muted">no rule — every request that names no workflow goes to the default.</p>
+        <p className="text-ink-muted">No rule — every request that names no workflow goes to the default.</p>
       ) : (
         <ol className="divide-y divide-line border-y border-line" aria-label="routing rules" data-testid="regles">
           {courantes.map((regle, index) => (

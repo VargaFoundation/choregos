@@ -50,13 +50,13 @@ test("ticket : le parcours se suit en direct, se rejoue, et chaque agent montre 
   expect(debord.droite).toBeLessThanOrEqual(debord.fenetre);
 
   await parcours.getByRole("button", { name: "2×" }).click();
-  await parcours.getByRole("button", { name: "Replay the journey" }).click();
+  await parcours.getByRole("button", { name: "replay the journey" }).click();
   await expect(parcours.getByTestId("parcours-moment")).toContainText("/ 30");
   await expect(parcours.getByTestId("etape-t-triage")).toHaveAttribute("data-statut", "fait", { timeout: 5000 });
-  await parcours.getByRole("button", { name: "Pause the replay" }).click();
+  await parcours.getByRole("button", { name: "pause the replay" }).click();
   await parcours.getByRole("navigation", { name: "stages of the journey" }).getByRole("button", { name: /In progress/ }).click();
   await expect(parcours.getByTestId("etape-t-implement")).toHaveAttribute("data-statut", "en_cours");
-  await parcours.getByRole("button", { name: /^Live/ }).click();
+  await parcours.getByRole("button", { name: /^live/ }).click();
 
   await parcours.getByTestId("etape-t-test").click();
   const panneau = page.getByTestId("panneau-parcours");
@@ -76,7 +76,7 @@ test("run : journal ACP avec permissions refusées mises en évidence", async ({
 
 test("trains : gel impossible sans motif", async ({ page }) => {
   await page.goto("/p/billing-api/trains");
-  await expect(page.getByText("Environment prod")).toBeVisible();
+  await expect(page.getByText("environment prod")).toBeVisible();
   await page.getByRole("button", { name: "freeze" }).first().click();
   await expect(page.getByText("a reason for the freeze is required")).toBeVisible();
 });
@@ -98,7 +98,7 @@ test("connexion : la page existe et dit ce qu'elle attend", async ({ page }) => 
   await page.goto("/login?next=%2Fadmin");
   await expect(page.getByRole("heading", { name: "sign in" })).toBeVisible();
   // en mode démo la session est simulée : la page le dit au lieu d'un bouton vers un IdP absent
-  await expect(page.getByText(/demo mode: the session/)).toBeVisible();
+  await expect(page.getByText(/Demo mode: the session/)).toBeVisible();
 });
 
 test("administration : membres et jetons ont un écran", async ({ page }) => {

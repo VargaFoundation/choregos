@@ -64,7 +64,7 @@ test("une skill se rattache à un agent dans sa nouvelle version (S23-13)", asyn
   const skills = page.getByTestId("skills-de-la-version");
   await expect(skills).toContainText("onboarding-procedure@1");
   await skills.getByRole("button", { name: "remove onboarding-procedure" }).click();
-  await expect(skills).toContainText("none");
+  await expect(skills).toContainText("None");
   await skills.getByLabel("add a skill").selectOption("onboarding-procedure");
   await expect(skills.getByLabel("version")).toHaveValue("");
   await skills.getByRole("button", { name: "attach" }).click();
