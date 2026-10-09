@@ -3,11 +3,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Card, Eyebrow, Heading, Lead, Stat, buttonClasses } from "@varga/design-system";
+import { Eyebrow, Heading, Lead, Stat, buttonClasses } from "@varga/design-system";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { eur, percent, relative } from "@/lib/format";
-import { Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
 
 export default function ProjectsPage() {
   const { org } = useSession();

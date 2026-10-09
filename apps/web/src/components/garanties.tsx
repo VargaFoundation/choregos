@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Card } from "@varga/design-system";
-import { Empty } from "@/components/ui";
+import { Card, Empty } from "@/components/ui";
 import type { RunEventDto } from "@/lib/types";
 
 export type Verdict = {

@@ -119,7 +119,9 @@ function History({ slug }: { slug: string }) {
               <th>tickets</th>
               <th>when</th>
               <th>verdict</th>
-              <th />
+              <th>
+                <span className="sr-only">actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>

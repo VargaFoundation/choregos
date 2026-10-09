@@ -120,21 +120,23 @@ export function ActorIcon({ kind, name }: { kind: string; name?: string | null }
   );
 }
 
-export function Card({
-  title,
-  action,
-  children,
-  className,
-}: {
-  title?: ReactNode;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
+/**
+ * La carte du design system, titrée au niveau 2 (S23-05). Elle titrait en `h3` : sous le `h1` d'une
+ * page, axe relevait un saut de niveau (`heading-order`) sur 23 pages sur 36, et un lecteur d'écran
+ * qui parcourt la page par titres cherchait des sections qui n'existaient pas.
+ */
+export function Card({ title, ...props }: ComponentProps<typeof VargaCard>) {
   return (
-    <VargaCard title={title} action={action} className={className}>
-      {children}
-    </VargaCard>
+    <VargaCard
+      title={
+        typeof title === "string" ? (
+          <h2 className="font-display text-base font-bold tracking-tight text-ink">{title}</h2>
+        ) : (
+          title
+        )
+      }
+      {...props}
+    />
   );
 }
 

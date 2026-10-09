@@ -81,7 +81,9 @@ export function OutilsDeLivraison({ org }: { org: string }) {
                 <tr>
                   <th className="py-1 font-normal">project</th>
                   <th className="py-1 font-normal">configured tools</th>
-                  <th className="py-1 font-normal" />
+                  <th className="py-1 font-normal">
+                    <span className="sr-only">actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
