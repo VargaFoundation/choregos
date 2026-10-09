@@ -155,6 +155,11 @@ class Runner:
         # Sans dépôt, la référence est l'arbre vide de git : tout ce que l'agent écrit est
         # donc « ajouté », ce qui est exactement la vérité pour un répertoire qui n'avait rien.
         base = await workspace.base_sha(stage_input.repo.base_branch) if stage_input.repo else ARBRE_VIDE
+        # Le périmètre se juge sur ce que CE run écrit : la branche du ticket porte déjà le travail
+        # des étapes d'avant, que l'agent n'a pas fait et ne peut pas défaire. Mesuré depuis la
+        # base, il était imputé au chercheur d'une étude (locataire dev, 08/10), deux fois en échec
+        # sur trois fichiers qu'avait poussés l'étape de cadrage.
+        depart = await workspace.head_sha() if stage_input.repo else ARBRE_VIDE
 
         # 3. contexte
         context = None
@@ -226,11 +231,11 @@ class Runner:
                     report = await run_checks(stage_input, workspace.path)
 
                 # 9. périmètre
-                scope_result = await check_scope(workspace, base, guards.allowed_paths)
+                scope_result = await check_scope(workspace, depart, guards.allowed_paths)
                 if scope_result.reverted:
                     await journal.record("scope.reverted", {"paths": scope_result.reverted})
                     await agent.prompt(scope_result.prompt(), timeout=self._remaining(budget_seconds))
-                    scope_result = await check_scope(workspace, base, guards.allowed_paths)
+                    scope_result = await check_scope(workspace, depart, guards.allowed_paths)
 
                 # 10. résultat
                 load = load_result(workspace.result_path())

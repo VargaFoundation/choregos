@@ -83,6 +83,42 @@ async def test_out_of_scope_write_is_denied_and_reverted(
     )
 
 
+async def test_le_travail_des_etapes_precedentes_n_est_pas_impute_au_run(
+    stage_input: StageInput, runner_settings: Any, toy_repo: Path, tmp_path: Path
+) -> None:
+    """La branche du ticket porte déjà un fichier hors du périmètre de CE run, poussé par une étape
+    d'avant : le run qui écrit dans son périmètre réussit, sans rien « annuler » ni dénoncer."""
+    from .conftest import git
+
+    avant = tmp_path / "etape-precedente"
+    git("clone", str(toy_repo), str(avant), cwd=tmp_path)
+    git("config", "user.email", "cadrage@test", cwd=avant)
+    git("config", "user.name", "cadrage", cwd=avant)
+    git("checkout", "-b", "choregos/1-total", cwd=avant)
+    (avant / "src" / "billing.py").write_text("RATE = 0.3\n", encoding="utf-8")
+    git("commit", "-am", "étape de cadrage", cwd=avant)
+    git("push", "origin", "choregos/1-total", cwd=avant)
+
+    outcome, client = await execute(
+        stage_input,
+        runner_settings,
+        {
+            "turns": [
+                {
+                    "writes": [{"path": "src/orders.py", "content": "def total(lines):\n    return 0\n"}],
+                    "result": valid_result(),
+                }
+            ]
+        },
+    )
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    assert outcome.result is not None and outcome.result.status is StageStatus.DONE
+    assert "out-of-scope" not in outcome.result.summary, outcome.result.summary
+    assert not [e for e in client.events if e["type"] == "scope.reverted"]
+    workspace = Path(runner_settings.workspace)
+    assert (workspace / "src" / "billing.py").read_text() == "RATE = 0.3\n", "le travail d'avant est gardé"
+
+
 async def test_dangerous_command_is_refused(stage_input: StageInput, runner_settings: Any) -> None:
     outcome, client = await execute(
         stage_input,
