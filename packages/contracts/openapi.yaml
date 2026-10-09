@@ -1157,7 +1157,7 @@ paths:
     post:
       tags: [agents]
       operationId: connectCatalogueClient
-      description: Connects an AI client of the catalogue in one click (ADR 0040). Its external agent is created by an administrator the first time and joined by any member afterwards; a `mcp:write` (or `mcp:read`) token is minted for the caller, attached to the agent and returned once. A client that calls from its vendor's cloud gets no token — the OAuth client the identity provider registered is attached — and is refused (409) when the gate does not accept it.
+      description: Connects an AI client of the catalogue in one click (ADR 0040). Its external agent is created by an administrator the first time and joined by any member afterwards; a `mcp:write` (or `mcp:read`) token is minted for the caller, attached to the agent and returned once. A client that calls from its vendor's cloud gets no token — the OAuth client the identity provider registered is attached — and is refused (409) when the door does not accept it.
       requestBody:
         required: false
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentCatalogueConnect" } } }
@@ -2087,7 +2087,7 @@ components:
         installed_version: { type: [integer, "null"] }
         own_agent: { type: boolean, description: "an agent of the organisation has this name and does not come from the catalogue" }
         update_available: { type: boolean }
-        offered: { type: boolean, description: "false for a client the gate does not accept yet (OAuth, registered client, https)" }
+        offered: { type: boolean, description: "false for a client the door does not accept yet (OAuth, registered client, https)" }
         unavailable_reason: { type: [string, "null"] }
     AgentCatalogueConnect:
       type: object
@@ -2170,7 +2170,7 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         revoked_at: { type: [string, "null"], format: date-time }
         token_name: { type: [string, "null"], description: the name of the attached token }
-        last_used_at: { type: [string, "null"], format: date-time, description: "the token's last call to the MCP gate: the console shows it as connected" }
+        last_used_at: { type: [string, "null"], format: date-time, description: "the token's last call to the MCP door: the console shows it as connected" }
         last_client: { type: [string, "null"], description: "the client of that last call (`User-Agent`, truncated)" }
     AgentOverrides:
       type: object
@@ -2375,18 +2375,18 @@ components:
       type: object
       required: [mcp_url, protocol_versions, oauth, version]
       properties:
-        mcp_url: { type: string, description: "The MCP gate's URL; a project's adds `/projects/{org}:{slug}` to it." }
+        mcp_url: { type: string, description: "The MCP door's URL; a project's adds `/projects/{org}:{slug}` to it." }
         protocol_versions: { type: array, items: { type: string } }
         oauth:
           type: object
           required: [enabled]
           properties:
-            enabled: { type: boolean, description: "False as long as the gate accepts only scoped tokens." }
+            enabled: { type: boolean, description: "False as long as the door accepts only scoped tokens." }
             authorization_server: { type: [string, "null"] }
             clients:
               type: object
               description: >-
-                The clients the IdP registered for the gate, by client of the Integrations page
+                The clients the IdP registered for the door, by client of the Integrations page
                 (`claude-code`, `claude-ai`…): the page derives the exact command from them.
               additionalProperties:
                 type: object
@@ -2401,8 +2401,8 @@ components:
       type: string
       enum: ["*", "mcp:read", "mcp:write"]
       description: >-
-        `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP gate only (ADR 0030) — such
-        a token is refused by the REST API, and the gate refuses `*`.
+        `*`: the REST API and the CLI. `mcp:read`, `mcp:write`: the MCP door only (ADR 0030) — such
+        a token is refused by the REST API, and the door refuses `*`.
     ApiTokenCreate:
       type: object
       required: [name]

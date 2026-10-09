@@ -157,7 +157,7 @@ async def current_principal(
             # configuration d'un client, il ne doit ni frapper un autre jeton, ni décider, ni
             # lire quoi que ce soit hors de la porte.
             raise forbidden(
-                "this token is reserved for the MCP gate (scope mcp:*); the REST API needs the `*` scope"
+                "this token is reserved for the MCP door (scope mcp:*); the REST API needs the `*` scope"
             )
         user = await session.get(User, token.user_id)
         if user is None:

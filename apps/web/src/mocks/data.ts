@@ -872,9 +872,9 @@ export const agentCatalogue: AgentCatalogueEntry[] = [
   entreeDuCatalogue("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1 }),
   entreeDuCatalogue("reviewer", "Reviewer", "review", "Reviews the branch with fresh eyes and gives a verdict.", { installed: true, installed_version: 1, update_available: true, skills: ["madr-4"] }),
   entreeDuCatalogue("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"] }),
-  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP gate, with its person's rights.", { kind: "external", client: "claude-code", reach: "always" }),
-  entreeDuCatalogue("chatgpt", "ChatGPT", "external", "ChatGPT acting through the MCP gate, with its person's rights.", {
-    kind: "external", client: "chatgpt", reach: "cloud", offered: false, unavailable_reason: "the MCP gate does not accept OAuth (`global.mcp.oauth`); the console's public address is not https",
+  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP door, with its person's rights.", { kind: "external", client: "claude-code", reach: "always" }),
+  entreeDuCatalogue("chatgpt", "ChatGPT", "external", "ChatGPT acting through the MCP door, with its person's rights.", {
+    kind: "external", client: "chatgpt", reach: "cloud", offered: false, unavailable_reason: "the MCP door does not accept OAuth (`global.mcp.oauth`); the console's public address is not https",
   }),
 ];
 

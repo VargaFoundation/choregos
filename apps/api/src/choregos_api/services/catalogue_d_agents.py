@@ -171,7 +171,7 @@ def offre(entree_: EntreeDuCatalogue, settings: Any) -> tuple[bool, str | None]:
         return True, None
     manque = []
     if not settings.mcp_oauth_enabled:
-        manque.append("the MCP gate does not accept OAuth (`global.mcp.oauth`)")
+        manque.append("the MCP door does not accept OAuth (`global.mcp.oauth`)")
     elif entree_.client not in settings.mcp_oauth_clients:
         manque.append(f"no OAuth client is registered for `{entree_.client}`")
     if not str(settings.public_url).startswith("https://"):

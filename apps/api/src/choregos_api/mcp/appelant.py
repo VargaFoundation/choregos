@@ -73,7 +73,7 @@ async def identifier(session: AsyncSession, request: Request, settings: Settings
         # Un jeton `*` ouvre l'API REST : on n'en veut pas dans la configuration d'un client.
         raise Refus(
             403,
-            "the MCP gate refuses a token with the `*` scope: "
+            "the MCP door refuses a token with the `*` scope: "
             "create an mcp:read or mcp:write token for this client",
             erreur="insufficient_scope",
         )

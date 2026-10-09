@@ -485,7 +485,7 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
     portees = sorted(set(body.scopes))
     if "*" in portees and len(portees) > 1:
         raise unprocessable(
-            "the `*` scope does not combine with others: it opens the REST API, not the MCP gate"
+            "the `*` scope does not combine with others: it opens the REST API, not the MCP door"
         )
     projet_id: str | None = None
     projet_nom: str | None = None

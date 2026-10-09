@@ -21,7 +21,7 @@ the onboarding one.
 When the ontology plugin is active (`CHOREGOS_ESSAI_ONTOLOGIE=1`), the project is born with the
 registry of what an onboarding opens and what an offboarding must close: `collaborateur`,
 `contrat`, `account` (and its groups), `group`, `materiel`, `badge`, and their links. An HR
-person's Claude queries it through the project's MCP gate (`collaborateur_search`,
+person's Claude queries it through the project's MCP door (`collaborateur_search`,
 `badge_porteur`…). Without the plugin, the project is born without a registry, and the audit log
 says so.
 

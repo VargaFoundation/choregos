@@ -5,12 +5,12 @@ catalogue:
   # `always` : il appelle depuis le poste de la personne ; `cloud` : depuis le cloud de son éditeur —
   # il ne se propose que si la porte MCP accepte l'OAuth, qu'un client est enregistré, et que l'adresse est en https.
   reach: always
-  summary: Claude Desktop acting through the MCP gate, with its person's rights intersected with this agent's.
+  summary: Claude Desktop acting through the MCP door, with its person's rights intersected with this agent's.
 agent:
   slug: claude-desktop
   kind: external
   display_name: Claude Desktop
-  description: Claude Desktop, connected to Choregos through the MCP gate. It acts with its person's rights, never more, and never decides.
+  description: Claude Desktop, connected to Choregos through the MCP door. It acts with its person's rights, never more, and never decides.
   # Une version vide : les droits de sa personne, jamais plus (ADR 0033). `connect` avec
   # `read_only` publie à la place la lecture seule (`list_*`, `describe_*`, `search_*`, `get_*`, `summarize_*`).
   spec: {}
