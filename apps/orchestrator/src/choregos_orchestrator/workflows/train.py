@@ -28,6 +28,11 @@ NO_RETRY = RetryPolicy(maximum_attempts=1)
 #: Un environnement `auto_sync` prévient ses tickets (#278, S21-27). Avant ce marqueur, le train y
 #: attendait `abort` sans rien lire, et un ticket qui y montait attendait 72 h puis un humain.
 AUTO_SYNC_PREVIENT = "auto-sync-previent"
+#: Le ticket dont le signal DÉMARRE le train (signal-with-start) reste dans le lot (S22-22). Avant ce
+#: marqueur, `run` écrasait le lot avec les tickets reportés : sur le locataire dev, le 09/10, #4 et #6
+#: ont réveillé chacun leur train et en ont été effacés aussitôt — le train attendait, vide, et le ticket
+#: attendait une livraison qui ne viendrait pas.
+LE_SIGNAL_DU_DEMARRAGE_EMBARQUE = "start-signal-boards"
 #: Combien de fois, et à quel rythme, on regarde l'environnement avant de conclure.
 ESSAIS_AUTO_SYNC = 30
 PAUSE_AUTO_SYNC = timedelta(minutes=2)
@@ -129,7 +134,11 @@ class ReleaseTrain:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = TrainInput(**payload)
-        self.batch = list(params.carried_items)
+        # Le signal qui démarre le train est livré AVANT ce corps : le lot en porte déjà le ticket.
+        deja_embarques, self.batch = list(self.batch), list(params.carried_items)
+        if workflow.patched(LE_SIGNAL_DU_DEMARRAGE_EMBARQUE):
+            for item in deja_embarques:
+                self.merged(item)
         self.batch_no = params.batch_no
         self.frozen = params.frozen
 
