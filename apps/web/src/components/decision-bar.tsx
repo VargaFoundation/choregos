@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { api } from "@/lib/api";
 import type { HumanRequest } from "@/lib/types";
 import { champsManquants, SchemaForm, type JsonSchema } from "./schema-form";
-import { Button, ErrorNote } from "./ui";
+import { Button, ErrorNote, Input } from "./ui";
 
 export function DecisionBar({
   itemId,
@@ -51,11 +51,11 @@ export function DecisionBar({
         <>
           <label className="flex min-w-0 flex-1 basis-64 flex-col gap-1">
             <span className="text-xs text-ink-muted">answer</span>
-            <input
+            <Input
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
               placeholder="your answer…"
-              className="rounded border border-line bg-surface px-2 py-1.5 text-sm"
+              className="w-auto"
             />
           </label>
           <Button tone="primary" disabled={busy || !answer} onClick={() => send("answer")}>
@@ -69,11 +69,11 @@ export function DecisionBar({
           </Button>
           <label className="flex min-w-0 flex-col gap-1">
             <span className="text-xs text-ink-muted">reason for sending back</span>
-            <input
+            <Input
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
               placeholder="reason (if sent back)"
-              className="min-w-48 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+              className="w-auto min-w-48"
             />
           </label>
           <Button tone="danger" disabled={busy} onClick={() => send("reject")}>
@@ -148,12 +148,12 @@ function TaskForm({
         >
           done
         </Button>
-        <input
+        <Input
           aria-label="why it cannot be done"
           value={motif}
           onChange={(event) => setMotif(event.target.value)}
           placeholder="why it cannot be done"
-          className="min-w-48 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+          className="w-auto min-w-48"
         />
         <Button tone="danger" disabled={busy || !motif} onClick={() => send({ kind: "reject", reason: motif })}>
           cannot do it

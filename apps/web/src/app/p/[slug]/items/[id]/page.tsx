@@ -7,7 +7,7 @@ import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { gare } from "@/components/parcours/modele";
-import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
+import { ActorIcon, Button, Card, CostChip, Dot, Empty, ErrorNote, FilDAriane, Heading, StateBadge, tonDActeur } from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
@@ -180,15 +180,17 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </Card>
 
         <Card title="timeline">
-          <ol className="space-y-3">
+          {/* Un rail, et sur lui un point par moment, à la couleur de qui a agi (S24-04). */}
+          <ol className="relative space-y-3 before:absolute before:top-2 before:bottom-2 before:left-[3.5px] before:w-px before:bg-line">
             {(timeline.data ?? []).map((entry, index) => (
-              <li key={`${entry.ts}-${index}`} className="border-l-2 border-line pl-3">
+              <li key={`${entry.ts}-${index}`} className="relative pl-5">
+                <Dot tone={tonDActeur(entry.actor_kind ?? "system")} size={8} className="absolute top-1.5 left-0" />
                 <p className="flex items-center gap-2 text-sm">
-                  <ActorIcon kind={entry.actor_kind ?? "system"} name={entry.actor ?? undefined} />
+                  <ActorIcon kind={entry.actor_kind ?? "system"} name={entry.actor ?? undefined} point={false} />
                   <span>{entry.title}</span>
                 </p>
                 {entry.detail && <p className="text-xs text-ink-muted">{entry.detail}</p>}
-                <p className="text-xs text-ink-muted" title={shortDate(entry.ts)}>
+                <p className="font-mono text-xs text-ink-muted" title={shortDate(entry.ts)}>
                   {relative(entry.ts)}
                   {entry.cost_usd ? ` · ${usd(entry.cost_usd)}` : ""}
                 </p>

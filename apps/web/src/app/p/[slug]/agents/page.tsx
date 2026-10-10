@@ -11,13 +11,11 @@ import {
   versionDeLActeur,
   type AgentImplicite,
 } from "@/components/agents/registre";
-import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Agent, ProjectAgent } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
-
-const champ = "w-full rounded border border-line bg-surface px-2 py-1.5 text-sm";
 
 /**
  * Les agents d'un projet : ceux qu'il épingle — une version du registre, que ses surcharges ne
@@ -120,8 +118,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
       >
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">agent</span>
-          <select
-            className={champ}
+          <Select
             value={agent}
             onChange={(e) => {
               setAgent(e.target.value);
@@ -134,25 +131,25 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
                 {a.display_name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">version</span>
-          <select className={champ} value={version} onChange={(e) => setVersion(e.target.value)} disabled={!choisi}>
+          <Select value={version} onChange={(e) => setVersion(e.target.value)} disabled={!choisi}>
             {Array.from({ length: choisi?.latest_version ?? 0 }, (_, i) => (choisi?.latest_version ?? 0) - i).map((v) => (
               <option key={v} value={v}>
                 v{v}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">daily budget, lower (USD)</span>
-          <input className={champ} type="number" min={0} step="0.5" value={quotidien} onChange={(e) => setQuotidien(e.target.value)} />
+          <Input type="number" min={0} step="0.5" value={quotidien} onChange={(e) => setQuotidien(e.target.value)} />
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">max turns, lower</span>
-          <input className={champ} type="number" min={1} value={tours} onChange={(e) => setTours(e.target.value)} />
+          <Input type="number" min={1} value={tours} onChange={(e) => setTours(e.target.value)} />
         </label>
         <div className="md:col-span-4">
           <Button type="submit" size="sm" disabled={!agent}>

@@ -6,11 +6,12 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, Heading, StateBadge } from "@/components/ui";
+import { ActorIcon, Button, Card, CostChip, Dot, Empty, ErrorNote, Heading, Input, LEGENDE, Select, Textarea, tonDEtat } from "@/components/ui";
 import { columnsFromGraph, itemsOf } from "@/components/workflows/board";
 import { champsDepuisSchema, valeursPourLApi, type Champ } from "@/components/workflows/champs";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { relative } from "@/lib/format";
 
 /**
@@ -53,11 +54,11 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         {(workflows.data?.length ?? 0) > 1 ? (
           <label className="flex items-center gap-2 text-sm text-ink-muted">
             workflow
-            <select
+            <Select
               aria-label="board workflow"
               value={choisi}
               onChange={(event) => router.replace(`${pathname}?workflow=${encodeURIComponent(event.target.value)}`)}
-              className="rounded border border-line bg-surface px-2 py-1 text-ink"
+              className="w-auto"
             >
               {workflows.data?.map((w) => (
                 <option key={w.name} value={w.name}>
@@ -65,7 +66,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                   {w.is_default ? " (default)" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         ) : null}
         <span className="text-sm text-ink-muted">
@@ -93,7 +94,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
       {items.isLoading && <Empty>loading…</Empty>}
       {enAttente.length > 0 && (
         <div
-          className="border border-line border-l-2 border-l-warn bg-surface p-3 text-sm"
+          className="raised border border-line border-l-2 border-l-waiting-solid p-3 text-sm"
           data-testid="attentes-du-board"
         >
           <p className="font-medium">
@@ -118,7 +119,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             return (
               <a key={column.state} href={`#colonne-${column.state}`} className="text-ink-muted hover:text-ink">
                 {column.display} <span className="tabular-nums">{column.items.length}</span>
-                {attentes > 0 && <span className="font-medium text-warn"> · {attentes} waiting</span>}
+                {attentes > 0 && <span className="font-medium text-waiting-ink"> · {attentes} waiting</span>}
               </a>
             );
           })}
@@ -132,9 +133,12 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             aria-label={`${column.display}, ${column.items.length} ticket${column.items.length > 1 ? "s" : ""}`}
             className="scroll-mt-16 space-y-2"
           >
-            <header className="flex items-center justify-between">
-              <StateBadge state={column.state} display={column.display} kind={column.kind} />
-              <span className="text-xs text-ink-muted">{column.items.length}</span>
+            <header className="flex h-8 items-center gap-2 border-b border-line" title={column.state}>
+              <Dot tone={tonDEtat(column.state, column.kind)} />
+              <h3 className={cn(LEGENDE, "truncate")}>{column.display}</h3>
+              <span className="ml-auto rounded-full bg-surface-muted px-1.5 font-mono text-[11px] tabular-nums text-ink-muted">
+                {column.items.length}
+              </span>
             </header>
             {column.horsWorkflow && (
               // Sans ce mot, une colonne « In progress » après « Done » ne se comprenait pas (audit du 08/10).
@@ -166,13 +170,13 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                     </p>
                   )}
                   {item.failure && (
-                    <p className="mt-1 text-xs font-medium text-danger" title={item.failure.message}>
+                    <p className="mt-1 text-xs font-medium text-failed-ink" title={item.failure.message}>
                       dead · {item.failure.activity ?? "interpreter"}
                     </p>
                   )}
                   {item.pending_request && (
-                    <div className="mt-2 space-y-2 border border-line border-l-2 border-l-warn bg-surface p-2">
-                      <p className="text-xs text-warn">
+                    <div className="mt-2 space-y-2 border border-line border-l-2 border-l-waiting-solid bg-surface p-2">
+                      <p className="text-xs text-waiting-ink">
                         {String(item.pending_request.payload?.summary ?? item.pending_request.kind)} ·{" "}
                         {relative(item.pending_request.requested_at)}
                       </p>
@@ -254,21 +258,21 @@ function NouvelleDemande({
         }}
       >
         {workflows.length > 1 && (
-          <select
+          <Select
             aria-label="workflow of the request"
             value={workflow}
             onChange={(event) => {
               setWorkflow(event.target.value);
               setSaisies({});
             }}
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           >
             {workflows.map((nom) => (
               <option key={nom} value={nom}>
                 {nom}
               </option>
             ))}
-          </select>
+          </Select>
         )}
         {champs.length > 0 && (
           <fieldset className="grid gap-2 md:grid-cols-2" data-testid="request-fields">
@@ -283,27 +287,27 @@ function NouvelleDemande({
             ))}
           </fieldset>
         )}
-        <input
+        <Input
           aria-label="request title"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Data project manager for a 6-month assignment"
-          className="w-full rounded border border-line bg-surface px-2 py-1.5"
+          className="w-full"
         />
-        <textarea
+        <Textarea
           aria-label="request details"
           value={body}
           onChange={(event) => setBody(event.target.value)}
           rows={4}
           placeholder="Client, start date, expected outcome, constraints…"
-          className="w-full rounded border border-line bg-surface px-2 py-1.5"
+          className="w-full"
         />
         <div className="flex items-center gap-2">
-          <select
+          <Select
             aria-label="size"
             value={size}
             onChange={(event) => setSize(event.target.value as typeof size)}
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           >
             <option value="">size?</option>
             {["S", "M", "L", "XL"].map((s) => (
@@ -311,7 +315,7 @@ function NouvelleDemande({
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
           <Button tone="primary" size="sm" type="submit" disabled={busy || !title}>
             file and start
           </Button>
@@ -333,7 +337,6 @@ function ChampDeDemande({
   onChange: (valeur: string | boolean) => void;
 }) {
   const libelle = `${champ.label}${champ.required ? " (required)" : ""}`;
-  const classes = "w-full rounded border border-line bg-surface px-2 py-1.5";
   if (champ.control === "boolean") {
     return (
       <label className="flex items-center gap-2">
@@ -344,11 +347,10 @@ function ChampDeDemande({
   }
   if (champ.control === "choice") {
     return (
-      <select
+      <Select
         aria-label={libelle}
         value={String(valeur ?? "")}
         onChange={(event) => onChange(event.target.value)}
-        className={classes}
       >
         <option value="">{libelle}</option>
         {champ.choices?.map((choix) => (
@@ -356,13 +358,13 @@ function ChampDeDemande({
             {choix}
           </option>
         ))}
-      </select>
+      </Select>
     );
   }
   const type =
     champ.control === "date" ? "date" : champ.control === "number" || champ.control === "integer" ? "number" : "text";
   return (
-    <input
+    <Input
       aria-label={libelle}
       title={champ.hint}
       type={type}
@@ -370,7 +372,6 @@ function ChampDeDemande({
       value={String(valeur ?? "")}
       placeholder={champ.control === "list" ? `${champ.label}, comma separated` : champ.label}
       onChange={(event) => onChange(event.target.value)}
-      className={classes}
     />
   );
 }

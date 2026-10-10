@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { SchemaForm, champsManquants, valeursParDefaut, type JsonSchema } from "@/components/schema-form";
-import { Badge, Button, Card, Empty, ErrorNote, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Input, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { AdminAction, AdminForm, AdminSecretOnce, AdminSection, AdminTable } from "@/lib/types";
@@ -267,7 +267,7 @@ function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
       {secret ? (
         <div className="space-y-2" data-testid="secret-once">
           <p className="text-sm text-warn">Copy it now: it is shown once, and Choregos does not keep it.</p>
-          <input readOnly aria-label={`${bloc.label}: the secret`} value={secret} className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-sm" />
+          <Input readOnly aria-label={`${bloc.label}: the secret`} value={secret} className="w-full font-mono" />
           <Button size="sm" onClick={() => setSecret(null)}>
             I have copied it
           </Button>

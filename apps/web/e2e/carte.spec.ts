@@ -16,7 +16,7 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
     const cases = [...document.querySelectorAll<HTMLElement>('[aria-label="nominal path"] > li [data-etat]')].map((el) =>
       el.closest("div")!.getBoundingClientRect(),
     );
-    const titres = [...document.querySelectorAll<HTMLElement>("[data-etat] span.font-semibold")].map((el) =>
+    const titres = [...document.querySelectorAll<HTMLElement>("[data-etat] [data-titre]")].map((el) =>
       parseFloat(getComputedStyle(el).fontSize),
     );
     return {
@@ -24,12 +24,15 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
       fenetre: document.documentElement.clientWidth,
       gauches: [...new Set(cases.map((r) => Math.round(r.left)))],
       chevauchements: cases.slice(1).filter((r, i) => r.top < cases[i]!.bottom).length,
+      titres: titres.length,
       plusPetitTitre: Math.min(...titres),
     };
   });
   expect(mesure.largeur).toBeLessThanOrEqual(mesure.fenetre);
   expect(mesure.gauches).toHaveLength(1);
   expect(mesure.chevauchements).toBe(0);
+  // Un titre par état : sans eux, Math.min() rendrait Infinity et l'assertion suivante passerait à vide.
+  expect(mesure.titres).toBe(18);
   expect(mesure.plusPetitTitre).toBeGreaterThanOrEqual(13);
   await expect(carte.getByRole("list", { name: "off the main path" }).locator(":scope > li")).toHaveCount(5);
 });

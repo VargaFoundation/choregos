@@ -5,7 +5,7 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { slugDeLActeur } from "@/components/agents/registre";
-import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import type { Agent, AgentSpec, ApiToken } from "@/lib/types";
@@ -119,30 +119,30 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
         >
           <label className="space-y-1">
             <span className="text-xs text-ink-muted">agent slug</span>
-            <input
-              className="rounded border border-line bg-surface px-2 py-1 text-sm"
+            <Input
+              className="w-auto"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
             />
           </label>
           <label className="space-y-1">
             <span className="text-xs text-ink-muted">name</span>
-            <input
-              className="rounded border border-line bg-surface px-2 py-1 text-sm"
+            <Input
+              className="w-auto"
               value={nom}
               onChange={(e) => setNom(e.target.value)}
             />
           </label>
           <label className="space-y-1">
             <span className="text-xs text-ink-muted">tools</span>
-            <select
-              className="rounded border border-line bg-surface px-2 py-1 text-sm"
+            <Select
+              className="w-auto"
               value={lecture ? "lecture" : "humain"}
               onChange={(e) => setLecture(e.target.value === "lecture")}
             >
               <option value="humain">what its human may use</option>
               <option value="lecture">read only</option>
-            </select>
+            </Select>
           </label>
           <Button size="sm" type="submit" tone="accent" disabled={!slug}>
             register

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { Button, ErrorNote, PhraseDuMoteur } from "@/components/ui";
+import { Button, ErrorNote, Input, PhraseDuMoteur } from "@/components/ui";
 
 type Ton = "default" | "primary" | "accent" | "danger";
 
@@ -82,13 +82,13 @@ export function Confirmation({ question, confirmer, ton = "danger", raison, acti
             {raison.label}
             {raison.requise ? " (required)" : ""}
           </span>
-          <input
+          <Input
             value={texte}
             onChange={(event) => setTexte(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !bloque) void executer();
             }}
-            className="w-full min-w-0 rounded border border-line bg-surface px-2 py-1"
+            className="w-full min-w-0"
           />
         </label>
       )}

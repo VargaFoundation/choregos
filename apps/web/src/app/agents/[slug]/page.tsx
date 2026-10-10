@@ -5,13 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { estUnClientMcp, etatDuClient, resumeDeLaVersion } from "@/components/agents/registre";
-import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Input, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import type { Agent, AgentSpec } from "@/lib/types";
-
-const champ = "w-full rounded border border-line bg-surface px-2 py-1.5 text-sm";
 
 /** Un agent du registre : ce qu'il a fait et coûté, ses versions, et — s'il est externe — ses clients. */
 export default function AgentPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -188,9 +186,9 @@ function Versions({ org, agent }: { org: string; agent: Agent }) {
           versions.length > 1 ? (
             <label className="flex items-center gap-2 text-xs">
               <span className="text-ink-muted">see</span>
-              <select
+              <Select
                 aria-label="version to see"
-                className="rounded border border-line bg-surface px-2 py-1"
+                className="w-auto"
                 value={choisie}
                 onChange={(e) => setChoisie(Number(e.target.value))}
               >
@@ -199,7 +197,7 @@ function Versions({ org, agent }: { org: string; agent: Agent }) {
                     v{v.version}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           ) : undefined
         }
@@ -331,8 +329,8 @@ function NouvelleVersion({
       >
         <label className="space-y-1 md:col-span-3">
           <span className="text-xs text-ink-muted">instructions</span>
-          <textarea
-            className={`${champ} font-mono text-xs`}
+          <Textarea
+            className="w-auto font-mono text-xs"
             rows={8}
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
@@ -340,8 +338,7 @@ function NouvelleVersion({
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">model</span>
-          <input
-            className={champ}
+          <Input
             value={modele}
             onChange={(e) => setModele(e.target.value)}
             placeholder="profile:standard"
@@ -349,12 +346,11 @@ function NouvelleVersion({
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">max turns</span>
-          <input className={champ} type="number" min={1} value={tours} onChange={(e) => setTours(e.target.value)} />
+          <Input type="number" min={1} value={tours} onChange={(e) => setTours(e.target.value)} />
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">daily budget (USD)</span>
-          <input
-            className={champ}
+          <Input
             type="number"
             min={0}
             step="0.5"
@@ -386,8 +382,7 @@ function NouvelleVersion({
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex min-w-0 flex-col gap-1">
               <span className="text-xs text-ink-muted">add a skill</span>
-              <select
-                className={champ}
+              <Select
                 value={ajout}
                 onChange={(e) => {
                   setAjout(e.target.value);
@@ -400,19 +395,19 @@ function NouvelleVersion({
                     {skill.slug}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             {choisie && (
               <label className="flex min-w-0 flex-col gap-1">
                 <span className="text-xs text-ink-muted">version</span>
-                <select className={champ} value={versionDAjout} onChange={(e) => setVersionDAjout(e.target.value)}>
+                <Select value={versionDAjout} onChange={(e) => setVersionDAjout(e.target.value)}>
                   <option value="">latest, read at each run</option>
                   {Array.from({ length: choisie.latest_version }, (_, i) => choisie.latest_version - i).map((v) => (
                     <option key={v} value={v}>
                       v{v}, pinned
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
             <Button
@@ -510,14 +505,14 @@ function Clients({ org, slug }: { org: string; slug: string }) {
           >
             <label className="space-y-1">
               <span className="text-xs text-ink-muted">attach one of your MCP tokens</span>
-              <select className={champ} value={choisi} onChange={(e) => setChoisi(e.target.value)}>
+              <Select value={choisi} onChange={(e) => setChoisi(e.target.value)}>
                 <option value="">—</option>
                 {libres.map((j) => (
                   <option key={j.id} value={j.id}>
                     {j.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <Button size="sm" type="submit" disabled={!choisi}>
               attach

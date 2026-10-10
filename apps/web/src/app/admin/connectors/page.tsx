@@ -9,7 +9,7 @@ import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteur
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { Glossaire } from "@/components/glossaire";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
-import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
@@ -186,9 +186,9 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
         <label className="sr-only" htmlFor={`politique-${connecteur}-${operation.name}`}>
           policy of {operation.name}
         </label>
-        <select
+        <Select
           id={`politique-${connecteur}-${operation.name}`}
-          className="rounded border border-line bg-surface px-2 py-1 text-sm"
+          className="w-auto"
           value={assouplir ?? operation.policy}
           onChange={(event) => {
             const choisie = event.target.value as keyof typeof RIGUEUR;
@@ -206,7 +206,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
               {p}
             </option>
           ))}
-        </select>
+        </Select>
         <span className="ml-2">
           <Badge tone={TON[operation.policy as keyof typeof TON] ?? "neutral"}>{operation.policy}</Badge>
         </span>
@@ -237,9 +237,9 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
           <label className="sr-only" htmlFor={`groupes-${connecteur}-${operation.name}`}>
             project groups of {operation.name}
           </label>
-          <input
+          <Input
             id={`groupes-${connecteur}-${operation.name}`}
-            className="w-40 rounded border border-line bg-surface px-2 py-1 text-xs"
+            className="w-40"
             placeholder="every project"
             value={groupes}
             onChange={(event) => setGroupes(event.target.value)}
@@ -308,8 +308,8 @@ function Declarer({ org }: { org: string }) {
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1">
               <span className="text-xs text-ink-muted">name</span>
-              <input
-                className="w-full rounded border border-line bg-surface px-2 py-1.5"
+              <Input
+                className="w-full"
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
                 placeholder="entra-acme"
@@ -317,8 +317,8 @@ function Declarer({ org }: { org: string }) {
             </label>
             <label className="space-y-1">
               <span className="text-xs text-ink-muted">type</span>
-              <select
-                className="w-full rounded border border-line bg-surface px-2 py-1.5"
+              <Select
+                className="w-full"
                 value={choix}
                 onChange={(e) => {
                   setChoix(e.target.value);
@@ -336,15 +336,15 @@ function Declarer({ org }: { org: string }) {
                     ))}
                   </optgroup>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
           {type && <SchemaForm schema={schema} value={config} onChange={setConfig} />}
           {(type?.secret_fields ?? []).map((champ) => (
             <label key={champ} className="block space-y-1">
               <span className="text-xs text-ink-muted">{champ.replaceAll("_", " ")} (by reference)</span>
-              <input
-                className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-xs"
+              <Input
+                className="w-full font-mono"
                 placeholder="env:NAME"
                 value={references[champ] ?? ""}
                 onChange={(event) => setReferences({ ...references, [champ]: event.target.value })}

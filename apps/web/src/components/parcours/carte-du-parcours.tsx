@@ -2,6 +2,8 @@
 "use client";
 
 import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "react";
+import { buttonClasses } from "@/components/ui";
+import { COULEUR_DU_GENRE as COULEURS_DES_GENRES } from "@/components/workflows/carte/disposition";
 import { cn } from "@/lib/cn";
 import { relative, shortDate, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
@@ -20,17 +22,8 @@ import {
   type StatutEtape,
   structure,
 } from "./modele";
+import { COULEUR_DU_RENVOI, COULEUR_DU_STATUT as COULEUR, fondDuStatut } from "./couleurs";
 import { PanneauDEtape } from "./panneau-d-etape";
-
-/** La couleur d'un statut, prise dans les jetons de la fondation : clair et sombre suivent. */
-const COULEUR: Record<StatutEtape, string> = {
-  a_venir: "var(--varga-line-strong)",
-  en_cours: "var(--varga-accent-strong)",
-  attend: "var(--varga-ink)",
-  fait: "var(--varga-ok)",
-  renvoye: "var(--varga-warn)",
-  echoue: "var(--varga-danger)",
-};
 
 /** Ce que dit un statut, en toutes lettres : la couleur ne porte jamais seule le sens. */
 export const LIBELLE_DU_STATUT: Record<StatutEtape, string> = {
@@ -234,7 +227,7 @@ function EnTete({ journey, modele, instant }: { journey: WorkItemJourney; modele
 
 function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof useLecteur>; images: number[]; recit: string }) {
   const direct = lecteur.mode === "direct";
-  const bouton = "inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors";
+  const bouton = buttonClasses("secondary", "sm", "gap-1.5");
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="replay the journey">
@@ -242,7 +235,7 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
           <button
             type="button"
             aria-label="pause the replay"
-            className={cn(bouton, "border-ink bg-ink text-surface")}
+            className={buttonClasses("primary", "sm", "gap-1.5")}
             onClick={lecteur.pause}
           >
             <span aria-hidden>❚❚</span> pause
@@ -250,7 +243,7 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
         ) : (
           <button
             type="button"
-            className={cn(bouton, "border-ink bg-ink text-surface")}
+            className={buttonClasses("primary", "sm", "gap-1.5")}
             onClick={lecteur.lire}
             disabled={images.length === 0}
             aria-label={direct ? "replay the journey" : "play the replay"}
@@ -260,22 +253,22 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
         )}
         <button
           type="button"
-          className={cn(bouton, "border-line-strong hover:border-ink")}
+          className={bouton}
           onClick={lecteur.recommencer}
           disabled={images.length === 0}
           aria-label="restart the replay"
         >
           <span aria-hidden>↺</span> restart
         </button>
-        <span className="inline-flex overflow-hidden rounded border border-line-strong" role="group" aria-label="speed">
+        <span className="inline-flex overflow-hidden border border-line-strong" role="group" aria-label="speed">
           {VITESSES.map((v) => (
             <button
               key={v}
               type="button"
               aria-pressed={lecteur.vitesse === v}
               className={cn(
-                "px-2 py-1 font-mono text-xs",
-                lecteur.vitesse === v ? "bg-surface-sunken text-ink" : "text-ink-muted hover:text-ink",
+                "h-7 px-2 font-mono text-xs pointer-coarse:min-h-11",
+                lecteur.vitesse === v ? "bg-accent-soft text-accent-strong" : "text-ink-muted hover:text-ink",
               )}
               onClick={() => lecteur.choisirLaVitesse(v)}
             >
@@ -286,10 +279,7 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
         <button
           type="button"
           aria-pressed={direct}
-          className={cn(
-            bouton,
-            direct ? "border-accent-strong text-accent-strong" : "border-line-strong text-ink-muted hover:text-ink",
-          )}
+          className={cn(bouton, direct && "border-running-line bg-running-soft text-running-ink hover:bg-running-soft")}
           onClick={lecteur.direct}
           aria-label="live: follow the work item"
         >
@@ -304,7 +294,7 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
               max={images.length - 1}
               value={lecteur.index}
               onChange={(event) => lecteur.allerA(Number(event.target.value))}
-              className="flex-1 accent-[var(--varga-accent-strong)]"
+              className="flex-1 accent-[var(--varga-accent)]"
               aria-label="moment of the journey"
             />
             <span className="whitespace-nowrap font-mono" data-testid="parcours-moment">
@@ -346,7 +336,7 @@ function Pastille({ statut }: { statut: StatutEtape }) {
         className="size-2.5 rounded-full border-2"
         style={{
           borderColor: COULEUR[statut],
-          background: statut === "en_cours" ? "var(--varga-accent-soft)" : "var(--varga-surface)",
+          background: fondDuStatut(statut),
         }}
       />
     </span>
@@ -387,7 +377,7 @@ function Carte({
           <defs>
             {(
               [
-                ["pris", "var(--varga-warn)"],
+                ["pris", COULEUR_DU_RENVOI],
                 ["structure", "var(--varga-line-strong)"],
               ] as const
             ).map(([nom, couleur]) => (
@@ -418,7 +408,7 @@ function Carte({
                 <path
                   d={segment.d}
                   fill="none"
-                  stroke={actif || parcouru ? "var(--varga-accent-strong)" : "var(--varga-line-strong)"}
+                  stroke={actif ? COULEUR.en_cours : parcouru ? "var(--varga-ink-muted)" : "var(--varga-line-strong)"}
                   strokeWidth={actif || parcouru ? 3 : 2}
                   strokeLinecap="round"
                   // Franchi, le tronçon se trace : `pathLength` ramène sa longueur à 1, l'animation fait le reste.
@@ -427,7 +417,7 @@ function Carte({
                   className={cn("parcours-trait", (actif || parcouru) && "parcours-trace")}
                 />
                 {actif && (
-                  <circle r={4.5} fill="var(--varga-accent-strong)" className="parcours-anime">
+                  <circle r={4.5} fill={COULEUR.en_cours} className="parcours-anime">
                     <animateMotion dur="1.8s" repeatCount="indefinite" path={segment.d} />
                   </circle>
                 )}
@@ -440,7 +430,7 @@ function Carte({
                   textAnchor={etiquette.ancre}
                   fontSize={11}
                   fontWeight={actif ? 600 : 400}
-                  fill={actif ? "var(--varga-accent-strong)" : "var(--varga-ink-subtle)"}
+                  fill={actif ? COULEUR.en_cours : "var(--varga-ink-muted)"}
                 >
                   <title>{modele.nom(segment.etat)}</title>
                   {tronquer(actif ? `now · ${modele.nom(segment.etat)}` : modele.nom(segment.etat), etiquette.largeurMax)}
@@ -460,7 +450,7 @@ function Carte({
                 <path
                   d={trace.d}
                   fill="none"
-                  stroke={pris.fois > 0 ? "var(--varga-warn)" : "var(--varga-line-strong)"}
+                  stroke={pris.fois > 0 ? COULEUR_DU_RENVOI : "var(--varga-line-strong)"}
                   strokeWidth={pris.fois > 0 ? 2.5 : 1.5}
                   strokeDasharray={pris.fois > 0 ? undefined : "4 5"}
                   opacity={pris.fois > 0 ? 1 : 0.55}
@@ -468,7 +458,7 @@ function Carte({
                   className="parcours-trait"
                 />
                 {pris.dernier && (
-                  <circle r={4} fill="var(--varga-warn)" className="parcours-anime">
+                  <circle r={4} fill={COULEUR_DU_RENVOI} className="parcours-anime">
                     <animateMotion dur="1.4s" repeatCount="indefinite" path={trace.d} />
                   </circle>
                 )}
@@ -482,7 +472,7 @@ function Carte({
                     textAnchor="middle"
                     fontSize={11}
                     fontWeight={600}
-                    fill="var(--varga-warn)"
+                    fill={COULEUR_DU_RENVOI}
                   >
                     {arc.libelle}
                     {pris.fois > 1 ? ` ×${pris.fois}` : ""}
@@ -546,18 +536,21 @@ function Borne({ point, atteinte = false }: { point: Point; atteinte?: boolean }
       width={6}
       height={40}
       rx={3}
-      fill={atteinte ? "var(--varga-ok)" : "var(--varga-ink)"}
+      fill={atteinte ? COULEUR.fait : "var(--varga-ink-muted)"}
     />
   );
 }
 
-/** La forme d'une case : le rond d'un agent, la silhouette d'une personne, le carré de la plateforme, la gélule du train. */
-/** Sans ticket, la couleur dit qui porte l'étape : turquoise l'agent, noir la personne, gris la plateforme, vert le train. */
+/**
+ * La forme d'une case : le rond d'un agent, la silhouette d'une personne, le carré de la plateforme,
+ * la gélule du train. Sans ticket, la couleur dit qui porte l'étape — celle de la carte en liste :
+ * prune l'agent, bleu la personne, ardoise la plateforme, vert le train.
+ */
 const COULEUR_DU_GENRE: Record<Etape["genre"], string> = {
-  agent: "var(--varga-accent-strong)",
-  human: "var(--varga-ink)",
-  platform: "var(--varga-ink-muted)",
-  train: "var(--varga-ok)",
+  agent: COULEURS_DES_GENRES.agent.bord,
+  human: COULEURS_DES_GENRES.human.bord,
+  platform: COULEURS_DES_GENRES.platform.bord,
+  train: COULEURS_DES_GENRES.train.bord,
 };
 
 function Case({
@@ -576,7 +569,7 @@ function Case({
   const couleur = statique ? COULEUR_DU_GENRE[etape.genre] : COULEUR[etat.statut];
   const vivante = etat.statut === "en_cours" || etat.statut === "attend";
   const plein = statique || etat.statut !== "a_venir";
-  const fond = etat.statut === "en_cours" ? "var(--varga-accent-soft)" : "var(--varga-surface)";
+  const fond = statique ? "var(--varga-surface)" : fondDuStatut(etat.statut);
   const { x, y } = point;
   return (
     <g data-etape={etape.id} data-statut={etat.statut}>
@@ -758,7 +751,9 @@ function BoutonDEtape({
               data-testid={`tour-${etape.id}`}
               className={cn(
                 "whitespace-nowrap rounded-full border px-1.5 text-[11px] font-medium",
-                etat.statut === "fait" ? "border-ok text-ok" : "border-warn text-warn",
+                etat.statut === "fait"
+                  ? "border-succeeded-line bg-succeeded-soft text-succeeded-ink"
+                  : "border-retrying-line bg-retrying-soft text-retrying-ink",
               )}
             >
               {tour}
@@ -768,11 +763,13 @@ function BoutonDEtape({
             <span
               className={cn(
                 "min-w-0 truncate",
-                etat.statut === "renvoye" || etat.statut === "echoue" || /fail|changes/.test(detail)
-                  ? "text-warn"
-                  : etat.statut === "fait"
-                    ? "text-ok"
-                    : "text-ink-muted",
+                etat.statut === "echoue" || /fail/.test(detail)
+                  ? "text-failed-ink"
+                  : etat.statut === "renvoye" || /changes/.test(detail)
+                    ? "text-retrying-ink"
+                    : etat.statut === "fait"
+                      ? "text-succeeded-ink"
+                      : "text-ink-muted",
               )}
             >
               {detail}
@@ -797,8 +794,12 @@ function Exceptions({ modele, instant }: { modele: Modele; instant: Instant }) {
             key={exception.id}
             data-statut={ici ? "actif" : passe ? "passe" : "a_venir"}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded border px-2 py-0.5",
-              ici ? "border-ink font-medium text-ink" : passe ? "border-warn text-warn" : "border-line text-ink-muted",
+              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5",
+              ici
+                ? "border-running-line bg-running-soft font-medium text-running-ink"
+                : passe
+                  ? "border-retrying-line bg-retrying-soft text-retrying-ink"
+                  : "border-line text-ink-muted",
             )}
           >
             {ici && <span aria-hidden className="parcours-pouls-point inline-block size-1.5 rounded-full bg-current" />}
@@ -843,7 +844,7 @@ function Phases({
                 data-testid={`phase-${i}`}
                 className={cn(
                   "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                  courante ? "border-accent-strong text-ink" : "border-line-strong text-ink-muted hover:text-ink",
+                  courante ? "border-running-line text-ink" : "border-line text-ink-muted hover:text-ink",
                 )}
               >
                 <span
@@ -851,9 +852,9 @@ function Phases({
                   className={cn(
                     "inline-flex size-5 items-center justify-center rounded-full font-mono text-[11px]",
                     faite
-                      ? "bg-ok text-surface"
+                      ? "bg-succeeded-soft text-succeeded-ink"
                       : courante
-                        ? "bg-accent-strong text-surface"
+                        ? "bg-running-soft text-running-ink"
                         : "bg-surface-sunken text-ink-muted",
                   )}
                 >

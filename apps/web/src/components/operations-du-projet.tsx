@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, Button, Card, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { ProjectOperation } from "@/lib/types";
 
@@ -74,9 +74,9 @@ function Ligne({ slug, operation }: { slug: string; operation: ProjectOperation 
         <label className="sr-only" htmlFor={id}>
           this project&apos;s policy for {operation.operation}
         </label>
-        <select
+        <Select
           id={id}
-          className="rounded border border-line bg-surface px-2 py-1 text-xs"
+          className="w-auto"
           value={operation.project_policy ?? ""}
           onChange={(event) =>
             void agir(() =>
@@ -92,7 +92,7 @@ function Ligne({ slug, operation }: { slug: string; operation: ProjectOperation 
               {p}
             </option>
           ))}
-        </select>
+        </Select>
         {operation.project_policy && (
           <span className="ml-2">
             <Button

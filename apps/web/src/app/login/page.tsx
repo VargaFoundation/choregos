@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { buttonClasses, Heading, Lead } from "@/components/ui";
+import { buttonClasses, Heading, Input, Lead } from "@/components/ui";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { api, IS_MOCK } from "@/lib/api";
@@ -50,12 +50,12 @@ function Connexion() {
           }}
         >
           <p className="text-xs text-ink-muted">development login — this bench has no IdP</p>
-          <input
+          <Input
             aria-label="development e-mail"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="admin@varga.dev"
-            className="w-full rounded border border-line bg-surface px-2 py-1.5"
+            className="w-full"
           />
           <button type="submit" className={buttonClasses("secondary", "sm")}>
             enter

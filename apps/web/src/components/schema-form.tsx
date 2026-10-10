@@ -2,6 +2,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { Input, Select, Textarea } from "@/components/ui";
 
 /**
  * Un formulaire tiré d'un JSON Schema — celui d'une section d'administration déclarée par un
@@ -103,7 +104,6 @@ function Champ({
 }) {
   const libelle = propriete.title ?? nom.replaceAll("_", " ");
   const aide = propriete.description ? `${id}-aide` : undefined;
-  const classes = "w-full rounded border border-line bg-surface px-2 py-1.5 text-sm";
   const etiquette = (
     <label htmlFor={id} className="text-xs text-ink-muted">
       {libelle}
@@ -136,9 +136,8 @@ function Champ({
   let controle;
   if (propriete.enum) {
     controle = (
-      <select
+      <Select
         id={id}
-        className={classes}
         value={valeur === undefined ? "" : String(valeur)}
         disabled={disabled}
         aria-describedby={aide}
@@ -150,15 +149,15 @@ function Champ({
             {String(choix)}
           </option>
         ))}
-      </select>
+      </Select>
     );
   } else if (propriete.type === "object") {
     controle = <Correspondance id={id} valeur={valeur} disabled={disabled} aide={aide} onChange={onChange} />;
   } else if (propriete.format === "multiline") {
     controle = (
-      <textarea
+      <Textarea
         id={id}
-        className={`${classes} font-mono text-xs`}
+        className="w-auto font-mono text-xs"
         rows={6}
         value={typeof valeur === "string" ? valeur : ""}
         required={requis}
@@ -169,9 +168,8 @@ function Champ({
     );
   } else if (propriete.type === "array") {
     controle = (
-      <input
+      <Input
         id={id}
-        className={classes}
         value={Array.isArray(valeur) ? valeur.join(", ") : ""}
         placeholder="comma separated"
         disabled={disabled}
@@ -188,9 +186,8 @@ function Champ({
   } else {
     const nombre = propriete.type === "integer" || propriete.type === "number";
     controle = (
-      <input
+      <Input
         id={id}
-        className={classes}
         type={nombre ? "number" : propriete.format === "date" ? "date" : propriete.format === "password" ? "password" : "text"}
         value={valeur === undefined || valeur === null ? "" : String(valeur)}
         required={requis}
@@ -268,9 +265,9 @@ function Correspondance({
   const { illisibles } = lireUneCorrespondance(texte);
   return (
     <>
-      <textarea
+      <Textarea
         id={id}
-        className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-xs"
+        className="w-full font-mono"
         rows={4}
         value={texte}
         placeholder="key = value"

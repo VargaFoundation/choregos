@@ -53,6 +53,9 @@ const config = [
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
+    // Les champs de la console (S24-04) rendent l'élément natif de leur nom : les règles
+    // d'accessibilité les voient comme tels — un `<label>` qui enveloppe un `<Input>` est associé.
+    settings: { "jsx-a11y": { components: { Input: "input", Select: "select", Textarea: "textarea" } } },
   },
   {
     // Les fixtures du mode démo ne partent pas dans le bundle réel : on les CHARGE (`import()`), en

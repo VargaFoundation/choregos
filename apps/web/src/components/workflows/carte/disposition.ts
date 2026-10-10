@@ -61,16 +61,20 @@ export const LIBELLE_DU_GENRE: Record<GenreDActeur, string> = {
   end: "end",
 };
 
-/** Les couleurs des genres, prises dans les jetons du design system de la fondation : clair et sombre suivent. */
-// `texte` à part du bord : le gris clair d'une fin borde bien une case, mais ne passe pas le contraste AA
-// en lettres (axe le mesure).
+/**
+ * Les couleurs des genres, dans les jetons de la console (ADR 0043) : prune l'agent, bleu la
+ * personne, ardoise la plateforme, vert le train, ambre l'attente, ardoise pâle la fin. Le `bord`
+ * dessine — la barre d'une case, le contour d'une forme —, le `texte` écrit, le `fond` teinte une
+ * pastille de légende ; clair et sombre suivent. `tests/carte-disposition.test.ts` les mesure : un
+ * bord à 3:1 au moins, un texte à 4,5:1, sur la page comme sur une carte, dans les deux thèmes.
+ */
 export const COULEUR_DU_GENRE: Record<GenreDActeur, { bord: string; fond: string; texte: string }> = {
-  agent: { bord: "var(--varga-accent-strong)", fond: "var(--varga-accent-soft)", texte: "var(--varga-accent-strong)" },
-  human: { bord: "var(--varga-ink)", fond: "var(--varga-surface)", texte: "var(--varga-ink)" },
-  platform: { bord: "var(--varga-ink-muted)", fond: "var(--varga-surface-muted)", texte: "var(--varga-ink-muted)" },
-  train: { bord: "var(--varga-ok)", fond: "var(--varga-surface)", texte: "var(--varga-ok)" },
-  waiting: { bord: "var(--varga-warn)", fond: "var(--varga-surface)", texte: "var(--varga-warn)" },
-  end: { bord: "var(--varga-ink-subtle)", fond: "var(--varga-surface-sunken)", texte: "var(--varga-ink-muted)" },
+  agent: { bord: "var(--choregos-agent-ink)", fond: "var(--choregos-agent-soft)", texte: "var(--choregos-agent-ink)" },
+  human: { bord: "var(--choregos-running-ink)", fond: "var(--choregos-running-soft)", texte: "var(--choregos-running-ink)" },
+  platform: { bord: "var(--choregos-neutral-ink)", fond: "var(--choregos-neutral-soft)", texte: "var(--choregos-neutral-ink)" },
+  train: { bord: "var(--choregos-succeeded-ink)", fond: "var(--choregos-succeeded-soft)", texte: "var(--choregos-succeeded-ink)" },
+  waiting: { bord: "var(--choregos-waiting-ink)", fond: "var(--choregos-waiting-soft)", texte: "var(--choregos-waiting-ink)" },
+  end: { bord: "var(--choregos-neutral-solid)", fond: "var(--varga-surface-sunken)", texte: "var(--choregos-neutral-ink)" },
 };
 
 const noeudsDe = (graphe: Graphe) => graphe.nodes as NoeudDuGraphe[];

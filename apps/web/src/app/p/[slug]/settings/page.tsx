@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { use, useState } from "react";
 import { Connecteurs } from "@/components/connecteurs";
 import { OperationsDuProjet } from "@/components/operations-du-projet";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur, usd } from "@/lib/format";
 import type { ProjectModels } from "@/lib/types";
@@ -210,12 +210,12 @@ function ModelsEditor({
       {PROFILS.map((profil) => (
         <label key={profil} className="flex items-center justify-between gap-3">
           <span className="font-mono text-xs">profile:{profil}</span>
-          <input
+          <Input
             list="modeles-disponibles"
             value={profils[profil] ?? ""}
             placeholder={models?.inherited?.[profil] ? `inherited: ${models.inherited[profil]}` : "platform/standard"}
             onChange={(event) => setProfils((p) => ({ ...p, [profil]: event.target.value }))}
-            className="w-64 min-w-0 rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
+            className="w-64 min-w-0 font-mono"
           />
         </label>
       ))}

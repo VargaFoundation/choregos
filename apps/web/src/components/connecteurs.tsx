@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
-import { Button, Card, ErrorNote, StateBadge } from "@/components/ui";
+import { Button, Card, ErrorNote, Input, Select, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
@@ -114,8 +114,8 @@ export function Connecteurs({ slug }: { slug: string }) {
           >
             <label className="space-y-1">
               <span className="text-xs text-ink-muted">add a connector</span>
-              <select
-                className="rounded border border-line bg-surface px-2 py-1.5 text-sm"
+              <Select
+                className="w-auto"
                 value={ajout}
                 onChange={(event) => setAjout(event.target.value)}
               >
@@ -125,7 +125,7 @@ export function Connecteurs({ slug }: { slug: string }) {
                     {sorte}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <Button size="sm" type="submit" disabled={!ajout}>
               add
@@ -238,8 +238,8 @@ function Formulaire({
     >
       <label className="block space-y-1">
         <span className="text-xs text-ink-muted">implementation</span>
-        <select
-          className="w-full rounded border border-line bg-surface px-2 py-1.5"
+        <Select
+          className="w-full"
           value={type}
           onChange={(event) => {
             setType(event.target.value);
@@ -252,7 +252,7 @@ function Formulaire({
               {t.display}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <SchemaForm schema={schema} value={config} onChange={setConfig} />
       {(choisi?.secret_fields ?? []).length > 0 && (
@@ -261,8 +261,8 @@ function Formulaire({
           {(choisi?.secret_fields ?? []).map((champ) => (
             <label key={champ} className="block space-y-1">
               <span className="text-xs text-ink-muted">{champ.replaceAll("_", " ")}</span>
-              <input
-                className="w-full rounded border border-line bg-surface px-2 py-1.5 font-mono text-xs"
+              <Input
+                className="w-full font-mono"
                 placeholder="env:NAME"
                 value={references[champ] ?? ""}
                 onChange={(event) => setReferences({ ...references, [champ]: event.target.value })}

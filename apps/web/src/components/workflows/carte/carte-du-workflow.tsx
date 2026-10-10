@@ -2,6 +2,8 @@
 "use client";
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { LEGENDE } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import type { ProcessStep } from "@/lib/types";
 import {
   type AreteDuGraphe,
@@ -92,11 +94,11 @@ export function CarteDuWorkflow({
       // Le survol n'est qu'un raccourci : le focus du bouton de la case montre les mêmes issues, au clavier.
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
       <div
-        className="rounded border-2 px-3 py-2 text-sm"
+        className={cn("raised border border-l-[3px] border-line px-3 py-2 text-sm", deCote && "border-dashed")}
+        data-genre={genre}
         style={{
-          borderColor: couleur.bord,
-          background: couleur.fond,
-          borderStyle: deCote ? "dashed" : "solid",
+          borderLeftColor: couleur.bord,
+          borderLeftStyle: "solid",
           outline: eclaires.has(id) ? "2px solid var(--varga-focus)" : undefined,
         }}
         onMouseEnter={() => setSurvol(id)}
@@ -113,8 +115,8 @@ export function CarteDuWorkflow({
           onBlur={() => setFocus(null)}
           onClick={() => onSelect?.("node", id)}
         >
-          <span className="flex items-baseline justify-between gap-2 text-xs" style={{ color: couleur.texte }}>
-            <span className="font-medium uppercase tracking-wide">
+          <span className="flex items-baseline justify-between gap-2 text-xs">
+            <span className={cn(LEGENDE, "font-medium")} style={{ color: couleur.texte }}>
               {LIBELLE_DU_GENRE[genre]}
               {principale?.actor ? ` · ${principale.actor}` : ""}
             </span>
@@ -125,7 +127,9 @@ export function CarteDuWorkflow({
               </span>
             )}
           </span>
-          <span className="mt-0.5 block text-[15px] font-semibold text-ink">{noeud.display}</span>
+          <span data-titre className="mt-0.5 block text-[15px] font-semibold text-ink">
+            {noeud.display}
+          </span>
           <span className="block font-mono text-xs text-ink-muted">{id}</span>
         </button>
         {(etape?.outputs?.length || garanties.length || principale?.timeout_hours || rejet) && (
@@ -147,7 +151,7 @@ export function CarteDuWorkflow({
                 key={a.id ?? a.to}
                 type="button"
                 data-testid={`transition-${a.id}`}
-                className="rounded border border-line bg-surface px-1.5 py-0.5 text-xs hover:border-line-strong"
+                className="border border-line bg-surface px-1.5 py-0.5 font-mono text-[11px] hover:border-line-strong pointer-coarse:min-h-11"
                 onClick={() => a.id && onSelect?.("edge", a.id)}
               >
                 also → {nom(a.to)}
@@ -157,7 +161,7 @@ export function CarteDuWorkflow({
           </div>
         )}
         {issues.length > 0 && montrerIssues && (
-          <ul className="mt-1.5 space-y-0.5 border-t border-line pt-1.5 text-xs text-warn" data-testid={`secondaires-${id}`}>
+          <ul className="mt-1.5 space-y-0.5 border-t border-line pt-1.5 text-xs text-retrying-ink" data-testid={`secondaires-${id}`}>
             {issues.map((a) => (
               <li key={a.id ?? `${a.to}-${a.kind}`}>
                 {commentOnYTombe(a)} → {nom(a.to)}
@@ -193,7 +197,7 @@ export function CarteDuWorkflow({
         onClick={() => principale.id && onSelect?.("edge", principale.id)}
       >
         <span aria-hidden className="h-3 w-px bg-line-strong group-hover:bg-ink" />
-        <span className="rounded px-1.5">{[qui, garanties, effet].filter(Boolean).join(" · ") || principale.id}</span>
+        <span className="px-1.5 font-mono text-[11px]">{[qui, garanties, effet].filter(Boolean).join(" · ") || principale.id}</span>
         <span aria-hidden className="leading-none">
           ▼
         </span>
@@ -222,7 +226,7 @@ export function CarteDuWorkflow({
           ))}
         </ol>
         <div className="space-y-2">
-          {disposition.cotes.length > 0 && <p className="text-xs uppercase tracking-wide text-ink-muted">off the main path</p>}
+          {disposition.cotes.length > 0 && <p className={LEGENDE}>off the main path</p>}
           <ul aria-label="off the main path" className="space-y-2">
             {disposition.cotes.map((cote) => (
               <li key={cote.id}>{carte(cote.id, undefined, cote.depuis)}</li>
@@ -268,11 +272,7 @@ function LegendeDeLaCarte({
           .filter((genre) => comptes.has(genre))
           .map((genre) => (
             <li key={genre} className="inline-flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className="inline-block h-3 w-3 rounded-sm border-2"
-                style={{ borderColor: COULEUR_DU_GENRE[genre].bord, background: COULEUR_DU_GENRE[genre].fond }}
-              />
+              <span aria-hidden className="inline-block h-3 w-[3px]" style={{ background: COULEUR_DU_GENRE[genre].bord }} />
               {LIBELLE_DU_GENRE[genre]} · {comptes.get(genre)}
             </li>
           ))}
@@ -297,7 +297,7 @@ function LegendeDeLaCarte({
               key={joker.cle}
               type="button"
               data-testid={`transition-${joker.cle}`}
-              className="rounded border border-line bg-surface px-1.5 py-0.5 hover:border-line-strong"
+              className="border border-line bg-surface px-1.5 py-0.5 font-mono text-[11px] hover:border-line-strong pointer-coarse:min-h-11"
               onClick={() => onSelect?.("edge", joker.cle)}
             >
               from any agent step → {nom(joker.to)}
