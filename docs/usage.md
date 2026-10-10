@@ -468,8 +468,6 @@ budgets:
   max_minutes: { implement: 30 }
   tool_calls_per_run: 20        # catalogue tools; omit for no cap
   daily_project_usd: 50
-approvals:
-  merge: { required: by_size, sizes: [L, XL], group: maintainers }
 scope:
   max_diff_files: 60
 sandbox:
@@ -478,6 +476,17 @@ sandbox:
 ```
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.
+
+**A policy does not decide who approves a work item.** People are declared in the **workflow**: a
+transition `by` a human actor, or `train: {approval: <actor>}` on a release train
+([ADR 0041](adr/0041-l-approbation-suit-ce-que-le-lot-emporte.md)). The policy's own human gate is
+the release train's: `release_train.<env>.approval` holds a departure until its group approves.
+
+`approvals.*` (`spec`, `merge`, `prod`, `scope_change`) and `review.require_human_for_risk` are
+still accepted, so an older policy stays valid, but **nothing enforces them**: no one is asked
+([ADR 0044](adr/0044-les-humains-se-declarent-dans-le-workflow.md)). Saving a policy that sets
+them — a rule other than `required: never`, a non-empty list — logs a `policy.not_enforced`
+warning per key, and the presets no longer write them. `review.cross_backend` is enforced.
 
 ## 4 bis. Governed actions
 

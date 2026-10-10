@@ -1,11 +1,25 @@
-"""Policy engine : budgets, approbations, tentatives, périmètre (couverture visée : 100 %)."""
+"""Policy engine : budgets, tentatives, périmètre, trains (couverture visée : 100 %)."""
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
-from choregos_contracts import HumanRequestKind, Policy, Risk, Size
-from choregos_core import PolicyEngine, ValidationError, engine_for, load_preset, parse_policy, preset_yaml
+import yaml
+from choregos_contracts import Policy, Size
+from choregos_core import (
+    PolicyEngine,
+    ValidationError,
+    engine_for,
+    load_preset,
+    parse_policy,
+    policy_warnings,
+    preset_yaml,
+)
 from choregos_core.policy import PRESET_NAMES
+
+RACINE = pathlib.Path(__file__).resolve().parents[3]
+POLITIQUES_DES_GABARITS = sorted((RACINE / "templates").glob("*/policy.yaml"))
 
 
 @pytest.mark.parametrize("name", PRESET_NAMES)
@@ -42,24 +56,11 @@ def test_ticket_budget_and_alerts() -> None:
     assert e.daily_budget() == 150
 
 
-def test_approvals_always_never_by_size_by_risk() -> None:
-    e = PolicyEngine(load_preset("solo"))
-    assert e.approval_for("prod").required
-    assert not e.approval_for("merge").required
-    assert e.approval_for(HumanRequestKind.APPROVAL, size=Size.M).required
-    assert not e.approval_for(HumanRequestKind.APPROVAL, size=Size.S).required
-    team = PolicyEngine(load_preset("team"))
-    assert team.approval_for("merge", risk=Risk.HIGH).required
-    assert not team.approval_for("merge", risk=Risk.LOW).required
-    assert team.approval_for("prod").group == "release-captains"
-
-
-def test_approval_without_rule_is_not_required() -> None:
+def test_policy_without_sections_falls_back_on_platform_defaults() -> None:
     policy = Policy.model_validate(
         {"apiVersion": "choregos/v1", "kind": "Policy", "metadata": {"name": "p", "version": 1}}
     )
     e = PolicyEngine(policy)
-    assert not e.approval_for("prod").required
     assert e.budget_ticket(Size.L) == 60  # défauts de la plateforme
     assert e.stage_usd("implement", Size.S) == 3
 
@@ -103,12 +104,87 @@ def test_memory_disabled_gives_zero_budget() -> None:
 
 
 def test_review_policy() -> None:
-    team = PolicyEngine(load_preset("team"))
-    assert team.cross_backend_review()
-    assert team.human_review_required(Risk.MEDIUM)
-    solo = PolicyEngine(load_preset("solo"))
-    assert not solo.cross_backend_review()
-    assert not solo.human_review_required(Risk.LOW)
+    assert PolicyEngine(load_preset("team")).cross_backend_review()
+    assert not PolicyEngine(load_preset("solo")).cross_backend_review()
+
+
+# ───────────── approbations et relecture humaine : déclarées dans le workflow (ADR 0044) ─────────────
+
+#: Une politique d'avant l'ADR 0044, telle que les presets l'écrivaient : elle reste valide.
+POLITIQUE_D_AVANT = """
+apiVersion: choregos/v1
+kind: Policy
+metadata: { name: ancienne, version: 3 }
+approvals:
+  spec: { required: by_size, group: product-owners, sizes: [M, L, XL], timeout_hours: 72 }
+  merge: { required: never }
+  prod: { required: always, group: release-captains, timeout_hours: 4 }
+  scope_change: { required: by_risk, group: maintainers, risks: [high] }
+review: { cross_backend: true, require_human_for_risk: [medium, high] }
+"""
+
+
+@pytest.mark.parametrize("name", PRESET_NAMES)
+def test_un_preset_ne_promet_ni_approbation_ni_relecture_humaine(name: str) -> None:
+    """Les presets écrivaient « approbation de la spec », « review humaine au merge », « prod :
+    always » : aucune de ces gardes n'existe. Ils ne les écrivent plus, et ne s'avertissent pas."""
+    brut = yaml.safe_load(preset_yaml(name))
+    assert "approvals" not in brut
+    assert "require_human_for_risk" not in (brut.get("review") or {})
+    assert policy_warnings(load_preset(name)) == []
+
+
+@pytest.mark.parametrize("chemin", POLITIQUES_DES_GABARITS, ids=lambda c: c.parent.name)
+def test_la_politique_d_un_gabarit_ne_promet_rien_non_plus(chemin: pathlib.Path) -> None:
+    texte = chemin.read_text(encoding="utf-8")
+    brut = yaml.safe_load(texte)
+    assert "approvals" not in brut
+    assert "require_human_for_risk" not in (brut.get("review") or {})
+    assert policy_warnings(parse_policy(texte)) == []
+
+
+def test_les_politiques_des_gabarits_sont_trouvees() -> None:
+    """Sans elle, le test paramétré ci-dessus ne jouerait aucun cas et passerait en silence."""
+    assert any(c.parent.name == "github-software-delivery" for c in POLITIQUES_DES_GABARITS)
+
+
+def test_une_politique_qui_les_renseigne_reste_valide_et_s_avertit() -> None:
+    """Le contrat ne change pas (ADR 0001) : la politique se charge, et chaque clé qui promet une
+    garde est nommée, en anglais, avec ce qu'il faut faire à la place."""
+    policy = parse_policy(POLITIQUE_D_AVANT)
+    issues = policy_warnings(policy)
+    assert [i.path for i in issues] == [
+        "approvals.spec",
+        "approvals.prod",
+        "approvals.scope_change",
+        "review.require_human_for_risk",
+    ]
+    assert {i.code for i in issues} == {"policy.approval_not_enforced", "policy.review_not_enforced"}
+    for issue in issues:
+        assert "is not enforced" in issue.message
+        assert "Declare a human transition in the workflow" in issue.message
+    # `required: never` ne promet rien : pas d'avertissement pour `approvals.merge`.
+    assert "approvals.merge" not in {i.path for i in issues}
+
+
+def test_le_defaut_du_contrat_ne_s_avertit_pas() -> None:
+    """`review.require_human_for_risk` vaut `[high]` par défaut dans le contrat : une politique qui
+    n'en dit rien ne doit pas recevoir d'avertissement pour une clé qu'elle n'a pas écrite."""
+    policy = parse_policy("apiVersion: choregos/v1\nkind: Policy\nmetadata: {name: p, version: 1}\n")
+    assert policy.review.require_human_for_risk  # le défaut est là…
+    assert policy_warnings(policy) == []  # … et il ne s'avertit pas
+    vide = parse_policy(
+        "apiVersion: choregos/v1\nkind: Policy\nmetadata: {name: p, version: 1}\n"
+        "review: {require_human_for_risk: []}\n"
+    )
+    assert policy_warnings(vide) == []
+
+
+def test_le_moteur_ne_decide_d_aucune_approbation() -> None:
+    """`approval_for` et `human_review_required` n'étaient appelés par personne : un moteur qui
+    répond « approbation requise » sans que rien ne la demande est une garde fantôme."""
+    assert not hasattr(PolicyEngine, "approval_for")
+    assert not hasattr(PolicyEngine, "human_review_required")
 
 
 def test_train_config() -> None:

@@ -181,7 +181,15 @@ function PolicyEditor({ yaml, onSave }: { yaml: string; onSave: (yaml: string) =
         </Button>
       </div>
       <p className="text-xs text-ink-muted">
-        Budgets, approvals, attempts, scope: the same policy the orchestrator applies. The server validates it on save.
+        Budgets, attempts, scope, sandbox and release trains: the same policy the orchestrator applies. The server
+        validates it on save.
+      </p>
+      {/* `approvals.*` et `review.require_human_for_risk` passent la validation mais ne gardent rien
+          (ADR 0044) : l'écran ne les range plus parmi ce qui s'applique, il dit où déclarer l'humain. */}
+      <p className="text-xs text-ink-muted" data-testid="politique-sans-gardes">
+        <code>approvals</code> and <code>review.require_human_for_risk</code> are accepted but not enforced: no one
+        is asked. To make a person approve or review, declare a human transition in the workflow — a human actor, or{" "}
+        <code>train.approval</code>. A release train&apos;s departure is approved through <code>release_train.&lt;env&gt;.approval</code>.
       </p>
     </div>
   );

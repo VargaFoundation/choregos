@@ -1,11 +1,11 @@
-# Preset `team` : une équipe produit, review humaine obligatoire au merge, prod approuvée.
+# Preset `team` : une équipe produit, relecture croisée, sandbox gVisor, prod approuvée par le train.
 apiVersion: choregos/v1
 kind: Policy
 metadata:
   name: team
   version: 1
   preset: team
-  description: "A team of 3 to 10 people: a human approves the spec and the merge, a release captain approves production."
+  description: "A team of 3 to 10 people: cross-backend review, a gVisor sandbox, a release captain approves each production release."
 budgets:
   ticket_usd: { S: 15, M: 45, L: 110, XL: 220 }
   stage_usd:
@@ -20,11 +20,9 @@ budgets:
   max_minutes: { default: 60, triage: 5, refine: 25, plan: 20, implement: 120, verify: 40, review: 30 }
   daily_project_usd: 400
   alert_at_ratio: 0.8
-approvals:
-  spec: { required: always, group: product-owners, timeout_hours: 48 }
-  merge: { required: by_risk, group: maintainers, risks: [medium, high], timeout_hours: 24 }
-  prod: { required: always, group: release-captains, timeout_hours: 4 }
-  scope_change: { required: by_size, group: maintainers, sizes: [M, L, XL] }
+# Pas d'`approvals` ici : personne ne les applique (ADR 0044). Un humain qui approuve se déclare
+# dans le WORKFLOW (acteur humain sur une transition, `train.approval`) ; la prod reste approuvée
+# par `release_train.prod.approval`, que le train applique.
 attempts:
   default_max: 2
   by_role: { implement: 3, fix_ci: 3, address_review: 3 }
@@ -54,7 +52,6 @@ memory:
   read_timeout_ms: 300
 review:
   cross_backend: true
-  require_human_for_risk: [medium, high]
 release_train:
   dev: { mode: auto_sync }
   staging:
