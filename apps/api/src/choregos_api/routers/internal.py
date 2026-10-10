@@ -32,6 +32,8 @@ from ..schemas import (
     ScopeChangeRequestIn,
 )
 from ..services import active_policy, persist_event, policy_model, ranger_les_sorties
+from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner
+from ..services.tickets import sorties_a_ranger
 from ..temporal import get_temporal, interpreter_id
 
 router = APIRouter(tags=["internal"], prefix="/internal")
@@ -119,6 +121,16 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
         item.allowed_paths = list(outputs.allowed_paths)
     declarees = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
     ranger_les_sorties(item, outputs, declarees)
+    # Chaque sortie rangée reçoit son reçu « produite », sous son empreinte (S25-04).
+    await consigner(
+        session,
+        org_id=project.org_id,
+        work_item_id=item.id,
+        run_id=run.id,
+        stage=run.stage_role,
+        sorties=sorties_a_ranger(outputs, declarees),
+        genre=PRODUITE,
+    )
 
     await persist_event(
         session,
@@ -320,8 +332,18 @@ async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, An
 
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
 async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
-    _run, item, _project = await _run_and_item(session, id)
+    run, item, project = await _run_and_item(session, id)
     documents = item.documents or {}
+    # Ce que le run lit ici, sous l'empreinte de ce qu'il lit (S25-04) : la révision exacte.
+    await consigner(
+        session,
+        org_id=project.org_id,
+        work_item_id=item.id,
+        run_id=run.id,
+        stage=run.stage_role,
+        sorties={nom: documents.get(nom) for nom in DOCUMENTS_DU_PROMPT},
+        genre=LUE,
+    )
     return RunTicket(
         key=item.tracker_key,
         title=item.title,

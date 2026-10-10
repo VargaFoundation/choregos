@@ -17,6 +17,7 @@ from choregos_api.db.models import GatewayKeyRow, Run
 from choregos_api.logging import bind, get_logger
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
+from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
 from choregos_contracts import (
     AgentRef,
     Budget,
@@ -276,6 +277,17 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         run.started_at = utcnow()
         if existing is None:
             session.add(run)
+        # Ce que le prompt de ce run embarque des étapes d'avant, sous l'empreinte de la révision
+        # embarquée (S25-04). Rejouable : un reçu existant ne se réécrit pas (ADR 0008).
+        await consigner(
+            session,
+            org_id=bundle.project.org_id,
+            work_item_id=item.id,
+            run_id=run_id,
+            stage=plan.role,
+            sorties=lu_par_le_prompt(item.documents or {}, list(plan.inputs or []), playbook_prompt),
+            genre=LUE,
+        )
         await persist_event(
             session,
             EventType.RUN_QUEUED,

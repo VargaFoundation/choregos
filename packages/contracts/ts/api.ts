@@ -895,6 +895,26 @@ export type WorkItemPage = {
   meta: PageMeta;
 };
 
+/** An output of a step and its receipts, in order (S25-04). */
+export type HandOff = {
+  /** spec_markdown, plan_markdown, or an output a transition declares */
+  output: string;
+  /** The digest of what the output is worth today; null when it is gone. */
+  current_digest?: string | null;
+  events: Array<HandOffEvent>;
+};
+
+/** A run produced or read an output, under this digest; a receipt never changes. */
+export type HandOffEvent = {
+  kind: "produced" | "read";
+  /** sha256:<hex> of the value's canonical JSON */
+  digest: string;
+  run_id: string;
+  stage?: string | null;
+  attempt?: number | null;
+  at: string;
+};
+
 export type TimelineEntry = {
   ts: string;
   kind: "state_change" | "run" | "decision" | "finding" | "release" | "comment" | "error";
@@ -1496,6 +1516,7 @@ export interface Operations {
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
+  getWorkItemHandOffs: { method: "GET"; path: "/work-items/{id}/hand-offs"; body: never; response: Array<HandOff> };
   getWorkItemJourney: { method: "GET"; path: "/work-items/{id}/journey"; body: never; response: WorkItemJourney };
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };

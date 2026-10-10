@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
+import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
 
 /** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
@@ -28,6 +29,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const [erreurDeControle, setErreurDeControle] = useState<string | null>(null);
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
   const timeline = useQuery({ queryKey: ["timeline", id], queryFn: () => api.timeline(id) });
+  // Les reçus de passage (S25-04) : qui a produit chaque sortie d'étape, qui l'a lue, sous quelle empreinte.
+  const passages = useQuery({ queryKey: ["hand-offs", id], queryFn: () => api.handOffs(id) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
   const journey = useQuery({
     queryKey: ["journey", id],
@@ -201,6 +204,12 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           {timeline.data?.length === 0 && <Empty>nothing to show</Empty>}
         </Card>
       </div>
+
+      {(passages.data ?? []).length > 0 && (
+        <Card title="hand-offs" action={<Provenance de="observed" />}>
+          <Passages passages={passages.data ?? []} />
+        </Card>
+      )}
 
       {data.pr_url && (
         <Card title="pull request">

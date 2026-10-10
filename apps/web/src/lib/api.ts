@@ -37,6 +37,7 @@ import type {
   ConnectorType,
   ExecutorInfo,
   GatewayModel,
+  HandOff,
   Membership,
   MembershipUpsert,
   Org,
@@ -392,6 +393,8 @@ export const api = {
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),
   workItem: (id: string) => request<WorkItemDto>(`/work-items/${id}`),
   timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
+  /** Les reçus de passage d'un ticket (S25-04) : qui a produit, qui a lu, sous quelle empreinte. */
+  handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),
   /** Le parcours du ticket dans SON workflow, en une lecture : ce que la carte animée dessine (S22-01). */
   journey: (id: string) => request<WorkItemJourney>(`/work-items/${id}/journey`),
   decide: (id: string, body: unknown) =>

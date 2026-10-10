@@ -100,8 +100,8 @@ function Ligne({ appel }: { appel: AppelDOutil }) {
           <span className="truncate" title={appel.chemins.join(", ") || undefined}>
             {appel.titre}
           </span>
-          <span className="sr-only">, {appel.sousAgent ? "sub-agent" : appel.genre}</span>
-          {appel.sousAgent && <Badge tone="agent">sub-agent</Badge>}
+          <span className="sr-only">, {appel.sousAgent ? "sub-agent" : appel.genre} </span>
+          {appel.sousAgent && <Badge tone="agent">sub-agent</Badge>}{" "}
           {appel.refus && (
             <span title={appel.refus}>
               <Badge tone="failed">denied</Badge>

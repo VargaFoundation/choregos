@@ -28,6 +28,8 @@ export type {
   FindingPage,
   FindingRecord,
   GatewayModel,
+  HandOff,
+  HandOffEvent,
   HumanRequest,
   Me as MeDto,
   Memory,
