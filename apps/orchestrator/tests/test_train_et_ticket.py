@@ -72,6 +72,34 @@ async def _releases() -> list[Any]:
         return list((await session.execute(select(Release))).scalars())
 
 
+# ───────────────────────── le ticket qui réveille le train (S22-22) ─────────────────────────
+
+
+async def test_le_ticket_qui_reveille_le_train_reste_dans_le_lot(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """L'interpréteur embarque par signal-with-start : quand aucun train ne tourne, c'est SON signal
+    qui le démarre. `run` écrasait alors le lot — #4 et #6 du locataire dev (09/10) ont réveillé leur
+    train et en ont été effacés."""
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            train = await temporal_env.client.start_workflow(
+                "ReleaseTrain",
+                {"project_slug": setup.project_slug, "env": "prod"},
+                id=f"train-{setup.project_slug}-prod",
+                task_queue="test",
+                start_signal="merged",
+                start_signal_args=[{"work_item_key": "varga/billing-api#4", "sha": "a4"}],
+            )
+            etat = await _jusqu_a(train, "status_query", lambda s: s["status"] == "collecting")
+            assert etat["pending_items"] == ["varga/billing-api#4"], etat
+            await train.signal("merged", {"work_item_key": "varga/billing-api#4", "sha": "a4"})
+            etat = await _jusqu_a(train, "status_query", lambda s: s["status"] == "collecting")
+            assert etat["batch_size"] == 1, "un second embarquement du même ticket ne le double pas"
+            await train.signal("abort", {"by": "test"})
+            await train.result()
+
+
 # ───────────────────────── le train : l'approbation suit ce que le lot emporte ─────────────────────────
 
 
