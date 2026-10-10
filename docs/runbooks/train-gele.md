@@ -25,7 +25,9 @@ temporal workflow query --workflow-id train-<project>-prod --name status_query
    choregos trains status <project> --env prod
    curl -s "$API/api/v1/projects/<project>/releases?env=prod" | jq '.items[0]'
    ```
-   `verdict.reason` says what failed (canary analysis, smoke, SLO).
+   `verdict.reason` says what failed (canary analysis, smoke, SLO), or which Argo CD event
+   stopped the departure (`Argo CD reported <app> degraded`, `Argo CD reported the <app> rollout
+   aborted`).
 2. **Fix the cause**, not the symptom. A `critical` finding was created automatically: it
    carries the evidence.
 3. **Unfreeze** once the fix is on its way:

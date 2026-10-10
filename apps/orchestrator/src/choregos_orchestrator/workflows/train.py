@@ -8,6 +8,7 @@ tiennent même si Choregos tombe.
 
 from __future__ import annotations
 
+import contextlib
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -15,11 +16,12 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ActivityError
 
-from .planification import executer_activite
+from .planification import demarrer_activite, executer_activite
 
 with workflow.unsafe.imports_passed_through():
-    from choregos_contracts import ReleaseStatus
+    from choregos_contracts import InboundEventType, ReleaseStatus
 
     from ..activities import train as train_activities
 
@@ -36,6 +38,12 @@ LE_SIGNAL_DU_DEMARRAGE_EMBARQUE = "start-signal-boards"
 #: Combien de fois, et à quel rythme, on regarde l'environnement avant de conclure.
 ESSAIS_AUTO_SYNC = 30
 PAUSE_AUTO_SYNC = timedelta(minutes=2)
+#: Le train lit ce qu'Argo CD lui annonce (#280, S22-18). Avant ce marqueur, `deploy_event` rangeait
+#: les événements dans `events` sans que rien ne les lise : seule la scrutation des étapes du départ
+#: voyait une dégradation, à son prochain passage.
+ECOUTE_LE_CD = "train-listens-to-cd"
+#: Ce qui, annoncé pour l'environnement du départ, le fait revenir en arrière sans attendre la scrutation.
+ALERTES_CD = frozenset({str(InboundEventType.CD_DEGRADED), str(InboundEventType.ROLLOUT_ABORTED)})
 
 
 @dataclass
@@ -67,6 +75,7 @@ class ReleaseTrain:
         self.current_release: str | None = None
         self.next_departure: str | None = None
         self.window_open: bool = True
+        self.ecoute_cd: bool = False
 
     # ───────────────────────── signaux ─────────────────────────
 
@@ -114,6 +123,8 @@ class ReleaseTrain:
 
     @workflow.signal
     def deploy_event(self, payload: dict[str, Any]) -> None:
+        """Un événement d'Argo CD pour cet environnement (webhook `/webhooks/argocd`). Le départ le lit
+        pendant le soak, le canary et la vérification (`_sous_l_oeil_du_cd`)."""
         self.events.append(payload)
 
     @workflow.query
@@ -251,6 +262,11 @@ class ReleaseTrain:
         items = list(self.batch)
         self.batch = []
         self.status = str(ReleaseStatus.DEPARTING)
+        self.ecoute_cd = workflow.patched(ECOUTE_LE_CD)
+        if self.ecoute_cd:
+            # Ce qu'Argo CD a annoncé pendant la collecte parle de la release d'avant : ce départ ne
+            # revient pas en arrière pour elle (le smoke test regarde l'état réel juste après).
+            self.events.clear()
         release = await executer_activite(
             train_activities.create_release,
             {
@@ -288,7 +304,9 @@ class ReleaseTrain:
         if not smoke.get("ok"):
             return await self._rollback(params, config, "smoke tests failed")
 
-        soak = await executer_activite(
+        soak = await self._sous_l_oeil_du_cd(
+            params,
+            config,
             train_activities.soak,
             {
                 "release_id": self.current_release,
@@ -300,7 +318,9 @@ class ReleaseTrain:
             retry_policy=NO_RETRY,
         )
         if not soak.get("ok"):
-            return await self._rollback(params, config, "SLOs degraded during the soak")
+            # La scrutation du soak garde sa raison d'avant ; une alerte d'Argo CD dit la sienne.
+            raison = soak["reason"] if soak.get("argocd") else "SLOs degraded during the soak"
+            return await self._rollback(params, config, raison)
 
         # L'approbation de la politique, OU celle qu'un ticket du lot apporte de son workflow (ADR
         # 0041) : un correctif part seul, une fonctionnalité attend son capitaine. Un embarquement
@@ -358,7 +378,9 @@ class ReleaseTrain:
         steps = list(canary.get("steps", [100]))
         step_minutes = list(canary.get("step_minutes", [0] * len(steps)))
         for index, weight in enumerate(steps):
-            analysis = await executer_activite(
+            analysis = await self._sous_l_oeil_du_cd(
+                params,
+                config,
                 train_activities.promote_canary_step,
                 {
                     "release_id": self.current_release,
@@ -376,7 +398,9 @@ class ReleaseTrain:
                 return await self._rollback(params, config, analysis.get("reason", "canary analysis failed"))
 
         self.status = str(ReleaseStatus.VERIFYING)
-        verdict = await executer_activite(
+        verdict = await self._sous_l_oeil_du_cd(
+            params,
+            config,
             train_activities.verify_prod,
             {"release_id": self.current_release, "project_slug": params.project_slug, "env": params.env},
             start_to_close_timeout=timedelta(minutes=30),
@@ -399,6 +423,45 @@ class ReleaseTrain:
         )
         return {"frozen": False, "release_id": self.current_release}
 
+    async def _sous_l_oeil_du_cd(
+        self, params: TrainInput, config: dict[str, Any], activite: Any, arg: Any, **options: Any
+    ) -> Any:
+        """Une étape du départ (soak, palier de canary, vérification) qu'Argo CD peut interrompre.
+
+        La scrutation de l'étape reste le filet. Un `cd.app.degraded` ou un `cd.rollout.aborted` reçu
+        pour l'environnement et les applications du départ la devance : l'étape est annulée et rend un
+        verdict négatif, que l'appelant traite comme le sien (rollback). Les événements lus sont
+        consommés : aucun n'est relu par l'étape suivante ni par le départ suivant.
+        """
+        if not self.ecoute_cd:
+            return await executer_activite(activite, arg, **options)
+        apps = [str(app) for app in config.get("apps") or []]
+        etape = demarrer_activite(activite, arg, **options)
+        await workflow.wait_condition(
+            lambda: etape.done() or any(_alerte(e, params.env, apps) for e in self.events)
+        )
+        raison = self._prendre_l_alerte(params.env, apps)
+        if raison is None:
+            return await etape
+        if not etape.done():
+            etape.cancel()
+        # L'étape annulée (ou échouée en même temps) ne dit plus rien : l'alerte d'Argo CD décide.
+        with contextlib.suppress(ActivityError):
+            await etape
+        return {"ok": False, "reason": raison, "argocd": True}
+
+    def _prendre_l_alerte(self, env: str, apps: list[str]) -> str | None:
+        """Consomme les événements jusqu'à la première alerte qui concerne ce départ, et en rend la raison.
+
+        Ceux d'un autre environnement ou d'une autre application sont écartés en passant ; ce qui suit
+        l'alerte parle du même incident, que le rollback traite : tout est consommé."""
+        while self.events:
+            raison = _alerte(self.events.popleft(), env, apps)
+            if raison is not None:
+                self.events.clear()
+                return raison
+        return None
+
     async def _rollback(self, params: TrainInput, config: dict[str, Any], reason: str) -> dict[str, Any]:
         """Rollback : annuler, marquer, notifier, geler si la politique le demande."""
         self.status = str(ReleaseStatus.ROLLED_BACK)
@@ -418,6 +481,24 @@ class ReleaseTrain:
             self.freeze_reason = reason
             self.status = str(ReleaseStatus.FROZEN)
         return {"frozen": self.frozen, "reason": reason}
+
+
+def _alerte(evenement: dict[str, Any], env: str, apps: list[str]) -> str | None:
+    """La raison du rollback si l'événement est une alerte d'Argo CD pour cet environnement et l'une de
+    ses applications ; `None` sinon. Un événement qui ne nomme ni environnement ni application compte,
+    comme pour le ticket (ADR 0041) : un événement porté à la main garde son effet."""
+    if str(evenement.get("type") or "") not in ALERTES_CD:
+        return None
+    detail = evenement.get("payload") or {}
+    if detail.get("env") and str(detail["env"]) != env:
+        return None
+    app = str(detail.get("app") or "")
+    if app and apps and app not in apps:
+        return None
+    sujet = app or env
+    if str(evenement.get("type")) == str(InboundEventType.ROLLOUT_ABORTED):
+        return f"Argo CD reported the {sujet} rollout aborted"
+    return f"Argo CD reported {sujet} degraded"
 
 
 def _cumul(une: dict[str, Any] | None, autre: dict[str, Any] | None) -> dict[str, Any] | None:

@@ -97,6 +97,11 @@ offers: an inventory that updates itself is not an access control.
 An agent that spots a problem **outside its scope** does not fix it: it reports a *finding*,
 which is deduplicated, triaged and turned into a linked ticket. A *release train* batches
 what is ready, opens its window, requires its approval, and can be frozen with a reason.
+During the soak, each canary step and the final check, the train listens to Argo CD: a
+`cd.app.degraded` or `cd.rollout.aborted` reported for its environment and one of its
+applications rolls the departure back at once, without waiting for the next poll of the CD.
+Polling stays the safety net; an event received while the train was collecting describes the
+previous release and is dropped.
 
 ## Where the money goes
 
