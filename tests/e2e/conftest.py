@@ -7,21 +7,65 @@ réel, Tekton, Argo) sont marquées `integration` et tournent la nuit.
 
 from __future__ import annotations
 
+import contextlib
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 
-os.environ.setdefault("CHOREGOS_FAKES", "1")
-os.environ.setdefault("CHOREGOS_ENV", "test")
-# La connexion de développement est ÉTEINTE par défaut depuis le 2026-09-24 : un test
-# qui s'en sert doit le dire, et nommer qui est admin.
-os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
-os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
-# Les webhooks refusent un secret vide depuis P0-3 : le banc de bout en bout en pose un.
-os.environ.setdefault("CHOREGOS_GENERIC_WEBHOOK_SECRET", "e2e-webhook-secret")
+#: L'environnement du banc de bout en bout. Il n'est PLUS posé à l'import (#259) : une session qui
+#: collectait `tests/e2e` avec un autre répertoire lui imposait ces variables — un test de l'API qui
+#: supposait un secret de webhook vide recevait 401. Seule la fixture `environnement_e2e` les pose,
+#: le temps des tests de ce paquet, et rend l'environnement tel qu'elle l'a trouvé.
+ENVIRONNEMENT_E2E: dict[str, str] = {
+    "CHOREGOS_FAKES": "1",
+    "CHOREGOS_ENV": "test",
+    # La connexion de développement est ÉTEINTE par défaut depuis le 2026-09-24 : un test
+    # qui s'en sert doit le dire, et nommer qui est admin.
+    "CHOREGOS_DEV_LOGIN_ENABLED": "true",
+    "CHOREGOS_DEV_ADMIN_EMAILS": "admin@varga.dev",
+    # Les webhooks refusent un secret vide depuis P0-3 : le banc de bout en bout en pose un.
+    "CHOREGOS_GENERIC_WEBHOOK_SECRET": "e2e-webhook-secret",
+}
+
+
+@contextlib.contextmanager
+def environnement_pose(variables: dict[str, str]) -> Iterator[None]:
+    """Pose `variables` là où l'environnement ne dit rien (une valeur déjà posée l'emporte, comme
+    `setdefault`), puis rend chaque variable telle qu'elle était — absente redevient absente.
+
+    Les réglages de l'API sont mis en cache : on le vide à l'entrée et à la sortie, pour que ni ce
+    paquet ni le suivant ne lise des réglages calculés sous l'autre environnement.
+    """
+    from choregos_api.config import reset_settings_cache
+
+    avant = {nom: os.environ.get(nom) for nom in variables}
+    for nom, valeur in variables.items():
+        os.environ.setdefault(nom, valeur)
+    reset_settings_cache()
+    try:
+        yield
+    finally:
+        for nom, valeur in avant.items():
+            if valeur is None:
+                os.environ.pop(nom, None)
+            else:
+                os.environ[nom] = valeur
+        reset_settings_cache()
+
+
+@pytest.fixture(scope="package", autouse=True)
+def environnement_e2e() -> Iterator[None]:
+    """L'environnement du banc, le temps des tests de `tests/e2e` et pas au-delà.
+
+    Portée `package` plutôt que `session` : une fixture de session ne se démonte qu'à la fin de la
+    session, donc APRÈS les tests d'un autre répertoire collecté dans la même session ; celle-ci se
+    démonte au dernier test du paquet.
+    """
+    with environnement_pose(ENVIRONNEMENT_E2E):
+        yield
 
 
 class BridgedTemporal:
@@ -106,8 +150,9 @@ class Platform:
 
 
 @pytest.fixture
-async def platform(tmp_path: Any) -> AsyncIterator[Platform]:
-    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/e2e.db"
+async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Platform]:
+    # Par `monkeypatch` : la base d'un scénario ne survit pas à son test (#259).
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/e2e.db")
     from choregos_adapters import AdapterSet
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session

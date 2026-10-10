@@ -421,8 +421,13 @@ async def test_une_release_s_approuve_et_s_abandonne(client: AsyncClient, projec
 
 
 async def test_un_cloudevent_tekton_est_achemine_une_seule_fois(
-    client: AsyncClient, project: dict[str, Any]
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from choregos_api.config import get_settings
+
+    # Ce test suppose un secret de webhook vide (environnement de test) : il le dit, au lieu de
+    # dépendre de ce qu'une autre partie de la session aurait posé (#259).
+    monkeypatch.setattr(get_settings(), "generic_webhook_secret", "")
     corps = {
         "pipelineRun": {
             "metadata": {
