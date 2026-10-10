@@ -55,6 +55,19 @@ class RunOutcome:
     detail: str = ""
 
 
+#: Les mises à jour ACP que la console montre en direct (S25-01) : elles partent tout de suite,
+#: avec ce qui attendait, au lieu d'attendre qu'un lot de 25 événements se remplisse. Un plan révisé
+#: resterait sinon dans le tampon tant que l'agent ne parle pas — le plan affiché serait l'ancien.
+SANS_ATTENDRE = frozenset({"plan"})
+
+
+def _sans_attendre(type_: str, payload: dict[str, Any]) -> bool:
+    if type_ != "session/update":
+        return False
+    update = payload.get("update", payload)
+    return isinstance(update, dict) and update.get("sessionUpdate") in SANS_ATTENDRE
+
+
 @dataclass
 class EventJournal:
     """Journal ACP : envoyé par lots à l'API, écrit en JSONL pour le transcript."""
@@ -72,7 +85,7 @@ class EventJournal:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
-        if len(self.buffer) >= self.batch_size:
+        if len(self.buffer) >= self.batch_size or _sans_attendre(type_, payload):
             await self.flush()
 
     async def flush(self) -> None:

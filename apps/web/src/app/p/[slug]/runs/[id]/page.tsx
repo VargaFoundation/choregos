@@ -4,12 +4,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { LiveLog } from "@/components/live-log";
+import { PlanDeLAgent } from "@/components/plan-de-l-agent";
 import { Acces } from "@/components/acces";
 import { Garanties } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
 import { Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
+import { planDeLAgent } from "@/lib/plan-de-l-agent";
 import { useEventStream } from "@/lib/sse";
 import type { RunEventDto } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
@@ -47,6 +49,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
 
   const events = dedupe([...(stored.data ?? []), ...live.events]);
   const evidence = run.data.result?.evidence;
+  // Le plan que l'agent publie en ACP, révision après révision (S25-01) ; rien s'il n'en publie pas.
+  const plan = planDeLAgent(events);
 
   return (
     <div className="space-y-4">
@@ -125,6 +129,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           <p className="mt-2 text-xs">{run.data.result?.diagnostics?.permission_denials ?? 0} permission(s) refused</p>
         </Card>
       </div>
+
+      {plan && (
+        <Card title="agent plan">
+          <PlanDeLAgent plan={plan} />
+        </Card>
+      )}
 
       <Garanties events={events} />
 

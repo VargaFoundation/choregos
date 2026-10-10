@@ -27,6 +27,7 @@ streams:
   S20: "Actions gouvernées dans le cœur et scénario RH arrivées/départs (ADR 0035)"
   S21: "Utilisabilité : console lisible, anglais partout, catalogue d'agents, gouvernance appliquée, projet de développement (revue produit du 2026-10-07)"
   S24: "L'allure d'une console d'opérations : contraste adouci, Geist, thème choisi, barre latérale (ADR 0043)"
+  S25: "Ce que fait l'agent, et d'où on le sait : plan, activité, provenance, reçus entre étapes (ADR 0045)"
 
 stories:
 
@@ -1911,3 +1912,45 @@ stories:
     depends_on: [S24-03]
     acceptance:
       - "Aucun champ brut stylé à la main ; captures sombre et clair, 1440 et 390 px, jointes à la PR"
+
+  # ───────────── S25 — Ce que fait l'agent, et d'où on le sait (2026-10-10) ─────────────
+  # Quatre idées reprises de l'observation des agents (aucun code repris) : le plan déclaré, l'activité
+  # lisible, la provenance de chaque signal, les reçus de passage d'une étape à l'autre.
+  - id: S25-01
+    title: "Le plan de l'agent, en direct : ses révisions ACP relues, une tâche retirée jamais comptée comme faite"
+    stream: S25
+    sprint: 15
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "Une tâche qui disparaît du plan est retirée, jamais comptée comme faite ; une tâche reformulée en est une autre"
+      - "Un plan révisé part du runner sans attendre que son lot se remplisse"
+  - id: S25-02
+    title: "L'activité d'un run, lisible au-dessus du journal brut : appels d'outils, refus, sous-agents"
+    stream: S25
+    sprint: 15
+    priority: 2
+    size: S
+    depends_on: [S25-01]
+    acceptance:
+      - "Chaque appel d'outil terminé apparaît une fois, avec son titre, son état et sa durée ; un refus se voit sur l'appel qu'il bloque"
+  - id: S25-03
+    title: "D'où vient chaque signal : déclaré par l'agent, constaté par la plateforme, déduit, ou inconnu"
+    stream: S25
+    sprint: 15
+    priority: 3
+    size: M
+    depends_on: [S25-02]
+    acceptance:
+      - "Un run que l'agent dit fini mais dont une garantie échoue s'affiche « déclaré fini, non constaté »"
+  - id: S25-04
+    title: "Reçus de passage entre étapes : l'empreinte d'une sortie, qui l'a produite, qui l'a lue"
+    stream: S25
+    sprint: 15
+    priority: 4
+    size: L
+    depends_on: [S25-03]
+    acceptance:
+      - "L'étape suivante lit la révision exacte produite ; une sortie modifiée après coup change d'empreinte, et ça se voit"
+
