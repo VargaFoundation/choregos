@@ -97,7 +97,7 @@ class McpServer:
         `findings` sans `title`. Le même validateur que le runner, exposé comme un outil, pour
         que l'erreur se lise AVANT le dépôt du résultat et non dans une boucle de réparation.
         """
-        from choregos_contracts import StageResult
+        from choregos_contracts import StageResult, StageStatus
         from pydantic import ValidationError
 
         brut = arguments.get("result")
@@ -108,11 +108,35 @@ class McpServer:
         if not isinstance(donnees, dict):
             return text_result("expected: a JSON object (`{…}`)", is_error=True)
         try:
-            StageResult.model_validate(donnees)
+            resultat = StageResult.model_validate(donnees)
         except ValidationError as exc:
             lignes = [f"- `{'.'.join(str(p) for p in e['loc'])}`: {e['msg']}" for e in exc.errors()]
             return text_result("result does NOT conform:\n" + "\n".join(lignes), is_error=True)
+        # Ce que le runner refusera après (S22-12) se dit ici AVANT : une étape qui finit rend
+        # chacune des sorties que sa transition déclare, à la racine de `outputs` (S22-15).
+        declarees = await self._sorties_declarees()
+        if resultat.status is StageStatus.DONE and declarees:
+            ecrites = resultat.outputs.model_dump(exclude_none=True)
+            manquantes = [nom for nom in declarees if ecrites.get(nom) in (None, "", [], {})]
+            if manquantes:
+                return text_result(
+                    f"`outputs` lacks {', '.join(f'`{n}`' for n in manquantes)}: this step declares "
+                    f"{', '.join(f'`{n}`' for n in declarees)}, each a key of `outputs` of its own — "
+                    "not nested in another output.",
+                    is_error=True,
+                )
         return text_result("ok: the result conforms to choregos/StageResult/v1")
+
+    async def _sorties_declarees(self) -> list[str]:
+        """Les sorties de la transition, lues une fois dans l'entrée du run. Illisible — un client
+        sans `fetch_input`, l'API injoignable — : rien à exiger, le runner tranchera."""
+        if self.context.declared_outputs is None:
+            try:
+                entree = await self.client.fetch_input()
+                self.context.declared_outputs = list(entree.transition.outputs)
+            except Exception:
+                return []
+        return self.context.declared_outputs
 
     async def _tool_report_finding(self, arguments: dict[str, Any]) -> dict[str, Any]:
         if self.context.findings_remaining <= 0:
