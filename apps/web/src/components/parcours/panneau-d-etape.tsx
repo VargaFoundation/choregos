@@ -7,10 +7,12 @@ import { useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { verdictsDe } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
+import { PlanDeLAgent } from "@/components/plan-de-l-agent";
 import { Empty, LEGENDE, PhraseDuMoteur } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { duration, relative, shortDate, usd } from "@/lib/format";
+import { planDeLAgent } from "@/lib/plan-de-l-agent";
 import { useEventStream } from "@/lib/sse";
 import type { JourneyStep, ProcessStep, RunEventDto } from "@/lib/types";
 import type { Etape, EtatEtape } from "./modele";
@@ -271,8 +273,15 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
   const garanties = verdictsDe(evenements);
   const lignes = acces.data?.acces ?? [];
   const fichiers = diff.data?.files ?? [];
+  const plan = planDeLAgent(evenements);
   return (
     <div className="space-y-3 text-sm" data-testid="ce-qu-il-a-fait">
+      {plan && (
+        <section>
+          <h4 className={cn(LEGENDE, "mb-1")}>agent plan</h4>
+          <PlanDeLAgent plan={plan} />
+        </section>
+      )}
       <section>
         <h4 className={LEGENDE}>gates</h4>
         {garanties.length === 0 ? (

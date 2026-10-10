@@ -106,6 +106,21 @@ function summarize(event: RunEventDto): string {
   if (event.type === "session/request_permission") {
     return `${payload.allowed ? "allowed" : "refused"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
   }
-  if (event.type === "session/update") return String(payload.text ?? JSON.stringify(payload));
+  if (event.type === "session/update") return resumerLaMiseAJour(payload);
   return JSON.stringify(payload);
+}
+
+/** Une mise à jour ACP en une ligne : le texte d'un message, l'état d'un plan — le JSON sinon. */
+function resumerLaMiseAJour(payload: Record<string, unknown>): string {
+  const update = (payload.update ?? payload) as Record<string, unknown>;
+  const genre = String(update.sessionUpdate ?? "");
+  const contenu = update.content as { text?: unknown } | undefined;
+  if ((genre === "agent_message_chunk" || genre === "agent_thought_chunk") && typeof contenu?.text === "string") {
+    return genre === "agent_thought_chunk" ? `(thinking) ${contenu.text}` : contenu.text;
+  }
+  if (genre === "plan" && Array.isArray(update.entries)) {
+    const entrees = update.entries as { status?: unknown }[];
+    return `plan · ${entrees.filter((e) => e.status === "completed").length} of ${entrees.length} done`;
+  }
+  return String(payload.text ?? JSON.stringify(payload));
 }

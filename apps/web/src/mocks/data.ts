@@ -324,6 +324,10 @@ export const runDiff = {
   ],
 };
 
+/** Une mise à jour ACP telle que le runner la journalise : les `params` bruts de `session/update`. */
+const maj = (update: Record<string, unknown>) => ({ sessionId: "sess-r3", update });
+const tache = (content: string, status: string, priority = "medium") => ({ content, priority, status });
+
 export const runEvents: RunEventDto[] = [
   { seq: 1, type: "run.started", ts: iso(60), payload: { role: "implement" } },
   {
@@ -338,15 +342,50 @@ export const runEvents: RunEventDto[] = [
     ts: iso(30),
     payload: { name: "evidence_present", passed: false, pending: false, detail: "no test was run (tests_run missing)" },
   },
-  { seq: 2, type: "session/update", ts: iso(59), payload: { text: "Reading src/orders/total.py" } },
+  // Le plan de l'agent, en trois révisions (S25-01) : la seconde coche, la troisième reformule une
+  // tâche (« Add a regression test ») et en retire une autre (« Update the changelog »).
+  {
+    seq: 2,
+    type: "session/update",
+    ts: iso(59),
+    payload: maj({
+      sessionUpdate: "plan",
+      entries: [
+        tache("Read the totals code", "in_progress", "high"),
+        tache("Deduct credit notes from the total", "pending", "high"),
+        tache("Add a regression test", "pending"),
+        tache("Update the changelog", "pending", "low"),
+      ],
+    }),
+  },
   {
     seq: 3,
+    type: "session/update",
+    ts: iso(59),
+    payload: maj({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Reading src/orders/total.py" } }),
+  },
+  {
+    seq: 4,
     type: "session/request_permission",
     ts: iso(58),
     payload: { allowed: true, kind: "edit", target: "src/orders/total.py", reason: "within the allowed paths" },
   },
   {
-    seq: 4,
+    seq: 5,
+    type: "session/update",
+    ts: iso(58),
+    payload: maj({
+      sessionUpdate: "plan",
+      entries: [
+        tache("Read the totals code", "completed", "high"),
+        tache("Deduct credit notes from the total", "in_progress", "high"),
+        tache("Add a regression test", "pending"),
+        tache("Update the changelog", "pending", "low"),
+      ],
+    }),
+  },
+  {
+    seq: 6,
     type: "session/request_permission",
     ts: iso(57),
     payload: {
@@ -356,9 +395,30 @@ export const runEvents: RunEventDto[] = [
       reason: "outside the allowed paths — use report_finding or request_scope_change",
     },
   },
-  { seq: 5, type: "dod.retry", ts: iso(40), payload: { iteration: 1, failures: ["tests"] } },
-  { seq: 6, type: "session/update", ts: iso(35), payload: { text: "Fixing the rounding and running the tests again" } },
-  { seq: 7, type: "run.result", ts: iso(30), payload: { status: "done", summary: "credit notes deducted from the total" } },
+  { seq: 7, type: "dod.retry", ts: iso(40), payload: { iteration: 1, failures: ["tests"] } },
+  {
+    seq: 8,
+    type: "session/update",
+    ts: iso(35),
+    payload: maj({
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text: "Fixing the rounding and running the tests again" },
+    }),
+  },
+  {
+    seq: 9,
+    type: "session/update",
+    ts: iso(34),
+    payload: maj({
+      sessionUpdate: "plan",
+      entries: [
+        tache("Read the totals code", "completed", "high"),
+        tache("Deduct credit notes from the total", "completed", "high"),
+        tache("Add regression tests for credit notes", "in_progress"),
+      ],
+    }),
+  },
+  { seq: 10, type: "run.result", ts: iso(30), payload: { status: "done", summary: "credit notes deducted from the total" } },
 ];
 
 export const trains: Record<string, TrainStatus> = {
