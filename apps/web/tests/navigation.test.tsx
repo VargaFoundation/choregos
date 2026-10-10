@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { entreeActive, NAV, TopNav } from "@/app/top-nav";
+import { TopNav } from "@/app/top-nav";
+import { entreeActive, GROUPES, NAV } from "@/components/coquille/navigation";
+import { ThemeProvider } from "@/lib/theme";
 
 const chemin = { courant: "/" };
 vi.mock("next/navigation", () => ({ usePathname: () => chemin.courant }));
@@ -29,29 +31,23 @@ function rendre(pathname: string) {
   chemin.courant = pathname;
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <TopNav />
+      <ThemeProvider>
+        <TopNav />
+      </ThemeProvider>
     </QueryClientProvider>,
   );
   return screen.getByRole("navigation", { name: "main navigation" });
 }
 
-describe("la navigation d'en-tête (S21-03)", () => {
+describe("la navigation (S21-03, S24-03)", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
   });
 
-  it("les skills ont leur propre entrée, active sur /skills et non sur /agents", () => {
+  it("chaque entrée est rangée dans un groupe, une seule fois ; les skills ont la leur", () => {
     expect(NAV.map((entree) => entree.label)).toContain("skills");
-    rendre("/skills/onboarding-procedure");
-    expect(screen.getByRole("link", { name: "skills" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "agents" })).not.toHaveAttribute("aria-current");
-  });
-
-  it("AI clients mène à /integrations", () => {
-    rendre("/integrations/cursor");
-    const lien = screen.getByRole("link", { name: "AI clients" });
-    expect(lien).toHaveAttribute("href", "/integrations");
-    expect(lien).toHaveAttribute("aria-current", "page");
+    const rangees = GROUPES.flatMap((groupe) => groupe.entrees);
+    expect([...rangees].sort()).toEqual(NAV.map((entree) => entree.href).sort());
   });
 
   it("les projets restent actifs dans un projet, et une seule entrée l'est à la fois", () => {
@@ -61,7 +57,7 @@ describe("la navigation d'en-tête (S21-03)", () => {
     }
   });
 
-  it("se replie derrière « menu » : le panneau s'ouvre, se ferme sur Échap et rend le focus (S23-01)", () => {
+  it("sous 1280 px, se replie derrière « menu » : le panneau s'ouvre, se ferme sur Échap et rend le focus (S23-01)", () => {
     const navigation = rendre("/p/billing-api");
     const menu = screen.getByRole("button", { name: /^menu/ });
     expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -69,11 +65,14 @@ describe("la navigation d'en-tête (S21-03)", () => {
 
     fireEvent.click(menu);
     expect(menu).toHaveAttribute("aria-expanded", "true");
-    const panneau = navigation.querySelector("#menu-principal");
+    const panneau = navigation.querySelector<HTMLElement>("#menu-principal");
     expect(panneau).not.toBeNull();
-    // Les six entrées y sont, et celle de la page courante y est marquée.
+    // Les six entrées y sont, dans leurs groupes, et celle de la page courante y est marquée.
     expect(panneau?.querySelectorAll("a")).toHaveLength(NAV.length + 1); // + « sign in »
     expect(panneau?.querySelector('a[aria-current="page"]')?.textContent).toBe("projects");
+    expect(within(panneau!).getByRole("list", { name: "catalogue" })).toBeInTheDocument();
+    // Le choix du thème y est aussi : sous 1280 px, l'en-tête ne le montre plus ailleurs.
+    expect(within(panneau!).getByRole("group", { name: "theme" })).toBeInTheDocument();
 
     fireEvent.keyDown(menu, { key: "Escape" });
     expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -81,12 +80,20 @@ describe("la navigation d'en-tête (S21-03)", () => {
     expect(menu).toHaveFocus();
   });
 
-  it("l'inbox compte ce qui attend une personne : un ticket et deux actions (S23-02)", async () => {
+  it("le bouton du menu compte ce qui attend une personne : un ticket et deux actions (S23-02)", async () => {
     rendre("/");
-    const inbox = screen.getByRole("link", { name: /^inbox/ });
-    expect(inbox).toHaveAttribute("href", "/inbox");
-    expect(await within(inbox).findByText(", 3 waiting")).toBeInTheDocument();
-    // Replié, le bouton du menu le dit aussi.
     expect(await within(screen.getByRole("button", { name: /^menu/ })).findByText(", 3 waiting")).toBeInTheDocument();
+  });
+
+  it("les deux choix du thème de l'en-tête sont deux groupes distincts", () => {
+    rendre("/");
+    fireEvent.click(screen.getByRole("button", { name: /^menu/ }));
+    // L'en-tête (à partir de 1280 px) et le panneau : un même nom n'en ferait qu'un groupe.
+    const groupes = screen.getAllByRole("group", { name: "theme" });
+    expect(groupes).toHaveLength(2);
+    const noms = groupes.map((groupe) => within(groupe).getAllByRole("radio")[0]!.getAttribute("name"));
+    expect(new Set(noms).size).toBe(2);
+    fireEvent.click(within(groupes[1]!).getByRole("radio", { name: "light" }));
+    for (const groupe of groupes) expect(within(groupe).getByRole("radio", { name: "light" })).toBeChecked();
   });
 });

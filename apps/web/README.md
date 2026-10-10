@@ -38,3 +38,4 @@ pnpm e2e                                   # parcours Playwright (mode démo)
 - **SSE avec reprise** : `Last-Event-ID` évite de perdre des événements au rechargement.
 - **Journal virtualisé** : 10 000 événements s'affichent sans saccade (test unitaire à l'appui).
 - **Thème** : une console d'opérations (ADR 0043) — sombre par défaut, clair ou celui du système au choix (`choregos.theme`, posé avant la première peinture), couleurs tirées de Radix Colors avec un budget de contraste par mode, Geist pour lire et Geist Mono pour comparer.
+- **Coquille** : à partir de 1280 px, une barre latérale groupée, repliable en rail (`choregos.sidebar`, posé avant la première peinture comme le thème) ; une barre du haut de 48 px ; en dessous, un bouton « menu » ouvre la même liste.

@@ -46,7 +46,7 @@ export function PanneauDEtape({
   const pas = tentatives.find((t) => t.id === choisie) ?? tentatives.at(-1);
   return (
     <aside
-      className="min-w-0 self-start rounded border border-line bg-surface p-4 xl:sticky xl:top-4"
+      className="min-w-0 self-start rounded border border-line bg-surface p-4 xl:sticky xl:top-16"
       aria-label={`${etape.libelle}: attempts, actions and log`}
       data-testid="panneau-parcours"
     >

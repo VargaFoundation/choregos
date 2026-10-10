@@ -35,7 +35,7 @@ export function libelleFonction(cle: string): string {
 export function EditionBadge({ edition }: { edition: Edition["edition"] }) {
   return (
     <span
-      className="rounded border border-line px-2 py-0.5 text-ink-muted"
+      className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-muted"
       title="ADR 0024 — two editions"
       data-testid="edition-badge"
     >

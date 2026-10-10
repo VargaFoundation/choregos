@@ -1,41 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { navLinkClasses } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
+import { ChoixDuTheme } from "@/components/choix-du-theme";
+import { Compte, ListeDeNavigation } from "@/components/coquille/navigation";
 import { EditionBadge } from "@/components/edition";
 import { useADecider } from "@/lib/a-decider";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { useSession } from "@/lib/session";
 
-// Les skills ont leur entrée (revue du 07/10 : « il n'y a pas de lien direct dans le menu ») et
-// « AI clients » plutôt qu'« integrations » : la page sert aux assistants qui entrent DANS Choregos,
-// quand les connecteurs (administration) sont ce vers quoi Choregos sort. Les libellés sont courts :
-// à 1280 px, l'en-tête doit tenir sur une ligne sans défiler (mesuré, S21-03).
-export const NAV = [
-  { href: "/", label: "projects" },
-  { href: "/agents", label: "agents" },
-  { href: "/skills", label: "skills" },
-  { href: "/inbox", label: "inbox" },
-  { href: "/integrations", label: "AI clients" },
-  { href: "/admin", label: "admin" },
-];
-
-export function entreeActive(href: string, pathname: string): boolean {
-  return href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(href);
-}
-
 /**
- * La navigation d'en-tête : liens, organisation courante, et qui est connecté.
+ * L'en-tête : organisation courante, qui est connecté, le thème — et, sous 1280 px, la navigation.
  *
- * Elle ne tient sur une ligne qu'à partir de 1280 px (S21-03). En dessous, elle débordait : TOUTES
- * les pages de la console défilaient en largeur, à 1024 px comme sur un téléphone (1091 px de large
- * pour une fenêtre de 390, mesuré le 08/10, S23-01). Sous `xl`, elle se replie derrière un bouton
- * « menu » qui ouvre un panneau sous l'en-tête ; il se referme sur Échap et quand on change de page.
+ * À partir de 1280 px, la navigation vit dans la barre latérale (`components/coquille`, ADR 0043) et
+ * l'en-tête ne garde que ce qui concerne la session. En dessous, la navigation se replie derrière un
+ * bouton « menu » qui ouvre un panneau sous l'en-tête (S23-01 : sans repli, TOUTES les pages
+ * défilaient en largeur) ; il se referme sur Échap et quand on change de page.
  */
 export function TopNav({ demo = false }: { demo?: boolean }) {
   const pathname = usePathname();
@@ -66,27 +50,6 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
     return () => window.removeEventListener("keydown", surTouche);
   }, [ouvert]);
 
-  const liens = (empile: boolean) =>
-    NAV.map((entry) => {
-      const active = entreeActive(entry.href, pathname);
-      return (
-        <Link
-          key={entry.href}
-          href={entry.href}
-          aria-current={active ? "page" : undefined}
-          className={cn(
-            navLinkClasses(active),
-            "whitespace-nowrap",
-            empile && "block py-3",
-            empile && active && "font-medium",
-          )}
-        >
-          {entry.label}
-          {entry.href === "/inbox" && aDecider > 0 && <Compte n={aDecider} />}
-        </Link>
-      );
-    });
-
   const choixOrg =
     orgs.length > 1 ? (
       <label className="flex items-center gap-2">
@@ -95,7 +58,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
           aria-label="current organisation"
           value={org}
           onChange={(event) => choisirOrg(event.target.value)}
-          className="rounded border border-line bg-surface px-2 py-1"
+          className="h-7 border border-line bg-raised px-2 font-mono text-xs text-ink"
         >
           {orgs.map((o) => (
             <option key={o.slug} value={o.slug}>
@@ -105,7 +68,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
         </select>
       </label>
     ) : (
-      <span className="text-ink-muted" title="current organisation">
+      <span className="font-mono text-ink-muted" title="current organisation">
         org {org}
       </span>
     );
@@ -124,58 +87,54 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
   );
 
   const badgeDemo = demo && (
-    <span className="whitespace-nowrap border border-line-strong px-2 py-0.5 text-xs text-ink-muted">
+    <span className="whitespace-nowrap rounded-full border border-waiting-line bg-waiting-soft px-2 py-0.5 font-mono text-[11px] text-waiting-ink">
       demo · fixtures
     </span>
   );
 
   return (
-    <nav className="flex flex-1 items-center gap-6" aria-label="main navigation">
-      <div className="hidden items-center gap-6 xl:flex">{liens(false)}</div>
+    <>
+      {/* À partir de 1280 px : l'organisation à gauche, la session à droite. */}
+      <div className="hidden items-center text-xs xl:flex">{choixOrg}</div>
       <div className="ml-auto hidden items-center gap-4 whitespace-nowrap text-xs xl:flex">
         {edition.data && <EditionBadge edition={edition.data.edition} />}
-        {choixOrg}
         {session}
         {badgeDemo}
+        <ChoixDuTheme />
       </div>
-      <button
-        ref={bouton}
-        type="button"
-        aria-expanded={ouvert}
-        aria-controls="menu-principal"
-        onClick={() => setOuvert((valeur) => !valeur)}
-        className="ml-auto inline-flex min-h-11 items-center gap-2 border border-line px-3 text-sm text-ink hover:border-line-strong xl:hidden"
-      >
-        <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-          {ouvert ? <path d="M3 3l10 10M13 3L3 13" /> : <path d="M2 4h12M2 8h12M2 12h12" />}
-        </svg>
-        menu
-        {aDecider > 0 && <Compte n={aDecider} />}
-      </button>
-      {ouvert && (
-        <div
-          id="menu-principal"
-          className="absolute inset-x-0 top-full max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-surface px-4 pb-6 shadow-sm sm:px-6 xl:hidden"
+      <nav className="ml-auto flex items-center xl:hidden" aria-label="main navigation">
+        <button
+          ref={bouton}
+          type="button"
+          aria-expanded={ouvert}
+          aria-controls="menu-principal"
+          onClick={() => setOuvert((valeur) => !valeur)}
+          className="-mr-3 inline-flex min-h-11 items-center gap-2 px-3 font-mono text-[13px] text-ink hover:bg-surface-muted aria-expanded:bg-surface-muted"
         >
-          <div className="divide-y divide-line">{liens(true)}</div>
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-line pt-4 text-xs">
-            {edition.data && <EditionBadge edition={edition.data.edition} />}
-            {choixOrg}
-            {session}
-            {badgeDemo}
+          {ouvert ? (
+            <X aria-hidden className="size-4" strokeWidth={1.75} />
+          ) : (
+            <Menu aria-hidden className="size-4" strokeWidth={1.75} />
+          )}
+          menu
+          {aDecider > 0 && <Compte n={aDecider} />}
+        </button>
+        {ouvert && (
+          <div
+            id="menu-principal"
+            className="raised absolute inset-x-0 top-full max-h-[calc(100dvh-3rem)] overflow-y-auto border-b border-line px-4 pb-6 sm:px-6"
+          >
+            <ListeDeNavigation pathname={pathname} aDecider={aDecider} variante="panneau" />
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-line pt-4 text-xs">
+              {edition.data && <EditionBadge edition={edition.data.edition} />}
+              {choixOrg}
+              {session}
+              {badgeDemo}
+              <ChoixDuTheme />
+            </div>
           </div>
-        </div>
-      )}
-    </nav>
-  );
-}
-
-/** Le nombre de choses qui attendent quelqu'un : lu à voix haute comme tel, pas comme un chiffre nu. */
-function Compte({ n }: { n: number }) {
-  return (
-    <span className="ml-1.5 inline-flex min-w-5 items-center justify-center bg-inverse px-1 text-xs tabular-nums text-inverse-ink">
-      <span aria-hidden>{n}</span>
-      <span className="sr-only">, {n} waiting</span>
-    </span>
+        )}
+      </nav>
+    </>
   );
 }

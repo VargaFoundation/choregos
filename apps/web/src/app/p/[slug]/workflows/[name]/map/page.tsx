@@ -78,7 +78,7 @@ export default function MapPage() {
           )}
         </div>
       </Card>
-      <div className="space-y-4 self-start lg:sticky lg:top-20" data-testid="panneaux-de-la-carte">
+      <div className="space-y-4 self-start lg:sticky lg:top-16" data-testid="panneaux-de-la-carte">
         {noeud && <PanneauDEtat key={`n-${noeud.id}`} noeud={noeud} etats={noeuds} acteurs={acteurs} />}
         {arete && <PanneauDeTransition key={`e-${arete.id ?? arete.from}`} arete={arete} acteurs={acteurs} />}
         {!noeud && !arete && (

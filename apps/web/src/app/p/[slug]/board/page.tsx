@@ -130,7 +130,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             key={column.state}
             id={`colonne-${column.state}`}
             aria-label={`${column.display}, ${column.items.length} ticket${column.items.length > 1 ? "s" : ""}`}
-            className="scroll-mt-20 space-y-2"
+            className="scroll-mt-16 space-y-2"
           >
             <header className="flex items-center justify-between">
               <StateBadge state={column.state} display={column.display} kind={column.kind} />
@@ -146,7 +146,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
               <div
                 key={item.id}
                 id={`carte-${item.id}`}
-                className="scroll-mt-20 target:outline target:outline-2 target:outline-accent"
+                className="scroll-mt-16 target:outline target:outline-2 target:outline-accent"
               >
                 <Card className="p-3">
                   <div className="flex items-start justify-between gap-2">
