@@ -77,8 +77,8 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
                   // colonnes restent alignées. Un filet plutôt qu'un fond teinté : la couleur seule ne
                   // disait pas « refusé » (S23-05).
                   "flex w-full items-center gap-3 border-b border-l-2 border-b-line/50 border-l-transparent px-3 hover:bg-surface-muted",
-                  denied && "border-l-failed-solid",
-                  isResult && "border-l-succeeded-solid",
+                  denied && "border-l-failed",
+                  isResult && "border-l-succeeded",
                 )}
               >
                 <span className="w-10 shrink-0 tabular-nums text-ink-muted">{event.seq}</span>
