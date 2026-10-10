@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Input, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 import { GesteConfirme } from "@/components/geste-confirme";
@@ -86,11 +86,11 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
               <>
                 <label className="flex min-w-0 flex-col gap-1">
                   <span className="text-xs text-ink-muted">freeze reason</span>
-                  <input
+                  <Input
                     value={reason}
                     onChange={(event) => setReason(event.target.value)}
                     placeholder="freeze reason (required)"
-                    className="min-w-56 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+                    className="w-auto min-w-56"
                   />
                 </label>
                 <Button tone="danger" onClick={() => act("freeze")}>

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Input, Select } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { GARANTIES_COURANTES, operations } from "@/components/workflows/operations";
 
@@ -16,8 +16,6 @@ type Arete = {
   gates?: string[];
   timeout_hours?: number | null;
 };
-
-const champ = "w-full rounded border border-line bg-surface px-2 py-1 text-sm";
 
 /**
  * La cible « un nouvel état » : l'état et la transition qui y mène partent ensemble, et s'annulent
@@ -42,7 +40,7 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
         >
           <label className="flex-1 space-y-1">
             <span className="text-xs text-ink-muted">label</span>
-            <input className={champ} value={libelle} onChange={(event) => setLibelle(event.target.value)} />
+            <Input value={libelle} onChange={(event) => setLibelle(event.target.value)} />
           </label>
           <Button size="sm" type="submit" disabled={!libelle || libelle === noeud.display}>
             set label
@@ -57,7 +55,7 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
         >
           <label className="flex-1 space-y-1">
             <span className="text-xs text-ink-muted">name (every reference follows)</span>
-            <input className={champ} value={nom} onChange={(event) => setNom(event.target.value)} />
+            <Input value={nom} onChange={(event) => setNom(event.target.value)} />
           </label>
           <Button size="sm" type="submit" disabled={!nom || nom === noeud.id}>
             rename
@@ -102,7 +100,7 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
       {!depart && (
         <label className="flex-1 space-y-1">
           <span className="text-xs text-ink-muted">from</span>
-          <select className={champ} value={de} onChange={(event) => setDe(event.target.value)}>
+          <Select value={de} onChange={(event) => setDe(event.target.value)}>
             <option value="">—</option>
             {etats
               .filter((etat) => !etat.terminal)
@@ -111,12 +109,12 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
                   {etat.display}
                 </option>
               ))}
-          </select>
+          </Select>
         </label>
       )}
       <label className="flex-1 space-y-1">
         <span className="text-xs text-ink-muted">{depart ? "new transition to" : "to"}</span>
-        <select className={champ} value={vers} onChange={(event) => setVers(event.target.value)}>
+        <Select value={vers} onChange={(event) => setVers(event.target.value)}>
           <option value="">—</option>
           {etats
             .filter((etat) => etat.id !== origine)
@@ -126,23 +124,23 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
               </option>
             ))}
           <option value={NOUVEL_ETAT}>a new state…</option>
-        </select>
+        </Select>
       </label>
       {vers === NOUVEL_ETAT && (
         <label className="flex-1 space-y-1">
           <span className="text-xs text-ink-muted">name of the new state</span>
-          <input className={champ} value={nouveau} onChange={(event) => setNouveau(event.target.value)} />
+          <Input value={nouveau} onChange={(event) => setNouveau(event.target.value)} />
         </label>
       )}
       <label className="flex-1 space-y-1">
         <span className="text-xs text-ink-muted">by</span>
-        <select className={champ} value={par} onChange={(event) => setPar(event.target.value)}>
+        <Select value={par} onChange={(event) => setPar(event.target.value)}>
           {acteurs.map((acteur) => (
             <option key={acteur} value={acteur}>
               {acteur}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <Button size="sm" type="submit" disabled={!origine || !cible || !par || brouillon.occupe}>
         add
@@ -177,13 +175,13 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
         >
           <label className="flex-1 space-y-1">
             <span className="text-xs text-ink-muted">who moves it</span>
-            <select className={champ} value={par} onChange={(event) => setPar(event.target.value)}>
+            <Select value={par} onChange={(event) => setPar(event.target.value)}>
               {acteurs.map((acteur) => (
                 <option key={acteur} value={acteur}>
                   {acteur}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <Button size="sm" type="submit" disabled={!par || par === arete.actor}>
             set
@@ -213,10 +211,9 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
               void brouillon.appliquer(operations.ajouterUneGarantie(id, garantie)).then((ok) => ok && setGarantie(""));
             }}
           >
-            <input
+            <Input
               aria-label="guarantee to add"
               list="garanties-courantes"
-              className={champ}
               value={garantie}
               onChange={(event) => setGarantie(event.target.value)}
             />
@@ -239,7 +236,7 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
         >
           <label className="flex-1 space-y-1">
             <span className="text-xs text-ink-muted">at most (hours, empty: no limit)</span>
-            <input type="number" min={1} className={champ} value={heures} onChange={(event) => setHeures(event.target.value)} />
+            <Input type="number" min={1} value={heures} onChange={(event) => setHeures(event.target.value)} />
           </label>
           <Button size="sm" type="submit">
             set

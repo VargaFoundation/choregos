@@ -3,7 +3,7 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, Card, Empty, ErrorNote, StateBadge, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, Input, StateBadge, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { versCsv } from "@/lib/csv";
 import { shortDate } from "@/lib/format";
@@ -54,20 +54,20 @@ export default function AuditPage() {
       >
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">actor</span>
-          <input
+          <Input
             value={acteur}
             onChange={(event) => setActeur(event.target.value)}
             placeholder="actor (e-mail, agent)"
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">target type</span>
-          <input
+          <Input
             value={cible}
             onChange={(event) => setCible(event.target.value)}
             placeholder="target type (work_item, user…)"
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           />
         </label>
         <Button size="sm" type="submit">

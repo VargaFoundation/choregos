@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 
@@ -40,17 +40,17 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
       action={
         <label className="flex items-center gap-2">
           <span className="text-xs text-ink-muted">filter by status</span>
-          <select
+          <Select
             value={status}
             onChange={(event) => setStatus(event.target.value)}
-            className="rounded border border-line bg-surface px-2 py-1 text-sm"
+            className="w-auto"
           >
             <option value="">all</option>
             <option value="pending">to triage</option>
             <option value="created">ticket created</option>
             <option value="duplicate">duplicates</option>
             <option value="dismissed">dismissed</option>
-          </select>
+          </Select>
         </label>
       }
     >

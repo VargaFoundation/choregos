@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, Card, ErrorNote, Heading } from "@/components/ui";
+import { Button, Card, ErrorNote, Heading, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -168,10 +168,10 @@ export default function NewProjectPage() {
             {!form.sansDepot && (
               <label className="block space-y-1">
                 <span>stack template</span>
-                <select
+                <Select
                   value={form.template}
                   onChange={(event) => set("template", event.target.value)}
-                  className="w-full rounded border border-line bg-surface px-2 py-1.5"
+                  className="w-full"
                 >
                   <option value="">none — I wire my connectors myself</option>
                   {(templates.data ?? []).map((template) => (
@@ -180,7 +180,7 @@ export default function NewProjectPage() {
                       {template.is_published ? "" : " (unpublished)"}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <span className="block text-xs text-ink-muted">
                   A template installs the labels, the board, the webhooks, the namespaces and the CI.
                 </span>
@@ -200,17 +200,17 @@ export default function NewProjectPage() {
                 {!repoValid && form.repo && <ErrorNote>expected: `owner/repo` or an https URL</ErrorNote>}
                 <label className="block space-y-1">
                   <span>main language</span>
-                  <select
+                  <Select
                     value={form.language}
                     onChange={(event) => set("language", event.target.value)}
-                    className="w-full rounded border border-line bg-surface px-2 py-1.5"
+                    className="w-full"
                   >
                     {["python", "node", "go", "java", "dotnet", "other"].map((language) => (
                       <option key={language} value={language}>
                         {language}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               </>
             )}
@@ -221,17 +221,17 @@ export default function NewProjectPage() {
           <div className="space-y-3 text-sm">
             <label className="block space-y-1">
               <span>tracker (where tickets come from)</span>
-              <select
+              <Select
                 value={form.tracker}
                 onChange={(event) => set("tracker", event.target.value)}
-                className="w-full rounded border border-line bg-surface px-2 py-1.5"
+                className="w-full"
               >
                 {TRACKERS.map((tracker) => (
                   <option key={tracker.value} value={tracker.value}>
                     {tracker.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             {!form.sansDepot && (
               <Field
@@ -319,11 +319,11 @@ function Field({
   return (
     <label className="block space-y-1">
       <span>{label}</span>
-      <input
+      <Input
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded border border-line bg-surface px-2 py-1.5"
+        className="w-full"
       />
     </label>
   );

@@ -37,6 +37,17 @@ const statut = (id: string) => screen.getByTestId(`etape-${id}`).getAttribute("d
 afterEach(() => vi.useRealTimers());
 
 describe("la carte animée du parcours (S22-02)", () => {
+  it("la barre de relecture n'a plus d'aplat d'encre : l'action en iris, le direct en bleu (S24-04)", () => {
+    rendre();
+    const relire = screen.getByRole("button", { name: "replay the journey" });
+    expect(relire).toHaveClass("bg-inverse");
+    expect(relire).not.toHaveClass("bg-ink");
+    expect(screen.getByRole("button", { name: "restart the replay" })).not.toHaveClass("bg-ink");
+    const direct = screen.getByRole("button", { name: "live: follow the work item" });
+    expect(direct).toHaveAttribute("aria-pressed", "true");
+    expect(direct).toHaveClass("bg-running-soft", "text-running-ink");
+  });
+
   it("en direct : chaque case dit qui agit, où il en est, et combien de tours il a pris", () => {
     rendre();
     expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("now in Reviewed by an agent");

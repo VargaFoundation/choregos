@@ -97,11 +97,15 @@
  * sortaient du champ sans indice. Une ombre se pose sur le bord où il reste à lire — les deux
  * premiers fonds suivent le contenu (`local`) et couvrent l'ombre quand on est au bout, les deux
  * suivants restent au bord (`scroll`). Le tableau du design system pose son propre conteneur.
+ *
+ * Le cache est du fond où le tableau est posé : `--varga-surface`, qu'une carte (`.raised`) redéfinit
+ * et que ses enfants héritent. `--color-surface`, résolu une fois sur :root, peignait sur une carte
+ * deux bandes du fond de la page, plus sombres qu'elle, même sans rien à faire défiler (S24-04).
  */
 .overflow-x-auto:has(> table) {
   background:
-    linear-gradient(to right, var(--color-surface) 30%, transparent) left center / 2.5rem 100% no-repeat local,
-    linear-gradient(to left, var(--color-surface) 30%, transparent) right center / 2.5rem 100% no-repeat local,
+    linear-gradient(to right, var(--varga-surface) 30%, transparent) left center / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--varga-surface) 30%, transparent) right center / 2.5rem 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, var(--choregos-scroll-hint), transparent) left center / 0.75rem 100%
       no-repeat scroll,
     radial-gradient(farthest-side at 100% 50%, var(--choregos-scroll-hint), transparent) right center / 0.75rem

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { GesteConfirme } from "@/components/geste-confirme";
-import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, EtatDeLecture, PhraseDuMoteur } from "@/components/ui";
+import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, EtatDeLecture, Input, PhraseDuMoteur, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { WorkflowRouting, WorkflowSummary } from "@/lib/types";
@@ -288,35 +288,35 @@ function Routage({
       >
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">labelled (any of)</span>
-          <input
+          <Input
             value={labels}
             onChange={(event) => setLabels(event.target.value)}
             placeholder="incident, sev1"
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">of type</span>
-          <input
+          <Input
             value={type}
             onChange={(event) => setType(event.target.value)}
             placeholder="Bug"
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">goes to</span>
-          <select
+          <Select
             value={cibleChoisie}
             onChange={(event) => setCible(event.target.value)}
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           >
             {noms.map((nom) => (
               <option key={nom} value={nom}>
                 {nom}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <Button size="sm" type="submit" disabled={!ajoutable} aria-describedby="regle-incomplete">
           add the rule

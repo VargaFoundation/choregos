@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, Card, Empty, ErrorNote, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { Confirmation } from "@/components/geste-confirme";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -59,34 +59,34 @@ export default function MembersPage() {
       >
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">member e-mail</span>
-          <input
+          <Input
             value={invite.email}
             onChange={(event) => setInvite((i) => ({ ...i, email: event.target.value }))}
             placeholder="alice@example.org"
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">role</span>
-          <select
+          <Select
             value={invite.role}
             onChange={(event) => setInvite((i) => ({ ...i, role: event.target.value as Role }))}
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           >
             {ROLES.map((role) => (
               <option key={role} value={role}>
                 {role}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">project (optional)</span>
-          <input
+          <Input
             value={invite.project_slug}
             onChange={(event) => setInvite((i) => ({ ...i, project_slug: event.target.value }))}
             placeholder="project (empty = whole organisation)"
-            className="rounded border border-line bg-surface px-2 py-1"
+            className="w-auto"
           />
         </label>
         <Button size="sm" tone="primary" type="submit" disabled={!invite.email}>
@@ -122,21 +122,21 @@ export default function MembersPage() {
                   <TD>{qui}</TD>
                   <TD>{membership.project_slug ?? "whole organisation"}</TD>
                   <TD>
-                    <select
+                    <Select
                       aria-label={`role of ${qui}${membership.project_slug ? ` on ${membership.project_slug}` : ""}`}
                       value={nouveauRole?.cle === cle ? nouveauRole.role : membership.role}
                       onChange={(event) => {
                         const role = event.target.value as Role;
                         setNouveauRole(role === membership.role ? null : { cle, role });
                       }}
-                      className="rounded border border-line bg-surface px-2 py-1 font-mono text-xs"
+                      className="w-auto font-mono"
                     >
                       {ROLES.map((role) => (
                         <option key={role} value={role}>
                           {role}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                     {nouveauRole?.cle === cle && (
                       <div className="mt-2 max-w-sm">
                         <Confirmation

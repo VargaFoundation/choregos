@@ -3,7 +3,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, ErrorNote } from "@/components/ui";
+import { Button, ErrorNote, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Action } from "@/lib/types";
 
@@ -40,8 +40,8 @@ export function DecisionDAction({ projet, action }: { projet: string; action: Ac
         </Button>
         <label className="flex-1 space-y-1">
           <span className="text-xs text-ink-muted">reason to reject</span>
-          <input
-            className="w-full rounded border border-line bg-surface px-2 py-1.5 text-sm"
+          <Input
+            className="w-full"
             value={raison}
             onChange={(event) => setRaison(event.target.value)}
           />

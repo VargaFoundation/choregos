@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -78,11 +78,11 @@ export default function AdminPage() {
           >
             <label className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="text-xs text-ink-muted">token name</span>
-              <input
+              <Input
                 value={tokenName}
                 onChange={(event) => setTokenName(event.target.value)}
                 placeholder="cli"
-                className="min-w-0 flex-1 rounded border border-line bg-surface px-2 py-1"
+                className="min-w-0 flex-1"
               />
             </label>
             <Button size="sm" tone="primary" type="submit">

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { verdictsDe } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
-import { Empty, PhraseDuMoteur } from "@/components/ui";
+import { Empty, LEGENDE, PhraseDuMoteur } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { duration, relative, shortDate, usd } from "@/lib/format";
@@ -46,13 +46,13 @@ export function PanneauDEtape({
   const pas = tentatives.find((t) => t.id === choisie) ?? tentatives.at(-1);
   return (
     <aside
-      className="min-w-0 self-start rounded border border-line bg-surface p-4 xl:sticky xl:top-16"
+      className="raised min-w-0 self-start border border-line p-4 xl:sticky xl:top-16"
       aria-label={`${etape.libelle}: attempts, actions and log`}
       data-testid="panneau-parcours"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-ink-muted">
+          <p className={LEGENDE}>
             {GENRE[etape.genre]}
             {etape.acteur && etape.genre !== "platform" ? ` · ${etape.acteur}` : ""}
           </p>
@@ -64,7 +64,7 @@ export function PanneauDEtape({
         <button
           type="button"
           onClick={onClose}
-          className="rounded px-2 py-1 text-sm text-ink-muted hover:text-ink"
+          className="px-2 py-1 text-sm text-ink-muted hover:text-ink pointer-coarse:min-h-11"
           aria-label="close the panel"
         >
           ✕
@@ -111,8 +111,10 @@ export function PanneauDEtape({
                 data-testid={`tentative-${t.id}`}
                 onClick={() => setChoisie(t.id)}
                 className={cn(
-                  "rounded border px-2 py-0.5 text-xs",
-                  t.id === pas?.id ? "border-ink text-ink" : "border-line-strong text-ink-muted hover:text-ink",
+                  "border px-2 py-0.5 font-mono text-xs pointer-coarse:min-h-11",
+                  t.id === pas?.id
+                    ? "border-accent-line bg-accent-soft text-accent-strong"
+                    : "border-line text-ink-muted hover:text-ink",
                 )}
               >
                 {t.attempt} · {t.status.replace(/_/g, " ")}
@@ -141,7 +143,7 @@ function Faits({ pas }: { pas: JourneyStep }) {
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
       <dt className="text-ink-muted">status</dt>
-      <dd className={cn(pas.status === "failed" || pas.status === "rejected" ? "text-danger" : "text-ink")}>
+      <dd className={cn(pas.status === "failed" || pas.status === "rejected" ? "text-failed-ink" : "text-ink")}>
         {pas.status.replace(/_/g, " ")}
       </dd>
       <dt className="text-ink-muted">started</dt>
@@ -204,7 +206,7 @@ function Preuves({ evidence }: { evidence: Record<string, unknown> }) {
   return (
     <ul className="flex flex-wrap gap-1.5 text-xs" aria-label="evidence">
       {lignes.map(([nom, valeur]) => (
-        <li key={nom} className="rounded border border-line px-1.5 py-0.5">
+        <li key={nom} className="border border-line px-1.5 py-0.5">
           <span className="text-ink-muted">{nom}</span> {valeur}
         </li>
       ))}
@@ -227,7 +229,7 @@ function PasDAgent({ pas, slug }: { pas: JourneyStep; slug: string }) {
       <Faits pas={pas} />
       {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
       {pas.verdict && (
-        <p className={cn("text-sm font-medium", pas.verdict === "approve" ? "text-ok" : "text-warn")}>
+        <p className={cn("text-sm font-medium", pas.verdict === "approve" ? "text-succeeded-ink" : "text-retrying-ink")}>
           verdict: {pas.verdict.replace(/_/g, " ")}
         </p>
       )}
@@ -247,7 +249,7 @@ function PasDAgent({ pas, slug }: { pas: JourneyStep; slug: string }) {
             onClick={() => setVue(cle)}
             className={cn(
               "-mb-px border-b-2 py-1.5",
-              vue === cle ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink",
+              vue === cle ? "border-accent font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink",
             )}
           >
             {libelle}
@@ -272,7 +274,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
   return (
     <div className="space-y-3 text-sm" data-testid="ce-qu-il-a-fait">
       <section>
-        <h4 className="text-xs uppercase tracking-wide text-ink-muted">gates</h4>
+        <h4 className={LEGENDE}>gates</h4>
         {garanties.length === 0 ? (
           <p className="text-xs text-ink-muted">No gate evaluated on this run.</p>
         ) : (
@@ -280,7 +282,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
             {garanties.map((g, i) => (
               <li key={`${g.name}-${i}`} className="flex gap-2 text-xs">
                 <span
-                  className={g.pending ? "text-warn" : g.passed ? "text-ok" : "text-danger"}
+                  className={g.pending ? "text-waiting-ink" : g.passed ? "text-succeeded-ink" : "text-failed-ink"}
                   aria-label={g.pending ? "pending" : g.passed ? "passed" : "refused"}
                 >
                   {g.pending ? "…" : g.passed ? "✓" : "✗"}
@@ -295,7 +297,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
         )}
       </section>
       <section>
-        <h4 className="text-xs uppercase tracking-wide text-ink-muted">
+        <h4 className={LEGENDE}>
           access {acces.data ? `· ${acces.data.evenements} events, ${acces.data.refus} refused` : ""}
         </h4>
         {lignes.length === 0 ? (
@@ -305,7 +307,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
             {[...lignes]
               .sort((a, b) => b.refus - a.refus)
               .map((l) => (
-                <li key={`${l.nature}:${l.cible}`} className={cn("flex gap-2", l.refus > 0 && "text-danger")}>
+                <li key={`${l.nature}:${l.cible}`} className={cn("flex gap-2", l.refus > 0 && "text-failed-ink")}>
                   <span className="w-14 shrink-0 text-ink-muted">{l.nature}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block break-all font-mono">{l.cible}</span>
@@ -317,7 +319,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
         )}
       </section>
       <section>
-        <h4 className="text-xs uppercase tracking-wide text-ink-muted">
+        <h4 className={LEGENDE}>
           files changed {diff.data ? `· +${diff.data.additions} −${diff.data.deletions}` : ""}
         </h4>
         {fichiers.length === 0 ? (
@@ -327,9 +329,9 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
             {fichiers.map((f) => (
               <li key={f.path} className="flex gap-2">
                 <span className="min-w-0 flex-1 break-all font-mono">{f.path}</span>
-                <span className="text-ok">+{f.additions}</span>
-                <span className="text-danger">−{f.deletions}</span>
-                {f.in_scope === false && <span className="text-danger">out of scope</span>}
+                <span className="text-succeeded-ink">+{f.additions}</span>
+                <span className="text-failed-ink">−{f.deletions}</span>
+                {f.in_scope === false && <span className="text-failed-ink">out of scope</span>}
               </li>
             ))}
           </ul>
@@ -346,12 +348,12 @@ function PasHumain({ pas, itemId, onDecided }: { pas: JourneyStep; itemId: strin
       <Faits pas={pas} />
       {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
       {attendu ? (
-        <div className="rounded border border-line p-3">
-          <p className="mb-2 text-xs uppercase tracking-wide text-ink-muted">decide here</p>
+        <div className="border border-line border-l-2 border-l-waiting-solid p-3">
+          <p className={cn(LEGENDE, "mb-2")}>decide here</p>
           <DecisionBar itemId={itemId} kind={pas.role ?? "approval"} onDone={onDecided} />
         </div>
       ) : (
-        <p className={cn("text-sm", pas.status === "rejected" ? "text-warn" : "text-ok")}>
+        <p className={cn("text-sm", pas.status === "rejected" ? "text-failed-ink" : "text-succeeded-ink")}>
           {pas.status.replace(/_/g, " ")}
           {pas.decided_by ? ` by ${pas.decided_by}` : ""}
           {pas.ended_at ? `, ${relative(pas.ended_at)}` : ""}

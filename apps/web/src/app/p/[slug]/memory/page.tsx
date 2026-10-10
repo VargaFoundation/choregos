@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input, LEGENDE } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 
@@ -42,11 +42,11 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
         >
           <label className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="text-xs text-ink-muted">search the memory</span>
-            <input
+            <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="rounding, incident, test convention…"
-              className="flex-1 rounded border border-line bg-surface px-2 py-1.5 text-sm"
+              className="flex-1"
             />
           </label>
           <Button type="submit" tone="primary">
@@ -55,8 +55,8 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
         </form>
         <ul className="space-y-3">
           {(results.data ?? []).map((memory) => (
-            <li key={memory.id} className="rounded border border-line p-3">
-              <p className="text-xs uppercase tracking-wide text-ink-muted">{memory.kind}</p>
+            <li key={memory.id} className="raised border border-line p-3">
+              <p className={LEGENDE}>{memory.kind}</p>
               <p className="font-mono text-xs">{memory.subject}</p>
               <p className="mt-1 text-sm">{memory.content}</p>
               <p className="mt-1 text-xs text-ink-muted">

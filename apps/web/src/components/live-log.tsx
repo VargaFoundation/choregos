@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
-/** Journal ACP virtualisé : 10 000 événements sans saccade, permissions mises en évidence. */
+/**
+ * Journal ACP virtualisé : 10 000 événements sans saccade, permissions mises en évidence. Il a
+ * l'allure d'un historique d'événements (ADR 0043) : des lignes de 32 px, l'heure en mono, un refus
+ * en pastille rouge, et des en-têtes de colonne qui restent en haut quand on défile.
+ */
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { Input, LEGENDE } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { shortDate } from "@/lib/format";
 import type { RunEventDto } from "@/lib/types";
 
-const ROW_HEIGHT = 28;
+const ROW_HEIGHT = 32;
 const OVERSCAN = 12;
 
 export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; height?: number }) {
@@ -32,14 +37,14 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-ink-muted">filter the journal</span>
-          <input
+          <Input
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
             placeholder="filter (permission, dod, result…)"
-            className="w-64 min-w-0 max-w-full rounded border border-line bg-surface px-2 py-1 text-xs"
+            className="w-64 min-w-0 max-w-full"
           />
         </label>
-        <span className="text-xs text-ink-muted">
+        <span className="pb-2 font-mono text-xs tabular-nums text-ink-muted">
           {rows.length} event{rows.length > 1 ? "s" : ""}
         </span>
       </div>
@@ -47,9 +52,18 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
         ref={container}
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
         style={{ height }}
-        className="overflow-auto rounded border border-line bg-surface font-mono text-xs"
+        className="raised overflow-auto border border-line font-mono text-xs"
         data-testid="live-log"
       >
+        <div
+          aria-hidden
+          className={cn("sticky top-0 z-10 flex h-8 items-center gap-3 border-b border-l-2 border-line border-l-transparent bg-raised px-3", LEGENDE)}
+        >
+          <span className="w-10 shrink-0">#</span>
+          <span className="w-16 shrink-0">time</span>
+          <span className="w-52 shrink-0">event</span>
+          <span>detail</span>
+        </div>
         <div style={{ height: rows.length * ROW_HEIGHT, position: "relative" }}>
           {visible.map((event, index) => {
             const denied = event.type === "session/request_permission" && event.payload?.allowed === false;
@@ -59,18 +73,23 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
                 key={event.seq}
                 style={{ position: "absolute", top: (start + index) * ROW_HEIGHT, height: ROW_HEIGHT }}
                 className={cn(
-                  "flex w-full items-center gap-3 border-b border-line/50 px-3",
-                  // Un filet plutôt qu'un fond teinté : le rouge et le vert sur leur propre teinte ne
-                  // passaient pas 4,5:1 (axe, S23-05), et la couleur seule ne disait pas « refusé ».
-                  denied && "border-l-2 border-l-danger",
-                  isResult && "border-l-2 border-l-ok",
+                  // Chaque ligne a son filet gauche, transparent sauf un refus ou un résultat : les
+                  // colonnes restent alignées. Un filet plutôt qu'un fond teinté : la couleur seule ne
+                  // disait pas « refusé » (S23-05).
+                  "flex w-full items-center gap-3 border-b border-l-2 border-b-line/50 border-l-transparent px-3 hover:bg-surface-muted",
+                  denied && "border-l-failed-solid",
+                  isResult && "border-l-succeeded-solid",
                 )}
               >
-                <span className="w-10 shrink-0 text-ink-muted">{event.seq}</span>
-                <span className="w-16 shrink-0 text-ink-muted">{shortDate(event.ts).slice(-5)}</span>
-                <span className="w-52 shrink-0">
-                  {event.type}
-                  {denied && <span className="ml-1 font-medium text-danger">denied</span>}
+                <span className="w-10 shrink-0 tabular-nums text-ink-muted">{event.seq}</span>
+                <span className="w-16 shrink-0 tabular-nums text-ink-muted">{shortDate(event.ts).slice(-5)}</span>
+                <span className="flex w-52 shrink-0 items-center gap-1.5">
+                  <span className="truncate">{event.type}</span>
+                  {denied && (
+                    <span className="shrink-0 rounded-full border border-failed-line bg-failed-soft px-1.5 text-[11px] leading-4 font-medium text-failed-ink">
+                      denied
+                    </span>
+                  )}
                 </span>
                 <span className="truncate text-ink-muted">{summarize(event)}</span>
               </div>

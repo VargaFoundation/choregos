@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
-import { Card, Empty, ErrorNote, Heading } from "@/components/ui";
+import { Card, Empty, ErrorNote, Heading, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -47,9 +47,9 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
           (skill.data.versions ?? []).length > 1 ? (
             <label className="flex items-center gap-2 text-xs">
               <span className="text-ink-muted">version</span>
-              <select
+              <Select
                 aria-label="version to see"
-                className="rounded border border-line bg-surface px-2 py-1"
+                className="w-auto"
                 value={numero ?? ""}
                 onChange={(e) => setChoisie(Number(e.target.value))}
               >
@@ -60,7 +60,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
                       v{v.version}
                     </option>
                   ))}
-              </select>
+              </Select>
             </label>
           ) : undefined
         }

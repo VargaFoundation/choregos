@@ -50,9 +50,11 @@ describe("journal ACP", () => {
     expect(screen.getByText(/5000 events/)).toBeInTheDocument();
   });
 
-  it("met en évidence les permissions refusées", () => {
-    const { container } = render(<LiveLog events={events.slice(0, 3)} />);
-    expect(container.querySelector(".text-danger")).not.toBeNull();
+  it("met en évidence les permissions refusées : une pastille, et un filet sur la ligne", () => {
+    render(<LiveLog events={events.slice(0, 3)} />);
+    const refus = screen.getByText("denied");
+    expect(refus).toHaveClass("rounded-full", "text-failed-ink");
+    expect(refus.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed-solid");
   });
 });
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, Code } from "@varga/design-system";
 import { useState } from "react";
-import { Button, Card, ErrorNote, Onglets, tabClasses } from "@/components/ui";
+import { Button, Card, ErrorNote, Onglets, Select, tabClasses } from "@/components/ui";
 import { api, qualify } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import {
@@ -151,18 +151,18 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                 </label>
                 <label className="flex items-center gap-2">
                   <span className="text-ink-muted">expires in</span>
-                  <select
+                  <Select
                     aria-label="expires in"
                     value={duree}
                     onChange={(e) => setDuree(Number(e.target.value) as (typeof DUREES)[number])}
-                    className="rounded border border-line bg-surface px-2 py-1"
+                    className="w-auto"
                   >
                     {DUREES.map((jours) => (
                       <option key={jours} value={jours}>
                         {jours} days
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
                 <Button tone="accent" onClick={() => void frapper()}>
                   create an access token

@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChoixDuTheme } from "@/components/choix-du-theme";
 import { Compte, ListeDeNavigation } from "@/components/coquille/navigation";
 import { EditionBadge } from "@/components/edition";
+import { Select } from "@/components/ui";
 import { useADecider } from "@/lib/a-decider";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -54,18 +55,18 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
     orgs.length > 1 ? (
       <label className="flex items-center gap-2">
         <span className="text-ink-muted">organisation</span>
-        <select
+        <Select
           aria-label="current organisation"
           value={org}
           onChange={(event) => choisirOrg(event.target.value)}
-          className="h-7 border border-line bg-raised px-2 font-mono text-xs text-ink"
+          className="w-auto h-7 font-mono"
         >
           {orgs.map((o) => (
             <option key={o.slug} value={o.slug}>
               {o.name}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
     ) : (
       <span className="font-mono text-ink-muted" title="current organisation">

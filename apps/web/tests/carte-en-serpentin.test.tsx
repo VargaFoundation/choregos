@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CarteEnSerpentin } from "@/components/parcours/carte-du-parcours";
+import { COULEUR_DU_GENRE } from "@/components/workflows/carte/disposition";
 import { parcoursEnCours } from "@/mocks/parcours";
 
 // La carte du gabarit dev-complex, telle que l'API la rend (`mocks/dev-complex.json`).
@@ -14,10 +15,15 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     expect(screen.queryByRole("toolbar", { name: "replay the journey" })).not.toBeInTheDocument();
     expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer, agent, writes the change — 0 attempts$/);
     const forme = (id: string) => carte.querySelector(`[data-etape="${id}"] .parcours-forme`)!.getAttribute("stroke");
-    expect(forme("t-implement")).toBe("var(--varga-accent-strong)");
-    expect(forme("t-approve-pr")).toBe("var(--varga-ink)");
-    expect(forme("t-merge")).toBe("var(--varga-ink-muted)");
-    expect(forme("t-release")).toBe("var(--varga-ok)");
+    // Prune l'agent, bleu la personne, ardoise la plateforme, vert le train (S24-04) — les couleurs
+    // de la carte en liste, pour que les deux vues d'un workflow disent la même chose.
+    expect(forme("t-implement")).toBe("var(--choregos-agent-ink)");
+    expect(forme("t-approve-pr")).toBe("var(--choregos-running-ink)");
+    expect(forme("t-merge")).toBe("var(--choregos-neutral-ink)");
+    expect(forme("t-release")).toBe("var(--choregos-succeeded-ink)");
+    for (const [id, genre] of [["t-implement", "agent"], ["t-approve-pr", "human"], ["t-merge", "platform"], ["t-release", "train"]] as const) {
+      expect(forme(id)).toBe(COULEUR_DU_GENRE[genre].bord);
+    }
     expect(carte.querySelectorAll("[data-arc]").length).toBeGreaterThan(5);
     expect(screen.getByRole("list", { name: "who carries each step" })).toHaveTextContent("release train");
   });

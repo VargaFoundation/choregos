@@ -131,15 +131,16 @@ export function Badge({ tone = "neutral", variant = "outline", dot = true, class
   );
 }
 
+/**
+ * Les classes d'une légende : petites capitales Geist Mono, sans cadre (ADR 0043). Pour ce qui
+ * n'est pas un `Eyebrow` — l'intitulé d'un groupe, un `h4` de panneau, l'en-tête d'une colonne.
+ */
+export const LEGENDE = "font-mono text-[11px] tracking-[0.06em] text-ink-muted uppercase";
+
 /** Une légende au-dessus d'un titre : petite, en capitales d'affichage, sans cadre. */
 export function Eyebrow({ children, tone, className }: { children: ReactNode; tone?: Tone; className?: string }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.06em] text-ink-muted uppercase",
-        className,
-      )}
-    >
+    <span className={cn("inline-flex items-center gap-1.5", LEGENDE, className)}>
       {tone && <Dot tone={tone} size={4} />}
       {children}
     </span>
@@ -381,6 +382,12 @@ function inferKind(state: string): string {
   return "work";
 }
 
+/** Le ton d'un état du workflow : celui de sa pastille, de son point sur le board. */
+export function tonDEtat(state: string, kind?: string): Tone {
+  const resolved = kind ?? inferKind(state);
+  return state.includes("needs_human") || state.includes("blocked") ? "failed" : (STATE_TONES[resolved] ?? "running");
+}
+
 export function StateBadge({
   state,
   display,
@@ -390,8 +397,7 @@ export function StateBadge({
   display?: string | null;
   kind?: string;
 }) {
-  const resolved = kind ?? inferKind(state);
-  const tone = state.includes("needs_human") || state.includes("blocked") ? "failed" : (STATE_TONES[resolved] ?? "running");
+  const tone = tonDEtat(state, kind);
   return (
     <Badge tone={tone} title={state}>
       {display && display !== state ? display : libelleDeCode(state)}
@@ -429,24 +435,32 @@ export function CostChip({
   );
 }
 
+// Les couleurs des cartes (S24-04) : prune l'agent, bleu la personne, ardoise la plateforme, vert le
+// train. La personne était un point d'encre — blanc pur en sombre.
 const ACTORS: Record<string, { tone: Tone; label: string }> = {
   agent: { tone: "agent", label: "agent" },
-  user: { tone: "ink", label: "human" },
-  human: { tone: "ink", label: "human" },
+  user: { tone: "running", label: "human" },
+  human: { tone: "running", label: "human" },
   system: { tone: "neutral", label: "system" },
-  train: { tone: "neutral", label: "release train" },
+  train: { tone: "succeeded", label: "release train" },
 };
+
+/** Le ton d'un acteur : celui de son point, dans la chronologie d'un ticket comme à côté de son nom. */
+export function tonDActeur(kind: string): Tone {
+  return ACTORS[kind]?.tone ?? "neutral";
+}
 
 /**
  * L'acteur d'une étape : un point dans sa couleur, et son nom. La couleur ne suffit pas — un
  * lecteur d'écran ne la voit pas, et un daltonien confond la prune et le gris : le type d'acteur
  * est toujours énoncé en toutes lettres.
  */
-export function ActorIcon({ kind, name }: { kind: string; name?: string | null }) {
+export function ActorIcon({ kind, name, point = true }: { kind: string; name?: string | null; point?: boolean }) {
   const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "system" };
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted" title={actor.label}>
-      <Dot tone={actor.tone} size={6} />
+      {/* Sans point quand un autre le porte déjà : le rail de la chronologie d'un ticket. */}
+      {point && <Dot tone={actor.tone} size={6} />}
       {name ? (
         <>
           <span className="sr-only">{actor.label}</span>

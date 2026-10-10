@@ -8,11 +8,9 @@ import { estUnClientMcp, resumeDeLaVersion } from "@/components/agents/registre"
 import { CatalogueDAgents } from "@/components/agents/catalogue";
 import { ClientsMcp } from "@/components/agents/clients-mcp";
 import { Glossaire } from "@/components/glossaire";
-import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading, Input, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
-
-const champ = "w-full rounded border border-line bg-surface px-2 py-1.5 text-sm";
 
 /**
  * Les agents de l'organisation (ADR 0033) — le point 3 de la revue produit : « c'est censé être une
@@ -137,8 +135,7 @@ function NouvelAgent({ org }: { org: string }) {
       >
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">slug</span>
-          <input
-            className={champ}
+          <Input
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
             pattern="[a-z0-9][a-z0-9-]*"
@@ -146,12 +143,12 @@ function NouvelAgent({ org }: { org: string }) {
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">name</span>
-          <input className={champ} value={nom} onChange={(e) => setNom(e.target.value)} />
+          <Input value={nom} onChange={(e) => setNom(e.target.value)} />
         </label>
         <label className="space-y-1 md:col-span-2">
           <span className="text-xs text-ink-muted">instructions (what the frame of the platform does not say)</span>
-          <textarea
-            className={`${champ} font-mono text-xs`}
+          <Textarea
+            className="w-auto font-mono text-xs"
             rows={6}
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
@@ -159,8 +156,7 @@ function NouvelAgent({ org }: { org: string }) {
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">model (empty: the project&apos;s profile)</span>
-          <input
-            className={champ}
+          <Input
             value={modele}
             onChange={(e) => setModele(e.target.value)}
             placeholder="profile:standard"
@@ -168,8 +164,7 @@ function NouvelAgent({ org }: { org: string }) {
         </label>
         <label className="space-y-1">
           <span className="text-xs text-ink-muted">daily budget (USD, empty: none)</span>
-          <input
-            className={champ}
+          <Input
             type="number"
             min={0}
             step="0.5"
