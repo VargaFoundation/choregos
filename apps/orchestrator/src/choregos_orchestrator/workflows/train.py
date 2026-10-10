@@ -48,10 +48,30 @@ EXPRESS_LANE_APPROVAL = "express-lane-approval"
 #: précoce pendant le rejeu d'un ancien historique rendrait `False` pour toute la vie du run. Ainsi un
 #: run démarré sur la version d'avant prend le correctif s'il est mis à jour avant le seuil.
 LE_TRAIN_AU_REPOS_SE_RELAIE = "idle-train-continues-as-new"
-#: Le seuil (en événements d'historique) au-delà duquel le train se relaie. Un train peut le recevoir
-#: dans son entrée (`seuil_de_relais`) : un historique archivé qui se relaie plus tôt rejoue alors
-#: contre le code tel quel, sans rien redéfinir.
-SEUIL_DE_RELAIS = 15_000
+#: Le train se relaie AVANT que son historique ne soit trop long à rejouer (S22-27). Avant ce marqueur,
+#: le seuil était de 15 000 événements : sur le locataire dev, le 10/10 (0.17.11), un historique de
+#: ~16 000 événements (2,6 Mo) prenait 32 à 34 s à rejouer sur le pod de l'orchestrateur (1 cœur) —
+#: `[TMPRL1104] ... workflow_task_duration=33943 workflow_history_size=2571325`. Or la tâche de
+#: workflow expire à 10 s : après un `temporal workflow reset`, ou après tout redémarrage du worker
+#: (déploiement, cache collant perdu), chaque tâche expirait (`WORKFLOW_TASK_TIMED_OUT`) et le train ne
+#: progressait plus ; chaque `status_query` de la console coûtait un rejeu complet de 33 s et finissait
+#: en « query task not found, or already expired » (API 500).
+#: Même discipline que `LE_TRAIN_AU_REPOS_SE_RELAIE` : le seuil d'abord, `patched` ensuite. Un run
+#: d'avant qui rejoue au-delà du nouveau seuil y appelle `patched` sans marqueur : `False`, mémorisé,
+#: et il garde le relais d'avant (`SEUIL_DE_RELAIS_D_AVANT`, sous l'ancien marqueur). Abaisser le seuil
+#: sans nouveau marqueur ne rejouait pas : l'ancien marqueur, interrogé dès le nouveau seuil, rendait
+#: `False` pour toute la vie du run, et le relais qu'il avait enregistré à 15 000 devenait un écart
+#: de déterminisme (TMPRL1100, vérifié).
+LE_TRAIN_SE_RELAIE_TOT = "train-continues-as-new-early"
+#: Le seuil (en événements d'historique) au-delà duquel le train se relaie — au repos, après un départ
+#: et après une synchro `auto_sync`. 2 000 : le rejeu coûte ~2 ms par événement sur le pod (33,9 s pour
+#: 16 000), soit ~4 s, sous les 10 s de la tâche de workflow avec une marge pour un CPU disputé par les
+#: requêtes de la console. Au repos (~11 événements par minute), c'est un relais toutes les ~3 h.
+#: Un train peut le recevoir dans son entrée (`seuil_de_relais`) : un historique archivé qui se relaie
+#: plus tôt rejoue alors contre le code tel quel, sans rien redéfinir.
+SEUIL_DE_RELAIS = 2_000
+#: Le seuil d'avant S22-27, que seuls rejouent les runs qui n'ont pas pris `LE_TRAIN_SE_RELAIE_TOT`.
+SEUIL_DE_RELAIS_D_AVANT = 15_000
 #: Combien de fois, et à quel rythme, on regarde l'environnement avant de conclure.
 ESSAIS_AUTO_SYNC = 30
 PAUSE_AUTO_SYNC = timedelta(minutes=2)
@@ -71,7 +91,17 @@ class TrainInput:
     carried_items: list[dict[str, Any]] = field(default_factory=list)
     batch_no: int = 1
     frozen: bool = False
-    seuil_de_relais: int = SEUIL_DE_RELAIS
+    #: `None` : le seuil du code (`SEUIL_DE_RELAIS`, et celui d'avant pour les runs d'avant). Un seuil
+    #: donné vaut pour le relais au repos, d'avant comme d'après S22-27.
+    seuil_de_relais: int | None = None
+
+    def seuil(self) -> int:
+        """Le seuil de relais de ce train."""
+        return SEUIL_DE_RELAIS if self.seuil_de_relais is None else self.seuil_de_relais
+
+    def seuil_au_repos_d_avant(self) -> int:
+        """Le seuil du relais au repos tel que S22-24 le lisait (un run qui n'a pas pris S22-27)."""
+        return SEUIL_DE_RELAIS_D_AVANT if self.seuil_de_relais is None else self.seuil_de_relais
 
 
 @workflow.defn(name="ReleaseTrain", sandboxed=False)
@@ -196,7 +226,7 @@ class ReleaseTrain:
             if released.get("frozen"):
                 self.frozen = True
                 self.freeze_reason = released.get("reason", "rollback")
-            if workflow.info().get_current_history_length() > 15_000:
+            if self._se_relayer_tot(params) or _longueur() > SEUIL_DE_RELAIS_D_AVANT:
                 workflow.continue_as_new(
                     {
                         **payload,
@@ -206,6 +236,15 @@ class ReleaseTrain:
                     }
                 )
         return {"status": self.status, "batches": departures}
+
+    def _se_relayer_tot(self, params: TrainInput) -> bool:
+        """Le seuil est franchi (ou Temporal suggère le relais) ET le run a pris S22-27.
+
+        `patched` n'est appelé qu'une fois la condition vraie (voir `LE_TRAIN_SE_RELAIE_TOT`). Il ne
+        rend `True` qu'à un appelant qui se relaie aussitôt : les trois appelants le font."""
+        return (
+            _longueur() > params.seuil() or workflow.info().is_continue_as_new_suggested()
+        ) and workflow.patched(LE_TRAIN_SE_RELAIE_TOT)
 
     async def _suivre_la_synchro(self, params: TrainInput, payload: dict[str, Any]) -> None:
         """`auto_sync` : chaque ticket qui monte attend que l'environnement soit sain, puis est prévenu."""
@@ -232,7 +271,7 @@ class ReleaseTrain:
                 if verdict.get("ok") is not None or self.abort_requested:
                     break
                 await _wait(lambda: self.abort_requested, PAUSE_AUTO_SYNC)
-            if workflow.info().get_current_history_length() > 15_000:
+            if self._se_relayer_tot(params) or _longueur() > SEUIL_DE_RELAIS_D_AVANT:
                 workflow.continue_as_new(
                     {**payload, "carried_items": self.batch, "batch_no": self.batch_no, "frozen": self.frozen}
                 )
@@ -261,14 +300,17 @@ class ReleaseTrain:
             if ready and not self.frozen and len(self.batch) >= int(config.get("batch_min", 1)):
                 return
             # Au repos, l'historique grossit sans départ pour le relayer : le train se relaie ici, son
-            # lot avec lui. Le seuil d'abord, `patched` ensuite (voir `LE_TRAIN_AU_REPOS_SE_RELAIE`).
-            if (
-                not self.abort_requested
-                and (
-                    workflow.info().get_current_history_length() > params.seuil_de_relais
-                    or workflow.info().is_continue_as_new_suggested()
+            # lot avec lui. Le seuil d'abord, `patched` ensuite (voir `LE_TRAIN_AU_REPOS_SE_RELAIE`) ;
+            # un run d'avant S22-27 garde le seuil d'avant, sous son marqueur.
+            if not self.abort_requested and (
+                self._se_relayer_tot(params)
+                or (
+                    (
+                        _longueur() > params.seuil_au_repos_d_avant()
+                        or workflow.info().is_continue_as_new_suggested()
+                    )
+                    and workflow.patched(LE_TRAIN_AU_REPOS_SE_RELAIE)
                 )
-                and workflow.patched(LE_TRAIN_AU_REPOS_SE_RELAIE)
             ):
                 workflow.continue_as_new(
                     {
@@ -561,6 +603,11 @@ def _approbation_du_depart(politique: dict[str, Any], items: list[dict[str, Any]
         return politique
     groupe = politique.get("group") or next((e.get("group") for e in exigences if e.get("group")), None)
     return {**politique, "required": True, "group": groupe}
+
+
+def _longueur() -> int:
+    """La longueur de l'historique du run, en événements."""
+    return workflow.info().get_current_history_length()
 
 
 async def _wait(condition: Any, timeout: timedelta | None = None) -> bool:  # noqa: ASYNC109
