@@ -6,7 +6,7 @@ départ. `_collect` bouclait — une activité `check_window` et un timer par to
 meurt, et les tickets qui y montent attendent pour toujours.
 
 Ici, un VRAI `ReleaseTrain` attend devant une fenêtre fermée ; le seuil de relais est abaissé par son
-entrée (`seuil_de_relais`) pour ne pas produire 15 000 événements.
+entrée (`seuil_de_relais`) pour ne pas produire des milliers d'événements.
 """
 
 from __future__ import annotations
