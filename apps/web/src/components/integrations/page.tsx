@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Eyebrow, Heading } from "@varga/design-system";
 import { Glossaire } from "@/components/glossaire";
-import { Empty } from "@/components/ui";
+import { Empty, Eyebrow, Heading } from "@/components/ui";
 import { estClient } from "@/lib/integrations";
 import { IntegrationsPanel } from "./panel";
 

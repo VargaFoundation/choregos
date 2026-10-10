@@ -2,12 +2,12 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { Heading, Numeral } from "@varga/design-system";
+import { Numeral } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { Button, Card, ErrorNote, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 

@@ -4,9 +4,8 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { Badge } from "@varga/design-system";
 import { slugDeLActeur } from "@/components/agents/registre";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import type { Agent, AgentSpec, ApiToken } from "@/lib/types";

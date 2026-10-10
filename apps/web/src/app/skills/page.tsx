@@ -4,9 +4,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { Eyebrow, Heading } from "@varga/design-system";
 import { Glossaire } from "@/components/glossaire";
-import { Card, Empty, ErrorNote } from "@/components/ui";
+import { Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 

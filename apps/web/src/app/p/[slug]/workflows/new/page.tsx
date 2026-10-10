@@ -5,8 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
-import { Field, Input, Select } from "@varga/design-system";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
 import { renommer } from "@/components/workflows/renommer";
 import { ApiError, api } from "@/lib/api";
 

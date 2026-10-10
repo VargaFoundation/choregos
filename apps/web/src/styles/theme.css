@@ -87,6 +87,7 @@
   --varga-accent-ink: #fff;
   --varga-accent-strong: var(--iris-11);
   --varga-accent-soft: var(--iris-3);
+  --choregos-accent-line: var(--iris-6);
   --varga-focus: var(--iris-10);
 
   --varga-ok: var(--green-11);

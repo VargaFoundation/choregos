@@ -3,9 +3,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, TBody, TD, TH, THead, TR, Table } from "@varga/design-system";
 import { SchemaForm, champsManquants, valeursParDefaut, type JsonSchema } from "@/components/schema-form";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { AdminAction, AdminForm, AdminSecretOnce, AdminSection, AdminTable } from "@/lib/types";

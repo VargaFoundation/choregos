@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Heading, Lead, buttonClasses } from "@varga/design-system";
+import { buttonClasses, Heading, Lead } from "@/components/ui";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { api, IS_MOCK } from "@/lib/api";

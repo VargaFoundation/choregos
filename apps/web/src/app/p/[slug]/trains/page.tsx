@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 import { GesteConfirme } from "@/components/geste-confirme";

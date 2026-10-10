@@ -4,7 +4,6 @@
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
-import { Badge } from "@varga/design-system";
 import {
   agentsImplicites,
   resumeDeLaVersion,
@@ -12,7 +11,7 @@ import {
   versionDeLActeur,
   type AgentImplicite,
 } from "@/components/agents/registre";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Agent, ProjectAgent } from "@/lib/types";

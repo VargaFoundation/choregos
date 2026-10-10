@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Heading } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { LiveLog } from "@/components/live-log";
 import { Acces } from "@/components/acces";
 import { Garanties } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
-import { Card, Empty, ErrorNote, FilDAriane, StateBadge } from "@/components/ui";
+import { Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { useEventStream } from "@/lib/sse";
