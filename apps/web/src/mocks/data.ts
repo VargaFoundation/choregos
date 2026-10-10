@@ -259,7 +259,15 @@ function run(id: string, role: string, status: string, cost: number, summary: st
       schema: "choregos/StageResult/v1",
       status: status === "running" ? "done" : "done",
       summary,
-      evidence: { tests_passed: true, tests_run: 412, tests_failed: 0, coverage_delta: 1.2, lint: "ok" },
+      // La couverture vient du récit de l'agent ; le reste, le runner l'a mesuré (ADR 0045).
+      evidence: {
+        tests_passed: true,
+        tests_run: 412,
+        tests_failed: 0,
+        coverage_delta: 1.2,
+        lint: "ok",
+        measured: ["lint", "tests_failed", "tests_passed", "tests_run"],
+      },
     },
   } as Run;
 }

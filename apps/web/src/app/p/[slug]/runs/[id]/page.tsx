@@ -6,14 +6,16 @@ import { use, useState } from "react";
 import { ActiviteDuRunVue } from "@/components/activite-du-run";
 import { LiveLog } from "@/components/live-log";
 import { PlanDeLAgent } from "@/components/plan-de-l-agent";
+import { Provenance } from "@/components/provenance";
 import { Acces } from "@/components/acces";
-import { Garanties } from "@/components/garanties";
+import { Garanties, verdictsDe } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
-import { Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
+import { Badge, Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { activiteDuRun } from "@/lib/activite-du-run";
 import { planDeLAgent } from "@/lib/plan-de-l-agent";
+import { finDeclaree } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
 import type { RunEventDto } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
@@ -55,6 +57,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const plan = planDeLAgent(events);
   // Ce que l'agent a appelé, relu du même journal (S25-02) : lisible, au-dessus du journal brut.
   const activite = activiteDuRun(events);
+  // L'agent se dit fini ; la plateforme l'a-t-elle constaté (ADR 0045) ?
+  const fin = finDeclaree(run.data.result?.status, verdictsDe(events));
 
   return (
     <div className="space-y-4">
@@ -76,7 +80,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
             {run.data.backend} · {run.data.model} · executor {run.data.executor_kind ?? "—"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {fin && (
+            <Badge tone="waiting" data-testid="fin-declaree" title="the agent says it is done; the platform has not observed it">
+              {fin}
+            </Badge>
+          )}
           <StateBadge
             state={run.data.status}
             display={run.data.status}
@@ -112,19 +121,19 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       </div>
 
       <div className="grid gap-4 lg:grid-cols-4">
-        <Card title="cost">
+        <Card title="cost" action={<Provenance de="observed" />}>
           <p className="text-2xl">{usd(run.data.cost_usd)}</p>
           <p className="text-xs text-ink-muted">
             {tokens(run.data.tokens?.tokens_in)} in · {tokens(run.data.tokens?.tokens_out)} out ·{" "}
             {tokens(run.data.tokens?.tokens_cached)} cached
           </p>
         </Card>
-        <Card title="duration">
+        <Card title="duration" action={<Provenance de="observed" />}>
           <p className="text-2xl">{duration(run.data.tokens?.duration_s)}</p>
           <p className="text-xs text-ink-muted">{run.data.result?.diagnostics?.turns ?? 0} agent turns</p>
         </Card>
         <Preuves evidence={evidence} />
-        <Card title="scope">
+        <Card title="scope" action={<Provenance de="observed" />}>
           <ul className="space-y-1 font-mono text-xs text-ink-muted">
             {(run.data.allowed_paths ?? []).map((path) => (
               <li key={path}>{path}</li>
@@ -135,7 +144,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       </div>
 
       {plan && (
-        <Card title="agent plan">
+        <Card title="agent plan" action={<Provenance de="declared" />}>
           <PlanDeLAgent plan={plan} />
         </Card>
       )}
@@ -145,7 +154,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       <Acces acces={acces.data} />
 
       {(activite.appels.length > 0 || activite.refus.length > 0) && (
-        <Card title="activity">
+        <Card title="activity" action={<Provenance de="declared" />}>
           <ActiviteDuRunVue activite={activite} />
         </Card>
       )}
@@ -161,7 +170,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
         <LiveLog events={events} />
       </Card>
 
-      <Card title="diff">
+      <Card title="diff" action={<Provenance de="observed" />}>
         {(diff.data?.files ?? []).length === 0 ? (
           <Empty>no file changed</Empty>
         ) : (

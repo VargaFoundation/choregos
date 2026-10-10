@@ -136,12 +136,15 @@ function vie(debut: number) {
   };
 }
 
+// Ce que le runner a mesuré ; la couverture, quand elle y est, vient du récit de l'agent (ADR 0045).
+const MESURES = ["lint", "tests_failed", "tests_passed", "tests_run", "typecheck"];
 const TESTS_ROUGES = {
   tests_run: 412,
   tests_failed: 2,
   tests_passed: false,
   lint: "ok",
   typecheck: "ok",
+  measured: MESURES,
 };
 const TESTS_VERTS = {
   tests_run: 418,
@@ -150,6 +153,7 @@ const TESTS_VERTS = {
   lint: "ok",
   typecheck: "ok",
   coverage_delta: 1.2,
+  measured: MESURES,
 };
 
 /** La partie commune : du tri à la revue approuvée, avec un refus, un échec et une demande de changements. */
@@ -295,7 +299,7 @@ export function parcoursTermine(maintenant: number = Date.now()): WorkItemJourne
   v.agent("t-verify-prod", 441, 446, {
     summary: "Go: smoke check green, error rate flat.",
     verdict: "approve",
-    evidence: { facts: { smoke_ok: true } },
+    evidence: { facts: { smoke_ok: true }, measured: ["facts.smoke_ok"] },
     cost: 0.12,
   });
   v.deplacer(446, "live", "verified", "nominal", "t-verify-prod");

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { Provenance } from "@/components/provenance";
 import { Card, Empty, LEGENDE } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
@@ -39,7 +40,8 @@ export function Acces({ acces }: { acces?: AccesRun }) {
     <Card
       title="access"
       action={
-        <span className="text-xs text-ink-muted">
+        <span className="flex items-center gap-3 text-xs text-ink-muted">
+          <Provenance de="observed" />
           {acces
             ? `${acces.evenements} events · ${acces.refus} refusals${acces.deduites ? ` · ${acces.deduites} kinds inferred` : ""}`
             : "—"}

@@ -45,6 +45,9 @@ async def test_happy_path_commits_and_posts_result(stage_input: StageInput, runn
     assert outcome.result.status is StageStatus.DONE
     assert outcome.result.evidence.tests_passed is True
     assert outcome.result.evidence.tests_run == 3
+    # Les tests, le runner les a exécutés ; le diff, git l'a calculé : mesurés (ADR 0045).
+    mesures = set(outcome.result.evidence.measured or [])
+    assert {"tests_passed", "tests_run", "diff_files", "diff_lines"} <= mesures
     assert outcome.result.artifacts.commits, "un commit a été créé"
     assert outcome.result.artifacts.commits[0].startswith("feat(1):")
     assert client.results and client.results[0].summary == "correction appliquée"

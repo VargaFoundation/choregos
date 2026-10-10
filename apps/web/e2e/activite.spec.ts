@@ -31,3 +31,17 @@ test("l'activité d'un run se lit au-dessus du journal : chaque appel une fois, 
   const journal = await page.getByTestId("live-log").boundingBox();
   expect(activite!.y).toBeLessThan(journal!.y);
 });
+
+test("un run que l'agent dit fini mais dont une garantie échoue s'affiche « declared done, not observed » (S25-03)", async ({
+  page,
+}) => {
+  await page.goto("/p/billing-api/runs/r3");
+  await expect(page.getByTestId("fin-declaree")).toHaveText("declared done, not observed");
+  // Chaque élément du résumé dit d'où il vient : le coût est constaté, le plan déclaré, la couverture
+  // déclarée (le runner ne l'a pas mesurée), les tests constatés.
+  await expect(page.locator("section", { has: page.getByRole("heading", { name: "cost", exact: true }) }).locator("[data-provenance]")).toHaveText(/observed/);
+  await expect(page.locator("section", { has: page.getByRole("heading", { name: "agent plan", exact: true }) }).locator("[data-provenance]")).toHaveText(/declared/);
+  const preuves = page.locator("section", { has: page.getByRole("heading", { name: "evidence", exact: true }) });
+  await expect(preuves.getByRole("listitem").filter({ hasText: "coverage" }).locator("[data-provenance]")).toHaveText(/declared/);
+  await expect(preuves.getByRole("listitem").filter({ hasText: "tests" }).locator("[data-provenance]")).toHaveText(/observed/);
+});
