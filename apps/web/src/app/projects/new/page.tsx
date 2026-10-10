@@ -130,14 +130,18 @@ export default function NewProjectPage() {
       <Heading as="h1" size="xl">
         new project
       </Heading>
-      <ol className="grid grid-cols-4 border border-line">
+      {/* Deux colonnes sur téléphone, quatre au-delà : à 360 px, quatre cases de 78 px ne tenaient
+          pas un numéro et « connectors », et la page débordait (S23-01). */}
+      <ol className="grid grid-cols-2 border border-line sm:grid-cols-4">
         {STEPS.map((label, index) => (
           <li
             key={label}
             aria-current={index === step ? "step" : undefined}
             className={cn(
-              "flex items-center gap-3 p-3 text-xs",
-              index > 0 && "border-l border-line",
+              "flex min-w-0 items-center gap-3 p-3 text-xs",
+              index % 2 === 1 && "border-l border-line",
+              index >= 2 && "border-t border-line sm:border-t-0",
+              index === 2 && "sm:border-l",
               index === step ? "text-ink" : "text-ink-muted",
             )}
           >
