@@ -438,3 +438,30 @@ async def test_un_depart_express_prend_l_approbation_de_la_voie_express(
     (release,) = await _releases()
     assert release.status == "done"
     assert await _groupes_sollicites() == attendu
+
+
+# ───────────────────────── un train qui livre sans Slack (S22-26) ─────────────────────────
+
+
+async def test_le_train_livre_et_previent_le_ticket_sans_notificateur(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """Sur le locataire dev, le 10/10, sans Slack : promotion et vérification faites, `finish_release`
+    levait sur la notification, et les deux trains mouraient sans prévenir leurs tickets."""
+    await _politique_de_prod(setup, approbation=False)
+    setup.adapters.cd.set_health("billing-api", "Healthy")
+    setup.adapters.notify.panne = "[slack] ni `bot_token` ni `webhook_url` configurés"
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            ticket, embarquement = await _jusqu_au_train(setup, temporal_env)
+            train = await _train(temporal_env, setup)
+            await train.signal("merged", embarquement)
+            await train.signal("depart_now", {"by": "augustin"})
+            await _jusqu_a(train, "status_query", lambda s: s["status"] == "awaiting_approval")
+            await train.signal("approve", {"by": "marie"})
+            issue = await asyncio.wait_for(ticket.result(), timeout=60)
+            await train.signal("abort", {"by": "test"})
+            await train.result()
+    assert issue["state"] == "deployed_prod"
+    assert [release.status for release in await _releases()] == ["done"]
+    assert setup.adapters.notify.sent == []
