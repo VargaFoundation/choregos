@@ -150,6 +150,9 @@ class ToolContext:
     max_findings: int = 5
     granted_paths: list[str] = field(default_factory=list)
     questions_asked: int = 0
+    #: Les sorties que la transition du run déclare, lues une fois dans l'entrée du run (S22-15).
+    #: `None` : pas encore lues.
+    declared_outputs: list[str] | None = None
 
     @property
     def findings_remaining(self) -> int:

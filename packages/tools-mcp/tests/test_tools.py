@@ -201,3 +201,31 @@ async def test_validate_result_dit_avant_de_finir_ce_que_le_runner_dirait_apres(
     assert not ok.get("isError") and "conforms" in ok["content"][0]["text"]
 
     assert (await mcp.call("validate_result", {"result": "{pas du json"}))["isError"] is True
+
+
+async def test_validate_result_exige_les_sorties_que_la_transition_declare(
+    server: tuple[McpServer, StubClient],
+) -> None:
+    """Le triage de #4 (locataire dev, 09/10) rangeait `size` et `risk` dans une sortie à lui :
+    l'agent l'apprend avant de finir, pas dans la boucle de réparation (S22-15)."""
+    from types import SimpleNamespace
+
+    mcp, client = server
+
+    async def fetch_input() -> Any:
+        return SimpleNamespace(transition=SimpleNamespace(outputs=["size", "risk"]))
+
+    client.fetch_input = fetch_input  # type: ignore[attr-defined]
+    base = {"schema": "choregos/StageResult/v1", "status": "done", "summary": "trié"}
+    imbrique = await mcp.call(
+        "validate_result", {"result": {**base, "outputs": {"triage": '{"size": "S", "risk": "medium"}'}}}
+    )
+    assert imbrique["isError"] is True
+    assert "`size`" in imbrique["content"][0]["text"] and "`risk`" in imbrique["content"][0]["text"]
+
+    juste = await mcp.call(
+        "validate_result", {"result": {**base, "outputs": {"size": "S", "risk": "medium"}}}
+    )
+    assert not juste.get("isError"), juste
+    question = {**base, "status": "needs_human", "outputs": {}}
+    assert not (await mcp.call("validate_result", {"result": question})).get("isError")
