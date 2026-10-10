@@ -34,3 +34,18 @@ def executer_activite(activite: Any, arg: Any = _ABSENT, **options: Any) -> Any:
     if arg is _ABSENT:
         return workflow.execute_activity(activite, **options)
     return workflow.execute_activity(activite, arg, **options)
+
+
+def demarrer_activite(activite: Any, arg: Any = _ABSENT, **options: Any) -> Any:
+    """Comme `workflow.start_activity`, sur la file déclarée de l'activité.
+
+    Rend la poignée de l'activité, qu'on peut attendre, interroger (`done()`) ou annuler : c'est ce
+    qu'il faut au workflow qui doit pouvoir cesser d'attendre une activité pour un signal.
+    """
+    if "task_queue" not in options:
+        file = file_de(activite)
+        if file is not None:
+            options["task_queue"] = file
+    if arg is _ABSENT:
+        return workflow.start_activity(activite, **options)
+    return workflow.start_activity(activite, arg, **options)
