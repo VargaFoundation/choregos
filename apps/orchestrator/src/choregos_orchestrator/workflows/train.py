@@ -38,6 +38,20 @@ LE_SIGNAL_DU_DEMARRAGE_EMBARQUE = "start-signal-boards"
 #: Un départ express prend l'approbation de SA voie (`express_lane.approval`, #279, S22-17). Avant ce
 #: marqueur, il prenait l'approbation ordinaire : la voie express n'était jamais lue.
 EXPRESS_LANE_APPROVAL = "express-lane-approval"
+#: Le train au repos se relaie (continue-as-new) avant que Temporal ne le tue (S22-24). Avant ce
+#: marqueur, seul un départ menait au relais : un train sans lot bouclait dans `_collect` — une
+#: activité `check_window` et un timer par tour, ~11 événements par minute. Sur le locataire dev, le
+#: 10/10, `train-dev-staging` portait 15 814 événements après 23 h (1 438 `check_window`), Temporal
+#: suggérait déjà le relais, et à 51 200 événements il termine le workflow (~78 h) : le train meurt,
+#: et les tickets qui y montent attendent pour toujours.
+#: `patched` n'est appelé qu'une fois le seuil franchi : il est mémorisé par exécution, et un appel
+#: précoce pendant le rejeu d'un ancien historique rendrait `False` pour toute la vie du run. Ainsi un
+#: run démarré sur la version d'avant prend le correctif s'il est mis à jour avant le seuil.
+LE_TRAIN_AU_REPOS_SE_RELAIE = "idle-train-continues-as-new"
+#: Le seuil (en événements d'historique) au-delà duquel le train se relaie. Un train peut le recevoir
+#: dans son entrée (`seuil_de_relais`) : un historique archivé qui se relaie plus tôt rejoue alors
+#: contre le code tel quel, sans rien redéfinir.
+SEUIL_DE_RELAIS = 15_000
 #: Combien de fois, et à quel rythme, on regarde l'environnement avant de conclure.
 ESSAIS_AUTO_SYNC = 30
 PAUSE_AUTO_SYNC = timedelta(minutes=2)
@@ -57,6 +71,7 @@ class TrainInput:
     carried_items: list[dict[str, Any]] = field(default_factory=list)
     batch_no: int = 1
     frozen: bool = False
+    seuil_de_relais: int = SEUIL_DE_RELAIS
 
 
 @workflow.defn(name="ReleaseTrain", sandboxed=False)
@@ -173,7 +188,7 @@ class ReleaseTrain:
 
         departures = 0
         while departures < 20 and not self.abort_requested:
-            await self._collect(config)
+            await self._collect(config, params, payload)
             if self.abort_requested:
                 break
             released = await self._depart(params, config)
@@ -222,8 +237,8 @@ class ReleaseTrain:
                     {**payload, "carried_items": self.batch, "batch_no": self.batch_no, "frozen": self.frozen}
                 )
 
-    async def _collect(self, config: dict[str, Any]) -> None:
-        """Attend le cron, le lot plein, un départ manuel ou un hotfix."""
+    async def _collect(self, config: dict[str, Any], params: TrainInput, payload: dict[str, Any]) -> None:
+        """Attend le cron, le lot plein, un départ manuel ou un hotfix — et se relaie au repos."""
         self.status = str(ReleaseStatus.COLLECTING)
         batch_max = int(config.get("batch_max", 8))
         while True:
@@ -245,6 +260,24 @@ class ReleaseTrain:
                 return
             if ready and not self.frozen and len(self.batch) >= int(config.get("batch_min", 1)):
                 return
+            # Au repos, l'historique grossit sans départ pour le relayer : le train se relaie ici, son
+            # lot avec lui. Le seuil d'abord, `patched` ensuite (voir `LE_TRAIN_AU_REPOS_SE_RELAIE`).
+            if (
+                not self.abort_requested
+                and (
+                    workflow.info().get_current_history_length() > params.seuil_de_relais
+                    or workflow.info().is_continue_as_new_suggested()
+                )
+                and workflow.patched(LE_TRAIN_AU_REPOS_SE_RELAIE)
+            ):
+                workflow.continue_as_new(
+                    {
+                        **payload,
+                        "carried_items": self.batch,
+                        "batch_no": self.batch_no,
+                        "frozen": self.frozen,
+                    }
+                )
             await _wait(
                 lambda: self.depart_requested or self.express or self.abort_requested,
                 timedelta(seconds=max(5.0, min(wait_s, 900.0))),
