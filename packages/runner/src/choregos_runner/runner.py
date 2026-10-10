@@ -371,6 +371,8 @@ class Runner:
                 result.artifacts.reports[RAPPORT_DEPART] = depart
         result.evidence.diff_lines = additions + deletions
         result.evidence.diff_files = len(await workspace.changed_files(base))
+        # Le diff, c'est git qui le dit, pas l'agent : mesuré (ADR 0045).
+        result.evidence.measured = sorted({*(result.evidence.measured or []), "diff_files", "diff_lines"})
 
         # On pousse dès qu'il y a QUELQUE CHOSE à pousser, pas seulement quand c'est nous
         # qui avons commité. L'agent a git sous la main : quand il commite lui-même, l'arbre

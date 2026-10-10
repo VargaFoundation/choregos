@@ -959,7 +959,7 @@ export type JourneyStep = {
   model?: string | null;
   decided_by?: string | null;
   due_at?: string | null;
-  /** What the platform measured for an agent run (tests, lint, coverage…). */
+  /** The evidence of an agent run (tests, lint, coverage, business facts…): what the platform measured, which `measured` lists, and what the agent declared, which it does not (ADR 0045). */
   evidence?: {
     [key: string]: unknown;
   };

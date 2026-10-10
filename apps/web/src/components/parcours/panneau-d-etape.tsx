@@ -8,11 +8,13 @@ import { DecisionBar } from "@/components/decision-bar";
 import { verdictsDe } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
 import { PlanDeLAgent } from "@/components/plan-de-l-agent";
+import { Provenance } from "@/components/provenance";
 import { Empty, LEGENDE, PhraseDuMoteur } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { duration, relative, shortDate, usd } from "@/lib/format";
 import { planDeLAgent } from "@/lib/plan-de-l-agent";
+import { provenanceDePreuve } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
 import type { JourneyStep, ProcessStep, RunEventDto } from "@/lib/types";
 import type { Etape, EtatEtape } from "./modele";
@@ -186,30 +188,40 @@ function Faits({ pas }: { pas: JourneyStep }) {
 
 function Preuves({ evidence }: { evidence: Record<string, unknown> }) {
   const faits = Object.entries((evidence.facts ?? {}) as Record<string, unknown>);
-  const lignes: [string, string][] = faits.length
-    ? faits.map(([k, v]) => [k.replace(/_/g, " "), typeof v === "boolean" ? (v ? "✓" : "✗") : String(v)])
+  // [libellé, valeur, champ du contrat] : le champ dit, par `measured`, qui l'a établi (ADR 0045).
+  const lignes: [string, string, string][] = faits.length
+    ? faits.map(([k, v]) => [k.replace(/_/g, " "), typeof v === "boolean" ? (v ? "✓" : "✗") : String(v), `facts.${k}`])
     : [
         ...(typeof evidence.tests_run === "number"
           ? [
               [
                 "tests",
                 `${Number(evidence.tests_failed ?? 0) > 0 ? "✗" : "✓"} ${evidence.tests_run} run, ${evidence.tests_failed ?? 0} failed`,
-              ] as [string, string],
+                "tests_run",
+              ] as [string, string, string],
             ]
           : []),
         ...(["lint", "typecheck", "security_scan"] as const)
           .filter((k) => evidence[k])
-          .map((k) => [k.replace(/_/g, " "), String(evidence[k])] as [string, string]),
+          .map((k) => [k.replace(/_/g, " "), String(evidence[k]), k] as [string, string, string]),
         ...(typeof evidence.coverage_delta === "number"
-          ? [["coverage", `${evidence.coverage_delta > 0 ? "+" : ""}${evidence.coverage_delta}`] as [string, string]]
+          ? [
+              [
+                "coverage",
+                `${evidence.coverage_delta > 0 ? "+" : ""}${evidence.coverage_delta}`,
+                "coverage_delta",
+              ] as [string, string, string],
+            ]
           : []),
       ];
   if (lignes.length === 0) return null;
+  const mesures = Array.isArray(evidence.measured) ? { measured: evidence.measured.map(String) } : undefined;
   return (
     <ul className="flex flex-wrap gap-1.5 text-xs" aria-label="evidence">
-      {lignes.map(([nom, valeur]) => (
-        <li key={nom} className="border border-line px-1.5 py-0.5">
+      {lignes.map(([nom, valeur, cle]) => (
+        <li key={nom} className="flex items-baseline gap-1.5 border border-line px-1.5 py-0.5">
           <span className="text-ink-muted">{nom}</span> {valeur}
+          <Provenance de={provenanceDePreuve(mesures, cle)} />
         </li>
       ))}
     </ul>
@@ -229,10 +241,14 @@ function PasDAgent({ pas, slug }: { pas: JourneyStep; slug: string }) {
   return (
     <div className="space-y-3">
       <Faits pas={pas} />
-      {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
+      {pas.summary && (
+        <p className="text-sm text-ink">
+          {pas.summary} <Provenance de="declared" />
+        </p>
+      )}
       {pas.verdict && (
         <p className={cn("text-sm font-medium", pas.verdict === "approve" ? "text-succeeded-ink" : "text-retrying-ink")}>
-          verdict: {pas.verdict.replace(/_/g, " ")}
+          verdict: {pas.verdict.replace(/_/g, " ")} <Provenance de="declared" />
         </p>
       )}
       <Preuves evidence={(pas.evidence ?? {}) as Record<string, unknown>} />

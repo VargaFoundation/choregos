@@ -459,6 +459,8 @@ export type StageResult = {
     security_scan?: "ok" | "failed" | "skipped" | null;
     diff_files?: number | null;
     diff_lines?: number | null;
+    /** What the platform measured itself (ADR 0045): the names of the fields above it ran or computed — tests, lint, typecheck, diff — and `facts.<name>` for a business fact a command measured. Written by the runner, never by the agent: an agent that sets it is overwritten. A field not listed comes from the agent's own account; null means a runner too old to say. */
+    measured?: Array<string> | null;
   };
   questions?: Array<{
     text: string;

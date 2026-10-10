@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
+import { Provenance } from "@/components/provenance";
 
 /** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
 function enMouvement(journey: WorkItemJourney | undefined): boolean {
@@ -133,7 +134,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="cost per stage" className="lg:col-span-2">
+        <Card title="cost per stage" className="lg:col-span-2" action={<Provenance de="observed" />}>
           <div className="overflow-x-auto">
             <table>
               <thead>
@@ -173,7 +174,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               <span className="text-ink-muted">
                 {" "}
                 · estimated {usd(data.estimate.median_usd)} (p80 {usd(data.estimate.p80_usd)})
-                {data.estimate.over_p80 ? " ⚠ over" : ""}
+                {data.estimate.over_p80 ? " ⚠ over" : ""} <Provenance de="inferred" />
               </span>
             ) : null}
           </p>

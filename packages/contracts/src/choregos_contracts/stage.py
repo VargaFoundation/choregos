@@ -224,6 +224,11 @@ class Evidence(Strict):
     security_scan: Literal["ok", "failed", "skipped"] | None = None
     diff_files: int | None = None
     diff_lines: int | None = None
+    #: Ce que la plateforme a mesuré elle-même (ADR 0045) : le nom des champs qu'elle a exécutés ou
+    #: calculés, et `facts.<nom>` pour un fait qu'une commande a mesuré. Le runner l'écrit, jamais
+    #: l'agent — `merge_evidence` écrase ce qu'un agent y mettrait. Un champ absent de la liste vient
+    #: du récit de l'agent ; `None` : un runner trop ancien pour le dire.
+    measured: list[str] | None = None
 
     def is_complete(self) -> bool:
         """Preuves minimales attendues par la gate `evidence_present`."""

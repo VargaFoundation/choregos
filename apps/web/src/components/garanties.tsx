@@ -3,6 +3,7 @@
 
 import { Card, Empty } from "@/components/ui";
 import type { RunEventDto } from "@/lib/types";
+import { Provenance } from "@/components/provenance";
 
 export type Verdict = {
   name: string;
@@ -44,8 +45,9 @@ export function Garanties({ events }: { events: RunEventDto[] }) {
     <Card
       title="gates"
       action={
-        <span className="text-xs text-ink-muted">
+        <span className="flex items-center gap-3 text-xs text-ink-muted">
           {verdicts.length === 0 ? "—" : `${verdicts.length} evaluated · ${refusees} refused`}
+          <Provenance de="observed" />
         </span>
       }
     >

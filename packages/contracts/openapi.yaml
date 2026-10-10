@@ -2573,7 +2573,7 @@ components:
         model: { type: [string, "null"] }
         decided_by: { type: [string, "null"] }
         due_at: { type: [string, "null"], format: date-time }
-        evidence: { type: object, additionalProperties: true, description: "What the platform measured for an agent run (tests, lint, coverage…)." }
+        evidence: { type: object, additionalProperties: true, description: "The evidence of an agent run (tests, lint, coverage, business facts…): what the platform measured, which `measured` lists, and what the agent declared, which it does not (ADR 0045)." }
     DecisionRequest:
       type: object
       required: [kind]

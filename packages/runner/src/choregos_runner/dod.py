@@ -204,13 +204,20 @@ def merge_evidence(base: Evidence, measured: Evidence) -> Evidence:
     perte serait silencieuse, ce qui est le pire des deux.
     """
     data: dict[str, Any] = base.model_dump()
+    # Ce que la plateforme a mesuré, champ par champ (ADR 0045) : la console dit « constaté » pour
+    # ceux-là, « déclaré » pour le reste. La liste de l'agent est ignorée — il ne peut pas se dire
+    # mesuré.
+    mesures: set[str] = set()
     for field_name, value in measured.model_dump().items():
-        if value is None:
+        if value is None or field_name == "measured":
             continue
         if field_name == "facts" and isinstance(value, dict):
             fusion = dict(data.get("facts") or {})
             fusion.update(value)
             data["facts"] = fusion
+            mesures.update(f"facts.{cle}" for cle in value)
             continue
         data[field_name] = value
+        mesures.add(field_name)
+    data["measured"] = sorted(mesures)
     return Evidence.model_validate(data)
