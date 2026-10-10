@@ -96,6 +96,13 @@ async def test_scm_diff_and_scope() -> None:
     assert diff.additions == 11 and diff.deletions == 2
 
 
+async def test_scm_lists_what_a_branch_holds() -> None:
+    scm = AdapterSet.fakes().scm
+    await scm.commit_files("acme/billing", "main", {"docs/adr/0001-q.md": "x", "src/a.py": "y"}, "m")
+    assert await scm.list_files("acme/billing", "main", "docs/adr") == ["docs/adr/0001-q.md"]  # type: ignore[attr-defined]
+    assert await scm.list_files("acme/billing", "other", "docs/adr") == []  # type: ignore[attr-defined]
+
+
 async def test_gateway_budget_is_a_hard_cap() -> None:
     gateway = AdapterSet.fakes().gateway
     key = await gateway.mint_key({"run_id": "r1"}, budget_usd=0.05, ttl_s=600, models=["platform/standard"])

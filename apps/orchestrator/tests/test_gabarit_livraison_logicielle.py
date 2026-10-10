@@ -407,6 +407,43 @@ async def test_study_fusionne_un_adr_madr_approuve_et_ne_part_nulle_part(
     ]
 
 
+async def test_study_renumerote_un_adr_dont_le_numero_a_ete_pris_avant_la_fusion(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """#287 : une autre étude fusionne son 0001 pendant que la nôtre attend la décision des architectes.
+    La fusion refuse le doublon (`adr_number_free`) et rend l'étude à l'architecte, qui renumérote ; la
+    PR fusionne ensuite, une seule fois."""
+    projet_id = await _projet_dev(setup)
+    item_id, cle = await _ticket(setup, projet_id, 13, "study")
+    scm = setup.adapters.scm
+    accepte = ADR_PROPOSE.replace('status: "proposed"', 'status: "accepted"\n+date: 2026-10-10')
+    scm.set_diff(DEPOT, "main", "choregos/13", [("docs/adr/0001-queue.md", 17, 0, ADR_PROPOSE)])
+    acceptations: list[str] = []
+
+    def accepter() -> Any:
+        # Première fois : le statut passe à `accepted`. Seconde : l'architecte renumérote en 0002.
+        chemin = "docs/adr/0001-queue.md" if not acceptations else "docs/adr/0002-queue.md"
+        acceptations.append(chemin)
+        scm.set_diff(DEPOT, "main", "choregos/13", [(chemin, 18, 0, accepte)])
+        return stage_result("ADR accepted")
+
+    setup.adapters.executor.handler = _agents({**_etude(ADR_PROPOSE), "t-accept": accepter})
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            ticket = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
+            await _etat(ticket, "awaiting_decision")
+            await scm.commit_files(DEPOT, "main", {"docs/adr/0001-cache.md": "# Cache\n"}, "autre étude")
+            await _decider(ticket)
+            await _etat(ticket, "in_pr")
+            await _ci(setup, ticket, "success", "ci-13")
+            issue = await asyncio.wait_for(ticket.result(), timeout=90)
+
+    assert issue["state"] == "adopted"
+    assert acceptations == ["docs/adr/0001-queue.md", "docs/adr/0002-queue.md"], "renuméroté, une fois"
+    assert [t for t, _ in await _runs(item_id)][-2:] == ["t-accept", "t-accept"]
+    assert len(scm.merge_queue) == 1, "fusionnée une seule fois, après la renumérotation"
+
+
 async def test_un_adr_sans_decision_outcome_ne_passe_pas(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:

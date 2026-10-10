@@ -126,6 +126,11 @@ class FakeScm:
     async def compare(self, repo: str, base: str, head: str) -> DiffSummary:
         return self._diffs.get((repo, base, head), DiffSummary(base=base, head=head))
 
+    async def list_files(self, repo: str, ref: str, directory: str) -> list[str]:
+        """Les chemins sous `directory` sur `ref` : ceux que `commit_files` y a écrits."""
+        prefixe = directory.rstrip("/") + "/"
+        return sorted(p for p in self.files.get((repo, ref), {}) if p.startswith(prefixe))
+
     async def create_check_run(
         self,
         repo: str,

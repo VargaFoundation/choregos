@@ -21,8 +21,15 @@ agent:
       3. Cite code as `path:line`; name each option identically everywhere; touch no other file.
 
       Write exactly these outputs: `{"adr_path": "docs/adr/NNNN-….md", "adr_markdown": "the full text of the file"}`.
-      {% else %}The deciders approved `{{ inputs.get('adr_path', '') }}`. Set `status: "accepted"` and `date` (today) in its front
-      matter. Change nothing else.
+      {% else %}The deciders approved `{{ inputs.get('adr_path', '') }}` — your record, the one file this branch adds under
+      `docs/adr/` (if that path is gone, you already renumbered it: take the file the branch adds).
+      1. Check that its number is still free. The default branch was fetched fresh for this run: it is the other local
+         branch (`git branch`), the one your work branch started from. List its records
+         (`git ls-tree --name-only <default-branch> docs/adr/`). If a record there already carries your number — another
+         study merged first; the merge guarantee `adr_number_free` refuses it and sends the study back to you —, rename
+         your file to the highest number on the default branch plus one (`git mv`, four digits) and update that number
+         wherever your record cites itself. Touch no other record.
+      2. Set `status: "accepted"` and `date` (today) in its front matter. Change nothing else.
       {% endif %}
     limits: { max_turns: 60, max_minutes: 40 }
     budget: { run_usd: 5.0 }

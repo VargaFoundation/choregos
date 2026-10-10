@@ -4,7 +4,9 @@
 # à l'appui ; l'architecte écrit UN ADR dans `docs/adr/` — la garantie `markdown_sections` lit ce que
 # la branche AJOUTE (contexte, options, décision « Chosen option: »), pas le récit de l'agent. Un
 # critique le relit ; les architectes décident (un refus renvoie à l'instruction, la raison suit) ;
-# l'architecte passe alors le statut à `accepted`, ce que la même garantie vérifie, et la PR fusionne.
+# l'architecte passe alors le statut à `accepted`, ce que la même garantie vérifie, et la PR fusionne —
+# si son numéro est encore libre sur la branche par défaut (`adr_number_free`) ; pris entre-temps par
+# une autre étude, il retourne à l'architecte, qui renumérote.
 # Aucun train : une étude ne part pas en production (ADR 0041).
 apiVersion: choregos/v1
 kind: Workflow
@@ -93,9 +95,11 @@ transitions:
     to: adopted
     by: platform
     does: merge_pr
-    gates: [ci_green]
+    # Deux études simultanées lisent le même « plus grand numéro » : la seconde à fusionner voit son
+    # numéro refusé, et retourne à l'architecte, qui renumérote avant de reposer `accepted` (#287).
+    gates: [ci_green, adr_number_free]
     timeout_hours: 24
-    on_fail: { to: in_pr, max_attempts: 2, escalate_to: needs_human }
+    on_fail: { to: decided, max_attempts: 2, escalate_to: needs_human }
   - id: t-abandon
     from: needs_human
     to: abandoned

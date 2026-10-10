@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import Any
 
@@ -10,6 +11,7 @@ from choregos_api.db.models import CostLedger, Run
 from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
 from choregos_core.domain import PrRef
+from choregos_core.gates import MOTIF_ADR
 from temporalio import activity
 
 from .base import db, load_work_item, project_bundle
@@ -37,7 +39,13 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         additions = deletions = 0
         secrets: list[str] = []
         ajoute: dict[str, str] = {}
-        lisent_le_diff = {"scope_respected", "diff_size_max", "no_secrets", "markdown_sections"}
+        lisent_le_diff = {
+            "scope_respected",
+            "diff_size_max",
+            "no_secrets",
+            "markdown_sections",
+            "adr_number_free",
+        }
         needs_diff = any(g["name"] in lisent_le_diff for g in gates)
         # Sans dépôt, il n'y a pas de diff — et pas d'erreur non plus : la garantie refusera
         # d'elle-même (`diff_available`), ce qui est exactement ce qu'on veut qu'elle fasse.
@@ -112,19 +120,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             required_flag=payload.get("required_flag"),
             added_text=ajoute,
         )
-        outcomes: list[GateOutcome] = []
-        for gate in gates:
-            params = dict(gate.get("params", {}))
-            if gate["name"] == "diff_size_max" and "files" not in params:
-                max_files, max_lines = bundle.engine.max_diff()
-                params.setdefault("files", max_files)
-                params.setdefault("lines", max_lines)
-            if gate["name"] == "scope_respected" and perimetre_du_run is not None:
-                outcomes.append(
-                    evaluate(gate["name"], replace(context, changed_files=perimetre_du_run), params)
-                )
-                continue
-            outcomes.append(evaluate(gate["name"], context, params))
+        outcomes = [await _juger(gate, context, bundle, diff is not None, perimetre_du_run) for gate in gates]
 
         await _publish_check_runs(bundle, item, outcomes, result)
         if run is not None:
@@ -154,6 +150,44 @@ async def _diff_du_run(
     except Exception:
         return None
     return list(diff.paths())
+
+
+async def _juger(
+    gate: dict[str, Any],
+    context: GateContext,
+    bundle: Any,
+    diff_obtenu: bool,
+    perimetre_du_run: list[str] | None,
+) -> GateOutcome:
+    """Une garantie, avec ce qu'elle seule lit en plus du contexte commun."""
+    params = dict(gate.get("params", {}))
+    if gate["name"] == "diff_size_max" and "files" not in params:
+        max_files, max_lines = bundle.engine.max_diff()
+        params.setdefault("files", max_files)
+        params.setdefault("lines", max_lines)
+    if gate["name"] == "adr_number_free" and diff_obtenu:
+        deja_la = await _fichiers_de_la_branche_par_defaut(bundle, params)
+        return evaluate(gate["name"], replace(context, default_branch_files=deja_la), params)
+    if gate["name"] == "scope_respected" and perimetre_du_run is not None:
+        return evaluate(gate["name"], replace(context, changed_files=perimetre_du_run), params)
+    return evaluate(gate["name"], context, params)
+
+
+async def _fichiers_de_la_branche_par_defaut(bundle: Any, params: dict[str, Any]) -> list[str] | None:
+    """Les fichiers déjà sur la branche par défaut, dans le dossier du motif de `adr_number_free`
+    (`docs/adr/[0-9]…` → `docs/adr`) ; `None` quand le connecteur ne sait pas lister ou échoue :
+    la garantie refuse alors plutôt que de déclarer libre un numéro qu'elle n'a pas pu comparer."""
+    depot = bundle.config.repo
+    lister = getattr(bundle.adapters.scm, "list_files", None)
+    if depot is None or lister is None:
+        return None
+    motif = str(params.get("pattern") or MOTIF_ADR)
+    fixe = re.split(r"[*?\[]", motif, maxsplit=1)[0]
+    dossier = fixe.rsplit("/", 1)[0] if "/" in fixe else ""
+    try:
+        return list(await lister(_repo_slug(depot.url), depot.default_branch, dossier))
+    except Exception:
+        return None
 
 
 def texte_ajoute(patch: str) -> str:
