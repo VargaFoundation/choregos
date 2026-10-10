@@ -4,9 +4,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
-import { Badge, Heading } from "@varga/design-system";
 import { estUnClientMcp, etatDuClient, resumeDeLaVersion } from "@/components/agents/registre";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";

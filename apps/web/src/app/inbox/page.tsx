@@ -3,10 +3,9 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { Badge, Eyebrow, Heading } from "@varga/design-system";
 import { Statut, propose } from "@/components/actions/statut";
 import { DecisionBar } from "@/components/decision-bar";
-import { Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { libelleDeDemande, resumeDeDemande, useADecider } from "@/lib/a-decider";
 import { relative } from "@/lib/format";
 import { useSession } from "@/lib/session";

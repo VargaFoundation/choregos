@@ -4,8 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
-import { Badge, tabClasses } from "@varga/design-system";
-import { Onglets } from "@/components/ui";
+import { Badge, Onglets, tabClasses } from "@/components/ui";
 import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
 import { BrouillonProvider } from "@/components/workflows/brouillon";
 import { useWorkflow } from "@/components/workflows/use-workflow";

@@ -3,8 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useMemo, useState } from "react";
-import { Badge, Field, Select, TBody, TD, TH, THead, TR, Table } from "@varga/design-system";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Field, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { diffLines, hunks } from "@/lib/diff";
 import { shortDate } from "@/lib/format";

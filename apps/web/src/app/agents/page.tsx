@@ -4,12 +4,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Eyebrow, Heading } from "@varga/design-system";
 import { estUnClientMcp, resumeDeLaVersion } from "@/components/agents/registre";
 import { CatalogueDAgents } from "@/components/agents/catalogue";
 import { ClientsMcp } from "@/components/agents/clients-mcp";
 import { Glossaire } from "@/components/glossaire";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 

@@ -3,8 +3,7 @@
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Badge } from "@varga/design-system";
-import { Card, ErrorNote } from "@/components/ui";
+import { Badge, Card, ErrorNote } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { estUneSorteDuProjet, libelleDeSorte, SORTES_DU_PROJET } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, OrgConnector, ProjectDto } from "@/lib/types";

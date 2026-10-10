@@ -4,9 +4,8 @@
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Badge, buttonClasses } from "@varga/design-system";
 import { GesteConfirme } from "@/components/geste-confirme";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, PhraseDuMoteur } from "@/components/ui";
+import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, EtatDeLecture, PhraseDuMoteur } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { WorkflowRouting, WorkflowSummary } from "@/lib/types";

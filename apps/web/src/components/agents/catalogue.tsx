@@ -4,8 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { Badge } from "@varga/design-system";
-import { Button, Card, Empty, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { estClient, extrait, urlDeLaPorte } from "@/lib/integrations";
 import type { AgentCatalogueConnection, AgentCatalogueEntry } from "@/lib/types";

@@ -3,8 +3,7 @@
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { TBody, TD, TH, THead, TR, Table } from "@varga/design-system";
-import { Button, Card, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, StateBadge, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { versCsv } from "@/lib/csv";
 import { shortDate } from "@/lib/format";

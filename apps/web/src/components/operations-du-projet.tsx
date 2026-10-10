@@ -3,8 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge } from "@varga/design-system";
-import { Button, Card, ErrorNote } from "@/components/ui";
+import { Badge, Button, Card, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { ProjectOperation } from "@/lib/types";
 

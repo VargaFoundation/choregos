@@ -3,8 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { TBody, TD, TH, THead, TR, Table } from "@varga/design-system";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 

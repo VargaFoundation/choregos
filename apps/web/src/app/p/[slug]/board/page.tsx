@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, StateBadge } from "@/components/ui";
+import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, Heading, StateBadge } from "@/components/ui";
 import { columnsFromGraph, itemsOf } from "@/components/workflows/board";
 import { champsDepuisSchema, valeursPourLApi, type Champ } from "@/components/workflows/champs";
 import { useWorkflow } from "@/components/workflows/use-workflow";

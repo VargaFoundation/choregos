@@ -4,11 +4,10 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
-import { Heading } from "@varga/design-system";
 import { DecisionDAction } from "@/components/actions/decision";
 import { DetailOntologie } from "@/components/actions/ontologie";
 import { Statut, propose } from "@/components/actions/statut";
-import { Card, Empty, ErrorNote } from "@/components/ui";
+import { Card, Empty, ErrorNote, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 

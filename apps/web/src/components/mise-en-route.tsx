@@ -3,8 +3,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { CheckSquare, Dot } from "@varga/design-system";
-import { Card } from "@/components/ui";
+import { CheckSquare } from "@varga/design-system";
+import { Card, Dot } from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ProjectDto, ProjectRequirement, WorkflowSummary, WorkItemDto } from "@/lib/types";

@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { Heading } from "@varga/design-system";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
 import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
 import { gare } from "@/components/parcours/modele";
-import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, FilDAriane, StateBadge } from "@/components/ui";
+import { ActorIcon, Button, Card, CostChip, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";

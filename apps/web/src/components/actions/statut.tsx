@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { Badge } from "@varga/design-system";
+import { Badge } from "@/components/ui";
 
 const TON: Record<string, "neutral" | "accent" | "ok" | "warn" | "danger"> = {
   pending_approval: "warn",
