@@ -96,7 +96,11 @@ offers: an inventory that updates itself is not an access control.
 
 An agent that spots a problem **outside its scope** does not fix it: it reports a *finding*,
 which is deduplicated, triaged and turned into a linked ticket. A *release train* batches
-what is ready, opens its window, requires its approval, and can be frozen with a reason.
+what is ready, opens its window, requires its approval, and can be frozen with a reason. A
+ticket labelled `hotfix` takes the *express lane*: the train leaves at once, with a shorter soak,
+under the express lane's approval (`express_lane.approval`) instead of the ordinary one, and
+still under the approval the ticket's own workflow requires (ADR 0041). A ticket keeps the labels
+it was born with and follows its tracker when they are added or removed.
 During the soak, each canary step and the final check, the train listens to Argo CD: a
 `cd.app.degraded` or `cd.rollout.aborted` reported for its environment and one of its
 applications rolls the departure back at once, without waiting for the next poll of the CD.

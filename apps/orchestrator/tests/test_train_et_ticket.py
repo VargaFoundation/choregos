@@ -291,3 +291,150 @@ async def test_un_rollback_rend_le_ticket_a_un_humain_sans_attendre_le_delai(
             await train.signal("abort", {"by": "test"})
             await train.result()
             await ticket.cancel()
+
+
+# ───────────────────── la voie express : depuis le ticket, sous SON approbation (#279) ─────────────────────
+
+HOTFIX_CAPTAINS = {"group": "hotfix-captains", "required": True}
+#: Le cas dont l'historique s'archive (`CHOREGOS_ARCHIVER_HISTORIQUE=1`). `train-express-ancien-code`
+#: a été enregistré sur `main` avant ce changement, cas `voie-dispense` : il rougit si la décision
+#: sort du marqueur `express-lane-approval`.
+ARCHIVES_EXPRESS = {"voie-exige": "train-express-S22-17"}
+
+
+async def _voie_express(setup: Fixture, *, approbation: bool, voie: dict[str, Any] | None) -> None:
+    """L'approbation ordinaire de la prod, et celle de sa voie express (`None` : la voie n'en dit rien)."""
+    from choregos_api.db.models import PolicyDef
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        ligne = (
+            await session.execute(
+                select(PolicyDef).where(
+                    PolicyDef.project_id == setup.project_id, PolicyDef.is_active.is_(True)
+                )
+            )
+        ).scalar_one()
+        document = copy.deepcopy(ligne.json_doc)
+        prod = document["release_train"]["prod"]
+        prod["approval"]["required"] = approbation
+        if voie is None:
+            prod["express_lane"].pop("approval", None)
+        else:
+            prod["express_lane"]["approval"] = voie
+        ligne.json_doc = document
+
+
+def _departs_express(historique: Any) -> list[bool]:
+    """Chaque départ du train, express ou non, tel que l'historique l'a planifié (`create_release`)."""
+    departs: list[bool] = []
+    for evenement in historique.events:
+        attributs = evenement.activity_task_scheduled_event_attributes
+        if evenement.HasField("activity_task_scheduled_event_attributes") and (
+            attributs.activity_type.name == "create_release"
+        ):
+            departs.append(bool(json.loads(attributs.input.payloads[0].data).get("express")))
+    return departs
+
+
+async def _groupes_sollicites() -> list[str | None]:
+    """Le groupe de chaque demande d'approbation de départ, dans l'ordre."""
+    from choregos_api.db.models import Event
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        lignes = await session.execute(
+            select(Event).where(Event.type == "choregos.release.approval_requested").order_by(Event.ts)
+        )
+        return [(e.payload or {}).get("group") for e in lignes.scalars()]
+
+
+async def test_un_ticket_etiquete_hotfix_embarque_par_l_interpreteur_prend_la_voie_express(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """`signal_train` embarquait avec `labels: []` : un hotfix venu de l'interpréteur attendait le cron."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.services import noter_les_etiquettes
+
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        noter_les_etiquettes(item, ["agent-ready", "hotfix"])
+    setup.adapters.cd.set_health("billing-api", "Healthy")
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            ticket, embarquement = await _jusqu_au_train(setup, temporal_env)
+            assert embarquement["labels"] == ["agent-ready", "hotfix"], "le ticket embarque ses étiquettes"
+
+            train = await _train(temporal_env, setup)
+            await train.signal("merged", embarquement)  # aucun `depart_now` : le hotfix part seul
+            await _jusqu_a(train, "status_query", lambda s: s["status"] == "awaiting_approval")
+            await train.signal("abort", {"by": "test"})
+            await train.result()
+            await ticket.cancel()
+            historique = await train.fetch_history()
+    assert _departs_express(historique) == [True], "parti par la voie express, sans attendre le cron"
+
+
+@pytest.mark.parametrize(
+    ("approbation", "voie", "ticket", "attendu"),
+    [
+        # La politique ne demande rien, la voie express si : le hotfix attend SES capitaines.
+        (False, HOTFIX_CAPTAINS, None, ["hotfix-captains"]),
+        # La politique demande, la voie express non : le hotfix part sans attendre.
+        (True, {"required": False}, None, []),
+        # … sauf si un ticket du lot l'exige (ADR 0041) : l'exigence des tickets tient toujours.
+        (True, {"required": False}, CAPITAINES, ["release-captains"]),
+        # Une voie express qui ne dit rien de l'approbation garde celle de la politique.
+        (True, None, None, ["release-captains"]),
+    ],
+    ids=["voie-exige", "voie-dispense", "ticket-exige", "voie-muette"],
+)
+async def test_un_depart_express_prend_l_approbation_de_la_voie_express(
+    setup: Fixture,
+    temporal_env: Any,
+    worker_factory: Any,
+    approbation: bool,
+    voie: dict[str, Any] | None,
+    ticket: dict[str, Any] | None,
+    attendu: list[str],
+    request: pytest.FixtureRequest,
+) -> None:
+    await _voie_express(setup, approbation=approbation, voie=voie)
+    setup.adapters.cd.set_health("billing-api", "Healthy")
+    embarquement: dict[str, Any] = {"work_item_key": "varga/billing-api#9", "sha": "f1", "labels": ["hotfix"]}
+    if ticket is not None:
+        embarquement["approval"] = ticket
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            train = await _train(temporal_env, setup)
+            await train.signal("merged", embarquement)
+            etat = await _jusqu_a(
+                train,
+                "status_query",
+                lambda s: (
+                    s["status"] == "awaiting_approval" or (s["status"] == "collecting" and s["release_id"])
+                ),
+            )
+            if etat["status"] == "awaiting_approval":
+                await train.signal("approve", {"by": "marie"})
+                await _jusqu_a(train, "status_query", lambda s: s["status"] == "collecting")
+            await train.signal("abort", {"by": "test"})
+            await train.result()
+            historique = await train.fetch_history()
+    # L'historique rejoue contre le code courant ; celui de la voie qui exige s'archive pour les suivants.
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.worker import Replayer
+
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
+    nom = ARCHIVES_EXPRESS.get(request.node.callspec.id)
+    if nom and os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+        cible = HISTORIQUES / f"{nom}.json"
+        cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
+    assert _departs_express(historique) == [True]
+    (release,) = await _releases()
+    assert release.status == "done"
+    assert await _groupes_sollicites() == attendu

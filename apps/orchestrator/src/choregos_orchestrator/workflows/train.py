@@ -35,6 +35,9 @@ AUTO_SYNC_PREVIENT = "auto-sync-previent"
 #: ont réveillé chacun leur train et en ont été effacés aussitôt — le train attendait, vide, et le ticket
 #: attendait une livraison qui ne viendrait pas.
 LE_SIGNAL_DU_DEMARRAGE_EMBARQUE = "start-signal-boards"
+#: Un départ express prend l'approbation de SA voie (`express_lane.approval`, #279, S22-17). Avant ce
+#: marqueur, il prenait l'approbation ordinaire : la voie express n'était jamais lue.
+EXPRESS_LANE_APPROVAL = "express-lane-approval"
 #: Combien de fois, et à quel rythme, on regarde l'environnement avant de conclure.
 ESSAIS_AUTO_SYNC = 30
 PAUSE_AUTO_SYNC = timedelta(minutes=2)
@@ -325,7 +328,13 @@ class ReleaseTrain:
         # L'approbation de la politique, OU celle qu'un ticket du lot apporte de son workflow (ADR
         # 0041) : un correctif part seul, une fonctionnalité attend son capitaine. Un embarquement
         # d'avant ne porte pas `approval` ; le calcul rend alors la politique seule, comme avant.
-        approval = _approbation_du_depart(config.get("approval") or {}, items)
+        politique = config.get("approval") or {}
+        voie = (config.get("express_lane") or {}).get("approval")
+        # Un départ express prend l'approbation de sa voie À LA PLACE de l'ordinaire — l'exigence
+        # des tickets du lot tient toujours. Une voie qui n'en dit rien garde l'ordinaire.
+        if express and voie is not None and workflow.patched(EXPRESS_LANE_APPROVAL):
+            politique = voie
+        approval = _approbation_du_depart(politique, items)
         if approval.get("required"):
             self.status = str(ReleaseStatus.AWAITING_APPROVAL)
             self.approved = None

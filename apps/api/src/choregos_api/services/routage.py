@@ -9,6 +9,7 @@ pose son état initial et épingle sa version ensemble. Un test refuse toute aut
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -85,6 +86,20 @@ def valider_les_champs(schema: dict[str, Any] | None, champs: dict[str, Any], wo
         )
 
 
+def noter_les_etiquettes(item: WorkItem, etiquettes: Iterable[str]) -> None:
+    """Range les étiquettes du ticket dans `documents.labels`, dans l'ordre, sans doublon.
+
+    Elles servaient au routage puis se perdaient : `signal_train` embarquait avec `labels: []`, et un
+    ticket étiqueté `hotfix` ne prenait jamais la voie express (#279). Elles vivent dans `documents`
+    plutôt que dans une colonne : ni le contrat ni le schéma de la base ne changent. La liste est
+    remplacée en entier, pas fusionnée : chaque tracker envoie l'état courant de ses étiquettes.
+    """
+    item.documents = {
+        **(item.documents or {}),
+        "labels": list(dict.fromkeys(str(e) for e in etiquettes if e)),
+    }
+
+
 async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Naissance) -> WorkItem:
     """Le seul constructeur : l'état initial DU workflow choisi, et l'épingle de sa version."""
     ligne = await choisir_workflow(session, project, naissance)
@@ -104,6 +119,8 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         allowed_paths=list(naissance.allowed_paths),
         fields=dict(naissance.fields),
     )
+    if naissance.labels:
+        noter_les_etiquettes(item, naissance.labels)
     session.add(item)
     await session.flush()
     return item

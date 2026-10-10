@@ -35,8 +35,10 @@ temporal workflow query --workflow-id train-<project>-prod --name status_query
    choregos trains unfreeze <project> --env prod
    ```
 4. If a fix has to leave right now, use the **express lane**: put the `hotfix` label on the
-   ticket. It shortens the soak and skips the cron — but **not** the freeze: unfreeze first.
-   That is deliberate.
+   ticket. It shortens the soak, skips the cron and asks for the express lane's approval
+   (`release_train.<env>.express_lane.approval`) instead of the ordinary one; a lane that names no
+   approval keeps the ordinary one, and a ticket whose workflow names an approver still holds the
+   batch. It does **not** skip the freeze: unfreeze first. That is deliberate.
 
 ## Check it is fixed
 
