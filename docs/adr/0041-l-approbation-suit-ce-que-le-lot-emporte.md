@@ -55,6 +55,9 @@ approves. It is impossible on 0.16, because three pieces of the release train we
 - The express lane still boards with no labels (`labels: []`), so `express_lane.approval` stays
   unread. `auto_sync` environments (no train) still never tell the work item. Both are filed as
   findings: the GitHub template avoids them by declaring a train for every environment it deploys to.
+  *Update 2026-10-10 (S22-17, #279)*: a work item now keeps its labels (`documents.labels`) and
+  boards with them, and an express departure takes `express_lane.approval` instead of `approval`,
+  still under the requirement of the work items it carries (`patched("express-lane-approval")`).
 
 ## Alternatives discarded
 

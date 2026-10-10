@@ -47,6 +47,7 @@ from .projets import (
 from .routage import (
     Naissance,
     choisir_workflow,
+    noter_les_etiquettes,
     nouveau_ticket,
 )
 from .tickets import (
@@ -88,6 +89,7 @@ __all__ = [
     "human_request_dto",
     "le_tracker_est_interne",
     "memory_ab_comparison",
+    "noter_les_etiquettes",
     "nouveau_ticket",
     "parcours",
     "persist_event",

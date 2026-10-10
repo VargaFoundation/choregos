@@ -24,13 +24,22 @@ from ..errors import unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
-from ..services import Naissance, nouveau_ticket, workflow_du_ticket, workflow_model
+from ..services import (
+    Naissance,
+    noter_les_etiquettes,
+    nouveau_ticket,
+    workflow_du_ticket,
+    workflow_model,
+)
 from ..temporal import deliver_inbound, get_temporal, interpreter_id, train_id
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
 logger = get_logger("choregos.webhooks")
 
 AGENT_READY_LABEL = "agent-ready"
+#: Les événements de ticket qui portent la liste COURANTE de ses étiquettes : `labeled` (posée ou
+#: retirée, `removed`), et `updated` — GitLab n'émet rien d'autre quand une étiquette est retirée.
+ETIQUETTES_A_JOUR = frozenset({InboundEventType.ITEM_LABELED, InboundEventType.ITEM_UPDATED})
 
 
 async def _already_seen(session: Any, source: str, delivery_id: str, event_type: str, body: bytes) -> bool:
@@ -129,6 +138,10 @@ async def _dispatch(session: Any, events: list[InboundEvent]) -> int:
             )
         if item is None:
             continue
+        etiquettes = event.payload.get("labels")
+        if event.type in ETIQUETTES_A_JOUR and isinstance(etiquettes, list):
+            # L'état courant des étiquettes, posé ou retiré : la voie express les lit (#279).
+            noter_les_etiquettes(item, etiquettes)
         if should_start:
             workflow_id = interpreter_id(project.slug, key)
             await get_temporal().start_interpreter(
@@ -156,6 +169,9 @@ async def _embarquer(session: Any, project: Project, item: WorkItem, event: Inbo
     train = train_apres_fusion(workflow)
     if train is None:
         return
+    # Les étiquettes de la PR ET celles du ticket : un ticket `hotfix` prend la voie express, que ce
+    # soit ce webhook ou l'interpréteur qui l'embarque le premier (#279).
+    etiquettes = [*event.payload.get("labels", []), *(item.documents or {}).get("labels", [])]
     await get_temporal().signal(
         train_id(project.slug, env_du_train(train)),
         "merged",
@@ -164,7 +180,7 @@ async def _embarquer(session: Any, project: Project, item: WorkItem, event: Inbo
             "sha": event.payload.get("sha", ""),
             "merged_at": utcnow().isoformat(),  # borne de départ du délai de livraison
             "risk": item.risk,
-            "labels": event.payload.get("labels", []),
+            "labels": list(dict.fromkeys(etiquettes)),
             "pr_url": event.payload.get("pr_url"),
             "title": item.title,
             "approval": dict(approbation_du_train(workflow, train)),
