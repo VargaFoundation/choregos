@@ -31,5 +31,15 @@ own licence and its own notices:
   PostgreSQL          PostgreSQL   database (container image)
   Ecphoria            Apache-2.0   optional memory service (container image)
 
+Embedded in the web console (apps/web):
+
+  Radix Colors        MIT          colour scales of the console's theme
+                                   (apps/web/src/styles/theme.css)
+                                   Copyright (c) 2022 WorkOS
+  Geist, Geist Mono   OFL-1.1      the console's typefaces, self-hosted from the
+                                   `geist` package
+                                   Copyright (c) 2023 Vercel, in collaboration
+                                   with basement.studio
+
 Python and JavaScript dependencies are declared in uv.lock and
 apps/web/pnpm-lock.yaml, and an SBOM ships with every release image.

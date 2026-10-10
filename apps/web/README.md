@@ -37,4 +37,4 @@ pnpm e2e                                   # parcours Playwright (mode démo)
   Le flux front avance sans attendre l'API, comme le prévoit le plan (§3.4).
 - **SSE avec reprise** : `Last-Event-ID` évite de perdre des événements au rechargement.
 - **Journal virtualisé** : 10 000 événements s'affichent sans saccade (test unitaire à l'appui).
-- **Thème sobre** : peu de couleurs, une par type d'acteur (agent, humain, système).
+- **Thème** : une console d'opérations (ADR 0043) — sombre par défaut, clair ou celui du système au choix (`choregos.theme`, posé avant la première peinture), couleurs tirées de Radix Colors avec un budget de contraste par mode, Geist pour lire et Geist Mono pour comparer.

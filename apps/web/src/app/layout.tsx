@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { GeistMono } from "geist/font/mono";
+import { GeistSans } from "geist/font/sans";
+import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandMark, Container } from "@varga/design-system";
+import { ChoixDuTheme } from "@/components/choix-du-theme";
+import { SCRIPT_DES_PREFERENCES } from "@/lib/preferences";
 import "./globals.css";
 import { Providers } from "./providers";
 import { TitreDuDocument } from "./titre-du-document";
@@ -16,10 +21,22 @@ export const metadata: Metadata = {
   description: "A ticket goes in, a controlled production release comes out.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+// Les deux thèmes existent : le navigateur dessine ses contrôles natifs (barres de défilement,
+// sélecteurs) dans celui de la page, que pose `data-theme` (ADR 0043).
+export const viewport: Viewport = { colorScheme: "dark light" };
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
   const demo = process.env.NEXT_PUBLIC_API_MODE === "mock";
+  // Le script du thème tourne avant React, donc hors du `strict-dynamic` de Next : il porte le nonce
+  // de la requête (`src/proxy.ts`), sans quoi la CSP le bloquerait sans un mot.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
-    <html lang="en" suppressHydrationWarning>
+    // Les variables des polices sur <html> : les jetons du thème (`:root`) les lisent à ce niveau.
+    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <head>
+        {/* Le thème choisi, posé AVANT la première peinture : pas d'éclair sombre puis clair. */}
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: SCRIPT_DES_PREFERENCES }} />
+      </head>
       <body>
         <Providers>
           <TitreDuDocument />
@@ -50,7 +67,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
               >
                 <span>A ticket goes in, a controlled production release comes out.</span>
-                <span>apache 2.0</span>
+                <span className="flex items-center gap-4">
+                  <ChoixDuTheme />
+                  <span>apache 2.0</span>
+                </span>
               </Container>
             </footer>
           </div>
