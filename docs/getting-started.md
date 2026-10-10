@@ -124,6 +124,11 @@ manifests written to the GitOps repository then synchronised by Argo CD, webhook
 project's memory tenant with an initial import (README, docs, ADRs, the year's issues and
 PRs), a team and a budget at the gateway, and a test message on the notification channel.
 
+The board's fields are `Status`, `Cost (€)`, `Size`, `Risk` and `Run`. A board provisioned by
+Choregos 0.17 or earlier named three of them `Coût (€)`, `Taille` and `Risque`: provisioning again
+renames them in place — the values already on the cards stay — and, until then, Choregos keeps
+writing to the fields the board has.
+
 And a **scaffolding PR** on your repository:
 
 | File | Review before merging |

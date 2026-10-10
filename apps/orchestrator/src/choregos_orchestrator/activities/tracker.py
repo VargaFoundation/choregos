@@ -161,9 +161,11 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
         await bundle.adapters.tracker.set_fields(
             item.tracker_key,
             {
-                "Coût (€)": round(float(totals.get("cost_eur", 0.0)), 2),
-                "Taille": item.size or "",
-                "Risque": item.risk or "",
+                # Un board d'avant S22-21 (`Coût (€)`, `Taille`, `Risque`) reçoit ces valeurs
+                # dans ses champs français : l'adaptateur écrit dans celui qui existe.
+                "Cost (€)": round(float(totals.get("cost_eur", 0.0)), 2),
+                "Size": item.size or "",
+                "Risk": item.risk or "",
                 "Run": f"{settings.public_url}/p/{bundle.slug}/items/{item.id}",
             },
         )

@@ -36,10 +36,13 @@ def test_un_projet_vide_est_refuse_a_la_construction() -> None:
         GitLabTracker(RestClient("https://gitlab.com"), "")
 
 
-async def test_lecture_d_un_ticket_avec_metadonnees() -> None:
-    description = (
-        'Les avoirs ne sont pas déduits.\n\n<!-- choregos:fields {"Risque": "low", "Taille": "M"} -->\n'
-    )
+@pytest.mark.parametrize(
+    "bloc",
+    ['{"Risk": "low", "Size": "M"}', '{"Risque": "low", "Taille": "M"}'],
+    ids=["noms-anglais", "bloc-d-avant-S22-21"],
+)
+async def test_lecture_d_un_ticket_avec_metadonnees(bloc: str) -> None:
+    description = f"Les avoirs ne sont pas déduits.\n\n<!-- choregos:fields {bloc} -->\n"
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/notes"):
@@ -145,13 +148,14 @@ async def test_les_champs_vivent_dans_la_description() -> None:
         envoye.update(jsonlib.loads(request.content))
         return httpx.Response(200, json={})
 
-    await tracker(handler).set_fields(f"{PROJECT}#12", {"Coût (€)": "1,25", "Run": "https://x/1"})
+    await tracker(handler).set_fields(f"{PROJECT}#12", {"Cost (€)": "1,25", "Run": "https://x/1"})
 
     description = envoye["description"]
     assert description.startswith("Corps du ticket.")
     assert description.count("choregos:fields") == 1, "un seul bloc de métadonnées"
     payload = jsonlib.loads(description.split("choregos:fields", 1)[1].rsplit("-->", 1)[0].strip())
-    assert payload == {"Coût (€)": "1,25", "Run": "https://x/1", "Taille": "M"}
+    # Le bloc d'avant S22-21 (`Taille`) est réécrit sous le nom anglais, sans doublon.
+    assert payload == {"Cost (€)": "1,25", "Run": "https://x/1", "Size": "M"}
 
 
 async def test_creation_de_ticket() -> None:

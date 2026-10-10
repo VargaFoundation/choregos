@@ -4,7 +4,7 @@
 
 | Kind | Jour 1 | Phase 5–6 | Notes d'implémentation |
 | :-- | :-- | :-- | :-- |
-| `tracker` | **GitHub Issues + Projects v2** | Jira Cloud, GitLab Issues, Azure Boards | GitHub : GraphQL pour Projects v2 (`updateProjectV2ItemFieldValue`), REST pour issues/commentaires ; champs *Status*, *Coût (€)*, *Taille*, *Risque*, *Run* ; webhooks `issues`, `issue_comment`, `projects_v2_item`, `label`. Polling de secours toutes les 60 s (`list_candidates`) pour rattraper les webhooks perdus |
+| `tracker` | **GitHub Issues + Projects v2** | Jira Cloud, GitLab Issues, Azure Boards | GitHub : GraphQL pour Projects v2 (`updateProjectV2ItemFieldValue`), REST pour issues/commentaires ; champs *Status*, *Cost (€)*, *Size*, *Risk*, *Run* (noms français d'avant S22-21 renommés au provisioning) ; webhooks `issues`, `issue_comment`, `projects_v2_item`, `label`. Polling de secours toutes les 60 s (`list_candidates`) pour rattraper les webhooks perdus |
 | `scm` | **GitHub** (App) | GitLab, Azure Repos | App GitHub `choregos-bot` : permissions Contents/Issues/Pull requests/Checks RW, Metadata R ; tokens d'installation par dépôt ; merge queue via `enablePullRequestAutoMerge` ; check-runs `choregos/scope`, `choregos/evidence` |
 | `ci` | **Tekton** | Jenkins, GitHub Actions, GitLab CI, Azure Pipelines | Tekton : `PipelineRun` déclenché par Triggers (`EventListener` GitHub) ; état via CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1` postés sur `/webhooks/tekton` ; logs via Tekton Results |
 | `cd` | **Argo CD + Argo Rollouts** | Azure Container Apps, Azure DevOps Releases, Flux | Argo : `Application` par env ; promotion = PR sur le repo GitOps ; santé via API Argo + webhooks de notification ; Rollouts : `AnalysisTemplate`, `abort`, `promote` via API |

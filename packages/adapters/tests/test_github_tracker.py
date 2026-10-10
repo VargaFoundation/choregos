@@ -205,6 +205,86 @@ async def test_un_ticket_absent_du_board_y_est_ajoute_et_un_nombre_part_en_nombr
     assert len(corps) == 4, "le champ `Inconnu` n'existe pas sur ce board : rien n'est inventé"
 
 
+def _board(champs: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"data": {"organization": {"projectV2": {"id": "PVT_1", "fields": {"nodes": champs}}}}}
+
+
+#: Un board provisionné avant S22-21 : ses champs portent leurs noms français.
+BOARD_D_AVANT = [
+    {"id": "F_status", "name": "Status", "dataType": "SINGLE_SELECT", "options": []},
+    {"id": "F_cost", "name": "Coût (€)", "dataType": "NUMBER"},
+    {"id": "F_size", "name": "Taille", "dataType": "SINGLE_SELECT", "options": [{"id": "O_m", "name": "M"}]},
+    {"id": "F_risk", "name": "Risque", "dataType": "SINGLE_SELECT", "options": []},
+]
+
+
+async def test_le_provisioning_renomme_les_champs_francais_au_lieu_de_les_doubler() -> None:
+    """S22-21 : `Coût (€)`, `Taille`, `Risque` deviennent `Cost (€)`, `Size`, `Risk` — le même champ,
+    donc les valeurs déjà posées sur les cartes restent ; `Run`, absent, est créé."""
+    graphql: list[Any] = [(200, _board(BOARD_D_AVANT))] + [(200, {"data": {}})] * 4
+    fil = Fil({("POST", "/graphql"): graphql})
+    bilan = await tracker(fil, project_number=3).ensure_project_fields(
+        ["Status", "Cost (€)", "Size", "Risk", "Run"]
+    )
+    mutations = [json.loads(r.content) for r in fil.requetes][1:]
+    renommages = [m["variables"] for m in mutations if "createProjectV2Field" not in m["query"]]
+    assert renommages == [
+        {"fieldId": "F_cost", "name": "Cost (€)"},
+        {"fieldId": "F_size", "name": "Size"},
+        {"fieldId": "F_risk", "name": "Risk"},
+    ], "l'ancien champ est renommé, pas doublé"
+    creations = [m["variables"] for m in mutations if "createProjectV2Field" in m["query"]]
+    assert creations == [{"projectId": "PVT_1", "name": "Run", "dataType": "TEXT"}]
+    assert bilan == {
+        "kept": ["Status"],
+        "renamed": ["Coût (€) → Cost (€)", "Taille → Size", "Risque → Risk"],
+        "created": ["Run"],
+    }
+
+
+async def test_un_gabarit_d_avant_qui_nomme_les_champs_en_francais_obtient_les_noms_anglais() -> None:
+    """Rejouable : un board déjà en anglais ne bouge pas, même si le pas nomme encore `Taille`."""
+    board = [
+        {"id": "F_status", "name": "Status", "dataType": "SINGLE_SELECT", "options": []},
+        {"id": "F_size", "name": "Size", "dataType": "SINGLE_SELECT", "options": []},
+    ]
+    fil = Fil({("POST", "/graphql"): [(200, _board(board)), (200, {"data": {}})]})
+    bilan = await tracker(fil, project_number=3).ensure_project_fields(["Status", "Taille", "Risque"])
+    mutations = [json.loads(r.content) for r in fil.requetes][1:]
+    assert [m["variables"]["name"] for m in mutations] == ["Risk"]
+    assert mutations[0]["variables"]["options"] == [
+        {"name": n, "color": "GRAY", "description": ""} for n in ("low", "medium", "high")
+    ]
+    assert bilan == {"kept": ["Status", "Size"], "renamed": [], "created": ["Risk"]}
+
+
+async def test_un_board_d_avant_pas_encore_renomme_recoit_encore_ses_valeurs() -> None:
+    """Pendant une version, `Cost (€)`/`Size` vont dans `Coût (€)`/`Taille` si le board n'a qu'eux."""
+    graphql = [
+        (200, _board(BOARD_D_AVANT)),
+        (200, {"data": {"node": {"items": {"pageInfo": {"hasNextPage": False}, "nodes": []}}}}),
+        (200, {"data": {"addProjectV2ItemById": {"item": {"id": "I_1"}}}}),
+        (200, {"data": {}}),
+        (200, {"data": {"node": {"items": {"pageInfo": {"hasNextPage": False}, "nodes": [
+            {"id": "I_1", "content": {"number": 12}}
+        ]}}}}),
+        (200, {"data": {}}),
+    ]  # fmt: skip
+    fil = Fil(
+        {("POST", "/graphql"): graphql, ("GET", f"/repos/{REPO}/issues/12"): (200, {"node_id": "ISSUE_12"})}
+    )
+    await tracker(fil, project_number=3).set_fields(f"{REPO}#12", {"Cost (€)": 0.42, "Size": "M"})
+    ecritures = [
+        json.loads(r.content)["variables"]
+        for r in fil.requetes
+        if r.url.path == "/graphql" and "updateProjectV2ItemFieldValue" in json.loads(r.content)["query"]
+    ]
+    assert [(e["fieldId"], e["value"]) for e in ecritures] == [
+        ("F_cost", {"number": 0.42}),
+        ("F_size", {"singleSelectOptionId": "O_m"}),
+    ]
+
+
 async def test_un_board_introuvable_est_une_erreur_de_configuration() -> None:
     fil = Fil({("POST", "/graphql"): (200, {"data": {"organization": {"projectV2": None}}})})
     with pytest.raises(ConfigurationError, match="board Projects v2 #9"):

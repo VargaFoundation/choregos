@@ -10,6 +10,8 @@ from typing import Any, Literal
 from choregos_contracts import InboundEvent, InboundEventType, ProjectConfig, Risk, Size
 from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItemData, utcnow
 
+from ..tracker.champs import nom_actuel, nom_present
+
 
 class FakeTracker:
     """Tracker de test. `seed()` crée des tickets ; `move()` simule un déplacement de carte."""
@@ -23,6 +25,8 @@ class FakeTracker:
         self.calls: list[tuple[str, Any]] = []
         self._next_number = 1
         self.webhook_secret = "fake-secret"
+        #: Les champs du board, par nom : un test y met un board d'avant S22-21 (`Taille`…).
+        self.board_fields: list[str] = ["Status"]
 
     # ───────────────────────── scripting ─────────────────────────
 
@@ -123,6 +127,22 @@ class FakeTracker:
     async def set_fields(self, key: str, fields: dict[str, Any]) -> None:
         self.calls.append(("set_fields", (key, dict(fields))))
         self.items[key].fields.update(fields)
+
+    async def ensure_project_fields(self, fields: list[str]) -> dict[str, list[str]]:
+        """Comme le board GitHub : garde, renomme l'ancien nom français, crée ce qui manque."""
+        self.calls.append(("ensure_project_fields", list(fields)))
+        bilan: dict[str, list[str]] = {"kept": [], "renamed": [], "created": []}
+        for voulu in dict.fromkeys(nom_actuel(str(nom)) for nom in fields):
+            present = nom_present(voulu, self.board_fields)
+            if present == voulu:
+                bilan["kept"].append(voulu)
+            elif present is not None:
+                self.board_fields[self.board_fields.index(present)] = voulu
+                bilan["renamed"].append(f"{present} → {voulu}")
+            else:
+                self.board_fields.append(voulu)
+                bilan["created"].append(voulu)
+        return bilan
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
         return [key for key, item in self.items.items() if "agent-ready" in item.labels]

@@ -21,6 +21,7 @@ from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItem
 
 from ..errors import ConfigurationError
 from ..http import RestClient
+from .champs import RISQUE, TAILLE, nom_actuel
 from .gitlab_events import parse_gitlab_event
 
 STATUS_COMMENT_MARKER = "<!-- choregos:status -->"
@@ -71,8 +72,8 @@ class GitLabTracker:
             url=issue.get("web_url"),
             state=issue.get("state"),
             labels=list(issue.get("labels") or []),
-            size=_as_enum(Size, metadata.get("Taille"), upper=True),
-            risk=_as_enum(Risk, metadata.get("Risque")),
+            size=_as_enum(Size, metadata.get(TAILLE), upper=True),
+            risk=_as_enum(Risk, metadata.get(RISQUE)),
             assignees=[a.get("username", "") for a in issue.get("assignees", [])],
             author=(issue.get("author") or {}).get("username"),
             comments=[
@@ -167,7 +168,7 @@ class GitLabTracker:
         iid = self._iid(key)
         issue = await self.client.request("GET", f"/api/v4/projects/{self.encoded}/issues/{iid}")
         description = issue.get("description") or ""
-        merged = {**_read_metadata(description), **{k: str(v) for k, v in fields.items()}}
+        merged = {**_read_metadata(description), **{nom_actuel(k): str(v) for k, v in fields.items()}}
         body = _strip_metadata(description).rstrip()
         payload = json.dumps(merged, ensure_ascii=False, sort_keys=True)
         await self.client.request(
@@ -199,7 +200,12 @@ def _read_metadata(description: str) -> dict[str, str]:
         parsed = json.loads(match.group("json").strip())
     except json.JSONDecodeError:
         return {}
-    return {str(k): str(v) for k, v in parsed.items()} if isinstance(parsed, dict) else {}
+    if not isinstance(parsed, dict):
+        return {}
+    brut = {str(k): str(v) for k, v in parsed.items()}
+    # Un bloc écrit avant S22-21 porte `Taille`, `Risque`, `Coût (€)` : on le lit sous le nom
+    # d'aujourd'hui, et la prochaine écriture le réécrit ainsi (le nouveau nom l'emporte s'il y est).
+    return {nom_actuel(k): v for k, v in brut.items() if nom_actuel(k) == k or nom_actuel(k) not in brut}
 
 
 def _strip_metadata(description: str) -> str:

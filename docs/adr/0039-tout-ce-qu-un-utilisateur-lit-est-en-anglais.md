@@ -39,7 +39,10 @@ product.
 - Tests that assert on a French message change with it; tests that carry their own French fixtures
   (a workflow written inside the test) keep them — they are data, not what the platform ships.
 - A GitHub Projects board created by an older Choregos keeps its French field names (`Coût (€)`,
-  `Taille`): renaming a board field is a migration, done in its own story.
+  `Taille`): renaming a board field is a migration, done in its own story. *Done in S22-21:* the
+  fields are `Cost (€)`, `Size`, `Risk`; provisioning renames the French ones in place, and until
+  then the adapters write to whichever name the board, the Jira project or the GitLab metadata
+  block has.
 - The detector is deliberately simple (accents, a short French lexicon, French function words);
   its false positives are settled by a short list of proper names, never by excluding a path.
 
