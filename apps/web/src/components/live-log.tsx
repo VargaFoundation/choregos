@@ -118,6 +118,10 @@ function resumerLaMiseAJour(payload: Record<string, unknown>): string {
   if ((genre === "agent_message_chunk" || genre === "agent_thought_chunk") && typeof contenu?.text === "string") {
     return genre === "agent_thought_chunk" ? `(thinking) ${contenu.text}` : contenu.text;
   }
+  if (genre === "tool_call" || genre === "tool_call_update") {
+    const titre = typeof update.title === "string" ? update.title : String(update.toolCallId ?? "");
+    return [titre, typeof update.status === "string" ? update.status : null].filter(Boolean).join(" · ");
+  }
   if (genre === "plan" && Array.isArray(update.entries)) {
     const entrees = update.entries as { status?: unknown }[];
     return `plan · ${entrees.filter((e) => e.status === "completed").length} of ${entrees.length} done`;
