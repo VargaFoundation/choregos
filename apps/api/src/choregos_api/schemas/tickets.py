@@ -134,6 +134,26 @@ class TimelineEntry(Dto):
     cost_usd: float | None = None
 
 
+class HandOffEvent(Dto):
+    """Un reçu de passage (S25-04) : un run a produit ou lu une sortie, sous cette empreinte."""
+
+    kind: Literal["produced", "read"]
+    digest: str
+    run_id: str
+    stage: str | None = None
+    attempt: int | None = None
+    at: datetime
+
+
+class HandOff(Dto):
+    """Une sortie d'étape et ses reçus, dans l'ordre ; `current_digest` est l'empreinte de ce qu'elle
+    vaut aujourd'hui — celle du dernier reçu « produite », sauf si on l'a modifiée après coup."""
+
+    output: str
+    current_digest: str | None = None
+    events: list[HandOffEvent] = Field(default_factory=list)
+
+
 JourneyMoveKind = Literal[
     "start",
     "nominal",

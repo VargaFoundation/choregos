@@ -41,6 +41,14 @@ blurs the agent's word and its own observation governs nothing.
    not verified yet". A work item's state comes from the workflow's transitions, which the platform
    takes after its gates — never from an agent's claim.
 
+5. **A hand-off is observed too** (S25-04). Every output a step stores (`item.documents`) gets a
+   *produced* receipt under the SHA-256 digest of its canonical JSON, with the run that produced it;
+   every read — what a run's prompt embeds when the orchestrator renders it, what `get_ticket`
+   serves during the run — gets a *read* receipt under the digest of what was read. A receipt is
+   never modified: a new revision makes a new receipt. `GET /work-items/{id}/hand-offs` returns them
+   with the digest of what each output is worth today, so the next step can be shown to have read
+   the exact revision produced, and an output modified afterwards no longer matches its receipt.
+
 ## Consequences
 
 - `tests/provenance.test.tsx` is the guard of decision 4: a run declared done with a refused gate

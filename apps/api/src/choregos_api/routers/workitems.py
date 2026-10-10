@@ -19,6 +19,7 @@ from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas import (
     DecisionRequest,
+    HandOff,
     HumanRequestDto,
     PageMeta,
     TimelineEntry,
@@ -39,6 +40,7 @@ from ..services import (
     workflow_du_ticket,
     workflow_model,
 )
+from ..services.recus import passages_du_ticket
 from ..services.routage import valider_les_champs
 from ..temporal import deliver_control, deliver_decision, get_temporal, interpreter_id
 
@@ -156,6 +158,17 @@ async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
         raise forbidden()
 
     return await chronologie(session, item)
+
+
+@router.get("/work-items/{id}/hand-offs", response_model=list[HandOff], operation_id="getWorkItemHandOffs")
+async def hand_offs(id: str, session: Db, principal: Me) -> list[HandOff]:
+    """Les reçus de passage du ticket, sortie par sortie (S25-04) : qui l'a produite, qui l'a lue, sous
+    quelle empreinte, et ce qu'elle vaut aujourd'hui."""
+    item, project = await _load(session, id)
+    _, org_slug = await resolve_project(session, project.id)
+    if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
+        raise forbidden()
+    return await passages_du_ticket(session, item)
 
 
 @router.get("/work-items/{id}/journey", response_model=WorkItemJourney, operation_id="getWorkItemJourney")

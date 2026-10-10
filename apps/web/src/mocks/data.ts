@@ -31,6 +31,7 @@ import type {
   ReleasePage,
   Run,
   RunEventDto,
+  HandOff,
   TimelineEntry,
   TrainStatus,
   WorkflowDef,
@@ -192,6 +193,53 @@ function item(
     closed_at: extra.closed ? iso(60 * 2) : undefined,
   };
 }
+
+export const handOffs: HandOff[] = [
+  {
+    output: "spec_markdown",
+    current_digest: "sha256:9f2c4e1a7b3d5c8e0f6a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e",
+    events: [
+      {
+        kind: "produced",
+        digest: "sha256:9f2c4e1a7b3d5c8e0f6a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e",
+        run_id: "r1",
+        stage: "refine",
+        attempt: 1,
+        at: iso(240),
+      },
+      {
+        kind: "read",
+        digest: "sha256:9f2c4e1a7b3d5c8e0f6a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e",
+        run_id: "r3",
+        stage: "implement",
+        attempt: 1,
+        at: iso(60),
+      },
+    ],
+  },
+  {
+    output: "plan_markdown",
+    current_digest: "sha256:4b8d2f6a0c4e8a2c6e0a4c8e2a6c0e4a8c2e6a0c4e8a2c6e0a4c8e2a6c0e4a8c",
+    events: [
+      {
+        kind: "produced",
+        digest: "sha256:4b8d2f6a0c4e8a2c6e0a4c8e2a6c0e4a8c2e6a0c4e8a2c6e0a4c8e2a6c0e4a8c",
+        run_id: "r2",
+        stage: "plan",
+        attempt: 1,
+        at: iso(120),
+      },
+      {
+        kind: "read",
+        digest: "sha256:4b8d2f6a0c4e8a2c6e0a4c8e2a6c0e4a8c2e6a0c4e8a2c6e0a4c8e2a6c0e4a8c",
+        run_id: "r3",
+        stage: "implement",
+        attempt: 1,
+        at: iso(60),
+      },
+    ],
+  },
+];
 
 export const timeline: TimelineEntry[] = [
   { ts: iso(240), kind: "state_change", title: "inbox → refining", actor: "orchestrator", actor_kind: "system" },
@@ -1438,6 +1486,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     // Un tracker interne : la demande se pose dans la console (le board offre “ new request ”).
     [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
+    [/^\/work-items\/[^/]+\/hand-offs$/, handOffs],
     [/^\/work-items\/[^/]+\/runs$/, runs],
     [/^\/runs\/[^/]+\/events$/, runEvents],
     [/^\/runs\/[^/]+\/access$/, runAccess],

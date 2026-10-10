@@ -623,6 +623,20 @@ paths:
       operationId: getWorkItemTimeline
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TimelineEntry" } } } } }
+  /work-items/{id}/hand-offs:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: getWorkItemHandOffs
+      description: >-
+        The hand-off receipts of a work item (S25-04), output by output: every run that produced it
+        and every run that read it, under the SHA-256 digest of the revision it produced or read, and
+        the digest of what the output is worth today — an output modified after it was produced no
+        longer has the digest of its last receipt.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/HandOff" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /work-items/{id}/journey:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2497,6 +2511,25 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/WorkItem" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
+    HandOff:
+      type: object
+      description: An output of a step and its receipts, in order (S25-04).
+      required: [output, events]
+      properties:
+        output: { type: string, description: "spec_markdown, plan_markdown, or an output a transition declares" }
+        current_digest: { type: [string, "null"], description: "The digest of what the output is worth today; null when it is gone." }
+        events: { type: array, items: { $ref: "#/components/schemas/HandOffEvent" } }
+    HandOffEvent:
+      type: object
+      description: A run produced or read an output, under this digest; a receipt never changes.
+      required: [kind, digest, run_id, at]
+      properties:
+        kind: { type: string, enum: [produced, read] }
+        digest: { type: string, description: "sha256:<hex> of the value's canonical JSON" }
+        run_id: { type: string }
+        stage: { type: [string, "null"] }
+        attempt: { type: [integer, "null"] }
+        at: { type: string, format: date-time }
     TimelineEntry:
       type: object
       required: [ts, kind, title]

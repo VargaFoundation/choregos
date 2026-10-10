@@ -246,6 +246,21 @@ async def le_tracker_est_interne(session: AsyncSession, project: Project) -> boo
 DOCUMENTS_LOGICIELS = ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown")
 
 
+def sorties_a_ranger(outputs: Any, declarees: list[str] | None = None) -> dict[str, Any]:
+    """Les sorties d'une étape qui se rangent dans `item.documents` : les quatre documents logiciels
+    présents, et chaque sortie que la transition déclare. Ce sont elles qui reçoivent un reçu (S25-04)."""
+    valeurs = (
+        outputs.model_dump(mode="json", exclude_none=True)
+        if hasattr(outputs, "model_dump")
+        else dict(outputs)
+    )
+    rangees = {champ: valeurs[champ] for champ in DOCUMENTS_LOGICIELS if valeurs.get(champ)}
+    for nom in declarees or []:
+        if nom in valeurs and valeurs[nom] not in (None, "", [], {}):
+            rangees[nom] = valeurs[nom]
+    return rangees
+
+
 def ranger_les_sorties(item: WorkItem, outputs: Any, declarees: list[str] | None = None) -> dict[str, Any]:
     """Range les sorties d'une étape dans `item.documents`, pour que l'étape SUIVANTE les lise.
 
@@ -255,18 +270,7 @@ def ranger_les_sorties(item: WorkItem, outputs: Any, declarees: list[str] | None
     cherchait « les profils proposés à l'étape précédente » dans un workspace vide.
     Une sortie déclarée par la transition (`outputs: [profils]`) est rangée sous son nom.
     """
-    documents = dict(item.documents or {})
-    valeurs = (
-        outputs.model_dump(mode="json", exclude_none=True)
-        if hasattr(outputs, "model_dump")
-        else dict(outputs)
-    )
-    for champ in DOCUMENTS_LOGICIELS:
-        if valeurs.get(champ):
-            documents[champ] = valeurs[champ]
-    for nom in declarees or []:
-        if nom in valeurs and valeurs[nom] not in (None, "", [], {}):
-            documents[nom] = valeurs[nom]
+    documents = {**(item.documents or {}), **sorties_a_ranger(outputs, declarees)}
     item.documents = documents
     return documents
 

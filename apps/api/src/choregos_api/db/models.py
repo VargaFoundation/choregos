@@ -609,6 +609,32 @@ class ActionEffect(Base, PkMixin, TimestampMixin):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class HandOffReceipt(Base, PkMixin, TimestampMixin):
+    """Un reçu de passage entre étapes (S25-04) : une sortie d'étape, son empreinte, et le run qui
+    l'a PRODUITE ou LUE. Une ligne ne change jamais : une nouvelle révision fait un nouveau reçu,
+    une lecture aussi. C'est ce qui montre que l'étape suivante a lu la révision exacte produite —
+    et qu'une sortie modifiée après coup n'a plus l'empreinte de son reçu."""
+
+    __tablename__ = "hand_off_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "work_item_id", "output", "digest", "run_id", "kind", name="uq_hand_off_receipts_passage"
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
+    #: le nom de la sortie : `spec_markdown`, `plan_markdown`, ou celui qu'une transition déclare
+    output: Mapped[str] = mapped_column(String(128))
+    #: `sha256:<hex>` de la valeur, en JSON canonique (`services/recus.py`)
+    digest: Mapped[str] = mapped_column(String(80))
+    #: produced | read
+    kind: Mapped[str] = mapped_column(String(16))
+    run_id: Mapped[str] = mapped_column(String(64))
+    #: le rôle de l'étape du run, gardé pour l'affichage : un run supprimé laisse son reçu lisible
+    stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class Agent(Base, PkMixin, TimestampMixin):
     """Un agent de l'organisation : interne (la plateforme le fait tourner) ou externe (un client
     de la porte MCP). Ce qu'il EST vit dans ses versions, immuables ; ici, son identité et son

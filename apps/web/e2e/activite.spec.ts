@@ -45,3 +45,14 @@ test("un run que l'agent dit fini mais dont une garantie échoue s'affiche « de
   await expect(preuves.getByRole("listitem").filter({ hasText: "coverage" }).locator("[data-provenance]")).toHaveText(/declared/);
   await expect(preuves.getByRole("listitem").filter({ hasText: "tests" }).locator("[data-provenance]")).toHaveText(/observed/);
 });
+
+test("les reçus de passage d'un ticket : chaque sortie, qui l'a produite, qui l'a lue (S25-04)", async ({ page }) => {
+  await page.goto("/p/billing-api/items/w1");
+  const passages = page.getByRole("list", { name: "hand-offs" });
+  await expect(passages.locator(":scope > li")).toHaveCount(2);
+  await expect(passages.locator('[data-sortie="spec_markdown"]')).toContainText("produced by refine · attempt 1");
+  await expect(passages.locator('[data-sortie="spec_markdown"]')).toContainText("read by implement · attempt 1");
+  // L'étape suivante a lu la révision exacte produite, pour la spec comme pour le plan.
+  await expect(passages.locator('[data-lecture="same"]')).toHaveCount(2);
+  await expect(page.getByTestId("modifiee-apres-coup")).toHaveCount(0);
+});
