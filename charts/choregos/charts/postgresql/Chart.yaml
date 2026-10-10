@@ -2,5 +2,5 @@ apiVersion: v2
 name: choregos-postgresql
 description: PostgreSQL embarqué (banc, démo) — une instance, un volume. Pas pour la production.
 type: application
-version: 0.17.8
-appVersion: "0.17.8"
+version: 0.17.9
+appVersion: "0.17.9"
