@@ -89,3 +89,15 @@ def test_l_empreinte_change_quand_le_texte_change() -> None:
     assert agent is not None
     autre = replace(agent, document={**agent.document, "description": "x"})
     assert autre.empreinte != agent.empreinte
+
+
+def test_l_architecte_verifie_son_numero_avant_d_accepter() -> None:
+    """#287 : renvoyé par `adr_number_free`, l'architecte repart de l'acceptation ; c'est là qu'il
+    relit les numéros de la branche par défaut et renumérote le sien s'il est pris."""
+    architecte = entree("architect")
+    assert architecte is not None
+    instructions = architecte.document["spec"]["instructions"]
+    accepter = rendre_les_instructions(instructions, inputs={"adr_path": "docs/adr/0007-queue.md"})
+    assert "docs/adr/0007-queue.md" in accepter
+    assert "adr_number_free" in accepter and "git ls-tree" in accepter
+    assert "highest number on the default branch plus one" in accepter

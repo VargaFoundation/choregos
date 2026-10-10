@@ -24,6 +24,7 @@ from choregos_contracts.workflow import (
 #: connue : une garantie nouvelle sans résumé ferait parler la vue processus dans le vide.
 RESUMES: dict[str, str] = {
     "action_succeeded": "its governed action succeeded",
+    "adr_number_free": "the decision record's number is not already taken on the default branch",
     "ci_green": "the CI pipeline is green",
     "coverage_delta_min": "test coverage does not drop below the threshold",
     "diff_size_max": "the change stays under the size limit",

@@ -182,6 +182,34 @@ async def test_la_comparaison_traduit_les_statuts_de_fichiers() -> None:
     assert diff.files[1].patch == "@@"
 
 
+async def test_lister_un_dossier_de_la_branche_par_defaut() -> None:
+    """`adr_number_free` (#287) lit les ADR déjà fusionnés : les fichiers, pas les sous-dossiers."""
+    fil = Fil(
+        {
+            ("GET", f"/repos/{REPO}/contents/docs/adr"): (
+                200,
+                [
+                    {"path": "docs/adr/0002-cache.md", "type": "file"},
+                    {"path": "docs/adr/0001-queue.md", "type": "file"},
+                    {"path": "docs/adr/images", "type": "dir"},
+                ],
+            )
+        }
+    )
+    assert await scm(fil).list_files(REPO, "main", "docs/adr") == [
+        "docs/adr/0001-queue.md",
+        "docs/adr/0002-cache.md",
+    ]
+    assert fil.requetes[0].url.params["ref"] == "main"
+
+
+async def test_un_dossier_absent_est_vide_mais_une_panne_remonte() -> None:
+    assert await scm(Fil()).list_files(REPO, "main", "docs/adr") == [], "pas encore d'ADR : 404"
+    panne = Fil({("GET", f"/repos/{REPO}/contents/docs/adr"): (401, {"message": "Bad credentials"})})
+    with pytest.raises(UpstreamError):
+        await scm(panne).list_files(REPO, "main", "docs/adr")
+
+
 async def test_les_relecteurs_se_repartissent_entre_personnes_et_equipes() -> None:
     from choregos_core.domain import PrRef
 

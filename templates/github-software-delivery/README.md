@@ -30,7 +30,10 @@ options with `path:line` evidence, the architect writes **one** ADR in `docs/adr
 skill. The guarantee `markdown_sections` reads what the branch adds — context, considered options,
 decision outcome, `Chosen option: "…"` — not what the agent says it wrote. A critic reviews it, the
 `architects` group decides (a rejection goes back to the research, with its reason), the architect
-sets `status: accepted`, and the pull request is merged. **Nothing is deployed.**
+sets `status: accepted`, and the pull request is merged — once `adr_number_free` confirms that no
+record on the default branch already carries its number. Two studies running together pick the
+same "highest plus one": the second to merge is sent back to the architect, who renumbers it.
+**Nothing is deployed.**
 
 **dev-complex** — the same chain as `dev-simple`, plus a plan, a security review and release notes
 (they are added to the pull request). Three people decide: `product-owners` on the specification,

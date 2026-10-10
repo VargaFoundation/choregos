@@ -56,10 +56,17 @@ actually executed; `scope_respected` compares the diff to the declared scope;
 minimum. Gates shipped today:
 
 ```
-ci_green · coverage_delta_min · diff_size_max · evidence_facts · evidence_present
-external · flag_present · no_secrets · outputs_present · provenance_signed
-review_approved · scans_ok · scope_respected · tool_called
+action_succeeded · adr_number_free · ci_green · coverage_delta_min · diff_size_max
+evidence_facts · evidence_present · external · flag_present · markdown_sections
+no_secrets · outputs_in · outputs_present · provenance_signed · review_approved
+scans_ok · scope_respected · tool_called
 ```
+
+`adr_number_free` guards numbered records: when the branch adds `docs/adr/NNNN-*.md` (the path
+pattern is the `pattern` parameter), it lists the records already on the default branch and refuses
+a number that one of them carries — two studies running together both pick "the highest plus
+one", and the second to merge is sent back to renumber. The refusal names the files in question.
+It is evaluated when the merge transition starts, alongside the other synchronous gates.
 
 **A gate that cannot see what it must check refuses.** If the SCM connector cannot produce a
 diff, `scope_respected` does not pass — it declines. A guarantee that passes blindly is worse

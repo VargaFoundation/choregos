@@ -5,7 +5,8 @@ Une gate est **le** mécanisme de garantie (docs/plan/01) : elle ne fait pas con
 à l'agent, elle vérifie. Deux familles :
 
 - **synchrones** : évaluables immédiatement à partir du `StageResult`, du diff et de la politique
-  (`scope_respected`, `evidence_present`, `diff_size_max`, `no_secrets`, `coverage_delta_min`) ;
+  (`scope_respected`, `evidence_present`, `diff_size_max`, `no_secrets`, `coverage_delta_min`,
+  `adr_number_free`…) ;
 - **asynchrones** : elles attendent un événement externe (`ci_green`, `review_approved`,
   `scans_ok`, `provenance_signed`, `flag_present`, `external`).
 """
@@ -57,6 +58,9 @@ class GateContext:
     #: fichier neuf l'est tout entier). `markdown_sections` lit ce qui est écrit, pas ce que
     #: l'agent raconte en avoir écrit.
     added_text: dict[str, str] = field(default_factory=dict)
+    #: Les chemins présents sur la branche PAR DÉFAUT, sous le dossier que lit la garantie
+    #: (`adr_number_free`) ; `None` quand le connecteur SCM n'a pas pu les lister.
+    default_branch_files: list[str] | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -249,6 +253,71 @@ def _markdown_sections(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         not manques,
         detail=f"{len(fichiers)} document(s) with their sections" if not manques else "; ".join(manques),
         annotations=manques,
+    )
+
+
+#: Le motif par défaut d'un ADR numéroté : `docs/adr/0042-titre.md`.
+MOTIF_ADR = "docs/adr/[0-9][0-9][0-9][0-9]-*.md"
+
+
+def _numero(chemin: str) -> int | None:
+    """Le numéro en tête du nom de fichier : `docs/adr/0042-rls.md` → 42."""
+    trouve = re.match(r"(\d+)-", chemin.rsplit("/", 1)[-1])
+    return int(trouve.group(1)) if trouve else None
+
+
+@gate("adr_number_free", needs=("scm",))
+def _adr_number_free(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Le numéro de l'ADR que la branche ajoute n'est pas déjà pris sur la branche par défaut (#287).
+
+    L'architecte numérote « le plus grand existant plus un », lu au moment où il écrit : deux études
+    qui tournent ensemble prennent le même numéro, et la seconde fusionnerait un doublon. Rien ne
+    réserve un numéro ; cette garantie, posée à la fusion, refuse le doublon au dernier moment utile.
+    Un chemin déjà présent tel quel sur la branche par défaut n'est pas un ajout : c'est le même
+    fichier (ou un conflit d'ajout que la forge refuse d'elle-même).
+    """
+    if not ctx.diff_available:
+        return _sans_diff("adr_number_free")
+    motif = str(params.get("pattern") or MOTIF_ADR)
+    if ctx.default_branch_files is None:
+        if not any(fnmatch.fnmatch(p, motif) for p in ctx.changed_files):
+            return GateOutcome("adr_number_free", True, detail="no numbered record added by the change")
+        return GateOutcome(
+            "adr_number_free",
+            False,
+            detail="default branch unavailable: the numbers already taken could not be listed "
+            "(SCM connector)",
+        )
+    existants = sorted(p for p in ctx.default_branch_files if fnmatch.fnmatch(p, motif))
+    ajoutes = [p for p in ctx.changed_files if fnmatch.fnmatch(p, motif) and p not in existants]
+    if not ajoutes:
+        return GateOutcome("adr_number_free", True, detail="no numbered record added by the change")
+    pris: dict[int, list[str]] = {}
+    for chemin in existants:
+        numero = _numero(chemin)
+        if numero is not None:
+            pris.setdefault(numero, []).append(chemin)
+    doublons = [
+        (chemin, numero, pris[numero])
+        for chemin in sorted(ajoutes)
+        if (numero := _numero(chemin)) is not None and numero in pris
+    ]
+    if not doublons:
+        return GateOutcome(
+            "adr_number_free",
+            True,
+            detail=f"number free on the default branch: {', '.join(sorted(ajoutes))}",
+        )
+    libre = max(pris) + 1
+    return GateOutcome(
+        "adr_number_free",
+        False,
+        detail="; ".join(
+            f"{chemin}: number {numero:04d} is already taken on the default branch by {', '.join(autres)}"
+            for chemin, numero, autres in doublons
+        )
+        + f" — renumber it (next free number: {libre:04d})",
+        annotations=[chemin for chemin, _, _ in doublons],
     )
 
 

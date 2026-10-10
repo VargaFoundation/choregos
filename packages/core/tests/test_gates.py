@@ -337,3 +337,47 @@ def test_un_statut_accepte_se_verifie_par_un_motif() -> None:
     assert evaluate(
         "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": ecrit}), accepte
     ).passed
+
+
+# ───────────────────────── adr_number_free (#287, S22-20) ─────────────────────────
+
+SUR_MAIN = ["docs/adr/0001-queue.md", "docs/adr/0002-cache.md", "docs/adr/README.md"]
+
+
+def test_adr_number_free_laisse_passer_un_numero_libre() -> None:
+    libre = GateContext(changed_files=["docs/adr/0003-rls.md"], default_branch_files=SUR_MAIN)
+    out = evaluate("adr_number_free", libre)
+    assert out.passed and "docs/adr/0003-rls.md" in out.detail
+
+
+def test_adr_number_free_refuse_un_numero_deja_pris_sur_la_branche_par_defaut() -> None:
+    """Deux études lisent le même « plus grand plus un » : la seconde à fusionner est refusée."""
+    pris = GateContext(changed_files=["docs/adr/0002-rls.md", "src/x.py"], default_branch_files=SUR_MAIN)
+    out = evaluate("adr_number_free", pris)
+    assert out.blocking
+    assert out.annotations == ["docs/adr/0002-rls.md"], "les fichiers en cause"
+    assert "0002 is already taken on the default branch by docs/adr/0002-cache.md" in out.detail
+    assert "next free number: 0003" in out.detail
+
+
+def test_adr_number_free_ne_dit_rien_sans_adr_ajoute() -> None:
+    sans_adr = GateContext(changed_files=["src/x.py", "docs/adr/README.md"], default_branch_files=SUR_MAIN)
+    assert evaluate("adr_number_free", sans_adr).passed
+    # Le même chemin, déjà sur la branche par défaut, n'est pas un ajout : c'est le même fichier.
+    retouche = GateContext(changed_files=["docs/adr/0002-cache.md"], default_branch_files=SUR_MAIN)
+    assert evaluate("adr_number_free", retouche).passed
+    # Sans ADR, il n'y a rien à comparer : le listage manquant ne bloque pas.
+    assert evaluate("adr_number_free", GateContext(changed_files=["src/x.py"])).passed
+
+
+def test_adr_number_free_refuse_quand_il_ne_peut_pas_regarder() -> None:
+    assert "diff unavailable" in evaluate("adr_number_free", GateContext(diff_available=False)).detail
+    aveugle = evaluate("adr_number_free", GateContext(changed_files=["docs/adr/0003-rls.md"]))
+    assert aveugle.blocking and "default branch unavailable" in aveugle.detail
+
+
+def test_adr_number_free_suit_son_motif() -> None:
+    motif = {"pattern": "decisions/[0-9][0-9][0-9]-*.md"}
+    ctx = GateContext(changed_files=["decisions/007-x.md"], default_branch_files=["decisions/007-y.md"])
+    assert evaluate("adr_number_free", ctx, motif).blocking
+    assert evaluate("adr_number_free", ctx).passed, "le motif par défaut ne voit pas ces fichiers"

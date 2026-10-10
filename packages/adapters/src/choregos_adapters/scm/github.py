@@ -240,6 +240,21 @@ class GitHubScm:
             ],
         )
 
+    async def list_files(self, repo: str, ref: str, directory: str) -> list[str]:
+        """Les fichiers d'un dossier sur une branche (API Contents, un seul niveau). Un dossier absent
+        n'a pas de fichiers ; une autre erreur remonte : une panne n'est pas une absence."""
+        try:
+            entrees = await self.client.request(
+                "GET", f"/repos/{repo}/contents/{quote(directory.strip('/'))}", repo=repo, params={"ref": ref}
+            )
+        except UpstreamError as exc:
+            if exc.status_code == 404:
+                return []
+            raise
+        if not isinstance(entrees, list):  # un fichier, pas un dossier
+            return []
+        return sorted(str(e["path"]) for e in entrees if e.get("type") == "file")
+
     async def create_check_run(
         self,
         repo: str,
