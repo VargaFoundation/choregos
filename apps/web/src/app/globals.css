@@ -16,6 +16,9 @@
 /* `dark:` suit le thème choisi (`data-theme` sur <html>), pas le système seul. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* `rail:` : la barre latérale repliée (`data-sidebar="rail"` sur <html>, S24-03). */
+@custom-variant rail (&:where([data-sidebar="rail"], [data-sidebar="rail"] *));
+
 /* Sans ce `@source`, Tailwind ne voit pas les classes des composants du design system et ne
    les génère pas : ils s'afficheraient sans style. */
 @source "../../node_modules/@varga/design-system/src";

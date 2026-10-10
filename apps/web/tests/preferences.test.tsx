@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChoixDuTheme } from "@/components/choix-du-theme";
-import { CLE_DU_THEME, SCRIPT_DES_PREFERENCES, themeResolu } from "@/lib/preferences";
+import { CLE_DE_LA_BARRE, CLE_DU_THEME, lireLaBarre, SCRIPT_DES_PREFERENCES, themeResolu } from "@/lib/preferences";
 import { ThemeProvider } from "@/lib/theme";
 
 type Ecouteur = (evenement: { matches: boolean }) => void;
@@ -58,6 +58,32 @@ describe("le script d'en-tête pose le thème avant la peinture (ADR 0043)", () 
       throw new Error("SecurityError");
     });
     expect(executerLeScript()).toBe("dark");
+  });
+});
+
+describe("le script d'en-tête replie aussi la barre latérale avant la peinture (S24-03)", () => {
+  it.each([
+    [null, undefined],
+    ["rail", "rail"],
+    ["full", undefined],
+    ["n'importe quoi", undefined],
+  ])("barre gardée %s → data-sidebar %s, comme lireLaBarre", (gardee, attendu) => {
+    systeme(false);
+    if (gardee !== null) window.localStorage.setItem(CLE_DE_LA_BARRE, gardee);
+    delete document.documentElement.dataset.sidebar;
+    new Function(SCRIPT_DES_PREFERENCES)();
+    expect(document.documentElement.dataset.sidebar).toBe(attendu);
+    expect(lireLaBarre()).toBe(attendu ?? "full");
+  });
+
+  it("un stockage refusé laisse la barre pleine, et le thème sombre", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    delete document.documentElement.dataset.sidebar;
+    expect(executerLeScript()).toBe("dark");
+    expect(document.documentElement.dataset.sidebar).toBeUndefined();
+    expect(lireLaBarre()).toBe("full");
   });
 });
 

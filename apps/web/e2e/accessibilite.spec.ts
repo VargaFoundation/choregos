@@ -153,7 +153,10 @@ test("les barres d'onglets ne défilent pas en hauteur : Windows y dessinait ses
   }
 });
 
-/** L'en-tête tient sur une ligne à 1280 px (S21-03) : six entrées, l'organisation, la session. */
+/**
+ * À 1280 px, rien ne passe à la ligne (S21-03) : la navigation est dans la barre latérale (S24-03),
+ * l'organisation et la session dans la barre du haut.
+ */
 test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   for (const path of ["/", "/skills", "/integrations", "/admin"]) {
@@ -167,10 +170,14 @@ test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", a
     const mesure = await page.evaluate(() => ({
       largeur: document.documentElement.scrollWidth,
       fenetre: document.documentElement.clientWidth,
-      // L'en-tête a une hauteur fixe : un libellé qui passe à la ligne déborde DEDANS sans la changer.
-      // Ce qui se mesure, c'est chaque élément de la navigation : une ligne de texte, pas trois (la
-      // marque, elle, est dessinée sur deux lignes).
-      hautes: [...document.querySelectorAll('nav[aria-label="main navigation"] :is(a, button, span, select)')]
+      // L'en-tête et la barre ont une hauteur fixe : un libellé qui passe à la ligne déborde DEDANS
+      // sans la changer. Ce qui se mesure, c'est chaque élément : une ligne de texte, pas trois.
+      // La barre du haut seule : l'en-tête d'une page (`<header>` aussi) porte des boutons de 32 px.
+      hautes: [
+        ...document.querySelectorAll(
+          'nav[aria-label="main navigation"] :is(a, button, span, select), header[data-barre-du-haut] :is(a, button, span, select)',
+        ),
+      ]
         .filter((el) => el.getBoundingClientRect().height > 30)
         .map((el) => (el.textContent ?? "").trim()),
     }));

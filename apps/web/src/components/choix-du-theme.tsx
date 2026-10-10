@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { useId } from "react";
 import { cn } from "@/lib/cn";
 import { PREFERENCES_DE_THEME, type PreferenceDeTheme } from "@/lib/preferences";
 import { useTheme } from "@/lib/theme";
@@ -10,9 +11,13 @@ const LIBELLES: Record<PreferenceDeTheme, string> = { dark: "dark", light: "ligh
 /**
  * Le choix du thème : sombre, clair, ou celui du système (ADR 0043). Trois boutons radio dans un
  * groupe nommé — au clavier, les flèches passent d'un choix à l'autre.
+ *
+ * Chaque exemplaire a son propre groupe (`useId`) : l'en-tête et le panneau du menu en portent un
+ * chacun, et deux groupes du même nom n'en feraient qu'un — cocher l'un décocherait l'autre.
  */
 export function ChoixDuTheme({ className }: { className?: string }) {
   const { preference, choisir } = useTheme();
+  const groupe = useId();
   return (
     <fieldset className={cn("flex items-center gap-1", className)}>
       <legend className="sr-only">theme</legend>
@@ -28,7 +33,7 @@ export function ChoixDuTheme({ className }: { className?: string }) {
         >
           <input
             type="radio"
-            name="theme"
+            name={groupe}
             value={valeur}
             checked={preference === valeur}
             onChange={() => choisir(valeur)}

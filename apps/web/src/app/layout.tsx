@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandMark, Container } from "@varga/design-system";
-import { ChoixDuTheme } from "@/components/choix-du-theme";
+import { BarreLaterale } from "@/components/coquille/barre-laterale";
 import { SCRIPT_DES_PREFERENCES } from "@/lib/preferences";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -47,32 +47,36 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           >
             skip to content
           </a>
-          <div className="flex min-h-screen flex-col">
-            <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur-sm">
-              <Container size="wide" className="flex h-16 items-center gap-4 sm:gap-8">
-                <Link href="/" className="no-underline">
-                  <BrandMark name="choregos" product="varga foundation" />
-                </Link>
-                <TopNav demo={demo} />
-              </Container>
-            </header>
-            <main id="contenu" tabIndex={-1} className="flex-1 focus:outline-none">
-              <Container size="wide" className="py-10">
-                {children}
-              </Container>
-            </main>
-            <footer className="border-t border-line">
-              <Container
-                size="wide"
-                className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
-              >
-                <span>A ticket goes in, a controlled production release comes out.</span>
-                <span className="flex items-center gap-4">
-                  <ChoixDuTheme />
+          {/* La coquille d'une console d'opérations (S24-03) : à partir de 1280 px, la barre latérale
+              à gauche (repliable en rail) et la page à droite ; en dessous, une seule colonne. */}
+          <div className="min-h-screen xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:rail:grid-cols-[52px_minmax(0,1fr)]">
+            <BarreLaterale />
+            <div className="flex min-h-screen min-w-0 flex-col">
+              {/* 48 px bordure comprise : son filet prolonge celui de la marque, dans la barre latérale. */}
+              <header data-barre-du-haut className="sticky top-0 z-20 h-12 border-b border-line bg-surface/95 backdrop-blur-sm">
+                <Container size="wide" className="flex h-full items-center gap-4 sm:gap-8">
+                  {/* À partir de 1280 px, la marque est en tête de la barre latérale. */}
+                  <Link href="/" className="no-underline xl:hidden">
+                    <BrandMark name="choregos" product="varga foundation" />
+                  </Link>
+                  <TopNav demo={demo} />
+                </Container>
+              </header>
+              <main id="contenu" tabIndex={-1} className="flex-1 focus:outline-none">
+                <Container size="wide" className="py-8">
+                  {children}
+                </Container>
+              </main>
+              <footer className="border-t border-line">
+                <Container
+                  size="wide"
+                  className="flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
+                >
+                  <span>A ticket goes in, a controlled production release comes out.</span>
                   <span>apache 2.0</span>
-                </span>
-              </Container>
-            </footer>
+                </Container>
+              </footer>
+            </div>
           </div>
         </Providers>
       </body>

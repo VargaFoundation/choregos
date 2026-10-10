@@ -40,6 +40,10 @@ Embedded in the web console (apps/web):
                                    `geist` package
                                    Copyright (c) 2023 Vercel, in collaboration
                                    with basement.studio
+  Lucide              ISC          the console's icons (`lucide-react`)
+                                   Copyright (c) 2026 Lucide Icons and Contributors;
+                                   the icons Lucide derives from Feather are MIT,
+                                   Copyright (c) 2013-present Cole Bemis
 
 Python and JavaScript dependencies are declared in uv.lock and
 apps/web/pnpm-lock.yaml, and an SBOM ships with every release image.

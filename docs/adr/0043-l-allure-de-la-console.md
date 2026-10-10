@@ -51,13 +51,22 @@ theme the person chooses.
    no shadows, light mode short cool ones on raised surfaces.
 7. **Amends ADR 0042**: a caption or a table header may be uppercased by CSS (`text-transform`);
    that is presentation, and the text in the document keeps the case ADR 0042 gives it.
+8. **The shell** (S24-03): from 1280 px, the navigation leaves the header for a 240 px left
+   sidebar, darker than the page, grouped (work, catalogue, organisation) with Lucide icons (ISC).
+   It folds into a 52 px rail of icons; the choice lives in the browser (`choregos.sidebar`) and
+   the same head script applies it before the first paint (`data-sidebar`, never rendered by
+   React). The top bar is 48 px: the organisation on the left, the edition, the person, sign-out
+   and the theme on the right. Below 1280 px, its "menu" button opens the same grouped list, with
+   44 px targets.
 
 ## Consequences
 
 - The design system can move on without the console following blindly: a new colour role in its
   dark tokens turns `theme-provenance` red until the console declares it.
 - `e2e/accessibilite.spec.ts` runs axe on every page in both themes, and `e2e/theme.spec.ts` proves
-  the default, the persistence of a choice, and that the head script alone applies it.
+  the default, the persistence of a choice, and that the head script alone applies it;
+  `e2e/coquille.spec.ts` proves the same for the folded sidebar, and the 48 px top bar at every
+  width.
 - The work is delivered as stream S24: tokens, fonts and theme (S24-01); restyled components
   (S24-02); a left sidebar and a 48 px top bar (S24-03); the map, the journey, the board and the
   journal (S24-04).
