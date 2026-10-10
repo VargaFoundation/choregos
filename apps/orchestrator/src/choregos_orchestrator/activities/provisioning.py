@@ -184,9 +184,27 @@ async def _github_ensure_labels(params: dict[str, Any], bundle: Any, settings: A
     return f"{len(etiquettes)} labels ensured"
 
 
+#: Les champs du board quand le gabarit n'en nomme aucun.
+CHAMPS_DU_BOARD = ["Status", "Cost (€)", "Size", "Risk", "Run"]
+
+
 async def _github_ensure_project_board(params: dict[str, Any], bundle: Any, settings: Any) -> str:
-    fields = params.get("fields", ["Status", "Cost", "Size", "Risk", "Run"])
-    return f"board checked ({', '.join(fields)})"
+    """Les champs du board existent sous leur nom anglais ; un champ qu'un Choregos d'avant S22-21
+    a créé en français (`Taille`) est renommé, pas doublé — ses valeurs restent sur les cartes."""
+    fields = [str(nom) for nom in params.get("fields") or CHAMPS_DU_BOARD]
+    ensure = getattr(bundle.adapters.tracker, "ensure_project_fields", None)
+    if ensure is None:
+        return f"board checked ({', '.join(fields)})"
+    bilan = await ensure(fields)
+    if not any(bilan.values()):
+        return "no Projects v2 board configured: give its number to the connector"
+    parties = [
+        f"{len(bilan.get('kept', []))} kept",
+        f"{len(bilan.get('created', []))} created",
+        f"{len(bilan.get('renamed', []))} renamed",
+    ]
+    renommes = bilan.get("renamed", [])
+    return f"board fields: {', '.join(parties)}" + (f" ({'; '.join(renommes)})" if renommes else "")
 
 
 async def _github_ensure_webhooks(params: dict[str, Any], bundle: Any, settings: Any) -> str:

@@ -44,7 +44,7 @@ Matrice backend × modèle (`model_profiles.validated_backends`, alimentée par 
 2. Le backend agent reçoit **cette** clé ; LiteLLM journalise chaque requête (spend logs : tokens prompt/completion/cache, coût d'après sa table de prix ou le prix interne, latence, modèle réel après fallback) et **coupe** au plafond (l'agent reçoit une erreur budget → le runner termine `failed(reason=budget)`).
 3. `collect_spend` : `GET /key/info` + `/spend/logs?request_id…` filtrés par clé → `Spend{tokens_in, tokens_out, tokens_cached, cost_usd, requests, models_used}` ; écriture `cost_ledger` (avec `fx_rate` du jour pour `cost_eur`) ; `revoke_key`.
 4. Agrégats : `work_items.totals` mis à jour par run ; vues matérialisées ; `GET /costs`.
-5. **Écriture dans le ticket** (`update_ticket_status_comment`) : un commentaire unique repéré par le marqueur `<!-- choregos:status -->`, réécrit à chaque étape, plus les champs structurés du board (*Coût (€)*, *Taille*, *Risque*, *Run*).
+5. **Écriture dans le ticket** (`update_ticket_status_comment`) : un commentaire unique repéré par le marqueur `<!-- choregos:status -->`, réécrit à chaque étape, plus les champs structurés du board (*Cost (€)*, *Size*, *Risk*, *Run* depuis S22-21).
 
 ```markdown
 <!-- choregos:status -->

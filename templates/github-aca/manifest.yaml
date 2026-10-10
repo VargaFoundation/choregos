@@ -45,7 +45,7 @@ inputs:
 steps:
   - github.install_app
   - github.ensure_labels
-  - github.ensure_project_board: { fields: [Status, "Coût (€)", Taille, Risque, Run] }
+  - github.ensure_project_board: { fields: [Status, "Cost (€)", Size, Risk, Run] }
   - github.ensure_issue_template
   - aca.check_environment
   - aca.check_identity

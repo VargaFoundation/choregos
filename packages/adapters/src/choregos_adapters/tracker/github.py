@@ -2,7 +2,9 @@
 """TrackerAdapter GitHub : Issues (REST) + Projects v2 (GraphQL).
 
 Le board est la vue humaine : Choregos y écrit l'état, le coût, la taille, le risque
-et le lien vers le run. Les champs sont créés à la demande s'ils n'existent pas.
+et le lien vers le run. Le provisioning crée les champs qui manquent et renomme ceux qu'un Choregos
+d'avant S22-21 avait créés en français (`ensure_project_fields`) ; une écriture vers un champ que le
+board n'a pas ne crée rien.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItem
 
 from ..errors import ConfigurationError
 from ..github.client import GitHubClient
+from .champs import COUT, RISQUE, RUN, TAILLE, nom_actuel, nom_present
 from .github_events import parse_github_event
 
 STATUS_COMMENT_MARKER = "<!-- choregos:status -->"
@@ -75,6 +78,37 @@ mutation($fieldId: ID!, $name: String!, $color: ProjectV2SingleSelectFieldOption
   }
 }
 """
+
+RENAME_FIELD_MUTATION = """
+mutation($fieldId: ID!, $name: String!) {
+  updateProjectV2Field(input: {fieldId: $fieldId, name: $name}) {
+    projectV2Field { ... on ProjectV2FieldCommon { id name } }
+  }
+}
+"""
+
+CREATE_FIELD_MUTATION = """
+mutation(
+  $projectId: ID!, $name: String!, $dataType: ProjectV2CustomFieldType!,
+  $options: [ProjectV2SingleSelectFieldOptionInput!]
+) {
+  createProjectV2Field(
+    input: {projectId: $projectId, name: $name, dataType: $dataType, singleSelectOptions: $options}
+  ) {
+    projectV2Field { ... on ProjectV2FieldCommon { id name } }
+  }
+}
+"""
+
+#: Le type de chaque champ que Choregos crée ; un champ inconnu est un texte. *Status* est natif à
+#: tout board Projects v2 : on ne le crée jamais.
+TYPES_DES_CHAMPS: dict[str, tuple[str, tuple[str, ...]]] = {
+    COUT: ("NUMBER", ()),
+    TAILLE: ("SINGLE_SELECT", ("S", "M", "L", "XL")),
+    RISQUE: ("SINGLE_SELECT", ("low", "medium", "high")),
+    RUN: ("TEXT", ()),
+}
+CHAMPS_NATIFS = frozenset({"Status", "Title", "Assignees", "Labels"})
 
 
 class GitHubTracker:
@@ -212,7 +246,10 @@ class GitHubTracker:
         await self.comment(a, f"<!-- choregos:link:{relation} -->\n{wording}")
 
     async def set_fields(self, key: str, fields: dict[str, Any]) -> None:
-        """Champs structurés du board : *Coût (€)*, *Taille*, *Risque*, *Run*."""
+        """Champs structurés du board : *Cost (€)*, *Size*, *Risk*, *Run*.
+
+        Un board provisionné avant S22-21 porte encore *Coût (€)*, *Taille*, *Risque* : la valeur va
+        dans le champ qui existe (voir `_set_board_field`)."""
         if not self.project_number:
             return
         number = self._number(key)
@@ -264,9 +301,47 @@ class GitHubTracker:
         )
         return str(data["addProjectV2ItemById"]["item"]["id"])
 
+    async def ensure_project_fields(self, fields: list[str]) -> dict[str, list[str]]:
+        """Provisioning : chaque champ voulu existe sur le board, sous son nom d'aujourd'hui.
+
+        Un champ présent est gardé ; un champ présent sous son ancien nom français est RENOMMÉ (ses
+        valeurs restent sur les cartes) plutôt que doublé ; un champ absent est créé. Rejouable : un
+        second passage ne trouve plus rien à faire.
+        """
+        bilan: dict[str, list[str]] = {"kept": [], "renamed": [], "created": []}
+        if not self.project_number:
+            return bilan
+        self._project_cache = None
+        project = await self._project()
+        par_nom = {str(f.get("name")): f for f in project["fields"]["nodes"] if f.get("name")}
+        for voulu in dict.fromkeys(nom_actuel(str(nom)) for nom in fields):
+            present = nom_present(voulu, par_nom)
+            if present == voulu:
+                bilan["kept"].append(voulu)
+            elif present is not None:
+                await self.client.graphql(
+                    RENAME_FIELD_MUTATION, {"fieldId": par_nom[present]["id"], "name": voulu}, repo=self.repo
+                )
+                bilan["renamed"].append(f"{present} → {voulu}")
+            elif voulu not in CHAMPS_NATIFS:
+                type_, options = TYPES_DES_CHAMPS.get(voulu, ("TEXT", ()))
+                variables: dict[str, Any] = {"projectId": project["id"], "name": voulu, "dataType": type_}
+                if options:
+                    variables["options"] = [
+                        {"name": option, "color": "GRAY", "description": ""} for option in options
+                    ]
+                await self.client.graphql(CREATE_FIELD_MUTATION, variables, repo=self.repo)
+                bilan["created"].append(voulu)
+        self._project_cache = None
+        return bilan
+
     async def _set_board_field(self, issue_number: int, field_name: str, value: Any) -> None:
         project = await self._project()
-        field = next((f for f in project["fields"]["nodes"] if f.get("name") == field_name), None)
+        par_nom = {str(f.get("name")): f for f in project["fields"]["nodes"] if f.get("name")}
+        # Le nom d'aujourd'hui, sinon l'ancien français : un board provisionné avant S22-21 que le
+        # provisioning n'a pas encore renommé reçoit encore ses valeurs (à retirer une version après).
+        nom = nom_present(field_name, par_nom)
+        field = par_nom.get(nom) if nom is not None else None
         if field is None:
             return  # le champ n'existe pas sur ce board : on n'invente rien
         item_id = await self._ensure_item(issue_number)

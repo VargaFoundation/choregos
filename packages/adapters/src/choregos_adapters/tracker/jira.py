@@ -20,6 +20,7 @@ from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItem
 from ..errors import ConfigurationError
 from ..http import RestClient
 from .adf import markdown_to_adf, text_of_adf
+from .champs import ANCIENS_NOMS, COUT, RISQUE, RUN, TAILLE, nom_actuel
 from .jira_events import parse_jira_event
 
 STATUS_COMMENT_MARKER = "[choregos:status]"
@@ -50,13 +51,14 @@ class JiraTracker:
         self.client = client
         self.project_key = project_key.upper()
         self.webhook_secret = webhook_secret
-        # Noms côté Jira des champs structurés que Choregos écrit.
+        # Noms côté Jira des champs structurés que Choregos écrit. Une configuration d'avant S22-21
+        # les désignait par leur ancien nom logique (`Taille`) : il vaut le nouveau (`Size`).
         self.field_names = {
-            "Coût (€)": "Coût (€)",
-            "Taille": "Taille",
-            "Risque": "Risque",
-            "Run": "Run",
-            **(field_names or {}),
+            COUT: COUT,
+            TAILLE: TAILLE,
+            RISQUE: RISQUE,
+            RUN: RUN,
+            **{nom_actuel(logique): nom for logique, nom in (field_names or {}).items()},
         }
         self.agent_ready_label = agent_ready_label
         self._fields: dict[str, str] | None = None
@@ -78,8 +80,8 @@ class JiraTracker:
             state=((fields.get("status") or {}).get("name")),
             labels=labels,
             item_type=((fields.get("issuetype") or {}).get("name")),
-            size=_parse_enum(Size, fields, self.field_names["Taille"]),
-            risk=_parse_enum(Risk, fields, self.field_names["Risque"]),
+            size=_parse_enum(Size, fields, self._nom_present(TAILLE, fields)),
+            risk=_parse_enum(Risk, fields, self._nom_present(RISQUE, fields)),
             assignees=[a for a in [((fields.get("assignee") or {}).get("displayName"))] if a],
             author=((fields.get("reporter") or {}).get("displayName")),
             comments=[
@@ -242,12 +244,22 @@ class JiraTracker:
         mapping = await self._field_ids()
         payload: dict[str, Any] = {}
         for name, value in fields.items():
-            field_id = mapping.get(self.field_names.get(name, name).casefold())
+            field_id = mapping.get(self._nom_present(nom_actuel(name), mapping, casefold=True).casefold())
             if field_id is None:
                 continue  # un champ absent n'est pas une panne : Choregos écrit ce qu'il peut
             payload[field_id] = str(value) if not isinstance(value, int | float) else value
         if payload:
             await self.client.request("PUT", f"/rest/api/3/issue/{key}", json={"fields": payload})
+
+    def _nom_present(self, logique: str, presents: Mapping[str, Any], *, casefold: bool = False) -> str:
+        """Le nom Jira du champ : celui configuré, sinon — s'il n'est pas configuré et que le projet
+        Jira a été monté avant S22-21 — son ancien nom français (`Taille`)."""
+        nom = self.field_names.get(logique, logique)
+        ancien = ANCIENS_NOMS.get(nom) if nom == logique else None
+        cle = str.casefold if casefold else str
+        if ancien is not None and cle(nom) not in presents and cle(ancien) in presents:
+            return ancien
+        return nom
 
     async def _field_ids(self) -> dict[str, str]:
         if self._fields is None:

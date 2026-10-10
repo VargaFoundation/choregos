@@ -266,6 +266,36 @@ async def test_les_champs_absents_du_projet_sont_ignores() -> None:
     assert envoye == [{"fields": {"customfield_1": 1.25}}], "seul le champ existant est écrit"
 
 
+async def test_les_champs_anglais_vont_dans_les_champs_francais_d_un_projet_d_avant() -> None:
+    """S22-21 : l'orchestrateur écrit `Cost (€)`, `Size`, `Risk` ; un projet Jira monté avant n'a que
+    `Coût (€)`, `Taille`, `Risque` — la valeur y va ; s'il a les deux, le nom anglais l'emporte."""
+    envoye: list[dict[str, Any]] = []
+    champs = [
+        {"id": "customfield_1", "name": "Coût (€)"},
+        {"id": "customfield_2", "name": "Taille"},
+        {"id": "customfield_3", "name": "Risque"},
+        {"id": "customfield_4", "name": "Risk"},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as jsonlib
+
+        if request.url.path == "/rest/api/3/field":
+            return httpx.Response(200, json=champs)
+        envoye.append(jsonlib.loads(request.content))
+        return httpx.Response(204)
+
+    await tracker(handler).set_fields("BILL-42", {"Cost (€)": 1.25, "Size": "M", "Risk": "low"})
+
+    assert envoye == [{"fields": {"customfield_1": 1.25, "customfield_2": "M", "customfield_4": "low"}}]
+
+
+def test_une_configuration_d_avant_qui_nomme_taille_vaut_pour_size() -> None:
+    client = RestClient(BASE, auth=("bot@varga.dev", "jeton"), service="jira")
+    jira = JiraTracker(client, "BILL", field_names={"Taille": "T-shirt"})
+    assert jira.field_names["Size"] == "T-shirt" and "Taille" not in jira.field_names
+
+
 async def test_creation_de_ticket_et_lien() -> None:
     appels: list[tuple[str, str]] = []
 
