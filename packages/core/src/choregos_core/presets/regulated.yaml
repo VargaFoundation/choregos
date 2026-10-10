@@ -1,11 +1,11 @@
-# Preset `regulated` : traçabilité maximale, humain à chaque porte, sandbox durcie.
+# Preset `regulated` : traçabilité maximale, sandbox durcie et fermée, trains approuvés.
 apiVersion: choregos/v1
 kind: Policy
 metadata:
   name: regulated
   version: 1
   preset: regulated
-  description: "Regulated context: every structural decision is made by a human, and provenance is mandatory."
+  description: "Regulated context: a hardened sandbox closed by default, mandatory provenance, approved staging and production releases."
 budgets:
   ticket_usd: { S: 20, M: 60, L: 150, XL: 300 }
   stage_usd:
@@ -16,11 +16,9 @@ budgets:
   max_minutes: { default: 60, implement: 120, review: 40 }
   daily_project_usd: 600
   alert_at_ratio: 0.7
-approvals:
-  spec: { required: always, group: product-owners, timeout_hours: 72 }
-  merge: { required: always, group: maintainers, timeout_hours: 48 }
-  prod: { required: always, group: release-captains, timeout_hours: 8 }
-  scope_change: { required: always, group: maintainers, timeout_hours: 24 }
+# Pas d'`approvals` ici : personne ne les applique (ADR 0044). Un humain qui approuve se déclare
+# dans le WORKFLOW (acteur humain sur une transition, `train.approval`) ; staging et prod restent
+# approuvés par `release_train.<env>.approval`, que le train applique.
 attempts:
   default_max: 2
   by_role: { implement: 2, fix_ci: 2 }
@@ -53,7 +51,6 @@ memory:
   read_timeout_ms: 300
 review:
   cross_backend: true
-  require_human_for_risk: [low, medium, high]
 release_train:
   dev: { mode: train, schedule: "0 * * * *", batch_max: 5, soak_minutes: 5 }
   staging:

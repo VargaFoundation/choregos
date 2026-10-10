@@ -13,6 +13,7 @@ from choregos_core import (
     load_template,
     parse_policy,
     parse_workflow,
+    policy_warnings,
 )
 from choregos_core.dsl import dump_workflow
 from sqlalchemy import func, select
@@ -27,6 +28,7 @@ from ..db.models import (
     WorkItem,
 )
 from ..errors import conflict, unprocessable
+from ..logging import get_logger
 
 DEFAULT_WORKFLOW = "default-simple"
 DEFAULT_POLICY_PRESET = "solo"
@@ -249,6 +251,7 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
     if policy is None:
         assert livree is not None
         parsed_policy = parse_policy(livree.politique)
+        signaler_ce_que_la_politique_n_applique_pas(parsed_policy, project.slug)
         policy = PolicyDef(
             project_id=project.id,
             name=parsed_policy.metadata.name,
@@ -313,6 +316,30 @@ def workflow_model(row: WorkflowDef | None) -> Workflow:
         return Workflow.model_validate(row.json_doc)
     parsed, _ = parse_workflow(row.yaml)
     return parsed
+
+
+def signaler_ce_que_la_politique_n_applique_pas(policy: Policy, project: str) -> list[str]:
+    """Journalise, une ligne par clé, ce que la politique écrit et que personne n'applique (ADR 0044).
+
+    Le contrat de `PolicyDto` n'a pas de champ d'avertissements : le journal est l'endroit où la
+    plateforme le dit, à l'enregistrement d'une politique et à la naissance d'un projet. Rend les
+    chemins signalés.
+    """
+    chemins: list[str] = []
+    # Un journaliseur par appel : celui d'un module, mis en cache au premier usage, ne verrait pas
+    # une configuration posée après lui (`structlog.testing.capture_logs`).
+    logger = get_logger("choregos.policy")
+    for issue in policy_warnings(policy):
+        logger.warning(
+            "policy.not_enforced",
+            project=project,
+            policy=policy.metadata.name,
+            code=issue.code,
+            path=issue.path,
+            message=issue.message,
+        )
+        chemins.append(issue.path or "")
+    return chemins
 
 
 def policy_model(row: PolicyDef | None) -> Policy:

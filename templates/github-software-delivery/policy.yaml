@@ -1,8 +1,9 @@
 # La politique du gabarit `github-software-delivery` (S21-23).
 #
 # Aucune approbation de production ici : ce sont les WORKFLOWS qui en exigent une (ADR 0041) —
-# `dev-simple` part seul, `dev-complex` attend le capitaine. Les `approvals` restent à `never` : ils ne
-# sont lus par personne, et les écrire autrement ferait croire à une garde qui n'existe pas.
+# `dev-simple` part seul, `dev-complex` attend le capitaine. Pas d'`approvals` ni de
+# `review.require_human_for_risk` : personne ne les applique (ADR 0044), et les écrire ferait croire
+# à une garde qui n'existe pas.
 apiVersion: choregos/v1
 kind: Policy
 metadata:
@@ -21,10 +22,6 @@ budgets:
   max_minutes: { default: 60, triage: 5, refine: 20, implement: 90, verify: 40 }
   daily_project_usd: 150
   alert_at_ratio: 0.8
-approvals:
-  spec: { required: never }
-  merge: { required: never }
-  prod: { required: never }
 attempts:
   default_max: 2
   by_role: { implement: 3, fix_ci: 3 }
@@ -54,7 +51,6 @@ memory:
   read_timeout_ms: 300
 review:
   cross_backend: false
-  require_human_for_risk: []
 release_train:
   staging:
     mode: train

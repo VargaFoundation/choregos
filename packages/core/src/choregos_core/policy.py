@@ -1,25 +1,26 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Policy engine : budgets, approbations, tentatives, périmètre.
+"""Policy engine : budgets, tentatives, périmètre, trains.
 
-Une politique répond à quatre questions, et à elles seules :
-combien puis-je dépenser, qui doit approuver, combien de fois puis-je réessayer,
-et où l'agent a-t-il le droit d'écrire.
+Une politique répond à trois questions, et à elles seules : combien puis-je dépenser,
+combien de fois puis-je réessayer, et où l'agent a-t-il le droit d'écrire — plus les règles
+des trains de livraison (`release_train`).
+
+Elle ne dit PAS qui doit approuver un ticket : les humains se déclarent DANS le workflow (un
+acteur humain sur une transition, `train.approval` — ADR 0041, ADR 0044). `approvals.*` et
+`review.require_human_for_risk` restent acceptés par le schéma (une politique existante reste
+valide), mais personne ne les lit : `policy_warnings` le dit à qui les renseigne.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
 from choregos_contracts import (
-    ApprovalRule,
     Budget,
-    HumanRequestKind,
     Policy,
-    Risk,
     Size,
 )
 from pydantic import ValidationError as PydanticValidationError
@@ -34,16 +35,6 @@ DEFAULT_TICKET_USD: dict[str, float] = {"S": 8.0, "M": 25.0, "L": 60.0, "XL": 12
 DEFAULT_STAGE_USD: dict[str, float] = {"S": 3.0, "M": 8.0, "L": 18.0, "XL": 30.0}
 DEFAULT_MAX_TURNS = 80
 DEFAULT_MAX_MINUTES = 60
-
-
-@dataclass(slots=True, frozen=True)
-class ApprovalDecision:
-    """Faut-il un humain, et lequel ?"""
-
-    required: bool
-    group: str | None = None
-    timeout_hours: int | None = None
-    reason: str = ""
 
 
 class PolicyEngine:
@@ -98,41 +89,7 @@ class PolicyEngine:
     def daily_budget(self) -> float | None:
         return self.policy.budgets.daily_project_usd
 
-    # ───────────────────────── approbations ─────────────────────────
-
-    def approval_for(
-        self,
-        kind: HumanRequestKind | str,
-        size: Size | str | None = None,
-        risk: Risk | str | None = None,
-    ) -> ApprovalDecision:
-        """Une approbation humaine est-elle requise pour ce type de décision ?"""
-        attr = {
-            "approval": "spec",
-            "spec": "spec",
-            "merge": "merge",
-            "prod": "prod",
-            "scope_change": "scope_change",
-        }.get(str(kind), str(kind))
-        rule: ApprovalRule | None = getattr(self.policy.approvals, attr, None)
-        if rule is None:
-            return ApprovalDecision(False, reason=f"no `{attr}` rule: no approval")
-        if rule.required == "always":
-            return ApprovalDecision(True, rule.group, rule.timeout_hours, f"`{attr}` : toujours")
-        if rule.required == "never":
-            return ApprovalDecision(False, reason=f"`{attr}` : jamais")
-        if rule.required == "by_size":
-            needed = str(size or Size.M) in {str(s) for s in rule.sizes}
-            return ApprovalDecision(
-                needed, rule.group, rule.timeout_hours, f"`{attr}` : par taille ({size}) → {needed}"
-            )
-        needed = str(risk or Risk.LOW) in {str(r) for r in rule.risks}
-        return ApprovalDecision(
-            needed, rule.group, rule.timeout_hours, f"`{attr}` : par risque ({risk}) → {needed}"
-        )
-
-    def human_review_required(self, risk: Risk | str | None) -> bool:
-        return str(risk or Risk.LOW) in {str(r) for r in self.policy.review.require_human_for_risk}
+    # ───────────────────────── relecture ─────────────────────────
 
     def cross_backend_review(self) -> bool:
         return self.policy.review.cross_backend
@@ -220,6 +177,44 @@ def parse_policy(text: str) -> Policy:
             Issue(f"schema.{e['type']}", e["msg"], ".".join(str(p) for p in e["loc"])) for e in exc.errors()
         ]
         raise ValidationError(issues, subject="policy") from exc
+
+
+#: Les règles d'approbation que le schéma accepte encore, et que personne n'applique.
+CLES_D_APPROBATION = ("spec", "merge", "prod", "scope_change")
+
+
+def policy_warnings(policy: Policy) -> list[Issue]:
+    """Ce qu'une politique écrit et que la plateforme n'applique pas (ADR 0044).
+
+    `approvals.*` et `review.require_human_for_risk` ont l'air de gardes ; aucune n'existe : les
+    humains se déclarent dans le workflow. Une règle `required: never` ou une liste vide ne promet
+    rien et ne se signale pas. On lit ce que le TEXTE a écrit (`model_fields_set`), pas les défauts
+    du modèle : une politique qui ne dit rien de `review` ne reçoit pas d'avertissement pour le
+    `[high]` que le contrat met par défaut.
+    """
+    issues: list[Issue] = []
+    for cle in CLES_D_APPROBATION:
+        regle = getattr(policy.approvals, cle)
+        if regle is not None and regle.required != "never":
+            issues.append(
+                Issue(
+                    "policy.approval_not_enforced",
+                    f"`approvals.{cle}` is not enforced: Choregos asks no one for this approval. "
+                    "Declare a human transition in the workflow (a human actor, or `train.approval`).",
+                    f"approvals.{cle}",
+                )
+            )
+    revue = policy.review
+    if "require_human_for_risk" in revue.model_fields_set and revue.require_human_for_risk:
+        issues.append(
+            Issue(
+                "policy.review_not_enforced",
+                "`review.require_human_for_risk` is not enforced: Choregos asks no one for this review. "
+                "Declare a human transition in the workflow.",
+                "review.require_human_for_risk",
+            )
+        )
+    return issues
 
 
 @lru_cache(maxsize=8)

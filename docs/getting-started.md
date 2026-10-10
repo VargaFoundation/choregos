@@ -130,7 +130,7 @@ And a **scaffolding PR** on your repository:
 | :-- | :-- |
 | `AGENTS.md` | the test, lint and type-check commands of *your* project |
 | `.choregos/workflow.yaml` | state labels must match your board; keep the gates |
-| `.choregos/policy.yaml` | budgets, approvals, allowed scope, train rules |
+| `.choregos/policy.yaml` | budgets, allowed scope, sandbox, train rules (who approves a ticket is in the workflow) |
 | `tekton/pipeline.yaml` | the project's CI |
 | `deploy/kustomization.yaml` | the deployment target |
 | `.github/PULL_REQUEST_TEMPLATE.md`, `CODEOWNERS` | review |
@@ -148,7 +148,7 @@ trigger. The platform:
 
 1. classifies the ticket (size, risk) and picks the workflow;
 2. runs a specification stage — the agent writes a spec with verifiable criteria;
-3. waits for human approval if the project's policy requires it;
+3. waits for human approval if the workflow names a human on that transition;
 4. implements on a branch, within the paths the ticket allows;
 5. verifies (tests, lint, types, coverage) and opens the PR;
 6. mirrors everything into the ticket: state, cost, run link.

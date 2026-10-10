@@ -29,7 +29,14 @@ from ..schemas import (
     WorkflowValidateRequest,
     WorkflowValidation,
 )
-from ..services import active_policy, default_workflow, ensure_defaults, publier_workflow, workflow_actif
+from ..services import (
+    active_policy,
+    default_workflow,
+    ensure_defaults,
+    publier_workflow,
+    signaler_ce_que_la_politique_n_applique_pas,
+    workflow_actif,
+)
 
 router = APIRouter(tags=["workflows"])
 
@@ -347,6 +354,8 @@ async def get_policy(ctx: ProjectCtx, session: Db) -> PolicyDto:
 async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto:
     ctx.require(Permission.POLICY_WRITE)
     policy = parse_policy(body.yaml)
+    # Valide, mais `approvals.*` et `review.require_human_for_risk` n'y gardent rien (ADR 0044).
+    signaler_ce_que_la_politique_n_applique_pas(policy, ctx.project.slug)
     current = await active_policy(session, ctx.id)
     version = policy.metadata.version
     if current is not None and current.version >= version:

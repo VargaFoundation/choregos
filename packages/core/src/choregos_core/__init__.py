@@ -82,11 +82,11 @@ from .models import (
 )
 from .policy import (
     PRESET_NAMES,
-    ApprovalDecision,
     PolicyEngine,
     engine_for,
     load_preset,
     parse_policy,
+    policy_warnings,
     preset_yaml,
 )
 
@@ -98,7 +98,6 @@ __all__ = [
     "PRESET_NAMES",
     "TEMPLATE_NAMES",
     "Acces",
-    "ApprovalDecision",
     "Catalogue",
     "Change",
     "ChoregosError",
@@ -167,6 +166,7 @@ __all__ = [
     "parse_policy",
     "parse_workflow",
     "parse_workflow_file",
+    "policy_warnings",
     "preset_yaml",
     "rapport_d_acces",
     "scan_secrets",
