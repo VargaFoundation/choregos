@@ -53,7 +53,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <BarreLaterale />
             <div className="flex min-h-screen min-w-0 flex-col">
               {/* 48 px bordure comprise : son filet prolonge celui de la marque, dans la barre latérale. */}
-              <header className="sticky top-0 z-20 h-12 border-b border-line bg-surface/95 backdrop-blur-sm">
+              <header data-barre-du-haut className="sticky top-0 z-20 h-12 border-b border-line bg-surface/95 backdrop-blur-sm">
                 <Container size="wide" className="flex h-full items-center gap-4 sm:gap-8">
                   {/* À partir de 1280 px, la marque est en tête de la barre latérale. */}
                   <Link href="/" className="no-underline xl:hidden">

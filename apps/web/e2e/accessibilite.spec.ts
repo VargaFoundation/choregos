@@ -172,7 +172,12 @@ test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", a
       fenetre: document.documentElement.clientWidth,
       // L'en-tête et la barre ont une hauteur fixe : un libellé qui passe à la ligne déborde DEDANS
       // sans la changer. Ce qui se mesure, c'est chaque élément : une ligne de texte, pas trois.
-      hautes: [...document.querySelectorAll('nav[aria-label="main navigation"] :is(a, button, span, select), header :is(a, button, span, select)')]
+      // La barre du haut seule : l'en-tête d'une page (`<header>` aussi) porte des boutons de 32 px.
+      hautes: [
+        ...document.querySelectorAll(
+          'nav[aria-label="main navigation"] :is(a, button, span, select), header[data-barre-du-haut] :is(a, button, span, select)',
+        ),
+      ]
         .filter((el) => el.getBoundingClientRect().height > 30)
         .map((el) => (el.textContent ?? "").trim()),
     }));
