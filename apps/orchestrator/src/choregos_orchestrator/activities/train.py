@@ -21,6 +21,28 @@ from .base import db, project_bundle
 
 logger = get_logger("choregos.train")
 
+
+async def _courtoisie(bundle: Any, message: Message) -> bool:
+    """Prévient le canal du projet, sans jamais faire échouer l'étape du train qui prévient.
+
+    Comme pour les demandes humaines (`tracker.py`, 2026-09-27) : la notification est une courtoisie,
+    pas l'acte. Sur le locataire dev, le 10/10, sans Slack, `finish_release` levait « [slack] ni
+    `bot_token` ni `webhook_url` configurés » APRÈS la promotion et la vérification : la transaction
+    était annulée (release jamais close, tickets jamais prévenus) et les deux trains mouraient avec
+    leur livraison faite (S22-26). Le silence se dit dans le journal et dans le retour."""
+    return await _envoyer(bundle.adapters.notify, bundle.config.notify.slack_channel or "#choregos", message)
+
+
+async def _envoyer(notify: Any, canal: str, message: Message) -> bool:
+    try:
+        await notify.send(canal, message)
+    # Volontairement large : aucune panne de notificateur ne doit tuer un train.
+    except Exception as exc:
+        logger.warning("train : notification NON envoyée", channel=canal, title=message.title, error=str(exc))
+        return False
+    return True
+
+
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 
@@ -274,8 +296,8 @@ async def request_approval(payload: dict[str, Any]) -> dict[str, Any]:
         if release is None:
             return {"requested": False}
         release.status = "awaiting_approval"
-        await bundle.adapters.notify.send(
-            bundle.config.notify.slack_channel or "#choregos",
+        notifie = await _courtoisie(
+            bundle,
             Message(
                 title=f"Approval requested — {bundle.slug} → {payload['env']}",
                 body=f"Batch {release.batch_no}: {len(release.items)} work item(s).",
@@ -292,7 +314,7 @@ async def request_approval(payload: dict[str, Any]) -> dict[str, Any]:
             release_id=release.id,
             group=payload.get("group"),
         )
-        return {"requested": True}
+        return {"requested": True, "notified": notifie}
 
 
 @activity.defn(name="promote_canary_step")
@@ -361,8 +383,8 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
             env=release.env,
             items=len(release.items),
         )
-        await bundle.adapters.notify.send(
-            bundle.config.notify.slack_channel or "#choregos",
+        notifie = await _courtoisie(
+            bundle,
             Message(
                 title=f"Deployed — {bundle.slug} → {release.env} (batch {release.batch_no})",
                 body=notes,
@@ -373,7 +395,7 @@ async def finish_release(payload: dict[str, Any]) -> dict[str, Any]:
         env = release.env
     # Après la validation de la transaction : le ticket prévenu relit une release terminée.
     await _prevenir_les_tickets(prevenir, "cd.rollout.completed", payload["release_id"], env)
-    return {"ok": True, "notes": notes}
+    return {"ok": True, "notes": notes, "notified": notifie}
 
 
 async def _tickets_du_lot(session: Any, bundle: Any, release: Release) -> dict[str, WorkItem | None]:
@@ -501,8 +523,8 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
                     provenance=Provenance(source="cd", ref=payload.get("release_id")),
                 ),
             )
-        await bundle.adapters.notify.send(
-            bundle.config.notify.slack_channel or "#choregos",
+        notifie = await _courtoisie(
+            bundle,
             Message(
                 title=f"Rollback — {bundle.slug} → {payload['env']}",
                 body=str(payload.get("reason", "")),
@@ -511,7 +533,7 @@ async def rollback(payload: dict[str, Any]) -> dict[str, Any]:
         )
     # Le ticket attendait son train jusqu'au délai, puis finissait chez un humain sans savoir pourquoi.
     await _prevenir_les_tickets(prevenir, "cd.rollout.aborted", payload["release_id"], payload["env"])
-    return {"ok": True}
+    return {"ok": True, "notified": notifie}
 
 
 @activity.defn(name="mark_release")
@@ -584,7 +606,8 @@ async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
         await scm.comment_pr(ref, "atlantis apply")
         verdict = await _await_atlantis(scm, ref, int(payload.get("timeout_minutes", 30)))
         if verdict != "success":
-            await notify.send(
+            await _envoyer(
+                notify,
                 channel,
                 Message(
                     title=f"Terraform apply failed — {slug} → {payload['env']}",
