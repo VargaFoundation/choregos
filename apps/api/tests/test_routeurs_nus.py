@@ -854,3 +854,39 @@ async def test_sans_secret_le_webhook_tekton_est_refuse_hors_du_developpement(
         headers={"ce-type": "dev.tekton.event.pipelinerun.started.v1", "ce-id": "p-1"},
     )
     assert refus.status_code == 401 and "CHOREGOS_GENERIC_WEBHOOK_SECRET" in refus.text
+
+
+async def test_une_sante_de_passage_d_argocd_ne_signale_pas_de_degradation(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Depuis S22-18, le train fait revenir un départ en arrière sur `cd.app.degraded` : une
+    notification `Progressing`, envoyée pendant un déploiement SAIN, ne doit pas en être un (#349)."""
+    from choregos_api.config import get_settings
+    from choregos_api.temporal import get_temporal
+
+    monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
+    entetes = {"X-Choregos-Secret": "s3cret"}
+    base = {"app": "billing-api-prod", "project": "billing-api", "env": "prod"}
+
+    def degradations() -> list[Any]:
+        return [
+            p
+            for wf, nom, p in get_temporal().signals
+            if nom == "deploy_event" and p["type"] == "cd.app.degraded"
+        ]
+
+    for i, sante in enumerate(["Progressing", "Suspended", "Missing", "Unknown"]):
+        reponse = await client.post(
+            "/api/v1/webhooks/argocd",
+            json={**base, "health": sante, "delivery_id": f"p-{i}"},
+            headers=entetes,
+        )
+        assert reponse.status_code == 202 and reponse.json()["events"] == 0, sante
+    assert degradations() == [], "une santé de passage n'est pas une dégradation"
+
+    reponse = await client.post(
+        "/api/v1/webhooks/argocd", json={**base, "health": "Degraded", "delivery_id": "p-9"}, headers=entetes
+    )
+    assert reponse.json()["events"] == 1
+    (signal,) = degradations()
+    assert signal["payload"]["health"] == "degraded", "la santé reçue voyage avec l'événement"

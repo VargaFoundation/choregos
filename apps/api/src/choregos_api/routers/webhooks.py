@@ -279,20 +279,26 @@ async def argocd_webhook(
     payload = json.loads(body or b"{}")
     app = payload.get("app", payload.get("application", ""))
     health = str(payload.get("health", payload.get("status", ""))).lower()
-    kind = InboundEventType.CD_SYNCED if health in {"healthy", "synced"} else InboundEventType.CD_DEGRADED
-    if payload.get("rollout") == "aborted":
-        kind = InboundEventType.ROLLOUT_ABORTED
-    elif payload.get("rollout") == "completed":
-        kind = InboundEventType.ROLLOUT_COMPLETED
+    kind = _genre_argocd(health, payload.get("rollout"))
     delivery = payload.get("delivery_id", body_digest(body))
-    if await _already_seen(session, "argocd", delivery, str(kind), body):
+    if await _already_seen(session, "argocd", delivery, str(kind or f"argocd.{health or 'unknown'}"), body):
         return WebhookAck(accepted=True, duplicate=True)
+    if kind is None:
+        # Une santé de passage (`progressing`, `suspended`, `missing`, `unknown`…) n'est ni une
+        # livraison ni une alerte : la signaler en `cd.app.degraded` faisait revenir en arrière un
+        # départ sain, depuis que le train écoute le CD (S22-18, #349).
+        return WebhookAck(accepted=True, events=0)
     event = InboundEvent(
         type=kind,
         source="argocd",
         delivery_id=delivery,
         project_slug=payload.get("project"),
-        payload={"app": app, "revision": payload.get("revision"), "env": payload.get("env")},
+        payload={
+            "app": app,
+            "revision": payload.get("revision"),
+            "env": payload.get("env"),
+            "health": health,
+        },
     )
     project = await _project_for(session, event.project_slug)
     if project is not None and event.payload.get("env"):
@@ -300,6 +306,20 @@ async def argocd_webhook(
             train_id(project.slug, str(event.payload["env"])), "deploy_event", event.model_dump(mode="json")
         )
     return WebhookAck(accepted=True, events=1)
+
+
+def _genre_argocd(health: str, rollout: Any) -> InboundEventType | None:
+    """Ce qu'une notification Argo CD annonce : livré, dégradé, rollout fini ou abandonné — ou
+    rien, pour une santé de passage. Seul `degraded` est une alerte (#349)."""
+    if rollout == "aborted":
+        return InboundEventType.ROLLOUT_ABORTED
+    if rollout == "completed":
+        return InboundEventType.ROLLOUT_COMPLETED
+    if health in {"healthy", "synced"}:
+        return InboundEventType.CD_SYNCED
+    if health == "degraded":
+        return InboundEventType.CD_DEGRADED
+    return None
 
 
 # ───────────────────────────── Alertmanager ─────────────────────────────
