@@ -26,6 +26,7 @@ from ..rbac import Principal
 from ..schemas import (
     HumanRequestDto,
     ReleaseDto,
+    ReleaseItemDto,
     RunDto,
     RunSummary,
     TimelineEntry,
@@ -182,13 +183,18 @@ async def _statut_temporal(item: WorkItem) -> str | None:
 
 
 def release_dto(row: Release, project_slug: str) -> ReleaseDto:
+    # Le train range dans la release le signal d'embarquement tel quel (`approval`, `merged_at`,
+    # `infra_pr_url`, `start_payload`…) ; le contrat n'en expose que les champs de l'élément et
+    # refuse le reste. Sur le locataire dev, le 10/10, la première release réelle rendait 500 à
+    # `getTrainStatus` et `listReleases` (S22-25).
+    champs = ReleaseItemDto.model_fields
     return ReleaseDto(
         id=row.id,
         project_slug=project_slug,
         env=row.env,
         batch_no=row.batch_no,
         status=row.status,
-        items=row.items,
+        items=[{k: v for k, v in item.items() if k in champs} for item in row.items or []],
         started_at=row.started_at,
         ended_at=row.ended_at,
         approved_by=row.approved_by,
