@@ -1,25 +1,68 @@
 /*
- * Choregos porte la grammaire de la Varga Foundation : le design system fournit les jetons,
- * les polices, le reset et les composants. Cette feuille n'ajoute que ce qui est propre à
- * Choregos — les trois acteurs d'un run.
+ * Choregos s'appuie sur le design system de la Varga Foundation (composants, reset, rôles des
+ * jetons) et lui donne l'allure d'une console d'opérations à la Temporal (ADR 0043) : sa feuille
+ * `styles/theme.css` réaffecte les jetons, Geist remplace le monospace partout, le sombre est un
+ * choix de la personne et non plus du seul système.
  */
 @import "tailwindcss";
-@import "@varga/design-system/css";
+/* Les valeurs de la fondation, DANS une couche : celles de la console, hors couche, l'emportent
+   toujours — y compris sur les sélecteurs sombres du design system, plus spécifiques. Ses polices
+   (`fonts.css`) ne sont plus chargées. */
+@import "@varga/design-system/css/tokens.css" layer(theme);
+@import "@varga/design-system/css/theme.css";
+@import "@varga/design-system/css/base.css";
+@import "../styles/theme.css";
+
+/* `dark:` suit le thème choisi (`data-theme` sur <html>), pas le système seul. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* Sans ce `@source`, Tailwind ne voit pas les classes des composants du design system et ne
    les génère pas : ils s'afficheraient sans style. */
 @source "../../node_modules/@varga/design-system/src";
 
 /*
- * Les trois acteurs d'un run, posés sur la sémantique de la fondation plutôt que sur trois
- * couleurs de plus : le turquoise est ce qui agit tout seul, le noir est l'humain, le gris est
- * la plateforme. Un tableau de bord Choregos se lit donc sans légende — ce qui est turquoise
- * tourne sans vous.
+ * Les trois acteurs d'un run : la prune est ce qui agit tout seul — un agent —, l'encre est
+ * l'humain, le gris est la plateforme. Ce qui est prune tourne sans vous.
  */
 @theme inline {
-  --color-agent: var(--varga-accent-strong);
+  --color-agent: var(--choregos-agent-solid);
   --color-human: var(--varga-ink);
   --color-system: var(--varga-ink-muted);
+
+  /* Le monospace ne sert plus qu'à ce qui se compare, se copie ou se commande. */
+  --font-mono: var(--choregos-font-mono);
+
+  --color-raised: var(--choregos-raised);
+  --color-sidebar: var(--choregos-sidebar);
+  --shadow-raised: var(--choregos-shadow-raised);
+
+  --color-running: var(--choregos-running-solid);
+  --color-running-soft: var(--choregos-running-soft);
+  --color-running-line: var(--choregos-running-line);
+  --color-running-ink: var(--choregos-running-ink);
+  --color-waiting: var(--choregos-waiting-solid);
+  --color-waiting-soft: var(--choregos-waiting-soft);
+  --color-waiting-line: var(--choregos-waiting-line);
+  --color-waiting-ink: var(--choregos-waiting-ink);
+  --color-succeeded: var(--choregos-succeeded-solid);
+  --color-succeeded-soft: var(--choregos-succeeded-soft);
+  --color-succeeded-line: var(--choregos-succeeded-line);
+  --color-succeeded-ink: var(--choregos-succeeded-ink);
+  --color-failed: var(--choregos-failed-solid);
+  --color-failed-soft: var(--choregos-failed-soft);
+  --color-failed-line: var(--choregos-failed-line);
+  --color-failed-ink: var(--choregos-failed-ink);
+  --color-retrying: var(--choregos-retrying-solid);
+  --color-retrying-soft: var(--choregos-retrying-soft);
+  --color-retrying-line: var(--choregos-retrying-line);
+  --color-retrying-ink: var(--choregos-retrying-ink);
+  --color-neutral: var(--choregos-neutral-solid);
+  --color-neutral-soft: var(--choregos-neutral-soft);
+  --color-neutral-line: var(--choregos-neutral-line);
+  --color-neutral-ink: var(--choregos-neutral-ink);
+  --color-agent-soft: var(--choregos-agent-soft);
+  --color-agent-line: var(--choregos-agent-line);
+  --color-agent-ink: var(--choregos-agent-ink);
 }
 
 /*
@@ -55,10 +98,10 @@
   background:
     linear-gradient(to right, var(--color-surface) 30%, transparent) left center / 2.5rem 100% no-repeat local,
     linear-gradient(to left, var(--color-surface) 30%, transparent) right center / 2.5rem 100% no-repeat local,
-    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.18), transparent) left center / 0.75rem 100% no-repeat
-      scroll,
-    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.18), transparent) right center / 0.75rem 100%
-      no-repeat scroll;
+    radial-gradient(farthest-side at 0 50%, var(--choregos-scroll-hint), transparent) left center / 0.75rem 100%
+      no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--choregos-scroll-hint), transparent) right center / 0.75rem
+      100% no-repeat scroll;
 }
 
 /* La carte d'un workflow se parcourt au clavier : la case sous le curseur doit se voir. */

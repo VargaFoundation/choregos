@@ -26,6 +26,7 @@ streams:
   S19: "Connecteurs par capacités et serveurs MCP (ADR 0034)"
   S20: "Actions gouvernées dans le cœur et scénario RH arrivées/départs (ADR 0035)"
   S21: "Utilisabilité : console lisible, anglais partout, catalogue d'agents, gouvernance appliquée, projet de développement (revue produit du 2026-10-07)"
+  S24: "L'allure d'une console d'opérations : contraste adouci, Geist, thème choisi, barre latérale (ADR 0043)"
 
 stories:
 
@@ -1870,3 +1871,43 @@ stories:
     depends_on: [S21-23, S21-24]
     acceptance:
       - "Un ticket par workflow, mesuré sur le dev, dans essai/projet-dev/RESULTATS.md"
+
+  # ───────────── S24 — L'allure d'une console d'opérations (ADR 0043, 2026-10-10) ─────────────
+  - id: S24-01
+    title: "Les jetons de la console tirés de Radix Colors, Geist, et un thème choisi posé avant la peinture"
+    stream: S24
+    sprint: 14
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "Le texte se lit entre 7:1 et 17:1 sur chaque surface, une bordure de contrôle à 3:1 au moins, dans les deux modes"
+      - "Chaque couleur est un pas Radix ou un mélange de pas ; un rôle de couleur du design system non redéclaré rougit"
+      - "Le thème choisi survit au rechargement et s'applique sans le JavaScript de l'application ; axe passe dans les deux thèmes"
+  - id: S24-02
+    title: "Les composants de la console à l'allure d'opérations : boutons, pastilles d'état, tableaux, en-têtes de page, champs"
+    stream: S24
+    sprint: 14
+    priority: 2
+    size: L
+    depends_on: [S24-01]
+    acceptance:
+      - "Les primitives à l'allure codée en dur passent par components/ui ; leur import direct est refusé par eslint"
+  - id: S24-03
+    title: "Une barre latérale repliable et une barre du haut de 48 px, un tiroir sur téléphone"
+    stream: S24
+    sprint: 14
+    priority: 3
+    size: L
+    depends_on: [S24-02]
+    acceptance:
+      - "Le rail se garde et s'applique avant la peinture ; aucun défilement horizontal de 360 à 1280 px ; Échap ferme le tiroir et rend le focus"
+  - id: S24-04
+    title: "La carte, le parcours, le board et le journal d'un run à la nouvelle allure"
+    stream: S24
+    sprint: 14
+    priority: 4
+    size: M
+    depends_on: [S24-03]
+    acceptance:
+      - "Aucun champ brut stylé à la main ; captures sombre et clair, 1440 et 390 px, jointes à la PR"

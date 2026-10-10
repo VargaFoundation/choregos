@@ -1,0 +1,254 @@
+/*
+ * L'allure de la console : une console d'opérations à la Temporal (ADR 0043).
+ *
+ * Le design system de la fondation donnait au texte et au fond les deux extrêmes (19:1, en clair
+ * comme en sombre), des filets presque invisibles (1,3:1), le monospace partout et un sombre qui ne
+ * suivait que le système. Cette feuille réaffecte ses jetons `--varga-*` — les composants du design
+ * system les lisent, rien n'est forké — et en ajoute quelques-uns (`--choregos-*`).
+ *
+ * Provenance : chaque couleur est un pas des échelles Radix Colors, ou un `color-mix()` d'un pas avec
+ * `#000`/`#fff`/un autre pas — `tests/theme-provenance.test.ts` le vérifie, littéral par littéral.
+ *
+ *   Radix Colors — Copyright (c) 2022 WorkOS — licence MIT (voir NOTICE).
+ *
+ * Le sombre est le défaut : il vaut sans JavaScript, et c'est le choix d'une console d'opérations.
+ * Le clair se pose par `data-theme="light"` sur <html>, que le script d'en-tête lit dans les
+ * préférences de la personne (`lib/preferences.ts`) avant la première peinture.
+ *
+ * Hors couche : les valeurs de la fondation sont importées DANS une couche (`globals.css`), celles-ci
+ * l'emportent donc toujours, quelle que soit la spécificité des sélecteurs sombres du design system.
+ */
+
+/* ───────────────────────────── sombre (défaut) ───────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  --slate-1: #111113;
+  --slate-2: #18191b;
+  --slate-3: #212225;
+  --slate-6: #363a3f;
+  --slate-9: #696e77;
+  --slate-11: #b0b4ba;
+  --slate-12: #edeef0;
+  --iris-3: #202248;
+  --iris-6: #3d3e82;
+  --iris-9: #5b5bd6;
+  --iris-10: #6e6ade;
+  --iris-11: #b1a9ff;
+  --plum-3: #351a35;
+  --plum-6: #5e3061;
+  --plum-9: #ab4aba;
+  --plum-11: #e796f3;
+  --blue-3: #0d2847;
+  --blue-6: #104d87;
+  --blue-9: #0090ff;
+  --blue-11: #70b8ff;
+  --green-3: #132d21;
+  --green-6: #20573e;
+  --green-9: #30a46c;
+  --green-11: #3dd68c;
+  --amber-3: #302008;
+  --amber-6: #5c3d05;
+  --amber-9: #ffc53d;
+  --amber-11: #ffca16;
+  --orange-3: #331e0b;
+  --orange-6: #66350c;
+  --orange-9: #f76b15;
+  --orange-11: #ffa057;
+  --red-3: #3b1219;
+  --red-6: #72232d;
+  --red-9: #e5484d;
+  --red-11: #ff9592;
+
+  /* Surfaces : la page, ce qui s'élève dessus (cartes, menus, tiroir), la barre latérale plus sombre. */
+  --varga-surface: var(--slate-1);
+  --choregos-raised: var(--slate-2);
+  --choregos-sidebar: color-mix(in srgb, var(--slate-1) 75%, #000);
+  --varga-surface-muted: var(--slate-3);
+  --varga-surface-sunken: var(--slate-3);
+  --varga-grid: var(--slate-3);
+
+  /* Filets : visibles (1,6:1) ; la bordure d'un contrôle porte 3:1 au moins (WCAG 1.4.11). */
+  --varga-line: var(--slate-6);
+  --varga-line-strong: var(--slate-9);
+
+  /* Texte : 16:1, plus 19 — le blanc pur sur le quasi-noir fatiguait. */
+  --varga-ink: var(--slate-12);
+  --varga-ink-muted: var(--slate-11);
+  --varga-ink-subtle: var(--slate-9);
+  --varga-ink-placeholder: var(--slate-11);
+
+  /* L'action : un seul accent, l'iris — l'aplat inversé (blanc en sombre) devient l'accent. */
+  --varga-inverse: var(--iris-9);
+  --varga-inverse-ink: #fff;
+  --varga-inverse-hover: color-mix(in srgb, var(--iris-9) 85%, #000);
+  --varga-accent: var(--iris-9);
+  --varga-accent-hover: color-mix(in srgb, var(--iris-9) 85%, #000);
+  --varga-accent-ink: #fff;
+  --varga-accent-strong: var(--iris-11);
+  --varga-accent-soft: var(--iris-3);
+  --varga-focus: var(--iris-10);
+
+  --varga-ok: var(--green-11);
+  --varga-warn: var(--amber-11);
+  --varga-danger: var(--red-11);
+
+  /* Les états d'un run ou d'un ticket : une pastille teintée (fond, filet, texte) et un plein. */
+  --choregos-running-solid: var(--blue-9);
+  --choregos-running-soft: var(--blue-3);
+  --choregos-running-line: var(--blue-6);
+  --choregos-running-ink: var(--blue-11);
+  --choregos-waiting-solid: var(--amber-9);
+  --choregos-waiting-soft: var(--amber-3);
+  --choregos-waiting-line: var(--amber-6);
+  --choregos-waiting-ink: var(--amber-11);
+  --choregos-succeeded-solid: var(--green-9);
+  --choregos-succeeded-soft: var(--green-3);
+  --choregos-succeeded-line: var(--green-6);
+  --choregos-succeeded-ink: var(--green-11);
+  --choregos-failed-solid: var(--red-9);
+  --choregos-failed-soft: var(--red-3);
+  --choregos-failed-line: var(--red-6);
+  --choregos-failed-ink: var(--red-11);
+  --choregos-retrying-solid: var(--orange-9);
+  --choregos-retrying-soft: var(--orange-3);
+  --choregos-retrying-line: var(--orange-6);
+  --choregos-retrying-ink: var(--orange-11);
+  --choregos-neutral-solid: var(--slate-9);
+  --choregos-neutral-soft: var(--slate-3);
+  --choregos-neutral-line: var(--slate-6);
+  --choregos-neutral-ink: var(--slate-11);
+  /* Ce qui tourne sans vous — un agent — a sa teinte : la prune. */
+  --choregos-agent-solid: var(--plum-9);
+  --choregos-agent-soft: var(--plum-3);
+  --choregos-agent-line: var(--plum-6);
+  --choregos-agent-ink: var(--plum-11);
+
+  /* Le défilement d'un tableau se signale par un voile, qu'une ombre noire ne montrait pas en sombre. */
+  --choregos-scroll-hint: color-mix(in srgb, var(--slate-12) 14%, transparent);
+  --choregos-shadow-raised: none;
+
+  /* Typographie : Geist pour lire, Geist Mono pour ce qui se compare, se copie ou se commande. */
+  --varga-font-text: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --varga-font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --choregos-font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --varga-leading-body: 1.5;
+  --varga-tracking-body: 0;
+  --varga-tracking-display: -0.01em;
+}
+
+/* ───────────────────────────── clair ───────────────────────────── */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --slate-1: #fcfcfd;
+  --slate-2: #f9f9fb;
+  --slate-3: #f0f0f3;
+  --slate-6: #d9d9e0;
+  --slate-9: #8b8d98;
+  --slate-11: #60646c;
+  --slate-12: #1c2024;
+  --iris-3: #f0f1fe;
+  --iris-6: #cbcdff;
+  --iris-9: #5b5bd6;
+  --iris-10: #5151cd;
+  --iris-11: #5753c6;
+  --plum-3: #fbebfb;
+  --plum-6: #e9c2ec;
+  --plum-9: #ab4aba;
+  --plum-11: #953ea3;
+  --plum-12: #53195d;
+  --blue-3: #e6f4fe;
+  --blue-6: #acd8fc;
+  --blue-9: #0090ff;
+  --blue-11: #0d74ce;
+  --blue-12: #113264;
+  --green-3: #e6f6eb;
+  --green-6: #adddc0;
+  --green-9: #30a46c;
+  --green-11: #218358;
+  --green-12: #193b2d;
+  --amber-3: #fff7c2;
+  --amber-6: #f3d673;
+  --amber-9: #ffc53d;
+  --amber-11: #ab6400;
+  --amber-12: #4f3422;
+  --orange-3: #ffefd6;
+  --orange-6: #ffc182;
+  --orange-9: #f76b15;
+  --orange-11: #cc4e00;
+  --orange-12: #582d1d;
+  --red-3: #feebec;
+  --red-6: #fdbdbe;
+  --red-9: #e5484d;
+  --red-11: #ce2c31;
+  --red-12: #641723;
+
+  --choregos-raised: #fff;
+  --choregos-sidebar: var(--slate-2);
+  --varga-inverse-hover: var(--iris-10);
+  --varga-accent-hover: var(--iris-10);
+  --varga-focus: var(--iris-9);
+
+  /*
+   * En clair, le pas 11 d'une teinte vive tombe à 4:1 sur son propre fond teinté : il s'assombrit
+   * vers le pas 12 de la même échelle (5,2:1 au moins partout, mesuré par le test de contraste).
+   */
+  --varga-ok: color-mix(in srgb, var(--green-11) 70%, var(--green-12));
+  --varga-warn: color-mix(in srgb, var(--amber-11) 70%, var(--amber-12));
+  --varga-danger: color-mix(in srgb, var(--red-11) 70%, var(--red-12));
+  --choregos-running-ink: color-mix(in srgb, var(--blue-11) 70%, var(--blue-12));
+  --choregos-waiting-ink: color-mix(in srgb, var(--amber-11) 70%, var(--amber-12));
+  --choregos-succeeded-ink: color-mix(in srgb, var(--green-11) 70%, var(--green-12));
+  --choregos-failed-ink: color-mix(in srgb, var(--red-11) 70%, var(--red-12));
+  --choregos-retrying-ink: color-mix(in srgb, var(--orange-11) 70%, var(--orange-12));
+  --choregos-agent-ink: color-mix(in srgb, var(--plum-11) 70%, var(--plum-12));
+
+  --choregos-scroll-hint: color-mix(in srgb, var(--slate-12) 12%, transparent);
+  --choregos-shadow-raised: 0 1px 2px color-mix(in srgb, var(--slate-12) 6%, transparent);
+}
+
+/*
+ * Ce qui s'élève (carte, menu, tiroir) redéfinit la surface pour tout ce qu'il contient : un champ, un
+ * halo de texte ou un dégradé qui « prend la couleur du fond » prend alors la bonne — comme la bande
+ * `.inverse` du design system.
+ */
+.raised {
+  --varga-surface: var(--choregos-raised);
+  background-color: var(--choregos-raised);
+  box-shadow: var(--choregos-shadow-raised);
+}
+.sidebar-surface {
+  --varga-surface: var(--choregos-sidebar);
+  background-color: var(--choregos-sidebar);
+}
+
+@layer base {
+  /* Le design system coupait les ligatures, utiles en monospace ; Geist en a de lisibles. */
+  body {
+    font-feature-settings: normal;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--choregos-font-mono);
+  }
+
+  /* Un tableau nu : l'en-tête se pose sur un filet, plus sur un trait d'encre. */
+  thead {
+    border-bottom-color: var(--varga-line);
+  }
+
+  ::selection {
+    background: var(--varga-accent-soft);
+    color: var(--varga-ink);
+  }
+}

@@ -45,15 +45,27 @@ const PAGES = [
   "/p/billing-api/items/w4",
 ];
 
-for (const path of PAGES) {
-  test(`${path} sans violation sérieuse`, async ({ page }) => {
-    await page.goto(path);
-    await page.waitForLoadState("networkidle");
-    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
-    const bloquantes = results.violations;
-    expect(
-      bloquantes.map((v) => `${v.id} (${v.impact}) : ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
-    ).toEqual([]);
+// Les deux thèmes (ADR 0043) : un contraste qui tient en sombre peut tomber en clair, et l'inverse.
+for (const theme of ["dark", "light"] as const) {
+  test.describe(`thème ${theme}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.addInitScript((choix) => window.localStorage.setItem("choregos.theme", choix), theme);
+    });
+
+    for (const path of PAGES) {
+      test(`${path} sans violation sérieuse`, async ({ page }) => {
+        await page.goto(path);
+        await page.waitForLoadState("networkidle");
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        const results = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
+          .analyze();
+        const bloquantes = results.violations;
+        expect(
+          bloquantes.map((v) => `${v.id} (${v.impact}) : ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`),
+        ).toEqual([]);
+      });
+    }
   });
 }
 
