@@ -94,7 +94,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
       {items.isLoading && <Empty>loading…</Empty>}
       {enAttente.length > 0 && (
         <div
-          className="raised border border-line border-l-2 border-l-waiting-solid p-3 text-sm"
+          className="raised border border-line border-l-2 border-l-waiting p-3 text-sm"
           data-testid="attentes-du-board"
         >
           <p className="font-medium">
@@ -175,7 +175,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                     </p>
                   )}
                   {item.pending_request && (
-                    <div className="mt-2 space-y-2 border border-line border-l-2 border-l-waiting-solid bg-surface p-2">
+                    <div className="mt-2 space-y-2 border border-line border-l-2 border-l-waiting bg-surface p-2">
                       <p className="text-xs text-waiting-ink">
                         {String(item.pending_request.payload?.summary ?? item.pending_request.kind)} ·{" "}
                         {relative(item.pending_request.requested_at)}

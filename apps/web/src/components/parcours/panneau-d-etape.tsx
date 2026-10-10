@@ -348,7 +348,7 @@ function PasHumain({ pas, itemId, onDecided }: { pas: JourneyStep; itemId: strin
       <Faits pas={pas} />
       {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
       {attendu ? (
-        <div className="border border-line border-l-2 border-l-waiting-solid p-3">
+        <div className="border border-line border-l-2 border-l-waiting p-3">
           <p className={cn(LEGENDE, "mb-2")}>decide here</p>
           <DecisionBar itemId={itemId} kind={pas.role ?? "approval"} onDone={onDecided} />
         </div>

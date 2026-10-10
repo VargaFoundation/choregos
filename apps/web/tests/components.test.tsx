@@ -54,7 +54,7 @@ describe("journal ACP", () => {
     render(<LiveLog events={events.slice(0, 3)} />);
     const refus = screen.getByText("denied");
     expect(refus).toHaveClass("rounded-full", "text-failed-ink");
-    expect(refus.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed-solid");
+    expect(refus.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed");
   });
 });
 

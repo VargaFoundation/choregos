@@ -51,7 +51,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
       ) : (
         <>
           {refuses.length > 0 && (
-            <div className="mb-4 border-l-2 border-failed-solid pl-3">
+            <div className="mb-4 border-l-2 border-failed pl-3">
               <p className={cn(LEGENDE, "mb-1 text-failed-ink")}>refused</p>
               <ul className="space-y-1 text-sm">
                 {refuses.map((ligne) => (
