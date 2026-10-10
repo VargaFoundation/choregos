@@ -3,6 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
+import { ActiviteDuRunVue } from "@/components/activite-du-run";
 import { LiveLog } from "@/components/live-log";
 import { PlanDeLAgent } from "@/components/plan-de-l-agent";
 import { Acces } from "@/components/acces";
@@ -11,6 +12,7 @@ import { Preuves } from "@/components/preuves";
 import { Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
+import { activiteDuRun } from "@/lib/activite-du-run";
 import { planDeLAgent } from "@/lib/plan-de-l-agent";
 import { useEventStream } from "@/lib/sse";
 import type { RunEventDto } from "@/lib/types";
@@ -51,6 +53,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const evidence = run.data.result?.evidence;
   // Le plan que l'agent publie en ACP, révision après révision (S25-01) ; rien s'il n'en publie pas.
   const plan = planDeLAgent(events);
+  // Ce que l'agent a appelé, relu du même journal (S25-02) : lisible, au-dessus du journal brut.
+  const activite = activiteDuRun(events);
 
   return (
     <div className="space-y-4">
@@ -139,6 +143,12 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       <Garanties events={events} />
 
       <Acces acces={acces.data} />
+
+      {(activite.appels.length > 0 || activite.refus.length > 0) && (
+        <Card title="activity">
+          <ActiviteDuRunVue activite={activite} />
+        </Card>
+      )}
 
       <Card
         title="ACP journal"

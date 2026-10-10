@@ -347,7 +347,7 @@ export const runEvents: RunEventDto[] = [
   {
     seq: 2,
     type: "session/update",
-    ts: iso(59),
+    ts: iso(59.9),
     payload: maj({
       sessionUpdate: "plan",
       entries: [
@@ -358,22 +358,65 @@ export const runEvents: RunEventDto[] = [
       ],
     }),
   },
+  // Les appels d'outils (S25-02) : une lecture, un sous-agent, deux modifications — dont une refusée —,
+  // puis les tests.
   {
     seq: 3,
     type: "session/update",
-    ts: iso(59),
-    payload: maj({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Reading src/orders/total.py" } }),
+    ts: iso(59.8),
+    payload: maj({
+      sessionUpdate: "tool_call",
+      toolCallId: "tc-1",
+      title: "Read src/orders/total.py",
+      kind: "read",
+      status: "in_progress",
+      locations: [{ path: "src/orders/total.py" }],
+    }),
   },
-  {
-    seq: 4,
-    type: "session/request_permission",
-    ts: iso(58),
-    payload: { allowed: true, kind: "edit", target: "src/orders/total.py", reason: "within the allowed paths" },
-  },
+  { seq: 4, type: "session/update", ts: iso(59.79), payload: maj({ sessionUpdate: "tool_call_update", toolCallId: "tc-1", status: "completed" }) },
   {
     seq: 5,
     type: "session/update",
-    ts: iso(58),
+    ts: iso(59.7),
+    payload: maj({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Reading src/orders/total.py" } }),
+  },
+  {
+    seq: 6,
+    type: "session/update",
+    ts: iso(59.6),
+    payload: maj({ sessionUpdate: "tool_call", toolCallId: "tc-2", title: "Explore how credit notes are stored", kind: "think", name: "Task", status: "in_progress" }),
+  },
+  { seq: 7, type: "session/update", ts: iso(58.9), payload: maj({ sessionUpdate: "tool_call_update", toolCallId: "tc-2", status: "completed" }) },
+  {
+    seq: 8,
+    type: "session/update",
+    ts: iso(58.8),
+    payload: maj({
+      sessionUpdate: "tool_call",
+      toolCallId: "tc-3",
+      title: "Edit src/orders/total.py",
+      kind: "edit",
+      status: "pending",
+      locations: [{ path: "src/orders/total.py" }],
+    }),
+  },
+  {
+    seq: 9,
+    type: "session/request_permission",
+    ts: iso(58.79),
+    payload: {
+      allowed: true,
+      kind: "edit",
+      target: "src/orders/total.py",
+      reason: "within the allowed paths",
+      params: { sessionId: "sess-r3", toolCall: { toolCallId: "tc-3" } },
+    },
+  },
+  { seq: 10, type: "session/update", ts: iso(58.7), payload: maj({ sessionUpdate: "tool_call_update", toolCallId: "tc-3", status: "completed" }) },
+  {
+    seq: 11,
+    type: "session/update",
+    ts: iso(58.6),
     payload: maj({
       sessionUpdate: "plan",
       entries: [
@@ -385,19 +428,34 @@ export const runEvents: RunEventDto[] = [
     }),
   },
   {
-    seq: 6,
+    seq: 12,
+    type: "session/update",
+    ts: iso(57.5),
+    payload: maj({
+      sessionUpdate: "tool_call",
+      toolCallId: "tc-4",
+      title: "Edit src/billing/rates.py",
+      kind: "edit",
+      status: "pending",
+      locations: [{ path: "src/billing/rates.py" }],
+    }),
+  },
+  {
+    seq: 13,
     type: "session/request_permission",
-    ts: iso(57),
+    ts: iso(57.49),
     payload: {
       allowed: false,
       kind: "edit",
       target: "src/billing/rates.py",
       reason: "outside the allowed paths — use report_finding or request_scope_change",
+      params: { sessionId: "sess-r3", toolCall: { toolCallId: "tc-4" } },
     },
   },
-  { seq: 7, type: "dod.retry", ts: iso(40), payload: { iteration: 1, failures: ["tests"] } },
+  { seq: 14, type: "session/update", ts: iso(57.48), payload: maj({ sessionUpdate: "tool_call_update", toolCallId: "tc-4", status: "failed" }) },
+  { seq: 15, type: "dod.retry", ts: iso(40), payload: { iteration: 1, failures: ["tests"] } },
   {
-    seq: 8,
+    seq: 16,
     type: "session/update",
     ts: iso(35),
     payload: maj({
@@ -405,8 +463,10 @@ export const runEvents: RunEventDto[] = [
       content: { type: "text", text: "Fixing the rounding and running the tests again" },
     }),
   },
+  { seq: 17, type: "session/update", ts: iso(34.9), payload: maj({ sessionUpdate: "tool_call", toolCallId: "tc-5", title: "make test", kind: "execute", status: "in_progress" }) },
+  { seq: 18, type: "session/update", ts: iso(34.3), payload: maj({ sessionUpdate: "tool_call_update", toolCallId: "tc-5", status: "completed" }) },
   {
-    seq: 9,
+    seq: 19,
     type: "session/update",
     ts: iso(34),
     payload: maj({
@@ -418,7 +478,7 @@ export const runEvents: RunEventDto[] = [
       ],
     }),
   },
-  { seq: 10, type: "run.result", ts: iso(30), payload: { status: "done", summary: "credit notes deducted from the total" } },
+  { seq: 20, type: "run.result", ts: iso(30), payload: { status: "done", summary: "credit notes deducted from the total" } },
 ];
 
 export const trains: Record<string, TrainStatus> = {
