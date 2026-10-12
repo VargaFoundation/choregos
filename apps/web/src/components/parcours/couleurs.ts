@@ -22,7 +22,7 @@ export const COULEUR_DU_STATUT: Record<StatutEtape, string> = {
 export function fondDuStatut(statut: StatutEtape): string {
   if (statut === "en_cours") return "var(--choregos-running-soft)";
   if (statut === "attend") return "var(--choregos-waiting-soft)";
-  return "var(--varga-surface)";
+  return "var(--choregos-surface)";
 }
 
 /** Un renvoi pris (une revue qui renvoie, une reprise) : l'arc, sa pointe et son compte de tours. */

@@ -74,7 +74,7 @@ export const COULEUR_DU_GENRE: Record<GenreDActeur, { bord: string; fond: string
   platform: { bord: "var(--choregos-neutral-ink)", fond: "var(--choregos-neutral-soft)", texte: "var(--choregos-neutral-ink)" },
   train: { bord: "var(--choregos-succeeded-ink)", fond: "var(--choregos-succeeded-soft)", texte: "var(--choregos-succeeded-ink)" },
   waiting: { bord: "var(--choregos-waiting-ink)", fond: "var(--choregos-waiting-soft)", texte: "var(--choregos-waiting-ink)" },
-  end: { bord: "var(--choregos-neutral-solid)", fond: "var(--varga-surface-sunken)", texte: "var(--choregos-neutral-ink)" },
+  end: { bord: "var(--choregos-neutral-solid)", fond: "var(--choregos-surface-sunken)", texte: "var(--choregos-neutral-ink)" },
 };
 
 const noeudsDe = (graphe: Graphe) => graphe.nodes as NoeudDuGraphe[];

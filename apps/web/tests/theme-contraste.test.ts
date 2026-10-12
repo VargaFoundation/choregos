@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { contraste, jeton, luminance, type Mode } from "./jetons";
 
 const MODES: Mode[] = ["dark", "light"];
-const FONDS = ["--varga-surface", "--choregos-raised", "--choregos-sidebar", "--varga-surface-muted"];
+const FONDS = ["--choregos-surface", "--choregos-raised", "--choregos-sidebar", "--choregos-surface-muted"];
 const STATUTS = ["running", "waiting", "succeeded", "failed", "retrying", "neutral", "agent"];
 
 function rapport(premier: string, second: string, mode: Mode): number {
@@ -21,14 +21,14 @@ function rapport(premier: string, second: string, mode: Mode): number {
 describe.each(MODES)("le contraste de la console, en %s", (mode) => {
   it("le texte se lit sans éblouir : 7:1 au moins, 17:1 au plus, sur chaque fond", () => {
     for (const fond of FONDS) {
-      const r = rapport("--varga-ink", fond, mode);
+      const r = rapport("--choregos-ink", fond, mode);
       expect(r, `encre sur ${fond}`).toBeGreaterThanOrEqual(7);
       expect(r, `encre sur ${fond} : trop dur`).toBeLessThanOrEqual(17);
     }
   });
 
   it("le texte secondaire et les indications passent AA (4,5:1) sur chaque fond", () => {
-    for (const texte of ["--varga-ink-muted", "--varga-ink-placeholder", "--varga-accent-strong"]) {
+    for (const texte of ["--choregos-ink-muted", "--choregos-ink-placeholder", "--choregos-accent-strong"]) {
       for (const fond of FONDS) {
         expect(rapport(texte, fond, mode), `${texte} sur ${fond}`).toBeGreaterThanOrEqual(4.5);
       }
@@ -37,17 +37,17 @@ describe.each(MODES)("le contraste de la console, en %s", (mode) => {
 
   it("le texte sur une action pleine passe AA, au repos comme au survol", () => {
     for (const [texte, fond] of [
-      ["--varga-inverse-ink", "--varga-inverse"],
-      ["--varga-inverse-ink", "--varga-inverse-hover"],
-      ["--varga-accent-ink", "--varga-accent"],
-      ["--varga-accent-ink", "--varga-accent-hover"],
+      ["--choregos-inverse-ink", "--choregos-inverse"],
+      ["--choregos-inverse-ink", "--choregos-inverse-hover"],
+      ["--choregos-accent-ink", "--choregos-accent"],
+      ["--choregos-accent-ink", "--choregos-accent-hover"],
     ] as const) {
       expect(rapport(texte, fond, mode), `${texte} sur ${fond}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 
   it("chaque état se lit sur la page, une carte, un survol et sa propre pastille", () => {
-    for (const texte of ["--varga-ok", "--varga-warn", "--varga-danger"]) {
+    for (const texte of ["--choregos-ok", "--choregos-warn", "--choregos-danger"]) {
       for (const fond of FONDS) {
         expect(rapport(texte, fond, mode), `${texte} sur ${fond}`).toBeGreaterThanOrEqual(4.5);
       }
@@ -61,16 +61,16 @@ describe.each(MODES)("le contraste de la console, en %s", (mode) => {
   });
 
   it("une bordure de contrôle et le focus se voient (3:1), un filet aussi (1,3:1)", () => {
-    for (const fond of ["--varga-surface", "--choregos-raised"]) {
-      expect(rapport("--varga-line-strong", fond, mode), `bordure sur ${fond}`).toBeGreaterThanOrEqual(3);
-      expect(rapport("--varga-line", fond, mode), `filet sur ${fond}`).toBeGreaterThanOrEqual(1.3);
+    for (const fond of ["--choregos-surface", "--choregos-raised"]) {
+      expect(rapport("--choregos-line-strong", fond, mode), `bordure sur ${fond}`).toBeGreaterThanOrEqual(3);
+      expect(rapport("--choregos-line", fond, mode), `filet sur ${fond}`).toBeGreaterThanOrEqual(1.3);
     }
     for (const fond of FONDS) {
-      expect(rapport("--varga-focus", fond, mode), `focus sur ${fond}`).toBeGreaterThanOrEqual(3);
+      expect(rapport("--choregos-focus", fond, mode), `focus sur ${fond}`).toBeGreaterThanOrEqual(3);
     }
   });
 
   it("la barre latérale est plus sombre que la page", () => {
-    expect(luminance(jeton("--choregos-sidebar", mode))).toBeLessThan(luminance(jeton("--varga-surface", mode)));
+    expect(luminance(jeton("--choregos-sidebar", mode))).toBeLessThan(luminance(jeton("--choregos-surface", mode)));
   });
 });

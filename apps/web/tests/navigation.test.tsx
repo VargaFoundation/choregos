@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/lib/theme";
 const chemin = { courant: "/" };
 vi.mock("next/navigation", () => ({ usePathname: () => chemin.courant }));
 vi.mock("@/lib/session", () => ({
-  useSession: () => ({ me: null, orgs: [], org: "varga", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
+  useSession: () => ({ me: null, orgs: [], org: "acme", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();

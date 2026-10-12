@@ -97,9 +97,9 @@ describe("la carte à plat : la disposition (S21-07)", () => {
 
   it("chaque genre d'acteur se peint avec des jetons de la console, et se dit en toutes lettres", () => {
     for (const { bord, fond, texte } of Object.values(COULEUR_DU_GENRE)) {
-      expect(texte).toMatch(/^var\(--(varga|choregos)-[a-z-]+\)$/);
-      expect(bord).toMatch(/^var\(--(varga|choregos)-[a-z-]+\)$/);
-      expect(fond).toMatch(/^var\(--(varga|choregos)-[a-z-]+\)$/);
+      expect(texte).toMatch(/^var\(--choregos-[a-z-]+\)$/);
+      expect(bord).toMatch(/^var\(--choregos-[a-z-]+\)$/);
+      expect(fond).toMatch(/^var\(--choregos-[a-z-]+\)$/);
     }
     expect(["agent", "human", "system", "train", "wait", "terminal"].map(genreDActeur)).toEqual([
       "agent",

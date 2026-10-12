@@ -294,7 +294,7 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
               max={images.length - 1}
               value={lecteur.index}
               onChange={(event) => lecteur.allerA(Number(event.target.value))}
-              className="flex-1 accent-[var(--varga-accent)]"
+              className="flex-1 accent-[var(--choregos-accent)]"
               aria-label="moment of the journey"
             />
             <span className="whitespace-nowrap font-mono" data-testid="parcours-moment">
@@ -378,7 +378,7 @@ function Carte({
             {(
               [
                 ["pris", COULEUR_DU_RENVOI],
-                ["structure", "var(--varga-line-strong)"],
+                ["structure", "var(--choregos-line-strong)"],
               ] as const
             ).map(([nom, couleur]) => (
               <marker
@@ -408,7 +408,7 @@ function Carte({
                 <path
                   d={segment.d}
                   fill="none"
-                  stroke={actif ? COULEUR.en_cours : parcouru ? "var(--varga-ink-muted)" : "var(--varga-line-strong)"}
+                  stroke={actif ? COULEUR.en_cours : parcouru ? "var(--choregos-ink-muted)" : "var(--choregos-line-strong)"}
                   strokeWidth={actif || parcouru ? 3 : 2}
                   strokeLinecap="round"
                   // Franchi, le tronçon se trace : `pathLength` ramène sa longueur à 1, l'animation fait le reste.
@@ -422,7 +422,7 @@ function Carte({
                   </circle>
                 )}
                 <text
-                  stroke="var(--varga-surface)"
+                  stroke="var(--choregos-surface)"
                   strokeWidth={4}
                   paintOrder="stroke"
                   x={etiquette.x}
@@ -430,7 +430,7 @@ function Carte({
                   textAnchor={etiquette.ancre}
                   fontSize={11}
                   fontWeight={actif ? 600 : 400}
-                  fill={actif ? COULEUR.en_cours : "var(--varga-ink-muted)"}
+                  fill={actif ? COULEUR.en_cours : "var(--choregos-ink-muted)"}
                 >
                   <title>{modele.nom(segment.etat)}</title>
                   {tronquer(actif ? `now · ${modele.nom(segment.etat)}` : modele.nom(segment.etat), etiquette.largeurMax)}
@@ -450,7 +450,7 @@ function Carte({
                 <path
                   d={trace.d}
                   fill="none"
-                  stroke={pris.fois > 0 ? COULEUR_DU_RENVOI : "var(--varga-line-strong)"}
+                  stroke={pris.fois > 0 ? COULEUR_DU_RENVOI : "var(--choregos-line-strong)"}
                   strokeWidth={pris.fois > 0 ? 2.5 : 1.5}
                   strokeDasharray={pris.fois > 0 ? undefined : "4 5"}
                   opacity={pris.fois > 0 ? 1 : 0.55}
@@ -464,7 +464,7 @@ function Carte({
                 )}
                 {pris.fois > 0 && arc.genre === "renvoi" && (
                   <text
-                    stroke="var(--varga-surface)"
+                    stroke="var(--choregos-surface)"
                     strokeWidth={4}
                     paintOrder="stroke"
                     x={trace.etiquette.x}
@@ -536,7 +536,7 @@ function Borne({ point, atteinte = false }: { point: Point; atteinte?: boolean }
       width={6}
       height={40}
       rx={3}
-      fill={atteinte ? COULEUR.fait : "var(--varga-ink-muted)"}
+      fill={atteinte ? COULEUR.fait : "var(--choregos-ink-muted)"}
     />
   );
 }
@@ -569,7 +569,7 @@ function Case({
   const couleur = statique ? COULEUR_DU_GENRE[etape.genre] : COULEUR[etat.statut];
   const vivante = etat.statut === "en_cours" || etat.statut === "attend";
   const plein = statique || etat.statut !== "a_venir";
-  const fond = statique ? "var(--varga-surface)" : fondDuStatut(etat.statut);
+  const fond = statique ? "var(--choregos-surface)" : fondDuStatut(etat.statut);
   const { x, y } = point;
   return (
     <g data-etape={etape.id} data-statut={etat.statut}>
@@ -584,7 +584,7 @@ function Case({
           className={etat.statut === "attend" ? "parcours-pouls-lent" : "parcours-pouls"}
         />
       )}
-      {choisie && <circle cx={x} cy={y} r={RAYON + 7} fill="none" stroke="var(--varga-focus)" strokeWidth={2} />}
+      {choisie && <circle cx={x} cy={y} r={RAYON + 7} fill="none" stroke="var(--choregos-focus)" strokeWidth={2} />}
       {etape.genre === "platform" ? (
         <rect
           x={x - RAYON + 1}
@@ -613,12 +613,12 @@ function Case({
         <circle cx={x} cy={y} r={RAYON} fill={fond} stroke={couleur} strokeWidth={3} className="parcours-forme" />
       )}
       {etape.genre === "human" ? (
-        <g fill={plein ? couleur : "var(--varga-ink-muted)"}>
+        <g fill={plein ? couleur : "var(--choregos-ink-muted)"}>
           <circle cx={x} cy={y - 3.5} r={3.4} />
           <path d={`M ${x - 6.5} ${y + 7} Q ${x} ${y - 1.5} ${x + 6.5} ${y + 7} Z`} />
         </g>
       ) : etape.genre === "train" ? (
-        <g fill={plein ? couleur : "var(--varga-ink-muted)"}>
+        <g fill={plein ? couleur : "var(--choregos-ink-muted)"}>
           {[-7, 0, 7].map((dx) => (
             <circle key={dx} cx={x + dx} cy={y} r={2.2} />
           ))}

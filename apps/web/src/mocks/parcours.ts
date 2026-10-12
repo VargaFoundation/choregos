@@ -171,7 +171,7 @@ function jusquALaRevue(v: ReturnType<typeof vie>) {
   v.deplacer(12, "triaged", "awaiting_spec_approval", "nominal", "t-specify");
   v.humain("t-approve-spec", "product_owners", 13, 40, {
     status: "rejected",
-    by: "augustin@varga.dev",
+    by: "augustin@acme.dev",
     summary: "Approve the specification of “Credit notes are not deducted from the total”",
   });
   v.deplacer(40, "awaiting_spec_approval", "triaged", "reject", "t-approve-spec", "Also cover partial credit notes.");
@@ -182,7 +182,7 @@ function jusquALaRevue(v: ReturnType<typeof vie>) {
   v.deplacer(46, "triaged", "awaiting_spec_approval", "nominal", "t-specify");
   v.humain("t-approve-spec", "product_owners", 47, 70, {
     status: "approved",
-    by: "augustin@varga.dev",
+    by: "augustin@acme.dev",
     summary: "Approve the specification of “Credit notes are not deducted from the total”",
   });
   v.deplacer(70, "awaiting_spec_approval", "spec_approved", "nominal", "t-approve-spec", "human decision: approved");
@@ -248,7 +248,7 @@ export function parcoursEnCours(maintenant: number = Date.now()): WorkItemJourne
   return {
     ...CARTE,
     work_item_id: "w1",
-    tracker_key: "varga/billing-api#123",
+    tracker_key: "acme/billing-api#123",
     state: "reviewed",
     closed: false,
     moves: v.moves,
@@ -275,7 +275,7 @@ export function parcoursTermine(maintenant: number = Date.now()): WorkItemJourne
   v.deplacer(191, "notes_written", "awaiting_pr_approval", "nominal", "t-open-pr");
   v.humain("t-approve-pr", "maintainers", 191, 230, {
     status: "approved",
-    by: "marie@varga.dev",
+    by: "marie@acme.dev",
     summary: "Approve the pull request #456",
   });
   v.deplacer(230, "awaiting_pr_approval", "pr_approved", "nominal", "t-approve-pr", "human decision: approved");
@@ -287,14 +287,14 @@ export function parcoursTermine(maintenant: number = Date.now()): WorkItemJourne
   v.deplacer(275, "fixing_ci", "awaiting_pr_approval", "nominal", "t-fix-ci");
   v.humain("t-approve-pr", "maintainers", 275, 300, {
     status: "approved",
-    by: "marie@varga.dev",
+    by: "marie@acme.dev",
     summary: "Approve the pull request #456 again: the CI fix changed it",
   });
   v.deplacer(300, "awaiting_pr_approval", "pr_approved", "nominal", "t-approve-pr", "human decision: approved");
   v.deplacer(312, "pr_approved", "integrated", "nominal", "t-merge", "gates green");
   v.train("t-stage", "staging", 320, 335);
   v.deplacer(335, "integrated", "staged", "nominal", "t-stage", "deployment verified");
-  v.train("t-release", "prod", 400, 440, "leo@varga.dev");
+  v.train("t-release", "prod", 400, 440, "leo@acme.dev");
   v.deplacer(440, "staged", "live", "nominal", "t-release", "deployment verified");
   v.agent("t-verify-prod", 441, 446, {
     summary: "Go: smoke check green, error rate flat.",
@@ -306,7 +306,7 @@ export function parcoursTermine(maintenant: number = Date.now()): WorkItemJourne
   return {
     ...CARTE,
     work_item_id: "w4",
-    tracker_key: "varga/billing-api#120",
+    tracker_key: "acme/billing-api#120",
     state: "verified",
     closed: true,
     moves: v.moves,
@@ -326,7 +326,7 @@ export function parcoursEnAttente(maintenant: number = Date.now()): WorkItemJour
   return {
     ...complet,
     work_item_id: "w2",
-    tracker_key: "varga/billing-api#124",
+    tracker_key: "acme/billing-api#124",
     state: "awaiting_spec_approval",
     moves: complet.moves.filter((m) => Date.parse(m.at) <= coupure),
     steps,

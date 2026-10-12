@@ -9,7 +9,7 @@ import { ThemeProvider } from "@/lib/theme";
 const chemin = { courant: "/" };
 vi.mock("next/navigation", () => ({ usePathname: () => chemin.courant }));
 vi.mock("@/lib/session", () => ({
-  useSession: () => ({ me: null, orgs: [], org: "varga", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
+  useSession: () => ({ me: null, orgs: [], org: "acme", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
@@ -78,12 +78,12 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
     const skills = within(barre).getByRole("link", { name: "skills" });
     expect(skills).not.toHaveAttribute("title");
 
-    fireEvent.click(within(barre).getByRole("button", { name: /collapse sidebar/ }));
+    fireEvent.click(within(barre).getByRole("button", { name: /Collapse sidebar/ }));
     expect(window.localStorage.getItem(CLE_DE_LA_BARRE)).toBe("rail");
     expect(document.documentElement.dataset.sidebar).toBe("rail");
     expect(skills).toHaveAttribute("title", "skills");
 
-    fireEvent.click(within(barre).getByRole("button", { name: /expand sidebar/ }));
+    fireEvent.click(within(barre).getByRole("button", { name: /Expand sidebar/ }));
     expect(window.localStorage.getItem(CLE_DE_LA_BARRE)).toBe("full");
     expect(document.documentElement.dataset.sidebar).toBeUndefined();
     expect(skills).not.toHaveAttribute("title");
@@ -104,7 +104,7 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
       throw new Error("QuotaExceededError");
     });
     const barre = rendre("/");
-    fireEvent.click(within(barre).getByRole("button", { name: /collapse sidebar/ }));
+    fireEvent.click(within(barre).getByRole("button", { name: /Collapse sidebar/ }));
     expect(document.documentElement.dataset.sidebar).toBe("rail");
     vi.restoreAllMocks();
   });

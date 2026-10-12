@@ -27,7 +27,7 @@ const entree = (slug: string, extra: Partial<AgentCatalogueEntry> = {}): AgentCa
 function rendre() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <CatalogueDAgents org="varga" />
+      <CatalogueDAgents org="acme" />
     </QueryClientProvider>,
   );
 }
@@ -60,9 +60,9 @@ describe("le catalogue d'agents dans la console (S21-18)", () => {
     rendre();
     const developer = await screen.findByTestId("catalogue-developer");
     fireEvent.click(within(developer).getByRole("button", { name: "install" }));
-    await waitFor(() => expect(api.installCatalogueAgent).toHaveBeenLastCalledWith("varga", "developer", false));
+    await waitFor(() => expect(api.installCatalogueAgent).toHaveBeenLastCalledWith("acme", "developer", false));
     fireEvent.click(within(screen.getByTestId("catalogue-reviewer")).getByRole("button", { name: "update" }));
-    await waitFor(() => expect(api.installCatalogueAgent).toHaveBeenLastCalledWith("varga", "reviewer", true));
+    await waitFor(() => expect(api.installCatalogueAgent).toHaveBeenLastCalledWith("acme", "reviewer", true));
     expect(within(screen.getByTestId("catalogue-architect")).queryByRole("button")).toBeNull();
     expect(screen.getByTestId("catalogue-architect")).toHaveTextContent("your organisation has its own agent");
   });
@@ -77,7 +77,7 @@ describe("le catalogue d'agents dans la console (S21-18)", () => {
     const claude = await screen.findByTestId("client-catalogue-claude-code");
     fireEvent.click(within(claude).getByLabelText("read only"));
     fireEvent.click(within(claude).getByRole("button", { name: "connect" }));
-    await waitFor(() => expect(api.connectCatalogueClient).toHaveBeenCalledWith("varga", "claude-code", true));
+    await waitFor(() => expect(api.connectCatalogueClient).toHaveBeenCalledWith("acme", "claude-code", true));
     const extrait = await screen.findByTestId("extrait-claude-code");
     expect(extrait).toHaveTextContent("chg_secret_once");
     expect(extrait).toHaveTextContent("https://choregos.example/mcp");

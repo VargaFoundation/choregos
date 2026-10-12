@@ -27,7 +27,7 @@ export function titreDuChemin(pathname: string): string {
 }
 
 /**
- * Chaque page a son titre (S23-05) : tous les onglets s'appelaient « choregos · varga foundation »,
+ * Chaque page a son titre (S23-05) : tous les onglets portaient le même titre,
  * l'historique du navigateur ne distinguait aucune page, et un lecteur d'écran annonçait le même
  * titre à chaque navigation (WCAG 2.4.2). React 19 remonte ce `<title>` dans le `<head>`.
  */

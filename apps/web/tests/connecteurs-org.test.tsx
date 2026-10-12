@@ -8,7 +8,7 @@ import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors" }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 
 const { annuaire, parc, fournisseur, outil, type } = vi.hoisted(() => ({
   annuaire: { name: "entra-acme", kind: "identity", type: "entra", operations: [] } as unknown as OrgConnector,

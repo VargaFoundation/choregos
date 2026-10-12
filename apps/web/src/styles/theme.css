@@ -1,22 +1,19 @@
 /*
- * L'allure de la console : une console d'opérations à la Temporal (ADR 0043).
+ * The look of the console: an operations console in the manner of Temporal's UI (ADR 0048, which
+ * keeps the colours, the contrast budget and the theme choice of ADR 0043).
  *
- * Le design system de la fondation donnait au texte et au fond les deux extrêmes (19:1, en clair
- * comme en sombre), des filets presque invisibles (1,3:1), le monospace partout et un sombre qui ne
- * suivait que le système. Cette feuille réaffecte ses jetons `--varga-*` — les composants du design
- * system les lisent, rien n'est forké — et en ajoute quelques-uns (`--choregos-*`).
+ * The console owns every token here (`--choregos-*`): it no longer depends on the Varga Foundation
+ * design system, and no other stylesheet declares a colour role. `tests/theme-provenance.test.ts`
+ * checks that every role the code reads is declared in this file.
  *
- * Provenance : chaque couleur est un pas des échelles Radix Colors, ou un `color-mix()` d'un pas avec
- * `#000`/`#fff`/un autre pas — `tests/theme-provenance.test.ts` le vérifie, littéral par littéral.
+ * Provenance: every colour is a step of a Radix Colors scale, or a `color-mix()` of a step with
+ * `#000`/`#fff`/another step — `tests/theme-provenance.test.ts` checks it, literal by literal.
  *
- *   Radix Colors — Copyright (c) 2022 WorkOS — licence MIT (voir NOTICE).
+ *   Radix Colors — Copyright (c) 2022 WorkOS — MIT licence (see NOTICE).
  *
- * Le sombre est le défaut : il vaut sans JavaScript, et c'est le choix d'une console d'opérations.
- * Le clair se pose par `data-theme="light"` sur <html>, que le script d'en-tête lit dans les
- * préférences de la personne (`lib/preferences.ts`) avant la première peinture.
- *
- * Hors couche : les valeurs de la fondation sont importées DANS une couche (`globals.css`), celles-ci
- * l'emportent donc toujours, quelle que soit la spécificité des sélecteurs sombres du design system.
+ * Dark is the default: it holds without JavaScript, and it is an operations console's choice.
+ * Light is set by `data-theme="light"` on <html>, which the head script reads from the person's
+ * preferences (`lib/preferences.ts`) before the first paint.
  */
 
 /* ───────────────────────────── sombre (défaut) ───────────────────────────── */
@@ -61,38 +58,37 @@
   --red-11: #ff9592;
 
   /* Surfaces : la page, ce qui s'élève dessus (cartes, menus, tiroir), la barre latérale plus sombre. */
-  --varga-surface: var(--slate-1);
+  --choregos-surface: var(--slate-1);
   --choregos-raised: var(--slate-2);
   --choregos-sidebar: color-mix(in srgb, var(--slate-1) 75%, #000);
-  --varga-surface-muted: var(--slate-3);
-  --varga-surface-sunken: var(--slate-3);
-  --varga-grid: var(--slate-3);
+  --choregos-surface-muted: var(--slate-3);
+  --choregos-surface-sunken: var(--slate-3);
 
   /* Filets : visibles (1,6:1) ; la bordure d'un contrôle porte 3:1 au moins (WCAG 1.4.11). */
-  --varga-line: var(--slate-6);
-  --varga-line-strong: var(--slate-9);
+  --choregos-line: var(--slate-6);
+  --choregos-line-strong: var(--slate-9);
 
   /* Texte : 16:1, plus 19 — le blanc pur sur le quasi-noir fatiguait. */
-  --varga-ink: var(--slate-12);
-  --varga-ink-muted: var(--slate-11);
-  --varga-ink-subtle: var(--slate-9);
-  --varga-ink-placeholder: var(--slate-11);
+  --choregos-ink: var(--slate-12);
+  --choregos-ink-muted: var(--slate-11);
+  --choregos-ink-subtle: var(--slate-9);
+  --choregos-ink-placeholder: var(--slate-11);
 
   /* L'action : un seul accent, l'iris — l'aplat inversé (blanc en sombre) devient l'accent. */
-  --varga-inverse: var(--iris-9);
-  --varga-inverse-ink: #fff;
-  --varga-inverse-hover: color-mix(in srgb, var(--iris-9) 85%, #000);
-  --varga-accent: var(--iris-9);
-  --varga-accent-hover: color-mix(in srgb, var(--iris-9) 85%, #000);
-  --varga-accent-ink: #fff;
-  --varga-accent-strong: var(--iris-11);
-  --varga-accent-soft: var(--iris-3);
+  --choregos-inverse: var(--iris-9);
+  --choregos-inverse-ink: #fff;
+  --choregos-inverse-hover: color-mix(in srgb, var(--iris-9) 85%, #000);
+  --choregos-accent: var(--iris-9);
+  --choregos-accent-hover: color-mix(in srgb, var(--iris-9) 85%, #000);
+  --choregos-accent-ink: #fff;
+  --choregos-accent-strong: var(--iris-11);
+  --choregos-accent-soft: var(--iris-3);
   --choregos-accent-line: var(--iris-6);
-  --varga-focus: var(--iris-10);
+  --choregos-focus: var(--iris-10);
 
-  --varga-ok: var(--green-11);
-  --varga-warn: var(--amber-11);
-  --varga-danger: var(--red-11);
+  --choregos-ok: var(--green-11);
+  --choregos-warn: var(--amber-11);
+  --choregos-danger: var(--red-11);
 
   /* Les états d'un run ou d'un ticket : une pastille teintée (fond, filet, texte) et un plein. */
   --choregos-running-solid: var(--blue-9);
@@ -129,13 +125,11 @@
   --choregos-scroll-hint: color-mix(in srgb, var(--slate-12) 14%, transparent);
   --choregos-shadow-raised: none;
 
-  /* Typographie : Geist pour lire, Geist Mono pour ce qui se compare, se copie ou se commande. */
-  --varga-font-text: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --varga-font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Type: Geist to read, Geist Mono for what is compared — ids, code, numbers, timestamps (ADR 0048). */
+  --choregos-font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --choregos-font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  --varga-leading-body: 1.5;
-  --varga-tracking-body: 0;
-  --varga-tracking-display: -0.01em;
+  --choregos-leading-body: 1.5;
+  --choregos-easing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ───────────────────────────── clair ───────────────────────────── */
@@ -187,17 +181,17 @@
 
   --choregos-raised: #fff;
   --choregos-sidebar: var(--slate-2);
-  --varga-inverse-hover: var(--iris-10);
-  --varga-accent-hover: var(--iris-10);
-  --varga-focus: var(--iris-9);
+  --choregos-inverse-hover: var(--iris-10);
+  --choregos-accent-hover: var(--iris-10);
+  --choregos-focus: var(--iris-9);
 
   /*
    * En clair, le pas 11 d'une teinte vive tombe à 4:1 sur son propre fond teinté : il s'assombrit
    * vers le pas 12 de la même échelle (5,2:1 au moins partout, mesuré par le test de contraste).
    */
-  --varga-ok: color-mix(in srgb, var(--green-11) 70%, var(--green-12));
-  --varga-warn: color-mix(in srgb, var(--amber-11) 70%, var(--amber-12));
-  --varga-danger: color-mix(in srgb, var(--red-11) 70%, var(--red-12));
+  --choregos-ok: color-mix(in srgb, var(--green-11) 70%, var(--green-12));
+  --choregos-warn: color-mix(in srgb, var(--amber-11) 70%, var(--amber-12));
+  --choregos-danger: color-mix(in srgb, var(--red-11) 70%, var(--red-12));
   --choregos-running-ink: color-mix(in srgb, var(--blue-11) 70%, var(--blue-12));
   --choregos-waiting-ink: color-mix(in srgb, var(--amber-11) 70%, var(--amber-12));
   --choregos-succeeded-ink: color-mix(in srgb, var(--green-11) 70%, var(--green-12));
@@ -211,29 +205,105 @@
 
 /*
  * Ce qui s'élève (carte, menu, tiroir) redéfinit la surface pour tout ce qu'il contient : un champ, un
- * halo de texte ou un dégradé qui « prend la couleur du fond » prend alors la bonne — comme la bande
- * `.inverse` du design system.
+ * halo de texte ou un dégradé qui « prend la couleur du fond » prend alors la bonne.
  */
 .raised {
-  --varga-surface: var(--choregos-raised);
+  --choregos-surface: var(--choregos-raised);
   background-color: var(--choregos-raised);
   box-shadow: var(--choregos-shadow-raised);
 }
 .sidebar-surface {
-  --varga-surface: var(--choregos-sidebar);
+  --choregos-surface: var(--choregos-sidebar);
   background-color: var(--choregos-sidebar);
 }
 
+/*
+ * What a bare HTML element already looks like: the console's defaults, in `@layer base` so that a
+ * utility class always wins. They used to come from the foundation's `base.css`.
+ */
 @layer base {
-  /* Le design system coupait les ligatures, utiles en monospace ; Geist en a de lisibles. */
+  html {
+    background: var(--choregos-surface);
+    color: var(--choregos-ink);
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
-    font-feature-settings: normal;
+    margin: 0;
+    background: var(--choregos-surface);
+    color: var(--choregos-ink);
+    font-family: var(--choregos-font-sans);
+    font-size: 0.875rem;
+    line-height: var(--choregos-leading-body);
+    -webkit-font-smoothing: antialiased;
   }
 
   h1,
   h2,
   h3 {
     font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--choregos-line-strong);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 120ms var(--choregos-easing);
+  }
+
+  a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  /* Aligned digits: in a table of costs or durations, the columns must line up. */
+  table,
+  time,
+  data {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A bare table: a hairline under the header and between rows, no vertical rule. */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    text-align: left;
+  }
+
+  thead {
+    border-bottom: 1px solid var(--choregos-line);
+  }
+
+  th {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--choregos-ink-muted);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.625rem 0.75rem;
+    vertical-align: top;
+  }
+
+  tbody tr + tr {
+    border-top: 1px solid var(--choregos-line);
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--choregos-line);
   }
 
   code,
@@ -243,13 +313,35 @@
     font-family: var(--choregos-font-mono);
   }
 
-  /* Un tableau nu : l'en-tête se pose sur un filet, plus sur un trait d'encre. */
-  thead {
-    border-bottom-color: var(--varga-line);
+  ::selection {
+    background: var(--choregos-accent-soft);
+    color: var(--choregos-ink);
   }
 
-  ::selection {
-    background: var(--varga-accent-soft);
-    color: var(--varga-ink);
+  /* The keyboard focus: the accent, 2 px. */
+  :focus-visible {
+    outline: 2px solid var(--choregos-focus);
+    outline-offset: 2px;
+  }
+
+  /* Tailwind 4 gives buttons `cursor: default`; a button here shows it can be clicked. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--choregos-ink-placeholder);
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

@@ -47,6 +47,6 @@ describe("décider d'une action gouvernée (ADR 0035, S20-02)", () => {
 
   it("un agent qui propose se nomme comme tel", () => {
     expect(propose({ kind: "agent", id: "agent:coordinateur" })).toBe("the agent coordinateur");
-    expect(propose({ kind: "user", id: "lea@varga.dev" })).toBe("lea@varga.dev");
+    expect(propose({ kind: "user", id: "lea@acme.dev" })).toBe("lea@acme.dev");
   });
 });
