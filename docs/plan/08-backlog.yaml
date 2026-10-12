@@ -37,6 +37,8 @@ streams:
   S32: "Agent builder, lifecycle, skills import behind a supply-chain gate (plan 2026-10-12)"
   S33: "Knowledge bases and specialist agents, netops included (plan 2026-10-12)"
   S34: "English everywhere: code, identifiers, docs, commits (plan 2026-10-12)"
+  S35: "The agent_sandbox executor: warm pool, suspend across a human gate, proved on the dev cluster (ADR 0016, plan 2026-10-12)"
+  S36: "Agent logs: transcript stored, pod logs and termination reason archived, a logs tab (plan 2026-10-12)"
 
 stories:
 
@@ -2239,6 +2241,24 @@ stories:
     depends_on: [S30-03]
     acceptance:
       - "org_admin is not offered on a project row; a person appears once"
+  - id: S30-07
+    title: "Trains tab and trains-in-flight counters only when a workflow of the project declares a release train"
+    stream: S30
+    sprint: 17
+    priority: 7
+    size: S
+    depends_on: [S30-03]
+    acceptance:
+      - "Playwright: the joiners-leavers project shows no trains tab; the software-delivery one does"
+  - id: S30-08
+    title: "The two ways a person gives data are proved: creation inputs and task form"
+    stream: S30
+    sprint: 17
+    priority: 8
+    size: S
+    depends_on: []
+    acceptance:
+      - "Playwright: an onboarding ticket is created from its input form; the badge task's form and attestation reach the decision"
   # S31 — Artifacts
   - id: S31-01
     title: "Artifact contract and storage in the object store, produced_by recorded"
@@ -2276,6 +2296,24 @@ stories:
     depends_on: [S31-03, S30-03]
     acceptance:
       - "Playwright"
+  - id: S31-05
+    title: "Binary deliverables: pptx, xlsx, docx, images and video stored as typed artifacts; office files from skills, media from gateway models or MCP, cost in the ledger"
+    stream: S31
+    sprint: 17
+    priority: 5
+    size: M
+    depends_on: [S31-01]
+    acceptance:
+      - "A fake agent's pptx is stored with its digest and media type; a declared xlsx output that is absent fails the stage"
+  - id: S31-06
+    title: "Viewer for binary artifacts: image and PDF preview, video player, office files downloaded"
+    stream: S31
+    sprint: 17
+    priority: 6
+    size: S
+    depends_on: [S31-04, S31-05]
+    acceptance:
+      - "Playwright on mocks"
   # S32 — Agent builder and skills
   - id: S32-01
     title: "Agent builder: every spec field editable, with what each one costs and allows"
@@ -2459,3 +2497,68 @@ stories:
     depends_on: [S34-04]
     acceptance:
       - "Link checker green"
+  # S35 — The agent_sandbox executor (ADR 0016)
+  - id: S35-01
+    title: "agent-sandbox operator on the dev cluster, API version pinned; chart values for the executor, warm pool and RuntimeClass"
+    stream: S35
+    sprint: 18
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "make test-cluster creates and deletes a Sandbox on the dev cluster"
+  - id: S35-02
+    title: "Executor agent_sandbox: queue through a waiting SandboxClaim, warm pool of never-used sandboxes, one run token per sandbox"
+    stream: S35
+    sprint: 18
+    priority: 2
+    size: L
+    depends_on: [S35-01, S36-02]
+    acceptance:
+      - "ADR 0013's no-executor-can-snapshot test turns red and is updated; a claimed sandbox holds no token before assignment"
+  - id: S35-03
+    title: "Suspend and resume the sandbox around a human question, bounded by sandbox.suspend_max_hours"
+    stream: S35
+    sprint: 18
+    priority: 3
+    size: L
+    depends_on: [S35-02]
+    acceptance:
+      - "Cluster test: an answered question costs one run, not two; past the bound the sandbox is gone and the stage replays"
+  - id: S35-04
+    title: "Conformance on the dev cluster before any executor capability is announced"
+    stream: S35
+    sprint: 18
+    priority: 4
+    size: M
+    depends_on: [S35-02]
+    acceptance:
+      - "A capability announced without its cluster test fails CI"
+  # S36 — Agent logs
+  - id: S36-01
+    title: "The run transcript is really stored, or the field is removed"
+    stream: S36
+    sprint: 17
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "GET /runs/{id}/transcript on a finished fake run returns its lines"
+  - id: S36-02
+    title: "At the end of every run the executor archives the pod log tail and the termination reason, secrets redacted"
+    stream: S36
+    sprint: 17
+    priority: 2
+    size: M
+    depends_on: []
+    acceptance:
+      - "Fake executor with a crashing pod: reason and last lines stored; a token in the logs is masked"
+  - id: S36-03
+    title: "GET /runs/{id}/logs with a live tail, and a logs tab on the run page"
+    stream: S36
+    sprint: 17
+    priority: 3
+    size: M
+    depends_on: [S36-02]
+    acceptance:
+      - "Playwright; another project's run answers 404"
