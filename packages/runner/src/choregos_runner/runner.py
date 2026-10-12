@@ -14,7 +14,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from choregos_contracts import (
     Artifacts,
@@ -27,6 +27,7 @@ from choregos_contracts import (
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome
 from .backends import get_backend
+from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, get_settings
 from .dod import run_checks
@@ -243,34 +244,36 @@ class Runner:
                 # 7. premier tour
                 prompt = self._prompt(stage_input, workspace.path)
                 budget_seconds = stage_input.budget.max_minutes * 60
-                await agent.prompt(prompt, timeout=budget_seconds)
+                # A key the gateway refuses for budget refuses every further turn too: no DoD
+                # retry, no reminder, no repair — each would only be refused again (S27-01).
+                refused = await _turn(agent, prompt, budget_seconds)
 
                 # 8. boucle DoD
                 max_iterations = max(0, stage_input.permissions.dod_iterations)
                 report = await run_checks(stage_input, workspace.path)
-                while not report.ok and dod_iterations < max_iterations:
+                while not report.ok and dod_iterations < max_iterations and not refused:
                     dod_iterations += 1
                     await journal.record(
                         "dod.retry",
                         {"iteration": dod_iterations, "failures": [c.name for c in report.failures()]},
                     )
-                    await agent.prompt(report.prompt_for_repair(), timeout=self._remaining(budget_seconds))
+                    refused = await _turn(agent, report.prompt_for_repair(), self._remaining(budget_seconds))
                     report = await run_checks(stage_input, workspace.path)
 
                 # 9. périmètre
                 scope_result = await check_scope(workspace, depart, guards.allowed_paths)
-                if scope_result.reverted:
+                if scope_result.reverted and not refused:
                     await journal.record("scope.reverted", {"paths": scope_result.reverted})
-                    await agent.prompt(scope_result.prompt(), timeout=self._remaining(budget_seconds))
+                    refused = await _turn(agent, scope_result.prompt(), self._remaining(budget_seconds))
                     scope_result = await check_scope(workspace, depart, guards.allowed_paths)
 
                 # 10. résultat
                 load = load_result(workspace.result_path(), inline_outputs(stage_input), _files(stage_input))
-                while not load.ok and repairs < MAX_RESULT_REPAIRS:
+                while not load.ok and repairs < MAX_RESULT_REPAIRS and not refused:
                     repairs += 1
                     await journal.record("result.repair", {"attempt": repairs, "error": load.error})
-                    await agent.prompt(
-                        repair_prompt(load, workspace.result_path()), timeout=self._remaining(budget_seconds)
+                    refused = await _turn(
+                        agent, repair_prompt(load, workspace.result_path()), self._remaining(budget_seconds)
                     )
                     load = load_result(
                         workspace.result_path(), inline_outputs(stage_input), _files(stage_input)
@@ -285,11 +288,11 @@ class Runner:
                     dod_iterations=dod_iterations,
                     result_repairs=repairs,
                 )
-                if agent_result is None:
-                    raison, detail = _diagnostic_sans_resultat(agent, load.error, workspace.result_path())
-                    invalid = fallback_result(raison, detail)
+                stop = _stop(agent, refused, agent_result, load.error, workspace.result_path())
+                if stop is not None:
+                    code, raison, detail = stop
                     final = complete_result(
-                        invalid,
+                        fallback_result(raison, detail),
                         measured=report.evidence(),
                         artifacts=Artifacts(
                             branch=stage_input.repo.work_branch if stage_input.repo else None
@@ -297,7 +300,7 @@ class Runner:
                         diagnostics=diagnostics,
                     )
                     await self._publish(client, journal, workspace, stage_input, final, base, depart)
-                    return RunOutcome(Exit.INVALID_RESULT, final, detail=detail)
+                    return RunOutcome(code, final, detail=detail)
         except AgentUnreachableError as exc:
             await journal.record("agent.unreachable", {"error": str(exc)[:500]})
             await journal.flush()
@@ -305,7 +308,7 @@ class Runner:
 
         # 11-12. publication
         final = complete_result(
-            agent_result,
+            cast(StageResult, agent_result),  # `_stop` ended the run when there was none
             measured=report.evidence(),
             artifacts=Artifacts(branch=stage_input.repo.work_branch if stage_input.repo else None),
             diagnostics=diagnostics,
@@ -528,6 +531,33 @@ def _diagnostic_sans_resultat(agent: Any, erreur: str | None, result_path: Path)
         )
         return "agent_silencieux", detail
     return "invalid_result", (erreur or "unreadable result")
+
+
+async def _turn(agent: Any, text: str, timeout: float) -> str | None:
+    """One prompt turn; then the gateway's budget refusal, if the agent met one (S27-01)."""
+    await agent.prompt(text, timeout=timeout)
+    return _budget_refusal(agent)
+
+
+def _budget_refusal(agent: Any) -> str | None:
+    """The gateway's budget refusal, as the agent relayed it — an error, its stderr, or its text."""
+    outcome: PromptOutcome = agent.outcome
+    return gateway_budget_refusal(outcome.errors, agent.stderr_tail[-20:], outcome.said)
+
+
+def _stop(
+    agent: Any, refused: str | None, result: StageResult | None, error: str | None, result_path: Path
+) -> tuple[Exit, str, str] | None:
+    """Why the run ends without the agent's own result — `(exit code, reason, detail)` — or `None`.
+
+    A budget refusal comes first: the agent's silence, or its failure, is then the gateway's doing,
+    and `reason="budget"` is what keeps the workflow from retrying it with a fresh key."""
+    if refused and (result is None or result.status is StageStatus.FAILED):
+        return Exit.BUDGET_EXCEEDED, BUDGET_REASON, f"the gateway refused the run's key: {refused}"
+    if result is None:
+        raison, detail = _diagnostic_sans_resultat(agent, error, result_path)
+        return Exit.INVALID_RESULT, raison, detail
+    return None
 
 
 def _agent_muet(outcome: PromptOutcome) -> bool:

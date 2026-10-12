@@ -26,6 +26,8 @@ class Exit(IntEnum):
     INPUTS_INVALID = 60
     #: A knowledge base of the agent was not delivered, or not with the digest the run expects (ADR 0051).
     KNOWLEDGE_INVALID = 51
+    #: The gateway refused the run's key: its budget is spent (S27-01). The result is posted.
+    BUDGET_EXCEEDED = 70
 
     @property
     def explanation(self) -> str:
@@ -38,6 +40,7 @@ class Exit(IntEnum):
             Exit.SKILLS_INVALID: "skill missing, or its digest does not match",
             Exit.INPUTS_INVALID: "an input artifact does not match its digest",
             Exit.KNOWLEDGE_INVALID: "knowledge base missing, or its digest does not match",
+            Exit.BUDGET_EXCEEDED: "the gateway refused the run's key: its budget is spent",
         }[self]
 
 
