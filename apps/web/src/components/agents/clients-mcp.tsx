@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { slugDeLActeur } from "@/components/agents/registre";
@@ -24,34 +24,23 @@ export function versionDuClient(lecture: boolean): AgentSpec {
  * registre, dont les droits sont ceux de son humain, intersectés avec ce que sa version nomme.
  */
 export function ClientsMcp({ org, clients, agents }: { org: string; clients: ApiToken[]; agents: Agent[] }) {
-  const externes = agents.filter((agent) => agent.kind === "external");
-  const rattachements = useQueries({
-    queries: externes.map((agent) => ({
-      queryKey: ["agent-credentials", org, agent.slug],
-      queryFn: () => api.agentCredentials(org, agent.slug),
-    })),
-  });
+  // One request for every external agent's clients (S30-04): it was one per agent.
+  const rattachements = useQuery({ queryKey: ["agent-credentials", org], queryFn: () => api.orgAgentCredentials(org) });
+  const parSlug = new Map(agents.map((agent) => [agent.slug, agent]));
   const agentDuJeton = new Map<string, Agent>();
-  rattachements.forEach((resultat, index) => {
-    const agent = externes[index];
-    for (const lien of resultat.data ?? []) {
-      if (agent && lien.token_id && !lien.revoked_at) agentDuJeton.set(lien.token_id, agent);
-    }
-  });
+  for (const lien of rattachements.data ?? []) {
+    const agent = lien.agent ? parSlug.get(lien.agent) : undefined;
+    if (agent && lien.token_id && !lien.revoked_at) agentDuJeton.set(lien.token_id, agent);
+  }
   return (
     <Card title="Your AI clients">
       <p className="mb-3 text-xs text-ink-muted">
-        Your access tokens for the MCP door, and the AI client behind each once it has called. Every token is listed,
-        and revoked, in <Link href="/admin">Admin › My access tokens</Link>.
+        Your access tokens for the MCP door, and the AI client behind each once it has called. Registering one
+        makes it an external agent of the registry. Every token is listed, and revoked, in{" "}
+        <Link href="/admin">Admin › My access tokens</Link>.
       </p>
       {clients.length === 0 ? (
-        <Empty title="No AI client">
-          Connect Claude Code or another client from{" "}
-          <Link href="/integrations" className="underline">
-            AI clients
-          </Link>
-          : it appears here once it has called.
-        </Empty>
+        <Empty title="No AI client">Connect Claude Code or another client above: it appears here once it has called.</Empty>
       ) : (
         <ul className="space-y-3" data-testid="clients-mcp">
           {clients.map((jeton) => (
@@ -77,7 +66,7 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
       await api.attachAgentToken(org, slug, jeton.id);
       setOuvert(false);
       await client.invalidateQueries({ queryKey: ["agents", org] });
-      await client.invalidateQueries({ queryKey: ["agent-credentials", org, slug] });
+      await client.invalidateQueries({ queryKey: ["agent-credentials", org] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "registration refused");
     }

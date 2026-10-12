@@ -160,7 +160,7 @@ test("administration : en communautaire, ce que l'édition entreprise ajoute, sa
 
 test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async ({ page }) => {
   await page.goto("/integrations");
-  await expect(page.getByRole("heading", { name: "Connect a client" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI clients", level: 1 })).toBeVisible();
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp");
   await expect(page.getByTestId("snippet")).toContainText("claude mcp add --transport http choregos");
   await page.getByRole("button", { name: "Create an access token" }).click();
@@ -284,7 +284,13 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await page.goto("/agents");
   await expect(page.getByRole("heading", { name: "Agents", exact: true })).toBeVisible();
   await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("Onboarding coordinator");
-  await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("1 skill");
+  // The registry's 30-day columns (S30-04).
+  await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("US$6.42");
+  await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("86 %");
+  // AI clients live on their own page now (S30-04).
+  await expect(page.getByTestId("client-tok-claude")).toHaveCount(0);
+  await page.goto("/integrations");
+  await expect(page.getByRole("heading", { name: "AI clients", level: 1 })).toBeVisible();
   // Le jeton du Claude Code de Léa a appelé la porte : connecté, et rattaché à son agent externe.
   const claude = page.getByTestId("client-tok-claude");
   await expect(claude).toContainText("Connected");
@@ -294,6 +300,7 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await expect(page.getByTestId("client-tok-cursor")).toContainText("Never called");
   await expect(page.getByTestId("client-tok-cursor").getByRole("button", { name: "Register as an external agent" })).toBeVisible();
 
+  await page.goto("/agents");
   await page.getByRole("link", { name: "Onboarding coordinator" }).click();
   await expect(page.getByTestId("mesures")).toContainText("14 (12 succeeded, 2 failed)");
   await expect(page.getByTestId("version")).toContainText("onboarding-procedure@1");
@@ -392,10 +399,13 @@ test("la boîte des décisions : une action proposée par un agent attend une pe
 
 test("agents : le catalogue s'installe, et Claude Code se connecte en un clic", async ({ page }) => {
   await page.goto("/agents");
-  const catalogue = page.getByTestId("catalogue");
+  await page.getByRole("button", { name: "Add from catalogue" }).click();
+  const catalogue = page.getByRole("dialog", { name: "Add from catalogue" }).getByTestId("catalogue");
   await expect(catalogue.getByTestId("catalogue-developer")).toContainText("Not installed");
   await expect(catalogue.getByTestId("catalogue-reviewer")).toContainText("an update is available");
   await catalogue.getByTestId("catalogue-developer").getByRole("button", { name: "Install" }).click();
+  // Connecting a client is on the AI clients' page (S30-04).
+  await page.goto("/integrations");
   const claude = page.getByTestId("client-catalogue-claude-code");
   await claude.getByRole("button", { name: "Connect" }).click();
   await expect(page.getByTestId("extrait-claude-code")).toContainText("chg_demo_shown_once");
@@ -505,11 +515,12 @@ test("un jeton, un nom, un endroit : les trois pages parlent d'« access token �
 
   await page.goto("/integrations/claude-code");
   await expect(page.getByText(/Connected this way, Claude Code acts as you/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Admin › My access tokens" })).toHaveAttribute("href", "/admin");
+  await expect(page.getByRole("link", { name: "Admin › My access tokens" }).first()).toHaveAttribute("href", "/admin");
 
-  await page.goto("/agents");
+  // The caller's AI clients are on the AI clients' page, under the connection steps (S30-04).
+  await page.goto("/integrations");
   await expect(page.getByRole("heading", { name: "Your AI clients" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Admin › My access tokens" })).toHaveAttribute("href", "/admin");
+  await expect(page.getByRole("link", { name: "Admin › My access tokens" }).first()).toHaveAttribute("href", "/admin");
   await expect(page.getByText(/To connect one simply as yourself/)).toBeVisible();
   await expect(page.locator("main")).not.toContainText(/your MCP clients|mint a token|API token/);
 });

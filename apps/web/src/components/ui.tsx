@@ -15,7 +15,9 @@ import {
   createContext,
   forwardRef,
   useContext,
+  useEffect,
   useId,
+  useRef,
   type ElementType,
   type HTMLAttributes,
   type InputHTMLAttributes,
@@ -736,6 +738,62 @@ export function Breadcrumbs({ steps }: { steps: BreadcrumbStep[] }) {
         ))}
       </ol>
     </nav>
+  );
+}
+
+/**
+ * A drawer: a modal panel on the right edge (S30-04), for what one opens from a list — a new agent,
+ * the catalogue. A native `<dialog>` shown modal: the focus stays inside, Escape closes it, and the
+ * page behind is inert.
+ */
+export function Drawer({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) {
+      // jsdom has no `showModal`: the attribute is enough to show it there.
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    }
+    if (!open && dialog.open) {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      onClose={onClose}
+      onCancel={onClose}
+      className="raised fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full max-w-2xl overflow-y-auto border-l border-line p-0 text-ink backdrop:bg-black/40"
+    >
+      {open && (
+        <div className="space-y-4 p-5">
+          <div className="flex items-center justify-between gap-4">
+            <h2 id={titleId} className="text-base font-semibold text-ink">
+              {title}
+            </h2>
+            <button type="button" onClick={onClose} className={buttonClasses("ghost", "sm")}>
+              Close
+            </button>
+          </div>
+          {children}
+        </div>
+      )}
+    </dialog>
   );
 }
 

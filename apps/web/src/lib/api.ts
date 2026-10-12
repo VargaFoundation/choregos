@@ -22,6 +22,8 @@ import type {
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentMetrics,
+  AgentMetricsSummary,
+  ImplicitAgent,
   AgentPatch,
   AgentSpec,
   AgentVersion,
@@ -295,6 +297,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ read_only: readOnly }),
     }),
+  /** Every client attached to an agent of the organisation, with its agent: one request (S30-04). */
+  orgAgentCredentials: (org: string) => request<AgentCredential[]>(`/orgs/${org}/agent-credentials`),
+  /** The registry's columns — runs, success rate, cost — for every agent at once (S30-04). */
+  agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
+  /** A project's implicit agents, computed by the API (S30-04). */
+  implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
   agentCredentials: (org: string, slug: string) =>
     request<AgentCredential[]>(`/orgs/${org}/agents/${slug}/credentials`),
   attachAgentToken: (org: string, slug: string, tokenId: string) =>

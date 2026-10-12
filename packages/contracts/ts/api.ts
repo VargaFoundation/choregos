@@ -616,6 +616,26 @@ export type AgentMetrics = {
   daily_budget_usd?: number | null;
 };
 
+/** An agent's line in the registry over a period. */
+export type AgentMetricsSummary = {
+  agent: string;
+  days: number;
+  runs: number;
+  success_rate?: number | null;
+  cost_usd?: number;
+};
+
+/** A workflow actor that runs as an agent without naming one of the registry. */
+export type ImplicitAgent = {
+  workflow: string;
+  actor: string;
+  role?: string | null;
+  model?: string | null;
+  backend?: string | null;
+  max_turns?: number | null;
+  max_minutes?: number | null;
+};
+
 export type AgentCredentialCreate = {
   kind: "token" | "oauth_client";
   token_id?: string | null;
@@ -636,6 +656,8 @@ export type AgentCredential = {
   last_used_at?: string | null;
   /** the client of that last call (`User-Agent`, truncated) */
   last_client?: string | null;
+  /** the slug of the agent the client is attached to */
+  agent?: string | null;
 };
 
 /** What a project changes in a version — tightening only. */
@@ -1833,6 +1855,7 @@ export interface Operations {
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
+  listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
@@ -1841,10 +1864,12 @@ export interface Operations {
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
+  listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
+  listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };

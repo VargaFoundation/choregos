@@ -307,6 +307,28 @@ class AgentMetrics(Dto):
     daily_budget_usd: float | None = None
 
 
+class AgentMetricsSummary(Dto):
+    """An agent's line in the registry over a period (S30-04): one request for the whole table."""
+
+    agent: str
+    days: int
+    runs: int
+    success_rate: float | None = None
+    cost_usd: float = 0.0
+
+
+class ImplicitAgent(Dto):
+    """A workflow actor that runs as an agent without naming one of the registry (S30-04)."""
+
+    workflow: str
+    actor: str
+    role: str | None = None
+    model: str | None = None
+    backend: str | None = None
+    max_turns: int | None = None
+    max_minutes: int | None = None
+
+
 class AgentCredentialCreate(Dto):
     """Un jeton `mcp:*` de la porte (son id), ou un client OAuth (son `client_id`, l'`azp` du jeton)."""
 
@@ -327,6 +349,8 @@ class AgentCredentialDto(Dto):
     token_name: str | None = None
     last_used_at: datetime | None = None
     last_client: str | None = None
+    #: The slug of the agent the client is attached to (the organisation's list carries it).
+    agent: str | None = None
 
 
 class AgentLifecycleChange(Dto):

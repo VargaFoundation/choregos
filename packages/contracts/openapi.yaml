@@ -1184,6 +1184,24 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentMetrics" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agent-credentials:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listOrgAgentCredentials
+      description: Every client attached to an external agent of the organisation, with the agent's slug — one request for the AI clients' page, not one per agent (S30-04).
+      responses:
+        "200": { description: The organisation's agent clients, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCredential" } } } } }
+  /orgs/{org}/agent-metrics:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listAgentMetrics
+      description: For each agent of the registry, its runs over the period, its success rate and its cost — the registry's columns in one request (S30-04).
+      parameters:
+        - { name: days, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
+      responses:
+        "200": { description: One line per agent, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentMetricsSummary" } } } } }
   /orgs/{org}/agents/{slug}/credentials:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1553,6 +1571,14 @@ paths:
       operationId: listProjectAgents
       responses:
         "200": { description: The pinned versions, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectAgent" } } } } }
+  /projects/{id}/implicit-agents:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [agents]
+      operationId: listImplicitAgents
+      description: The `agent` actors of the project's active workflows that name no agent of the registry — computed by the API, not by one read per workflow (S30-04).
+      responses:
+        "200": { description: The implicit agents, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ImplicitAgent" } } } } }
   /projects/{id}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -2582,6 +2608,28 @@ components:
         by_project: { type: array, items: { type: object, required: [project, runs, cost_usd], properties: { project: { type: string }, runs: { type: integer }, cost_usd: { type: number } } } }
         spent_today_usd: { type: number }
         daily_budget_usd: { type: [number, "null"] }
+    AgentMetricsSummary:
+      type: object
+      description: An agent's line in the registry over a period.
+      required: [agent, days, runs]
+      properties:
+        agent: { type: string }
+        days: { type: integer }
+        runs: { type: integer }
+        success_rate: { type: [number, "null"] }
+        cost_usd: { type: number }
+    ImplicitAgent:
+      type: object
+      description: A workflow actor that runs as an agent without naming one of the registry.
+      required: [workflow, actor]
+      properties:
+        workflow: { type: string }
+        actor: { type: string }
+        role: { type: [string, "null"] }
+        model: { type: [string, "null"] }
+        backend: { type: [string, "null"] }
+        max_turns: { type: [integer, "null"] }
+        max_minutes: { type: [integer, "null"] }
     AgentCredentialCreate:
       type: object
       required: [kind]
@@ -2603,6 +2651,7 @@ components:
         token_name: { type: [string, "null"], description: the name of the attached token }
         last_used_at: { type: [string, "null"], format: date-time, description: "the token's last call to the MCP door: the console shows it as connected" }
         last_client: { type: [string, "null"], description: "the client of that last call (`User-Agent`, truncated)" }
+        agent: { type: [string, "null"], description: "the slug of the agent the client is attached to" }
     AgentOverrides:
       type: object
       description: What a project changes in a version — tightening only.

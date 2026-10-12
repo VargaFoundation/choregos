@@ -17,6 +17,8 @@ import type {
   ProjectRequirement,
   AgentCredential,
   AgentMetrics,
+  AgentMetricsSummary,
+  ImplicitAgent,
   ApiToken,
   ProjectAgent,
   ProjectAgentPut,
@@ -1222,6 +1224,39 @@ export const agentMetrics: AgentMetrics = {
   daily_budget_usd: 5,
 };
 
+/** The registry's columns, one line per agent (S30-04). */
+export function agentMetricsList(): AgentMetricsSummary[] {
+  return agents.map((agent) =>
+    agent.slug === agentMetrics.agent
+      ? { agent: agent.slug, days: 30, runs: agentMetrics.runs, success_rate: agentMetrics.success_rate, cost_usd: agentMetrics.cost_usd }
+      : { agent: agent.slug, days: 30, runs: 0, success_rate: null, cost_usd: 0 },
+  );
+}
+
+/** The project's implicit agents, as the API computes them from its active workflows (S30-04). */
+export function implicitAgents(): ImplicitAgent[] {
+  const registry = new Set(agents.map((a) => a.slug));
+  const found: ImplicitAgent[] = [];
+  for (const def of [workflow, hotfix]) {
+    const actors = ((def.json ?? {}) as { actors?: Record<string, Record<string, unknown>> }).actors ?? {};
+    for (const [actor, spec] of Object.entries(actors)) {
+      if (spec?.type !== "agent") continue;
+      const named = String(spec.agent ?? "").split("@")[0];
+      if (named && registry.has(named)) continue;
+      found.push({
+        workflow: def.name,
+        actor,
+        role: (spec.role as string | undefined) ?? null,
+        model: (spec.model as string | undefined) ?? null,
+        backend: (spec.backend as string | undefined) ?? null,
+        max_turns: (spec.max_turns as number | undefined) ?? null,
+        max_minutes: (spec.max_minutes as number | undefined) ?? null,
+      });
+    }
+  }
+  return found;
+}
+
 /** Le Claude Code de Léa a appelé la porte il y a trois minutes : la console le dit connecté. */
 export const agentCredentials: AgentCredential[] = [
   {
@@ -1629,6 +1664,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (parcours) return parcoursDe(parcours[1]!) as T;
   const ticket = /^\/work-items\/([^/]+)$/.exec(route ?? "");
   if (ticket) return ticketDetaille(ticket[1]!) as T;
+  if (/^\/orgs\/[^/]+\/agent-credentials$/.test(route ?? "")) {
+    return agentCredentials.map((c) => ({ ...c, agent: "leas-claude-code" })) as T;
+  }
+  if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? "")) return agentMetricsList() as T;
+  if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   const table: Array<[RegExp, unknown]> = [
