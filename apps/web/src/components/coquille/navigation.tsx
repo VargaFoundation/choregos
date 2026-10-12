@@ -151,7 +151,11 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
     },
     {
       title: "Configure",
-      entries: [section("/integrations", "Integrations", Plug), section("/settings", "Settings", Settings)],
+      entries: [
+        section("/integrations", "Integrations", Plug),
+        section("/members", "Members", Users),
+        section("/settings", "Settings", Settings),
+      ],
     },
   ];
 }

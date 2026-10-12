@@ -1122,6 +1122,9 @@ paths:
     get:
       tags: [admin]
       operationId: listMembers
+      description: The organisation's memberships — to its members only; with `project`, that project's memberships, to the project's members (S30-06).
+      parameters:
+        - { name: project, in: query, required: false, schema: { type: string } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Membership" } } } } }
     post:
@@ -1132,6 +1135,7 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/MembershipUpsert" } } }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Membership" } } } }
+        "422": { description: "`org_admin` is a role of the organisation, not of a project (S30-06)" }
   /orgs/{org}/members/{user_id}:
     parameters:
       - { $ref: "#/components/parameters/Org" }

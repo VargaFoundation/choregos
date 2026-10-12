@@ -36,6 +36,7 @@ import type {
   DoraReport,
   FindingPage,
   MeDto,
+  Membership,
   Memory,
   ProjectPage,
   ReleasePage,
@@ -78,6 +79,16 @@ export const me: MeDto = {
     { org: "acme", role: "org_admin", user_id: "u1", email: "augustin@acme.dev" },
   ],
 };
+
+/** The organisation's memberships: a person may have one for the organisation and one per project. */
+export const memberships: Membership[] = [
+  { org: "acme", role: "org_admin", user_id: "u1", email: "augustin@acme.dev" },
+  { org: "acme", role: "developer", user_id: "u2", email: "lea@acme.dev" },
+  { org: "acme", role: "project_owner", user_id: "u2", email: "lea@acme.dev", project_slug: "billing-api" },
+  { org: "acme", role: "viewer", user_id: "u3", email: "marc@acme.dev" },
+  { org: "acme", role: "developer", user_id: "u3", email: "marc@acme.dev", project_slug: "billing-api" },
+  { org: "acme", role: "release_captain", user_id: "u3", email: "marc@acme.dev", project_slug: "checkout-web" },
+];
 
 export const projects: ProjectPage = {
   items: [
@@ -1336,6 +1347,12 @@ export const platformBackends: AgentBackendInfo[] = [
   { name: "codex", enabled: false, capabilities: ["mcp"], disabled_reason: "conformance below threshold" },
 ];
 
+/** The memberships the API returns: the organisation's, or one project's with `?project=` (S30-06). */
+function membersOf(path: string): Membership[] {
+  const project = new URLSearchParams(path.split("?")[1] ?? "").get("project");
+  return project ? memberships.filter((m) => m.project_slug === project) : memberships;
+}
+
 /** The registry's columns, one line per agent (S30-04). */
 export function agentMetricsList(): AgentMetricsSummary[] {
   return agents.map((agent) =>
@@ -1865,7 +1882,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
     [/^\/orgs$/, [{ slug: "acme", name: "Varga Foundation", role: "org_admin", currency: "EUR" }]],
-    [/^\/orgs\/[^/]+\/members$/, me.memberships],
+    [/^\/orgs\/[^/]+\/members$/, membersOf(path)],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
