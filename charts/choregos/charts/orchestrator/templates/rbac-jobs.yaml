@@ -42,6 +42,21 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
+  {{- if eq .Values.runner.executor "agent_sandbox" }}
+  # The `agent_sandbox` executor (ADR 0016): one SandboxClaim per run, created, read and
+  # deleted; `patch` marks a claim once its run is assigned. `patch` on sandboxes suspends and
+  # resumes one around a human question. The pool and the template are read, never written:
+  # the chart owns them.
+  - apiGroups: ["extensions.agents.x-k8s.io"]
+    resources: ["sandboxclaims"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  - apiGroups: ["extensions.agents.x-k8s.io"]
+    resources: ["sandboxwarmpools", "sandboxtemplates"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["get", "list", "watch", "patch"]
+  {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

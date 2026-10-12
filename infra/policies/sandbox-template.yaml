@@ -1,0 +1,64 @@
+# The non-root rule of `pod-security.yaml`, applied to the pod a SandboxTemplate or a Sandbox
+# DESCRIBES (ADR 0016).
+#
+# The pods the agent-sandbox controller creates are Pods, so the `non-root` rule already judges
+# them at admission. But it judges them late: a template that breaks it is accepted, its warm
+# pool is created, and every pod the controller then tries to create is refused, in a loop, in
+# the controller's log. This policy refuses the template itself, where the mistake is written.
+#
+# A separate ClusterPolicy, not a rule in `choregos-pod-security`: Kyverno refuses a policy
+# whose kinds the cluster does not know, and this one must not take the others down on a
+# cluster without the operator. `bootstrap/agent-sandbox.yaml` (wave 1) installs the CRDs
+# before `bootstrap/policies.yaml` (wave 2) applies this.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: choregos-sandbox-template-security
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: non-root
+      match:
+        any:
+          - resources:
+              kinds:
+                - extensions.agents.x-k8s.io/v1beta1/SandboxTemplate
+                - agents.x-k8s.io/v1beta1/Sandbox
+              namespaces: ["choregos-*", "proj-*"]
+      validate:
+        message: >-
+          the pod of a Choregos sandbox runs non-root, without privilege escalation, under
+          seccomp RuntimeDefault: spec.podTemplate.spec.securityContext.runAsNonRoot,
+          seccompProfile and allowPrivilegeEscalation: false are required
+        pattern:
+          spec:
+            podTemplate:
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: "RuntimeDefault | Localhost"
+                containers:
+                  - securityContext:
+                      allowPrivilegeEscalation: false
+                      =(privileged): false
+                      capabilities:
+                        drop:
+                          - ALL
+    - name: no-hostpath
+      match:
+        any:
+          - resources:
+              kinds:
+                - extensions.agents.x-k8s.io/v1beta1/SandboxTemplate
+                - agents.x-k8s.io/v1beta1/Sandbox
+              namespaces: ["choregos-*", "proj-*"]
+      validate:
+        message: "hostPath is forbidden: a runner does not touch the node"
+        pattern:
+          spec:
+            podTemplate:
+              spec:
+                =(volumes):
+                  - X(hostPath): "null"

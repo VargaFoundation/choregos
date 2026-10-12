@@ -39,7 +39,10 @@ def _accordes() -> dict[str, set[str]]:
     texte = ROLE.read_text(encoding="utf-8")
     debut = texte.index("rules:")
     fin = texte.index("---", debut)
-    regles = yaml.safe_load(texte[debut:fin])["rules"]
+    # Helm control lines (`{{- if ... }}`) are dropped: every rule is read, whichever
+    # executor turns it on.
+    bloc = "\n".join(line for line in texte[debut:fin].splitlines() if not line.strip().startswith("{{"))
+    regles = yaml.safe_load(bloc)["rules"]
     return {ressource: set(regle["verbs"]) for regle in regles for ressource in regle["resources"]}
 
 

@@ -4,3 +4,4 @@ resources:
   - images.yaml
   - pod-security.yaml
   - quotas-runtime.yaml
+  - sandbox-template.yaml

@@ -1,0 +1,31 @@
+# kubernetes-sigs/agent-sandbox — wave 1, an operator before its objects (ADR 0016).
+#
+# Cluster-scoped: four CRDs (`agents.x-k8s.io/v1beta1` Sandbox,
+# `extensions.agents.x-k8s.io/v1beta1` SandboxTemplate, SandboxClaim, SandboxWarmPool), two
+# ClusterRoles and the controller in `agent-sandbox-system`. A tenant of a shared cluster cannot
+# install it; a platform team does, and only where `runner.executor: agent_sandbox` is wanted.
+# A platform that keeps `tekton` or `k8s_job` deletes this file and loses nothing.
+#
+# The version is pinned in `operators/agent-sandbox/kustomization.yaml`, not here: Argo CD
+# renders that directory, which pins the upstream tag and the controller image digest.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agent-sandbox
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/VargaFoundation/choregos-infra.git
+    path: operators/agent-sandbox
+    targetRevision: HEAD
+  destination: { server: https://kubernetes.default.svc, namespace: agent-sandbox-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    # ServerSideApply, like every other operator here: the Sandbox and SandboxTemplate CRDs
+    # carry a full pod template schema each (~75 KB), and a client-side apply copies it whole
+    # into a `last-applied-configuration` annotation.
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
