@@ -521,6 +521,14 @@ twice is one document. `scope` says who uses the base: `org`, `projects` (the li
 console, **knowledge** (top bar) lists the bases; a base's page uploads documents and follows each
 conversion.
 
+An agent version reads a base by naming it: `"knowledge": [{"slug": "architecture"}]` in its spec.
+When a run is prepared, each named base must exist and be served to the run's project — otherwise
+the run does not start (`KnowledgeRefused`). A base served as **files** has its ready documents
+pinned by id and digest; the runner fetches exactly those (`GET /internal/runs/{id}/knowledge`),
+checks the digest (a base changed in between stops the run, exit 51), and lays them read-only under
+`.choregos/knowledge/<slug>/` with an `INDEX.md`, out of the diff. The prompt says where they are
+and asks the agent to cite the document and section it applies.
+
 ## 4. Write the policy
 
 ```yaml

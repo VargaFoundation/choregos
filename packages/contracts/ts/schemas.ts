@@ -449,6 +449,14 @@ export type StageInput = {
     version: number;
     digest: string;
   }>;
+  /** The registry agent's knowledge bases (ADR 0051). `files`: the runner fetches the pinned documents through the internal API, checks the digest and lays them read-only under `.choregos/knowledge/<slug>/`; `index`: the agent searches the base with `knowledge_search`. */
+  knowledge?: Array<{
+    slug: string;
+    name?: string;
+    mode?: "files" | "index";
+    documents?: Array<string>;
+    digest?: string;
+  }>;
 };
 
 /** Runner → orchestrator contract (docs/plan/01 §1.6). The agent writes .choregos/result.json; the runner completes artifacts/evidence/diagnostics. */

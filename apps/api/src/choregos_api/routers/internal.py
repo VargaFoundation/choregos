@@ -488,6 +488,27 @@ async def put_output(
     return to_contract(row)
 
 
+@router.get("/runs/{id}/knowledge", response_model=list[dict[str, Any]], operation_id="getRunKnowledge")
+async def get_knowledge(id: str, session: Db, claims: RunAuth) -> list[dict[str, Any]]:
+    """The pinned documents of the `files` knowledge bases the run's `StageInput` names (ADR 0051).
+
+    Exactly the documents pinned when the run was prepared, and only while the base is still served
+    to the run's project; the runner recomputes the digest before laying them down.
+    """
+    from ..knowledge.serving import KnowledgeRefusedError, deliver
+
+    run, _, project = await _run_and_item(session, id)
+    delivered: list[dict[str, Any]] = []
+    for ref in (run.stage_input or {}).get("knowledge", []):
+        if ref.get("mode", "files") != "files":
+            continue
+        try:
+            delivered.append(await deliver(session, project.org_id, project.slug, ref))
+        except KnowledgeRefusedError as refusal:
+            raise not_found("Knowledge base of the run", str(ref.get("slug"))) from refusal
+    return delivered
+
+
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
 async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
     run, item, project = await _run_and_item(session, id)

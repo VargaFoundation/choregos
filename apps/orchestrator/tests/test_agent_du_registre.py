@@ -244,3 +244,81 @@ async def test_les_skills_de_l_agent_partent_dans_le_stage_input_avec_leur_empre
     assert entree["skills"] == [
         {"slug": "procedure-onboarding", "version": 2, "digest": empreinte_de_skill(fichiers)}
     ], "la dernière version, à défaut d'une version dite"
+
+
+async def _knowledge(setup: Fixture, slug: str, **fields: Any) -> None:
+    """A knowledge base of the project's organisation, with one ready and one failed document."""
+    from choregos_api.db.models import KnowledgeBase, KnowledgeDocument, Project
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        projet = await session.get(Project, setup.project_id)
+        assert projet is not None
+        base = KnowledgeBase(org_id=projet.org_id, slug=slug, name=slug.title(), **fields)
+        session.add(base)
+        await session.flush()
+        for name, status, markdown in (("zoning.pptx", "ready", "# Zoning\n"), ("scan.pdf", "failed", None)):
+            session.add(
+                KnowledgeDocument(
+                    org_id=projet.org_id,
+                    knowledge_base_id=base.id,
+                    filename=name,
+                    title=name,
+                    mime="x",
+                    size_bytes=1,
+                    digest=f"sha256:{slug}-{name}",
+                    markdown=markdown,
+                    status=status,
+                )
+            )
+
+
+async def _reads(slugs: list[str]) -> None:
+    from choregos_api.db.models import AgentVersion
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        version = (await session.execute(select(AgentVersion))).scalar_one()
+        version.spec = {**version.spec, "knowledge": [{"slug": s} for s in slugs]}
+
+
+async def test_the_knowledge_bases_of_the_agent_are_pinned_in_the_stage_input(setup: Fixture) -> None:
+    """S33-02: prepare_stage passes the agent's bases — its ready documents and their digest."""
+    from choregos_contracts import knowledge_digest
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _agent(setup)
+    await _knowledge(setup, "architecture", scope="org", projects=[], groups=[], serving_mode="files")
+    await _knowledge(setup, "big-corpus", scope="org", projects=[], groups=[], serving_mode="index")
+    await _reads(["architecture", "big-corpus"])
+    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    files, index = entree["knowledge"]
+    assert (files["slug"], files["mode"], len(files["documents"])) == ("architecture", "files", 1)
+    assert files["digest"] == knowledge_digest(
+        [{"path": "zoning.md", "title": "zoning.pptx", "filename": "zoning.pptx", "markdown": "# Zoning\n"}]
+    ), "only the ready document, under its file name"
+    assert (index["slug"], index["mode"], index["documents"]) == ("big-corpus", "index", [])
+
+
+@pytest.mark.parametrize(
+    ("fields", "reason"),
+    [
+        ({"scope": "projects", "projects": ["another-project"], "groups": []}, "not served to the project"),
+        ({"scope": "groups", "projects": [], "groups": ["auditors"]}, "not served to the project"),
+        ({"scope": "org", "projects": [], "groups": [], "status": "archived"}, "status `archived`"),
+        (None, "does not exist"),
+    ],
+)
+async def test_a_base_the_project_is_not_served_stops_the_run(
+    setup: Fixture, fields: dict[str, Any] | None, reason: str
+) -> None:
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _agent(setup)
+    if fields is not None:
+        await _knowledge(setup, "architecture", **fields)
+    await _reads(["architecture"])
+    with pytest.raises(ApplicationError, match=reason) as refusal:
+        await prepare_stage(_plan(setup, agent="coordinateur"))
+    assert refusal.value.non_retryable and refusal.value.type == "KnowledgeRefused"

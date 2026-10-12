@@ -1679,6 +1679,38 @@ paths:
       operationId: getRunContext
       responses:
         "200": { description: Context pack, content: { application/json: { schema: { $ref: "#/components/schemas/ContextPack" } } } }
+  /internal/runs/{id}/knowledge:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunKnowledge
+      description: The converted documents of the `files` knowledge bases the run's StageInput pins (ADR 0051); the runner recomputes their digest before laying them read-only.
+      responses:
+        "200":
+          description: One entry per knowledge base
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [slug, digest, documents]
+                  properties:
+                    slug: { type: string }
+                    name: { type: string }
+                    digest: { type: string }
+                    documents:
+                      type: array
+                      items:
+                        type: object
+                        required: [path, title, markdown]
+                        properties:
+                          path: { type: string, description: "relative to `.choregos/knowledge/<slug>/`" }
+                          title: { type: string }
+                          filename: { type: string }
+                          markdown: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/runs/{id}/ticket:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2305,6 +2337,7 @@ components:
         budget: { $ref: "#/components/schemas/AgentBudget" }
         skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
         mcp_servers: { type: array, items: { type: object, required: [connector], properties: { connector: { type: string }, tools: { type: array, items: { type: string } } } } }
+        knowledge: { type: array, description: "the knowledge bases the agent reads (ADR 0051); each must be served to the run's project", items: { type: object, required: [slug], properties: { slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } } } }
     AgentCreate:
       type: object
       required: [slug, display_name]

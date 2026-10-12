@@ -24,6 +24,8 @@ class Exit(IntEnum):
     SKILLS_INVALID = 50
     #: A declared input does not hash to the digest the platform recorded (ADR 0049).
     INPUTS_INVALID = 60
+    #: A knowledge base of the agent was not delivered, or not with the digest the run expects (ADR 0051).
+    KNOWLEDGE_INVALID = 51
 
     @property
     def explanation(self) -> str:
@@ -35,6 +37,7 @@ class Exit(IntEnum):
             Exit.INVALID_RESULT: "invalid result after repair attempts",
             Exit.SKILLS_INVALID: "skill missing, or its digest does not match",
             Exit.INPUTS_INVALID: "an input artifact does not match its digest",
+            Exit.KNOWLEDGE_INVALID: "knowledge base missing, or its digest does not match",
         }[self]
 
 

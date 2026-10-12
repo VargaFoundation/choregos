@@ -24,6 +24,7 @@ from choregos_contracts import (
     Callbacks,
     ContextPack,
     EventType,
+    KnowledgeRef,
     LaunchSpec,
     McpServerRef,
     Permissions,
@@ -264,6 +265,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
             tools=ToolsRef(mcp=_serveurs_mcp(settings)),
             skills=await _skills_de_l_agent(session, bundle, agent),
+            knowledge=await _knowledge_of_agent(session, bundle, agent),
             permissions=Permissions(
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
@@ -491,6 +493,29 @@ async def _skills_de_l_agent(session: Any, bundle: Any, agent: Any) -> list[Skil
             )
         refs.append(SkillRef(slug=demandee.slug, version=ligne.version, digest=ligne.digest))
     return refs
+
+
+async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any) -> list[KnowledgeRef]:
+    """The knowledge bases the agent version reads (ADR 0051), pinned for this run. A base that does
+    not exist, or is not served to this project, stops the run: it would answer without its reference."""
+    if agent is None or not agent.spec.knowledge:
+        return []
+    from choregos_api.knowledge.serving import KnowledgeRefusedError, pin
+    from temporalio.exceptions import ApplicationError
+
+    try:
+        return await pin(
+            session,
+            bundle.project.org_id,
+            bundle.project.slug,
+            [ref.slug for ref in agent.spec.knowledge],
+        )
+    except KnowledgeRefusedError as refusal:
+        raise ApplicationError(
+            f"the agent `{agent.agent.slug}` reads a knowledge base it cannot be served: {refusal}",
+            type="KnowledgeRefused",
+            non_retryable=True,
+        ) from refusal
 
 
 def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:

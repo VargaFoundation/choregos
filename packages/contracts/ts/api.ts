@@ -478,6 +478,10 @@ export type AgentSpec = {
     connector: string;
     tools?: Array<string>;
   }>;
+  /** the knowledge bases the agent reads (ADR 0051); each must be served to the run's project */
+  knowledge?: Array<{
+    slug: string;
+  }>;
 };
 
 export type AgentCreate = {
@@ -1642,6 +1646,18 @@ export interface Operations {
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
   getRunInputContent: { method: "GET"; path: "/internal/runs/{id}/inputs/{name}"; body: never; response: void };
   getRunInputs: { method: "GET"; path: "/internal/runs/{id}/inputs"; body: never; response: Array<RunInputFile> };
+  getRunKnowledge: { method: "GET"; path: "/internal/runs/{id}/knowledge"; body: never; response: Array<{
+  slug: string;
+  name?: string;
+  digest: string;
+  documents: Array<{
+    /** relative to `.choregos/knowledge/<slug>/` */
+    path: string;
+    title: string;
+    filename?: string;
+    markdown: string;
+  }>;
+}> };
   getRunLogs: { method: "GET"; path: "/runs/{id}/logs"; body: never; response: RunLogs };
   getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: Array<{
   slug: string;

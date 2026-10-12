@@ -176,6 +176,34 @@ def empreinte_de_skill(fichiers: dict[str, str]) -> str:
     return "sha256:" + condense.hexdigest()
 
 
+class KnowledgeRef(Strict):
+    """A knowledge base served to the run (ADR 0051).
+
+    `files`: the runner fetches exactly the `documents` named here from
+    `GET /internal/runs/{id}/knowledge`, checks their `digest`, and lays them read-only under
+    `.choregos/knowledge/<slug>/`. `index`: nothing is laid down; the agent searches the base with
+    the sidecar's `knowledge_search` tool.
+    """
+
+    slug: str
+    name: str = ""
+    mode: Literal["files", "index"] = "files"
+    #: The converted documents pinned when the run was prepared (`files` mode).
+    documents: list[str] = Field(default_factory=list)
+    digest: str = ""
+
+
+def knowledge_digest(files: list[dict[str, str]]) -> str:
+    """The digest of a knowledge base as laid down: each file's path and markdown, in order. The API
+    computes it when the run is prepared, the runner again before writing."""
+    import hashlib
+
+    condense = hashlib.sha256()
+    for entry in files:
+        condense.update(entry["path"].encode("utf-8") + b"\0" + entry["markdown"].encode("utf-8") + b"\0")
+    return "sha256:" + condense.hexdigest()
+
+
 class StageInput(Strict):
     """Ce que l'orchestrateur remet au runner (docs/plan/01 §1.5)."""
 
@@ -200,6 +228,8 @@ class StageInput(Strict):
     tools: ToolsRef = Field(default_factory=ToolsRef)
     #: Les skills de l'agent du registre (ADR 0033) ; vide pour un playbook.
     skills: list[SkillRef] = Field(default_factory=list)
+    #: The knowledge bases of the registry agent (ADR 0051); empty for a playbook.
+    knowledge: list[KnowledgeRef] = Field(default_factory=list)
     permissions: Permissions = Field(default_factory=Permissions)
     callbacks: Callbacks
 

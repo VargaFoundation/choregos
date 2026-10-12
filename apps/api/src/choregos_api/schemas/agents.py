@@ -38,6 +38,12 @@ class AgentMcpServer(Dto):
     tools: list[str] = Field(default_factory=list)
 
 
+class AgentKnowledgeRef(Dto):
+    """A knowledge base an agent reads (ADR 0051): by its slug; its documents are read at each run."""
+
+    slug: str = Field(pattern=SLUG)
+
+
 class AgentSpec(Dto):
     """Ce qu'une version d'agent EST. Elle ne se modifie jamais : un changement publie la suivante."""
 
@@ -48,6 +54,8 @@ class AgentSpec(Dto):
     budget: AgentBudget = Field(default_factory=AgentBudget)
     skills: list[AgentSkillRef] = Field(default_factory=list)
     mcp_servers: list[AgentMcpServer] = Field(default_factory=list)
+    #: The knowledge bases the agent reads (ADR 0051), each served to the run's project or the run fails.
+    knowledge: list[AgentKnowledgeRef] = Field(default_factory=list)
 
 
 class AgentCreate(Dto):

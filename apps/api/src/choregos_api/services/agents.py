@@ -21,7 +21,11 @@ from ..schemas import AgentOverrides, AgentSpec
 
 def empreinte(spec: AgentSpec) -> str:
     """L'empreinte d'une version : ce qu'un run enregistre, et ce qu'on compare."""
-    blob = json.dumps(spec.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    contenu = spec.model_dump(mode="json")
+    # Added after versions were published (ADR 0051): absent, it leaves their digest unchanged.
+    if not contenu.get("knowledge"):
+        contenu.pop("knowledge", None)
+    blob = json.dumps(contenu, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
