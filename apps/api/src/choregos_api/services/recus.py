@@ -53,11 +53,30 @@ async def consigner(
     genre: str,
 ) -> int:
     """Un reçu par sortie présente ; rend le nombre de reçus écrits (zéro quand tous existaient)."""
+    return await record_digests(
+        session,
+        org_id=org_id,
+        work_item_id=work_item_id,
+        run_id=run_id,
+        stage=stage,
+        digests={nom: empreinte(valeur) for nom, valeur in sorties.items() if _presente(valeur)},
+        genre=genre,
+    )
+
+
+async def record_digests(
+    session: AsyncSession,
+    *,
+    org_id: str,
+    work_item_id: str,
+    run_id: str,
+    stage: str | None,
+    digests: dict[str, str],
+    genre: str,
+) -> int:
+    """One receipt per output under a digest already computed: a file artifact's sha256 (ADR 0049)."""
     ecrits = 0
-    for nom, valeur in sorties.items():
-        if not _presente(valeur):
-            continue
-        digest = empreinte(valeur)
+    for nom, digest in digests.items():
         deja = (
             await session.execute(
                 select(HandOffReceipt.id).where(

@@ -22,6 +22,8 @@ class Exit(IntEnum):
     INVALID_RESULT = 40
     #: Une skill de l'agent manque, ou n'a pas l'empreinte que le run attend (ADR 0033).
     SKILLS_INVALID = 50
+    #: A declared input does not hash to the digest the platform recorded (ADR 0049).
+    INPUTS_INVALID = 60
 
     @property
     def explanation(self) -> str:
@@ -32,6 +34,7 @@ class Exit(IntEnum):
             Exit.AGENT_UNREACHABLE: "agent backend unreachable",
             Exit.INVALID_RESULT: "invalid result after repair attempts",
             Exit.SKILLS_INVALID: "skill missing, or its digest does not match",
+            Exit.INPUTS_INVALID: "an input artifact does not match its digest",
         }[self]
 
 

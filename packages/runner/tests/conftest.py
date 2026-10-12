@@ -126,6 +126,15 @@ class FakeInternalClient:
     async def fetch_skills(self) -> list[dict[str, Any]]:
         return list(self.skills)
 
+    #: The declared inputs the internal API would list (ADR 0049): name → (entry, bytes served).
+    inputs: dict[str, tuple[dict[str, Any], bytes]]
+
+    async def fetch_inputs(self) -> list[dict[str, Any]]:
+        return [entry for entry, _ in getattr(self, "inputs", {}).values()]
+
+    async def fetch_input_content(self, name: str) -> bytes:
+        return getattr(self, "inputs", {})[name][1]
+
     async def fetch_input(self) -> StageInput:
         return self.stage_input
 

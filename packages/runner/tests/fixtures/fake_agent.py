@@ -8,6 +8,7 @@ ouvre une session, demande des permissions, écrit des fichiers, et produit un
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -156,10 +157,22 @@ def main() -> int:
                     },
                 )
 
+            # `reads`: files the agent opens; their sha256 (or null when absent) go into the result's
+            # `outputs.seen`, so a test can tell what the agent actually found in its workspace.
+            seen = {
+                path: (
+                    "sha256:" + hashlib.sha256((workspace / path).read_bytes()).hexdigest()
+                    if (workspace / path).is_file()
+                    else None
+                )
+                for path in plan.get("reads", [])
+            }
             if "result" in plan:
                 result_path = workspace / ".choregos" / "result.json"
                 result_path.parent.mkdir(parents=True, exist_ok=True)
                 content = plan["result"]
+                if seen and isinstance(content, dict):
+                    content = {**content, "outputs": {**content.get("outputs", {}), "seen": seen}}
                 result_path.write_text(
                     content
                     if isinstance(content, str)

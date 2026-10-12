@@ -273,6 +273,18 @@ class RunEventsBatch(Dto):
     events: list[RunEventIn]
 
 
+class RunInputFile(Dto):
+    """A declared input of a run, as the runner mounts it in `.choregos/inputs/` (ADR 0049)."""
+
+    name: str
+    version: int
+    filename: str
+    type: str
+    media_type: str
+    digest: str
+    size: int
+
+
 class ArtifactRef(Dto):
     url: str
     content_type: str = "application/json"

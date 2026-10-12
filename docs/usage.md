@@ -355,6 +355,15 @@ value written in `outputs` under the same name does not stand for it. The types 
 `gif`, `webp`, `svg`, `mp4`, `webm` and `file`; the validator refuses an unknown type, a type for an
 output `outputs:` does not declare, and a name that cannot be a file name.
 
+Every output is kept as an **artifact** of the ticket, revision by revision:
+`GET /work-items/{id}/artifacts` lists them (type, media type, size, sha256, the run and agent that
+produced each), `GET /work-items/{id}/artifacts/{name}` (or `{name}@{version}`) describes one, and
+`…/content` serves its bytes after checking the digest again — altered content is refused (409).
+A step's declared `inputs:` reach its agent as files too: the runner writes each one in
+`.choregos/inputs/<name>.<ext>` (`deck.pptx`, `profiles.json`, `spec_markdown.md`) after checking
+its digest, and lists them in `.choregos/task.md`. A large report no longer has to fit in the
+prompt; an input whose bytes do not match stops the run.
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated

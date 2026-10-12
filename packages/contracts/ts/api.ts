@@ -1374,6 +1374,21 @@ export type StageInput = S.StageInput;
 
 export type StageResult = S.StageResult;
 
+export type Artifact = S.Artifact;
+
+/** A declared input of a run, as the runner mounts it in `.choregos/inputs/` (ADR 0049). */
+export type RunInputFile = {
+  name: string;
+  version: number;
+  /** The name with its type's extension: `deck.pptx`. */
+  filename: string;
+  type: string;
+  media_type: string;
+  /** sha256 of the bytes */
+  digest: string;
+  size: number;
+};
+
 export type ContextPack = S.ContextPack;
 
 export type Finding = S.Finding;
@@ -1492,6 +1507,8 @@ export interface Operations {
   getRunDiff: { method: "GET"; path: "/runs/{id}/diff"; body: never; response: DiffSummary };
   getRunEvents: { method: "GET"; path: "/runs/{id}/events"; body: never; response: Array<RunEvent> };
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
+  getRunInputContent: { method: "GET"; path: "/internal/runs/{id}/inputs/{name}"; body: never; response: void };
+  getRunInputs: { method: "GET"; path: "/internal/runs/{id}/inputs"; body: never; response: Array<RunInputFile> };
   getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: Array<{
   slug: string;
   version: number;
@@ -1516,6 +1533,8 @@ export interface Operations {
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
+  getWorkItemArtifact: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}"; body: never; response: Artifact };
+  getWorkItemArtifactContent: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}/content"; body: never; response: void };
   getWorkItemHandOffs: { method: "GET"; path: "/work-items/{id}/hand-offs"; body: never; response: Array<HandOff> };
   getWorkItemJourney: { method: "GET"; path: "/work-items/{id}/journey"; body: never; response: WorkItemJourney };
   getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
@@ -1560,6 +1579,7 @@ export interface Operations {
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
+  listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };

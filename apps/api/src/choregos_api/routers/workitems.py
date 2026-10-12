@@ -5,9 +5,10 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from choregos_contracts import Control, EventType, HumanDecision, HumanRequestKind
+from choregos_adapters.storage import ObjectStoreError
+from choregos_contracts import Artifact, Control, EventType, HumanDecision, HumanRequestKind
 from choregos_core import WorkflowEngine, utcnow
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from ..audit import record
@@ -16,6 +17,7 @@ from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..greffons import DemandeDeGeste, controler
 from ..logging import get_logger
+from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import (
     DecisionRequest,
@@ -39,6 +41,14 @@ from ..services import (
     work_item_dto,
     workflow_du_ticket,
     workflow_model,
+)
+from ..services.artifacts import (
+    ArtifactCorruptedError,
+    artifacts_of,
+    filename_of,
+    read_content,
+    revision,
+    to_contract,
 )
 from ..services.recus import passages_du_ticket
 from ..services.routage import valider_les_champs
@@ -169,6 +179,63 @@ async def hand_offs(id: str, session: Db, principal: Me) -> list[HandOff]:
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
     return await passages_du_ticket(session, item)
+
+
+async def _readable(session: Any, principal: Any, id: str) -> WorkItem:
+    item, project = await _load(session, id)
+    _, org_slug = await resolve_project(session, project.id)
+    if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
+        raise forbidden()
+    return item
+
+
+@router.get("/work-items/{id}/artifacts", response_model=list[Artifact], operation_id="listWorkItemArtifacts")
+async def list_artifacts(id: str, session: Db, principal: Me) -> list[Artifact]:
+    """Every revision of every artifact of the work item, by name then version (ADR 0049)."""
+    item = await _readable(session, principal, id)
+    return [to_contract(row) for row in await artifacts_of(session, item.id)]
+
+
+@router.get("/work-items/{id}/artifacts/{ref}", response_model=Artifact, operation_id="getWorkItemArtifact")
+async def get_artifact(id: str, ref: str, session: Db, principal: Me) -> Artifact:
+    """One revision: `name` for the latest, `name@version` for a given one."""
+    item = await _readable(session, principal, id)
+    return to_contract(await revision(session, item.id, ref))
+
+
+@router.get("/work-items/{id}/artifacts/{ref}/content", operation_id="getWorkItemArtifactContent")
+async def get_artifact_content(
+    id: str,
+    ref: str,
+    session: Db,
+    principal: Me,
+    download: Annotated[bool, Query(description="attachment rather than inline")] = False,
+) -> Response:
+    """The bytes of a revision, served with its media type once their digest is checked again:
+    content altered behind the platform is refused (409), never served."""
+    item = await _readable(session, principal, id)
+    row = await revision(session, item.id, ref)
+    try:
+        data = await read_content(object_store(), row)
+    except ArtifactCorruptedError as exc:
+        raise conflict(str(exc)) from exc
+    except ObjectStoreError as exc:
+        raise conflict(
+            f"artifact `{row.name}` v{row.version} cannot be read from the object store: {exc}"
+        ) from exc
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=data,
+        media_type=row.media_type,
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename_of(row)}"',
+            "ETag": f'"{row.digest}"',
+            "X-Choregos-Digest": row.digest,
+            "X-Content-Type-Options": "nosniff",
+            # An HTML or SVG artifact is an agent's content: it must never run as the console's page.
+            "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'",
+        },
+    )
 
 
 @router.get("/work-items/{id}/journey", response_model=WorkItemJourney, operation_id="getWorkItemJourney")
