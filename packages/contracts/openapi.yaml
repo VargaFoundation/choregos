@@ -1281,7 +1281,7 @@ paths:
     post:
       tags: [agents]
       operationId: importSkill
-      description: A zip archive; zip-slip, symbolic links, more than 64 files or 512 KiB are refused. From a repository, see `importSkillsFromGit`.
+      description: A zip archive; zip-slip, symbolic links, more than 256 files or 5 MiB are refused; the gate assesses each version (ADR 0050). From a repository, see `importSkillsFromGit`.
       requestBody:
         required: true
         content: { application/zip: { schema: { type: string, format: binary } } }
@@ -1472,6 +1472,20 @@ paths:
       description: Converts the document again (after a failure, or a converter upgrade). `agent:manage`.
       responses:
         "202": { description: Accepted for conversion, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/skills/{slug}/versions/{version}/approve:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [agents]
+      operationId: approveSkillVersion
+      description: Approves a high-risk version waiting for review (ADR 0050); `agent:manage`, and not by the person who imported it (403). Audited as `skill.approve`.
+      responses:
+        "200": { description: Approved, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/skills/{slug}/update:
     parameters:
@@ -2559,6 +2573,21 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         files: { type: [object, "null"], additionalProperties: { type: string } }
         source: { oneOf: [{ $ref: "#/components/schemas/SkillSource" }, { type: "null" }] }
+        risk: { type: [string, "null"], enum: [low, medium, high, null], description: "the gate's tier; null before the gate existed" }
+        review_status: { type: string, enum: [approved, pending_review], description: "a high-risk version waits for an administrator who is not its importer; until then no agent pins it and no run receives it" }
+        findings: { type: array, items: { $ref: "#/components/schemas/SkillFinding" } }
+        reviewed_by: { type: [string, "null"] }
+        reviewed_at: { type: [string, "null"], format: date-time }
+    SkillFinding:
+      type: object
+      description: What the gate found in a version (ADR 0050).
+      required: [code, severity, detail]
+      properties:
+        code: { type: string, description: "script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open" }
+        severity: { type: string, enum: [info, warning, critical] }
+        detail: { type: string }
+        file: { type: [string, "null"] }
+        line: { type: [integer, "null"] }
     SkillSources:
       type: object
       required: [sources]
@@ -2592,6 +2621,8 @@ components:
         licence: { type: [string, "null"] }
         problem: { type: [string, "null"], description: why it cannot be imported }
         existing_version: { type: [integer, "null"], description: the latest version of the library's skill of that name }
+        risk: { type: [string, "null"], enum: [low, medium, high, null], description: "the gate's tier; null before the gate existed" }
+        findings: { type: array, items: { $ref: "#/components/schemas/SkillFinding" } }
     SkillGitPreview:
       type: object
       required: [repo, ref, sha, path, allowed, skills]
@@ -2627,6 +2658,8 @@ components:
         latest_version: { type: integer }
         used_by: { type: array, items: { type: string } }
         versions: { type: [array, "null"], items: { $ref: "#/components/schemas/SkillVersion" } }
+        risk: { type: [string, "null"], enum: [low, medium, high, null], description: "the gate's tier of the latest version; null before the gate existed" }
+        review_status: { type: string, enum: [approved, pending_review] }
     KnowledgeBaseCreate:
       type: object
       required: [slug, name]

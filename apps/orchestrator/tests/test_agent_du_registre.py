@@ -322,3 +322,49 @@ async def test_a_base_the_project_is_not_served_stops_the_run(
     with pytest.raises(ApplicationError, match=reason) as refusal:
         await prepare_stage(_plan(setup, agent="coordinateur"))
     assert refusal.value.non_retryable and refusal.value.type == "KnowledgeRefused"
+
+
+async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending_review(
+    setup: Fixture,
+) -> None:
+    """S32-06: a high-risk version waits for a second reviewer; unpinned, the run reads the latest
+    APPROVED one; pinned to the pending one, the run does not start."""
+    from choregos_api.db.models import AgentVersion, Project, Skill, SkillVersion
+    from choregos_api.db.session import session_scope
+    from choregos_contracts import empreinte_de_skill
+    from choregos_orchestrator.activities.stage import prepare_stage
+    from sqlalchemy import select
+    from temporalio.exceptions import ApplicationError
+
+    fichiers = {"SKILL.md": "---\nname: fill-forms\ndescription: x\n---\n"}
+    await _agent(setup)
+    async with session_scope() as session:
+        projet = await session.get(Project, setup.project_id)
+        assert projet is not None
+        skill = Skill(org_id=projet.org_id, slug="fill-forms", status="active")
+        session.add(skill)
+        await session.flush()
+        for version, etat in ((1, "approved"), (2, "pending_review")):
+            session.add(
+                SkillVersion(
+                    skill_id=skill.id,
+                    org_id=projet.org_id,
+                    version=version,
+                    files=fichiers,
+                    digest=empreinte_de_skill(fichiers),
+                    review_status=etat,
+                )
+            )
+        version_de_l_agent = (await session.execute(select(AgentVersion))).scalar_one()
+        version_de_l_agent.spec = {**version_de_l_agent.spec, "skills": [{"slug": "fill-forms"}]}
+    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    assert [ref["version"] for ref in entree["skills"]] == [1]
+
+    async with session_scope() as session:
+        version_de_l_agent = (await session.execute(select(AgentVersion))).scalar_one()
+        version_de_l_agent.spec = {
+            **version_de_l_agent.spec,
+            "skills": [{"slug": "fill-forms", "version": 2}],
+        }
+    with pytest.raises(ApplicationError, match="second reviewer"):
+        await prepare_stage(_plan(setup, agent="coordinateur", attempt=2))

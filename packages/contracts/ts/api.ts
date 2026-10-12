@@ -653,6 +653,23 @@ export type SkillVersion = {
     [key: string]: string;
   } | null;
   source?: SkillSource | null;
+  /** the gate's tier; null before the gate existed */
+  risk?: "low" | "medium" | "high" | null;
+  /** a high-risk version waits for an administrator who is not its importer; until then no agent pins it and no run receives it */
+  review_status?: "approved" | "pending_review";
+  findings?: Array<SkillFinding>;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+};
+
+/** What the gate found in a version (ADR 0050). */
+export type SkillFinding = {
+  /** script, executable, outbound_url, credential, mcp_reference, prompt_injection, hidden_unicode, obfuscated, pipe_to_shell, licence_missing, licence_not_open */
+  code: string;
+  severity: "info" | "warning" | "critical";
+  detail: string;
+  file?: string | null;
+  line?: number | null;
 };
 
 export type SkillSources = {
@@ -689,6 +706,9 @@ export type SkillCandidate = {
   problem?: string | null;
   /** the latest version of the library's skill of that name */
   existing_version?: number | null;
+  /** the gate's tier; null before the gate existed */
+  risk?: "low" | "medium" | "high" | null;
+  findings?: Array<SkillFinding>;
 };
 
 export type SkillGitPreview = {
@@ -722,6 +742,9 @@ export type Skill = {
   latest_version: number;
   used_by?: Array<string>;
   versions?: Array<SkillVersion> | null;
+  /** the gate's tier of the latest version; null before the gate existed */
+  risk?: "low" | "medium" | "high" | null;
+  review_status?: "approved" | "pending_review";
 };
 
 export type KnowledgeBaseCreate = {
@@ -1613,6 +1636,7 @@ export interface Operations {
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
+  approveSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions/{version}/approve"; body: never; response: SkillVersion };
   argocdWebhook: { method: "POST"; path: "/webhooks/argocd"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };

@@ -7,8 +7,8 @@ Ce qui entre est vérifié ICI, une fois, avant d'être une version :
   la bibliothèque se contrediraient — et une `description` ;
 - **aucune permission déclarée** : un champ `allowed-tools` est refusé. Ce qu'un agent peut appeler
   se décide par sa version et son projet, jamais par un fichier qu'il lit ;
-- une archive ne sort pas de son dossier (zip-slip), ne porte pas de lien symbolique, tient en 64
-  fichiers et 512 Kio, et ne contient que du texte.
+- une archive ne sort pas de son dossier (zip-slip), ne porte pas de lien symbolique, tient en 256
+  fichiers et 5 Mio (S32-06), et ne contient que du texte.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from dataclasses import dataclass
 import yaml
 from choregos_contracts import empreinte_de_skill
 
-MAX_FICHIERS = 64
-MAX_OCTETS = 512 * 1024
+MAX_FICHIERS = 256
+MAX_OCTETS = 5 * 1024 * 1024
 NOM = re.compile(r"^[a-z][a-z0-9-]{1,62}$")
 
 
@@ -50,6 +50,12 @@ def chemin_sur(chemin: str) -> str:
 
 def lire_le_zip(contenu: bytes) -> dict[str, str]:
     """Les fichiers d'une archive, vérifiés ; un dossier racine commun est retiré."""
+    return read_zip(contenu)[0]
+
+
+def read_zip(contenu: bytes) -> tuple[dict[str, str], list[str]]:
+    """The files of an archive, checked, and those carrying an executable bit (the gate reads them);
+    a common root folder is dropped."""
     try:
         archive = zipfile.ZipFile(io.BytesIO(contenu))
     except zipfile.BadZipFile as erreur:
@@ -61,6 +67,7 @@ def lire_le_zip(contenu: bytes) -> dict[str, str]:
         if sum(info.file_size for info in entrees) > MAX_OCTETS:
             raise SkillRefusee(f"more than {MAX_OCTETS // 1024} KiB once uncompressed")
         fichiers: dict[str, str] = {}
+        executables: set[str] = set()
         lus = 0
         for info in entrees:
             if stat.S_ISLNK(info.external_attr >> 16):
@@ -74,11 +81,14 @@ def lire_le_zip(contenu: bytes) -> dict[str, str]:
                 fichiers[chemin] = donnees.decode("utf-8")
             except UnicodeDecodeError as erreur:
                 raise SkillRefusee(f"`{chemin}` is not UTF-8 text") from erreur
+            if (info.external_attr >> 16) & 0o111:
+                executables.add(chemin)
     racines = {chemin.split("/", 1)[0] for chemin in fichiers}
     if len(racines) == 1 and "SKILL.md" not in fichiers and all("/" in chemin for chemin in fichiers):
         (racine,) = racines
         fichiers = {chemin[len(racine) + 1 :]: texte for chemin, texte in fichiers.items()}
-    return fichiers
+        executables = {chemin[len(racine) + 1 :] for chemin in executables}
+    return fichiers, sorted(executables)
 
 
 def entete(skill_md: str) -> dict[str, object]:

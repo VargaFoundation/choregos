@@ -182,6 +182,16 @@ class SkillSourceDto(Dto):
     licence: str | None = None
 
 
+class SkillFinding(Dto):
+    """What the gate found in a version (S32-06, ADR 0050)."""
+
+    code: str
+    severity: Literal["info", "warning", "critical"]
+    detail: str
+    file: str | None = None
+    line: int | None = None
+
+
 class SkillVersionDto(Dto):
     version: int
     digest: str
@@ -190,6 +200,13 @@ class SkillVersionDto(Dto):
     #: Rendus par la lecture d'UNE version ; la liste n'en porte pas.
     files: dict[str, str] | None = None
     source: SkillSourceDto | None = None
+    #: `low`, `medium`, `high`; `None` before the gate existed.
+    risk: Literal["low", "medium", "high"] | None = None
+    #: `approved`, or `pending_review` until an administrator who is not the importer approves it.
+    review_status: Literal["approved", "pending_review"] = "approved"
+    findings: list[SkillFinding] = Field(default_factory=list)
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
 
 
 class SkillSources(Dto):
@@ -231,6 +248,8 @@ class SkillCandidate(Dto):
     problem: str | None = None
     #: The version of the library's skill of the same name, if there is one.
     existing_version: int | None = None
+    risk: Literal["low", "medium", "high"] | None = None
+    findings: list[SkillFinding] = Field(default_factory=list)
 
 
 class SkillGitPreview(Dto):
@@ -270,6 +289,9 @@ class SkillDto(Dto):
     #: Les agents dont une version porte la skill : `agent@version`.
     used_by: list[str] = Field(default_factory=list)
     versions: list[SkillVersionDto] | None = None
+    #: The gate of the latest version.
+    risk: Literal["low", "medium", "high"] | None = None
+    review_status: Literal["approved", "pending_review"] = "approved"
 
 
 class AgentProjectMetrics(Dto):

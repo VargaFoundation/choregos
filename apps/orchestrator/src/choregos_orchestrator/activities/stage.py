@@ -481,9 +481,27 @@ async def _skills_de_l_agent(session: Any, bundle: Any, agent: Any) -> list[Skil
         )
         if demandee.version is not None:
             requete = requete.where(SkillVersion.version == demandee.version)
+        else:
+            # Unpinned: the latest APPROVED version — never one waiting for its second reviewer
+            # (S32-06, ADR 0050). An activity, not workflow code: no replay concern.
+            requete = requete.where(SkillVersion.review_status == "approved")
         ligne = (
             await session.execute(requete.order_by(SkillVersion.version.desc()).limit(1))
         ).scalar_one_or_none()
+        if ligne is not None and ligne.review_status != "approved":
+            raise ApplicationError(
+                f"the agent `{agent.agent.slug}` pins the skill `{demandee.slug}` v{ligne.version}, "
+                "which is high risk and waits for a second reviewer",
+                type="SkillPendingReview",
+                non_retryable=True,
+            )
+        if ligne is None and demandee.version is None and await _skill_exists(session, bundle, demandee.slug):
+            raise ApplicationError(
+                f"the agent `{agent.agent.slug}` carries the skill `{demandee.slug}`, "
+                "which has no approved version yet",
+                type="SkillPendingReview",
+                non_retryable=True,
+            )
         if ligne is None:
             raise ApplicationError(
                 f"the agent `{agent.agent.slug}` carries the skill `{demandee.slug}`, "
@@ -516,6 +534,15 @@ async def _knowledge_of_agent(session: Any, bundle: Any, agent: Any) -> list[Kno
             type="KnowledgeRefused",
             non_retryable=True,
         ) from refusal
+
+
+async def _skill_exists(session: Any, bundle: Any, slug: str) -> bool:
+    from choregos_api.db.models import Skill
+
+    trouvee = await session.execute(
+        select(Skill.id).where(Skill.org_id == bundle.project.org_id, Skill.slug == slug)
+    )
+    return trouvee.first() is not None
 
 
 def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:

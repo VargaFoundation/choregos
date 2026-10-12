@@ -147,6 +147,10 @@ async def test_the_preview_resolves_a_branch_to_its_commit_and_lists_each_skill(
     assert by_path["skills/onboarding"]["problem"] is None
     assert by_path["skills/onboarding"]["files"] == 3
     assert by_path["skills/onboarding"]["licence"] == "Apache-2.0"
+    # The gate, before anything is written (S32-06): references are medium, a script is high.
+    assert by_path["skills/onboarding"]["risk"] == "medium"
+    assert by_path["skills/pdf"]["risk"] == "high"
+    assert "script" in {f["code"] for f in by_path["skills/pdf"]["findings"]}
     assert "declares no permission" in by_path["skills/greedy"]["problem"]
     assert "not UTF-8" in by_path["skills/fonts"]["problem"]
     assert (await client.get("/api/v1/orgs/varga/skills")).json() == [], "a preview writes nothing"

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Glossaire } from "@/components/glossaire";
+import { GitImport, RiskBadge } from "@/components/skills/gate";
 import { Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -25,7 +26,10 @@ export default function SkillsPage() {
     setErreur(null);
     try {
       const skill = await api.importSkill(org, archive);
-      setFait(`${skill.slug} v${skill.latest_version} published`);
+      setFait(
+        `${skill.slug} v${skill.latest_version} published` +
+          (skill.review_status === "pending_review" ? " — high risk: it waits for a second reviewer" : ""),
+      );
       await client.invalidateQueries({ queryKey: ["skills", org] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "import refused");
@@ -53,7 +57,7 @@ export default function SkillsPage() {
         ) : !skills.data ? (
           <p className="text-sm text-ink-muted">Reading the library…</p>
         ) : skills.data.length === 0 ? (
-          <Empty title="No skill yet">Import a zip below.</Empty>
+          <Empty title="No skill yet">Import a zip or a repository below.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="bibliotheque">
@@ -61,6 +65,7 @@ export default function SkillsPage() {
                 <tr>
                   <th className="py-1 font-normal">Skill</th>
                   <th className="py-1 font-normal">Version</th>
+                  <th className="py-1 font-normal">Gate</th>
                   <th className="py-1 font-normal">Used by</th>
                 </tr>
               </thead>
@@ -74,6 +79,9 @@ export default function SkillsPage() {
                       {skill.description && <p className="text-xs text-ink-muted">{skill.description}</p>}
                     </td>
                     <td>v{skill.latest_version}</td>
+                    <td>
+                      <RiskBadge risk={skill.risk} reviewStatus={skill.review_status} />
+                    </td>
                     <td className="text-xs">
                       {(skill.used_by ?? []).length === 0
                         ? "—"
@@ -90,10 +98,15 @@ export default function SkillsPage() {
           </div>
         )}
       </Card>
+      <Card title="Import from a repository">
+        <GitImport org={org} onImported={() => void client.invalidateQueries({ queryKey: ["skills", org] })} />
+      </Card>
       <Card title="Import a skill">
         <div className="space-y-2 text-sm">
           <p className="text-ink-muted">
-            A zip of the folder (at most 64 files, 512 KiB). The same name publishes its next version.
+            A zip of the folder (at most 256 files, 5 MiB). The same name publishes its next version. Each version is
+            assessed: a script, an executable file, an outbound URL, a credential or an MCP reference makes it high
+            risk, and it waits for a second administrator before an agent may carry it.
           </p>
           <label className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-ink-muted">Archive</span>

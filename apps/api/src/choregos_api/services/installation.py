@@ -24,6 +24,7 @@ from ..rbac import SYSTEM
 from ..schemas.agents import AgentCreate
 from .agents import empreinte as empreinte_de_l_agent
 from .agents import erreurs_d_une_version
+from .skill_gate import platform_columns
 from .skills import SkillRefusee, empreinte, valider
 
 logger = get_logger("choregos.gabarits")
@@ -76,6 +77,7 @@ async def installer_skills_et_agents(
                 files=dict(fichiers),
                 digest=empreinte(fichiers),
                 created_by=auteur,
+                **platform_columns(fichiers),
             )
         )
         await record(session, SYSTEM, "skill.publish", org_id=org_id, target_type="skill",

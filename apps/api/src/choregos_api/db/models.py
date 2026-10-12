@@ -735,7 +735,7 @@ class Skill(Base, PkMixin, TimestampMixin):
 
 
 class SkillVersion(Base, PkMixin, TimestampMixin):
-    """Les fichiers d'une version de skill — 64 au plus, 512 Kio en tout — et leur empreinte, que le
+    """Les fichiers d'une version de skill — 256 au plus, 5 Mio en tout — et leur empreinte, que le
     runner vérifie avant de les poser."""
 
     __tablename__ = "skill_versions"
@@ -750,6 +750,16 @@ class SkillVersion(Base, PkMixin, TimestampMixin):
     #: Where the version comes from when it was imported from git (S32-05): `repo`, `sha`, `path`,
     #: `licence`. `None` for a zip, the console or a template.
     source: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The supply-chain gate (S32-06, ADR 0050): `low`, `medium` or `high`; `None` for a version
+    #: published before the gate existed.
+    risk: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    #: What the static scan and the licence check found: `{code, severity, detail, file, line}`.
+    findings: Mapped[list[Any] | None] = mapped_column(Json, nullable=True)
+    #: `approved`, or `pending_review` for a high-risk version until an administrator who is not its
+    #: importer approves it. A pending version is pinned by no agent and reaches no run.
+    review_status: Mapped[str] = mapped_column(String(16), default="approved", server_default="approved")
+    reviewed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AgentCredential(Base, PkMixin, TimestampMixin):
