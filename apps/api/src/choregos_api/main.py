@@ -21,7 +21,7 @@ from .adaptateurs import brancher_memoire_lexicale
 from .amorcage import amorcer
 from .config import get_settings
 from .db.session import create_all, dispose_engine
-from .errors import install_error_handlers
+from .errors import install_error_handlers, internal_error
 from .events import RelaisPostgres
 from .logging import bind, clear, configure_logging, get_logger
 from .metriques import boucle_de_rafraichissement, exposer, requetes_http
@@ -232,12 +232,15 @@ def create_app() -> FastAPI:
         # Un identifiant par requête, repris de l'entrée s'il y en a un (ingress, client),
         # rendu en réponse : c'est ce qui relie un journal de l'API à un journal du front.
         request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
+        request.state.request_id = request_id
         bind(path=request.url.path, method=request.method, request_id=request_id)
         try:
             response = await call_next(request)
         except Exception:
-            logger.exception("erreur non gérée", path=request.url.path)
-            raise
+            # Logged here, with the request id; answered as problem+json carrying the same id
+            # (S26-02) — Starlette answered a plain-text "Internal Server Error".
+            logger.exception("unhandled error", path=request.url.path)
+            response = internal_error(request, request_id)
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         response.headers["X-Response-Time-Ms"] = str(duration_ms)
         response.headers["X-Request-Id"] = request_id

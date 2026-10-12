@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from choregos_core import ChoregosError, ValidationError
@@ -78,7 +79,34 @@ def upstream(service: str, detail: str, retry_after: int | None = None) -> ApiEr
     )
 
 
+def correlation_id(request: Request) -> str:
+    """The id that ties an answer to its log lines: the one the logging middleware set, or the caller's."""
+    known = getattr(request.state, "request_id", None) or request.headers.get("x-request-id")
+    return str(known or uuid.uuid4().hex[:16])
+
+
+def internal_error(request: Request, correlation: str) -> JSONResponse:
+    """An unhandled error, as problem+json (S26-02): no stack trace, no exception message — they may
+    carry secrets or tenant data — but the correlation id that finds them in the logs."""
+    problem = ApiError(
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "Internal server error",
+        f"an unexpected error occurred; quote the correlation id {correlation} to the operators",
+        type_="https://choregos.dev/problems/internal",
+    ).to_problem(str(request.url.path))
+    problem["correlation_id"] = correlation
+    return JSONResponse(
+        problem, status_code=500, media_type=PROBLEM_JSON, headers={"X-Request-Id": correlation}
+    )
+
+
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+        # Last resort, for what fails outside the logging middleware (which answers itself).
+        # Starlette still re-raises afterwards, so the server logs the traceback.
+        return internal_error(request, correlation_id(request))
+
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
         headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
