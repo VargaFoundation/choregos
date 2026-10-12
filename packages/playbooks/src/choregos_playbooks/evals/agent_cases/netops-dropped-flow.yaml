@@ -1,0 +1,42 @@
+agent: netops
+description: >
+  From a recorded Hubble trace, the netops agent explains why `frontend` cannot reach `api` on 8080/TCP in
+  `shop` — the policy `api-ingress` selects `api` and admits only `gateway` — and proposes the fix as code,
+  with its risk and its rollback, without applying anything.
+output: netops_report_markdown
+task: >
+  In namespace `shop`, the `frontend` pods time out when they call the `api` service on port 8080.
+  Explain why and propose a fix.
+#: What the agent's tools return on the fakes: the recorded trace and the policies of `shop`.
+evidence:
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows,
+      arguments: { namespace: shop, verdict: DROPPED } }
+  - { tool: cilium__list_network_policies, kind: network_policy, operation: list_network_policies,
+      arguments: { namespace: shop } }
+instructions_must_contain:
+  - "never write directly"
+  - "cilium__get_flows"
+  - "drop_reason"
+  - "denies by default"
+  - "netops_report_markdown"
+  - "## Findings"
+  - "## Proposed change"
+  - "## Risk"
+  - "## Rollback"
+#: Facts the evidence supports — each one is checked against the evidence by the tests.
+answer_must_contain:
+  - "frontend"
+  - "8080"
+  - "POLICY_DENIED"
+  - "api-ingress"
+  - "gateway"
+  - "fromEndpoints"
+answer_must_not_contain:
+  - "kubectl apply"
+  - "kubectl edit"
+  - "fromEntities"
+answer_sections: ["## Findings", "## Proposed change", "## Risk", "## Rollback"]
+min_score: 1.0
+#: A reference answer, written from the evidence: it proves the scorer, it is not what a model is graded against.
+reference_answer: |
+  {"netops_report_markdown": "## Findings\n\nThree flows from `frontend-7d9c6b5f4-x2x9q` (shop, `app=frontend`) to `api-5f8d7c9b6-k7p2m` on 8080/TCP were DROPPED at INGRESS with `drop_reason` POLICY_DENIED (09:14:03, 09:14:04, 09:14:06). The CiliumNetworkPolicy `api-ingress` selects `app=api`; once a policy selects an endpoint, Cilium denies whatever it does not allow, and `api-ingress` admits only `app=gateway` on 8080/TCP. The flows from `gateway` to `api:8080` are FORWARDED.\n\n## Proposed change\n\nIn the GitOps repository, `cilium/shop/api-ingress.yaml`, add `frontend` as a peer on 8080/TCP only:\n\n```yaml\ningress:\n  - fromEndpoints:\n      - matchLabels: {app: gateway}\n      - matchLabels: {app: frontend}\n    toPorts:\n      - ports: [{port: \"8080\", protocol: TCP}]\n```\n\n## Risk\n\nEvery pod labelled `app=frontend` in `shop` can now reach `api` on 8080. No other port or peer is opened.\n\n## Rollback\n\nRevert the pull request; Argo CD restores the previous `api-ingress` and `frontend` is dropped again.\n"}
