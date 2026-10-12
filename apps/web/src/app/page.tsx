@@ -84,7 +84,7 @@ export default function ProjectsPage() {
                   value={eur(project.stats?.cost_month_eur)}
                   label={project.stats?.budget_month_eur ? `of ${eur(project.stats.budget_month_eur)}` : "Cost this month"}
                 />
-                <Stat value={percent(project.stats?.first_pass_merge_rate)} label="Prs on first pass" />
+                <Stat value={percent(project.stats?.first_pass_merge_rate)} label="PRs on first pass" />
                 {hasReleaseTrain(project) && (
                   <Stat value={project.stats?.trains_pending ?? 0} label="Trains in flight" />
                 )}

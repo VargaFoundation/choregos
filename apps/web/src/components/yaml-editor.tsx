@@ -67,6 +67,9 @@ export function YamlEditor({
           yaml(),
           syntaxHighlighting(SURLIGNAGE),
           THEME,
+          // In mono (ADR 0048) a long line no longer fits: it wraps, so the scroller never scrolls
+          // sideways — a sideways region that holds no focusable element fails axe (read-only view).
+          EditorView.lineWrapping,
           // Pas d'`indentWithTab` : Tab doit sortir de l'éditeur, sinon le clavier y reste piégé.
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorState.tabSize.of(2),

@@ -11,7 +11,7 @@ const fond = (page: import("@playwright/test").Page) =>
 test("sombre par défaut, en Geist, le monospace gardé pour le code", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  // slateDark 1 : un quasi-noir froid, plus le #0A0A0A du design system.
+  // slateDark 1 : un quasi-noir froid, plus le #0A0A0A de l'ancien design system.
   expect(await fond(page)).toBe("rgb(17, 17, 19)");
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/Geist/);
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).not.toMatch(/JetBrains/);

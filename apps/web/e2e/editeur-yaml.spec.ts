@@ -57,8 +57,8 @@ test("à largeur lg, la validation se tient à côté de l'éditeur, pas dessous
 test("l'éditeur de la politique d'un projet se rend aussi, sous la même CSP", async ({ page }) => {
   const bilan = await surveiller(page);
   await page.goto("/p/billing-api/settings");
-  await expect(page.getByLabel("policy YAML")).toBeVisible();
-  await expect(page.getByLabel("policy YAML")).toContainText("per_ticket_usd");
+  await expect(page.getByLabel("Policy YAML")).toBeVisible();
+  await expect(page.getByLabel("Policy YAML")).toContainText("per_ticket_usd");
   expect(await bilan()).toEqual({ violations: [], dehors: [] });
 });
 
@@ -69,14 +69,14 @@ test("le texte tapé dans l'onglet YAML survit au passage par la carte, et se pu
   await page.keyboard.press("Control+End");
   await page.keyboard.type("# kept across tabs");
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
-  await page.getByRole("link", { name: "map", exact: true }).click();
+  await page.getByRole("link", { name: "Map", exact: true }).click();
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
   await page.getByRole("link", { name: "YAML", exact: true }).click();
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# kept across tabs");
   // Un seul bouton de publication, celui de la barre du brouillon.
-  await expect(page.getByRole("button", { name: /^publish/ })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "publish v2" })).toBeEnabled();
-  await page.getByRole("button", { name: "publish v2" }).click();
+  await expect(page.getByRole("button", { name: /^Publish/ })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Publish v2" })).toBeEnabled();
+  await page.getByRole("button", { name: "Publish v2" }).click();
   await expect(page.getByText(/published — running items finish on their version/)).toBeVisible();
 });
 
@@ -88,12 +88,12 @@ test("un texte invalide se souligne dans la marge et interdit de publier", async
   await page.keyboard.type("kind: Workflow");
   await expect(page.getByTestId("validation-yaml")).toContainText("a workflow declares its states");
   await expect(page.getByTestId("yaml-editor").locator(".cm-lint-marker-error")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "publish v2" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Publish v2" })).toBeDisabled();
   // Cliquer la ligne d'une erreur ramène le curseur dans l'éditeur, à cette ligne.
-  await page.getByTestId("validation-yaml").getByRole("button", { name: "line 1" }).click();
+  await page.getByTestId("validation-yaml").getByRole("button", { name: "Line 1" }).click();
   await expect(page.getByTestId("yaml-editor").locator(".cm-editor.cm-focused")).toHaveCount(1);
   // La carte garde la dernière version valide, et le dit.
-  await page.getByRole("link", { name: "map", exact: true }).click();
+  await page.getByRole("link", { name: "Map", exact: true }).click();
   await expect(page.getByTestId("texte-illisible")).toBeVisible();
 });
 
@@ -104,15 +104,15 @@ test("un brouillon survit à un détour par une autre page de la console (S23-06
   await page.keyboard.type("# still here");
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
   // Une autre page du projet démonte le brouillon : avant, il partait sans un mot.
-  await page.getByRole("link", { name: "board", exact: true }).click();
+  await page.getByRole("link", { name: "Board", exact: true }).click();
   await expect(page).toHaveURL(/\/board$/);
   await page.goBack();
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet — kept from your last visit");
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# still here");
-  await expect(page.getByRole("button", { name: "publish v2" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Publish v2" })).toBeEnabled();
   // Abandonner l'efface pour de bon.
-  await page.getByRole("button", { name: "discard" }).click();
-  await page.getByRole("button", { name: "discard my changes" }).click();
+  await page.getByRole("button", { name: "Discard" }).click();
+  await page.getByRole("button", { name: "Discard my changes" }).click();
   await expect(page.getByTestId("brouillon")).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).not.toContainText("# still here");
@@ -120,14 +120,14 @@ test("un brouillon survit à un détour par une autre page de la console (S23-06
 
 test("un nouveau workflow ne prend pas le nom d'un workflow qui existe (S23-06)", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/new");
-  const nom = page.getByLabel("name");
+  const nom = page.getByLabel("Name");
   await nom.fill("default-simple");
-  await expect(page.getByText("a workflow named default-simple already exists")).toBeVisible();
-  await expect(page.getByRole("button", { name: "publish default-simple" })).toBeDisabled();
-  await expect(page.getByRole("link", { name: "open default-simple" })).toHaveAttribute(
+  await expect(page.getByText("A workflow named default-simple already exists")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish default-simple" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Open default-simple" })).toHaveAttribute(
     "href",
     "/p/billing-api/workflows/default-simple",
   );
   await nom.fill("offboarding");
-  await expect(page.getByRole("button", { name: "publish offboarding" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Publish offboarding" })).toBeEnabled();
 });

@@ -55,7 +55,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
       if (action === "depart") await api.departTrain(slug, env);
       if (action === "freeze") {
         if (!reason.trim()) {
-          setError("a reason for the freeze is required");
+          setError("A reason for the freeze is required");
           return;
         }
         await api.freezeTrain(slug, env, reason);

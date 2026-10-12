@@ -176,7 +176,11 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
     <tr className="border-t border-line">
       <td className="py-2">
         <code>{operation.name}</code>
-        {operation.description && <p className="text-xs text-ink-muted">{operation.description}</p>}
+        {operation.description && (
+          <p className="text-xs text-ink-muted" data-donnee>
+            {operation.description}
+          </p>
+        )}
         {erreur && <ErrorNote>{erreur}</ErrorNote>}
       </td>
       <td>

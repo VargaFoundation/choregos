@@ -72,7 +72,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           <Stat value={actifs} label="Active tickets" tone={actifs > 0 ? "accent" : "ink"} />
         </div>
         <div className="border-l border-line p-6">
-          <Stat value={percent(stats?.first_pass_merge_rate)} label="Prs merged on first pass" />
+          <Stat value={percent(stats?.first_pass_merge_rate)} label="PRs merged on first pass" />
         </div>
         <div className="border-t border-line p-6 md:border-t-0 md:border-l">
           <Stat

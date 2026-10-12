@@ -27,7 +27,7 @@ the console's budget is 600 kB per chunk and 1,600 kB in total, enforced in CI.
    for CSP violations and for requests leaving the console's origin: there must be none.
 3. **The server stays the only validator.** The editor places the API's errors and warnings at
    their line (diagnostics in the gutter); it adds no rule of its own.
-4. **The editor is themed with the design system's tokens** (`--varga-*`), so light and dark
+4. **The editor is themed with the console's tokens** (`--choregos-*` since ADR 0048; `--varga-*` before), so light and dark
    follow without code, and the gutter passes the AA contrast that axe measures.
 5. **The workflow map is plain HTML and CSS, flat and vertical** (S21-07). The same review found the
    React Flow map unreadable: swimlanes by actor type and breadth-first columns overflowed at 11 to 18
