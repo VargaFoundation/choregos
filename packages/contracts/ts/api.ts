@@ -629,6 +629,17 @@ export type SkillFiles = {
   };
 };
 
+/** Where a version imported from git comes from (ADR 0050). */
+export type SkillSource = {
+  repo: string;
+  /** the full commit SHA the version is pinned to */
+  sha: string;
+  /** the skill's folder in the repository; empty is the root */
+  path: string;
+  /** an SPDX identifier, LicenseRef-proprietary, LicenseRef-unknown, or null when none was found */
+  licence?: string | null;
+};
+
 export type SkillVersion = {
   version: number;
   digest: string;
@@ -637,6 +648,67 @@ export type SkillVersion = {
   files?: {
     [key: string]: string;
   } | null;
+  source?: SkillSource | null;
+};
+
+export type SkillSources = {
+  sources: Array<string>;
+  /** true when the organisation has not written its own list */
+  default?: boolean;
+};
+
+export type SkillGitPreviewRequest = {
+  /** https://github.com/<owner>/<repo> or https://gitlab.com/<group>/…/<project> */
+  repo_url: string;
+  /** a folder holding one skill */
+  path?: string;
+  /** a branch */
+  ref: string;
+};
+
+export type SkillGitImport = {
+  repo_url: string;
+  path?: string;
+  /** a full commit SHA; a branch or a tag is refused */
+  sha: string;
+  skills: Array<string>;
+};
+
+export type SkillCandidate = {
+  path: string;
+  name?: string | null;
+  description?: string | null;
+  files: number;
+  bytes: number;
+  licence?: string | null;
+  /** why it cannot be imported */
+  problem?: string | null;
+  /** the latest version of the library's skill of that name */
+  existing_version?: number | null;
+};
+
+export type SkillGitPreview = {
+  repo: string;
+  ref: string;
+  sha: string;
+  path: string;
+  /** whether the repository is in the organisation's allowlist */
+  allowed: boolean;
+  skills: Array<SkillCandidate>;
+};
+
+export type SkillUpdate = {
+  slug: string;
+  version: number;
+  source: SkillSource;
+  ref: string;
+  sha: string;
+  up_to_date: boolean;
+  digest?: string | null;
+  added?: Array<string>;
+  removed?: Array<string>;
+  modified?: Array<string>;
+  problem?: string | null;
 };
 
 export type Skill = {
@@ -1551,6 +1623,7 @@ export interface Operations {
   result: unknown;
   remaining?: number;
 } };
+  checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
@@ -1663,6 +1736,7 @@ export interface Operations {
 } };
   getRunTranscript: { method: "GET"; path: "/runs/{id}/transcript"; body: never; response: ArtifactRef };
   getSkill: { method: "GET"; path: "/orgs/{org}/skills/{slug}"; body: never; response: Skill };
+  getSkillSources: { method: "GET"; path: "/orgs/{org}/skill-sources"; body: never; response: SkillSources };
   getSkillVersion: { method: "GET"; path: "/orgs/{org}/skills/{slug}/versions/{version}"; body: never; response: SkillVersion };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
@@ -1682,6 +1756,7 @@ export interface Operations {
 }; response: WebhookAck };
   healthz: { method: "GET"; path: "/healthz"; body: never; response: void };
   importSkill: { method: "POST"; path: "/orgs/{org}/skills/import"; body: void; response: Skill };
+  importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
@@ -1737,6 +1812,7 @@ export interface Operations {
   justification: string;
 }; response: ScopeChangeDecision };
   postWorkItemAction: { method: "POST"; path: "/work-items/{id}/actions"; body: WorkItemAction; response: void };
+  previewSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git/preview"; body: SkillGitPreviewRequest; response: SkillGitPreview };
   proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
   publishAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions"; body: AgentSpec; response: AgentVersion };
@@ -1749,6 +1825,7 @@ export interface Operations {
   putPolicyCeiling: { method: "PUT"; path: "/orgs/{org}/policy-ceiling"; body: PolicyCeilingPut; response: PolicyCeilingState };
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
   putRunOutput: { method: "PUT"; path: "/internal/runs/{id}/outputs/{name}"; body: void; response: Artifact };
+  putSkillSources: { method: "PUT"; path: "/orgs/{org}/skill-sources"; body: SkillSources; response: SkillSources };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };

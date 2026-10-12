@@ -37,6 +37,10 @@ class Permission(StrEnum):
     #: Créer un agent, publier ses versions, le suspendre ou le révoquer (ADR 0033) :
     #: l'administrateur de l'organisation. Un projet n'épingle qu'une version existante.
     AGENT_MANAGE = "agent:manage"
+    #: Import a skill from a repository of the organisation's allowlist (S32-05, ADR 0050): a project
+    #: owner may, since the allowlist is what the administrator decided to trust. Another source,
+    #: or a new version of an existing skill, still needs `agent:manage`.
+    SKILL_IMPORT = "skill:import"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
@@ -80,6 +84,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.MEMORY_WRITE,
             Permission.MEMBER_MANAGE,
             Permission.AUDIT_READ,
+            Permission.SKILL_IMPORT,
         }
     ),
     Role.ORG_ADMIN: frozenset(Permission),

@@ -747,6 +747,9 @@ class SkillVersion(Base, PkMixin, TimestampMixin):
     files: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     digest: Mapped[str] = mapped_column(String(80))
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Where the version comes from when it was imported from git (S32-05): `repo`, `sha`, `path`,
+    #: `licence`. `None` for a zip, the console or a template.
+    source: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class AgentCredential(Base, PkMixin, TimestampMixin):

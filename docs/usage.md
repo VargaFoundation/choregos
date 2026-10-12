@@ -470,6 +470,27 @@ call is decided by its version and its project, never by a file it reads. An arc
 its folder (`../`), holds a symbolic link, more than 64 files or 512 KiB, or a file that is not
 UTF-8 text is refused. Versions never change; a skill says which agents carry it.
 
+A skill can also come from a **git repository, at a pinned commit**
+([ADR 0050](adr/0050-skill-supply-chain-gate.md)). The preview resolves a branch or a tag to its
+commit SHA and lists the skill folders it finds; the import then names that SHA — a branch or a
+tag is refused, since it can change under you — and the skills you picked:
+
+```bash
+curl -X POST $API/orgs/acme/skills/import-git/preview \
+  -d '{"repo_url": "https://github.com/anthropics/skills", "ref": "main", "path": "skills"}'
+curl -X POST $API/orgs/acme/skills/import-git \
+  -d '{"repo_url": "https://github.com/anthropics/skills", "sha": "<40 hex>", "path": "skills",
+       "skills": ["mcp-builder"]}'
+curl $API/orgs/acme/skills/mcp-builder/update            # a proposal: the new SHA and the files changed
+```
+
+Only `https://github.com/…` and `https://gitlab.com/…` repositories are fetched, as a tarball,
+public ones for now. Each version records its repository, SHA, folder and licence. A project
+owner (`skill:import`) imports new skills from the organisation's **allowlist**
+(`GET|PUT /orgs/{org}/skill-sources`; by default `github.com/anthropics/skills` and the GitHub
+owners of your connected repositories); another source, or the next version of an existing skill,
+needs an administrator. Checking for an update never applies it: importing the proposed SHA does.
+
 A workflow actor **names** an agent — `{type: agent, role: implement, agent: onboarding-coordinator}`,
 or `…@2` for a given version. The run then takes the project's pinned version (else the latest),
 overrides applied: its model, its limits and its budget, which only tighten the actor's own. Its

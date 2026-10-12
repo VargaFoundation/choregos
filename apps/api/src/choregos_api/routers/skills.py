@@ -10,16 +10,44 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Request, status
+from fastapi import APIRouter, Path, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..db.models import Agent, AgentVersion, Organization, Skill, SkillVersion
-from ..deps import Db, Me
-from ..errors import conflict, forbidden, not_found, unprocessable
+from ..db.models import Agent, AgentVersion, Connector, Organization, Project, Skill, SkillVersion
+from ..deps import Config, Db, Me
+from ..errors import conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
-from ..schemas import SkillDto, SkillFiles, SkillVersionDto
+from ..schemas import (
+    SkillCandidate,
+    SkillDto,
+    SkillFiles,
+    SkillGitImport,
+    SkillGitPreview,
+    SkillGitPreviewRequest,
+    SkillSourceDto,
+    SkillSources,
+    SkillUpdate,
+    SkillVersionDto,
+)
+from ..services.skill_sources import (
+    DEFAULT_SOURCES,
+    SHA,
+    SOURCE,
+    FoundSkill,
+    GitSource,
+    Snapshot,
+    SourceFetcher,
+    SourceRefused,
+    SourceUnavailable,
+    allowed,
+    detect_licence,
+    folder,
+    get_fetcher,
+    parse_repo_url,
+    read_tarball,
+)
 from ..services.skills import SkillRefusee, empreinte, lire_le_zip, valider
 
 router = APIRouter(tags=["agents"])
@@ -71,6 +99,17 @@ async def _utilisee_par(session: AsyncSession, organisation: Organization, slug:
     ]
 
 
+def _version_dto(version: SkillVersion, *, files: bool = False) -> SkillVersionDto:
+    return SkillVersionDto(
+        version=version.version,
+        digest=version.digest,
+        created_by=version.created_by,
+        created_at=version.created_at,
+        files=version.files if files else None,
+        source=SkillSourceDto.model_validate(version.source) if version.source else None,
+    )
+
+
 async def _dto(
     session: AsyncSession, organisation: Organization, skill: Skill, *, avec_versions: bool = False
 ) -> SkillDto:
@@ -89,14 +128,7 @@ async def _dto(
         status=skill.status,
         latest_version=versions[0].version if versions else 0,
         used_by=await _utilisee_par(session, organisation, skill.slug),
-        versions=[
-            SkillVersionDto(
-                version=v.version, digest=v.digest, created_by=v.created_by, created_at=v.created_at
-            )
-            for v in versions
-        ]
-        if avec_versions
-        else None,
+        versions=[_version_dto(v) for v in versions] if avec_versions else None,
     )
 
 
@@ -106,6 +138,7 @@ async def _publier(
     organisation: Organization,
     fichiers: dict[str, str],
     slug: str | None,
+    source: dict[str, object] | None = None,
 ) -> tuple[Skill, SkillVersion]:
     """Crée la skill (version 1) ou publie sa version suivante — jamais de réécriture."""
     try:
@@ -130,6 +163,7 @@ async def _publier(
         files=dict(fichiers),
         digest=empreinte(fichiers),
         created_by=principal.email,
+        source=source,
     )
     session.add(version)
     await session.flush()
@@ -141,6 +175,7 @@ async def _publier(
         target_type="skill",
         target_id=skill.id,
         version=version.version,
+        **({"source": source} if source else {}),
     )
     return skill, version
 
@@ -218,12 +253,7 @@ async def publish_skill_version(
     organisation = await _organisation(session, org)
     await _skill(session, organisation, slug)
     _, version = await _publier(session, principal, organisation, body.files, slug)
-    return SkillVersionDto(
-        version=version.version,
-        digest=version.digest,
-        created_by=version.created_by,
-        created_at=version.created_at,
-    )
+    return _version_dto(version)
 
 
 @router.get(
@@ -243,10 +273,259 @@ async def get_skill_version(
     ).scalar_one_or_none()
     if ligne is None:
         raise not_found("Skill version", f"{slug}@{version}")
-    return SkillVersionDto(
-        version=ligne.version,
-        digest=ligne.digest,
-        created_by=ligne.created_by,
-        created_at=ligne.created_at,
-        files=ligne.files,
+    return _version_dto(ligne, files=True)
+
+
+# ───────────────────────────── from a git repository (S32-05, ADR 0050) ─────────────────────────────
+
+
+async def _skill_sources(session: AsyncSession, organisation: Organization) -> tuple[list[str], bool]:
+    """The organisation's allowlist, and whether it is the default one.
+
+    By default: `github.com/anthropics/skills`, and the GitHub owner of each repository a project
+    of the organisation is connected to — its own repositories."""
+    ecrites = (organisation.settings or {}).get("skill_sources")
+    if isinstance(ecrites, list):
+        return [str(source) for source in ecrites], False
+    sources = list(DEFAULT_SOURCES)
+    configs = await session.execute(
+        select(Connector.config)
+        .join(Project, Project.id == Connector.project_id)
+        .where(Project.org_id == organisation.id, Connector.type.in_(("github", "github-issues")))
     )
+    for (config,) in configs.tuples():
+        depot = str((config or {}).get("repo") or "")
+        proprietaire = f"github.com/{depot.split('/', 1)[0]}" if "/" in depot else ""
+        if proprietaire and SOURCE.match(proprietaire) and proprietaire not in sources:
+            sources.append(proprietaire)
+    return sources, True
+
+
+def _may_import(principal: Me, org: str, source: GitSource, permis: bool, existantes: list[str]) -> None:
+    """An administrator imports from anywhere; a project owner from the allowlist, new skills only —
+    a new version of an existing skill changes what the agents that carry it read."""
+    if principal.can(Permission.AGENT_MANAGE, org):
+        return
+    if not principal.can(Permission.SKILL_IMPORT, org):
+        raise forbidden("importing a skill needs the project_owner or org_admin role")
+    if not permis:
+        raise forbidden(
+            f"`{source.key}` is not in the organisation's allowlist of skill sources: "
+            "an org_admin may import from it"
+        )
+    if existantes:
+        raise forbidden(
+            f"`{', '.join(existantes)}` already in the library: publishing its next version needs the "
+            "org_admin role"
+        )
+
+
+def _source(repo_url: str, path: str) -> tuple[GitSource, str]:
+    try:
+        return parse_repo_url(repo_url), folder(path)
+    except SourceRefused as refus:
+        raise unprocessable(str(refus)) from refus
+
+
+async def _resolve(fetcher: SourceFetcher, source: GitSource, ref: str) -> str:
+    try:
+        return await fetcher.resolve(source, ref)
+    except SourceRefused as refus:
+        raise unprocessable(str(refus)) from refus
+    except SourceUnavailable as panne:
+        raise upstream(source.host, str(panne)) from panne
+
+
+async def _snapshot(fetcher: SourceFetcher, source: GitSource, sha: str, path: str) -> Snapshot:
+    try:
+        return read_tarball(await fetcher.tarball(source, sha), path)
+    except SourceRefused as refus:
+        raise unprocessable(str(refus)) from refus
+    except SourceUnavailable as panne:
+        raise upstream(source.host, str(panne)) from panne
+
+
+async def _latest_versions(
+    session: AsyncSession, organisation: Organization, noms: list[str]
+) -> dict[str, int]:
+    lignes = await session.execute(
+        select(Skill.slug, func.max(SkillVersion.version))
+        .join(SkillVersion, SkillVersion.skill_id == Skill.id)
+        .where(Skill.org_id == organisation.id, Skill.slug.in_(noms))
+        .group_by(Skill.slug)
+    )
+    return {slug: int(version) for slug, version in lignes.tuples()}
+
+
+def _licence(skill: FoundSkill, snapshot: Snapshot) -> str | None:
+    return detect_licence(skill.files, snapshot.licences)
+
+
+@router.get("/orgs/{org}/skill-sources", response_model=SkillSources, operation_id="getSkillSources")
+async def get_skill_sources(org: str, session: Db, principal: Me) -> SkillSources:
+    _lire(principal, org)
+    sources, defaut = await _skill_sources(session, await _organisation(session, org))
+    return SkillSources(sources=sources, default=defaut)
+
+
+@router.put("/orgs/{org}/skill-sources", response_model=SkillSources, operation_id="putSkillSources")
+async def put_skill_sources(org: str, body: SkillSources, session: Db, principal: Me) -> SkillSources:
+    """The allowlist, written by the administrator; it replaces the default one."""
+    if not principal.can(Permission.AGENT_MANAGE, org):
+        raise forbidden("the skill sources of an organisation are decided by its administrator")
+    organisation = await _organisation(session, org)
+    mauvaises = [source for source in body.sources if not SOURCE.match(source)]
+    if mauvaises:
+        raise unprocessable(
+            f"not a source: {', '.join(mauvaises)} — expected `github.com/<owner>[/<repo>]` "
+            "or `gitlab.com/<group>[/…]`"
+        )
+    sources = list(dict.fromkeys(body.sources))
+    organisation.settings = {**(organisation.settings or {}), "skill_sources": sources}
+    await record(session, principal, "skill.sources", org_id=organisation.id, sources=sources)
+    return SkillSources(sources=sources, default=False)
+
+
+@router.post(
+    "/orgs/{org}/skills/import-git/preview",
+    response_model=SkillGitPreview,
+    operation_id="previewSkillsFromGit",
+)
+async def preview_skills_from_git(
+    org: str, body: SkillGitPreviewRequest, session: Db, principal: Me, settings: Config
+) -> SkillGitPreview:
+    """The skills a repository holds at a reference, resolved to its commit SHA. Nothing is written:
+    the import then names that SHA and the skills a person picked."""
+    organisation = await _organisation(session, org)
+    source, base = _source(body.repo_url, body.path)
+    sources, _ = await _skill_sources(session, organisation)
+    permis = allowed(source, sources)
+    _may_import(principal, org, source, permis, [])
+    fetcher = get_fetcher(settings.fakes)
+    sha = await _resolve(fetcher, source, body.ref)
+    snapshot = await _snapshot(fetcher, source, sha, base)
+    existantes = await _latest_versions(
+        session, organisation, [skill.name for skill in snapshot.skills if skill.name]
+    )
+    return SkillGitPreview(
+        repo=source.url,
+        ref=body.ref,
+        sha=sha,
+        path=base,
+        allowed=permis,
+        skills=[
+            SkillCandidate(
+                path=skill.path,
+                name=skill.name,
+                description=skill.description,
+                files=len(skill.files),
+                bytes=sum(len(texte.encode("utf-8")) for texte in skill.files.values()),
+                licence=_licence(skill, snapshot),
+                problem=skill.problem,
+                existing_version=existantes.get(skill.name or ""),
+            )
+            for skill in snapshot.skills
+        ],
+    )
+
+
+@router.post(
+    "/orgs/{org}/skills/import-git",
+    response_model=list[SkillDto],
+    status_code=status.HTTP_201_CREATED,
+    operation_id="importSkillsFromGit",
+)
+async def import_skills_from_git(
+    org: str, body: SkillGitImport, session: Db, principal: Me, settings: Config
+) -> list[SkillDto]:
+    """The skills a person picked, at a commit SHA: each becomes a new skill, or its next version,
+    recording its repository, SHA, folder and licence."""
+    if not SHA.match(body.sha):
+        raise unprocessable(
+            f"`{body.sha}` is not a commit SHA: a branch or a tag can move under an import — pin the "
+            "40-character SHA the preview resolved"
+        )
+    organisation = await _organisation(session, org)
+    source, base = _source(body.repo_url, body.path)
+    sources, _ = await _skill_sources(session, organisation)
+    noms = list(dict.fromkeys(body.skills))
+    existantes = await _latest_versions(session, organisation, noms)
+    _may_import(principal, org, source, allowed(source, sources), sorted(existantes))
+    snapshot = await _snapshot(get_fetcher(settings.fakes), source, body.sha, base)
+    choisies: list[FoundSkill] = []
+    for nom in noms:
+        trouvees = [skill for skill in snapshot.skills if skill.name == nom]
+        if not trouvees:
+            raise unprocessable(f"no skill named `{nom}` under `{base or '/'}` at {body.sha[:12]}")
+        if len(trouvees) > 1:
+            dossiers = ", ".join(skill.path for skill in trouvees)
+            raise unprocessable(f"`{nom}` names {len(trouvees)} folders ({dossiers}): narrow the path")
+        if trouvees[0].problem:
+            raise unprocessable(f"`{nom}` ({trouvees[0].path}): {trouvees[0].problem}")
+        choisies.append(trouvees[0])
+    publiees: list[Skill] = []
+    for skill in choisies:
+        provenance: dict[str, object] = {
+            "repo": source.url,
+            "sha": body.sha,
+            "path": skill.path,
+            "licence": _licence(skill, snapshot),
+        }
+        publiee, _ = await _publier(session, principal, organisation, skill.files, None, provenance)
+        publiees.append(publiee)
+    return [await _dto(session, organisation, skill, avec_versions=True) for skill in publiees]
+
+
+@router.get("/orgs/{org}/skills/{slug}/update", response_model=SkillUpdate, operation_id="checkSkillUpdate")
+async def check_skill_update(
+    org: str,
+    slug: Slug,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    ref: Annotated[str, Query(min_length=1, max_length=200)] = "HEAD",
+) -> SkillUpdate:
+    """What the skill's repository holds now at `ref` (its default branch by default), against its
+    latest version. A proposal, never applied: importing the SHA it gives publishes it."""
+    if not (principal.can(Permission.SKILL_IMPORT, org) or principal.can(Permission.AGENT_MANAGE, org)):
+        raise forbidden("checking a skill's repository needs the project_owner or org_admin role")
+    organisation = await _organisation(session, org)
+    skill = await _skill(session, organisation, slug)
+    derniere = (
+        await session.execute(
+            select(SkillVersion)
+            .where(SkillVersion.skill_id == skill.id)
+            .order_by(SkillVersion.version.desc())
+            .limit(1)
+        )
+    ).scalar_one()
+    if not derniere.source:
+        raise unprocessable(
+            f"`{slug}` v{derniere.version} was not imported from git: there is nothing to check"
+        )
+    origine = SkillSourceDto.model_validate(derniere.source)
+    source, chemin = _source(origine.repo, origine.path)
+    fetcher = get_fetcher(settings.fakes)
+    sha = await _resolve(fetcher, source, ref)
+    reponse = SkillUpdate(
+        slug=slug, version=derniere.version, source=origine, ref=ref, sha=sha, up_to_date=sha == origine.sha
+    )
+    if reponse.up_to_date:
+        reponse.digest = derniere.digest
+        return reponse
+    snapshot = await _snapshot(fetcher, source, sha, chemin)
+    trouvee = next((s for s in snapshot.skills if s.path == chemin), None)
+    if trouvee is None:
+        reponse.problem = f"there is no skill at `{chemin or '/'}` any more at {sha[:12]}"
+    elif trouvee.problem:
+        reponse.problem = trouvee.problem
+    elif trouvee.name != slug:
+        reponse.problem = f"the skill at `{chemin or '/'}` is now named `{trouvee.name}`"
+    else:
+        avant: dict[str, str] = dict(derniere.files or {})
+        apres = trouvee.files
+        reponse.digest = empreinte(apres)
+        reponse.added = sorted(set(apres) - set(avant))
+        reponse.removed = sorted(set(avant) - set(apres))
+        reponse.modified = sorted(c for c in set(avant) & set(apres) if avant[c] != apres[c])
+    return reponse

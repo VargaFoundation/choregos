@@ -162,6 +162,18 @@ class SkillFiles(Dto):
     files: dict[str, str]
 
 
+class SkillSourceDto(Dto):
+    """Where a version imported from git comes from (S32-05)."""
+
+    repo: str
+    #: The full commit SHA the version is pinned to.
+    sha: str
+    #: The skill's folder in the repository; `""` is the root.
+    path: str
+    #: An SPDX identifier, `LicenseRef-proprietary`, `LicenseRef-unknown`, or `None` if none found.
+    licence: str | None = None
+
+
 class SkillVersionDto(Dto):
     version: int
     digest: str
@@ -169,6 +181,77 @@ class SkillVersionDto(Dto):
     created_at: datetime | None = None
     #: Rendus par la lecture d'UNE version ; la liste n'en porte pas.
     files: dict[str, str] | None = None
+    source: SkillSourceDto | None = None
+
+
+class SkillSources(Dto):
+    """The repositories a project owner may import skills from without an administrator."""
+
+    sources: list[str] = Field(max_length=100)
+    #: True when the organisation has not written its own list: these are the defaults.
+    default: bool = False
+
+
+class SkillGitRequest(Dto):
+    repo_url: str = Field(max_length=300)
+    #: The folder of the repository holding one skill, or several skill folders; `""` is the root.
+    path: str = Field(default="", max_length=300)
+
+
+class SkillGitPreviewRequest(SkillGitRequest):
+    #: A branch, a tag or a commit: the preview resolves it to the SHA an import pins.
+    ref: str = Field(min_length=1, max_length=200)
+
+
+class SkillGitImport(SkillGitRequest):
+    #: A full commit SHA (40 hex characters). A branch or a tag is refused: it can move.
+    sha: str = Field(min_length=1, max_length=200)
+    #: The names of the skills to import, among those the preview listed.
+    skills: list[str] = Field(min_length=1, max_length=100)
+
+
+class SkillCandidate(Dto):
+    """A folder with a `SKILL.md` found at that commit."""
+
+    path: str
+    name: str | None = None
+    description: str | None = None
+    files: int
+    bytes: int
+    licence: str | None = None
+    #: Why it cannot be imported, if it cannot.
+    problem: str | None = None
+    #: The version of the library's skill of the same name, if there is one.
+    existing_version: int | None = None
+
+
+class SkillGitPreview(Dto):
+    repo: str
+    ref: str
+    sha: str
+    path: str
+    #: Whether the repository is in the organisation's allowlist.
+    allowed: bool
+    skills: list[SkillCandidate]
+
+
+class SkillUpdate(Dto):
+    """What a newer commit of the skill's repository would change. Never applied by itself: an
+    import of that SHA publishes it, after a person read this."""
+
+    slug: str
+    version: int
+    source: SkillSourceDto
+    ref: str
+    sha: str
+    up_to_date: bool
+    #: The digest the new version would have; equal to the current one when nothing changed.
+    digest: str | None = None
+    added: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    modified: list[str] = Field(default_factory=list)
+    #: Set when the skill is no longer at its path, or no longer passes the checks.
+    problem: str | None = None
 
 
 class SkillDto(Dto):
