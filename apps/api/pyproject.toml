@@ -22,6 +22,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "temporalio>=1.8",
     "prometheus-client>=0.21",
+    "markitdown[docx,pdf,pptx,xlsx]==0.1.8",
 ]
 
 [project.scripts]

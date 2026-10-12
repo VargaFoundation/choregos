@@ -564,3 +564,39 @@ async def test_une_skill_et_ses_versions_ne_sortent_pas_de_leur_organisation(
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(Skill.slug))).scalars().all() == ["skill-a"]
         assert len((await session.execute(select(SkillVersion))).scalars().all()) == 1
+
+
+async def test_a_knowledge_base_and_its_documents_stay_in_their_organisation(
+    deux_organisations: dict[str, str],
+) -> None:
+    """Knowledge bases (ADR 0051): a base of `b`, and its documents, do not exist for `a`."""
+    from choregos_api.db.models import KnowledgeBase, KnowledgeDocument, Organization
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        for slug in ("a", "b"):
+            org = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one()
+            base = KnowledgeBase(
+                org_id=org.id, slug=f"kb-{slug}", name=slug, scope="org", projects=[], groups=[]
+            )
+            session.add(base)
+            await session.flush()
+            session.add(
+                KnowledgeDocument(
+                    org_id=org.id,
+                    knowledge_base_id=base.id,
+                    filename="n.md",
+                    title="n",
+                    mime="text/markdown",
+                    size_bytes=1,
+                    digest=f"sha256:{slug}",
+                    markdown=f"secret of {slug}",
+                )
+            )
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(KnowledgeBase.slug))).scalars().all() == ["kb-a"]
+        assert (await session.execute(select(KnowledgeDocument.markdown))).scalars().all() == ["secret of a"]
+    async with session_scope() as session:
+        assert (await session.execute(select(KnowledgeDocument))).scalars().all() == [], (
+            "without a scope, nothing"
+        )

@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -770,6 +771,65 @@ class AgentCredential(Base, PkMixin, TimestampMixin):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+# ───────────────────────────── knowledge bases (ADR 0051) ─────────────────────────────
+
+
+class KnowledgeBase(Base, PkMixin, TimestampMixin):
+    """A curated reference corpus of the organisation, read-only for agents (ADR 0051).
+
+    Not the memory: memory holds facts learned from work (proposed, then accepted); a knowledge
+    base holds documents a human chose. `scope` says who may use it: `org` (every project),
+    `projects` (the listed project slugs) or `groups` (the listed IdP groups, humans only).
+    """
+
+    __tablename__ = "knowledge_bases"
+    __table_args__ = (UniqueConstraint("org_id", "slug", name="uq_knowledge_bases_org_slug"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: org | projects | groups
+    scope: Mapped[str] = mapped_column(String(16), default="org")
+    projects: Mapped[list[str]] = mapped_column(Json, default=list)
+    groups: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: files (the converted corpus mounted in the workspace) | index (hybrid search)
+    serving_mode: Mapped[str] = mapped_column(String(16), default="files")
+    #: active | archived
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class KnowledgeDocument(Base, PkMixin, TimestampMixin):
+    """One document of a knowledge base: its source bytes, kept for a re-conversion, and the
+    markdown they became. `status`: pending → converting → ready | failed."""
+
+    __tablename__ = "knowledge_documents"
+    __table_args__ = (
+        UniqueConstraint("knowledge_base_id", "digest", name="uq_knowledge_documents_kb_digest"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    #: where it came from: `upload` today, a connector tomorrow (S33-04)
+    source: Mapped[str] = mapped_column(String(32), default="upload")
+    filename: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str] = mapped_column(String(300))
+    mime: Mapped[str] = mapped_column(String(128))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    #: sha256 of the source bytes: the same file twice is one document
+    digest: Mapped[str] = mapped_column(String(80))
+    #: the uploaded bytes, never loaded with a listing
+    content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    markdown: Mapped[str | None] = mapped_column(Text, nullable=True, deferred=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
 ALL_TABLES = [
     Organization,
     User,
@@ -802,6 +862,8 @@ ALL_TABLES = [
     Skill,
     SkillVersion,
     AgentCredential,
+    KnowledgeBase,
+    KnowledgeDocument,
 ]
 
 

@@ -497,6 +497,30 @@ is the library: import a zip, read each version's files, see which agents carry 
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).
 
+### Knowledge bases
+
+A **knowledge base** is a corpus you curate — an architecture framework, a security policy,
+runbooks — that agents read and never write ([ADR 0051](adr/0051-knowledge-bases.md)). It is not
+the memory: memory holds facts learned from work, proposed and accepted; a knowledge base holds
+documents a human chose.
+
+```bash
+curl -X POST $API/orgs/acme/knowledge -H 'Content-Type: application/json' \
+  -d '{"slug": "architecture", "name": "Architecture framework", "scope": "org", "serving_mode": "files"}'
+curl -X POST $API/orgs/acme/knowledge/architecture/documents -F file=@zoning-principles.pptx
+```
+
+An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text; 20 MiB by default,
+`CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB`) is answered `202 pending` and converted to markdown **in the
+background**, in a child process that sees none of the API's secrets and is stopped after
+`CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S` (120 s). Headings, slide titles and tables are kept; a PDF
+gives its text without headings, and a scanned PDF fails (no OCR). Each document then reads
+`ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
+twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
+`groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage`. In the
+console, **knowledge** (top bar) lists the bases; a base's page uploads documents and follows each
+conversion.
+
 ## 4. Write the policy
 
 ```yaml

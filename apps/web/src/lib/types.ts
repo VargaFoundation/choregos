@@ -96,6 +96,13 @@ export type {
 
 /** One revision of a named output of a work item (ADR 0049). */
 export type { Artifact } from "@choregos/contracts/schemas";
+/** Knowledge bases (ADR 0051). */
+export type {
+  KnowledgeBase,
+  KnowledgeBaseCreate,
+  KnowledgeBasePatch,
+  KnowledgeDocument,
+} from "@choregos/contracts/api";
 
 /** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */
 export type {

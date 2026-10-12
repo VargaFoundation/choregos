@@ -29,6 +29,7 @@ tags:
   - { name: templates }
   - { name: admin }
   - { name: agents }
+  - { name: knowledge }
   - { name: ui }
   - { name: webhooks }
   - { name: internal }
@@ -1298,6 +1299,109 @@ paths:
       responses:
         "200": { description: The version and its files, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/knowledge:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [knowledge]
+      operationId: listKnowledgeBases
+      description: The organisation's knowledge bases the caller may read (ADR 0051), without their documents.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/KnowledgeBase" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [knowledge]
+      operationId: createKnowledgeBase
+      description: A curated corpus of reference documents, read-only for agents. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBaseCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [knowledge]
+      operationId: getKnowledgeBase
+      description: The knowledge base and its documents with their conversion status. A base outside the caller's scope is 404.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [knowledge]
+      operationId: updateKnowledgeBase
+      description: Renames it, changes its scope or serving mode, archives it. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBasePatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/documents:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: uploadKnowledgeDocument
+      description: >-
+        One document (docx, pptx, xlsx, pdf, md, html, txt), converted to markdown in the background:
+        answered 202 `pending`, then `ready` or `failed` with its reason. The same bytes twice answer the
+        existing document (200). `agent:manage`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200": { description: Already there, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
+        "202": { description: Accepted for conversion, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { description: Larger than the deployment's cap, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/documents/{document_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: document_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [knowledge]
+      operationId: getKnowledgeDocument
+      description: The document and, once converted, its markdown.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [knowledge]
+      operationId: deleteKnowledgeDocument
+      description: "`agent:manage`."
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/knowledge/{slug}/documents/{document_id}/convert:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: document_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: convertKnowledgeDocument
+      description: Converts the document again (after a failure, or a converter upgrade). `agent:manage`.
+      responses:
+        "202": { description: Accepted for conversion, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{id}/agents:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2336,6 +2440,64 @@ components:
         latest_version: { type: integer }
         used_by: { type: array, items: { type: string } }
         versions: { type: [array, "null"], items: { $ref: "#/components/schemas/SkillVersion" } }
+    KnowledgeBaseCreate:
+      type: object
+      required: [slug, name]
+      additionalProperties: false
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        scope: { type: string, enum: [org, projects, groups], default: org, description: "`org`: every project; `projects`: the listed ones; `groups`: humans of the listed IdP groups (never a run)" }
+        projects: { type: array, items: { type: string }, maxItems: 200 }
+        groups: { type: array, items: { type: string }, maxItems: 200 }
+        serving_mode: { type: string, enum: [files, index], default: files, description: "`files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search" }
+    KnowledgeBasePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: [string, "null"], minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        scope: { type: [string, "null"], enum: [org, projects, groups, null] }
+        projects: { type: [array, "null"], items: { type: string }, maxItems: 200 }
+        groups: { type: [array, "null"], items: { type: string }, maxItems: 200 }
+        serving_mode: { type: [string, "null"], enum: [files, index, null] }
+        status: { type: [string, "null"], enum: [active, archived, null] }
+    KnowledgeDocument:
+      type: object
+      required: [id, filename, title, mime, size_bytes, digest, source, status]
+      properties:
+        id: { type: string }
+        filename: { type: string }
+        title: { type: string, description: "the format's own title, else the first heading, else the file name" }
+        mime: { type: string }
+        size_bytes: { type: integer }
+        digest: { type: string, description: sha256 of the uploaded bytes }
+        source: { type: string, description: "`upload`" }
+        status: { type: string, enum: [pending, converting, ready, failed] }
+        error: { type: [string, "null"] }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        converted_at: { type: [string, "null"], format: date-time }
+        markdown: { type: [string, "null"], description: returned by the reading of one document }
+    KnowledgeBase:
+      type: object
+      required: [slug, name, scope, serving_mode, status]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        scope: { type: string, enum: [org, projects, groups] }
+        projects: { type: array, items: { type: string } }
+        groups: { type: array, items: { type: string } }
+        serving_mode: { type: string, enum: [files, index] }
+        status: { type: string }
+        document_count: { type: integer }
+        documents_by_status: { type: object, additionalProperties: { type: integer } }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        updated_at: { type: [string, "null"], format: date-time }
+        documents: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeDocument" } }
     WorkflowIssue:
       type: object
       required: [code, message]

@@ -27,6 +27,10 @@ import type {
   ProjectAgentPut,
   Skill,
   SkillVersion,
+  KnowledgeBase,
+  KnowledgeBaseCreate,
+  KnowledgeBasePatch,
+  KnowledgeDocument,
   AgentBackendInfo,
   ApiToken,
   ApiTokenCreate,
@@ -179,7 +183,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+    // A file upload (`FormData`) sets its own type, with its multipart boundary.
+    headers: init.body instanceof FormData ? { ...(init.headers ?? {}) } : { "Content-Type": "application/json", ...(init.headers ?? {}) },
     cache: "no-store",
   });
   if (!response.ok) {
@@ -300,6 +305,24 @@ export const api = {
       body: archive,
       headers: { "Content-Type": "application/zip" },
     }),
+  /** Knowledge bases (ADR 0051): a curated corpus, converted to markdown outside the request. */
+  knowledgeBases: (org: string) => request<KnowledgeBase[]>(`/orgs/${org}/knowledge`),
+  knowledgeBase: (org: string, slug: string) => request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`),
+  createKnowledgeBase: (org: string, body: KnowledgeBaseCreate) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
+  updateKnowledgeBase: (org: string, slug: string, body: KnowledgeBasePatch) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  uploadKnowledgeDocument: (org: string, slug: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents`, { method: "POST", body: form });
+  },
+  knowledgeDocument: (org: string, slug: string, id: string) =>
+    request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents/${id}`),
+  deleteKnowledgeDocument: (org: string, slug: string, id: string) =>
+    request<void>(`/orgs/${org}/knowledge/${slug}/documents/${id}`, { method: "DELETE" }),
+  convertKnowledgeDocument: (org: string, slug: string, id: string) =>
+    request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents/${id}/convert`, { method: "POST" }),
   myTokens: () => request<ApiToken[]>("/me/tokens"),
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
