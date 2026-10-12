@@ -8,6 +8,7 @@ la décision est dans `packages/core`, l'orchestration dans `apps/orchestrator`.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from typing import Any
 
 from .base import (
@@ -124,6 +125,9 @@ _ENTIER: dict[str, Any] = {"type": "integer"}
 
 from .familles import FAMILLES as _FAMILLES  # noqa: E402 - après le registre
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA  # noqa: E402 - après le registre
+from .netops.cilium import CILIUM_READ_OPERATIONS as _OPERATIONS_CILIUM  # noqa: E402 - after the registry
+from .netops.nginx import NGINX_READ_OPERATIONS as _OPERATIONS_NGINX  # noqa: E402 - after the registry
+from .netops.pfsense import PFSENSE_READ_OPERATIONS as _OPERATIONS_PFSENSE  # noqa: E402 - after the registry
 
 #: La configuration d'un type `demo` : rien, ou l'adresse du processus qui sert les faux.
 _CONFIGURATION_DE_DEMO = _objet(
@@ -349,6 +353,66 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
     ),
+    # Netops (ADR 0052, S33-08): our own estate, read through the platform.
+    ("firewall", "pfsense"): ConnectorTypeSpec(
+        "pfSense (REST API package, v2)",
+        ("firewall",),
+        _objet(
+            {
+                "base_url": {"type": "string", "description": "https://<pfsense>, without /api/v2"},
+                "verify_tls": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "false: dev only, logged each time; refused in staging and prod",
+                },
+                "ca_cert": {
+                    "type": "string",
+                    "description": "PEM of the CA that signed the device's certificate",
+                },
+            },
+            ("base_url",),
+        ),
+        ("api_key",),
+        operations=_OPERATIONS_PFSENSE,
+    ),
+    ("network_policy", "cilium"): ConnectorTypeSpec(
+        "Cilium (network policies, Hubble flows)",
+        ("network_policy", "flows"),
+        _objet(
+            {
+                "kubernetes_url": {"type": "string", "description": "the cluster's API server, https"},
+                "verify_tls": {"type": "boolean", "default": True},
+                "ca_cert": {"type": "string", "description": "PEM of the cluster's CA"},
+                "hubble_server": {"type": "string", "default": "hubble-relay.kube-system.svc:443"},
+                "hubble_tls": {"type": "boolean", "default": True},
+                "hubble_ca_cert": {"type": "string", "description": "PEM of Hubble Relay's CA"},
+                "hubble_tls_server_name": _TEXTE,
+                "hubble_client_cert": {"type": "string", "description": "PEM, when Relay requires mTLS"},
+            },
+            ("kubernetes_url",),
+        ),
+        ("token", "hubble_client_key"),
+        operations=_OPERATIONS_CILIUM,
+    ),
+    ("web_server", "nginx"): ConnectorTypeSpec(
+        "nginx (configuration from the GitOps repository)",
+        ("web_server",),
+        _objet(
+            {
+                "repo": {"type": "string", "description": "owner/repo of the GitOps repository"},
+                "ref": {"type": "string", "default": "main"},
+                "root": {
+                    "type": "string",
+                    "default": "nginx",
+                    "description": "the configuration's directory",
+                },
+                "api_url": {"type": "string", "default": "https://api.github.com"},
+            },
+            ("repo",),
+        ),
+        ("token",),
+        operations=_OPERATIONS_NGINX,
+    ),
     ("mcp", "mcp"): ConnectorTypeSpec(
         "MCP server (Streamable HTTP)",
         ("mcp",),
@@ -436,6 +500,59 @@ def _guichet_de_demo(famille: str, *, en_production: bool) -> Any:
     return construire
 
 
+#: The netops fakes (ADR 0052): one pfSense, one cluster, one recorded Hubble trace, one GitOps
+#: repository — shared in the process, scripted by the tests and the demo.
+FAKE_NETOPS: dict[str, Any] = {}
+
+
+def _fake_netops(name: str) -> Any:
+    if name not in FAKE_NETOPS:
+        from .fakes import netops as fakes
+
+        builders: dict[str, Callable[[], Any]] = {
+            "pfsense": fakes.FakePfSense,
+            "kubernetes": fakes.FakeCiliumKubernetes,
+            "flows": fakes.recorded_flows,
+            "repo": fakes.FakeRepo,
+        }
+        FAKE_NETOPS[name] = builders[name]()
+    return FAKE_NETOPS[name]
+
+
+def _fake_pfsense(cfg: dict[str, Any]) -> Any:
+    from .netops import PfSenseFirewall
+
+    return PfSenseFirewall(
+        base_url=str(cfg.get("base_url") or "https://pfsense.fake"),
+        api_key=str(cfg.get("api_key") or "fake-api-key"),
+        transport=_fake_netops("pfsense").transport(),
+    )
+
+
+def _fake_cilium(cfg: dict[str, Any]) -> Any:
+    from .netops import CiliumNetwork, ReadOnlyKubernetes
+
+    kubernetes = ReadOnlyKubernetes(
+        str(cfg.get("kubernetes_url") or "https://kubernetes.fake"),
+        str(cfg.get("token") or "fake-reader-token"),
+        transport=_fake_netops("kubernetes").transport(),
+    )
+    return CiliumNetwork(kubernetes, _fake_netops("flows"))
+
+
+def _fake_nginx(cfg: dict[str, Any]) -> Any:
+    from .netops import NginxConfig
+
+    return NginxConfig(_fake_netops("repo"), root=str(cfg.get("root") or "nginx"))
+
+
+def _nginx(cfg: dict[str, Any]) -> Any:
+    from .netops import GitHubRepoReader, NginxConfig
+
+    reader = GitHubRepoReader(_github_client(cfg), str(cfg["repo"]), str(cfg.get("ref") or "main"))
+    return NginxConfig(reader, root=str(cfg.get("root") or "nginx"))
+
+
 def _cd_de_demo(cfg: dict[str, Any]) -> Any:
     """La fabrique de `cd: demo` : refusée en staging et en prod ; servie quand elle porte une `url`."""
     from .fakes.cd_de_demo import CdDeDemo, FakeCdDeDemo
@@ -483,6 +600,9 @@ def _register_builtins() -> None:
     register("identity", "fake")(_annuaire_du_faux_entra)
     for famille in _FAMILLES:
         register(famille, "fake")(_guichet_de_demo(famille, en_production=False))
+    register("firewall", "fake")(_fake_pfsense)
+    register("network_policy", "fake")(_fake_cilium)
+    register("web_server", "fake")(_fake_nginx)
 
     # ───────────────── implémentations réelles (jour 1) ─────────────────
     from .cd.argocd import ArgoCdAdapter
@@ -660,6 +780,13 @@ def _register_builtins() -> None:
             _guichet_de_demo(famille, en_production=True)
         )
     register("cd", "demo", _SPECS_LIVREES[("cd", "demo")])(_cd_de_demo)
+    from .netops import CiliumNetwork, PfSenseFirewall
+
+    register("firewall", "pfsense", _SPECS_LIVREES[("firewall", "pfsense")])(PfSenseFirewall.from_config)
+    register("network_policy", "cilium", _SPECS_LIVREES[("network_policy", "cilium")])(
+        CiliumNetwork.from_config
+    )
+    register("web_server", "nginx", _SPECS_LIVREES[("web_server", "nginx")])(_nginx)
     # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
     from .mcp import ClientMcp
 

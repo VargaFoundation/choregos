@@ -7,7 +7,9 @@ ni GitHub, ni base, ni cloud. C'est le seul moyen pour lui d'agir hors du worksp
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from choregos_contracts import Finding
@@ -121,6 +123,23 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "validate_nginx_config",
+        "description": (
+            "Validates an nginx configuration of your workspace with `nginx -t` (ADR 0052): returns ok, or "
+            "nginx's own error with the file and line. Run it before proposing any nginx change."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "required": ["path"],
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "the main configuration file, from the workspace root (nginx/nginx.conf)",
+                },
+            },
+        },
+    },
+    {
         "name": "propose_fact",
         "description": (
             "Proposes a fact to the project memory. It is not written directly: it goes to a review queue."
@@ -153,6 +172,10 @@ class ToolContext:
     #: Les sorties que la transition du run déclare, lues une fois dans l'entrée du run (S22-15).
     #: `None` : pas encore lues.
     declared_outputs: list[str] | None = None
+    #: The run's workspace: what `validate_nginx_config` may read, and nothing outside it.
+    workspace: Path = field(default_factory=lambda: Path(os.environ.get("CHOREGOS_WORKSPACE", "/workspace")))
+    #: The nginx binary; the runner image carries it (`docker/runner.Dockerfile`).
+    nginx_binary: str = "nginx"
 
     @property
     def findings_remaining(self) -> int:
