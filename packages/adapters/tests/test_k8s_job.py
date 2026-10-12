@@ -417,3 +417,22 @@ async def test_sans_pod_le_run_le_dit() -> None:
         ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
     )
     assert "aucun pod du run" in statut.message
+
+
+async def test_an_oom_killed_runner_gives_its_termination_reason() -> None:
+    """S36-02: the archive keeps the runtime's own word for how the pod ended."""
+    client = _ClusterScripte(
+        [_pod("2026-10-12T10:00:00Z", {"terminated": {"exitCode": 137, "reason": "OOMKilled"}})]
+    )
+    status = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
+    )
+    assert (status.exit_code, status.reason) == (137, "OOMKilled")
+
+
+async def test_an_image_that_does_not_pull_gives_its_reason() -> None:
+    client = _ClusterScripte([_pod("2026-10-12T10:00:00Z", {"waiting": {"reason": "ErrImagePull"}})])
+    status = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
+        ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
+    )
+    assert (status.exit_code, status.reason) == (None, "ErrImagePull")

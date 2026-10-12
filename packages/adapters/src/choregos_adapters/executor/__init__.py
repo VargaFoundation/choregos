@@ -6,6 +6,7 @@ from __future__ import annotations
 from .agent_sandbox import AgentSandboxExecutor
 from .k8s_job import KubernetesJobExecutor
 from .local_docker import LocalDockerExecutor
+from .log_archive import archive_run_logs, tail_logs
 from .tekton import KubernetesClient, TektonExecutor
 
 __all__ = [
@@ -14,4 +15,6 @@ __all__ = [
     "KubernetesJobExecutor",
     "LocalDockerExecutor",
     "TektonExecutor",
+    "archive_run_logs",
+    "tail_logs",
 ]

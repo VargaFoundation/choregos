@@ -214,6 +214,7 @@ class TektonExecutor:
         return ExecStatus(
             state=state,
             message=str(condition.get("message", ""))[:500],
+            reason=reason or None,
             result_url=results.get("result-url"),
             started_at=_parse_time(status.get("startTime")),
             ended_at=_parse_time(status.get("completionTime")),

@@ -239,6 +239,9 @@ class Run(Base, PkMixin, TimestampMixin):
     result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     stage_input: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     transcript_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: How the run's pod ended and the last lines of its log, redacted (S36-02, `RunLogArchive`).
+    #: Written once, at the end of the run, by the orchestrator through the `Executor` protocol.
+    log_archive: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     context_pack_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     context_pack: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     playbook_checksum: Mapped[str | None] = mapped_column(String(80), nullable=True)

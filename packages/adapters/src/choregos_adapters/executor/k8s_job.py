@@ -312,16 +312,19 @@ class KubernetesJobExecutor:
             attente = "" if admis else f"en attente d'une place (plafond {self.max_active} par namespace)"
         message = attente or "; ".join(c.get("message", "") for c in status.get("conditions", []) or [])[:500]
         code = None
+        reason: str | None = None
         if state == "failed":
             # « Job has reached the specified backoff limit » ne dit pas pourquoi : le pod le sait —
             # son code de sortie, que le runner choisit (`choregos_core.sorties`), ou la raison pour
             # laquelle son conteneur n'a jamais démarré (image, secret, configuration).
             code, cause = await self._diagnostic(ref)
+            reason = await self._termination_reason(ref)
             if cause:
                 message = f"{cause} — {message}" if message else cause
         return ExecStatus(
             state=state,
             exit_code=code,
+            reason=reason,
             message=message[:700],
             started_at=_parse_time(status.get("startTime")),
             ended_at=_parse_time(status.get("completionTime")),
@@ -358,6 +361,33 @@ class KubernetesJobExecutor:
             detail = str(attente.get("message") or "")[:200]
             return None, f"runner jamais démarré : {attente.get('reason')}{' — ' + detail if detail else ''}"
         return None, ""
+
+    async def _termination_reason(self, ref: ExecRef) -> str | None:
+        """The runtime's own word for how the runner container ended, or why it never started
+        (`OOMKilled`, `Error`, `ErrImagePull`, `ImagePullBackOff`…), read on the run's last pod."""
+        pods = await self.client.request(
+            "GET",
+            f"{CORE_API}/namespaces/{ref.namespace}/pods",
+            params={"labelSelector": f"choregos/run-id={ref.run_id}"},
+        )
+        items = sorted(
+            (pods or {}).get("items", []) or [],
+            key=lambda pod: str((pod.get("metadata") or {}).get("creationTimestamp") or ""),
+        )
+        if not items:
+            return None
+        statuses = (items[-1].get("status") or {}).get("containerStatuses") or []
+        container = next(
+            (c for c in statuses if c.get("name") == "runner"), statuses[0] if statuses else None
+        )
+        if container is None:
+            return None
+        state = container.get("state") or {}
+        ended = state.get("terminated") or (container.get("lastState") or {}).get("terminated")
+        if ended:
+            return str(ended.get("reason") or "") or None
+        waiting = state.get("waiting") or {}
+        return str(waiting.get("reason") or "") or None
 
     async def logs(self, ref: ExecRef) -> AsyncIterator[str]:
         pods = await self.client.request(

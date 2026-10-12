@@ -79,6 +79,7 @@ class LocalDockerExecutor:
         return ExecStatus(
             state="succeeded" if exit_code == 0 else "failed",
             exit_code=exit_code,
+            reason="OOMKilled" if state.get("OOMKilled") else None,
             message=str(state.get("Error", ""))[:300],
         )
 
