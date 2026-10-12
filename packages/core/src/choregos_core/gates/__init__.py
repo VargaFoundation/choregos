@@ -351,6 +351,8 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     # `StageOutputs` tolère les champs supplémentaires (rôles custom) : c'est ce qui permet
     # à un métier de nommer ses propres sorties sans toucher au contrat.
     produced = ctx.result.outputs.model_dump(exclude_none=True)
+    # A file output (ADR 0049) is present when the runner stored it from `.choregos/outputs/`.
+    produced.update(dict.fromkeys(ctx.result.artifacts.files, True))
     missing = [key for key in required if not produced.get(key)]
     return GateOutcome(
         "outputs_present",

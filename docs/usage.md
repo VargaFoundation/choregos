@@ -339,6 +339,22 @@ transitions:
 polite zero: finding nobody is said by failing the step. `demo/workflows/staffing.yaml` is a
 complete example that runs on the same deployment as the software one, with no code change.
 
+**Every declared output is required** (ADR 0049): a step that reports `done` without one of its
+`outputs:` fails and is retried or escalated like any failure, with or without an
+`outputs_present` gate. An output is a value of the result (markdown or JSON) unless
+`output_types` says it is a file:
+
+```yaml
+    outputs: [summary_markdown, budget, deck]
+    output_types: { budget: xlsx, deck: pptx }
+```
+
+A typed output is a file the agent writes in `.choregos/outputs/` (`budget.xlsx`, `deck.pptx`); a
+value written in `outputs` under the same name does not stand for it. The types are `markdown`,
+`json`, `mermaid`, `sarif`, `text`, `csv`, `html`, `pdf`, `docx`, `xlsx`, `pptx`, `png`, `jpeg`,
+`gif`, `webp`, `svg`, `mp4`, `webm` and `file`; the validator refuses an unknown type, a type for an
+output `outputs:` does not declare, and a name that cannot be a file name.
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated
@@ -708,10 +724,11 @@ curl -X PATCH $API/orgs/acme -d '{"slug": "acme-corp", "name": "Acme Corporation
 
 ## Known limits, stated rather than discovered
 
-- The engine is still shaped by software in two places (ADR 0012): `StageOutputs` is typed
-  for development — business outputs travel by name in `outputs`, are stored on the ticket
-  and handed to the next stage as `inputs`, but are not typed —, and most gates read a
-  diff. `outputs_present` and `evidence_facts` are the business-side gates.
+- The engine is still shaped by software in two places (ADR 0012): `StageOutputs` names
+  development fields — business outputs travel by name in `outputs`, are stored on the ticket as
+  artifacts and handed to the next stage as `inputs`, typed by `output_types` when they are files
+  (ADR 0049) —, and most gates read a diff. `outputs_present` and `evidence_facts` are the
+  business-side gates.
 - The tool catalogue is listed to agents and callable, but nothing *requires* a call: a
   playbook can announce a tool the agent ignores. A `tool_called` gate reading the ledger is
   the mechanism to write (P1-6).

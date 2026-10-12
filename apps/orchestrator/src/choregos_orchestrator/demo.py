@@ -113,6 +113,8 @@ async def seed() -> tuple[str, str, Any]:
                 "size": "M",
                 "risk": "low",
                 "spec_markdown": "## Spec\n…",
+                # `default-simple` declares `spec`: every declared output is required (S31-02).
+                "spec": "## Spec\n…",
                 "allowed_paths": ["src/orders/**", "tests/orders/**"],
             },
             evidence=evidence(),
@@ -122,6 +124,7 @@ async def seed() -> tuple[str, str, Any]:
         StageResult(
             status=StageStatus.DONE,
             summary="credits deducted from the total; 3 tests added",
+            outputs={"branch": "choregos/123", "commits": ["fix(orders): deduct credits from the total"]},
             artifacts={"branch": "choregos/123", "commits": ["fix(orders): deduct credits from the total"]},
             evidence=evidence(),
             findings=[

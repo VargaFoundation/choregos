@@ -356,15 +356,19 @@ def _task_markdown(stage_input: StageInput) -> str:
         *(
             [
                 "When you finish (`status: done`), `outputs` holds exactly these keys, each at the top "
-                "level of `outputs`: "
-                + ", ".join(f"`{nom}`" for nom in stage_input.transition.outputs)
-                + ".",
+                "level of `outputs`: " + ", ".join(f"`{nom}`" for nom in inline_outputs(stage_input)) + ".",
             ]
-            if stage_input.transition.outputs
+            if inline_outputs(stage_input)
             else []
         ),
     ]
     return "\n".join(lines) + "\n"
+
+
+def inline_outputs(stage_input: StageInput) -> list[str]:
+    """The declared outputs that are values of `outputs`, not files (ADR 0049)."""
+    files = set(stage_input.transition.file_outputs())
+    return [name for name in stage_input.transition.outputs if name not in files]
 
 
 def _context_markdown(context: ContextPack | None) -> str:

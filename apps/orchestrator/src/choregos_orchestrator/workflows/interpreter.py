@@ -87,6 +87,9 @@ TRAIN_PAR_ENVIRONNEMENT = "train-par-environnement"
 #: stage », le ramène à l'état d'où il est parti, avec un budget de tentatives neuf. Avant ce
 #: marqueur, `on_answer: resume` était déclaré et rien ne le jouait : seul l'abandon en sortait.
 REPRISE_APRES_ESCALADE = "resume-after-escalation"
+#: A `done` result that lacks a declared output fails the stage, whatever the output's type (S31-02,
+#: ADR 0049). Histories recorded before this marker advanced on such a result unless a gate refused.
+DECLARED_OUTPUTS_REQUIRED = "declared-outputs-required"
 
 
 @dataclass
@@ -358,6 +361,7 @@ class WorkflowInterpreter:
                 "agent": actor.agent,
                 "outputs": list(transition.outputs),
                 "inputs": list(transition.inputs),
+                "output_types": dict(transition.output_types),
             },
             start_to_close_timeout=timedelta(minutes=5),
             retry_policy=DEFAULT_RETRY,
@@ -433,7 +437,13 @@ class WorkflowInterpreter:
         for request in result.scope_changes_requested:
             await self._request_scope_change(params, transition, request)
 
-        decision = engine.after_stage(transition, result, self._essais(key), outcomes)
+        decision = engine.after_stage(
+            transition,
+            result,
+            self._essais(key),
+            outcomes,
+            require_outputs=workflow.patched(DECLARED_OUTPUTS_REQUIRED),
+        )
         if decision.next_state == engine.question_state() and result.status is StageStatus.NEEDS_HUMAN:
             await self._create_request(
                 params,

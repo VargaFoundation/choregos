@@ -135,6 +135,23 @@
             "type": "string"
           },
           "default": {}
+        },
+        "files": {
+          "description": "The files the step left in .choregos/outputs/, by artifact name, as the runner stored them (ADR 0049).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["filename", "type", "media_type", "digest", "size"],
+            "additionalProperties": false,
+            "properties": {
+              "filename": { "type": "string" },
+              "type": { "type": "string" },
+              "media_type": { "type": "string" },
+              "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+              "size": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "default": {}
         }
       }
     },

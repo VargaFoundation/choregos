@@ -18,9 +18,11 @@ def auto() -> WorkflowEngine:
 
 
 def done(summary: str = "fait") -> StageResult:
+    # `t-implement` declares `branch` and `commits`: a `done` without them fails (S31-02).
     return StageResult(
         status=StageStatus.DONE,
         summary=summary,
+        outputs={"branch": "choregos/1", "commits": ["feat: total"]},
         evidence=Evidence(tests_passed=True, tests_run=10),
     )
 

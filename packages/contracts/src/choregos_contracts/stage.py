@@ -7,12 +7,39 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from .artifact import ARTIFACT_TYPES
 from .enums import ApiFormat, FindingType, Severity, StageStatus
 from .workflow import Strict
 
 STAGE_INPUT_SCHEMA = "choregos/StageInput/v1"
 STAGE_RESULT_SCHEMA = "choregos/StageResult/v1"
 CONTEXT_PACK_SCHEMA = "choregos/ContextPack/v1"
+
+
+def file_outputs(outputs: list[str], output_types: dict[str, str]) -> list[str]:
+    """The declared outputs whose type is a file (ADR 0049); an unknown type is not one."""
+    return [
+        name
+        for name in outputs
+        if (entry := ARTIFACT_TYPES.get(output_types.get(name, ""))) is not None and not entry.inline
+    ]
+
+
+def missing_outputs(
+    outputs: list[str], output_types: dict[str, str], result: StageResult | None
+) -> list[str]:
+    """The declared outputs a result does not carry: an inline output absent or empty in
+    `outputs`, a file output absent from `artifacts.files`. Whatever their type (S31-02)."""
+    if result is None:
+        return list(outputs)
+    files = set(file_outputs(outputs, output_types))
+    written = result.outputs.model_dump(exclude_none=True)
+    stored = set(result.artifacts.files)
+    return [
+        name
+        for name in outputs
+        if (name not in stored if name in files else written.get(name) in (None, "", [], {}))
+    ]
 
 
 class ProjectRef(Strict):
@@ -49,8 +76,14 @@ class TransitionRef(Strict):
     to: str
     outputs: list[str] = Field(default_factory=list)
     inputs: list[str] = Field(default_factory=list)
+    #: The declared type of each output (ADR 0049); a file type is written in `.choregos/outputs/`.
+    output_types: dict[str, str] = Field(default_factory=dict)
 
     model_config = Strict.model_config | {"populate_by_name": True}
+
+    def file_outputs(self) -> list[str]:
+        """The declared outputs that are files, not values of `outputs`."""
+        return file_outputs(self.outputs, self.output_types)
 
 
 class RepoRef(Strict):
@@ -193,6 +226,16 @@ class ScopeChangeRequest(Strict):
     justification: str = Field(min_length=1)
 
 
+class ArtifactFile(Strict):
+    """A file a step left in `.choregos/outputs/`, as the runner stored it (ADR 0049)."""
+
+    filename: str
+    type: str
+    media_type: str
+    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    size: int = Field(ge=0)
+
+
 class Artifacts(Strict):
     branch: str | None = None
     commits: list[str] = Field(default_factory=list)
@@ -200,6 +243,8 @@ class Artifacts(Strict):
     transcript_url: str | None = None
     context_pack_url: str | None = None
     reports: dict[str, str] = Field(default_factory=dict)
+    #: The files of `.choregos/outputs/`, by artifact name; written by the runner, never by the agent.
+    files: dict[str, ArtifactFile] = Field(default_factory=dict)
 
 
 class Evidence(Strict):
