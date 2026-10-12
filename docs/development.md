@@ -128,8 +128,14 @@ NEXT_PUBLIC_API_MODE=mock pnpm -C apps/web dev
 ```
 
 Consistent fixtures tell the story of a living project: a ticket in progress, a pending
-approval, a batch ready to depart, a finding to triage. The fixtures are loaded on demand and
-never ship in a production bundle.
+approval, a batch ready to depart, a finding to triage. A second project, **People Ops**
+(`people-ops`), is born from the `joiners-leavers` template: an onboarding is filed from the
+workflow's `metadata.inputs`, and a joiner waits on the badge task (a form and an attestation).
+The fixtures are loaded on demand and never ship in a production bundle.
+
+No request leaves the page in demo mode: every write the mock API receives is recorded on
+`window.__mockWrites` (`{ method, path, body }`), which the Playwright journeys read to check what
+the API would have been sent (`apps/web/e2e/creation-inputs-and-task-form.spec.ts`).
 
 ## Writing a workflow
 

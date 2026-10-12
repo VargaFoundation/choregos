@@ -1,0 +1,524 @@
+{
+ "onboarding": {
+  "yaml": "apiVersion: choregos/v1\nkind: Workflow\nmetadata:\n  name: onboarding\n  version: 1\n  description: A joiner — access plan, account and groups ten days before, laptop seven days before, badge handed over, check the day after.\n  inputs:\n    type: object\n    required: [nom, upn, date_arrivee, poste, groupe, groupe_sensible, adresse]\n    properties:\n      nom: { type: string, title: Full name }\n      upn: { type: string, title: Sign-in name (UPN) }\n      date_arrivee: { type: string, format: date, title: Start date }\n      poste: { type: string, title: Job title }\n      groupe: { type: string, title: Access group of the role }\n      groupe_sensible: { type: string, title: Sensitive group (stronger approval) }\n      adresse: { type: string, title: Laptop delivery address }\n      modele: { type: string, title: Laptop model, default: portable-14 }\n      badge_uid: { type: string, title: Badge UID }\ninitial: demande\nactors:\n  coordinateur: { type: agent, role: coordination, agent: coordinateur-onboarding, max_turns: 40, max_minutes: 20 }\n  rh: { type: human, group: rh, sla_hours: 24 }\n  accueil: { type: human, group: accueil, sla_hours: 8 }\n  plateforme: { type: system }\nstates:\n  demande: { display: Request received, kind: wait }\n  plan: { display: Access plan proposed, kind: wait }\n  valide: { display: Plan approved, kind: wait }\n  comptes: { display: Account and group created, kind: wait }\n  sensible: { display: Sensitive group decided, kind: wait }\n  poste: { display: \"Laptop ordered, enrolled, shipped\", kind: wait }\n  badge: { display: Badge handed over, kind: wait }\n  actif: { display: Badge active, kind: wait }\n  a_revoir: { display: To review, kind: wait }\n  pret: { display: Joiner ready, terminal: true }\ntransitions:\n  - id: t-plan\n    from: demande\n    to: plan\n    by: coordinateur\n    outputs: [plan_d_acces]\n    gates: [outputs_present]\n    on_fail: { to: demande, max_attempts: 2, escalate_to: a_revoir }\n\n  - id: t-validation\n    from: plan\n    to: valide\n    by: rh\n    on_reject: a_revoir\n\n  - id: t-comptes\n    from: valide\n    to: comptes\n    by: plateforme\n    action:\n      kind: arrivee.comptes\n      title: \"Account and group of {{ fields.nom }}\"\n      justification: \"starts on {{ fields.date_arrivee }} as {{ fields.poste }}\"\n      params: { upn: \"{{ fields.upn }}\", nom: \"{{ fields.nom }}\", groupe: \"{{ fields.groupe }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: annuaire\n            operation: create_user\n            arguments: { upn: \"{{ params.upn }}\", display_name: \"{{ params.nom }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: annuaire, operation: disable_user, arguments: { upn: \"{{ params.upn }}\" } }\n        - effect: connector.call\n          with:\n            connector: annuaire\n            operation: add_to_group\n            arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.groupe }}\" }\n          compensate:\n            effect: connector.call\n            with:\n              connector: annuaire\n              operation: remove_from_group\n              arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.groupe }}\" }\n      not_before: fields.date_arrivee - 10d\n    on_fail: { to: valide, max_attempts: 2, escalate_to: a_revoir }\n\n  - id: t-sensible\n    from: comptes\n    to: sensible\n    by: plateforme\n    action:\n      kind: arrivee.groupe_sensible\n      title: \"{{ fields.nom }} in {{ fields.groupe_sensible }}\"\n      params: { upn: \"{{ fields.upn }}\", groupe: \"{{ fields.groupe_sensible }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: annuaire\n            operation: add_to_group\n            arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.groupe }}\" }\n      approval:\n        approvers: [{ role: project_owner, min: 1 }]\n        step_up_minutes: 5\n    on_fail: { to: comptes, max_attempts: 1, escalate_to: a_revoir }\n    on_reject: sensible\n\n  - id: t-poste\n    from: sensible\n    to: poste\n    by: plateforme\n    action:\n      kind: arrivee.poste\n      title: \"Laptop of {{ fields.nom }} ({{ fields.modele | default('portable-14') }})\"\n      params:\n        reference: \"{{ work_item.key }}\"\n        upn: \"{{ fields.upn }}\"\n        modele: \"{{ fields.modele | default('portable-14') }}\"\n        adresse: \"{{ fields.adresse }}\"\n      effects:\n        - effect: connector.call\n          with:\n            connector: fournisseur\n            operation: commander_poste\n            arguments: { reference: \"{{ params.reference }}\", modele: \"{{ params.modele }}\", upn: \"{{ params.upn }}\" }\n        - effect: connector.call\n          with:\n            connector: parc\n            operation: enroll_device\n            arguments: { serial: \"{{ effects[0].serial }}\", upn: \"{{ params.upn }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: parc, operation: wipe_device, arguments: { serial: \"{{ result.serial }}\" } }\n        - effect: connector.call\n          with:\n            connector: transporteur\n            operation: create_shipment\n            arguments:\n              reference: \"{{ params.reference }}-poste\"\n              address: \"{{ params.adresse }}\"\n              items: [\"{{ effects[0].serial }}\"]\n      not_before: fields.date_arrivee - 7d\n    on_fail: { to: sensible, max_attempts: 2, escalate_to: a_revoir }\n\n  - id: t-badge\n    from: poste\n    to: badge\n    by: accueil\n    task:\n      title: Hand over the badge\n      instructions: Hand the badge to its holder in person, then hold it to the reader to read its UID.\n      form:\n        type: object\n        required: [badge_uid]\n        properties:\n          badge_uid: { type: string, title: Badge UID, minLength: 8 }\n      attest: I handed the badge to its holder in person\n    on_reject: a_revoir\n\n  - id: t-activer\n    from: badge\n    to: actif\n    by: plateforme\n    action:\n      kind: arrivee.badge\n      title: \"Activate badge {{ fields.badge_uid }}\"\n      params: { uid: \"{{ fields.badge_uid }}\", porteur: \"{{ fields.upn }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: lecteurs\n            operation: activate_badge\n            arguments: { uid: \"{{ params.uid }}\", holder: \"{{ params.porteur }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: lecteurs, operation: deactivate_badge, arguments: { uid: \"{{ params.uid }}\" } }\n    on_fail: { to: badge, max_attempts: 1, escalate_to: a_revoir }\n\n  - id: t-controle\n    from: actif\n    to: pret\n    by: plateforme\n    action:\n      kind: arrivee.controle\n      title: \"Check the onboarding of {{ fields.nom }}\"\n      params: { upn: \"{{ fields.upn }}\", uid: \"{{ fields.badge_uid }}\", reference: \"{{ work_item.key }}-poste\" }\n      effects:\n        - effect: connector.call\n          with: { connector: annuaire, operation: get_user, arguments: { upn: \"{{ params.upn }}\" } }\n        - effect: connector.call\n          with: { connector: lecteurs, operation: badge_status, arguments: { uid: \"{{ params.uid }}\" } }\n        - effect: connector.call\n          with: { connector: transporteur, operation: shipment_status, arguments: { reference: \"{{ params.reference }}\" } }\n        - effect: verifier\n          with:\n            condition: \"{{ effects[0].user is not none and effects[1].active and effects[2].state != 'unknown' }}\"\n            motif: the account, the active badge and the laptop shipment\n      not_before: fields.date_arrivee + 1d\n    on_fail: { to: actif, max_attempts: 2, escalate_to: a_revoir }\n",
+  "json": {
+   "apiVersion": "choregos/v1",
+   "kind": "Workflow",
+   "metadata": {
+    "name": "onboarding",
+    "version": 1,
+    "description": "A joiner — access plan, account and groups ten days before, laptop seven days before, badge handed over, check the day after.",
+    "inputs": {
+     "type": "object",
+     "required": [
+      "nom",
+      "upn",
+      "date_arrivee",
+      "poste",
+      "groupe",
+      "groupe_sensible",
+      "adresse"
+     ],
+     "properties": {
+      "nom": {
+       "type": "string",
+       "title": "Full name"
+      },
+      "upn": {
+       "type": "string",
+       "title": "Sign-in name (UPN)"
+      },
+      "date_arrivee": {
+       "type": "string",
+       "format": "date",
+       "title": "Start date"
+      },
+      "poste": {
+       "type": "string",
+       "title": "Job title"
+      },
+      "groupe": {
+       "type": "string",
+       "title": "Access group of the role"
+      },
+      "groupe_sensible": {
+       "type": "string",
+       "title": "Sensitive group (stronger approval)"
+      },
+      "adresse": {
+       "type": "string",
+       "title": "Laptop delivery address"
+      },
+      "modele": {
+       "type": "string",
+       "title": "Laptop model",
+       "default": "portable-14"
+      },
+      "badge_uid": {
+       "type": "string",
+       "title": "Badge UID"
+      }
+     }
+    }
+   },
+   "actors": {
+    "coordinateur": {
+     "type": "agent",
+     "role": "coordination",
+     "model": "profile:by_size",
+     "fresh_context": false,
+     "max_turns": 40,
+     "max_minutes": 20,
+     "agent": "coordinateur-onboarding"
+    },
+    "rh": {
+     "type": "human",
+     "group": "rh",
+     "sla_hours": 24
+    },
+    "accueil": {
+     "type": "human",
+     "group": "accueil",
+     "sla_hours": 8
+    },
+    "plateforme": {
+     "type": "system"
+    }
+   }
+  },
+  "badge_task": {
+   "title": "Hand over the badge",
+   "instructions": "Hand the badge to its holder in person, then hold it to the reader to read its UID.",
+   "form": {
+    "type": "object",
+    "required": [
+     "badge_uid"
+    ],
+    "properties": {
+     "badge_uid": {
+      "type": "string",
+      "title": "Badge UID",
+      "minLength": 8
+     }
+    }
+   },
+   "attest": "I handed the badge to its holder in person"
+  },
+  "validation": {
+   "valid": true,
+   "errors": [],
+   "warnings": [],
+   "graph": {
+    "nodes": [
+     {
+      "id": "demande",
+      "display": "Request received",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "agent",
+      "tracker_status": null
+     },
+     {
+      "id": "plan",
+      "display": "Access plan proposed",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "human",
+      "tracker_status": null
+     },
+     {
+      "id": "valide",
+      "display": "Plan approved",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "system",
+      "tracker_status": null
+     },
+     {
+      "id": "comptes",
+      "display": "Account and group created",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "system",
+      "tracker_status": null
+     },
+     {
+      "id": "sensible",
+      "display": "Sensitive group decided",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "system",
+      "tracker_status": null
+     },
+     {
+      "id": "poste",
+      "display": "Laptop ordered, enrolled, shipped",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "human",
+      "tracker_status": null
+     },
+     {
+      "id": "badge",
+      "display": "Badge handed over",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "system",
+      "tracker_status": null
+     },
+     {
+      "id": "actif",
+      "display": "Badge active",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "system",
+      "tracker_status": null
+     },
+     {
+      "id": "a_revoir",
+      "display": "To review",
+      "kind": "wait",
+      "terminal": false,
+      "lane": "wait",
+      "tracker_status": null
+     },
+     {
+      "id": "pret",
+      "display": "Joiner ready",
+      "kind": "terminal",
+      "terminal": true,
+      "lane": "terminal",
+      "tracker_status": null
+     }
+    ],
+    "edges": [
+     {
+      "actor": "coordinateur",
+      "actor_type": "agent",
+      "role": "coordination",
+      "gates": [
+       "outputs_present"
+      ],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-plan",
+      "from": "demande",
+      "to": "plan",
+      "kind": "nominal",
+      "label": "coordinateur",
+      "wildcard": false
+     },
+     {
+      "id": "demande->demande:retry:on failure (≤2)",
+      "from": "demande",
+      "to": "demande",
+      "kind": "retry",
+      "label": "on failure (≤2)",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "id": "demande->a_revoir:escalate:when retries run out",
+      "from": "demande",
+      "to": "a_revoir",
+      "kind": "escalate",
+      "label": "when retries run out",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "actor": "rh",
+      "actor_type": "human",
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-validation",
+      "from": "plan",
+      "to": "valide",
+      "kind": "nominal",
+      "label": "rh",
+      "wildcard": false
+     },
+     {
+      "id": "plan->a_revoir:reject:if rejected",
+      "from": "plan",
+      "to": "a_revoir",
+      "kind": "reject",
+      "label": "if rejected",
+      "wildcard": false,
+      "actor": "rh",
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "actor": "plateforme",
+      "actor_type": "system",
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-comptes",
+      "from": "valide",
+      "to": "comptes",
+      "kind": "nominal",
+      "label": "plateforme",
+      "wildcard": false
+     },
+     {
+      "id": "valide->valide:retry:on failure (≤2)",
+      "from": "valide",
+      "to": "valide",
+      "kind": "retry",
+      "label": "on failure (≤2)",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "id": "valide->a_revoir:escalate:when retries run out",
+      "from": "valide",
+      "to": "a_revoir",
+      "kind": "escalate",
+      "label": "when retries run out",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "actor": "plateforme",
+      "actor_type": "system",
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-sensible",
+      "from": "comptes",
+      "to": "sensible",
+      "kind": "nominal",
+      "label": "plateforme",
+      "wildcard": false
+     },
+     {
+      "id": "comptes->sensible:reject:if rejected",
+      "from": "comptes",
+      "to": "sensible",
+      "kind": "reject",
+      "label": "if rejected",
+      "wildcard": false,
+      "actor": "plateforme",
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "id": "comptes->comptes:retry:on failure (≤1)",
+      "from": "comptes",
+      "to": "comptes",
+      "kind": "retry",
+      "label": "on failure (≤1)",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "id": "comptes->a_revoir:escalate:when retries run out",
+      "from": "comptes",
+      "to": "a_revoir",
+      "kind": "escalate",
+      "label": "when retries run out",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "actor": "plateforme",
+      "actor_type": "system",
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-poste",
+      "from": "sensible",
+      "to": "poste",
+      "kind": "nominal",
+      "label": "plateforme",
+      "wildcard": false
+     },
+     {
+      "id": "sensible->sensible:retry:on failure (≤2)",
+      "from": "sensible",
+      "to": "sensible",
+      "kind": "retry",
+      "label": "on failure (≤2)",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "id": "sensible->a_revoir:escalate:when retries run out",
+      "from": "sensible",
+      "to": "a_revoir",
+      "kind": "escalate",
+      "label": "when retries run out",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "actor": "accueil",
+      "actor_type": "human",
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-badge",
+      "from": "poste",
+      "to": "badge",
+      "kind": "nominal",
+      "label": "accueil",
+      "wildcard": false
+     },
+     {
+      "id": "poste->a_revoir:reject:if rejected",
+      "from": "poste",
+      "to": "a_revoir",
+      "kind": "reject",
+      "label": "if rejected",
+      "wildcard": false,
+      "actor": "accueil",
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "actor": "plateforme",
+      "actor_type": "system",
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-activer",
+      "from": "badge",
+      "to": "actif",
+      "kind": "nominal",
+      "label": "plateforme",
+      "wildcard": false
+     },
+     {
+      "id": "badge->badge:retry:on failure (≤1)",
+      "from": "badge",
+      "to": "badge",
+      "kind": "retry",
+      "label": "on failure (≤1)",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "id": "badge->a_revoir:escalate:when retries run out",
+      "from": "badge",
+      "to": "a_revoir",
+      "kind": "escalate",
+      "label": "when retries run out",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "actor": "plateforme",
+      "actor_type": "system",
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null,
+      "id": "t-controle",
+      "from": "actif",
+      "to": "pret",
+      "kind": "nominal",
+      "label": "plateforme",
+      "wildcard": false
+     },
+     {
+      "id": "actif->actif:retry:on failure (≤2)",
+      "from": "actif",
+      "to": "actif",
+      "kind": "retry",
+      "label": "on failure (≤2)",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     },
+     {
+      "id": "actif->a_revoir:escalate:when retries run out",
+      "from": "actif",
+      "to": "a_revoir",
+      "kind": "escalate",
+      "label": "when retries run out",
+      "wildcard": false,
+      "actor": null,
+      "actor_type": null,
+      "role": null,
+      "gates": [],
+      "via": null,
+      "timeout_hours": null
+     }
+    ]
+   },
+   "process": []
+  }
+ }
+}

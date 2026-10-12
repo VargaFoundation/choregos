@@ -45,6 +45,9 @@ import type {
 } from "@/lib/types";
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
+import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
+
+export { peopleOpsFixtures };
 
 const now = new Date();
 const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
@@ -100,6 +103,7 @@ export const projects: ProjectPage = {
       created_at: iso(120),
       updated_at: iso(12),
     },
+    peopleOps,
   ],
   meta: { has_more: false },
 };
@@ -1269,10 +1273,24 @@ export const projectRequirements: ProjectRequirement[] = [
   { capability: "gateway", reasons: ["default-simple: the agent dev calls models"], connector: null, default_type: "litellm" },
 ];
 
+/**
+ * The writes the demo received, in order: what a real API would have been sent. Playwright reads
+ * them on `window.__mockWrites` to check a payload, since in demo mode no request leaves the page.
+ */
+function recordWrite(method: string, path: string, body: unknown): void {
+  if (typeof window === "undefined") return;
+  const target = window as unknown as { __mockWrites?: Array<{ method: string; path: string; body: unknown }> };
+  (target.__mockWrites ??= []).push({ method, path, body });
+}
+
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
+  const body: unknown = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+  if (method !== "GET") recordWrite(method, path, body);
+  const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
+  if (hr !== undefined) return hr as T;
   if (method === "POST" && path === "/workflows/validate") {
     // Comme l'API : un texte sans `states:` n'est pas un workflow, et ne se dessine pas.
     const texte = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
