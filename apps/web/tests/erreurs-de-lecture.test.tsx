@@ -26,6 +26,9 @@ vi.mock("@/lib/api", async (importOriginal) => {
       connectors: vi.fn(panne),
       workflows: vi.fn(panne),
       train: vi.fn(panne),
+      policy: vi.fn(() =>
+        Promise.resolve({ name: "p", version: 1, yaml: "", is_active: true, json: { release_train: { prod: {} } } }),
+      ),
       releases: vi.fn(panne),
       backends: vi.fn(panne),
       executors: vi.fn(() => Promise.resolve([])),
@@ -60,7 +63,8 @@ describe("une lecture qui échoue se dit, elle ne passe pas pour du vide (S23-08
   it("les trains : le train et l'historique, et « retry » relit", async () => {
     await rendre(<TrainsPage params={Promise.resolve({ slug: "billing-api" })} />);
     expect(await screen.findByText(/could not read the batches/)).toBeInTheDocument();
-    expect(screen.getAllByText(/could not read the (prod|staging|[a-z]+) train/).length).toBeGreaterThan(0);
+    // the train cards wait for the policy that names their environments (S26-05)
+    expect((await screen.findAllByText(/could not read the (prod|staging|[a-z]+) train/)).length).toBeGreaterThan(0);
     expect(screen.queryByText("no batch")).toBeNull();
     const appels = vi.mocked(api.releases).mock.calls.length;
     await act(async () => {

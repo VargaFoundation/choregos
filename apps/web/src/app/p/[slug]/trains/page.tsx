@@ -6,20 +6,34 @@ import { use, useState } from "react";
 import { Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Input, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
+import type { PolicyDef } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
 
-const ENVS = ["prod", "staging"];
+/**
+ * The environments that have a release train: the keys of the active policy's `release_train`, in
+ * the policy's order (S26-05). The page used to show a fixed `prod` and `staging`, whatever the
+ * policy said — a train for an environment the project does not have, and none for one it has.
+ */
+function trainEnvironments(policy: PolicyDef): string[] {
+  return Object.keys(policy.json?.release_train ?? {});
+}
 
 export default function TrainsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const policy = useQuery({ queryKey: ["policy", slug], queryFn: () => api.policy(slug) });
+  const envs = policy.data ? trainEnvironments(policy.data) : [];
   return (
     <div className="space-y-4">
       <Heading as="h2" size="md">
         release trains
       </Heading>
-      {ENVS.map((env) => (
-        <TrainCard key={env} slug={slug} env={env} />
-      ))}
+      {!policy.data ? (
+        <EtatDeLecture lecture={policy} quoi="the policy's release trains" />
+      ) : envs.length === 0 ? (
+        <Empty title="no release train">this project&apos;s policy declares no release_train environment.</Empty>
+      ) : (
+        envs.map((env) => <TrainCard key={env} slug={slug} env={env} />)
+      )}
       <History slug={slug} />
     </div>
   );
