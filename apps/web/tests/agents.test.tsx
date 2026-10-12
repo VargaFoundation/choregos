@@ -99,11 +99,11 @@ describe("les clients MCP", () => {
         <ClientsMcp org="acme" clients={[jeton]} agents={[]} />
       </QueryClientProvider>,
     );
-    expect(screen.getByText("connected")).toBeInTheDocument();
+    expect(screen.getByText("Connected")).toBeInTheDocument();
     expect(screen.getByText(/claude-code\/2\.1\.0/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "register as an external agent" }));
-    fireEvent.change(screen.getByLabelText("tools"), { target: { value: "lecture" } });
-    fireEvent.click(screen.getByRole("button", { name: "register" }));
+    fireEvent.click(screen.getByRole("button", { name: "Register as an external agent" }));
+    fireEvent.change(screen.getByLabelText("Tools"), { target: { value: "lecture" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register" }));
     await waitFor(() => expect(api.attachAgentToken).toHaveBeenCalledWith("acme", "claude-code", "tok-1"));
     expect(api.createAgent).toHaveBeenCalledWith("acme", {
       slug: "claude-code",

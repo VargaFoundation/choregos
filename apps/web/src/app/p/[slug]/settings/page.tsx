@@ -13,7 +13,7 @@ import type { ProjectModels } from "@/lib/types";
 
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
   ssr: false,
-  loading: () => <p className="text-sm text-ink-muted">loading the editor…</p>,
+  loading: () => <p className="text-sm text-ink-muted">Loading the editor…</p>,
 });
 
 const PROFILS = ["standard", "strong", "cheap", "by_size"];
@@ -63,7 +63,7 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
       <Connecteurs slug={slug} />
       <OperationsDuProjet slug={slug} />
 
-      <Card title="policy" className="lg:col-span-2">
+      <Card title="Policy" className="lg:col-span-2">
         {(policy.data?.clamps ?? []).length > 0 && (
           <div className="mb-2 text-sm" data-testid="policy-clamps">
             <p>The organisation&apos;s ceiling brings this policy down; what runs is clamped:</p>
@@ -76,19 +76,19 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         )}
         <PolicyEditor
           yaml={policy.data?.yaml ?? ""}
-          onSave={(yaml) => faire(() => api.putPolicy(slug, yaml), "policy saved", ["policy"])}
+          onSave={(yaml) => faire(() => api.putPolicy(slug, yaml), "Policy saved", ["policy"])}
         />
       </Card>
 
-      <Card title="model profiles">
+      <Card title="Model profiles">
         <ModelsEditor
           models={models.data}
           disponibles={(platformModels.data ?? []).map((m) => m.model_name)}
-          onSave={(body) => faire(() => api.putModels(slug, body), "profiles saved", ["models", "matrix"])}
+          onSave={(body) => faire(() => api.putModels(slug, body), "Profiles saved", ["models", "matrix"])}
         />
       </Card>
 
-      <Card title="tool catalogue">
+      <Card title="Tool catalogue">
         {(tools.data?.tools ?? []).length === 0 ? (
           <Empty>No tool declared by the deployment.</Empty>
         ) : (
@@ -96,11 +96,11 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
             <table>
               <thead>
                 <tr>
-                  <th>tool</th>
-                  <th>provider</th>
-                  <th>open to</th>
-                  <th>per call</th>
-                  <th>this project</th>
+                  <th>Tool</th>
+                  <th>Provider</th>
+                  <th>Open to</th>
+                  <th>Per call</th>
+                  <th>This project</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,9 +115,9 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                       {tool.source === "mcp" ? " · remote MCP" : ""}
                       {tool.needs_credential ? " · platform key" : " · no key"}
                     </td>
-                    <td className="text-xs">{(tool.groups ?? []).join(", ") || "everyone"}</td>
+                    <td className="text-xs">{(tool.groups ?? []).join(", ") || "Everyone"}</td>
                     <td className="text-xs">{eur(tool.price_eur ?? 0)}</td>
-                    <td className="text-xs">{tool.allowed ? "allowed" : "—"}</td>
+                    <td className="text-xs">{tool.allowed ? "Allowed" : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -126,15 +126,15 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         )}
         {tools.data?.allows_all && (
           <p className="mt-2 text-xs text-ink-muted">
-            this project declares <span className="font-mono">*</span>: the whole catalogue is open to it.
+            This project declares <span className="font-mono">*</span>: the whole catalogue is open to it.
           </p>
         )}
         <p className="mt-2 text-xs text-ink-muted">
-          a project&apos;s tool list (<code>tools</code>, <code>groups</code>) is set in its configuration — it is reviewed like code.
+          A project&apos;s tool list (<code>tools</code>, <code>groups</code>) is set in its configuration — it is reviewed like code.
         </p>
       </Card>
 
-      <Card title="backend × model matrix" className="lg:col-span-2">
+      <Card title="Backend × model matrix" className="lg:col-span-2">
         <p className="mb-2 text-sm text-ink-muted">
           Published by the nightly evals: an unvalidated combination is refused on save.
         </p>
@@ -142,12 +142,12 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
           <table>
             <thead>
               <tr>
-                <th>backend</th>
-                <th>model</th>
-                <th>validated</th>
-                <th className="text-right">success</th>
-                <th className="text-right">median cost</th>
-                <th>memory</th>
+                <th>Backend</th>
+                <th>Model</th>
+                <th>Validated</th>
+                <th className="text-right">Success</th>
+                <th className="text-right">Median cost</th>
+                <th>Memory</th>
               </tr>
             </thead>
             <tbody>
@@ -162,14 +162,14 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
                   <td className="text-right">
                     {entry.median_cost_usd != null ? usd(entry.median_cost_usd) : "—"}
                   </td>
-                  <td>{entry.with_memory == null ? "—" : entry.with_memory ? "with" : "without"}</td>
+                  <td>{entry.with_memory == null ? "—" : entry.with_memory ? "With" : "Without"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <EtatDeLecture lecture={matrix} quoi="the eval matrix" />
-        {matrix.data && (matrix.data.entries ?? []).length === 0 && <Empty>no eval published yet</Empty>}
+        {matrix.data && (matrix.data.entries ?? []).length === 0 && <Empty>No eval published yet</Empty>}
       </Card>
     </div>
   );
@@ -184,10 +184,10 @@ function PolicyEditor({ yaml, onSave }: { yaml: string; onSave: (yaml: string) =
   }
   return (
     <div className="space-y-2">
-      <YamlEditor label="policy YAML" value={texte} onChange={setTexte} issues={[]} />
+      <YamlEditor label="Policy YAML" value={texte} onChange={setTexte} issues={[]} />
       <div className="flex justify-end">
         <Button tone="primary" onClick={() => void onSave(texte)} disabled={!texte || texte === yaml}>
-          save the policy
+          Save the policy
         </Button>
       </div>
       <p className="text-xs text-ink-muted">
@@ -231,7 +231,7 @@ function ModelsEditor({
           <Input
             list="modeles-disponibles"
             value={profils[profil] ?? ""}
-            placeholder={models?.inherited?.[profil] ? `inherited: ${models.inherited[profil]}` : "platform/standard"}
+            placeholder={models?.inherited?.[profil] ? `Inherited: ${models.inherited[profil]}` : "platform/standard"}
             onChange={(event) => setProfils((p) => ({ ...p, [profil]: event.target.value }))}
             className="w-64 min-w-0 font-mono"
           />
@@ -244,7 +244,7 @@ function ModelsEditor({
       </datalist>
       <label className="flex items-center gap-2 text-xs text-ink-muted">
         <input type="checkbox" checked={allowUnvalidated} onChange={(e) => setAllowUnvalidated(e.target.checked)} />
-        accept a backend × model combination not validated by the evals
+        Accept a backend × model combination not validated by the evals
       </label>
       <div className="flex justify-end">
         <Button
@@ -261,7 +261,7 @@ function ModelsEditor({
             })
           }
         >
-          save the profiles
+          Save the profiles
         </Button>
       </div>
     </div>

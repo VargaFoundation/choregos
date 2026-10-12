@@ -36,10 +36,10 @@ export function DecisionDAction({ projet, action }: { projet: string; action: Ac
     <div className="space-y-2" data-testid="decision">
       <div className="flex flex-wrap items-end gap-2">
         <Button tone="primary" onClick={() => void decider("approve")} disabled={occupe}>
-          approve
+          Approve
         </Button>
         <label className="flex-1 space-y-1">
-          <span className="text-xs text-ink-muted">reason to reject</span>
+          <span className="text-xs text-ink-muted">Reason to reject</span>
           <Input
             className="w-full"
             value={raison}
@@ -47,7 +47,7 @@ export function DecisionDAction({ projet, action }: { projet: string; action: Ac
           />
         </label>
         <Button tone="danger" onClick={() => void decider("reject")} disabled={occupe || !raison.trim()}>
-          reject
+          Reject
         </Button>
       </div>
       <p className="text-xs text-ink-muted" data-testid="regles-de-decision">

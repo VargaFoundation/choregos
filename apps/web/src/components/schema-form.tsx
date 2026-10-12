@@ -171,7 +171,7 @@ function Champ({
       <Input
         id={id}
         value={Array.isArray(valeur) ? valeur.join(", ") : ""}
-        placeholder="comma separated"
+        placeholder="Comma separated"
         disabled={disabled}
         aria-describedby={aide}
         onChange={(event) => {
@@ -281,7 +281,7 @@ function Correspondance({
       />
       {illisibles.length > 0 && (
         <p className="text-xs text-danger" role="alert">
-          line{illisibles.length > 1 ? "s" : ""} {illisibles.join(", ")}: key = value expected
+          Line{illisibles.length > 1 ? "s" : ""} {illisibles.join(", ")}: key = value expected
         </p>
       )}
     </>

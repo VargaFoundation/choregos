@@ -108,7 +108,7 @@ describe("SchemaForm : textes sur plusieurs lignes et correspondances (S17-04)",
     render(<FormulaireSaml initial={{}} onValue={(v) => (derniere = v)} />);
     const correspondance = screen.getByLabelText(/^mapping/);
     fireEvent.change(correspondance, { target: { value: "admins = org_admin\nsans egal" } });
-    expect(screen.getByRole("alert")).toHaveTextContent("line 2: key = value expected");
+    expect(screen.getByRole("alert")).toHaveTextContent("Line 2: key = value expected");
     expect(correspondance).toHaveValue("admins = org_admin\nsans egal");
     expect(derniere.correspondance).toEqual({ admins: "org_admin" });
 

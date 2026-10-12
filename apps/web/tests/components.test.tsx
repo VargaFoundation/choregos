@@ -31,7 +31,7 @@ describe("composants transverses", () => {
 
   it("nomme le type d'acteur pour les lecteurs d'écran", () => {
     render(<ActorIcon kind="agent" name="implement" />);
-    expect(screen.getByText("agent")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
   });
 });
 
@@ -52,7 +52,7 @@ describe("journal ACP", () => {
 
   it("met en évidence les permissions refusées : une pastille, et un filet sur la ligne", () => {
     render(<LiveLog events={events.slice(0, 3)} />);
-    const refus = screen.getByText("denied");
+    const refus = screen.getByText("Denied");
     expect(refus).toHaveClass("rounded-full", "text-failed-ink");
     expect(refus.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed");
   });
@@ -75,15 +75,15 @@ describe("preuves d'une étape", () => {
     // Un dossier instruit n'a ni tests ni couverture : afficher « tests : ✗ · lint : — »
     // pour lui était faux, et la faute se voyait à l'écran avant de se voir au contrat.
     render(<Preuves evidence={{ facts: { profils_retenus: 2, besoin_complet: true } }} />);
-    expect(screen.getByText(/profils retenus/)).toBeInTheDocument();
+    expect(screen.getByText(/Profils retenus/)).toBeInTheDocument();
     expect(screen.getByText(/✓/)).toBeInTheDocument();
     expect(screen.queryByText(/tests/)).toBeNull();
   });
 
   it("garde les mesures du logiciel quand ce sont elles qui existent", () => {
     render(<Preuves evidence={{ tests_run: 6, tests_passed: true, lint: "ok" }} />);
-    expect(screen.getByText(/tests: ✓ 6/)).toBeInTheDocument();
-    expect(screen.getByText(/lint: ok/)).toBeInTheDocument();
+    expect(screen.getByText(/Tests: ✓ 6/)).toBeInTheDocument();
+    expect(screen.getByText(/Lint: ok/)).toBeInTheDocument();
   });
 
   it("ne montre pas une grille de tirets quand il n'y a aucune preuve", () => {
@@ -142,7 +142,7 @@ describe("garanties", () => {
     const items = screen.getAllByRole("listitem");
     expect(items[0]?.textContent).toContain("evidence_present");
     expect(items[0]?.textContent).toContain("aucun test exécuté");
-    expect(screen.getByLabelText("refused")).toBeInTheDocument();
+    expect(screen.getByLabelText("Refused")).toBeInTheDocument();
   });
 
   it("dit quand aucune garantie n'a été évaluée, plutôt qu'un ✓ à vide", () => {
@@ -154,20 +154,20 @@ describe("garanties", () => {
 describe("édition (ADR 0024)", () => {
   it("en communautaire, dit ce que l'édition entreprise ajouterait", () => {
     render(<EditionCard edition={{ edition: "community", features: [], version: "0.13.1" }} />);
-    const liste = screen.getByRole("list", { name: "what the enterprise edition adds" });
+    const liste = screen.getByRole("list", { name: "What the enterprise edition adds" });
     expect(liste.querySelectorAll("li").length).toBe(FONCTIONS_ENTREPRISE.length);
     expect(screen.getByText("SCIM provisioning of users and groups")).toBeInTheDocument();
   });
 
   it("en entreprise, liste ce qu'elle s'autorise, et garde une clé inconnue lisible", () => {
     render(<EditionCard edition={{ edition: "enterprise", features: ["saml", "nouveaute"], version: "0.14.0" }} />);
-    const liste = screen.getByRole("list", { name: "enterprise features" });
+    const liste = screen.getByRole("list", { name: "Enterprise features" });
     expect(liste.textContent).toContain("SAML sign-in, per organisation");
     expect(liste.textContent).toContain("nouveaute");
   });
 
   it("le badge nomme l'édition", () => {
     render(<EditionBadge edition="enterprise" />);
-    expect(screen.getByTestId("edition-badge")).toHaveTextContent("enterprise edition");
+    expect(screen.getByTestId("edition-badge")).toHaveTextContent("Enterprise edition");
   });
 });

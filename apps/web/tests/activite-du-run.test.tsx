@@ -85,18 +85,18 @@ describe("la carte d'activité", () => {
   it("résume le run, montre chaque appel, et le refus sur la ligne de l'appel bloqué", () => {
     render(<ActiviteDuRunVue activite={activiteDuRun(runEvents)} />);
     expect(screen.getByTestId("activite-resume")).toHaveTextContent("5 tool calls · 5 finished · 1 refused · 1 sub-agent");
-    const lignes = within(screen.getByRole("table", { name: "tool calls" })).getAllByRole("row").slice(1);
+    const lignes = within(screen.getByRole("table", { name: "Tool calls" })).getAllByRole("row").slice(1);
     expect(lignes).toHaveLength(5);
     const bloquee = lignes.find((l) => l.getAttribute("data-appel") === "tc-4")!;
     expect(bloquee).toHaveAttribute("data-statut", "failed");
-    expect(within(bloquee).getByText("denied")).toBeInTheDocument();
-    expect(within(lignes.find((l) => l.getAttribute("data-appel") === "tc-2")!).getByText("sub-agent")).toBeInTheDocument();
+    expect(within(bloquee).getByText("Denied")).toBeInTheDocument();
+    expect(within(lignes.find((l) => l.getAttribute("data-appel") === "tc-2")!).getByText("Sub-agent")).toBeInTheDocument();
     // Un refus que rien ne relie à un appel reste visible, à part.
-    expect(screen.queryByRole("list", { name: "refusals outside a tool call" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Refusals outside a tool call" })).not.toBeInTheDocument();
   });
 
   it("un refus sans appel se liste à part", () => {
     render(<ActiviteDuRunVue activite={activiteDuRun([permission(1, 0, false)])} />);
-    expect(within(screen.getByRole("list", { name: "refusals outside a tool call" })).getByText("src/x.py")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Refusals outside a tool call" })).getByText("src/x.py")).toBeInTheDocument();
   });
 });

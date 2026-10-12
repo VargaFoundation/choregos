@@ -24,16 +24,16 @@ export function OperationsDuProjet({ slug }: { slug: string }) {
   if (operations.error) return <ErrorNote>{String(operations.error)}</ErrorNote>;
   if (!operations.data || operations.data.length === 0) return null;
   return (
-    <Card title="operations of the organisation's connectors" className="lg:col-span-2">
+    <Card title="Operations of the organisation's connectors" className="lg:col-span-2">
       <div className="overflow-x-auto">
         <table className="w-full text-sm" data-testid="operations-du-projet">
           <thead className="text-left text-xs text-ink-muted">
             <tr>
-              <th className="py-1 font-normal">connector</th>
-              <th className="py-1 font-normal">operation</th>
-              <th className="py-1 font-normal">organisation</th>
-              <th className="py-1 font-normal">this project</th>
-              <th className="py-1 font-normal">effective</th>
+              <th className="py-1 font-normal">Connector</th>
+              <th className="py-1 font-normal">Operation</th>
+              <th className="py-1 font-normal">Organisation</th>
+              <th className="py-1 font-normal">This project</th>
+              <th className="py-1 font-normal">Effective</th>
             </tr>
           </thead>
           <tbody>
@@ -72,7 +72,7 @@ function Ligne({ slug, operation }: { slug: string; operation: ProjectOperation 
       </td>
       <td className="whitespace-nowrap">
         <label className="sr-only" htmlFor={id}>
-          this project&apos;s policy for {operation.operation}
+          This project&apos;s policy for {operation.operation}
         </label>
         <Select
           id={id}
@@ -86,7 +86,7 @@ function Ligne({ slug, operation }: { slug: string; operation: ProjectOperation 
             )
           }
         >
-          <option value="">as the organisation</option>
+          <option value="">As the organisation</option>
           {choixPermis(operation.org_policy).map((p) => (
             <option key={p} value={p}>
               {p}
@@ -99,7 +99,7 @@ function Ligne({ slug, operation }: { slug: string; operation: ProjectOperation 
               size="sm"
               onClick={() => void agir(() => api.relaxProjectOperation(slug, operation.connector, operation.operation))}
             >
-              reset
+              Reset
             </Button>
           </span>
         )}

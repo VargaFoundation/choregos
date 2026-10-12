@@ -31,7 +31,7 @@ export default function MapPage() {
   const [choix, setChoix] = useState<{ kind: "node" | "edge"; id: string } | null>(null);
   if (brouillon.definition.error) return <ErrorNote>{String(brouillon.definition.error)}</ErrorNote>;
   const graph = brouillon.graph;
-  if (!graph) return <Empty>the map appears once the workflow is read…</Empty>;
+  if (!graph) return <Empty>The map appears once the workflow is read…</Empty>;
   const noeuds = graph.nodes as NoeudDuGraphe[];
   const definition = (brouillon.definition.data?.json ?? {}) as Definition;
   const acteurs = Object.keys(definition.actors ?? {});
@@ -40,9 +40,9 @@ export default function MapPage() {
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <Card
-        title="map"
+        title="Map"
         action={
-          <span className="inline-flex overflow-hidden rounded border border-line-strong text-xs" role="group" aria-label="view">
+          <span className="inline-flex overflow-hidden rounded border border-line-strong text-xs" role="group" aria-label="View">
             {(["diagram", "list"] as const).map((v) => (
               <button
                 key={v}
@@ -51,7 +51,7 @@ export default function MapPage() {
                 className={cn("px-2.5 py-1", vue === v ? "bg-surface-sunken text-ink" : "text-ink-muted hover:text-ink")}
                 onClick={() => router.replace(v === "list" ? `${chemin}?vue=list` : chemin)}
               >
-                {v}
+                {v === "list" ? "List" : "Diagram"}
               </button>
             ))}
           </span>
@@ -83,12 +83,12 @@ export default function MapPage() {
         {arete && <PanneauDeTransition key={`e-${arete.id ?? arete.from}`} arete={arete} acteurs={acteurs} />}
         {!noeud && !arete && (
           <>
-            <Empty title="edit the workflow">
+            <Empty title="Edit the workflow">
               Choose a step on the diagram, or a state in the list view (click, or Tab then Enter).
             </Empty>
             {/* Ajouter une étape ne demandait pas moins que la vue liste, un état choisi, puis « a new
                 state… » dans une liste : introuvable (seconde passe du 08/10, S23-13). */}
-            <Card title="add a step">
+            <Card title="Add a step">
               <FormulaireDEtape etats={noeuds} acteurs={acteurs} />
             </Card>
           </>

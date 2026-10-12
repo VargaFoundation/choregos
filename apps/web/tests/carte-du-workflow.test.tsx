@@ -32,18 +32,18 @@ function rendre(onSelect = vi.fn()) {
 describe("la carte à plat, rendue (S21-07)", () => {
   it("chaque case dit qui agit en toutes lettres, ce qu'elle produit, ses garanties, son délai", () => {
     rendre();
-    const chemin = screen.getByRole("list", { name: "nominal path" });
+    const chemin = screen.getByRole("list", { name: "Nominal path" });
     expect(chemin.querySelectorAll(":scope > li")).toHaveLength(4);
-    expect(screen.getByTestId("etat-inbox")).toHaveTextContent("agent · refiner");
-    expect(screen.getByTestId("etat-spec")).toHaveTextContent("human · owner");
+    expect(screen.getByTestId("etat-inbox")).toHaveTextContent("Agent · refiner");
+    expect(screen.getByTestId("etat-spec")).toHaveTextContent("Human · owner");
     expect(screen.getByTestId("etat-spec")).toHaveTextContent("product-owners, within 24 h");
-    expect(screen.getByTestId("etat-inbox").parentElement).toHaveTextContent("produces spec_markdown");
-    expect(screen.getByTestId("etat-dev").parentElement).toHaveTextContent("only if scope_respected, no_secrets");
-    expect(screen.getByTestId("etat-spec").parentElement).toHaveTextContent("times out after 72 h");
+    expect(screen.getByTestId("etat-inbox").parentElement).toHaveTextContent("Produces spec_markdown");
+    expect(screen.getByTestId("etat-dev").parentElement).toHaveTextContent("Only if scope_respected, no_secrets");
+    expect(screen.getByTestId("etat-spec").parentElement).toHaveTextContent("Times out after 72 h");
     // Ce qui sort du chemin est à côté, avec d'où l'on y tombe.
-    const cote = screen.getByRole("list", { name: "off the main path" });
+    const cote = screen.getByRole("list", { name: "Off the main path" });
     expect(cote).toHaveTextContent("Needs a human");
-    expect(cote).toHaveTextContent("reached from Implementing (when retries run out)");
+    expect(cote).toHaveTextContent("Reached from Implementing (when retries run out)");
   });
 
   it("cliquer un état ou une flèche ouvre son panneau", () => {
@@ -52,7 +52,7 @@ describe("la carte à plat, rendue (S21-07)", () => {
     expect(onSelect).toHaveBeenLastCalledWith("node", "spec");
     fireEvent.click(screen.getByTestId("transition-t-dev"));
     expect(onSelect).toHaveBeenLastCalledWith("edge", "t-dev");
-    expect(screen.getByTestId("transition-t-dev")).toHaveTextContent("by dev · 2 gates");
+    expect(screen.getByTestId("transition-t-dev")).toHaveTextContent("By dev · 2 gates");
   });
 
   it("les flèches du clavier déplacent le focus, et l'état sous le curseur est annoncé", () => {
@@ -71,10 +71,10 @@ describe("la carte à plat, rendue (S21-07)", () => {
     rendre();
     expect(screen.queryByTestId("secondaires-dev")).toBeNull();
     fireEvent.mouseEnter(screen.getByTestId("etat-dev").parentElement!);
-    expect(screen.getByTestId("secondaires-dev")).toHaveTextContent("when retries run out → Needs a human");
+    expect(screen.getByTestId("secondaires-dev")).toHaveTextContent("When retries run out → Needs a human");
     fireEvent.mouseLeave(screen.getByTestId("etat-dev").parentElement!);
     expect(screen.queryByTestId("secondaires-dev")).toBeNull();
-    fireEvent.click(screen.getByLabelText(/show every retry, rejection and escalation \(1\)/));
+    fireEvent.click(screen.getByLabelText(/Show every retry, rejection and escalation \(1\)/));
     expect(screen.getByTestId("secondaires-dev")).toBeInTheDocument();
   });
 

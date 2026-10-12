@@ -25,9 +25,9 @@ export default function AgentsPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>who does the work</Eyebrow>
+        <Eyebrow>Who does the work</Eyebrow>
         <Heading as="h1" size="xl">
-          agents
+          Agents
         </Heading>
         <p className="max-w-3xl text-sm text-ink-muted">
           An agent is an object of the organisation: its instructions, model, skills and tools live in versions that
@@ -37,23 +37,23 @@ export default function AgentsPage() {
         </p>
         <Glossaire ici="agents" />
       </div>
-      <Card title="registry">
+      <Card title="Registry">
         {agents.error ? (
           <ErrorNote>{String(agents.error)}</ErrorNote>
         ) : !agents.data ? (
-          <p className="text-sm text-ink-muted">reading the registry…</p>
+          <p className="text-sm text-ink-muted">Reading the registry…</p>
         ) : agents.data.length === 0 ? (
-          <Empty title="no agent yet">Register one below, or from a project&apos;s implicit agents.</Empty>
+          <Empty title="No agent yet">Register one below, or from a project&apos;s implicit agents.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="registre">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
-                  <th className="py-1 font-normal">agent</th>
-                  <th className="py-1 font-normal">kind</th>
-                  <th className="py-1 font-normal">status</th>
-                  <th className="py-1 font-normal">version</th>
-                  <th className="py-1 font-normal">owner</th>
+                  <th className="py-1 font-normal">Agent</th>
+                  <th className="py-1 font-normal">Kind</th>
+                  <th className="py-1 font-normal">Status</th>
+                  <th className="py-1 font-normal">Version</th>
+                  <th className="py-1 font-normal">Owner</th>
                 </tr>
               </thead>
               <tbody>
@@ -125,7 +125,7 @@ function NouvelAgent({ org }: { org: string }) {
     }
   }
   return (
-    <Card title="new agent">
+    <Card title="New agent">
       <form
         className="grid gap-3 md:grid-cols-2"
         onSubmit={(event) => {
@@ -134,7 +134,7 @@ function NouvelAgent({ org }: { org: string }) {
         }}
       >
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">slug</span>
+          <span className="text-xs text-ink-muted">Slug</span>
           <Input
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
@@ -142,11 +142,11 @@ function NouvelAgent({ org }: { org: string }) {
           />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">name</span>
+          <span className="text-xs text-ink-muted">Name</span>
           <Input value={nom} onChange={(e) => setNom(e.target.value)} />
         </label>
         <label className="space-y-1 md:col-span-2">
-          <span className="text-xs text-ink-muted">instructions (what the frame of the platform does not say)</span>
+          <span className="text-xs text-ink-muted">Instructions (what the frame of the platform does not say)</span>
           <Textarea
             className="w-auto font-mono text-xs"
             rows={6}
@@ -155,7 +155,7 @@ function NouvelAgent({ org }: { org: string }) {
           />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">model (empty: the project&apos;s profile)</span>
+          <span className="text-xs text-ink-muted">Model (empty: the project&apos;s profile)</span>
           <Input
             value={modele}
             onChange={(e) => setModele(e.target.value)}
@@ -163,7 +163,7 @@ function NouvelAgent({ org }: { org: string }) {
           />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">daily budget (USD, empty: none)</span>
+          <span className="text-xs text-ink-muted">Daily budget (USD, empty: none)</span>
           <Input
             type="number"
             min={0}
@@ -174,7 +174,7 @@ function NouvelAgent({ org }: { org: string }) {
         </label>
         <div className="flex items-center gap-3 md:col-span-2">
           <Button type="submit" tone="accent" disabled={!slug}>
-            register
+            Register
           </Button>
           {fait && (
             <span className="text-sm" role="status">

@@ -10,7 +10,7 @@ import { useBrouillon } from "@/components/workflows/brouillon";
 // L'éditeur (CodeMirror) n'est chargé qu'à l'ouverture de l'onglet : la page n'en paie pas le poids avant.
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
   ssr: false,
-  loading: () => <p className="text-sm text-ink-muted">loading the editor…</p>,
+  loading: () => <p className="text-sm text-ink-muted">Loading the editor…</p>,
 });
 
 /**
@@ -23,7 +23,7 @@ export default function YamlPage() {
   const editeur = useRef<PoigneeDeLEditeur>(null);
   const { definition, validation } = brouillon;
   if (definition.error) return <ErrorNote>{String(definition.error)}</ErrorNote>;
-  if (!definition.data) return <Empty>reading the workflow…</Empty>;
+  if (!definition.data) return <Empty>Reading the workflow…</Empty>;
   const name = definition.data.name;
   return (
     <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
@@ -41,15 +41,15 @@ export default function YamlPage() {
           Changes typed here, on the map or in the process view are one draft: the bar above publishes it.
         </p>
       </Card>
-      <Card title="validation" className="self-start">
+      <Card title="Validation" className="self-start">
         <div data-testid="validation-yaml" className="space-y-2 text-sm">
           {validation.etat === "en_cours" ? (
-            <p className="text-ink-muted">validating…</p>
+            <p className="text-ink-muted">Validating…</p>
           ) : validation.etat === "injoignable" ? (
             <ErrorNote>
-              could not validate: {validation.message}.{" "}
+              Could not validate: {validation.message}.{" "}
               <button type="button" className="underline" onClick={brouillon.revalider}>
-                retry
+                Retry
               </button>
             </ErrorNote>
           ) : brouillon.erreurs.length === 0 ? (
@@ -59,7 +59,7 @@ export default function YamlPage() {
             <ErrorNote key={index}>
               {issue.line ? (
                 <button type="button" className="underline" onClick={() => editeur.current?.allerALaLigne(issue.line!)}>
-                  line {issue.line}
+                  Line {issue.line}
                 </button>
               ) : null}
               {issue.line ? " — " : ""}

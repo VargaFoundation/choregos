@@ -62,12 +62,12 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
           rule it matches, else the default — and stays pinned to that version until it ends.
         </p>
         <Link href={`/p/${slug}/workflows/new`} className={buttonClasses("secondary", "sm")}>
-          new workflow
+          New workflow
         </Link>
       </div>
 
-      {workflows.data?.length === 0 && <Empty title="no workflow">Publish one from a template.</Empty>}
-      <ul className="grid gap-4 md:grid-cols-2" aria-label="workflows">
+      {workflows.data?.length === 0 && <Empty title="No workflow">Publish one from a template.</Empty>}
+      <ul className="grid gap-4 md:grid-cols-2" aria-label="Workflows">
         {workflows.data?.map((workflow) => (
           <li key={workflow.name}>
             <CarteDeWorkflow
@@ -81,7 +81,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
         ))}
       </ul>
 
-      <Card title="routing">
+      <Card title="Routing">
         {!routing.data || !workflows.data ? (
           <>
             <EtatDeLecture lecture={routing} quoi="the routing" />
@@ -116,9 +116,9 @@ function CarteDeWorkflow({
   const nom = workflow.name;
   // Ce que l'API refuserait, dit avant : le défaut et la cible d'une règle ne se désactivent pas.
   const pourquoiPas = workflow.is_default
-    ? "the default cannot be deactivated — make another one the default first"
+    ? "The default cannot be deactivated — make another one the default first"
     : routed.length > 0
-      ? "a routing rule sends requests here — remove it first"
+      ? "A routing rule sends requests here — remove it first"
       : null;
   return (
     <Card
@@ -127,24 +127,24 @@ function CarteDeWorkflow({
           {nom}
         </Link>
       }
-      action={workflow.is_default ? <Badge tone="accent">default</Badge> : undefined}
+      action={workflow.is_default ? <Badge tone="accent">Default</Badge> : undefined}
     >
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm" data-testid={`workflow-card-${nom}`}>
-        <dt className="text-ink-muted">active version</dt>
+        <dt className="text-ink-muted">Active version</dt>
         <dd>v{workflow.version}</dd>
-        <dt className="text-ink-muted">open items</dt>
+        <dt className="text-ink-muted">Open items</dt>
         <dd>{workflow.open_items}</dd>
-        <dt className="text-ink-muted">routed here</dt>
+        <dt className="text-ink-muted">Routed here</dt>
         <dd>
           {routed.length > 0
             ? routed.map(condition).join("; ")
             : workflow.is_default
-              ? "whatever no rule claims"
-              : "only when a request names it"}
+              ? "Whatever no rule claims"
+              : "Only when a request names it"}
         </dd>
         {workflow.created_by && (
           <>
-            <dt className="text-ink-muted">published</dt>
+            <dt className="text-ink-muted">Published</dt>
             <dd>
               {workflow.created_by}
               {workflow.updated_at ? `, ${shortDate(workflow.updated_at)}` : ""}
@@ -157,14 +157,14 @@ function CarteDeWorkflow({
           {routing && (
             <GesteConfirme
               ton="primary"
-              question={`make ${nom} the default? a request that names no workflow and matches no rule is born in ${nom} from now on; tickets already running stay where they are.`}
-              confirmer={`make ${nom} the default`}
+              question={`Make ${nom} the default? A request that names no workflow and matches no rule is born in ${nom} from now on; tickets already running stay where they are.`}
+              confirmer={`Make ${nom} the default`}
               action={async () => {
                 await api.putWorkflowRouting(slug, { ...routing, default: nom });
                 await onChange();
               }}
             >
-              make default
+              Make default
             </GesteConfirme>
           )}
           {pourquoiPas ? (
@@ -172,14 +172,14 @@ function CarteDeWorkflow({
           ) : (
             <GesteConfirme
               tonDuBouton="danger"
-              question={`deactivate ${nom}? it takes no new request; its ${workflow.open_items} open ticket${workflow.open_items === 1 ? "" : "s"} finish on their version. publishing it again brings it back.`}
-              confirmer={`deactivate ${nom}`}
+              question={`Deactivate ${nom}? It takes no new request; its ${workflow.open_items} open ticket${workflow.open_items === 1 ? "" : "s"} finish on their version. Publishing it again brings it back.`}
+              confirmer={`Deactivate ${nom}`}
               action={async () => {
                 await api.deactivateWorkflow(slug, nom);
                 await onChange();
               }}
             >
-              deactivate
+              Deactivate
             </GesteConfirme>
           )}
         </div>
@@ -236,7 +236,7 @@ function Routage({
     try {
       await api.putWorkflowRouting(slug, { default: routing.default, rules: regles });
       setRegles(null);
-      setMessage("routing saved — it applies to the next request that comes in");
+      setMessage("Routing saved — it applies to the next request that comes in");
       await onChange();
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "refused");
@@ -254,7 +254,7 @@ function Routage({
       {courantes.length === 0 ? (
         <p className="text-ink-muted">No rule — every request that names no workflow goes to the default.</p>
       ) : (
-        <ol className="divide-y divide-line border-y border-line" aria-label="routing rules" data-testid="regles">
+        <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="regles">
           {courantes.map((regle, index) => (
             <li key={`${index}-${regle.workflow}`} className="flex flex-wrap items-center gap-2 py-2">
               <span className="w-5 text-ink-muted">{index + 1}.</span>
@@ -262,13 +262,13 @@ function Routage({
                 {condition(regle)} → <strong>{regle.workflow}</strong>
               </span>
               <Button size="sm" onClick={() => deplacer(index, -1)} disabled={index === 0}>
-                up<span className="sr-only"> rule {index + 1}</span>
+                Up<span className="sr-only"> rule {index + 1}</span>
               </Button>
               <Button size="sm" onClick={() => deplacer(index, 1)} disabled={index === courantes.length - 1}>
-                down<span className="sr-only"> rule {index + 1}</span>
+                Down<span className="sr-only"> rule {index + 1}</span>
               </Button>
               <Button size="sm" onClick={() => changer(courantes.filter((_, i) => i !== index))}>
-                remove<span className="sr-only"> rule {index + 1}</span>
+                Remove<span className="sr-only"> rule {index + 1}</span>
               </Button>
             </li>
           ))}
@@ -277,7 +277,7 @@ function Routage({
 
       <form
         className="flex flex-wrap items-end gap-2"
-        aria-label="new routing rule"
+        aria-label="New routing rule"
         onSubmit={(event) => {
           event.preventDefault();
           if (!ajoutable) return;
@@ -287,7 +287,7 @@ function Routage({
         }}
       >
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">labelled (any of)</span>
+          <span className="text-xs text-ink-muted">Labelled (any of)</span>
           <Input
             value={labels}
             onChange={(event) => setLabels(event.target.value)}
@@ -296,7 +296,7 @@ function Routage({
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">of type</span>
+          <span className="text-xs text-ink-muted">Of type</span>
           <Input
             value={type}
             onChange={(event) => setType(event.target.value)}
@@ -305,7 +305,7 @@ function Routage({
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">goes to</span>
+          <span className="text-xs text-ink-muted">Goes to</span>
           <Select
             value={cibleChoisie}
             onChange={(event) => setCible(event.target.value)}
@@ -319,23 +319,23 @@ function Routage({
           </Select>
         </label>
         <Button size="sm" type="submit" disabled={!ajoutable} aria-describedby="regle-incomplete">
-          add the rule
+          Add the rule
         </Button>
         {!ajoutable && (
           <span id="regle-incomplete" className="self-center text-xs text-ink-muted">
-            a rule needs a label or a type
+            A rule needs a label or a type
           </span>
         )}
       </form>
 
       {regles && (
         <div className="flex flex-wrap items-center gap-2 border border-line border-l-2 border-l-accent p-2">
-          <span className="flex-1">the routing has unsaved changes</span>
+          <span className="flex-1">The routing has unsaved changes</span>
           <Button size="sm" onClick={() => setRegles(null)} disabled={occupe}>
-            discard
+            Discard
           </Button>
           <Button size="sm" tone="primary" onClick={() => void enregistrer()} disabled={occupe}>
-            save the routing
+            Save the routing
           </Button>
         </div>
       )}

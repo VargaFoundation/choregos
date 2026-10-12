@@ -24,12 +24,12 @@ export function PlanDeLAgent({ plan }: { plan: Plan }) {
           done
         </span>
         <span className="font-mono">
-          revision {plan.revisions.length} · {shortDate(derniere.ts)}
+          Revision {plan.revisions.length} · {shortDate(derniere.ts)}
         </span>
       </div>
       <div
         role="progressbar"
-        aria-label="tasks done"
+        aria-label="Tasks done"
         aria-valuemin={0}
         aria-valuemax={plan.total}
         aria-valuenow={plan.faites}
@@ -40,7 +40,7 @@ export function PlanDeLAgent({ plan }: { plan: Plan }) {
           style={{ width: `${plan.total ? (plan.faites / plan.total) * 100 : 0}%` }}
         />
       </div>
-      <ol aria-label="agent plan" className="space-y-1.5 text-sm">
+      <ol aria-label="Agent plan" className="space-y-1.5 text-sm">
         {plan.taches.map((tache) => (
           <Ligne key={`${tache.retiree ? "retiree" : "courante"}:${tache.contenu}`} tache={tache} />
         ))}
@@ -82,7 +82,7 @@ function Ligne({ tache }: { tache: TacheDuPlan }) {
         <span className="sr-only"> — {LIBELLE[tache.statut]}</span>
       </span>
       {tache.priorite === "high" && (
-        <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-muted">high</span>
+        <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-muted">High</span>
       )}
     </li>
   );

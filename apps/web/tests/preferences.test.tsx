@@ -95,11 +95,11 @@ describe("le choix du thème", () => {
         <ChoixDuTheme />
       </ThemeProvider>,
     );
-    expect(screen.getByRole("radio", { name: "dark" })).toBeChecked();
-    fireEvent.click(screen.getByRole("radio", { name: "light" }));
+    expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Light" }));
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(window.localStorage.getItem(CLE_DU_THEME)).toBe("light");
-    expect(screen.getByRole("radio", { name: "light" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Light" })).toBeChecked();
   });
 
   it("« system » suit le système quand il change de mode", () => {
@@ -109,7 +109,7 @@ describe("le choix du thème", () => {
         <ChoixDuTheme />
       </ThemeProvider>,
     );
-    fireEvent.click(screen.getByRole("radio", { name: "system" }));
+    fireEvent.click(screen.getByRole("radio", { name: "System" }));
     expect(document.documentElement.dataset.theme).toBe("dark");
     act(() => os.basculer(true));
     expect(document.documentElement.dataset.theme).toBe("light");
@@ -127,6 +127,6 @@ describe("le choix du thème", () => {
       window.dispatchEvent(new StorageEvent("storage", { key: CLE_DU_THEME }));
     });
     expect(document.documentElement.dataset.theme).toBe("light");
-    expect(screen.getByRole("radio", { name: "light" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Light" })).toBeChecked();
   });
 });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { CircleHelp, Eye, MessageSquareQuote, Sigma, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { enPhrase } from "@/lib/format";
 import type { Provenance as Genre } from "@/lib/provenance";
 
 const ICONES: Record<Genre, LucideIcon> = { declared: MessageSquareQuote, observed: Eye, inferred: Sigma, unknown: CircleHelp };
@@ -21,13 +22,13 @@ export function Provenance({ de, className }: { de: Genre; className?: string })
       data-provenance={de}
       title={SENS[de]}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 font-mono text-[10px] tracking-[0.06em] uppercase",
+        "inline-flex shrink-0 items-center gap-1 text-[11px] font-medium",
         de === "declared" ? "text-waiting-ink" : "text-ink-muted",
         className,
       )}
     >
       <Icone aria-hidden className="size-3" strokeWidth={2} />
-      {de}
+      {enPhrase(de)}
       <span className="sr-only"> — {SENS[de]}</span>
     </span>
   );

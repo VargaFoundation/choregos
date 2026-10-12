@@ -32,7 +32,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="search">
+      <Card title="Search">
         <form
           className="mb-3 flex items-end gap-2"
           onSubmit={(event) => {
@@ -41,16 +41,16 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
           }}
         >
           <label className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-xs text-ink-muted">search the memory</span>
+            <span className="text-xs text-ink-muted">Search the memory</span>
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="rounding, incident, test convention…"
+              placeholder="Rounding, incident, test convention…"
               className="flex-1"
             />
           </label>
           <Button type="submit" tone="primary">
-            search
+            Search
           </Button>
         </form>
         <ul className="space-y-3">
@@ -60,7 +60,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
               <p className="font-mono text-xs">{memory.subject}</p>
               <p className="mt-1 text-sm">{memory.content}</p>
               <p className="mt-1 text-xs text-ink-muted">
-                valid from {shortDate(memory.valid_from)}
+                Valid from {shortDate(memory.valid_from)}
                 {memory.valid_to ? ` to ${shortDate(memory.valid_to)}` : " (in force)"} · source{" "}
                 {String((memory.provenance as Record<string, unknown>)?.source ?? "—")}
               </p>
@@ -68,10 +68,10 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
           ))}
         </ul>
         <EtatDeLecture lecture={results} quoi="the memory" />
-        {submitted && results.data?.length === 0 && <Empty>no memory for “{submitted}”</Empty>}
+        {submitted && results.data?.length === 0 && <Empty>No memory for “{submitted}”</Empty>}
       </Card>
 
-      <Card title="facts proposed by agents">
+      <Card title="Facts proposed by agents">
         {error && <ErrorNote>{error}</ErrorNote>}
         <ul className="space-y-3">
           {(pending.data ?? [])
@@ -80,20 +80,20 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
               <li key={memory.id} className="rounded border border-line border-l-2 border-l-warn bg-surface p-3">
                 <p className="font-mono text-xs">{memory.subject}</p>
                 <p className="mt-1 text-sm">{memory.content}</p>
-                <p className="mt-1 text-xs text-ink-muted">proposed by run {memory.proposed_by ?? "—"}</p>
+                <p className="mt-1 text-xs text-ink-muted">Proposed by run {memory.proposed_by ?? "—"}</p>
                 <div className="mt-2 flex gap-2">
                   <Button tone="primary" onClick={() => decide(memory.id ?? "", "accept")}>
-                    accept
+                    Accept
                   </Button>
                   <Button tone="danger" onClick={() => decide(memory.id ?? "", "reject")}>
-                    reject
+                    Reject
                   </Button>
                 </div>
               </li>
             ))}
         </ul>
         <EtatDeLecture lecture={pending} quoi="the proposed facts" />
-        {pending.data?.length === 0 && <Empty>no pending fact</Empty>}
+        {pending.data?.length === 0 && <Empty>No pending fact</Empty>}
       </Card>
     </div>
   );

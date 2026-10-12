@@ -7,10 +7,10 @@ import { shortDate } from "@/lib/format";
 import type { HandOff, HandOffEvent } from "@/lib/types";
 
 const NOMS: Record<string, string> = {
-  spec_markdown: "specification",
-  plan_markdown: "plan",
-  review_markdown: "review",
-  release_notes_markdown: "release notes",
+  spec_markdown: "Specification",
+  plan_markdown: "Plan",
+  review_markdown: "Review",
+  release_notes_markdown: "Release notes",
 };
 
 /** Le début d'une empreinte : de quoi la reconnaître, pas de quoi la recopier. */
@@ -39,9 +39,9 @@ export function modifieeApresCoup(passage: HandOff): boolean {
 }
 
 const LECTURES: Record<Lecture, [Tone, string]> = {
-  same: ["succeeded", "the revision produced"],
-  other: ["failed", "another revision"],
-  unknown: ["waiting", "a revision no step produced"],
+  same: ["succeeded", "The revision produced"],
+  other: ["failed", "Another revision"],
+  unknown: ["waiting", "A revision no step produced"],
 };
 
 /**
@@ -50,7 +50,7 @@ const LECTURES: Record<Lecture, [Tone, string]> = {
  */
 export function Passages({ passages }: { passages: HandOff[] }) {
   return (
-    <ul aria-label="hand-offs" className="space-y-4" data-testid="passages">
+    <ul aria-label="Hand-offs" className="space-y-4" data-testid="passages">
       {passages.map((passage) => (
         <li key={passage.output} data-sortie={passage.output} className="space-y-1.5">
           <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
@@ -60,7 +60,7 @@ export function Passages({ passages }: { passages: HandOff[] }) {
             </code>{" "}
             {modifieeApresCoup(passage) && (
               <Badge tone="waiting" data-testid="modifiee-apres-coup">
-                {passage.current_digest ? "modified after it was produced" : "removed after it was produced"}
+                {passage.current_digest ? "Modified after it was produced" : "Removed after it was produced"}
               </Badge>
             )}
           </p>
@@ -85,7 +85,7 @@ function Ligne({ evenement, children }: { evenement: HandOffEvent; children?: Re
     <li className="flex flex-wrap items-center gap-x-2 gap-y-1" data-genre={evenement.kind}>
       <Dot tone={evenement.kind === "produced" ? "agent" : "neutral"} />
       {/* Des espaces dans le texte, pas seulement l'écart du flex : un lecteur d'écran lit le texte. */}
-      <span className="text-ink-muted">{evenement.kind === "produced" ? "produced by" : "read by"}</span>{" "}
+      <span className="text-ink-muted">{evenement.kind === "produced" ? "Produced by" : "Read by"}</span>{" "}
       <span className="text-ink">{qui}</span>{" "}
       <code className="font-mono text-ink-muted" title={evenement.digest}>
         {courte(evenement.digest)}

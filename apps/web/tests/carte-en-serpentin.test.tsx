@@ -12,7 +12,7 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     render(<CarteEnSerpentin graph={graph} process={process} initial={initial} />);
     const carte = screen.getByTestId("carte-en-serpentin");
     expect(carte.querySelectorAll("[data-etape]")).toHaveLength(17); // quinze étapes et deux détours
-    expect(screen.queryByRole("toolbar", { name: "replay the journey" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("toolbar", { name: "Replay the journey" })).not.toBeInTheDocument();
     expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer, agent, writes the change — 0 attempts$/);
     const forme = (id: string) => carte.querySelector(`[data-etape="${id}"] .parcours-forme`)!.getAttribute("stroke");
     // Prune l'agent, bleu la personne, ardoise la plateforme, vert le train (S24-04) — les couleurs
@@ -25,7 +25,7 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
       expect(forme(id)).toBe(COULEUR_DU_GENRE[genre].bord);
     }
     expect(carte.querySelectorAll("[data-arc]").length).toBeGreaterThan(5);
-    expect(screen.getByRole("list", { name: "who carries each step" })).toHaveTextContent("release train");
+    expect(screen.getByRole("list", { name: "Who carries each step" })).toHaveTextContent("Release train");
   });
 
   it("cliquer une étape rend sa transition, pour le panneau d'édition", () => {
@@ -45,6 +45,6 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     render(<CarteEnSerpentin graph={brut} process={[]} initial="a" />);
     expect(screen.getByTestId("etape-t-a")).toHaveAccessibleName(/, agent,/);
     expect(screen.getByTestId("etape-t-b")).toHaveAccessibleName(/, person,/);
-    expect(screen.getByTestId("etape-t-c")).toHaveAccessibleName(/release train/);
+    expect(screen.getByTestId("etape-t-c")).toHaveAccessibleName(/Release train/);
   });
 });

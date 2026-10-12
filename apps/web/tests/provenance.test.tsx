@@ -38,22 +38,22 @@ describe("les preuves d'un run", () => {
     const lignes = screen.getAllByRole("listitem");
     const provenance = (texte: string) =>
       lignes.find((l) => l.textContent?.startsWith(texte))!.querySelector("[data-provenance]")!.getAttribute("data-provenance");
-    expect(provenance("tests")).toBe("observed");
-    expect(provenance("lint")).toBe("observed");
-    expect(provenance("coverage")).toBe("declared");
+    expect(provenance("Tests")).toBe("observed");
+    expect(provenance("Lint")).toBe("observed");
+    expect(provenance("Coverage")).toBe("declared");
   });
 
   it("un fait métier mesuré est constaté, celui que l'agent écrit est déclaré", () => {
     render(<Preuves evidence={{ facts: { smoke_ok: true, rapport_joint: true }, measured: ["facts.smoke_ok"] }} />);
     const [smoke, rapport] = screen.getAllByRole("listitem");
-    expect(within(smoke!).getByText("observed")).toBeInTheDocument();
-    expect(within(rapport!).getByText("declared")).toBeInTheDocument();
+    expect(within(smoke!).getByText("Observed")).toBeInTheDocument();
+    expect(within(rapport!).getByText("Declared")).toBeInTheDocument();
   });
 
   it("l'étiquette se lit : un mot, et ce qu'il veut dire pour un lecteur d'écran", () => {
     render(<Provenance de="declared" />);
-    expect(screen.getByText("declared").closest("[data-provenance]")).toHaveTextContent(
-      "declared — said by the agent, not checked by the platform",
+    expect(screen.getByText("Declared").closest("[data-provenance]")).toHaveTextContent(
+      "Declared — said by the agent, not checked by the platform",
     );
   });
 });

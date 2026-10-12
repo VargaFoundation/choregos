@@ -23,14 +23,14 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
   });
   const [fichier, setFichier] = useState<string | null>(null);
   if (skill.error) return <ErrorNote>{String(skill.error)}</ErrorNote>;
-  if (!skill.data) return <Empty>reading the skill…</Empty>;
+  if (!skill.data) return <Empty>Reading the skill…</Empty>;
   const fichiers = Object.keys(version.data?.files ?? {}).sort();
   const montre = fichier && fichiers.includes(fichier) ? fichier : (fichiers.find((f) => f === "SKILL.md") ?? fichiers[0]);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-3">
         <Link href="/skills" className="text-sm text-ink-muted hover:underline">
-          skills
+          Skills
         </Link>
         <span aria-hidden className="text-ink-muted">
           /
@@ -42,13 +42,13 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
       </div>
       {skill.data.description && <p className="max-w-3xl text-sm text-ink-muted">{skill.data.description}</p>}
       <Card
-        title="files"
+        title="Files"
         action={
           (skill.data.versions ?? []).length > 1 ? (
             <label className="flex items-center gap-2 text-xs">
-              <span className="text-ink-muted">version</span>
+              <span className="text-ink-muted">Version</span>
               <Select
-                aria-label="version to see"
+                aria-label="Version to see"
                 className="w-auto"
                 value={numero ?? ""}
                 onChange={(e) => setChoisie(Number(e.target.value))}
@@ -66,7 +66,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
         }
       >
         {!version.data ? (
-          <p className="text-sm text-ink-muted">reading the files…</p>
+          <p className="text-sm text-ink-muted">Reading the files…</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-[14rem_1fr]" data-testid="fichiers">
             <ul className="space-y-1 text-xs">
@@ -98,7 +98,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
           </div>
         )}
       </Card>
-      <Card title="carried by">
+      <Card title="Carried by">
         {(skill.data.used_by ?? []).length === 0 ? (
           <p className="text-sm text-ink-muted">No agent names it yet.</p>
         ) : (

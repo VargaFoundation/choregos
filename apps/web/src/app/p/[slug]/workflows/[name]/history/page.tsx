@@ -54,19 +54,19 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
   }
 
   if (versions.error) return <ErrorNote>{String(versions.error)}</ErrorNote>;
-  if (!versions.data) return <Empty>reading the history…</Empty>;
+  if (!versions.data) return <Empty>Reading the history…</Empty>;
   return (
     <div className="space-y-4">
-      <Table aria-label={`versions of ${name}`}>
+      <Table aria-label={`Versions of ${name}`}>
         <THead>
           <TR>
-            <TH>version</TH>
-            <TH>status</TH>
-            <TH>published by</TH>
-            <TH>when</TH>
-            <TH>checksum</TH>
+            <TH>Version</TH>
+            <TH>Status</TH>
+            <TH>Published by</TH>
+            <TH>When</TH>
+            <TH>Checksum</TH>
             <TH>
-              <span className="sr-only">actions</span>
+              <span className="sr-only">Actions</span>
             </TH>
           </TR>
         </THead>
@@ -75,7 +75,7 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
             <TR key={version.version}>
               <TD>v{version.version}</TD>
               <TD>
-                {version.is_active ? <Badge tone="accent">active</Badge> : <span className="text-ink-muted">superseded</span>}
+                {version.is_active ? <Badge tone="accent">Active</Badge> : <span className="text-ink-muted">Superseded</span>}
               </TD>
               <TD>{version.created_by ?? "—"}</TD>
               <TD>{version.created_at ? shortDate(version.created_at) : "—"}</TD>
@@ -87,15 +87,15 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
                   (aConfirmer === version.version ? (
                     <span className="inline-flex items-center gap-2">
                       <Button size="sm" tone="accent" onClick={() => restaurer(version.version)}>
-                        republish v{version.version}
+                        Republish v{version.version}
                       </Button>
                       <Button size="sm" onClick={() => setAConfirmer(null)}>
-                        cancel
+                        Cancel
                       </Button>
                     </span>
                   ) : (
                     <Button size="sm" onClick={() => setAConfirmer(version.version)}>
-                      restore v{version.version}
+                      Restore v{version.version}
                     </Button>
                   ))}
               </TD>
@@ -110,9 +110,9 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
       )}
 
       {liste.length > 1 && (
-        <Card title="compare">
+        <Card title="Compare">
           <div className="flex flex-wrap gap-4">
-            <Field label="from">
+            <Field label="From">
               {(props) => (
                 <Select {...props} value={versionAvant ?? ""} onChange={(event) => setAvant(Number(event.target.value))}>
                   {liste.map((version) => (
@@ -123,7 +123,7 @@ export default function HistoryPage({ params }: { params: Promise<{ slug: string
                 </Select>
               )}
             </Field>
-            <Field label="to">
+            <Field label="To">
               {(props) => (
                 <Select {...props} value={versionApres ?? ""} onChange={(event) => setApres(Number(event.target.value))}>
                   {liste.map((version) => (
@@ -154,7 +154,7 @@ function Diff({ avant, apres }: { avant?: WorkflowDef; apres?: WorkflowDef }) {
   if (!avant || !apres) return null;
   if (morceaux.length === 0) return <p className="mt-3 text-sm text-ink-muted">v{avant.version} and v{apres.version} are identical.</p>;
   return (
-    <div className="mt-3 space-y-3" data-testid="workflow-diff" aria-label={`changes from v${avant.version} to v${apres.version}`}>
+    <div className="mt-3 space-y-3" data-testid="workflow-diff" aria-label={`Changes from v${avant.version} to v${apres.version}`}>
       {morceaux.map((morceau, index) => (
         <pre key={index} className="overflow-hidden whitespace-pre-wrap break-all rounded border border-line bg-surface p-2 text-xs">
           {morceau.map((ligne, rang) => (

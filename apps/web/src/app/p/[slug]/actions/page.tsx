@@ -15,20 +15,20 @@ export default function ProjectActionsPage({ params }: { params: Promise<{ slug:
   const actions = useQuery({ queryKey: ["actions", slug], queryFn: () => api.projectActions(slug) });
   if (actions.error) return <ErrorNote>{String(actions.error)}</ErrorNote>;
   return (
-    <Card title="governed actions">
+    <Card title="Governed actions">
       {!actions.data ? (
-        <p className="text-sm text-ink-muted">reading…</p>
+        <p className="text-sm text-ink-muted">Reading…</p>
       ) : actions.data.length === 0 ? (
-        <Empty title="no action yet">A tool under approval, or a step that writes elsewhere, proposes one.</Empty>
+        <Empty title="No action yet">A tool under approval, or a step that writes elsewhere, proposes one.</Empty>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="actions">
             <thead className="text-left text-xs text-ink-muted">
               <tr>
-                <th className="py-1 font-normal">action</th>
-                <th className="py-1 font-normal">status</th>
-                <th className="py-1 font-normal">proposed by</th>
-                <th className="py-1 font-normal">effects</th>
+                <th className="py-1 font-normal">Action</th>
+                <th className="py-1 font-normal">Status</th>
+                <th className="py-1 font-normal">Proposed by</th>
+                <th className="py-1 font-normal">Effects</th>
               </tr>
             </thead>
             <tbody>

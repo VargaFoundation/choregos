@@ -54,9 +54,9 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
   const choixOrg =
     orgs.length > 1 ? (
       <label className="flex items-center gap-2">
-        <span className="text-ink-muted">organisation</span>
+        <span className="text-ink-muted">Organisation</span>
         <Select
-          aria-label="current organisation"
+          aria-label="Current organisation"
           value={org}
           onChange={(event) => choisirOrg(event.target.value)}
           className="w-auto h-7 font-mono"
@@ -69,8 +69,8 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
         </Select>
       </label>
     ) : (
-      <span className="font-mono text-ink-muted" title="current organisation">
-        org {org}
+      <span className="font-mono text-ink-muted" title="Current organisation">
+        Org {org}
       </span>
     );
 
@@ -78,18 +78,18 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
     <>
       <span title={me.email}>{me.display_name || me.email}</span>
       <button type="button" onClick={() => void deconnecter()} className="text-ink-muted hover:text-ink">
-        sign out
+        Sign out
       </button>
     </>
   ) : (
     <Link href="/login" className="text-ink-muted hover:text-ink">
-      sign in
+      Sign in
     </Link>
   );
 
   const badgeDemo = demo && (
-    <span className="whitespace-nowrap rounded-full border border-waiting-line bg-waiting-soft px-2 py-0.5 font-mono text-[11px] text-waiting-ink">
-      demo · fixtures
+    <span className="whitespace-nowrap rounded-full border border-waiting-line bg-waiting-soft px-2 py-0.5 text-[11px] font-medium text-waiting-ink">
+      Demo · fixtures
     </span>
   );
 
@@ -103,21 +103,21 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
         {badgeDemo}
         <ChoixDuTheme />
       </div>
-      <nav className="ml-auto flex items-center xl:hidden" aria-label="main navigation">
+      <nav className="ml-auto flex items-center xl:hidden" aria-label="Main navigation">
         <button
           ref={bouton}
           type="button"
           aria-expanded={ouvert}
           aria-controls="menu-principal"
           onClick={() => setOuvert((valeur) => !valeur)}
-          className="-mr-3 inline-flex min-h-11 items-center gap-2 px-3 font-mono text-[13px] text-ink hover:bg-surface-muted aria-expanded:bg-surface-muted"
+          className="-mr-3 inline-flex min-h-11 items-center gap-2 rounded px-3 text-[13px] text-ink hover:bg-surface-muted aria-expanded:bg-surface-muted"
         >
           {ouvert ? (
             <X aria-hidden className="size-4" strokeWidth={1.75} />
           ) : (
             <Menu aria-hidden className="size-4" strokeWidth={1.75} />
           )}
-          menu
+          Menu
           {aDecider > 0 && <Compte n={aDecider} />}
         </button>
         {ouvert && (

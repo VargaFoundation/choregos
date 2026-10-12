@@ -50,11 +50,11 @@ describe("les reçus de passage, lus (S25-04)", () => {
         ]}
       />,
     );
-    const [spec, profils] = [...screen.getByRole("list", { name: "hand-offs" }).querySelectorAll<HTMLElement>(":scope > li")];
-    expect(spec).toHaveTextContent("specification");
-    expect(within(spec!).getByTestId("modifiee-apres-coup")).toHaveTextContent("modified after it was produced");
-    expect(within(spec!).getByText("the revision produced")).toBeInTheDocument();
-    expect(spec).toHaveTextContent("produced by refine · attempt 1");
+    const [spec, profils] = [...screen.getByRole("list", { name: "Hand-offs" }).querySelectorAll<HTMLElement>(":scope > li")];
+    expect(spec).toHaveTextContent("Specification");
+    expect(within(spec!).getByTestId("modifiee-apres-coup")).toHaveTextContent("Modified after it was produced");
+    expect(within(spec!).getByText("The revision produced")).toBeInTheDocument();
+    expect(spec).toHaveTextContent("Produced by refine · attempt 1");
     expect(profils).toHaveTextContent("profils");
     expect(within(profils!).queryByTestId("modifiee-apres-coup")).not.toBeInTheDocument();
   });

@@ -60,14 +60,14 @@ export function Connecteurs({ slug }: { slug: string }) {
   }
 
   return (
-    <Card title="connectors" className="lg:col-span-2">
+    <Card title="Connectors" className="lg:col-span-2">
       <div className="space-y-3">
         <p className="text-sm text-ink-muted">
           What this project&apos;s workflows need, and why. A secret is never typed here: name it by reference
           (<code>env:NAME</code>), the platform reads it when the connector is used. Systems the whole organisation
           shares — a directory, MCP servers — are declared in{" "}
           <Link href="/admin/connectors" className="underline">
-            admin › connectors
+            Admin › connectors
           </Link>
           .
         </p>
@@ -113,7 +113,7 @@ export function Connecteurs({ slug }: { slug: string }) {
             }}
           >
             <label className="space-y-1">
-              <span className="text-xs text-ink-muted">add a connector</span>
+              <span className="text-xs text-ink-muted">Add a connector</span>
               <Select
                 className="w-auto"
                 value={ajout}
@@ -128,7 +128,7 @@ export function Connecteurs({ slug }: { slug: string }) {
               </Select>
             </label>
             <Button size="sm" type="submit" disabled={!ajout}>
-              add
+              Add
             </Button>
           </form>
         )}
@@ -164,7 +164,7 @@ function Ligne({
           {actuel ? (
             actuel.type
           ) : exigence?.default_type ? (
-            <span className="text-ink-muted">platform default: {exigence.default_type}</span>
+            <span className="text-ink-muted">Platform default: {exigence.default_type}</span>
           ) : (
             <span className="text-ink-muted">— not configured</span>
           )}
@@ -176,15 +176,15 @@ function Ligne({
             kind={actuel.status === "ok" ? "terminal" : actuel.status === "error" ? "blocked" : "wait"}
           />
         )}
-        {actuel?.last_check_at && <span className="text-xs text-ink-muted">tested {shortDate(actuel.last_check_at)}</span>}
+        {actuel?.last_check_at && <span className="text-xs text-ink-muted">Tested {shortDate(actuel.last_check_at)}</span>}
         <span className="ml-auto inline-flex gap-2">
           {actuel && (
             <Button size="sm" onClick={() => void onTest()}>
-              test
+              Test
             </Button>
           )}
           <Button size="sm" onClick={() => setOuvert(!ouvert)}>
-            {ouvert ? "close" : actuel ? "edit" : "configure"}
+            {ouvert ? "Close" : actuel ? "Edit" : "Configure"}
           </Button>
         </span>
       </div>
@@ -193,7 +193,7 @@ function Ligne({
           {exigence.reasons.slice(0, 3).map((raison) => (
             <li key={raison}>{raison}</li>
           ))}
-          {exigence.reasons.length > 3 && <li>and {exigence.reasons.length - 3} more</li>}
+          {exigence.reasons.length > 3 && <li>And {exigence.reasons.length - 3} more</li>}
         </ul>
       )}
       {ouvert && (
@@ -237,7 +237,7 @@ function Formulaire({
       }}
     >
       <label className="block space-y-1">
-        <span className="text-xs text-ink-muted">implementation</span>
+        <span className="text-xs text-ink-muted">Implementation</span>
         <Select
           className="w-full"
           value={type}
@@ -257,7 +257,7 @@ function Formulaire({
       <SchemaForm schema={schema} value={config} onChange={setConfig} />
       {(choisi?.secret_fields ?? []).length > 0 && (
         <fieldset className="space-y-2">
-          <legend className="text-xs text-ink-muted">secrets — by reference, never the value</legend>
+          <legend className="text-xs text-ink-muted">Secrets — by reference, never the value</legend>
           {(choisi?.secret_fields ?? []).map((champ) => (
             <label key={champ} className="block space-y-1">
               <span className="text-xs text-ink-muted">{champ.replaceAll("_", " ")}</span>
@@ -278,7 +278,7 @@ function Formulaire({
       )}
       <div className="flex justify-end">
         <Button size="sm" tone="primary" type="submit" disabled={!type || manquants.length > 0 || illisibles.length > 0}>
-          save
+          Save
         </Button>
       </div>
     </form>

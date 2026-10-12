@@ -40,7 +40,7 @@ export default function OrgConnectorsPage() {
   const lecture = instances.error ? (
     <ErrorNote>{String(instances.error)}</ErrorNote>
   ) : !instances.data ? (
-    <p className="text-sm text-ink-muted">reading…</p>
+    <p className="text-sm text-ink-muted">Reading…</p>
   ) : null;
   return (
     <div className="space-y-6">
@@ -54,7 +54,7 @@ export default function OrgConnectorsPage() {
       </div>
       <section className="space-y-3" aria-labelledby="business" data-testid="section-metier">
         <h2 id="business" className="text-lg font-semibold">
-          business systems (API)
+          Business systems (API)
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
           Systems your agents act on through the operations their type declares — a directory, a device fleet, a
@@ -62,7 +62,7 @@ export default function OrgConnectorsPage() {
         </p>
         {lecture ??
           (metier.length === 0 ? (
-            <Empty title="no business system yet">Declare one below.</Empty>
+            <Empty title="No business system yet">Declare one below.</Empty>
           ) : (
             metier.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
           ))}
@@ -82,7 +82,7 @@ export default function OrgConnectorsPage() {
         </p>
         {lecture ??
           (mcp.length === 0 ? (
-            <Empty title="no MCP server yet">declare one below, type “MCP server”.</Empty>
+            <Empty title="No MCP server yet">Declare one below, type “MCP server”.</Empty>
           ) : (
             mcp.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
           ))}
@@ -112,13 +112,13 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
       <Badge tone="neutral">{libelleDeSorte(instance.kind)}</Badge>
       {instance.kind === "mcp" && (
         <Button size="sm" onClick={() => void decouvrir()}>
-          discover
+          Discover
         </Button>
       )}
     </span>
   );
   return (
-    <Card title={`${instance.name} — ${instance.type}`} action={action}>
+    <Card title={`${instance.name} — ${instance.type}`} titreDonnee action={action}>
       {diff && (
         <p className="mb-2 text-sm" role="status">
           {diff}
@@ -128,18 +128,18 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
       {(instance.operations ?? []).length === 0 ? (
         <p className="text-sm text-ink-muted">
           {instance.kind === "mcp"
-            ? "no tool known yet: discover asks the server; each new tool is born closed."
-            : "this type declares no operation an agent can call."}
+            ? "No tool known yet: discover asks the server; each new tool is born closed."
+            : "This type declares no operation an agent can call."}
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid={`operations-${instance.name}`}>
             <thead className="text-left text-xs text-ink-muted">
               <tr>
-                <th className="py-1 font-normal">operation</th>
-                <th className="py-1 font-normal">access</th>
-                <th className="py-1 font-normal">policy</th>
-                <th className="py-1 font-normal">project groups</th>
+                <th className="py-1 font-normal">Operation</th>
+                <th className="py-1 font-normal">Access</th>
+                <th className="py-1 font-normal">Policy</th>
+                <th className="py-1 font-normal">Project groups</th>
               </tr>
             </thead>
             <tbody>
@@ -184,7 +184,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
       </td>
       <td>
         <label className="sr-only" htmlFor={`politique-${connecteur}-${operation.name}`}>
-          policy of {operation.name}
+          Policy of {operation.name}
         </label>
         <Select
           id={`politique-${connecteur}-${operation.name}`}
@@ -214,8 +214,8 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
           <div className="mt-2 max-w-sm">
             <Confirmation
               ton="primary"
-              question={`loosen ${operation.name} to ${assouplir}? ${CE_QUE_CA_PERMET[assouplir as keyof typeof CE_QUE_CA_PERMET] ?? ""}, in every project it applies to.`}
-              confirmer={`set ${assouplir}`}
+              question={`Loosen ${operation.name} to ${assouplir}? ${CE_QUE_CA_PERMET[assouplir as keyof typeof CE_QUE_CA_PERMET] ?? ""}, in every project it applies to.`}
+              confirmer={`Set ${assouplir}`}
               action={async () => {
                 await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir });
                 await client.invalidateQueries({ queryKey: ["org-connectors", org] });
@@ -235,17 +235,17 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
           }}
         >
           <label className="sr-only" htmlFor={`groupes-${connecteur}-${operation.name}`}>
-            project groups of {operation.name}
+            Project groups of {operation.name}
           </label>
           <Input
             id={`groupes-${connecteur}-${operation.name}`}
             className="w-40"
-            placeholder="every project"
+            placeholder="Every project"
             value={groupes}
             onChange={(event) => setGroupes(event.target.value)}
           />
           <Button size="sm" type="submit" disabled={lus.join(",") === (operation.groups ?? []).join(",")}>
-            set
+            Set
           </Button>
         </form>
       </td>
@@ -265,7 +265,7 @@ function Declarer({ org }: { org: string }) {
   // Les outils de livraison d'un projet se règlent dans le projet : ils ne se déclarent pas ici.
   const candidats = (types.data ?? []).filter((t) => !estUneSorteDuProjet(t.kind));
   const familles = [
-    { titre: "business systems (API)", types: candidats.filter((t) => t.kind !== "mcp") },
+    { titre: "Business systems (API)", types: candidats.filter((t) => t.kind !== "mcp") },
     { titre: "MCP servers", types: candidats.filter((t) => t.kind === "mcp") },
   ].filter((famille) => famille.types.length > 0);
   const type = candidats.find((t) => `${t.kind}/${t.type}` === choix);
@@ -292,10 +292,10 @@ function Declarer({ org }: { org: string }) {
     }
   }
   return (
-    <Card title="declare a connector">
+    <Card title="Declare a connector">
       {candidats.length === 0 ? (
         <p className="text-sm text-ink-muted">
-          no connector type exposes operations yet: a plugin (or the <code>mcp</code> type) brings them.
+          No connector type exposes operations yet: a plugin (or the <code>mcp</code> type) brings them.
         </p>
       ) : (
         <form
@@ -307,7 +307,7 @@ function Declarer({ org }: { org: string }) {
         >
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs text-ink-muted">name</span>
+              <span className="text-xs text-ink-muted">Name</span>
               <Input
                 className="w-full"
                 value={nom}
@@ -316,7 +316,7 @@ function Declarer({ org }: { org: string }) {
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-ink-muted">type</span>
+              <span className="text-xs text-ink-muted">Type</span>
               <Select
                 className="w-full"
                 value={choix}
@@ -353,7 +353,7 @@ function Declarer({ org }: { org: string }) {
           ))}
           {illisibles.length > 0 && (
             <p className="text-xs text-danger" role="alert">
-              a reference is expected (env:NAME), not a value
+              A reference is expected (env:NAME), not a value
             </p>
           )}
           {erreur && <ErrorNote>{erreur}</ErrorNote>}
@@ -362,7 +362,7 @@ function Declarer({ org }: { org: string }) {
             tone="accent"
             disabled={!nom || !type || champsManquants(schema, config).length > 0 || illisibles.length > 0}
           >
-            declare
+            Declare
           </Button>
         </form>
       )}

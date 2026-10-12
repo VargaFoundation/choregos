@@ -35,7 +35,7 @@ function rendre(pathname: string) {
       <BarreLaterale />
     </QueryClientProvider>,
   );
-  return screen.getByRole("complementary", { name: "sidebar" });
+  return screen.getByRole("complementary", { name: "Sidebar" });
 }
 
 describe("la barre latérale (S24-03, ADR 0043)", () => {
@@ -45,21 +45,21 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
 
   it("range la navigation en trois groupes nommés", () => {
     const barre = rendre("/");
-    const navigation = within(barre).getByRole("navigation", { name: "main navigation" });
+    const navigation = within(barre).getByRole("navigation", { name: "Main navigation" });
     const noms = (liste: string) =>
       within(within(navigation).getByRole("list", { name: liste }))
         .getAllByRole("link")
         .map((lien) => lien.textContent);
-    expect(noms("work")).toEqual(["projects", "inbox"]);
-    expect(noms("catalogue")).toEqual(["agents", "skills", "knowledge", "AI clients"]);
-    expect(noms("organisation")).toEqual(["admin"]);
+    expect(noms("Work")).toEqual(["Projects", "Inbox"]);
+    expect(noms("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "AI clients"]);
+    expect(noms("Organisation")).toEqual(["Admin"]);
   });
 
   it.each([
-    ["/p/billing-api/board", "projects"],
-    ["/skills/onboarding-procedure", "skills"],
+    ["/p/billing-api/board", "Projects"],
+    ["/skills/onboarding-procedure", "Skills"],
     ["/integrations/cursor", "AI clients"],
-    ["/admin/connectors", "admin"],
+    ["/admin/connectors", "Admin"],
   ])("sur %s, une seule entrée est active : %s", (pathname, attendue) => {
     const barre = rendre(pathname);
     const actives = within(barre).getAllByRole("link").filter((lien) => lien.getAttribute("aria-current") === "page");
@@ -68,20 +68,20 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
 
   it("l'inbox compte ce qui attend une personne : un ticket et deux actions (S23-02)", async () => {
     const barre = rendre("/");
-    const inbox = within(barre).getByRole("link", { name: /^inbox/ });
+    const inbox = within(barre).getByRole("link", { name: /^Inbox/ });
     expect(inbox).toHaveAttribute("href", "/inbox");
     expect(await within(inbox).findByText(", 3 waiting")).toBeInTheDocument();
   });
 
   it("se replie en rail : le choix est gardé, posé sur <html>, et chaque icône a son infobulle", () => {
     const barre = rendre("/");
-    const skills = within(barre).getByRole("link", { name: "skills" });
+    const skills = within(barre).getByRole("link", { name: "Skills" });
     expect(skills).not.toHaveAttribute("title");
 
     fireEvent.click(within(barre).getByRole("button", { name: /Collapse sidebar/ }));
     expect(window.localStorage.getItem(CLE_DE_LA_BARRE)).toBe("rail");
     expect(document.documentElement.dataset.sidebar).toBe("rail");
-    expect(skills).toHaveAttribute("title", "skills");
+    expect(skills).toHaveAttribute("title", "Skills");
 
     fireEvent.click(within(barre).getByRole("button", { name: /Expand sidebar/ }));
     expect(window.localStorage.getItem(CLE_DE_LA_BARRE)).toBe("full");
@@ -96,7 +96,7 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
       window.dispatchEvent(new StorageEvent("storage", { key: CLE_DE_LA_BARRE }));
     });
     expect(document.documentElement.dataset.sidebar).toBe("rail");
-    expect(within(barre).getByRole("link", { name: "skills" })).toHaveAttribute("title", "skills");
+    expect(within(barre).getByRole("link", { name: "Skills" })).toHaveAttribute("title", "Skills");
   });
 
   it("un stockage refusé n'empêche pas de replier la barre", () => {
@@ -121,9 +121,9 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
         </ThemeProvider>
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^menu/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Menu/ }));
     const ids = [...document.querySelectorAll("[id]")].map((element) => element.id);
     expect(ids.filter((id, rang) => ids.indexOf(id) !== rang)).toEqual([]);
-    expect(screen.getAllByRole("list", { name: "work" })).toHaveLength(2);
+    expect(screen.getAllByRole("list", { name: "Work" })).toHaveLength(2);
   });
 });

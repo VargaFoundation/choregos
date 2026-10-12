@@ -58,7 +58,7 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
       const champs = new Set(Object.keys(schema.properties ?? {}));
       const corps = Object.fromEntries(Object.entries(valeurs).filter(([nom]) => champs.has(nom)));
       await api.sectionCall(bloc.write_method ?? "PUT", remplir(bloc.write, org), corps);
-      setMessage("saved");
+      setMessage("Saved");
       setSaisie(null);
       await lu.refetch();
     } catch (cause) {
@@ -71,7 +71,7 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
       title={bloc.title}
       action={
         <Button size="sm" tone="primary" onClick={enregistrer} disabled={saisie === null || manquants.length > 0}>
-          save
+          Save
         </Button>
       }
     >
@@ -105,7 +105,7 @@ function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
     <Card title={bloc.title}>
       {bloc.description && <p className="mb-3 text-sm text-ink-muted">{bloc.description}</p>}
       {lignes.error && <ErrorNote>{String(lignes.error)}</ErrorNote>}
-      {lignes.data && lignes.data.length === 0 && <Empty>nothing yet</Empty>}
+      {lignes.data && lignes.data.length === 0 && <Empty>Nothing yet</Empty>}
       {lignes.data && lignes.data.length > 0 && (
         <Table aria-label={bloc.title}>
           <THead>
@@ -115,7 +115,7 @@ function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
               ))}
               {bloc.row_actions && bloc.row_actions.length > 0 && (
                 <TH>
-                  <span className="sr-only">actions</span>
+                  <span className="sr-only">Actions</span>
                 </TH>
               )}
             </TR>
@@ -211,7 +211,7 @@ function BoutonDAction({
     );
   }
   return (
-    <div className="space-y-2 rounded border border-line p-2" role="group" aria-label={`confirm ${action.label}`}>
+    <div className="space-y-2 rounded border border-line p-2" role="group" aria-label={`Confirm ${action.label}`}>
       {action.confirm && <p className="text-sm">{action.confirm}</p>}
       {action.reauth && <p className="text-xs text-ink-muted">You may be asked to sign in again.</p>}
       {params && <SchemaForm schema={params} value={valeurs} onChange={setValeurs} />}
@@ -222,10 +222,10 @@ function BoutonDAction({
           onClick={() => void agir()}
           disabled={params ? champsManquants(params, valeurs).length > 0 : false}
         >
-          confirm {action.label}
+          Confirm {action.label}
         </Button>
         <Button size="sm" onClick={() => setOuvert(false)}>
-          cancel
+          Cancel
         </Button>
       </span>
       {message && (
