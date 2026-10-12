@@ -166,6 +166,12 @@
             "type": "string"
           },
           "default": []
+        },
+        "output_types": {
+          "type": "object",
+          "description": "The declared type of each output (ADR 0049); a file type is written in .choregos/outputs/.",
+          "additionalProperties": { "type": "string" },
+          "default": {}
         }
       }
     },

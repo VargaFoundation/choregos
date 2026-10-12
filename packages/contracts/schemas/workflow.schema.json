@@ -294,6 +294,11 @@
             "type": "string"
           }
         },
+        "output_types": {
+          "type": "object",
+          "description": "The type of each declared output (ADR 0049); an output not listed is inline markdown or JSON.",
+          "additionalProperties": { "type": "string", "enum": ["markdown", "json", "mermaid", "sarif", "text", "csv", "html", "pdf", "docx", "xlsx", "pptx", "png", "jpeg", "gif", "webp", "svg", "mp4", "webm", "file"] }
+        },
         "on_fail": {
           "$ref": "#/$defs/retry"
         },

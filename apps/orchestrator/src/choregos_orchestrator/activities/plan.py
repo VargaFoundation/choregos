@@ -26,5 +26,7 @@ class StagePlan:
     playbook: str | None = None
     outputs: list[str] | None = None
     inputs: list[str] | None = None
+    #: The declared type of each output (ADR 0049).
+    output_types: dict[str, str] | None = None
     #: Un agent du registre (ADR 0033) : `slug` ou `slug@version`.
     agent: str | None = None

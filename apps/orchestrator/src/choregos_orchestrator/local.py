@@ -190,6 +190,7 @@ async def _run_stage(
             "playbook": actor.playbook,
             "outputs": list(transition.outputs),
             "inputs": list(transition.inputs),
+            "output_types": dict(transition.output_types),
         }
     )
     run_id = prepared["run_id"]

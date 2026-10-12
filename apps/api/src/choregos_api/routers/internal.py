@@ -139,6 +139,7 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
         item=item,
         run=run,
         outputs=sorties_a_ranger(outputs, declarees),
+        types=dict(((run.stage_input or {}).get("transition") or {}).get("output_types") or {}),
     )
 
     await persist_event(

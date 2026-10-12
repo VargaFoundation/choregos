@@ -18,6 +18,7 @@ from choregos_contracts import (
     SystemActor,
     Transition,
     Workflow,
+    missing_outputs,
 )
 
 from ..gates import GateOutcome
@@ -138,8 +139,14 @@ class WorkflowEngine:
         result: StageResult,
         attempts: int,
         gate_outcomes: list[GateOutcome] | None = None,
+        *,
+        require_outputs: bool = True,
     ) -> Decision:
-        """Décide de l'état suivant après un run d'agent (docs/plan/02 §2.1)."""
+        """Décide de l'état suivant après un run d'agent (docs/plan/02 §2.1).
+
+        `require_outputs`: a `done` result that lacks a declared output fails the stage, whatever
+        the output's type (S31-02, ADR 0049) — with or without an `outputs_present` gate. False
+        only for histories recorded before that rule (the interpreter's patch marker)."""
         gate_outcomes = gate_outcomes or []
         if result.status is StageStatus.NEEDS_HUMAN:
             target = self._default_state("on_question")
@@ -156,6 +163,13 @@ class WorkflowEngine:
                 if target:
                     return Decision(target, reason=f"limite atteinte ({result.reason})")
             return self.retry_or_escalate(transition, attempts, result.reason or str(result.status))
+
+        if require_outputs:
+            missing = missing_outputs(list(transition.outputs), dict(transition.output_types), result)
+            if missing:
+                return self.retry_or_escalate(
+                    transition, attempts, f"missing declared outputs: {', '.join(missing)}"
+                )
 
         blocking = [g for g in gate_outcomes if g.blocking]
         if blocking:
