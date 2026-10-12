@@ -66,10 +66,15 @@ SECONDES_DEMARRAGE = (5.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0)
 SECONDES_LIVRAISON = (3600.0, 4 * 3600.0, 8 * 3600.0, 24 * 3600.0, 3 * 86400.0, 7 * 86400.0, 30 * 86400.0)
 ENVIRONNEMENTS = ("dev", "staging", "prod")
 #: Les tableaux de bord affichent l'état d'un train comme un nombre.
+#: The query the `ReleaseTrain` workflow answers (`workflows/train.py`, `status_query`), as the
+#: trains route asks it.
+TRAIN_STATUS_QUERY = "status_query"
+#: Keyed by the `status` the train's `status_query` returns (`ReleaseStatus`). "staged" was never a
+#: status: a train at staging fell to -1 (S26-03).
 ETATS_TRAIN = {
     "collecting": 0,
     "departing": 1,
-    "staged": 2,
+    "staging": 2,
     "awaiting_approval": 3,
     "promoting": 4,
     "verifying": 5,
@@ -312,7 +317,11 @@ async def rafraichir() -> Instantane:
 
 
 async def _trains(slugs: list[str]) -> tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]:
-    """L'état des trains vit dans Temporal : une requête `status` par (projet, environnement), bornée."""
+    """L'état des trains vit dans Temporal : une requête `status_query` par (projet, environnement), bornée.
+
+    S26-03: it asked for `status`, a query the train does not define, and read `state`, a field it
+    does not return; the failure was swallowed below, so the train series were always empty.
+    """
     from .temporal import get_temporal, train_id
 
     geles: dict[tuple[str, str], float] = {}
@@ -321,14 +330,16 @@ async def _trains(slugs: list[str]) -> tuple[dict[tuple[str, str], float], dict[
     for projet in slugs:
         for env in ENVIRONNEMENTS:
             try:
-                live = await asyncio.wait_for(temporal.query(train_id(projet, env), "status"), timeout=2.0)
+                live = await asyncio.wait_for(
+                    temporal.query(train_id(projet, env), TRAIN_STATUS_QUERY), timeout=2.0
+                )
             except Exception as exc:  # pas de train, ou Temporal lent : la série manque, l'API vit
                 logger.debug("train sans état", projet=projet, env=env, error=str(exc)[:80])
                 continue
             if not isinstance(live, dict):
                 continue
             geles[(projet, env)] = 1.0 if live.get("frozen") else 0.0
-            etats[(projet, env)] = float(ETATS_TRAIN.get(str(live.get("state", "")), -1))
+            etats[(projet, env)] = float(ETATS_TRAIN.get(str(live.get("status", "")), -1))
     return geles, etats
 
 
