@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { Heading, Onglets, tabClasses } from "@/components/ui";
+import { Heading, Tabs, tabClasses } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -35,7 +35,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <Heading as="h1" size="xl">
         Administration
       </Heading>
-      <Onglets aria-label="Administration sections">
+      <Tabs aria-label="Administration sections">
         {onglets.map((onglet) => {
           const actif = pathname === onglet.href;
           return (
@@ -44,7 +44,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </Link>
           );
         })}
-      </Onglets>
+      </Tabs>
       {children}
     </div>
   );

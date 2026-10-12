@@ -122,8 +122,8 @@ describe("les primitives de la console", () => {
       </>,
     );
     expect(screen.getByText("Project · billing-api")).not.toHaveClass("border");
-    const carte = screen.getByRole("heading", { level: 2, name: "Costs" }).closest("section");
-    expect(carte).toHaveClass("raised", "rounded-md", "border-line");
+    const card = screen.getByRole("heading", { level: 2, name: "Costs" }).closest("section");
+    expect(card).toHaveClass("raised", "rounded-md", "border-line");
     expect(screen.getByText("42")).toHaveClass("font-mono", "font-light");
   });
 
@@ -144,11 +144,11 @@ describe("les primitives de la console", () => {
     expect(screen.getByRole("alert")).toHaveClass("rounded-md", "bg-failed-soft");
     expect(screen.getByText("mcp:write").tagName).toBe("CODE");
     expect(screen.getByText("mcp:write")).toHaveClass("font-mono", "rounded-sm");
-    const cases = container.querySelectorAll("span[aria-hidden].size-4");
-    expect(cases).toHaveLength(2);
-    expect(cases[0]).toHaveClass("rounded-sm", "bg-accent");
-    expect(cases[0]!.querySelector("svg")).not.toBeNull();
-    expect(cases[1]!.querySelector("svg")).toBeNull();
+    const boxes = container.querySelectorAll("span[aria-hidden].size-4");
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]).toHaveClass("rounded-sm", "bg-accent");
+    expect(boxes[0]!.querySelector("svg")).not.toBeNull();
+    expect(boxes[1]!.querySelector("svg")).toBeNull();
     // A step is numbered `2`, not `02` on a black square.
     expect(screen.getByText("2")).toHaveClass("rounded-full", "font-mono");
   });

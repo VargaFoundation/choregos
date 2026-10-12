@@ -67,7 +67,7 @@ export function libelleDeCode(code: string): string {
  * only, the rest as it is — `release train` → « Release train », `ci_green` stays `ci_green` where
  * it is shown as code.
  */
-export function enPhrase(texte: string): string {
+export function toSentenceCase(texte: string): string {
   return texte.charAt(0).toUpperCase() + texte.slice(1);
 }
 
