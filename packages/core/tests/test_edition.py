@@ -320,7 +320,7 @@ def test_renommer_la_production_ne_leve_pas_le_verrou() -> None:
 
 def test_un_effet_ecrit_se_lit_et_un_effet_deduit_s_annonce() -> None:
     _, ancien = parse_workflow(ANCIEN, strict=False)
-    assert len([w for w in ancien.warnings if w.code == "workflow.effet_implicite"]) == 3
+    assert len([w for w in ancien.warnings if w.code == "workflow.implicit_effect"]) == 3
     nouveau = editer(
         ANCIEN,
         [
@@ -330,7 +330,7 @@ def test_un_effet_ecrit_se_lit_et_un_effet_deduit_s_annonce() -> None:
         ],
     ).yaml
     _, ecrit = parse_workflow(nouveau, strict=False)
-    assert [w for w in ecrit.warnings if w.code == "workflow.effet_implicite"] == []
+    assert [w for w in ecrit.warnings if w.code == "workflow.implicit_effect"] == []
 
 
 def test_does_n_est_qu_un_geste_de_la_plateforme() -> None:

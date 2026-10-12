@@ -160,7 +160,7 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
             for g_index, g in enumerate(t.gates):
                 if g.name == "action_succeeded":
                     report.error(
-                        "gate.sans_matiere",
+                        "gate.nothing_to_check",
                         "guarantee `action_succeeded` without `action:`: there is no action to judge",
                         [*chemin, "gates", g_index],
                         source,
@@ -442,14 +442,14 @@ def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 f"the transition to `{t.to}` {gestes[implicite]} because of the state's NAME: "
                 f"write `does: {implicite}`, so that a rename no longer changes it"
             )
-            report.warn("workflow.effet_implicite", message, ["transitions", index, "to"], source)
+            report.warn("workflow.implicit_effect", message, ["transitions", index, "to"], source)
     for nom, etat in wf.states.items():
         if nom.startswith(PREFIXE_PRODUCTION) and not etat.production:
             message = (
                 f"the state `{nom}` is production because of its NAME: write `production: true`, "
                 "so that a rename no longer lifts the lock"
             )
-            report.warn("workflow.effet_implicite", message, ["states", nom], source)
+            report.warn("workflow.implicit_effect", message, ["states", nom], source)
 
 
 def _check_prod_states(wf: Workflow, report: ValidationReport, source: Any) -> None:
@@ -509,7 +509,7 @@ def _check_gates_ont_de_la_matiere(wf: Workflow, report: ValidationReport, sourc
             if g.params.get("allow_empty") or g.params.get(champ) or (champ == "outputs" and t.outputs):
                 continue
             report.error(
-                "gate.sans_matiere",
+                "gate.nothing_to_check",
                 f"guarantee `{g.name}` without {comment}: it would have nothing to check",
                 ["transitions", index, "gates", g_index],
                 source,

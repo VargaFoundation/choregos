@@ -323,20 +323,20 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
       </section>
       <section>
         <h4 className={LEGENDE}>
-          Access {acces.data ? `· ${acces.data.evenements} events, ${acces.data.refus} refused` : ""}
+          Access {acces.data ? `· ${acces.data.evenements} events, ${acces.data.refusals} refused` : ""}
         </h4>
         {lignes.length === 0 ? (
           <p className="text-xs text-ink-muted">No access recorded.</p>
         ) : (
           <ul className="space-y-0.5 text-xs">
             {[...lignes]
-              .sort((a, b) => b.refus - a.refus)
+              .sort((a, b) => b.refusals - a.refusals)
               .map((l) => (
-                <li key={`${l.nature}:${l.cible}`} className={cn("flex gap-2", l.refus > 0 && "text-failed-ink")}>
+                <li key={`${l.nature}:${l.target}`} className={cn("flex gap-2", l.refusals > 0 && "text-failed-ink")}>
                   <span className="w-14 shrink-0 text-ink-muted">{l.nature}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block break-all font-mono">{l.cible}</span>
-                    {l.refus > 0 && <span className="block">Refused{l.motifs?.length ? `: ${l.motifs.join(" · ")}` : ""}</span>}
+                    <span className="block break-all font-mono">{l.target}</span>
+                    {l.refusals > 0 && <span className="block">Refused{l.motifs?.length ? `: ${l.motifs.join(" · ")}` : ""}</span>}
                   </span>
                 </li>
               ))}

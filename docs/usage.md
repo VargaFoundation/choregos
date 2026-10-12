@@ -211,8 +211,13 @@ transitions:
 Before this, the *name* of the target state carried the effect (`pr_*` opened, `merged*` merged,
 `deployed_prod*` was production): renaming a state silently changed what the workflow did, or
 lifted the production lock. Those names are still read, so a published workflow keeps its
-behaviour, but the validator warns (`workflow.effet_implicite`), and a rename from the console
+behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
+
+Two validation codes were renamed to English (ADR 0046): `workflow.implicit_effect` (formerly
+`workflow.effet_implicite`) and `gate.nothing_to_check` (formerly `gate.sans_matiere`). For one
+release, an issue that carries one of them also carries its former spelling in `deprecated_code`;
+match on `code`.
 
 The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
 the process (each transition in plain words), the map (one lane per kind of actor), the YAML

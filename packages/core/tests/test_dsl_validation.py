@@ -215,7 +215,7 @@ def test_13_garantie_sans_matiere() -> None:
         + RETRY
         + "}\n  - {id: t2, from: doing, to: done, by: ci}\n"
     )
-    assert "gate.sans_matiere" in _errors(wf_text(sans))
+    assert "gate.nothing_to_check" in _errors(wf_text(sans))
 
     avec = sans.replace("gates: [outputs_present]", "outputs: [profils], gates: [outputs_present]")
     _wf, rapport = parse_workflow(wf_text(avec), strict=False)
@@ -236,7 +236,7 @@ def test_14_evidence_facts_sans_keys() -> None:
         + RETRY
         + "}\n  - {id: t2, from: doing, to: done, by: ci}\n"
     )
-    assert "gate.sans_matiere" in _errors(wf_text(sans))
+    assert "gate.nothing_to_check" in _errors(wf_text(sans))
 
     avec = sans.replace(
         "gates: [evidence_facts]",
@@ -329,12 +329,12 @@ transitions:
 """
     _, rapport = parse_workflow(source, strict=False)
     assert not rapport.valid
-    assert any(e.code == "gate.sans_matiere" and "tool_called" in e.message for e in rapport.errors)
+    assert any(e.code == "gate.nothing_to_check" and "tool_called" in e.message for e in rapport.errors)
     ok = source.replace(
         "      - name: tool_called", "      - { name: tool_called, params: { tools: [verifier_adresse] } }"
     )
     _, rapport = parse_workflow(ok, strict=False)
-    assert not [e for e in rapport.errors if e.code == "gate.sans_matiere"]
+    assert not [e for e in rapport.errors if e.code == "gate.nothing_to_check"]
 
 
 def test_l_escalade_d_un_humain_vers_un_acteur_inconnu_est_refusee() -> None:
@@ -372,18 +372,18 @@ def test_outputs_in_sans_values_est_refusee() -> None:
     from choregos_core.dsl import parse_workflow
 
     _, rapport = parse_workflow(_avec_garantie("outputs_in"), strict=False)
-    assert "gate.sans_matiere" in {e.code for e in rapport.errors}
+    assert "gate.nothing_to_check" in {e.code for e in rapport.errors}
     _, rapport = parse_workflow(
         _avec_garantie("outputs_in", "{ values: { verdict: [approve] } }"), strict=False
     )
-    assert "gate.sans_matiere" not in {e.code for e in rapport.errors}
+    assert "gate.nothing_to_check" not in {e.code for e in rapport.errors}
 
 
 def test_markdown_sections_sans_chemins_est_refusee() -> None:
     from choregos_core.dsl import parse_workflow
 
     _, rapport = parse_workflow(_avec_garantie("markdown_sections"), strict=False)
-    assert "gate.sans_matiere" in {e.code for e in rapport.errors}
+    assert "gate.nothing_to_check" in {e.code for e in rapport.errors}
 
 
 def test_sans_agent_qui_ecrit_du_code_une_pr_n_exige_pas_de_verify() -> None:

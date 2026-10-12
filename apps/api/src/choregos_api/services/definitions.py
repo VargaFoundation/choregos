@@ -29,7 +29,7 @@ from ..db.models import (
     WorkflowDef,
     WorkItem,
 )
-from ..errors import conflict, unprocessable
+from ..errors import conflict, former_code, unprocessable
 from ..logging import get_logger
 
 DEFAULT_WORKFLOW = "default-simple"
@@ -137,7 +137,14 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         raise unprocessable(
             "invalid workflow",
             [
-                {"loc": [i.path or ""], "msg": i.message, "code": i.code, "line": i.line, "column": i.column}
+                {
+                    "loc": [i.path or ""],
+                    "msg": i.message,
+                    "code": i.code,
+                    "line": i.line,
+                    "column": i.column,
+                    **former_code(i.code),
+                }
                 for i in report.errors
             ],
         )
@@ -277,7 +284,10 @@ async def _publier_ce_que_livre_le_gabarit(
         if not report.valid:
             raise unprocessable(
                 f"template `{project.template_ref}` ships an invalid workflow",
-                [{"loc": [i.path or ""], "msg": i.message, "code": i.code} for i in report.errors],
+                [
+                    {"loc": [i.path or ""], "msg": i.message, "code": i.code, **former_code(i.code)}
+                    for i in report.errors
+                ],
             )
         nom = parsed.metadata.name
         if nom in lignes:

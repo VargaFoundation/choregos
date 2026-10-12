@@ -366,9 +366,9 @@ export const api = {
   runAccess: (id: string) =>
     request<{
       evenements: number;
-      refus: number;
-      cout_outils_eur?: number;
-      acces: { nature: string; cible: string; demandes: number; refus: number; motifs?: string[] }[];
+      refusals: number;
+      tool_cost_eur?: number;
+      acces: { nature: string; target: string; requests: number; refusals: number; motifs?: string[] }[];
     }>(`/runs/${id}/access`),
   projectTools: (id: string) =>
     request<{

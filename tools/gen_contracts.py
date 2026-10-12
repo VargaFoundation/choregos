@@ -113,6 +113,9 @@ class Emitter:
         for name, sub in props.items():
             optional = "" if name in required else "?"
             doc = sub.get("description") if isinstance(sub, dict) else None
+            if isinstance(sub, dict) and sub.get("deprecated"):
+                # Kept for one release under its former name (ADR 0046): editors strike it through.
+                doc = f"@deprecated {doc}" if doc else "@deprecated"
             if doc:
                 lines.append(f"{pad}/** {doc.strip().splitlines()[0]} */")
             key = name if re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", name) else json.dumps(name)
