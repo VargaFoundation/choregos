@@ -32,6 +32,8 @@ const PAGES = [
   "/p/billing-api/actions/act-comptes",
   "/agents",
   "/agents/onboarding-coordinator",
+  "/agents/onboarding-coordinator?tab=versions",
+  "/agents/onboarding-coordinator?tab=runs",
   "/agents/leas-claude-code",
   "/skills",
   "/skills/onboarding-procedure",

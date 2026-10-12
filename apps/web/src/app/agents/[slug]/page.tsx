@@ -3,50 +3,108 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { LifecycleBadges, LifecyclePanel } from "@/components/agents/lifecycle";
 import { estUnClientMcp, etatDuClient, resumeDeLaVersion } from "@/components/agents/registre";
-import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Input, Select, Textarea } from "@/components/ui";
+import {
+  Badge,
+  Breadcrumbs,
+  Button,
+  Card,
+  Empty,
+  ErrorNote,
+  EtatDeLecture,
+  Heading,
+  Input,
+  Select,
+  StateBadge,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  Tabs,
+  tabClasses,
+  Textarea,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import type { Agent, AgentSpec } from "@/lib/types";
 
-/** Un agent du registre : ce qu'il a fait et coûté, ses versions, et — s'il est externe — ses clients. */
+/** The tabs of an agent's page (S30-05, plan item 7): one subject each. */
+const AGENT_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "definition", label: "Definition" },
+  { id: "versions", label: "Versions" },
+  { id: "runs", label: "Runs" },
+  { id: "access", label: "Access" },
+] as const;
+type AgentTab = (typeof AGENT_TABS)[number]["id"];
+
+/**
+ * Un agent du registre, in tabs (S30-05): what it did and cost (overview), what it is (its current
+ * version, and publishing the next), its versions, its runs, and what it may reach (access — and,
+ * for an external agent, the clients that act as it). The tab is in the address: a link names it.
+ */
 export default function AgentPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const { org } = useSession();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const demande = search.get("tab");
+  const onglet: AgentTab = AGENT_TABS.some((o) => o.id === demande) ? (demande as AgentTab) : "overview";
   const agent = useQuery({ queryKey: ["agent", org, slug], queryFn: () => api.agent(org, slug) });
   if (agent.error) return <ErrorNote>{String(agent.error)}</ErrorNote>;
   if (!agent.data) return <Empty>Reading the agent…</Empty>;
   const a = agent.data;
   return (
     <div className="space-y-6">
+      <Breadcrumbs steps={[{ href: "/agents", label: "Agents" }, { label: <span data-donnee>{a.display_name}</span> }]} />
       <div className="flex flex-wrap items-baseline gap-3">
-        <Link href="/agents" className="text-sm text-ink-muted hover:underline">
-          Agents
-        </Link>
-        <span aria-hidden className="text-ink-muted">
-          /
-        </span>
-        <Heading as="h1" size="lg" data-donnee>
+        <Heading as="h1" size="xl" data-donnee>
           {a.display_name}
         </Heading>
-        <span className="text-sm text-ink-muted">{a.slug}</span>
-        <Badge tone={a.kind === "external" ? "accent" : "neutral"}>{a.kind}</Badge>
+        <span className="font-mono text-sm text-ink-muted">{a.slug}</span>
+        <Badge tone={a.kind === "external" ? "accent" : "neutral"}>{a.kind === "external" ? "External" : "Internal"}</Badge>
         <Badge tone={a.status === "active" ? "ok" : "danger"}>{a.status}</Badge>
         <LifecycleBadges agent={a} />
         {a.owner && <span className="text-xs text-ink-muted">Owned by {a.owner}</span>}
         {a.expires_at && <span className="text-xs text-ink-muted">Expires {shortDate(a.expires_at)}</span>}
       </div>
-      {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
-      <Statut org={org} agent={a} />
-      <Card title="Lifecycle">
-        <LifecyclePanel org={org} agent={a} />
-      </Card>
-      <Mesures org={org} slug={slug} />
-      <Versions org={org} agent={a} />
-      {a.kind === "external" && <Clients org={org} slug={slug} />}
+      <Tabs aria-label={`Sections of ${a.display_name}`}>
+        {AGENT_TABS.map((o) => (
+          <Link
+            key={o.id}
+            href={o.id === "overview" ? pathname : `${pathname}?tab=${o.id}`}
+            aria-current={o.id === onglet ? "page" : undefined}
+            className={tabClasses(o.id === onglet)}
+          >
+            {o.label}
+          </Link>
+        ))}
+      </Tabs>
+      {onglet === "overview" && (
+        <>
+          {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
+          <Statut org={org} agent={a} />
+          <Card title="Lifecycle">
+            <LifecyclePanel org={org} agent={a} />
+          </Card>
+          <Mesures org={org} slug={slug} />
+        </>
+      )}
+      {onglet === "definition" && <Definition org={org} agent={a} />}
+      {onglet === "versions" && <Versions agent={a} />}
+      {onglet === "runs" && <Runs org={org} slug={slug} />}
+      {onglet === "access" && (
+        <>
+          <Acces agent={a} />
+          {a.kind === "external" && <Clients org={org} slug={slug} />}
+        </>
+      )}
     </div>
   );
 }
@@ -172,55 +230,24 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
   );
 }
 
-/** Les versions : immuables. En publier une autre, c'est partir de la dernière et la changer. */
-function Versions({ org, agent }: { org: string; agent: Agent }) {
+/** What the agent is: its current version, and the next one, published from it (S30-05). */
+function Definition({ org, agent }: { org: string; agent: Agent }) {
   const versions = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version);
-  // Sans choix, la dernière : une version qu'on vient de publier s'affiche d'elle-même.
-  const [choix, setChoisie] = useState<number | null>(null);
-  const choisie = choix ?? agent.latest_version;
-  const version = versions.find((v) => v.version === choisie) ?? versions[0];
+  const courante = versions[0];
   // Le message de publication vit ICI : le formulaire se remonte quand la version publiée arrive
-  // (clé `latest_version`), et l'emportait avec lui — selon la vitesse de la relecture, on le voyait
-  // ou pas (S23-13, vu en CI).
+  // (clé `latest_version`), et l'emportait avec lui (S23-13, vu en CI).
   const [publiee, setPubliee] = useState<string | null>(null);
   return (
     <>
-      <Card
-        title={`Version ${version?.version ?? "—"}`}
-        action={
-          versions.length > 1 ? (
-            <label className="flex items-center gap-2 text-xs">
-              <span className="text-ink-muted">See</span>
-              <Select
-                aria-label="Version to see"
-                className="w-auto"
-                value={choisie}
-                onChange={(e) => setChoisie(Number(e.target.value))}
-              >
-                {versions.map((v) => (
-                  <option key={v.version} value={v.version}>
-                    v{v.version}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          ) : undefined
-        }
-      >
-        {version ? <Specification spec={version.spec} /> : <p className="text-sm text-ink-muted">No version</p>}
-        {version && (
-          <p className="mt-3 text-xs text-ink-muted">
-            {version.created_by ? `Published by ${version.created_by}` : "Published"}
-            {version.created_at ? ` ${relative(version.created_at)}` : ""} · {version.checksum.slice(0, 19)}
-          </p>
-        )}
+      <Card title={`Version ${courante?.version ?? "—"}`}>
+        {courante ? <Specification spec={courante.spec} /> : <p className="text-sm text-ink-muted">No version</p>}
       </Card>
       {agent.status !== "revoked" && (
         <NouvelleVersion
           key={agent.latest_version}
           org={org}
           agent={agent}
-          depart={versions[0]?.spec ?? {}}
+          depart={courante?.spec ?? {}}
           onPubliee={setPubliee}
         />
       )}
@@ -230,6 +257,125 @@ function Versions({ org, agent }: { org: string; agent: Agent }) {
         </p>
       )}
     </>
+  );
+}
+
+/** Les versions : immuables. One is read at a time; the newest by default. */
+function Versions({ agent }: { agent: Agent }) {
+  const versions = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version);
+  const [choix, setChoix] = useState<number | null>(null);
+  const choisie = versions.find((v) => v.version === (choix ?? agent.latest_version)) ?? versions[0];
+  if (versions.length === 0) return <Empty>No version</Empty>;
+  return (
+    <>
+      <Card title="Versions" padding="none" className="overflow-hidden">
+        <Table aria-label="Versions">
+          <THead>
+            <TR>
+              <TH>Version</TH>
+              <TH>Published by</TH>
+              <TH>When</TH>
+              <TH>Checksum</TH>
+              <TH>
+                <span className="sr-only">Actions</span>
+              </TH>
+            </TR>
+          </THead>
+          <TBody>
+            {versions.map((v) => (
+              <TR key={v.version} aria-current={v.version === choisie?.version ? "true" : undefined}>
+                <TD className="font-mono">v{v.version}</TD>
+                <TD>{v.created_by ?? "—"}</TD>
+                <TD className="font-mono text-xs">{v.created_at ? shortDate(v.created_at) : "—"}</TD>
+                <TD className="font-mono text-xs">{v.checksum.slice(0, 19)}</TD>
+                <TD align="right">
+                  <Button size="sm" onClick={() => setChoix(v.version)} disabled={v.version === choisie?.version}>
+                    View<span className="sr-only"> v{v.version}</span>
+                  </Button>
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </Card>
+      {choisie && (
+        <Card title={`Version ${choisie.version}`}>
+          <Specification spec={choisie.spec} />
+          <p className="mt-3 text-xs text-ink-muted">
+            {choisie.created_by ? `Published by ${choisie.created_by}` : "Published"}
+            {choisie.created_at ? ` ${relative(choisie.created_at)}` : ""} · {choisie.checksum.slice(0, 19)}
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+/** Its latest runs, across the projects one may read (S30-05): one request. */
+function Runs({ org, slug }: { org: string; slug: string }) {
+  const runs = useQuery({ queryKey: ["agent-runs", org, slug], queryFn: () => api.agentRuns(org, slug) });
+  if (!runs.data) return <EtatDeLecture lecture={runs} quoi="the agent's runs" />;
+  if (runs.data.length === 0) return <Empty title="No run yet">A workflow that names this agent runs it.</Empty>;
+  return (
+    <Card title="Latest runs" padding="none" className="overflow-hidden">
+      <Table aria-label="Runs" data-testid="runs-de-l-agent">
+        <THead>
+          <TR>
+            <TH>Started</TH>
+            <TH>Project</TH>
+            <TH>Stage</TH>
+            <TH>Status</TH>
+            <TH align="right">Cost</TH>
+          </TR>
+        </THead>
+        <TBody>
+          {runs.data.map((run) => (
+            <TR key={run.id} interactive>
+              <TD className="font-mono text-xs">{run.started_at ? shortDate(run.started_at) : "—"}</TD>
+              <TD>
+                <span data-donnee>{run.project_slug}</span>
+              </TD>
+              <TD>
+                <Link href={`/p/${run.project_slug}/runs/${run.id}`} className="hover:underline">
+                  {run.stage_role} · attempt {run.attempt}
+                </Link>
+              </TD>
+              <TD>
+                <StateBadge state={run.status} kind={run.status === "succeeded" ? "terminal" : run.status === "failed" ? "blocked" : "work"} />
+              </TD>
+              <TD align="right" className="font-mono">
+                {usd(run.cost_usd ?? 0)}
+              </TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+    </Card>
+  );
+}
+
+/** What the agent may reach: the tools and servers its current version names, and its skills. */
+function Acces({ agent }: { agent: Agent }) {
+  const courante = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version)[0];
+  const serveurs = courante?.spec.mcp_servers ?? [];
+  return (
+    <Card title="Tools and servers">
+      {serveurs.length === 0 ? (
+        <p className="text-sm text-ink-muted">
+          Its version names no server: it reaches what the platform gives a run of its project
+          {agent.kind === "external" ? ", within its human's rights" : ""}.
+        </p>
+      ) : (
+        <ul className="space-y-1 text-sm" data-testid="acces-de-l-agent">
+          {serveurs.map((s) => (
+            <li key={s.connector}>
+              <span className="font-mono">{s.connector}</span>
+              <span className="text-ink-muted"> — {(s.tools ?? []).length ? (s.tools ?? []).join(", ") : "every tool"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

@@ -1202,6 +1202,19 @@ paths:
         - { name: days, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
       responses:
         "200": { description: One line per agent, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentMetricsSummary" } } } } }
+  /orgs/{org}/agents/{slug}/runs:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listAgentRuns
+      description: The agent's latest runs across the projects the caller may read, newest first (S30-05).
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200": { description: The runs, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Run" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/credentials:
     parameters:
       - { $ref: "#/components/parameters/Org" }

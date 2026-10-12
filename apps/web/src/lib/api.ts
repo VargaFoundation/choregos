@@ -303,6 +303,8 @@ export const api = {
   agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
   /** A project's implicit agents, computed by the API (S30-04). */
   implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
+  /** An agent's latest runs (S30-05). */
+  agentRuns: (org: string, slug: string, limit = 50) => request<Run[]>(`/orgs/${org}/agents/${slug}/runs?limit=${limit}`),
   agentCredentials: (org: string, slug: string) =>
     request<AgentCredential[]>(`/orgs/${org}/agents/${slug}/credentials`),
   attachAgentToken: (org: string, slug: string, tokenId: string) =>

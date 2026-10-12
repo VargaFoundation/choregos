@@ -1668,6 +1668,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return agentCredentials.map((c) => ({ ...c, agent: "leas-claude-code" })) as T;
   }
   if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? "")) return agentMetricsList() as T;
+  // The runs of an agent, newest first (S30-05).
+  if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
   if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
