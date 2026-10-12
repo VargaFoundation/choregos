@@ -136,10 +136,29 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
 
 @router.get("/runs/{id}/transcript", response_model=ArtifactRef, operation_id="getRunTranscript")
 async def transcript(id: str, session: Db, principal: Me) -> ArtifactRef:
+    """The run's transcript: its ACP journal as JSONL, served from what the API stored (S36-01).
+
+    The runner used to announce `transcript.jsonl` next to the context pack in the object
+    store, and nothing ever uploaded it: the link led nowhere. The journal is already here,
+    batched by the runner and idempotent by `seq`; it is the transcript, so it is served
+    inline. `url` names where the same lines can be read as JSON.
+    """
     run, _ = await _run(session, id, principal)
-    if not run.transcript_url:
+    rows = (
+        (await session.execute(select(RunEvent).where(RunEvent.run_id == run.id).order_by(RunEvent.seq)))
+        .scalars()
+        .all()
+    )
+    if not rows:
         raise not_found("Transcript", id)
-    return ArtifactRef(url=run.transcript_url, content_type="application/x-ndjson")
+    lines = [RunEventDto(seq=r.seq, type=r.type, ts=r.ts, payload=r.payload).model_dump_json() for r in rows]
+    body = "\n".join(lines) + "\n"
+    return ArtifactRef(
+        url=f"/api/v1/runs/{run.id}/events",
+        content_type="application/x-ndjson",
+        size_bytes=len(body.encode()),
+        inline=body,
+    )
 
 
 @router.get("/runs/{id}/diff", response_model=DiffSummaryDto, operation_id="getRunDiff")

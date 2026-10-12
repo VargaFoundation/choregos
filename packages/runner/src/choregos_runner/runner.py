@@ -389,8 +389,10 @@ class Runner:
 
         await journal.record("run.result", {"status": str(result.status), "summary": result.summary})
         await journal.flush()
-        transcript_url = f"{stage_input.context_pack_url or ''}".replace("context.json", "transcript.jsonl")
-        result.artifacts.transcript_url = transcript_url or str(journal.path)
+        # No transcript URL is announced: nothing uploads `transcript.jsonl`, and a link that
+        # leads nowhere is worse than none. The API serves the transcript from the journal it
+        # already holds (S36-01).
+        result.artifacts.transcript_url = None
         result.artifacts.context_pack_url = stage_input.context_pack_url
         write_result(workspace.result_path(), result)
 

@@ -266,6 +266,18 @@ async def test_transcript_is_written_as_jsonl(stage_input: StageInput, runner_se
     assert [line["seq"] for line in lines] == sorted(line["seq"] for line in lines)
 
 
+async def test_result_announces_no_transcript_url_nothing_uploads(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """S36-01: the runner used to derive `.../transcript.jsonl` from the context pack URL, and
+    nothing uploaded it. The journal posted to the API is the transcript; no dead link is sent."""
+    stage_input.context_pack_url = "s3://choregos/runs/r1/context.json"
+    _, client = await execute(stage_input, runner_settings, {"turns": [{"result": valid_result()}]})
+    assert client.results, "the result was posted"
+    assert client.results[-1].artifacts.transcript_url is None
+    assert any(event["type"] == "run.result" for event in client.events), "the journal reached the API"
+
+
 async def test_context_pack_is_written_to_workspace(stage_input: StageInput, runner_settings: Any) -> None:
     from choregos_contracts import ContextPack, MemoryItem
 
