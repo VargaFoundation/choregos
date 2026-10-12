@@ -5,7 +5,7 @@ import { EditionBadge, EditionCard, FONCTIONS_ENTREPRISE } from "@/components/ed
 import { Garanties } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
 import { Preuves } from "@/components/preuves";
-import { ActorIcon, CostChip, Onglets, StateBadge } from "@/components/ui";
+import { ActorIcon, CostChip, Tabs, StateBadge } from "@/components/ui";
 import type { RunEventDto } from "@/lib/types";
 
 describe("composants transverses", () => {
@@ -21,9 +21,9 @@ describe("composants transverses", () => {
 
   it("une barre d'onglets reçoit le pixel que l'onglet actif déborde : pas de défilement vertical", () => {
     render(
-      <Onglets aria-label="sections" className="mt-2">
+      <Tabs aria-label="sections" className="mt-2">
         <a href="#a">a</a>
-      </Onglets>,
+      </Tabs>,
     );
     const barre = screen.getByRole("navigation", { name: "sections" });
     expect(barre).toHaveClass("pb-px", "overflow-x-auto", "mt-2");

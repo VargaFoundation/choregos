@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Eyebrow, Heading, Onglets, tabClasses } from "@/components/ui";
+import { Eyebrow, Heading, Tabs, tabClasses } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useHasReleaseTrain } from "@/lib/release-train";
 
@@ -44,7 +44,7 @@ export default function ProjectLayout({
           {projet.data?.name ?? slug}
         </Heading>
       </div>
-      <Onglets aria-label="Project sections">
+      <Tabs aria-label="Project sections">
         {TABS.filter((tab) => tab.suffix !== "/trains" || trains).map((tab) => {
           const href = `/p/${slug}${tab.suffix}`;
           // Les intégrations (un sous-onglet par client), les actions (une page par action) et les
@@ -66,7 +66,7 @@ export default function ProjectLayout({
             </Link>
           );
         })}
-      </Onglets>
+      </Tabs>
       {children}
     </div>
   );

@@ -15,10 +15,10 @@ import * as radix from "@radix-ui/colors";
 import { describe, expect, it } from "vitest";
 import { declarationsDe, FEUILLE_DU_THEME } from "./jetons";
 
-function sources(dossier: string): string[] {
-  return readdirSync(dossier).flatMap((nom) => {
-    const chemin = join(dossier, nom);
-    if (statSync(chemin).isDirectory()) return sources(chemin);
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((nom) => {
+    const chemin = join(dir, nom);
+    if (statSync(chemin).isDirectory()) return sourceFiles(chemin);
     return /\.(tsx?|css)$/.test(nom) ? [chemin] : [];
   });
 }
@@ -52,20 +52,20 @@ describe("la provenance des couleurs de la console", () => {
   });
 
   it("every token the console reads is declared by its theme", () => {
-    const declares = new Set(declarationsDe(FEUILLE_DU_THEME, ":root").keys());
+    const declared = new Set(declarationsDe(FEUILLE_DU_THEME, ":root").keys());
     // A card or the sidebar redefines the surface for what it holds: still a declared token.
-    const lus = new Set<string>();
-    for (const chemin of sources(join(import.meta.dirname, "../src"))) {
-      for (const m of readFileSync(chemin, "utf8").matchAll(/var\((--choregos-[a-z0-9-]+)/g)) lus.add(m[1]!);
+    const read = new Set<string>();
+    for (const chemin of sourceFiles(join(import.meta.dirname, "../src"))) {
+      for (const m of readFileSync(chemin, "utf8").matchAll(/var\((--choregos-[a-z0-9-]+)/g)) read.add(m[1]!);
     }
-    expect(lus.size, "no token read: the test checks nothing").toBeGreaterThan(20);
-    expect([...lus].filter((nom) => !declares.has(nom)).sort()).toEqual([]);
+    expect(read.size, "no token read: the test checks nothing").toBeGreaterThan(20);
+    expect([...read].filter((nom) => !declared.has(nom)).sort()).toEqual([]);
   });
 
   it("no stylesheet of the console declares a colour role outside its theme", () => {
-    const ailleurs = sources(join(import.meta.dirname, "../src"))
+    const elsewhere = sourceFiles(join(import.meta.dirname, "../src"))
       .filter((chemin) => chemin.endsWith(".css") && chemin !== FEUILLE_DU_THEME)
       .flatMap((chemin) => [...readFileSync(chemin, "utf8").matchAll(/^\s*(--(?:choregos|varga)-[a-z0-9-]+)\s*:/gm)].map((m) => m[1]!));
-    expect(ailleurs).toEqual([]);
+    expect(elsewhere).toEqual([]);
   });
 });

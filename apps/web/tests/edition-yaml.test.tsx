@@ -49,7 +49,7 @@ function Sonde() {
 }
 
 /** Un onglet qu'on quitte et où l'on revient : le fournisseur du brouillon, lui, reste (il vit dans la mise en page). */
-function Onglets({ children }: { children: ReactNode }) {
+function Tabs({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(true);
   return (
     <>
@@ -68,7 +68,7 @@ async function rendre(contenu: ReactNode = <Sonde />) {
     <QueryClientProvider client={client}>
       <BrouillonProvider slug="rh" name="onboarding">
         <BarreDuBrouillon />
-        <Onglets>{contenu}</Onglets>
+        <Tabs>{contenu}</Tabs>
       </BrouillonProvider>
     </QueryClientProvider>,
   );

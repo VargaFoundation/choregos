@@ -24,7 +24,7 @@ import {
   type ThHTMLAttributes,
 } from "react";
 import { cn } from "@/lib/cn";
-import { enPhrase, libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
+import { toSentenceCase, libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
 
 // ───────────────────────────── tons ─────────────────────────────
 
@@ -395,7 +395,7 @@ export function StateBadge({
   const tone = tonDEtat(state, kind);
   return (
     <Badge tone={tone} title={state}>
-      {display && display !== state ? display : enPhrase(libelleDeCode(state))}
+      {display && display !== state ? display : toSentenceCase(libelleDeCode(state))}
     </Badge>
   );
 }
@@ -481,7 +481,7 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   padding?: "none" | "sm" | "md" | "lg";
 }
 
-const MARGES = { none: "", sm: "p-4", md: "p-5", lg: "p-8" } as const;
+const CARD_PADDINGS = { none: "", sm: "p-4", md: "p-5", lg: "p-8" } as const;
 
 /**
  * A card: a raised surface, a 1 px hairline, 6 px corners (ADR 0048). Its title is a level-2 heading
@@ -500,18 +500,18 @@ export function Card({
   children,
   ...props
 }: CardProps) {
-  const enTete = title != null || eyebrow != null || action != null;
+  const hasHeader = title != null || eyebrow != null || action != null;
   return (
     <section
       className={cn(
         "raised rounded-md border border-line",
         interactive && "transition-colors duration-200 ease-standard hover:border-line-strong",
-        MARGES[padding],
+        CARD_PADDINGS[padding],
         className,
       )}
       {...props}
     >
-      {enTete && (
+      {hasHeader && (
         <header className={cn("mb-4 flex items-start justify-between gap-4", padding === "none" && "px-5 pt-5")}>
           <div className="min-w-0 space-y-1">
             {eyebrow != null && <Label>{eyebrow}</Label>}
@@ -532,14 +532,14 @@ export function Card({
 }
 
 /** The width of a page: centred, 1400 px at most (`wide`), with its side gutter. */
-const LARGEURS = { text: "max-w-3xl", page: "max-w-6xl", wide: "max-w-[1400px]" } as const;
+const PAGE_WIDTHS = { text: "max-w-3xl", page: "max-w-6xl", wide: "max-w-[1400px]" } as const;
 
 export function Container({
   size = "page",
   className,
   ...props
-}: HTMLAttributes<HTMLDivElement> & { size?: keyof typeof LARGEURS }) {
-  return <div className={cn("mx-auto w-full px-4 sm:px-6", LARGEURS[size], className)} {...props} />;
+}: HTMLAttributes<HTMLDivElement> & { size?: keyof typeof PAGE_WIDTHS }) {
+  return <div className={cn("mx-auto w-full px-4 sm:px-6", PAGE_WIDTHS[size], className)} {...props} />;
 }
 
 /** Inline code: an identifier, a path, a command — in mono, on a sunken chip. */
@@ -785,6 +785,6 @@ export function EtatDeLecture({
  * vertical, et Windows dessinait ses flèches ▲ ● ▼ au bout de chaque barre d'onglets (relevé le
  * 06/10). Un pixel de marge basse (`pb-px`) le reçoit.
  */
-export function Onglets({ className, ...props }: HTMLAttributes<HTMLElement>) {
+export function Tabs({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return <nav className={cn("flex gap-6 overflow-x-auto border-b border-line pb-px", className)} {...props} />;
 }

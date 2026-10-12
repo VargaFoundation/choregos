@@ -5,7 +5,7 @@ import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "rea
 import { buttonClasses } from "@/components/ui";
 import { COULEUR_DU_GENRE as COULEURS_DES_GENRES } from "@/components/workflows/carte/disposition";
 import { cn } from "@/lib/cn";
-import { enPhrase, relative, shortDate, usd } from "@/lib/format";
+import { toSentenceCase, relative, shortDate, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { placer, RAYON, tronquer, type Placement, type Point } from "./disposition";
 import { useLecteur, type Vitesse } from "./lecteur";
@@ -756,7 +756,7 @@ function BoutonDEtape({
                   : "border-retrying-line bg-retrying-soft text-retrying-ink",
               )}
             >
-              {enPhrase(tour)}
+              {toSentenceCase(tour)}
             </span>
           )}
           {detail && (

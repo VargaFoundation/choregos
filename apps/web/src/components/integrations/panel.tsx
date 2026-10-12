@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Alert, Button, Card, Code, ErrorNote, Onglets, Select, tabClasses } from "@/components/ui";
+import { Alert, Button, Card, Code, ErrorNote, Tabs, Select, tabClasses } from "@/components/ui";
 import { api, qualify } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import {
@@ -66,7 +66,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
 
   return (
     <div className="space-y-6">
-      <Onglets aria-label="Clients">
+      <Tabs aria-label="Clients">
         {CLIENTS.map((c) => {
           const href = `${base}/${c.id}`;
           const active = c.id === client;
@@ -76,7 +76,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
             </Link>
           );
         })}
-      </Onglets>
+      </Tabs>
 
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
 

@@ -74,7 +74,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 >
                   <span>A ticket goes in, a controlled production release comes out.</span>
                   {/* The foundation is named here, and only here (ADR 0048). */}
-                  <span data-testid="pied-de-page-fondation">Choregos by Varga Foundation · Apache 2.0</span>
+                  <span data-testid="footer-foundation">Choregos by Varga Foundation · Apache 2.0</span>
                 </Container>
               </footer>
             </div>

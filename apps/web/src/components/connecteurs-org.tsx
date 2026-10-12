@@ -5,7 +5,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Badge, Card, ErrorNote } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { enPhrase } from "@/lib/format";
+import { toSentenceCase } from "@/lib/format";
 import { estUneSorteDuProjet, libelleDeSorte, SORTES_DU_PROJET } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, OrgConnector, ProjectDto } from "@/lib/types";
 
@@ -102,7 +102,7 @@ export function OutilsDeLivraison({ org }: { org: string }) {
                           {ligne.outils.map((outil) => (
                             <span key={outil.kind} title={`Status: ${outil.status}`}>
                               <Badge tone={outil.status === "error" ? "danger" : "neutral"}>
-                                {enPhrase(libelleDeSorte(outil.kind))}: {outil.type}
+                                {toSentenceCase(libelleDeSorte(outil.kind))}: {outil.type}
                               </Badge>
                             </span>
                           ))}

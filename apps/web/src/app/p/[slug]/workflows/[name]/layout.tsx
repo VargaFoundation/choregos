@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
-import { Badge, Onglets, tabClasses } from "@/components/ui";
+import { Badge, Tabs, tabClasses } from "@/components/ui";
 import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
 import { BrouillonProvider } from "@/components/workflows/brouillon";
 import { useWorkflow } from "@/components/workflows/use-workflow";
@@ -49,7 +49,7 @@ export default function WorkflowLayout({
         )}
         {definition.data?.is_default && <Badge tone="accent">Default</Badge>}
       </div>
-      <Onglets aria-label={`Views of ${name}`}>
+      <Tabs aria-label={`Views of ${name}`}>
         {VUES.map((vue) => {
           const href = `${base}${vue.suffix}`;
           const active = pathname === href;
@@ -64,7 +64,7 @@ export default function WorkflowLayout({
             </Link>
           );
         })}
-      </Onglets>
+      </Tabs>
       {/* Le brouillon est commun à la carte et à la vue processus : un geste sur l'une se voit sur
           l'autre, et rien n'est publié avant « publish ». */}
       <BrouillonProvider slug={slug} name={name}>

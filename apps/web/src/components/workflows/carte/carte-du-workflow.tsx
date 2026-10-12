@@ -3,7 +3,7 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { LEGENDE } from "@/components/ui";
-import { enPhrase } from "@/lib/format";
+import { toSentenceCase } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { ProcessStep } from "@/lib/types";
 import {
@@ -118,7 +118,7 @@ export function CarteDuWorkflow({
         >
           <span className="flex items-baseline justify-between gap-2 text-xs">
             <span className={cn(LEGENDE, "font-medium")} style={{ color: couleur.texte }}>
-              {enPhrase(LIBELLE_DU_GENRE[genre])}
+              {toSentenceCase(LIBELLE_DU_GENRE[genre])}
               {principale?.actor ? ` · ${principale.actor}` : ""}
             </span>
             {acteur?.group && (
@@ -165,7 +165,7 @@ export function CarteDuWorkflow({
           <ul className="mt-1.5 space-y-0.5 border-t border-line pt-1.5 text-xs text-retrying-ink" data-testid={`secondaires-${id}`}>
             {issues.map((a) => (
               <li key={a.id ?? `${a.to}-${a.kind}`}>
-                {enPhrase(commentOnYTombe(a))} → {nom(a.to)}
+                {toSentenceCase(commentOnYTombe(a))} → {nom(a.to)}
               </li>
             ))}
           </ul>
@@ -198,7 +198,7 @@ export function CarteDuWorkflow({
         onClick={() => principale.id && onSelect?.("edge", principale.id)}
       >
         <span aria-hidden className="h-3 w-px bg-line-strong group-hover:bg-ink" />
-        <span className="px-1.5 font-mono text-[11px]">{enPhrase([qui, garanties, effet].filter(Boolean).join(" · ")) || principale.id}</span>
+        <span className="px-1.5 font-mono text-[11px]">{toSentenceCase([qui, garanties, effet].filter(Boolean).join(" · ")) || principale.id}</span>
         <span aria-hidden className="leading-none">
           ▼
         </span>
@@ -274,7 +274,7 @@ function LegendeDeLaCarte({
           .map((genre) => (
             <li key={genre} className="inline-flex items-center gap-1.5">
               <span aria-hidden className="inline-block h-3 w-[3px]" style={{ background: COULEUR_DU_GENRE[genre].bord }} />
-              {enPhrase(LIBELLE_DU_GENRE[genre])} · {comptes.get(genre)}
+              {toSentenceCase(LIBELLE_DU_GENRE[genre])} · {comptes.get(genre)}
             </li>
           ))}
       </ul>
