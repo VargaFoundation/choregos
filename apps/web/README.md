@@ -37,5 +37,6 @@ pnpm e2e                                   # parcours Playwright (mode démo)
   Le flux front avance sans attendre l'API, comme le prévoit le plan (§3.4).
 - **SSE avec reprise** : `Last-Event-ID` évite de perdre des événements au rechargement.
 - **Journal virtualisé** : 10 000 événements s'affichent sans saccade (test unitaire à l'appui).
-- **Thème** : une console d'opérations (ADR 0043) — sombre par défaut, clair ou celui du système au choix (`choregos.theme`, posé avant la première peinture), couleurs tirées de Radix Colors avec un budget de contraste par mode, Geist pour lire et Geist Mono pour comparer.
+- **Thème** : une console d'opérations à la Temporal (ADR 0043, ADR 0048) — sombre par défaut, clair ou celui du système au choix (`choregos.theme`, posé avant la première peinture), couleurs tirées de Radix Colors avec un budget de contraste par mode, Geist pour lire et Geist Mono pour comparer (identifiants, code, nombres, horodatages).
+- **Primitives** : la console a les siennes (`src/components/ui.tsx`, ADR 0048) ; elle ne dépend plus du design system de la Varga Foundation, et eslint refuse un import `@varga/*`. Casse de phrase partout ; les données gardent la leur (`data-donnee`).
 - **Coquille** : à partir de 1280 px, une barre latérale groupée, repliable en rail (`choregos.sidebar`, posé avant la première peinture comme le thème) ; une barre du haut de 48 px ; en dessous, un bouton « menu » ouvre la même liste.

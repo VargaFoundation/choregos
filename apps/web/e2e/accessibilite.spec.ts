@@ -75,7 +75,7 @@ test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
   await page.getByTestId("workflow-graph").getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
   await panneau.getByLabel("label").fill("Nouvelles demandes");
-  await panneau.getByRole("button", { name: "set label" }).click();
+  await panneau.getByRole("button", { name: "Set label" }).click();
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
   const bloquantes = results.violations;
@@ -87,7 +87,7 @@ test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
 /** Les connecteurs d'un projet (S19-01) : la section seule — le reste des réglages a ses propres pages. */
 test("réglages : la section des connecteurs sans violation sérieuse", async ({ page }) => {
   await page.goto("/p/billing-api/settings");
-  await page.getByTestId("connecteur-tracker").getByRole("button", { name: "edit" }).click();
+  await page.getByTestId("connecteur-tracker").getByRole("button", { name: "Edit" }).click();
   const results = await new AxeBuilder({ page })
     .include('[data-testid="connecteurs"]')
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
@@ -161,10 +161,10 @@ test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", a
   await page.setViewportSize({ width: 1280, height: 800 });
   for (const path of ["/", "/skills", "/integrations", "/admin"]) {
     await page.goto(path);
-    await expect(page.getByRole("link", { name: "skills" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Skills" })).toBeVisible();
     // La session arrive après la page : l'en-tête ne porte son poids réel (organisation, personne,
     // déconnexion) qu'une fois qu'elle est là.
-    await expect(page.getByRole("button", { name: "sign out" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
     // Mesurer avant les polices, c'est mesurer la police de repli : plus étroite, elle ne casse rien.
     await page.evaluate(() => document.fonts.ready);
     const mesure = await page.evaluate(() => ({
@@ -175,7 +175,7 @@ test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", a
       // La barre du haut seule : l'en-tête d'une page (`<header>` aussi) porte des boutons de 32 px.
       hautes: [
         ...document.querySelectorAll(
-          'nav[aria-label="main navigation"] :is(a, button, span, select), header[data-barre-du-haut] :is(a, button, span, select)',
+          'nav[aria-label="Main navigation"] :is(a, button, span, select), header[data-barre-du-haut] :is(a, button, span, select)',
         ),
       ]
         .filter((el) => el.getBoundingClientRect().height > 30)
@@ -198,7 +198,7 @@ test("titres de page distincts, et un lien d'évitement vers le contenu", async 
   await page.goto("/p/billing-api/board");
   await expect(page).toHaveTitle("board · billing-api · choregos");
   await page.keyboard.press("Tab");
-  const evitement = page.getByRole("link", { name: "skip to content" });
+  const evitement = page.getByRole("link", { name: "Skip to content" });
   await expect(evitement).toBeFocused();
   await expect(evitement).toBeVisible();
   await page.keyboard.press("Enter");

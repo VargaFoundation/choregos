@@ -196,7 +196,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                   <ActorIcon kind={entry.actor_kind ?? "system"} name={entry.actor ?? undefined} point={false} />
                   <span>{entry.title}</span>
                 </p>
-                {entry.detail && <p className="text-xs text-ink-muted">{entry.detail}</p>}
+                {entry.detail && (
+                  <p className="text-xs text-ink-muted" data-donnee>
+                    {entry.detail}
+                  </p>
+                )}
                 <p className="font-mono text-xs text-ink-muted" title={shortDate(entry.ts)}>
                   {relative(entry.ts)}
                   {entry.cost_usd ? ` · ${usd(entry.cost_usd)}` : ""}

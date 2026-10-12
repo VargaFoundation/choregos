@@ -11,7 +11,7 @@ test("chaque page part avec une CSP à nonce, sans unsafe-inline pour les script
   expect(scriptSrc).not.toContain("'unsafe-inline'");
   expect(csp).toContain("frame-ancestors 'none'");
   // Et la page fonctionne quand même : les scripts de Next portent le nonce.
-  await expect(page.getByRole("heading", { name: "projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
   const deuxieme = await page.goto("/login");
   expect(deuxieme!.headers()["content-security-policy"]).not.toEqual(csp);
 });

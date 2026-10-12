@@ -64,17 +64,17 @@ for (const largeur of [360, 768, 1024, 1280]) {
 test("sous 1280 px, la navigation se replie derrière « menu », et s'y ouvre", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/p/billing-api");
-  const navigation = page.getByRole("navigation", { name: "main navigation" });
-  await expect(navigation.getByRole("link", { name: "skills" })).toBeHidden();
-  const menu = navigation.getByRole("button", { name: "menu" });
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation.getByRole("link", { name: "Skills" })).toBeHidden();
+  const menu = navigation.getByRole("button", { name: "Menu" });
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   // Une cible tactile d'au moins 44 px de haut.
   expect((await menu.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 
   await menu.click();
   await expect(menu).toHaveAttribute("aria-expanded", "true");
-  await expect(navigation.getByRole("link", { name: "projects" })).toHaveAttribute("aria-current", "page");
-  await expect(navigation.getByRole("button", { name: "sign out" })).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "Projects" })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("button", { name: "Sign out" })).toBeVisible();
   // Échap referme, et rend le focus au bouton.
   await page.keyboard.press("Escape");
   await expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -82,7 +82,7 @@ test("sous 1280 px, la navigation se replie derrière « menu », et s'y ouvre",
 
   // Suivre un lien referme le menu.
   await menu.click();
-  await navigation.getByRole("link", { name: "skills" }).click();
+  await navigation.getByRole("link", { name: "Skills" }).click();
   await expect(page).toHaveURL(/\/skills$/);
   await expect(menu).toHaveAttribute("aria-expanded", "false");
 });
