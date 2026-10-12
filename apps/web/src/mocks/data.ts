@@ -79,6 +79,8 @@ export const projects: ProjectPage = {
       config: projectConfig("billing-api"),
       workflow_name: "default-simple",
       policy_name: "solo",
+      // Its workflows ship through the train (S30-07): the trains tab and counters show.
+      has_release_train: true,
       stats: {
         active_work_items: 3,
         cost_month_eur: 42.18,
@@ -99,6 +101,7 @@ export const projects: ProjectPage = {
       config: projectConfig("checkout-web"),
       workflow_name: "advanced",
       policy_name: "team",
+      has_release_train: true,
       stats: { active_work_items: 0, cost_month_eur: 0, trains_pending: 0 },
       created_at: iso(120),
       updated_at: iso(12),

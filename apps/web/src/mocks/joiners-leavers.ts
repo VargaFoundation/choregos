@@ -46,6 +46,8 @@ export const peopleOps: ProjectDto = {
   config: { slug: SLUG, org: "varga" },
   workflow_name: "onboarding",
   policy_name: "solo",
+  // No workflow of the template takes a release train: no trains tab, no trains counter (S30-07).
+  has_release_train: false,
   stats: { active_work_items: 1, cost_month_eur: 3.1, trains_pending: 0 },
   created_at: iso(60 * 24 * 9),
   updated_at: iso(50),

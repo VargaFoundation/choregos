@@ -6,6 +6,7 @@ import Link from "next/link";
 import { use } from "react";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
+import { hasReleaseTrain } from "@/lib/release-train";
 import { GrapheDesCouts } from "@/components/graphe-des-couts";
 import type { DoraMetric } from "@/lib/types";
 import { MiseEnRoute } from "@/components/mise-en-route";
@@ -60,7 +61,9 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           {provisioning.data.steps.length === 0 && <Empty>waiting for the first step…</Empty>}
         </Card>
       )}
-      <div className="grid grid-cols-2 border border-line md:grid-cols-4">
+      <div
+        className={`grid grid-cols-2 border border-line ${hasReleaseTrain(project.data) ? "md:grid-cols-4" : "md:grid-cols-3"}`}
+      >
         <div className="p-6">
           <Stat value={actifs} label="active tickets" tone={actifs > 0 ? "accent" : "ink"} />
         </div>
@@ -77,9 +80,11 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
             label="median cycle time"
           />
         </div>
-        <div className="border-t border-l border-line p-6 md:border-t-0">
-          <Stat value={stats?.trains_pending ?? 0} label="trains in flight" />
-        </div>
+        {hasReleaseTrain(project.data) && (
+          <div className="border-t border-l border-line p-6 md:border-t-0">
+            <Stat value={stats?.trains_pending ?? 0} label="trains in flight" />
+          </div>
+        )}
       </div>
 
       <Card
