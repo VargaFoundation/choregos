@@ -8,7 +8,6 @@ import { resolve } from "node:path";
 import postcss from "postcss";
 
 export const FEUILLE_DU_THEME = resolve(import.meta.dirname, "../src/styles/theme.css");
-export const JETONS_DU_DS = resolve(import.meta.dirname, "../node_modules/@varga/design-system/css/tokens.css");
 
 export type Mode = "dark" | "light";
 export type Declarations = Map<string, string>;
@@ -18,9 +17,9 @@ export function declarationsDe(chemin: string, selecteur: string): Declarations 
   const racine = postcss.parse(readFileSync(chemin, "utf-8"));
   const trouvees: Declarations = new Map();
   racine.walkRules((regle) => {
-    // Un sélecteur de la liste suffit : le DS écrit `:root.dark, :root[data-theme="dark"]`.
+    // Un sélecteur de la liste suffit.
     if (!regle.selectors.some((s) => s.trim() === selecteur)) return;
-    // Seulement au premier niveau (pas dans un @media) : le sombre « système » du DS est à part.
+    // Seulement au premier niveau (pas dans un @media).
     if (regle.parent?.type !== "root") return;
     regle.walkDecls((declaration) => {
       if (declaration.prop.startsWith("--")) trouvees.set(declaration.prop, declaration.value.trim());

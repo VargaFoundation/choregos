@@ -54,7 +54,7 @@ function Connexion() {
             aria-label="development e-mail"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="admin@varga.dev"
+            placeholder="admin@acme.dev"
             className="w-full"
           />
           <button type="submit" className={buttonClasses("secondary", "sm")}>

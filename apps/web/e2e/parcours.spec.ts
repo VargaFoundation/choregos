@@ -148,7 +148,7 @@ test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async (
 
 test("integrations d'un projet : la porte du projet, et claude.ai dit pourquoi il ne la joint pas", async ({ page }) => {
   await page.goto("/p/billing-api/integrations/cursor");
-  await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp/projects/varga:billing-api");
+  await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp/projects/acme:billing-api");
   await page.getByRole("link", { name: "claude.ai" }).click();
   await expect(page.getByText("not reachable from here yet")).toBeVisible();
 });
@@ -364,7 +364,7 @@ test("la boîte des décisions : une action proposée par un agent attend une pe
   await page.getByRole("button", { name: "approve" }).click();
   // Une action déjà décidée montre ses décisions et le journal de ses effets, clé par clé.
   await page.goto("/p/billing-api/actions/act-comptes");
-  await expect(page.getByTestId("decisions")).toContainText("approve by lea@varga.dev");
+  await expect(page.getByTestId("decisions")).toContainText("approve by lea@acme.dev");
   await expect(page.getByTestId("effet-1")).toContainText("key act-comptes:1 · 2 attempt(s)");
 });
 
@@ -389,7 +389,7 @@ test("inbox : un ticket arrêté sur une demande humaine s'y décide, et l'en-t�
   const ticket = page.getByTestId("attente-w2");
   await expect(ticket).toContainText("Export invoices as PDF");
   await expect(ticket).toContainText("Approval of the specification requested");
-  await expect(ticket).toContainText("billing-api · varga/billing-api#124 · Spec to approve · asked");
+  await expect(ticket).toContainText("billing-api · acme/billing-api#124 · Spec to approve · asked");
   await expect(ticket).toContainText("due in 21 hours");
   await ticket.getByRole("button", { name: "approve" }).click();
   await expect(ticket.getByRole("alert")).toHaveCount(0);

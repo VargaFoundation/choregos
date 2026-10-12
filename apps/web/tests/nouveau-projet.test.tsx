@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 
 const pousser = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pousser }) }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
   return {

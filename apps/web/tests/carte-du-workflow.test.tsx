@@ -83,6 +83,6 @@ describe("la carte à plat, rendue (S21-07)", () => {
     const cible = screen.getByTestId("etat-needs_human").parentElement!;
     expect(cible.style.outline).toBe("");
     fireEvent.mouseEnter(screen.getByTestId("etat-dev").parentElement!);
-    expect(cible.style.outline).toContain("var(--varga-focus)");
+    expect(cible.style.outline).toContain("var(--choregos-focus)");
   });
 });

@@ -4,7 +4,7 @@
  * de règle, et le filet retombe sur la couleur du texte, le fond sur rien. `border-l-waiting-solid` en
  * était une (S24-04) — les tons pleins s'écrivent `waiting`, `failed`… — : le filet d'une attente était
  * gris, celui d'un refus aussi. Les tests d'apparence vérifiaient le NOM de la classe, pas qu'elle
- * existe. Celui-ci lit les couleurs du thème (`--color-*` de `globals.css` et du design system) et
+ * existe. Celui-ci lit les couleurs du thème (`--color-*` de `globals.css`) et
  * refuse, dans le code de la console, toute classe de couleur d'une de leurs familles qui n'en nomme
  * aucune. Les couleurs de Tailwind (`red-500`…), les tailles et les largeurs ne le regardent pas.
  */
@@ -14,7 +14,8 @@ import { describe, expect, it } from "vitest";
 
 const WEB = join(import.meta.dirname, "..");
 const RACINE = join(WEB, "src");
-const FEUILLES = [join(RACINE, "app/globals.css"), join(WEB, "node_modules/@varga/design-system/css/theme.css")];
+// The console's colours are declared in its own stylesheet only (ADR 0048).
+const FEUILLES = [join(RACINE, "app/globals.css")];
 
 function fichiers(dossier: string): string[] {
   return readdirSync(dossier).flatMap((nom) => {

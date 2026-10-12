@@ -96,7 +96,7 @@ describe("les clients MCP", () => {
     };
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <ClientsMcp org="varga" clients={[jeton]} agents={[]} />
+        <ClientsMcp org="acme" clients={[jeton]} agents={[]} />
       </QueryClientProvider>,
     );
     expect(screen.getByText("connected")).toBeInTheDocument();
@@ -104,8 +104,8 @@ describe("les clients MCP", () => {
     fireEvent.click(screen.getByRole("button", { name: "register as an external agent" }));
     fireEvent.change(screen.getByLabelText("tools"), { target: { value: "lecture" } });
     fireEvent.click(screen.getByRole("button", { name: "register" }));
-    await waitFor(() => expect(api.attachAgentToken).toHaveBeenCalledWith("varga", "claude-code", "tok-1"));
-    expect(api.createAgent).toHaveBeenCalledWith("varga", {
+    await waitFor(() => expect(api.attachAgentToken).toHaveBeenCalledWith("acme", "claude-code", "tok-1"));
+    expect(api.createAgent).toHaveBeenCalledWith("acme", {
       slug: "claude-code",
       kind: "external",
       display_name: "Claude Code",

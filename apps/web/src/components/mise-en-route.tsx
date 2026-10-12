@@ -3,8 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { CheckSquare } from "@varga/design-system";
-import { Card, Dot } from "@/components/ui";
+import { Card, Checkbox, Dot } from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ProjectDto, ProjectRequirement, WorkflowSummary, WorkItemDto } from "@/lib/types";
@@ -173,7 +172,7 @@ export function MiseEnRoute({ slug, projet }: { slug: string; projet: ProjectDto
         {etapes.map((etape) => (
           <li key={etape.id} className="flex items-start gap-3 py-2.5 text-sm" data-testid={`etape-${etape.id}`}>
             <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center">
-              {etape.etat === "a_verifier" ? <Dot tone="warn" size={8} /> : <CheckSquare checked={etape.etat === "fait"} />}
+              {etape.etat === "a_verifier" ? <Dot tone="warn" size={8} /> : <Checkbox checked={etape.etat === "fait"} />}
             </span>
             <span className="min-w-0 flex-1">
               <span className={etape.etat === "fait" ? "text-ink-muted" : "font-medium"}>{etape.titre}</span>

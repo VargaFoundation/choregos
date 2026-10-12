@@ -9,7 +9,7 @@ import { COULEUR_DU_RENVOI, COULEUR_DU_STATUT } from "@/components/parcours/coul
 import { COULEUR_DU_GENRE } from "@/components/workflows/carte/disposition";
 import { contraste, jeton, type Mode } from "./jetons";
 
-const FONDS = ["--varga-surface", "--choregos-raised"];
+const FONDS = ["--choregos-surface", "--choregos-raised"];
 
 function nomDe(valeur: string): string {
   const nom = /^var\((--[a-z0-9-]+)\)$/.exec(valeur)?.[1];

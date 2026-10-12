@@ -1,39 +1,70 @@
 /*
- * Choregos s'appuie sur le design system de la Varga Foundation (composants, reset, rôles des
- * jetons) et lui donne l'allure d'une console d'opérations à la Temporal (ADR 0043) : sa feuille
- * `styles/theme.css` réaffecte les jetons, Geist remplace le monospace partout, le sombre est un
- * choix de la personne et non plus du seul système.
+ * The console owns its primitives and its tokens (ADR 0048): Tailwind, the console's theme
+ * (`styles/theme.css`, Radix Colors with a contrast budget per mode) and nothing else. The look is
+ * an operations console in the manner of Temporal's UI; the Varga Foundation design system is no
+ * longer a dependency.
  */
 @import "tailwindcss";
-/* Les valeurs de la fondation, DANS une couche : celles de la console, hors couche, l'emportent
-   toujours — y compris sur les sélecteurs sombres du design system, plus spécifiques. Ses polices
-   (`fonts.css`) ne sont plus chargées. */
-@import "@varga/design-system/css/tokens.css" layer(theme);
-@import "@varga/design-system/css/theme.css";
-@import "@varga/design-system/css/base.css";
 @import "../styles/theme.css";
 
-/* `dark:` suit le thème choisi (`data-theme` sur <html>), pas le système seul. */
+/* `dark:` follows the chosen theme (`data-theme` on <html>), not the system alone. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* `rail:` : la barre latérale repliée (`data-sidebar="rail"` sur <html>, S24-03). */
 @custom-variant rail (&:where([data-sidebar="rail"], [data-sidebar="rail"] *));
 
-/* Sans ce `@source`, Tailwind ne voit pas les classes des composants du design system et ne
-   les génère pas : ils s'afficheraient sans style. */
-@source "../../node_modules/@varga/design-system/src";
+/*
+ * Small radii (ADR 0048): 4 px on controls (`rounded`, `rounded-sm`), 6 px on surfaces
+ * (`rounded-md` and above); pills and dots stay round (`rounded-full`).
+ */
+@theme {
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius: 4px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
+  --radius-2xl: 6px;
+  --radius-3xl: 6px;
+  --radius-4xl: 6px;
+}
 
 /*
- * Les trois acteurs d'un run : la prune est ce qui agit tout seul — un agent —, l'encre est
- * l'humain, le gris est la plateforme. Ce qui est prune tourne sans vous.
+ * The colour roles, as Tailwind colours. The three actors of a run: plum is what acts on its own —
+ * an agent —, ink is the human, grey is the platform. What is plum runs without you.
  */
 @theme inline {
-  --color-agent: var(--choregos-agent-solid);
-  --color-human: var(--varga-ink);
-  --color-system: var(--varga-ink-muted);
+  --color-surface: var(--choregos-surface);
+  --color-surface-muted: var(--choregos-surface-muted);
+  --color-surface-sunken: var(--choregos-surface-sunken);
+  --color-line: var(--choregos-line);
+  --color-line-strong: var(--choregos-line-strong);
+  --color-ink: var(--choregos-ink);
+  --color-ink-muted: var(--choregos-ink-muted);
+  --color-ink-subtle: var(--choregos-ink-subtle);
+  --color-ink-placeholder: var(--choregos-ink-placeholder);
+  --color-inverse: var(--choregos-inverse);
+  --color-inverse-ink: var(--choregos-inverse-ink);
+  --color-inverse-hover: var(--choregos-inverse-hover);
+  --color-ok: var(--choregos-ok);
+  --color-warn: var(--choregos-warn);
+  --color-danger: var(--choregos-danger);
+  --color-accent: var(--choregos-accent);
+  --color-accent-hover: var(--choregos-accent-hover);
+  --color-accent-ink: var(--choregos-accent-ink);
+  --color-accent-strong: var(--choregos-accent-strong);
+  --color-accent-soft: var(--choregos-accent-soft);
+  --color-focus: var(--choregos-focus);
 
-  /* Le monospace ne sert plus qu'à ce qui se compare, se copie ou se commande. */
+  --color-agent: var(--choregos-agent-solid);
+  --color-human: var(--choregos-ink);
+  --color-system: var(--choregos-ink-muted);
+
+  /* Sans for what is read; mono only for what is compared, copied or typed (ids, code, numbers). */
+  --font-sans: var(--choregos-font-sans);
   --font-mono: var(--choregos-font-mono);
+
+  --ease-standard: var(--choregos-easing);
 
   --color-raised: var(--choregos-raised);
   --color-accent-line: var(--choregos-accent-line);
@@ -96,16 +127,16 @@
  * Un tableau qui défile dans sa case le montre (S23-11) : sur téléphone, les colonnes d'action
  * sortaient du champ sans indice. Une ombre se pose sur le bord où il reste à lire — les deux
  * premiers fonds suivent le contenu (`local`) et couvrent l'ombre quand on est au bout, les deux
- * suivants restent au bord (`scroll`). Le tableau du design system pose son propre conteneur.
+ * suivants restent au bord (`scroll`). Le `Table` de la console pose son propre conteneur.
  *
- * Le cache est du fond où le tableau est posé : `--varga-surface`, qu'une carte (`.raised`) redéfinit
+ * Le cache est du fond où le tableau est posé : `--choregos-surface`, qu'une carte (`.raised`) redéfinit
  * et que ses enfants héritent. `--color-surface`, résolu une fois sur :root, peignait sur une carte
  * deux bandes du fond de la page, plus sombres qu'elle, même sans rien à faire défiler (S24-04).
  */
 .overflow-x-auto:has(> table) {
   background:
-    linear-gradient(to right, var(--varga-surface) 30%, transparent) left center / 2.5rem 100% no-repeat local,
-    linear-gradient(to left, var(--varga-surface) 30%, transparent) right center / 2.5rem 100% no-repeat local,
+    linear-gradient(to right, var(--choregos-surface) 30%, transparent) left center / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--choregos-surface) 30%, transparent) right center / 2.5rem 100% no-repeat local,
     radial-gradient(farthest-side at 0 50%, var(--choregos-scroll-hint), transparent) left center / 0.75rem 100%
       no-repeat scroll,
     radial-gradient(farthest-side at 100% 50%, var(--choregos-scroll-hint), transparent) right center / 0.75rem
@@ -114,7 +145,7 @@
 
 /* La carte d'un workflow se parcourt au clavier : la case sous le curseur doit se voir. */
 [data-etat]:focus-visible {
-  outline: 2px solid var(--varga-focus);
+  outline: 2px solid var(--choregos-focus);
   outline-offset: 4px;
 }
 

@@ -24,7 +24,7 @@ const CLE = "choregos.org";
  *
  * Avant : aucune page ne savait qui était connecté (`/me` n'était appelé que sur
  * l'administration), un 401 se rendait en message d'erreur brut, et l'organisation était
- * `varga`, codée en dur. Ici : `/me` une fois, les organisations de la personne, un choix
+ * codée en dur. Ici : `/me` une fois, les organisations de la personne, un choix
  * mémorisé dans le navigateur, et le client de l'API qui en tient compte.
  */
 export function SessionProvider({ children }: { children: ReactNode }) {

@@ -3,9 +3,8 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Code } from "@varga/design-system";
 import { useState } from "react";
-import { Button, Card, ErrorNote, Onglets, Select, tabClasses } from "@/components/ui";
+import { Alert, Button, Card, Code, ErrorNote, Onglets, Select, tabClasses } from "@/components/ui";
 import { api, qualify } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import {

@@ -74,7 +74,7 @@ export function ListeDeNavigation({
         <p
           id={idTitre}
           className={cn(
-            "px-2 pb-1 font-mono text-[11px] tracking-[0.06em] text-ink-muted uppercase",
+            "px-2 pb-1 text-xs font-medium text-ink-muted",
             barre && "rail:sr-only",
           )}
         >
@@ -93,13 +93,13 @@ export function ListeDeNavigation({
                   aria-current={active ? "page" : undefined}
                   title={barre && rail ? entree.label : undefined}
                   className={cn(
-                    "relative flex items-center border-l-2 font-mono no-underline",
+                    "relative flex items-center rounded no-underline",
                     barre
                       ? "h-7 gap-2.5 px-2 text-[13px] pointer-coarse:min-h-11 rail:justify-center rail:px-0"
                       : "min-h-11 gap-3 px-3 text-sm",
                     active
-                      ? "border-accent bg-accent-soft text-ink"
-                      : "border-transparent text-ink-muted hover:bg-surface-muted hover:text-ink",
+                      ? "bg-accent-soft font-medium text-ink"
+                      : "text-ink-muted hover:bg-surface-muted hover:text-ink",
                   )}
                 >
                   <Icone aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />

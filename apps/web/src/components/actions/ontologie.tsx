@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import { Code } from "@varga/design-system";
 import { Statut } from "@/components/actions/statut";
-import { Card } from "@/components/ui";
+import { Card, Code } from "@/components/ui";
 import type { Action } from "@/lib/types";
 
 interface Ontologie {

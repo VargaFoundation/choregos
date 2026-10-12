@@ -5,7 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BrandMark, Container } from "@varga/design-system";
+import { Container, Wordmark } from "@/components/ui";
 import { BarreLaterale } from "@/components/coquille/barre-laterale";
 import { SCRIPT_DES_PREFERENCES } from "@/lib/preferences";
 import "./globals.css";
@@ -45,7 +45,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             href="#contenu"
             className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-inverse focus:px-4 focus:py-3 focus:text-sm focus:text-inverse-ink"
           >
-            skip to content
+            Skip to content
           </a>
           {/* La coquille d'une console d'opérations (S24-03) : à partir de 1280 px, la barre latérale
               à gauche (repliable en rail) et la page à droite ; en dessous, une seule colonne. */}
@@ -57,7 +57,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Container size="wide" className="flex h-full items-center gap-4 sm:gap-8">
                   {/* À partir de 1280 px, la marque est en tête de la barre latérale. */}
                   <Link href="/" className="no-underline xl:hidden">
-                    <BrandMark name="choregos" product="varga foundation" />
+                    <Wordmark />
                   </Link>
                   <TopNav demo={demo} />
                 </Container>
@@ -73,7 +73,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   className="flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3 text-xs text-ink-muted"
                 >
                   <span>A ticket goes in, a controlled production release comes out.</span>
-                  <span>apache 2.0</span>
+                  {/* The foundation is named here, and only here (ADR 0048). */}
+                  <span data-testid="pied-de-page-fondation">Choregos by Varga Foundation · Apache 2.0</span>
                 </Container>
               </footer>
             </div>

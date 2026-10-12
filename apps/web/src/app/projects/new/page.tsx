@@ -2,12 +2,11 @@
 "use client";
 
 import { cn } from "@/lib/cn";
-import { Numeral } from "@varga/design-system";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, Card, ErrorNote, Heading, Input, Select } from "@/components/ui";
+import { Button, Card, ErrorNote, Heading, Input, Select, StepNumber } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -145,9 +144,9 @@ export default function NewProjectPage() {
               index === step ? "text-ink" : "text-ink-muted",
             )}
           >
-            <Numeral
+            <StepNumber
               value={index + 1}
-              className={cn("size-7", index > step && "border border-line-strong bg-surface text-ink-muted")}
+              className={cn(index <= step && "border-accent bg-accent text-accent-ink")}
             />
             <span className={cn(index === step && "font-bold")}>{label}</span>
           </li>
@@ -196,7 +195,7 @@ export default function NewProjectPage() {
             <Field label="display name" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
             {!form.sansDepot && (
               <>
-                <Field label="repository" value={form.repo} onChange={(value) => set("repo", value)} placeholder="varga/billing-api" />
+                <Field label="repository" value={form.repo} onChange={(value) => set("repo", value)} placeholder="acme/billing-api" />
                 {!repoValid && form.repo && <ErrorNote>expected: `owner/repo` or an https URL</ErrorNote>}
                 <label className="block space-y-1">
                   <span>main language</span>
@@ -238,7 +237,7 @@ export default function NewProjectPage() {
                 label="GitOps repository (environments)"
                 value={form.gitops}
                 onChange={(value) => set("gitops", value)}
-                placeholder="https://github.com/varga/billing-api-gitops.git"
+                placeholder="https://github.com/acme/billing-api-gitops.git"
               />
             )}
             <Field label="Slack channel" value={form.channel} onChange={(value) => set("channel", value)} placeholder="#choregos" />

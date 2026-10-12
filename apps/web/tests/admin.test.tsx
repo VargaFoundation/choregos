@@ -47,8 +47,8 @@ describe("SchemaForm (ADR 0032, S17-02)", () => {
     fireEvent.change(screen.getByLabelText(/^name/), { target: { value: "okta" } });
     fireEvent.change(screen.getByLabelText(/^seats/), { target: { value: "12" } });
     fireEvent.click(screen.getByLabelText(/^enabled/));
-    fireEvent.change(screen.getByLabelText(/^domains/), { target: { value: "varga.dev, diametral.com" } });
-    expect(derniere).toEqual({ name: "okta", seats: 12, enabled: true, domains: ["varga.dev", "diametral.com"] });
+    fireEvent.change(screen.getByLabelText(/^domains/), { target: { value: "acme.dev, diametral.com" } });
+    expect(derniere).toEqual({ name: "okta", seats: 12, enabled: true, domains: ["acme.dev", "diametral.com"] });
     expect(champsManquants(schema, derniere)).toEqual(["role"]);
   });
 });
@@ -124,8 +124,8 @@ describe("SchemaForm : textes sur plusieurs lignes et correspondances (S17-04)",
 
 describe("les chemins d'une section", () => {
   it("prennent l'organisation et la clé de la ligne, quel que soit le nom du paramètre", () => {
-    expect(remplir("/orgs/{org}/scim/tokens/{id}", "varga", "t 1")).toBe("/orgs/varga/scim/tokens/t%201");
-    expect(remplir("/orgs/{org}/saml/providers/{provider_id}", "varga", "p1")).toBe("/orgs/varga/saml/providers/p1");
+    expect(remplir("/orgs/{org}/scim/tokens/{id}", "acme", "t 1")).toBe("/orgs/acme/scim/tokens/t%201");
+    expect(remplir("/orgs/{org}/saml/providers/{provider_id}", "acme", "p1")).toBe("/orgs/acme/saml/providers/p1");
   });
 });
 

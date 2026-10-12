@@ -99,7 +99,7 @@ export function CarteDuWorkflow({
         style={{
           borderLeftColor: couleur.bord,
           borderLeftStyle: "solid",
-          outline: eclaires.has(id) ? "2px solid var(--varga-focus)" : undefined,
+          outline: eclaires.has(id) ? "2px solid var(--choregos-focus)" : undefined,
         }}
         onMouseEnter={() => setSurvol(id)}
         onMouseLeave={() => setSurvol(null)}

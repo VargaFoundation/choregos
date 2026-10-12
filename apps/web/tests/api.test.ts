@@ -14,15 +14,15 @@ describe("client API", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     const { api } = await import("@/lib/api");
-    await api.projects("varga");
-    expect(fetchMock).toHaveBeenCalledWith("/api/v1/orgs/varga/projects", expect.objectContaining({ credentials: "include" }));
+    await api.projects("acme");
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/orgs/acme/projects", expect.objectContaining({ credentials: "include" }));
     vi.unstubAllGlobals();
   });
 
   it("construit un lien d'export CSV téléchargeable tel quel, qualifié par l'organisation (#178)", async () => {
     const { api, setCurrentOrg } = await import("@/lib/api");
     expect(api.costsCsvUrl("billing-api", "stage")).toBe(
-      "/api/v1/projects/varga:billing-api/costs.csv?group_by=stage",
+      "/api/v1/projects/default:billing-api/costs.csv?group_by=stage",
     );
     setCurrentOrg("acme");
     try {
@@ -30,6 +30,15 @@ describe("client API", () => {
     } finally {
       setCurrentOrg("");
     }
+  });
+
+  it("starts on an organisation that is not the foundation's (ADR 0048)", async () => {
+    const { defaultOrg, DEFAULT_ORG } = await import("@/lib/api");
+    expect(DEFAULT_ORG).not.toBe("varga");
+    expect(defaultOrg(undefined, true)).toBe("acme");
+    expect(defaultOrg(undefined, false)).toBe("default");
+    expect(defaultOrg("  ", false)).toBe("default");
+    expect(defaultOrg("globex", true)).toBe("globex");
   });
 
   it("sert les mesures DORA en mode maquette", async () => {
