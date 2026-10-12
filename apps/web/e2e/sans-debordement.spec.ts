@@ -63,7 +63,7 @@ for (const largeur of [360, 768, 1024, 1280]) {
 
 test("sous 1280 px, la navigation se replie derrière « menu », et s'y ouvre", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.goto("/p/billing-api");
+  await page.goto("/");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(navigation.getByRole("link", { name: "Skills" })).toBeHidden();
   const menu = navigation.getByRole("button", { name: "Menu" });

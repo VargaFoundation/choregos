@@ -10,7 +10,7 @@ import { Provenance } from "@/components/provenance";
 import { Acces } from "@/components/acces";
 import { Garanties, verdictsDe } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
-import { Badge, Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge, tabClasses } from "@/components/ui";
+import { Badge, Breadcrumbs, Card, Empty, ErrorNote, Heading, StateBadge, tabClasses } from "@/components/ui";
 import { PodLogs } from "@/components/pod-logs";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
@@ -72,8 +72,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
 
   return (
     <div className="space-y-4">
-      <FilDAriane
-        etapes={[
+      <Breadcrumbs
+        steps={[
           { href: `/p/${slug}/board`, label: "Board" },
           ...(idDuTicket
             ? [{ href: `/p/${slug}/items/${idDuTicket}`, label: ticket.data?.tracker_key ?? "ticket" }]

@@ -11,9 +11,31 @@ test("liste des projets et accès à un projet", async ({ page }) => {
   await page.getByRole("link", { name: "Billing API" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api$/);
   await expect(page.getByText("PRs merged on first pass")).toBeVisible();
-  // Le titre est le nom du projet, le slug au-dessus (S23-04).
+  // Le titre est le nom du projet (S23-04) ; le fil part de la liste des projets (S30-03).
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Billing API");
-  await expect(page.getByText("Project · billing-api")).toBeVisible();
+  const fil = page.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(fil.getByRole("link", { name: "Projects" })).toHaveAttribute("href", "/");
+  await expect(fil.locator("[aria-current=page]")).toHaveText("Billing API");
+});
+
+test("inside a project the sidebar lists its sections, and no tab row is left (S30-03)", async ({ page }) => {
+  await page.goto("/p/billing-api/board");
+  const barre = page.getByRole("complementary", { name: "Sidebar" });
+  for (const groupe of ["Work", "Define", "Configure"]) await expect(barre.getByRole("list", { name: groupe })).toBeVisible();
+  await expect(barre.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
+  await expect(barre.getByRole("link", { name: "Skills" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
+  // The switcher goes to another project; the way back leads to the organisation's pages.
+  await barre.getByTestId("project-switcher").locator("summary").click();
+  await barre.getByRole("link", { name: "Checkout Web" }).click();
+  await expect(page).toHaveURL(/\/p\/checkout-web$/);
+  await barre.getByRole("link", { name: /All of/ }).click();
+  await expect(barre.getByRole("link", { name: "Skills" })).toBeVisible();
+  // The administration: its sections in the sidebar, no tab row.
+  await page.goto("/admin/members");
+  await expect(barre.getByRole("list", { name: "Administration" }).getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("navigation", { name: "Administration sections" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Administration");
 });
 
 test("board : une colonne d'un état que le workflow ne connaît pas le dit (S23-04)", async ({ page }) => {
@@ -445,16 +467,17 @@ test("coûts : un écran, une devise, et un graphe qui se lit (S23-10)", async (
   await expect(graphe.getByRole("table", { name: "Cost per day" }).getByRole("row")).toHaveCount(15);
 });
 
-test("repérage : un ticket et un run ont leur fil d'Ariane, et l'onglet board reste actif (S23-12)", async ({ page }) => {
+test("repérage : un ticket et un run ont leur fil d'Ariane, et l'entrée board reste active (S23-12, S30-03)", async ({ page }) => {
   await page.goto("/p/billing-api/items/w1");
-  const onglets = page.getByRole("navigation", { name: "Project sections" });
+  const onglets = page.getByRole("complementary", { name: "Sidebar" });
   await expect(onglets.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
   const fil = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(fil.getByRole("link", { name: "Board" })).toHaveAttribute("href", "/p/billing-api/board");
 
   await page.goto("/p/billing-api/runs/r3");
   await expect(onglets.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
-  await expect(fil.getByRole("link")).toHaveCount(2);
+  // Projects › Billing API › Board › the ticket › the run.
+  await expect(fil.getByRole("link")).toHaveCount(4);
   await expect(fil.locator("[aria-current=page]")).toContainText("attempt");
 
   await page.goto("/p/billing-api/actions/act-poste");

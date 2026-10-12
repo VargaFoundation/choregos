@@ -58,7 +58,7 @@ describe("la navigation (S21-03, S24-03)", () => {
   });
 
   it("sous 1280 px, se replie derrière « menu » : le panneau s'ouvre, se ferme sur Échap et rend le focus (S23-01)", () => {
-    const navigation = rendre("/p/billing-api");
+    const navigation = rendre("/");
     const menu = screen.getByRole("button", { name: /^Menu/ });
     expect(menu).toHaveAttribute("aria-expanded", "false");
     expect(navigation.querySelector("#menu-principal")).toBeNull();

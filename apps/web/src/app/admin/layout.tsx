@@ -1,51 +1,32 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { Heading, Tabs, tabClasses } from "@/components/ui";
-import { api } from "@/lib/api";
-import { useSession } from "@/lib/session";
+import { useNavGroups, sectionOf } from "@/components/coquille/navigation";
+import { BreadcrumbBase, Breadcrumbs, Heading, type BreadcrumbStep } from "@/components/ui";
 
-const ONGLETS = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/members", label: "Members" },
-  { href: "/admin/connectors", label: "Connectors" },
-  { href: "/admin/audit", label: "Audit" },
-  { href: "/admin/platform", label: "Platform" },
-  { href: "/admin/edition", label: "Edition" },
-];
+const BASE: BreadcrumbStep[] = [{ href: "/admin", label: "Administration" }];
 
 /**
  * L'administration, en sous-pages : les écrans du cœur, puis une page par section qu'un greffon
- * déclare (ADR 0032) — l'API ne rend que celles dont on a le droit.
+ * déclare (ADR 0032) — l'API ne rend que celles dont on a le droit. No tab row (S30-03): the sidebar
+ * lists the sections when one is inside the administration, the trail says which one.
  */
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { org } = useSession();
-  const sections = useQuery({ queryKey: ["admin-sections", org], queryFn: () => api.adminSections(org), retry: false });
-  const onglets = [
-    ...ONGLETS,
-    ...(sections.data ?? []).map((section) => ({ href: `/admin/x/${section.id}`, label: section.title })),
-  ];
+  const { groups } = useNavGroups(pathname);
+  const section = sectionOf(pathname, groups);
+  const steps = section && section.href !== "/admin" ? [{ label: section.label }] : [];
   return (
-    <div className="space-y-4">
-      <Heading as="h1" size="xl">
-        Administration
-      </Heading>
-      <Tabs aria-label="Administration sections">
-        {onglets.map((onglet) => {
-          const actif = pathname === onglet.href;
-          return (
-            <Link key={onglet.href} href={onglet.href} aria-current={actif ? "page" : undefined} className={tabClasses(actif)}>
-              {onglet.label}
-            </Link>
-          );
-        })}
-      </Tabs>
-      {children}
-    </div>
+    <BreadcrumbBase.Provider value={BASE}>
+      <div className="space-y-4">
+        <Breadcrumbs steps={steps} />
+        <Heading as="h1" size="xl">
+          {steps.length > 0 ? section!.label : "Administration"}
+        </Heading>
+        {children}
+      </div>
+    </BreadcrumbBase.Provider>
   );
 }

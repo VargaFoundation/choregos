@@ -139,9 +139,7 @@ test("les barres d'onglets ne défilent pas en hauteur : Windows y dessinait ses
   // L'onglet actif descend d'un pixel sur le filet ; sans la marge qui le reçoit, chaque barre
   // débordait d'un pixel en hauteur, et Windows dessinait ▲ ● ▼ au bout de la ligne (relevé le 06/10).
   const barres: Array<[string, string]> = [
-    ["/p/billing-api/workflows/default-simple/map", "project sections"],
     ["/p/billing-api/workflows/default-simple/map", "views of default-simple"],
-    ["/admin", "administration sections"],
     ["/integrations/claude-code", "clients"],
   ];
   for (const [chemin, nom] of barres) {
@@ -161,7 +159,7 @@ test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", a
   await page.setViewportSize({ width: 1280, height: 800 });
   for (const path of ["/", "/skills", "/integrations", "/admin"]) {
     await page.goto(path);
-    await expect(page.getByRole("link", { name: "Skills" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Sidebar" })).toBeVisible();
     // La session arrive après la page : l'en-tête ne porte son poids réel (organisation, personne,
     // déconnexion) qu'une fois qu'elle est là.
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
