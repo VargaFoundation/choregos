@@ -123,8 +123,10 @@ async def test_une_session_revoquee_est_refusee_a_la_requete_suivante(client_gre
 async def test_une_validation_en_panne_ne_vaut_pas_acceptation(client_greffe: AsyncClient) -> None:
     await _connecter(client_greffe, "admin@varga.dev")
     _etat()["panne"] = True
-    with pytest.raises(ConnectionError):
-        await client_greffe.get("/api/v1/me")
+    # Since S26-02 the failure is answered as a problem+json 500 rather than propagated: still a refusal.
+    reponse = await client_greffe.get("/api/v1/me")
+    assert reponse.status_code == 500
+    assert reponse.headers["content-type"].startswith("application/problem+json")
 
 
 async def test_un_greffon_accorde_l_administration_de_la_plateforme_sans_la_retirer(
