@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import tarfile
 from typing import Any
 
 import pytest
@@ -80,21 +82,56 @@ async def test_l_etat_vient_de_docker_inspect(etat: dict[str, Any], attendu: str
         assert statut.exit_code == 2 and statut.message == "boom"
 
 
-async def test_le_resultat_est_lu_dans_le_workspace_et_un_json_invalide_rend_none() -> None:
-    bon = json.dumps({"schema": "choregos/StageResult/v1", "status": "done", "summary": "ok"})
-    ex = executeur(_Docker(exec=(0, bon, "")))
+def _tar(contenu: bytes) -> bytes:
+    """What `docker cp <container>:<file> -` writes on stdout: a tar holding the file."""
+    tampon = io.BytesIO()
+    with tarfile.open(fileobj=tampon, mode="w") as archive:
+        info = tarfile.TarInfo("result.json")
+        info.size = len(contenu)
+        archive.addfile(info, io.BytesIO(contenu))
+    return tampon.getvalue()
+
+
+def lecteur(code: int, sortie: bytes) -> tuple[LocalDockerExecutor, list[list[str]]]:
+    ex = LocalDockerExecutor(network="choregos_net")
+    appels: list[list[str]] = []
+
+    async def brut(*args: str, timeout: float = 120.0) -> tuple[int, bytes, str]:
+        appels.append(list(args))
+        return code, sortie, ""
+
+    ex._run_raw = brut  # type: ignore[method-assign]
+    return ex, appels
+
+
+async def test_the_result_is_read_from_the_stopped_container_and_bad_json_gives_none() -> None:
+    """`docker exec` needs a running container; the result is read once the run has ENDED."""
+    bon = json.dumps({"schema": "choregos/StageResult/v1", "status": "done", "summary": "ok"}).encode()
+    ex, appels = lecteur(0, _tar(bon))
     resultat = await ex.fetch_result(ExecRef(kind="local_docker", name="c"))
     assert resultat is not None and resultat.status == "done"
-    assert (
-        await executeur(_Docker(exec=(0, "{pas du json", ""))).fetch_result(
-            ExecRef(kind="local_docker", name="c")
-        )
-        is None
-    )
-    assert (
-        await executeur(_Docker(exec=(1, "", ""))).fetch_result(ExecRef(kind="local_docker", name="c"))
-        is None
-    )
+    assert appels == [["cp", "c:/workspace/.choregos/result.json", "-"]]
+    ex, _ = lecteur(0, _tar(b"{not json"))
+    assert await ex.fetch_result(ExecRef(kind="local_docker", name="c")) is None
+    ex, _ = lecteur(1, b"")
+    assert await ex.fetch_result(ExecRef(kind="local_docker", name="c")) is None
+
+
+async def test_the_run_container_drops_capabilities_and_waits_for_the_image_pull() -> None:
+    docker = _Docker(inspect=(1, "", "no such container"))
+    timeouts: list[float] = []
+
+    async def enregistre(*args: str, timeout: float = 120.0) -> tuple[int, str, str]:
+        timeouts.append(timeout)
+        return await docker(*args, timeout=timeout)
+
+    ex = LocalDockerExecutor(network="choregos_net")
+    ex._run = enregistre  # type: ignore[method-assign]
+    await ex.start(spec())
+    run = next(a for a in docker.appels if a[0] == "run")
+    assert run[run.index("--cap-drop") + 1] == "ALL"
+    assert run[run.index("--security-opt") + 1] == "no-new-privileges"
+    assert max(timeouts) >= 600, "a first pull of the runner image takes minutes"
 
 
 async def test_les_journaux_et_l_annulation() -> None:

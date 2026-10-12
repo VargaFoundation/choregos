@@ -5,6 +5,7 @@
     docker compose up -d
     python3 tools/local_install_check.py               # console, sign-in, one work item
     python3 tools/local_install_check.py --console-only
+    python3 tools/local_install_check.py --expect-real --stage-timeout 900   # a key in .env
 
 What it does, against the running compose:
 
@@ -142,6 +143,11 @@ def main() -> int:
     parser.add_argument("--console-timeout", type=float, default=300, help="seconds to wait for the console")
     parser.add_argument("--stage-timeout", type=float, default=180, help="seconds to wait for each state")
     parser.add_argument("--console-only", action="store_true", help="stop after the console answers")
+    parser.add_argument(
+        "--expect-real",
+        action="store_true",
+        help="fail unless the agent stage consumed model tokens (a key in .env, S28-02)",
+    )
     args = parser.parse_args()
 
     console = Console(args.url)
@@ -173,6 +179,10 @@ def main() -> int:
         if item.get("state") != "awaiting_approval":
             return fail(f"the work item is `{item.get('state')}`, expected `awaiting_approval`: {item}")
         print(f"  `awaiting_approval` after {time.monotonic() - started:.0f} s")
+        totals = item.get("totals") or {}
+        print(f"  tokens in/out: {totals.get('tokens_in', 0)}/{totals.get('tokens_out', 0)}")
+        if args.expect_real and not totals.get("tokens_in"):
+            return fail("--expect-real: the agent stage consumed no model token, it was simulated")
 
         step("approving")
         status, body = console.post(f"/api/v1/work-items/{item['id']}/decisions", {"kind": "approve"})

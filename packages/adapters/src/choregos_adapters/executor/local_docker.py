@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
+import tarfile
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -12,6 +14,9 @@ from choregos_contracts import ExecutorKind, StageResult
 from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
 
 from ..errors import UpstreamError
+
+RESULT_PATH = "/workspace/.choregos/result.json"
+PULL_TIMEOUT_S = 900.0
 
 
 class LocalDockerExecutor:
@@ -28,12 +33,16 @@ class LocalDockerExecutor:
     def _name(self, run_id: str) -> str:
         return f"choregos-run-{run_id}"[:60].lower()
 
-    async def _run(self, *args: str, timeout: float = 120.0) -> tuple[int, str, str]:
+    async def _run_raw(self, *args: str, timeout: float = 120.0) -> tuple[int, bytes, str]:
         process = await asyncio.create_subprocess_exec(
             self.docker, *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-        return process.returncode or 0, stdout.decode(), stderr.decode()
+        return process.returncode or 0, stdout, stderr.decode(errors="replace")
+
+    async def _run(self, *args: str, timeout: float = 120.0) -> tuple[int, str, str]:
+        code, stdout, stderr = await self._run_raw(*args, timeout=timeout)
+        return code, stdout.decode(errors="replace"), stderr
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         name = self._name(spec.run_id)
@@ -47,6 +56,11 @@ class LocalDockerExecutor:
             name,
             "--network",
             self.network,
+            # What the Kubernetes Job's security context says (k8s_job.py), as far as Docker can.
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
             "--env",
             f"CHOREGOS_RUN_ID={spec.run_id}",
             "--env",
@@ -61,7 +75,9 @@ class LocalDockerExecutor:
         for key, value in spec.env.items():
             args += ["--env", f"{key}={value}"]
         args += [spec.runner_image, "run"]
-        code, _stdout, stderr = await self._run(*args)
+        # The first run pulls the runner image (more than a gigabyte): two minutes are not enough,
+        # and a `docker run` cut short keeps pulling, then collides with the retry on the name.
+        code, _stdout, stderr = await self._run(*args, timeout=PULL_TIMEOUT_S)
         if code != 0:
             raise UpstreamError("docker", f"démarrage impossible : {stderr[:300]}")
         self.containers[spec.run_id] = name
@@ -84,12 +100,22 @@ class LocalDockerExecutor:
         )
 
     async def fetch_result(self, ref: ExecRef) -> StageResult | None:
-        code, stdout, _ = await self._run("exec", ref.name, "cat", "/workspace/.choregos/result.json")
+        """The result file the runner left in its workspace, read from the STOPPED container.
+
+        `docker exec` (the first version) needs a running container, and this is only called once
+        the run has ended: it always failed. `docker cp … -` reads a stopped one, as a tar stream.
+        """
+        code, stdout, _ = await self._run_raw("cp", f"{ref.name}:{RESULT_PATH}", "-")
         if code != 0:
             return None
         try:
-            return StageResult.model_validate(json.loads(stdout))
-        except (json.JSONDecodeError, ValueError):
+            with tarfile.open(fileobj=io.BytesIO(stdout)) as archive:
+                member = archive.next()
+                extracted = archive.extractfile(member) if member is not None else None
+                if extracted is None:
+                    return None
+                return StageResult.model_validate(json.loads(extracted.read()))
+        except (tarfile.TarError, json.JSONDecodeError, ValueError):
             return None
 
     async def logs(self, ref: ExecRef) -> AsyncIterator[str]:
