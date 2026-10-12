@@ -194,3 +194,36 @@ def _nothing_to_do(stage_input: StageInput | None) -> StageResult:
         outputs=outputs,
         artifacts=Artifacts(files=stored),
     )
+
+
+def simulated_stage(stage_input: StageInput) -> StageResult:
+    """What a simulated agent hands back: every output the transition declares, and nothing else.
+
+    No model is called. The summary says so, so that nobody mistakes a local install without a
+    model key for an agent that worked.
+    """
+    transition = stage_input.transition
+    return StageResult.model_validate(
+        {
+            "status": StageStatus.DONE,
+            "summary": (
+                f"simulated agent: `{transition.role}` moved the work item from `{transition.from_}` "
+                f"to `{transition.to}` without calling a model (local install in fakes mode)"
+            ),
+            "outputs": {name: f"(simulated {name}: no model key configured)" for name in transition.outputs},
+        }
+    )
+
+
+#: One simulated executor per process. The worker rebuilds a project's adapters for every
+#: activity: a fresh `FakeExecutor` would know nothing of the run that `start_run` began, and
+#: `await_run` would poll an `unknown` state until the stage timed out.
+_SIMULATED: FakeExecutor | None = None
+
+
+def simulated_executor() -> FakeExecutor:
+    """The executor of the `fake` runtime configured with `{"simulate": true}` (local install)."""
+    global _SIMULATED  # noqa: PLW0603 - one simulated agent per process, like the other shared fakes
+    if _SIMULATED is None:
+        _SIMULATED = FakeExecutor(handler=simulated_stage)
+    return _SIMULATED

@@ -1,0 +1,229 @@
+# SPDX-License-Identifier: Apache-2.0
+# Choregos on one machine, with Docker only (S28, ADR none: this is a development install).
+#
+#   cp .env.example .env      # optional: a model key; nothing means fakes
+#   docker compose up         # console on http://localhost:3000
+#
+# What runs: PostgreSQL (under row-level security, through a non-superuser role), the Temporal
+# server (on the same PostgreSQL), the migrations, the API, the Temporal workers, the
+# console, LiteLLM, and a one-shot seed that creates the demo organisation and project.
+# `docker compose --profile memory up` adds Ecphoria (the memory service).
+#
+# Everything here is for a laptop: development passwords, development sign-in (no identity
+# provider), ports bound to 127.0.0.1. The API refuses development sign-in outside `dev`/`test`.
+name: choregos
+
+x-platform-env: &platform-env
+  CHOREGOS_ENV: dev
+  CHOREGOS_DATABASE_URL: postgresql+asyncpg://choregos_app:local-dev-only@postgres:5432/choregos
+  CHOREGOS_TEMPORAL_ADDRESS: temporal:7233
+  CHOREGOS_DEV_LOGIN_ENABLED: "true"
+  CHOREGOS_DEV_ADMIN_EMAILS: ${CHOREGOS_ADMIN_EMAIL:-admin@choregos.local}
+  CHOREGOS_BOOTSTRAP_ORG: demo
+  CHOREGOS_BOOTSTRAP_ORG_NAME: Demo
+  CHOREGOS_BOOTSTRAP_ADMINS: ${CHOREGOS_ADMIN_EMAIL:-admin@choregos.local}
+  CHOREGOS_SESSION_SECRET: local-install-only-not-a-secret
+  CHOREGOS_PUBLIC_URL: http://localhost:${CHOREGOS_PORT_WEB:-3000}
+  CHOREGOS_API_URL: http://localhost:${CHOREGOS_PORT_API:-8000}
+  CHOREGOS_CORS_ORIGINS: http://localhost:${CHOREGOS_PORT_WEB:-3000}
+  CHOREGOS_GATEWAY_URL: http://litellm:4000
+  CHOREGOS_GATEWAY_MASTER_KEY: sk-local-install-only
+  CHOREGOS_MEMORY_URL: http://ecphoria:8432
+  CHOREGOS_LOG_JSON: ${CHOREGOS_LOG_JSON:-false}
+
+# The run-token key is generated once per install (service `keys`) and read from a shared
+# volume: the workers sign run tokens, the API verifies them, so both need the same key.
+x-with-run-token-key: &with-run-token-key
+  volumes: ["run-token-key:/keys:ro"]
+
+x-platform-image: &platform-image
+  image: choregos-api:local
+  build:
+    context: .
+    dockerfile: docker/api.Dockerfile
+    target: api
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    # No fsync: a laptop install trades crash safety for start-up time. Measured on 2026-10-12
+    # (WSL2): the first start's initdb checkpoint took 20 s to 60 s+ to sync, and once outlived
+    # `pg_ctl`'s 60 s shutdown timeout, which killed the container. A host crash can corrupt this
+    # database: keep nothing here you cannot recreate.
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+    environment:
+      POSTGRES_USER: choregos
+      POSTGRES_PASSWORD: local-dev-only
+      POSTGRES_DB: choregos
+    volumes:
+      - ./dev/local/initdb:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP: the temporary server of the first start (initdb) listens on the socket only, and
+      # must not pass for the real one. `start_period`: a first start on a slow disk (WSL2) takes
+      # a minute to initialise, and its failed probes must not count.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U choregos -d choregos"]
+      interval: 2s
+      retries: 30
+      start_period: 120s
+
+  temporal:
+    # Temporal on the same PostgreSQL (its own two databases, created by `auto-setup`).
+    #
+    # Not the development server (`temporalio/temporal server start-dev`): tried first, on
+    # 2026-10-12. In memory it loses every running workflow at each restart while PostgreSQL keeps
+    # the work items, which then never move again; with `--db-filename` (SQLite on a volume) the
+    # `default` namespace is listed but every `start_workflow` answers "Namespace default is not
+    # found", for minutes. `auto-setup` on PostgreSQL is what `essai/demarrage-local` measured
+    # healthy in 18–21 s.
+    image: temporalio/auto-setup:1.26.2
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: choregos
+      POSTGRES_PWD: local-dev-only
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 3s
+      retries: 60
+      start_period: 10s
+
+  temporal-ui:
+    # Optional: `docker compose --profile temporal-ui up`, then http://localhost:8233.
+    profiles: [temporal-ui]
+    image: temporalio/ui:2.32.0
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports: ["127.0.0.1:${CHOREGOS_PORT_TEMPORAL_UI:-8233}:8080"]
+    depends_on: [temporal]
+
+  litellm:
+    image: ghcr.io/berriai/litellm-database:v1.95.0
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: sk-local-install-only
+      DATABASE_URL: postgresql://choregos:local-dev-only@postgres:5432/litellm
+    volumes: ["./dev/local/litellm.yaml:/app/config.yaml:ro"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness')"]
+      interval: 5s
+      retries: 60
+      start_period: 30s
+
+  keys:
+    <<: *platform-image
+    user: "0"
+    entrypoint: ["python", "-c"]
+    command:
+      - |
+        import os, pathlib
+        from cryptography.hazmat.primitives import serialization as s
+        from cryptography.hazmat.primitives.asymmetric import ec
+        cle = pathlib.Path("/keys/run-token.pem")
+        if not cle.exists():
+            cle.write_bytes(ec.generate_private_key(ec.SECP256R1()).private_bytes(
+                s.Encoding.PEM, s.PrivateFormat.PKCS8, s.NoEncryption()))
+        os.chown(cle, 1000, 1000)
+        cle.chmod(0o400)
+    volumes: ["run-token-key:/keys"]
+    restart: "no"
+
+  migrate:
+    <<: *platform-image
+    command: ["python", "-m", "choregos_api.migrer"]
+    environment: *platform-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    <<: [*platform-image, *with-run-token-key]
+    command:
+      - sh
+      - -c
+      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec uvicorn choregos_api.main:app --host 0.0.0.0 --port 8000
+    environment: *platform-env
+    ports: ["127.0.0.1:${CHOREGOS_PORT_API:-8000}:8000"]
+    depends_on:
+      keys: { condition: service_completed_successfully }
+      migrate: { condition: service_completed_successfully }
+      temporal: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 2s
+      retries: 60
+
+  worker:
+    <<: *with-run-token-key
+    image: choregos-orchestrator:local
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: worker
+    command:
+      - sh
+      - -c
+      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec python -m choregos_orchestrator.worker
+    environment:
+      <<: *platform-env
+      # What an agent calls back, from inside the compose network.
+      CHOREGOS_INTERNAL_API_URL: http://api:8000
+    depends_on:
+      keys: { condition: service_completed_successfully }
+      migrate: { condition: service_completed_successfully }
+      temporal: { condition: service_healthy }
+
+  seed:
+    # The demo organisation and project, once; a second `up` changes nothing (choregos_api.local_demo).
+    <<: *platform-image
+    command: ["python", "-m", "choregos_api.local_demo"]
+    environment: *platform-env
+    depends_on:
+      api: { condition: service_healthy }
+    restart: "no"
+
+  web:
+    image: choregos-web:local
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        # Baked at build time: Next.js computes its rewrites and `NEXT_PUBLIC_*` when it builds.
+        CHOREGOS_API_URL: http://api:8000
+        NEXT_PUBLIC_DEV_LOGIN: "true"
+    environment:
+      CHOREGOS_API_URL: http://api:8000
+    ports: ["127.0.0.1:${CHOREGOS_PORT_WEB:-3000}:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+      # The console opens on a seeded install, and `up --wait` waits for the one-shot seed.
+      seed: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 3s
+      retries: 60
+
+  ecphoria:
+    # Optional: `docker compose --profile memory up`. Its embeddings need a provider key.
+    profiles: [memory]
+    image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory
+    environment:
+      ECPHORIA_EMBEDDING__PROVIDER: openai_compatible
+      ECPHORIA_EMBEDDING__OPENAI_BASE_URL: http://litellm:4000/v1
+      ECPHORIA_EMBEDDING__MODEL: platform/embed
+      ECPHORIA_GATEWAY__ALLOW_INSECURE: "true"
+      ECPHORIA_MEMORY__EPISODIC__DB_PATH: /data/episodic.duckdb
+      ECPHORIA_MEMORY__STATE__DB_PATH: /data/state.db
+      ECPHORIA_MEMORY__COGNITION__DB_PATH: /data/cognition.duckdb
+    volumes: ["ecphoriadata:/data"]
+
+volumes:
+  pgdata:
+  run-token-key:
+  ecphoriadata:

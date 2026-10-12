@@ -1,0 +1,14 @@
+# The build context of every image is the repository root (`docker/*.Dockerfile`, `compose.yaml`).
+# What a working copy grows locally must not reach an image: `COPY apps/web ./` would otherwise
+# copy the host's `node_modules` (built for another OS) over the one installed in the image, and a
+# `.env` holding a provider key would be sent to the builder.
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/.next
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+**/.env
+**/.env.local
