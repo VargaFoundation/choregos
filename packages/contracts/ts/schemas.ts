@@ -7,6 +7,36 @@
  */
 
 
+/** One revision of a named output of a work item: typed, stored and traced (ADR 0049). */
+export type Artifact = {
+  /** The output's name, as the transition declares it. */
+  name: string;
+  /** The declared type, or the type of the value or file. */
+  type: "markdown" | "json" | "mermaid" | "sarif" | "text" | "csv" | "html" | "pdf" | "docx" | "xlsx" | "pptx" | "png" | "jpeg" | "gif" | "webp" | "svg" | "mp4" | "webm" | "file";
+  /** How the platform handles it. */
+  kind: "markdown" | "json" | "diagram" | "report" | "file";
+  /** The IANA media type the content is served with. */
+  media_type: string;
+  /** 1 for the first revision; a new content makes the next one. */
+  version: number;
+  /** sha256 of the bytes served on download, checked again on every read. */
+  digest: string;
+  /** Size of the content in bytes. */
+  size: number;
+  /** The run that produced this revision, and the agent behind it. */
+  produced_by: {
+    run_id: string;
+    stage?: string | null;
+    attempt?: number | null;
+    /** The registry agent (ADR 0033); null for a playbook. */
+    agent?: string | null;
+    agent_version?: number | null;
+  };
+  /** Where the bytes are in the object store; null for an inline artifact. */
+  storage_url?: string | null;
+  created_at?: string | null;
+};
+
 export type ContextPackMemory = {
   id?: string;
   kind: "decision" | "convention" | "incident" | "ticket_summary" | "run_lesson" | "flaky_test" | "hotspot" | "finding" | "other";
@@ -767,6 +797,7 @@ export type Workflow = {
 };
 
 export type ChoregosContract =
+  | Artifact
   | ContextPack
   | Event
   | Finding

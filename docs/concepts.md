@@ -29,6 +29,15 @@ The DSL is validated statically. A workflow that cannot be satisfied is rejected
 is written**, not when a ticket is halfway through it: unreachable states, unbounded retry
 loops, unknown gates, and gates that would have nothing to check.
 
+## Artifact
+
+What a step leaves for the next one (ADR 0049): one revision of a named output of a ticket — a
+specification, a list of profiles, a SARIF report, a slide deck. Each revision has a type, a media
+type, a size, the sha256 of its bytes and the run that produced it (stage, attempt, agent and
+version). Markdown and JSON values stay in the platform's database; files go to the object store.
+The digest is checked again on every read: content altered behind the platform is not served. The
+same content produced again makes no new version.
+
 ## Actor
 
 Three kinds:

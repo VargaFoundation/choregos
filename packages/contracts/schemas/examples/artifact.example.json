@@ -1,0 +1,18 @@
+{
+  "name": "deck",
+  "type": "pptx",
+  "kind": "file",
+  "media_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "version": 2,
+  "digest": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "size": 48213,
+  "produced_by": {
+    "run_id": "SALES-12-present-1",
+    "stage": "present",
+    "attempt": 1,
+    "agent": "presenter",
+    "agent_version": 3
+  },
+  "storage_url": "s3://choregos/orgs/acme/work-items/0192f7c1/artifacts/deck/9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "created_at": "2026-10-12T09:30:00Z"
+}

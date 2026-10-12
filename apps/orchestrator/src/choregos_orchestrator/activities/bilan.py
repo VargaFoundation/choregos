@@ -10,8 +10,10 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_api.db.models import Finding as FindingRow
-from choregos_api.db.models import GatewayKeyRow, Run
+from choregos_api.db.models import GatewayKeyRow, Project, Run
 from choregos_api.services import persist_event, ranger_les_sorties, record_cost
+from choregos_api.services.artifacts import record_inline_outputs
+from choregos_api.services.tickets import sorties_a_ranger
 from choregos_contracts import EventType, StageResult, StageStatus
 from choregos_core import Spend, elapsed_seconds, utcnow
 from sqlalchemy import select
@@ -108,6 +110,17 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
             item.allowed_paths = list(outputs.allowed_paths)
         declarees = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
         documents = ranger_les_sorties(item, outputs, declarees)
+        # The same outputs as typed artifacts (ADR 0049). Usually already recorded when the runner
+        # posted its result; the same content makes no new version, so this is a no-op then.
+        project = await session.get(Project, run.project_id)
+        if project is not None:
+            await record_inline_outputs(
+                session,
+                org_id=project.org_id,
+                item=item,
+                run=run,
+                outputs=sorties_a_ranger(outputs, declarees),
+            )
         # Une PR d'infra déclarée par l'agent (`artifacts.reports["infra_pr"]`) suit le
         # ticket jusqu'au train, qui en déclenchera l'`apply` Atlantis après approbation.
         infra_pr = result.artifacts.reports.get("infra_pr")

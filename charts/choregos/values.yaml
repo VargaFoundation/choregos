@@ -135,6 +135,12 @@ global:
     tokenSecret: ""
   objectStore:
     url: s3://choregos
+    # The S3 endpoint of an S3-compatible store (RustFS, MinIO, Ceph); empty means AWS (ADR 0049).
+    endpoint: ""
+    region: us-east-1
+    # Secret with the keys `access-key` and `secret-key`. Only the API reads and writes the
+    # store; a runner never receives these keys. Empty: no signature (an open or IAM-bound store).
+    secretRef: ""
   oidc:
     issuer: https://keycloak.choregos.local/realms/choregos
     clientId: choregos

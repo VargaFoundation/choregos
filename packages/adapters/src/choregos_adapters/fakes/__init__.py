@@ -15,6 +15,7 @@ from .gateway import BudgetExceeded, BudgetExceededError, FakeGateway
 from .memory import FakeMemory
 from .notify import FakeNotifier
 from .scm import FakeScm
+from .storage import FakeObjectStore
 from .tracker import FakeTracker
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "FakeGateway",
     "FakeMemory",
     "FakeNotifier",
+    "FakeObjectStore",
     "FakeScm",
     "FakeTracker",
 ]

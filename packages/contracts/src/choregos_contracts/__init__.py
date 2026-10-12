@@ -14,6 +14,19 @@ from typing import Any
 
 import yaml
 
+from .artifact import (
+    ARTIFACT_NAME_PATTERN,
+    ARTIFACT_TYPES,
+    Artifact,
+    ArtifactKind,
+    ArtifactProducer,
+    ArtifactType,
+    artifact_digest,
+    artifact_type,
+    inline_bytes,
+    type_of_filename,
+    type_of_value,
+)
 from .enums import (
     ActionOrigin,
     ActionStatus,
@@ -119,6 +132,7 @@ SCHEMA_FILES = (
     "template.schema.json",
     "event.schema.json",
     "ui-manifest.schema.json",
+    "artifact.schema.json",
 )
 
 
@@ -155,6 +169,8 @@ def load_openapi() -> dict[str, Any]:
 
 
 __all__ = [
+    "ARTIFACT_NAME_PATTERN",
+    "ARTIFACT_TYPES",
     "STAGE_INPUT_SCHEMA",
     "STAGE_RESULT_SCHEMA",
     "ActionApprovalSpec",
@@ -169,6 +185,10 @@ __all__ = [
     "ApiFormat",
     "ApprovalRule",
     "Approvals",
+    "Artifact",
+    "ArtifactKind",
+    "ArtifactProducer",
+    "ArtifactType",
     "Artifacts",
     "Attempts",
     "Budget",
@@ -244,10 +264,15 @@ __all__ = [
     "Workflow",
     "WorkflowDefaults",
     "WorkflowMetadata",
+    "artifact_digest",
+    "artifact_type",
     "contracts_dir",
     "empreinte_de_skill",
+    "inline_bytes",
     "load_openapi",
     "load_schema",
     "openapi_path",
     "schemas_dir",
+    "type_of_filename",
+    "type_of_value",
 ]
