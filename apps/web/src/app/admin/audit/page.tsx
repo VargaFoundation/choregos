@@ -38,10 +38,10 @@ export default function AuditPage() {
 
   return (
     <Card
-      title="audit log"
+      title="Audit log"
       action={
         <Button size="sm" onClick={exporter} disabled={lignes.length === 0}>
-          export the {lignes.length} rows (CSV)
+          Export the {lignes.length} rows (CSV)
         </Button>
       }
     >
@@ -53,38 +53,38 @@ export default function AuditPage() {
         }}
       >
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">actor</span>
+          <span className="text-xs text-ink-muted">Actor</span>
           <Input
             value={acteur}
             onChange={(event) => setActeur(event.target.value)}
-            placeholder="actor (e-mail, agent)"
+            placeholder="Actor (e-mail, agent)"
             className="w-auto"
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">target type</span>
+          <span className="text-xs text-ink-muted">Target type</span>
           <Input
             value={cible}
             onChange={(event) => setCible(event.target.value)}
-            placeholder="target type (work_item, user…)"
+            placeholder="Target type (work_item, user…)"
             className="w-auto"
           />
         </label>
         <Button size="sm" type="submit">
-          filter
+          Filter
         </Button>
       </form>
       {pages.error && <ErrorNote>{String(pages.error)}</ErrorNote>}
       {lignes.length === 0 && !pages.isLoading ? (
-        <Empty>no audit entry</Empty>
+        <Empty>No audit entry</Empty>
       ) : (
-        <Table aria-label="audit entries">
+        <Table aria-label="Audit entries">
           <THead>
             <TR>
-              <TH>when</TH>
-              <TH>actor</TH>
-              <TH>action</TH>
-              <TH>target</TH>
+              <TH>When</TH>
+              <TH>Actor</TH>
+              <TH>Action</TH>
+              <TH>Target</TH>
             </TR>
           </THead>
           <TBody>
@@ -109,7 +109,7 @@ export default function AuditPage() {
       {pages.hasNextPage && (
         <div className="mt-3">
           <Button size="sm" onClick={() => void pages.fetchNextPage()} disabled={pages.isFetchingNextPage}>
-            more
+            More
           </Button>
         </div>
       )}

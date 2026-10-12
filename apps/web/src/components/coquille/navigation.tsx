@@ -10,12 +10,12 @@ import { cn } from "@/lib/cn";
 // « AI clients » plutôt qu'« integrations » : la page sert aux assistants qui entrent DANS Choregos,
 // quand les connecteurs (administration) sont ce vers quoi Choregos sort.
 export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
-  { href: "/", label: "projects", icone: FolderKanban },
-  { href: "/agents", label: "agents", icone: Bot },
-  { href: "/skills", label: "skills", icone: BookOpen },
-  { href: "/inbox", label: "inbox", icone: Inbox },
+  { href: "/", label: "Projects", icone: FolderKanban },
+  { href: "/agents", label: "Agents", icone: Bot },
+  { href: "/skills", label: "Skills", icone: BookOpen },
+  { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "AI clients", icone: Plug },
-  { href: "/admin", label: "admin", icone: Settings },
+  { href: "/admin", label: "Admin", icone: Settings },
 ];
 
 export function entreeActive(href: string, pathname: string): boolean {
@@ -24,9 +24,9 @@ export function entreeActive(href: string, pathname: string): boolean {
 
 /** Les entrées, rangées : le travail, ce qu'on y branche, l'organisation. */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
-  { titre: "work", entrees: ["/", "/inbox"] },
-  { titre: "catalogue", entrees: ["/agents", "/skills", "/integrations"] },
-  { titre: "organisation", entrees: ["/admin"] },
+  { titre: "Work", entrees: ["/", "/inbox"] },
+  { titre: "Catalogue", entrees: ["/agents", "/skills", "/integrations"] },
+  { titre: "Organisation", entrees: ["/admin"] },
 ];
 
 /** Le nombre de choses qui attendent quelqu'un : lu à voix haute comme tel, pas comme un chiffre nu. */

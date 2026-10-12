@@ -14,8 +14,8 @@ export default function SectionPage({ params }: { params: Promise<{ section: str
   const { org } = useSession();
   const sections = useQuery({ queryKey: ["admin-sections", org], queryFn: () => api.adminSections(org) });
   if (sections.error) return <ErrorNote>{String(sections.error)}</ErrorNote>;
-  if (!sections.data) return <Empty>reading the section…</Empty>;
+  if (!sections.data) return <Empty>Reading the section…</Empty>;
   const section = sections.data.find((candidate) => candidate.id === id);
-  if (!section) return <Empty title="no such section">It is not declared here, or not for you.</Empty>;
+  if (!section) return <Empty title="No such section">It is not declared here, or not for you.</Empty>;
   return <SectionRendue section={section} org={org} />;
 }

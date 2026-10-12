@@ -39,18 +39,18 @@ afterEach(() => vi.useRealTimers());
 describe("la carte animée du parcours (S22-02)", () => {
   it("la barre de relecture n'a plus d'aplat d'encre : l'action en iris, le direct en bleu (S24-04)", () => {
     rendre();
-    const relire = screen.getByRole("button", { name: "replay the journey" });
+    const relire = screen.getByRole("button", { name: "Replay the journey" });
     expect(relire).toHaveClass("bg-inverse");
     expect(relire).not.toHaveClass("bg-ink");
-    expect(screen.getByRole("button", { name: "restart the replay" })).not.toHaveClass("bg-ink");
-    const direct = screen.getByRole("button", { name: "live: follow the work item" });
+    expect(screen.getByRole("button", { name: "Restart the replay" })).not.toHaveClass("bg-ink");
+    const direct = screen.getByRole("button", { name: "Live: follow the work item" });
     expect(direct).toHaveAttribute("aria-pressed", "true");
     expect(direct).toHaveClass("bg-running-soft", "text-running-ink");
   });
 
   it("en direct : chaque case dit qui agit, où il en est, et combien de tours il a pris", () => {
     rendre();
-    expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("now in Reviewed by an agent");
+    expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("Now in Reviewed by an agent");
     expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("Security reviewer working");
     expect(statut("t-security-review")).toBe("en_cours");
     expect(statut("t-review")).toBe("fait");
@@ -58,7 +58,7 @@ describe("la carte animée du parcours (S22-02)", () => {
     expect(statut("t-address-review")).toBe("fait");
     const testeur = screen.getByTestId("etape-t-test");
     expect(testeur).toHaveAccessibleName(/Tester, agent, runs the checks — done — passed in round 3 — ✓ 420 tests pass — 3 attempts/);
-    expect(screen.getByTestId("tour-t-review")).toHaveTextContent("approved in round 2");
+    expect(screen.getByTestId("tour-t-review")).toHaveTextContent("Approved in round 2");
     expect(screen.getByTestId("etape-t-approve-spec")).toHaveAccessibleName(/Product owners, person/);
     // Les arcs pris le disent : une fois, sans plus.
     const svg = screen.getByTestId("parcours").querySelector("svg")!;
@@ -71,7 +71,7 @@ describe("la carte animée du parcours (S22-02)", () => {
   it("Replay rejoue la vie événement par événement, à la vitesse choisie, et le raconte", () => {
     vi.useFakeTimers();
     rendre();
-    fireEvent.click(screen.getByRole("button", { name: "replay the journey" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replay the journey" }));
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("1 / 30");
     expect(statut("t-triage")).toBe("en_cours");
     expect(statut("t-security-review")).toBe("a_venir");
@@ -82,19 +82,19 @@ describe("la carte animée du parcours (S22-02)", () => {
     });
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 30");
     expect(statut("t-triage")).toBe("fait");
-    fireEvent.click(screen.getByRole("button", { name: "pause the replay" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pause the replay" }));
     act(() => {
       vi.advanceTimersByTime(5000);
     });
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 30");
     // Le direct revient où en est le ticket.
-    fireEvent.click(screen.getByRole("button", { name: /^live/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Live/ }));
     expect(statut("t-security-review")).toBe("en_cours");
   });
 
   it("une phase cliquée saute au moment où elle commence ; une phase jamais atteinte ne se clique pas", () => {
     rendre();
-    const phases = screen.getByRole("navigation", { name: "stages of the journey" });
+    const phases = screen.getByRole("navigation", { name: "Stages of the journey" });
     fireEvent.click(within(phases).getByRole("button", { name: /In progress/ }));
     expect(statut("t-implement")).toBe("en_cours");
     expect(statut("t-test")).toBe("a_venir");
@@ -110,17 +110,17 @@ describe("la carte animée du parcours (S22-02)", () => {
     expect(within(panneau).getByText("420 tests pass.")).toBeInTheDocument();
     fireEvent.click(within(panneau).getByTestId("tentative-r-test-1"));
     expect(within(panneau).getByText("2 tests fail: rounding of partial credit notes.")).toBeInTheDocument();
-    expect(within(panneau).getByRole("list", { name: "evidence" })).toHaveTextContent("✗ 412 run, 2 failed");
+    expect(within(panneau).getByRole("list", { name: "Evidence" })).toHaveTextContent("✗ 412 run, 2 failed");
     const fait = await within(panneau).findByTestId("ce-qu-il-a-fait");
     await waitFor(() => expect(fait).toHaveTextContent("src/billing/rates.py"));
-    expect(fait).toHaveTextContent("refused: outside the allowed paths");
+    expect(fait).toHaveTextContent("Refused: outside the allowed paths");
     expect(fait).toHaveTextContent("tests/billing/test_totals.py");
     expect(fait).toHaveTextContent("evidence_present");
     expect(api.runAccess).toHaveBeenCalledWith("r-test-1");
     fireEvent.click(within(panneau).getByRole("tab", { name: "Log" }));
     await waitFor(() => expect(within(panneau).getByTestId("live-log")).toHaveTextContent("session/request_permission"));
-    expect(within(panneau).getByRole("link", { name: "open the full run →" })).toHaveAttribute("href", "/p/billing-api/runs/r-test-1");
-    fireEvent.click(within(panneau).getByRole("button", { name: "close the panel" }));
+    expect(within(panneau).getByRole("link", { name: "Open the full run →" })).toHaveAttribute("href", "/p/billing-api/runs/r-test-1");
+    fireEvent.click(within(panneau).getByRole("button", { name: "Close the panel" }));
     expect(screen.queryByTestId("panneau-parcours")).not.toBeInTheDocument();
   });
 
@@ -129,14 +129,14 @@ describe("la carte animée du parcours (S22-02)", () => {
     expect(statut("t-approve-spec")).toBe("attend");
     fireEvent.click(screen.getByTestId("etape-t-approve-spec"));
     const panneau = screen.getByTestId("panneau-parcours");
-    expect(panneau).toHaveTextContent("decide here");
-    fireEvent.click(within(panneau).getByRole("button", { name: "approve" }));
+    expect(panneau).toHaveTextContent("Decide here");
+    fireEvent.click(within(panneau).getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(api.decide).toHaveBeenCalledWith("w2", { kind: "approve" }));
   });
 
   it("un ticket fini : tout est fait, la fin est atteinte, la CI rouge et sa réparation se voient", () => {
     rendre(parcoursTermine(MAINTENANT));
-    expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("now in Verified in production");
+    expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("Now in Verified in production");
     const svg = screen.getByTestId("parcours").querySelector("svg")!;
     expect([...svg.querySelectorAll("[data-etape]")].every((g) => g.getAttribute("data-statut") === "fait")).toBe(true);
     expect(svg.querySelector('[data-arc="pr_approved->fixing_ci"]')).toHaveAttribute("data-fois", "1");

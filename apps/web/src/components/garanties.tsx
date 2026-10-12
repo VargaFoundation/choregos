@@ -43,7 +43,7 @@ export function Garanties({ events }: { events: RunEventDto[] }) {
   const refusees = verdicts.filter((v) => !v.passed && !v.pending).length;
   return (
     <Card
-      title="gates"
+      title="Gates"
       action={
         <span className="flex items-center gap-3 text-xs text-ink-muted">
           {verdicts.length === 0 ? "—" : `${verdicts.length} evaluated · ${refusees} refused`}
@@ -60,7 +60,7 @@ export function Garanties({ events }: { events: RunEventDto[] }) {
             .map((verdict, index) => (
               <li key={`${verdict.name}-${index}`} className="flex items-start gap-3 text-sm">
                 <span
-                  aria-label={verdict.pending ? "pending" : verdict.passed ? "passed" : "refused"}
+                  aria-label={verdict.pending ? "Pending" : verdict.passed ? "Passed" : "Refused"}
                   className={verdict.pending ? "text-warn" : verdict.passed ? "text-ok" : "text-danger"}
                 >
                   {verdict.pending ? "…" : verdict.passed ? "✓" : "✗"}

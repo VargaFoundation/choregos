@@ -35,11 +35,11 @@ export function libelleFonction(cle: string): string {
 export function EditionBadge({ edition }: { edition: Edition["edition"] }) {
   return (
     <span
-      className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-muted"
+      className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-muted"
       title="ADR 0024 — two editions"
       data-testid="edition-badge"
     >
-      {edition === "enterprise" ? "enterprise edition" : "community edition"}
+      {edition === "enterprise" ? "Enterprise edition" : "Community edition"}
     </span>
   );
 }
@@ -49,13 +49,15 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
   if (!edition) return null;
   const entreprise = edition.edition === "enterprise";
   return (
-    <Card title="edition">
+    <Card title="Edition">
       <p className="text-sm">
-        {entreprise ? "enterprise edition" : "community edition"}{" "}
-        <span className="text-xs text-ink-muted">version {edition.version}</span>
+        {entreprise ? "Enterprise edition" : "Community edition"}{" "}
+        <span className="text-xs text-ink-muted">
+          version <span className="font-mono">{edition.version}</span>
+        </span>
       </p>
       {entreprise ? (
-        <ul className="mt-2 space-y-1 text-xs" aria-label="enterprise features">
+        <ul className="mt-2 space-y-1 text-xs" aria-label="Enterprise features">
           {edition.features.map((cle) => (
             <li key={cle}>{libelleFonction(cle)}</li>
           ))}
@@ -65,7 +67,7 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
           <p className="mt-2 text-xs text-ink-muted">
             This installation runs the community core: one organisation. The enterprise edition adds:
           </p>
-          <ul className="mt-1 space-y-1 text-xs" aria-label="what the enterprise edition adds">
+          <ul className="mt-1 space-y-1 text-xs" aria-label="What the enterprise edition adds">
             {FONCTIONS_ENTREPRISE.map(([cle, libelle]) => (
               <li key={cle}>{libelle}</li>
             ))}

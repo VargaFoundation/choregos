@@ -66,7 +66,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
 
   return (
     <div className="space-y-6">
-      <Onglets aria-label="clients">
+      <Onglets aria-label="Clients">
         {CLIENTS.map((c) => {
           const href = `${base}/${c.id}`;
           const active = c.id === client;
@@ -81,7 +81,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title={`connect ${info.label}`} className="lg:col-span-2">
+        <Card title={`Connect ${info.label}`} className="lg:col-span-2">
           <p className="text-sm text-ink-muted">
             {portee ? (
               <>
@@ -98,17 +98,17 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
 
           {code ? (
             <div className="mt-4 space-y-2">
-              <p className="text-xs text-ink-muted">paste into {code.where}</p>
+              <p className="text-xs text-ink-muted">Paste into {code.where}</p>
               <Extrait code={code.code} />
             </div>
           ) : clientOAuth(client, oauth) ? (
-            <Alert tone="warn" title="not reachable from here yet" className="mt-4">
+            <Alert tone="warn" title="Not reachable from here yet" className="mt-4">
               {info.label} calls MCP servers from its vendor&apos;s network: the door accepts its sign-in, but this
               platform has no public HTTPS address for <Code>/mcp</Code>. A platform behind a VPN stays out of its
               reach: use Claude Code meanwhile.
             </Alert>
           ) : (
-            <Alert tone="warn" title="not reachable from here yet" className="mt-4">
+            <Alert tone="warn" title="Not reachable from here yet" className="mt-4">
               {info.label} calls MCP servers from its vendor&apos;s network and signs in with OAuth. It needs a public
               HTTPS address for <Code>/mcp</Code> and OAuth on the door — the next step of ADR 0030. A platform behind a
               VPN stays out of its reach: use Claude Code or Claude Desktop meanwhile.
@@ -120,12 +120,12 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                 <>
                   you sign in with your single sign-on: nothing to paste, your session decides.{" "}
                   <button type="button" className="underline" onClick={() => setParJeton(true)}>
-                    use an MCP token instead
+                    Use an MCP token instead
                   </button>
                 </>
               ) : (
                 <button type="button" className="underline" onClick={() => setParJeton(false)}>
-                  sign in with single sign-on instead
+                  Sign in with single sign-on instead
                 </button>
               )}
             </p>
@@ -133,11 +133,11 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
         </Card>
 
         {avecJetonMcp && (
-          <Card title="a token for this client">
+          <Card title="A token for this client">
             {frappe ? (
               <div className="space-y-3 text-sm">
                 <p>
-                  token <strong>{frappe.name}</strong> ({(frappe.scopes ?? []).join(", ")}
+                  Token <strong>{frappe.name}</strong> ({(frappe.scopes ?? []).join(", ")}
                   {frappe.project ? `, ${frappe.project}` : ""}) — shown once, already in the snippet.
                 </p>
                 <Etat id={frappe.id} />
@@ -146,12 +146,12 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
               <div className="space-y-3 text-sm">
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={ecriture} onChange={(e) => setEcriture(e.target.checked)} />
-                  <span>can open work items (mcp:write)</span>
+                  <span>Can open work items (mcp:write)</span>
                 </label>
                 <label className="flex items-center gap-2">
-                  <span className="text-ink-muted">expires in</span>
+                  <span className="text-ink-muted">Expires in</span>
                   <Select
-                    aria-label="expires in"
+                    aria-label="Expires in"
                     value={duree}
                     onChange={(e) => setDuree(Number(e.target.value) as (typeof DUREES)[number])}
                     className="w-auto"
@@ -164,13 +164,13 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                   </Select>
                 </label>
                 <Button tone="accent" onClick={() => void frapper()}>
-                  create an access token
+                  Create an access token
                 </Button>
                 <p className="text-xs text-ink-muted">
                   It opens the MCP door only: the REST API refuses it, and it can never decide. Connected this way,{" "}
                   {info.label} acts as you. To give it a name, limits and an audit trail of its own, connect it from{" "}
-                  <Link href="/agents">agents</Link> instead: it becomes an external agent. Every token is listed, and
-                  revoked, in <Link href="/admin">admin › my access tokens</Link>.
+                  <Link href="/agents">Agents</Link> instead: it becomes an external agent. Every token is listed, and
+                  revoked, in <Link href="/admin">Admin › My access tokens</Link>.
                 </p>
               </div>
             )}
@@ -178,15 +178,15 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
         )}
       </div>
 
-      <Card title="which client reaches what">
+      <Card title="Which client reaches what">
         <div className="overflow-x-auto">
-          <table aria-label="capabilities">
+          <table aria-label="Capabilities">
             <thead>
               <tr>
-                <th>client</th>
-                <th>calls from</th>
-                <th>signs in with</th>
-                <th>here and now</th>
+                <th>Client</th>
+                <th>Calls from</th>
+                <th>Signs in with</th>
+                <th>Here and now</th>
               </tr>
             </thead>
             <tbody>
@@ -203,26 +203,26 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
         </div>
       </Card>
 
-      <Card title="when it does not connect">
+      <Card title="When it does not connect">
         <ul className="space-y-2 text-sm">
           <li>
             <strong>401</strong> — the token is missing, revoked or expired. <strong>403 insufficient_scope</strong> — a
             full-access token: create an MCP one here.
           </li>
           <li>
-            <strong>the console&apos;s 404 page</strong> — the ingress does not route <Code>/mcp</Code> to the API
+            <strong>The console&apos;s 404 page</strong> — the ingress does not route <Code>/mcp</Code> to the API
             (chart 0.14 or later).
           </li>
           <li>
-            <strong>plain HTTP</strong> — Claude Desktop&apos;s bridge needs <Code>--allow-http</Code>; claude.ai and
+            <strong>Plain HTTP</strong> — Claude Desktop&apos;s bridge needs <Code>--allow-http</Code>; claude.ai and
             ChatGPT refuse it.
           </li>
           <li>
-            <strong>an internal host</strong> — claude.ai and ChatGPT call from their vendor&apos;s cloud (Anthropic:
+            <strong>An internal host</strong> — claude.ai and ChatGPT call from their vendor&apos;s cloud (Anthropic:
             160.79.104.0/21) and cannot reach a host behind your VPN; Claude Code can.
           </li>
           <li>
-            <strong>a tool is missing</strong> — a read-only token, a role without the right, or a project whose tracker
+            <strong>A tool is missing</strong> — a read-only token, a role without the right, or a project whose tracker
             is external.
           </li>
         </ul>
@@ -250,7 +250,7 @@ function Extrait({ code }: { code: string }) {
               void pressePapier.writeText(code).then(() => setCopie(true));
             }}
           >
-            {copie ? "copied" : "copy"}
+            {copie ? "Copied" : "Copy"}
           </Button>
         </div>
       )}
@@ -272,13 +272,13 @@ function Etat({ id }: { id: string }) {
   if (!jeton?.last_used_at) {
     return (
       <p className="text-xs text-ink-muted" data-testid="connection-status">
-        waiting for the first call from your client…
+        Waiting for the first call from your client…
       </p>
     );
   }
   return (
     <p className="text-xs" data-testid="connection-status">
-      connected — last call {shortDate(jeton.last_used_at)}
+      Connected — last call {shortDate(jeton.last_used_at)}
       {jeton.last_client ? ` from ${jeton.last_client}` : ""}
     </p>
   );

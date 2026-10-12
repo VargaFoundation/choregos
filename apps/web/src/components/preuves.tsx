@@ -3,6 +3,7 @@
 
 import { Provenance } from "@/components/provenance";
 import { Card, Empty } from "@/components/ui";
+import { enPhrase } from "@/lib/format";
 import { provenanceDePreuve } from "@/lib/provenance";
 import type { Run } from "@/lib/types";
 
@@ -37,7 +38,7 @@ export function Preuves({ evidence }: { evidence?: Evidence }) {
   const lignes = faits.length > 0 ? faits : logiciel;
 
   return (
-    <Card title="evidence">
+    <Card title="Evidence">
       {lignes.length === 0 ? (
         <Empty>No evidence recorded.</Empty>
       ) : (
@@ -45,7 +46,7 @@ export function Preuves({ evidence }: { evidence?: Evidence }) {
           {lignes.map(([nom, valeur, cle]) => (
             <li key={nom} className="flex items-baseline justify-between gap-2">
               <span>
-                {nom.replace(/_/g, " ")}: {typeof valeur === "boolean" ? (valeur ? "✓" : "✗") : String(valeur)}
+                {enPhrase(nom.replace(/_/g, " "))}: {typeof valeur === "boolean" ? (valeur ? "✓" : "✗") : String(valeur)}
               </span>
               <Provenance de={provenanceDePreuve(evidence, cle)} />
             </li>

@@ -36,11 +36,11 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">filter the journal</span>
+          <span className="text-xs text-ink-muted">Filter the journal</span>
           <Input
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            placeholder="filter (permission, dod, result…)"
+            placeholder="Filter (permission, dod, result…)"
             className="w-64 min-w-0 max-w-full"
           />
         </label>
@@ -60,9 +60,9 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
           className={cn("sticky top-0 z-10 flex h-8 items-center gap-3 border-b border-l-2 border-line border-l-transparent bg-raised px-3", LEGENDE)}
         >
           <span className="w-10 shrink-0">#</span>
-          <span className="w-16 shrink-0">time</span>
-          <span className="w-52 shrink-0">event</span>
-          <span>detail</span>
+          <span className="w-16 shrink-0">Time</span>
+          <span className="w-52 shrink-0">Event</span>
+          <span>Detail</span>
         </div>
         <div style={{ height: rows.length * ROW_HEIGHT, position: "relative" }}>
           {visible.map((event, index) => {
@@ -87,7 +87,7 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
                   <span className="truncate">{event.type}</span>
                   {denied && (
                     <span className="shrink-0 rounded-full border border-failed-line bg-failed-soft px-1.5 text-[11px] leading-4 font-medium text-failed-ink">
-                      denied
+                      Denied
                     </span>
                   )}
                 </span>
@@ -104,7 +104,7 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
 function summarize(event: RunEventDto): string {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   if (event.type === "session/request_permission") {
-    return `${payload.allowed ? "allowed" : "refused"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
+    return `${payload.allowed ? "Allowed" : "Refused"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
   }
   if (event.type === "session/update") return resumerLaMiseAJour(payload);
   return JSON.stringify(payload);
@@ -124,7 +124,7 @@ function resumerLaMiseAJour(payload: Record<string, unknown>): string {
   }
   if (genre === "plan" && Array.isArray(update.entries)) {
     const entrees = update.entries as { status?: unknown }[];
-    return `plan · ${entrees.filter((e) => e.status === "completed").length} of ${entrees.length} done`;
+    return `Plan · ${entrees.filter((e) => e.status === "completed").length} of ${entrees.length} done`;
   }
   return String(payload.text ?? JSON.stringify(payload));
 }

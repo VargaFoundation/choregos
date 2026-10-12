@@ -60,7 +60,7 @@ export function BarreLaterale() {
   const [barre, basculer] = useBarre();
   return (
     <aside
-      aria-label="sidebar"
+      aria-label="Sidebar"
       className="sidebar-surface hidden border-r border-line xl:sticky xl:top-0 xl:flex xl:h-dvh xl:flex-col"
     >
       <div className="flex h-12 shrink-0 items-center border-b border-line px-4 rail:justify-center rail:px-0">
@@ -69,7 +69,7 @@ export function BarreLaterale() {
           <Wordmark className="rail:[&>span]:sr-only" />
         </Link>
       </div>
-      <nav aria-label="main navigation" className="flex-1 overflow-y-auto px-2 py-3">
+      <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-2 py-3">
         <ListeDeNavigation pathname={pathname} aDecider={aDecider} variante="barre" rail={barre === "rail"} />
       </nav>
       <div className="shrink-0 border-t border-line p-2">

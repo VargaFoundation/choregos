@@ -45,7 +45,7 @@ export default function MembersPage() {
   }
 
   return (
-    <Card title={`members of ${org}`}>
+    <Card title={`Members of ${org}`}>
       <form
         className="mb-4 flex flex-wrap items-end gap-2 text-sm"
         onSubmit={(event) => {
@@ -58,7 +58,7 @@ export default function MembersPage() {
         }}
       >
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">member e-mail</span>
+          <span className="text-xs text-ink-muted">Member e-mail</span>
           <Input
             value={invite.email}
             onChange={(event) => setInvite((i) => ({ ...i, email: event.target.value }))}
@@ -67,7 +67,7 @@ export default function MembersPage() {
           />
         </label>
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">role</span>
+          <span className="text-xs text-ink-muted">Role</span>
           <Select
             value={invite.role}
             onChange={(event) => setInvite((i) => ({ ...i, role: event.target.value as Role }))}
@@ -81,16 +81,16 @@ export default function MembersPage() {
           </Select>
         </label>
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-ink-muted">project (optional)</span>
+          <span className="text-xs text-ink-muted">Project (optional)</span>
           <Input
             value={invite.project_slug}
             onChange={(event) => setInvite((i) => ({ ...i, project_slug: event.target.value }))}
-            placeholder="project (empty = whole organisation)"
+            placeholder="Project (empty = whole organisation)"
             className="w-auto"
           />
         </label>
         <Button size="sm" tone="primary" type="submit" disabled={!invite.email}>
-          invite
+          Invite
         </Button>
       </form>
       {message && (
@@ -100,16 +100,16 @@ export default function MembersPage() {
       )}
       {members.error && <ErrorNote>{String(members.error)}</ErrorNote>}
       {(members.data ?? []).length === 0 ? (
-        <Empty>no member</Empty>
+        <Empty>No member</Empty>
       ) : (
-        <Table aria-label={`members of ${org}`}>
+        <Table aria-label={`Members of ${org}`}>
           <THead>
             <TR>
-              <TH>member</TH>
-              <TH>scope</TH>
-              <TH>role</TH>
+              <TH>Member</TH>
+              <TH>Scope</TH>
+              <TH>Role</TH>
               <TH>
-                <span className="sr-only">actions</span>
+                <span className="sr-only">Actions</span>
               </TH>
             </TR>
           </THead>
@@ -120,10 +120,10 @@ export default function MembersPage() {
               return (
                 <TR key={cle}>
                   <TD>{qui}</TD>
-                  <TD>{membership.project_slug ?? "whole organisation"}</TD>
+                  <TD>{membership.project_slug ?? "Whole organisation"}</TD>
                   <TD>
                     <Select
-                      aria-label={`role of ${qui}${membership.project_slug ? ` on ${membership.project_slug}` : ""}`}
+                      aria-label={`Role of ${qui}${membership.project_slug ? ` on ${membership.project_slug}` : ""}`}
                       value={nouveauRole?.cle === cle ? nouveauRole.role : membership.role}
                       onChange={(event) => {
                         const role = event.target.value as Role;
@@ -147,10 +147,10 @@ export default function MembersPage() {
                           }
                           question={
                             soi(membership.email) && rang(nouveauRole.role) < rang(membership.role)
-                              ? `this is you: as ${nouveauRole.role} you lose what ${membership.role} lets you do, and cannot give it back to yourself.`
-                              : `make ${qui} ${nouveauRole.role}${membership.project_slug ? ` on ${membership.project_slug}` : ""}?`
+                              ? `This is you: as ${nouveauRole.role} you lose what ${membership.role} lets you do, and cannot give it back to yourself.`
+                              : `Make ${qui} ${nouveauRole.role}${membership.project_slug ? ` on ${membership.project_slug}` : ""}?`
                           }
-                          confirmer={`make ${soi(membership.email) ? "me" : qui} ${nouveauRole.role}`}
+                          confirmer={`Make ${soi(membership.email) ? "me" : qui} ${nouveauRole.role}`}
                           action={async () => {
                             await api.addMember(org, {
                               email: membership.email ?? "",
@@ -179,15 +179,15 @@ export default function MembersPage() {
                             ).then(() => setARetirer(null))
                           }
                         >
-                          confirm removal
+                          Confirm removal
                         </Button>
                         <Button size="sm" onClick={() => setARetirer(null)}>
-                          cancel
+                          Cancel
                         </Button>
                       </span>
                     ) : (
                       <Button size="sm" onClick={() => setARetirer(cle)}>
-                        remove {qui}
+                        Remove {qui}
                       </Button>
                     )}
                   </TD>

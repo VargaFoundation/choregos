@@ -27,9 +27,9 @@ export default function ProcessPage() {
   // Le brouillon : les gestes pas encore publiés se lisent ici aussi (S16-12).
   const etapes = brouillon.process;
   const acteurs = Object.keys(brouillon.definition.data?.json?.actors ?? {});
-  if (!etapes) return <Empty>reading the workflow…</Empty>;
+  if (!etapes) return <Empty>Reading the workflow…</Empty>;
   const ajouter = (
-    <Card title="add a step">
+    <Card title="Add a step">
       <FormulaireDEtape
         etats={(brouillon.graph?.nodes ?? []) as { id: string; display: string; terminal?: boolean }[]}
         acteurs={acteurs}
@@ -39,14 +39,14 @@ export default function ProcessPage() {
   if (etapes.length === 0)
     return (
       <div className="space-y-3">
-        <Empty title="no transition">This workflow has no step yet.</Empty>
+        <Empty title="No transition">This workflow has no step yet.</Empty>
         {ajouter}
       </div>
     );
   return (
     <div className="space-y-3">
       {brouillon.grapheObsolete && <TexteIllisible />}
-      <ol className={brouillon.grapheObsolete ? "space-y-3 opacity-60" : "space-y-3"} aria-label="steps of the process">
+      <ol className={brouillon.grapheObsolete ? "space-y-3 opacity-60" : "space-y-3"} aria-label="Steps of the process">
         {etapes.map((etape, index) => (
           <li key={etape.id}>
             <Card>
@@ -57,17 +57,17 @@ export default function ProcessPage() {
                     <PhraseDuMoteur texte={etape.sentence} />
                   </p>
                   <Button size="sm" onClick={() => setOuverte(ouverte === etape.id ? null : etape.id)}>
-                    {ouverte === etape.id ? "close" : `edit ${etape.id}`}
+                    {ouverte === etape.id ? "Close" : `Edit ${etape.id}`}
                   </Button>
                 </div>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
-                  <dt className="text-ink-muted">from → to</dt>
+                  <dt className="text-ink-muted">From → to</dt>
                   <dd className="flex flex-wrap items-center gap-2">
                     <StateBadge state={etape.from} display={etape.from_display} />
                     <span aria-hidden>→</span>
                     <StateBadge state={etape.to} display={etape.to_display} />
                   </dd>
-                  <dt className="text-ink-muted">who</dt>
+                  <dt className="text-ink-muted">Who</dt>
                   <dd className="flex items-center gap-2">
                     <ActorIcon
                       kind={GENRE[etape.actor_type] ?? "system"}
@@ -79,7 +79,7 @@ export default function ProcessPage() {
                   </dd>
                   {etape.gates && etape.gates.length > 0 && (
                     <>
-                      <dt className="text-ink-muted">only if</dt>
+                      <dt className="text-ink-muted">Only if</dt>
                       <dd>
                         <ul className="space-y-0.5">
                           {etape.gates.map((garantie) => (
@@ -94,25 +94,25 @@ export default function ProcessPage() {
                   )}
                   {etape.outputs && etape.outputs.length > 0 && (
                     <>
-                      <dt className="text-ink-muted">produces</dt>
+                      <dt className="text-ink-muted">Produces</dt>
                       <dd>{etape.outputs.join(", ")}</dd>
                     </>
                   )}
                   {etape.on_fail && (
                     <>
-                      <dt className="text-ink-muted">on failure</dt>
+                      <dt className="text-ink-muted">On failure</dt>
                       <dd>{etape.on_fail}</dd>
                     </>
                   )}
                   {etape.on_reject && (
                     <>
-                      <dt className="text-ink-muted">on rejection</dt>
+                      <dt className="text-ink-muted">On rejection</dt>
                       <dd>{etape.on_reject}</dd>
                     </>
                   )}
                   {etape.timeout_hours && (
                     <>
-                      <dt className="text-ink-muted">at most</dt>
+                      <dt className="text-ink-muted">At most</dt>
                       <dd>{etape.timeout_hours} h</dd>
                     </>
                   )}

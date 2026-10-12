@@ -24,7 +24,7 @@ import {
   type ThHTMLAttributes,
 } from "react";
 import { cn } from "@/lib/cn";
-import { libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
+import { enPhrase, libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
 
 // ───────────────────────────── tons ─────────────────────────────
 
@@ -395,7 +395,7 @@ export function StateBadge({
   const tone = tonDEtat(state, kind);
   return (
     <Badge tone={tone} title={state}>
-      {display && display !== state ? display : libelleDeCode(state)}
+      {display && display !== state ? display : enPhrase(libelleDeCode(state))}
     </Badge>
   );
 }
@@ -433,11 +433,11 @@ export function CostChip({
 // Les couleurs des cartes (S24-04) : prune l'agent, bleu la personne, ardoise la plateforme, vert le
 // train. La personne était un point d'encre — blanc pur en sombre.
 const ACTORS: Record<string, { tone: Tone; label: string }> = {
-  agent: { tone: "agent", label: "agent" },
-  user: { tone: "running", label: "human" },
-  human: { tone: "running", label: "human" },
-  system: { tone: "neutral", label: "system" },
-  train: { tone: "succeeded", label: "release train" },
+  agent: { tone: "agent", label: "Agent" },
+  user: { tone: "running", label: "Human" },
+  human: { tone: "running", label: "Human" },
+  system: { tone: "neutral", label: "System" },
+  train: { tone: "succeeded", label: "Release train" },
 };
 
 /** Le ton d'un acteur : celui de son point, dans la chronologie d'un ticket comme à côté de son nom. */
@@ -451,7 +451,7 @@ export function tonDActeur(kind: string): Tone {
  * est toujours énoncé en toutes lettres.
  */
 export function ActorIcon({ kind, name, point = true }: { kind: string; name?: string | null; point?: boolean }) {
-  const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "system" };
+  const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "System" };
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted" title={actor.label}>
       {/* Sans point quand un autre le porte déjà : le rail de la chronologie d'un ticket. */}
@@ -704,7 +704,7 @@ export function PhraseDuMoteur({ texte }: { texte: string }) {
  */
 export function FilDAriane({ etapes }: { etapes: { href?: string; label: ReactNode }[] }) {
   return (
-    <nav aria-label="breadcrumb" className="text-sm">
+    <nav aria-label="Breadcrumb" className="text-sm">
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-muted">
         {etapes.map((etape, index) => (
           <li key={index} className="flex min-w-0 items-center gap-2">
@@ -759,9 +759,9 @@ export function EtatDeLecture({
     const message = lecture.error instanceof Error ? lecture.error.message : String(lecture.error);
     return (
       <ErrorNote>
-        could not {lecture.data === undefined ? "read" : "refresh"} {quoi}: {message}.{" "}
+        Could not {lecture.data === undefined ? "read" : "refresh"} {quoi}: {message}.{" "}
         <button type="button" className="underline" onClick={() => void lecture.refetch()} disabled={lecture.isRefetching}>
-          {lecture.isRefetching ? "retrying…" : "retry"}
+          {lecture.isRefetching ? "Retrying…" : "Retry"}
         </button>
       </ErrorNote>
     );
@@ -769,7 +769,7 @@ export function EtatDeLecture({
   if (lecture.data === undefined && lecture.fetchStatus !== "idle") {
     return (
       <p className="text-sm text-ink-muted" role="status">
-        reading {quoi}…
+        Reading {quoi}…
       </p>
     );
   }

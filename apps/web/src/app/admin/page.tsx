@@ -39,7 +39,7 @@ export default function AdminPage() {
       {error && <ErrorNote>{error}</ErrorNote>}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="session">
+        <Card title="Session">
           <p className="text-sm">
             {me?.display_name} — {me?.email}
           </p>
@@ -57,15 +57,15 @@ export default function AdminPage() {
             clients, « MCP client » dans les agents — trois noms pour le même objet, sous deux clés de
             cache. Ici la liste de TOUS les jetons de la personne, et leur révocation ; les deux autres
             pages renvoient ici. */}
-        <Card title="my access tokens">
+        <Card title="My access tokens">
           <p className="mb-3 text-xs text-ink-muted" id="jetons">
             Every token you hold: for the API and the CLI, or for an AI client at the MCP door (created from{" "}
-            <Link href="/integrations">AI clients</Link> or <Link href="/agents">agents</Link>).
+            <Link href="/integrations">AI clients</Link> or <Link href="/agents">Agents</Link>).
           </p>
           {/* Le clair n'existe qu'ici, une fois : il n'est jamais stocké ni réaffiché. */}
           {tokenClair && (
             <div className="mb-3 border border-line border-l-2 border-l-accent bg-surface p-3 text-sm">
-              <p className="text-xs text-ink-muted">copy it now — it will not be shown again</p>
+              <p className="text-xs text-ink-muted">Copy it now — it will not be shown again</p>
               <code className="block break-all font-mono text-xs">{tokenClair}</code>
             </div>
           )}
@@ -77,7 +77,7 @@ export default function AdminPage() {
             }}
           >
             <label className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-xs text-ink-muted">token name</span>
+              <span className="text-xs text-ink-muted">Token name</span>
               <Input
                 value={tokenName}
                 onChange={(event) => setTokenName(event.target.value)}
@@ -86,14 +86,16 @@ export default function AdminPage() {
               />
             </label>
             <Button size="sm" tone="primary" type="submit">
-              create an API token (90 days)
+              Create an API token (90 days)
             </Button>
           </form>
           <ul className="space-y-1 text-xs">
             {(tokens.data ?? []).map((token) => (
               <li key={token.id} className="flex items-center justify-between gap-2">
                 <span>
-                  <span className="font-mono">{token.name}</span>
+                  <span className="font-mono" data-donnee>
+                    {token.name}
+                  </span>
                   <span className="text-ink-muted">
                     {" "}
                     · {porteeDuJeton(token.scopes)} · expires {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
@@ -102,20 +104,20 @@ export default function AdminPage() {
                 </span>
                 <GesteConfirme
                   tonDuBouton="danger"
-                  question={`revoke ${token.name}? every client using it is refused from its next call — a token does not come back.`}
-                  confirmer={`revoke ${token.name}`}
+                  question={`Revoke ${token.name}? Every client using it is refused from its next call — a token does not come back.`}
+                  confirmer={`Revoke ${token.name}`}
                   action={async () => {
                     await api.revokeToken(token.id);
                     await queryClient.invalidateQueries({ queryKey: ["tokens"] });
                   }}
                 >
-                  revoke
+                  Revoke
                 </GesteConfirme>
               </li>
             ))}
           </ul>
           <EtatDeLecture lecture={tokens} quoi="your access tokens" />
-          {tokens.data?.length === 0 && <Empty>no token</Empty>}
+          {tokens.data?.length === 0 && <Empty>No token</Empty>}
         </Card>
       </div>
     </div>

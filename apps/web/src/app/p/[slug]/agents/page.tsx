@@ -28,13 +28,13 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
   const registre = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   return (
     <div className="space-y-6">
-      <Card title="pinned agents">
+      <Card title="Pinned agents">
         {epingles.error ? (
           <ErrorNote>{String(epingles.error)}</ErrorNote>
         ) : !epingles.data ? (
-          <p className="text-sm text-ink-muted">reading…</p>
+          <p className="text-sm text-ink-muted">Reading…</p>
         ) : epingles.data.length === 0 ? (
-          <Empty title="nothing pinned">
+          <Empty title="Nothing pinned">
             A workflow actor that names an agent runs its latest version; pin one to hold it, and tighten it.
           </Empty>
         ) : (
@@ -60,18 +60,18 @@ function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent })
         {epingle.agent}
       </Link>
       <Badge tone="neutral">v{epingle.version}</Badge>
-      {resserre && <Badge tone="warn">tightened</Badge>}
+      {resserre && <Badge tone="warn">Tightened</Badge>}
       <span className="text-xs text-ink-muted">{resumeDeLaVersion(epingle.effective)}</span>
       <span className="ml-auto">
         <GesteConfirme
-          question={`unpin ${epingle.agent}? its workflows run its latest version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
-          confirmer={`unpin ${epingle.agent}`}
+          question={`Unpin ${epingle.agent}? Its workflows run its latest version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
+          confirmer={`Unpin ${epingle.agent}`}
           action={async () => {
             await api.unpinProjectAgent(projet, epingle.agent);
             await client.invalidateQueries({ queryKey: ["project-agents", projet] });
           }}
         >
-          unpin
+          Unpin
         </GesteConfirme>
       </span>
     </li>
@@ -108,7 +108,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
   }
   if (agents.length === 0) return null;
   return (
-    <Card title="pin an agent">
+    <Card title="Pin an agent">
       <form
         className="grid gap-3 md:grid-cols-4"
         onSubmit={(event) => {
@@ -117,7 +117,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
         }}
       >
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">agent</span>
+          <span className="text-xs text-ink-muted">Agent</span>
           <Select
             value={agent}
             onChange={(e) => {
@@ -134,7 +134,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
           </Select>
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">version</span>
+          <span className="text-xs text-ink-muted">Version</span>
           <Select value={version} onChange={(e) => setVersion(e.target.value)} disabled={!choisi}>
             {Array.from({ length: choisi?.latest_version ?? 0 }, (_, i) => (choisi?.latest_version ?? 0) - i).map((v) => (
               <option key={v} value={v}>
@@ -144,16 +144,16 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
           </Select>
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">daily budget, lower (USD)</span>
+          <span className="text-xs text-ink-muted">Daily budget, lower (USD)</span>
           <Input type="number" min={0} step="0.5" value={quotidien} onChange={(e) => setQuotidien(e.target.value)} />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">max turns, lower</span>
+          <span className="text-xs text-ink-muted">Max turns, lower</span>
           <Input type="number" min={1} value={tours} onChange={(e) => setTours(e.target.value)} />
         </label>
         <div className="md:col-span-4">
           <Button type="submit" size="sm" disabled={!agent}>
-            pin
+            Pin
           </Button>
         </div>
         {erreur && (
@@ -178,7 +178,7 @@ function Implicites({ projet, org, registre }: { projet: string; org: string; re
   const workflows = definitions.flatMap((d) => (d.data ? [{ name: d.data.name, json: d.data.json }] : []));
   const implicites = agentsImplicites(workflows, new Set(registre.map((a) => a.slug)));
   return (
-    <Card title="implicit agents">
+    <Card title="Implicit agents">
       <div className="space-y-3">
         <p className="text-sm text-ink-muted">
           Workflow actors that run as agents without naming one: no editable instructions, no versions, no costs of
@@ -211,10 +211,10 @@ function Implicite({ org, implicite, pris }: { org: string; implicite: AgentImpl
         slug,
         kind: "internal",
         display_name: implicite.acteur,
-        description: `registered from the ${implicite.workflow} workflow${implicite.role ? ` (role ${implicite.role})` : ""}`,
+        description: `Registered from the ${implicite.workflow} workflow${implicite.role ? ` (role ${implicite.role})` : ""}`,
         spec: versionDeLActeur(implicite),
       });
-      setFait(`registered: name it in ${implicite.workflow} — actors.${implicite.acteur}.agent: ${slug}`);
+      setFait(`Registered: name it in ${implicite.workflow} — actors.${implicite.acteur}.agent: ${slug}`);
       await client.invalidateQueries({ queryKey: ["agents", org] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "registration refused");
@@ -222,8 +222,10 @@ function Implicite({ org, implicite, pris }: { org: string; implicite: AgentImpl
   }
   return (
     <li className="flex flex-wrap items-center gap-3 text-sm">
-      <span className="font-medium">{implicite.acteur}</span>
-      <span className="text-xs text-ink-muted">
+      <span className="font-medium" data-donnee>
+        {implicite.acteur}
+      </span>
+      <span className="text-xs text-ink-muted" data-donnee>
         {implicite.workflow}
         {implicite.role ? ` · role ${implicite.role}` : ""}
         {implicite.model ? ` · ${implicite.model}` : ""}
@@ -242,7 +244,7 @@ function Implicite({ org, implicite, pris }: { org: string; implicite: AgentImpl
           </span>
         ) : (
           <Button size="sm" onClick={() => void enregistrer()}>
-            register
+            Register
           </Button>
         )}
       </span>

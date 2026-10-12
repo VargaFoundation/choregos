@@ -11,11 +11,11 @@ import type { AgentCatalogueConnection, AgentCatalogueEntry } from "@/lib/types"
 
 /** L'état d'une entrée dans l'organisation, en clair : ce que le bouton fera. */
 export function etatDeLEntree(entree: AgentCatalogueEntry): { libelle: string; action: "install" | "update" | null } {
-  if (entree.own_agent) return { libelle: "your organisation has its own agent with this name", action: null };
-  if (!entree.installed) return { libelle: "not installed", action: "install" };
+  if (entree.own_agent) return { libelle: "Your organisation has its own agent with this name", action: null };
+  if (!entree.installed) return { libelle: "Not installed", action: "install" };
   if (entree.update_available)
-    return { libelle: `installed v${entree.installed_version} — an update is available`, action: "update" };
-  return { libelle: `installed v${entree.installed_version}`, action: null };
+    return { libelle: `Installed v${entree.installed_version} — an update is available`, action: "update" };
+  return { libelle: `Installed v${entree.installed_version}`, action: null };
 }
 
 /**
@@ -31,27 +31,27 @@ export function CatalogueDAgents({ org }: { org: string }) {
   const clients = entrees.filter((e) => e.kind === "external");
   return (
     <>
-      <Card title="catalogue — ready-made agents">
+      <Card title="Catalogue — ready-made agents">
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           Agents the platform ships, one per role. Installing makes one an agent of your organisation, version 1: it
           uses your project&apos;s model and runtime, and you can tune it by publishing your own versions. A workflow
           that names one installs it by itself.
         </p>
         {!catalogue.data ? (
-          <p className="text-sm text-ink-muted">reading the catalogue…</p>
+          <p className="text-sm text-ink-muted">Reading the catalogue…</p>
         ) : internes.length === 0 ? (
-          <Empty title="empty catalogue">This deployment ships no agent.</Empty>
+          <Empty title="Empty catalogue">This deployment ships no agent.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="catalogue">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
-                  <th className="py-1 font-normal">agent</th>
-                  <th className="py-1 font-normal">role</th>
-                  <th className="py-1 font-normal">what it does</th>
-                  <th className="py-1 font-normal">in your organisation</th>
+                  <th className="py-1 font-normal">Agent</th>
+                  <th className="py-1 font-normal">Role</th>
+                  <th className="py-1 font-normal">What it does</th>
+                  <th className="py-1 font-normal">In your organisation</th>
                   <th className="py-1 font-normal">
-                    <span className="sr-only">actions</span>
+                    <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
@@ -64,7 +64,7 @@ export function CatalogueDAgents({ org }: { org: string }) {
           </div>
         )}
       </Card>
-      <Card title="connect an AI client">
+      <Card title="Connect an AI client">
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           Assistants that reach in through the MCP door — they never decide. Connecting one here registers it as an
           external agent: its calls carry the agent&apos;s name and limits, within your rights, and you get its
@@ -113,7 +113,7 @@ function LigneDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogue
           <span className="font-medium">{entree.display_name}</span>
         )}
         {entree.skills && entree.skills.length > 0 && (
-          <span className="block text-xs text-ink-muted">carries {entree.skills.join(", ")}</span>
+          <span className="block text-xs text-ink-muted">Carries {entree.skills.join(", ")}</span>
         )}
       </td>
       <td className="py-2 pr-2">
@@ -124,7 +124,7 @@ function LigneDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogue
       <td className="py-2 text-right">
         {etat.action && (
           <Button size="sm" onClick={() => void agir()} disabled={occupe}>
-            {etat.action}
+            {etat.action === "update" ? "Update" : "Install"}
           </Button>
         )}
         {erreur && <ErrorNote>{erreur}</ErrorNote>}
@@ -157,23 +157,23 @@ function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogu
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="font-medium">{entree.display_name}</span>
         <span className="text-xs text-ink-muted">
-          {entree.reach === "cloud" ? "calls from its vendor's cloud" : "calls from your machine"}
+          {entree.reach === "cloud" ? "Calls from its vendor's cloud" : "Calls from your machine"}
         </span>
         {entree.offered ? (
           <span className="ml-auto inline-flex items-center gap-3">
             {entree.reach !== "cloud" && (
               <label className="inline-flex items-center gap-1 text-xs text-ink-muted">
                 <input type="checkbox" checked={lecture} onChange={(e) => setLecture(e.target.checked)} />
-                read only
+                Read only
               </label>
             )}
             <Button size="sm" onClick={() => void connecter()} disabled={Boolean(connexion)}>
-              {connexion ? "connected" : "connect"}
+              {connexion ? "Connected" : "Connect"}
             </Button>
           </span>
         ) : (
           <span className="ml-auto">
-            <Badge tone="neutral">not available here</Badge>
+            <Badge tone="neutral">Not available here</Badge>
           </span>
         )}
       </div>

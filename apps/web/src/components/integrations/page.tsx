@@ -19,9 +19,9 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
     <div className="space-y-6">
       {!projet && (
         <div className="space-y-2">
-          <Eyebrow>integrations · MCP</Eyebrow>
+          <Eyebrow>Integrations · MCP</Eyebrow>
           <Heading as="h1" size="xl">
-            connect a client
+            Connect a client
           </Heading>
           <p className="max-w-3xl text-sm text-ink-muted">
             Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work
@@ -34,7 +34,7 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
       {estClient(client) ? (
         <IntegrationsPanel client={client} projet={projet} base={base} />
       ) : (
-        <Empty title="unknown client">no client called {client}</Empty>
+        <Empty title="Unknown client">No client called {client}</Empty>
       )}
     </div>
   );

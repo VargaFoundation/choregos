@@ -113,13 +113,13 @@ export default function NewProjectPage() {
           : null;
 
   const recapitulatif: [string, string][] = [
-    ["organisation", org],
-    ["template", form.sansDepot ? "none — no code repository" : form.template || "none"],
-    ["identifier", form.slug],
-    ["display name", form.name || form.slug],
-    ["repository", form.sansDepot ? "none" : form.repo],
-    ...(form.sansDepot ? [] : ([["main language", form.language]] as [string, string][])),
-    ["tracker", TRACKERS.find((t) => t.value === form.tracker)?.label ?? form.tracker],
+    ["Organisation", org],
+    ["Template", form.sansDepot ? "None — no code repository" : form.template || "None"],
+    ["Identifier", form.slug],
+    ["Display name", form.name || form.slug],
+    ["Repository", form.sansDepot ? "None" : form.repo],
+    ...(form.sansDepot ? [] : ([["Main language", form.language]] as [string, string][])),
+    ["Tracker", TRACKERS.find((t) => t.value === form.tracker)?.label ?? form.tracker],
     ...(form.sansDepot ? [] : ([["GitOps repository", form.gitops]] as [string, string][])),
     ["Slack channel", form.channel],
   ];
@@ -127,7 +127,7 @@ export default function NewProjectPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <Heading as="h1" size="xl">
-        new project
+        New project
       </Heading>
       {/* Deux colonnes sur téléphone, quatre au-delà : à 360 px, quatre cases de 78 px ne tenaient
           pas un numéro et « connectors », et la page débordait (S23-01). */}
@@ -162,17 +162,17 @@ export default function NewProjectPage() {
                 checked={form.sansDepot}
                 onChange={(event) => set("sansDepot", event.target.checked)}
               />
-              <span>this project has no code repository (a line of business: HR, purchasing, legal…)</span>
+              <span>This project has no code repository (a line of business: HR, purchasing, legal…)</span>
             </label>
             {!form.sansDepot && (
               <label className="block space-y-1">
-                <span>stack template</span>
+                <span>Stack template</span>
                 <Select
                   value={form.template}
                   onChange={(event) => set("template", event.target.value)}
                   className="w-full"
                 >
-                  <option value="">none — I wire my connectors myself</option>
+                  <option value="">None — I wire my connectors myself</option>
                   {(templates.data ?? []).map((template) => (
                     <option key={`${template.name}@${template.version}`} value={`${template.name}@${template.version}`}>
                       {template.display}
@@ -190,15 +190,15 @@ export default function NewProjectPage() {
 
         {step === 1 && (
           <div className="space-y-3 text-sm">
-            <Field label="identifier (slug)" value={form.slug} onChange={(value) => set("slug", value)} placeholder="billing-api" />
-            {!slugValid && form.slug && <ErrorNote>lowercase letters, digits and dashes only</ErrorNote>}
-            <Field label="display name" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
+            <Field label="Identifier (slug)" value={form.slug} onChange={(value) => set("slug", value)} placeholder="billing-api" />
+            {!slugValid && form.slug && <ErrorNote>Lowercase letters, digits and dashes only</ErrorNote>}
+            <Field label="Display name" value={form.name} onChange={(value) => set("name", value)} placeholder="Billing API" />
             {!form.sansDepot && (
               <>
-                <Field label="repository" value={form.repo} onChange={(value) => set("repo", value)} placeholder="acme/billing-api" />
-                {!repoValid && form.repo && <ErrorNote>expected: `owner/repo` or an https URL</ErrorNote>}
+                <Field label="Repository" value={form.repo} onChange={(value) => set("repo", value)} placeholder="acme/billing-api" />
+                {!repoValid && form.repo && <ErrorNote>Expected: `owner/repo` or an https URL</ErrorNote>}
                 <label className="block space-y-1">
-                  <span>main language</span>
+                  <span>Main language</span>
                   <Select
                     value={form.language}
                     onChange={(event) => set("language", event.target.value)}
@@ -219,7 +219,7 @@ export default function NewProjectPage() {
         {step === 2 && (
           <div className="space-y-3 text-sm">
             <label className="block space-y-1">
-              <span>tracker (where tickets come from)</span>
+              <span>Tracker (where tickets come from)</span>
               <Select
                 value={form.tracker}
                 onChange={(event) => set("tracker", event.target.value)}
@@ -277,7 +277,7 @@ export default function NewProjectPage() {
             // Le projet existe : revenir changer son identifiant ne le renommerait pas.
             disabled={step === 0 || fait.projet !== null}
           >
-            previous
+            Previous
           </Button>
           {raisonDAttente && (
             <p className="ml-auto text-xs text-ink-muted" id="raison-d-attente">
@@ -291,11 +291,11 @@ export default function NewProjectPage() {
               disabled={raisonDAttente !== null}
               aria-describedby={raisonDAttente ? "raison-d-attente" : undefined}
             >
-              next
+              Next
             </Button>
           ) : (
             <Button tone="primary" onClick={create} disabled={busy || !slugValid || !repoValid}>
-              {fait.projet ? "retry" : avecTemplate ? "create and provision" : "create"}
+              {fait.projet ? "Retry" : avecTemplate ? "Create and provision" : "Create"}
             </Button>
           )}
         </div>

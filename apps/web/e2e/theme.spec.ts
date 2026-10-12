@@ -21,7 +21,7 @@ test("le clair choisi survit au rechargement, et s'applique sans le JavaScript d
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("radio", { name: "light" }).check({ force: true });
+  await page.getByRole("radio", { name: "Light" }).check({ force: true });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   expect(await fond(page)).toBe("rgb(252, 252, 253)");
 
@@ -38,7 +38,7 @@ test("le clair choisi survit au rechargement, et s'applique sans le JavaScript d
 test("« system » suit le mode du système", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
-  await page.getByRole("radio", { name: "system" }).check({ force: true });
+  await page.getByRole("radio", { name: "System" }).check({ force: true });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

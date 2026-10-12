@@ -25,12 +25,12 @@ describe("le glossaire des quatre notions (S21-03)", () => {
 
   it("dit le chemin d'une demande, du client à la personne qui approuve", () => {
     render(<Glossaire ici="skills" />);
-    const etapes = within(screen.getByRole("list", { name: "how a request flows" })).getAllByRole("listitem");
+    const etapes = within(screen.getByRole("list", { name: "How a request flows" })).getAllByRole("listitem");
     expect(etapes.filter((li) => li.textContent !== "→").map((li) => li.textContent)).toEqual([
-      "a client or a tracker opens a work item",
-      "its workflow hands each step to an agent",
-      "the agent calls connectors under the policy",
-      "a person approves what the policy asks",
+      "A client or a tracker opens a work item",
+      "Its workflow hands each step to an agent",
+      "The agent calls connectors under the policy",
+      "A person approves what the policy asks",
     ]);
   });
 

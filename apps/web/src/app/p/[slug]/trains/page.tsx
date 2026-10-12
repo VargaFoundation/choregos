@@ -15,7 +15,7 @@ export default function TrainsPage({ params }: { params: Promise<{ slug: string 
   return (
     <div className="space-y-4">
       <Heading as="h2" size="md">
-        release trains
+        Release trains
       </Heading>
       {ENVS.map((env) => (
         <TrainCard key={env} slug={slug} env={env} />
@@ -56,7 +56,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
   const data = train.data;
   return (
     <Card
-      title={`environment ${env}`}
+      title={`Environment ${env}`}
       action={data && <StateBadge state={data.status} display={data.status} kind={data.frozen ? "blocked" : "work"} />}
     >
       {!data ? (
@@ -64,7 +64,7 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
-            pending batch: <strong>{data.batch_size}</strong> ticket(s)
+            Pending batch: <strong>{data.batch_size}</strong> ticket(s)
             {data.next_departure && (
               <span className="text-ink-muted"> · departure {relative(data.next_departure)}</span>
             )}
@@ -78,23 +78,23 @@ function TrainCard({ slug, env }: { slug: string; env: string }) {
           {data.frozen && <ErrorNote>Train frozen: {data.freeze_reason ?? "no reason"}</ErrorNote>}
           <div className="flex flex-wrap items-end gap-2">
             <Button tone="primary" onClick={() => act("depart")} disabled={data.frozen || data.batch_size === 0}>
-              depart now
+              Depart now
             </Button>
             {data.frozen ? (
-              <Button onClick={() => act("unfreeze")}>unfreeze</Button>
+              <Button onClick={() => act("unfreeze")}>Unfreeze</Button>
             ) : (
               <>
                 <label className="flex min-w-0 flex-col gap-1">
-                  <span className="text-xs text-ink-muted">freeze reason</span>
+                  <span className="text-xs text-ink-muted">Freeze reason</span>
                   <Input
                     value={reason}
                     onChange={(event) => setReason(event.target.value)}
-                    placeholder="freeze reason (required)"
+                    placeholder="Freeze reason (required)"
                     className="w-auto min-w-56"
                   />
                 </label>
                 <Button tone="danger" onClick={() => act("freeze")}>
-                  freeze
+                  Freeze
                 </Button>
               </>
             )}
@@ -110,19 +110,19 @@ function History({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
   const releases = useQuery({ queryKey: ["releases", slug], queryFn: () => api.releases(slug) });
   return (
-    <Card title="batch history">
+    <Card title="Batch history">
       <div className="overflow-x-auto">
         <table>
           <thead>
             <tr>
-              <th>batch</th>
-              <th>env</th>
-              <th>status</th>
-              <th>tickets</th>
-              <th>when</th>
-              <th>verdict</th>
+              <th>Batch</th>
+              <th>Env</th>
+              <th>Status</th>
+              <th>Tickets</th>
+              <th>When</th>
+              <th>Verdict</th>
               <th>
-                <span className="sr-only">actions</span>
+                <span className="sr-only">Actions</span>
               </th>
             </tr>
           </thead>
@@ -151,26 +151,26 @@ function History({ slug }: { slug: string }) {
                       <GesteConfirme
                         tonDuBouton="primary"
                         ton="primary"
-                        question={`approve the production release of batch R-${release.batch_no}? its ${release.items?.length ?? 0} item(s) go to ${release.env}.`}
-                        confirmer={`approve R-${release.batch_no}`}
+                        question={`Approve the production release of batch R-${release.batch_no}? Its ${release.items?.length ?? 0} item(s) go to ${release.env}.`}
+                        confirmer={`Approve R-${release.batch_no}`}
                         action={async () => {
                           await api.approveRelease(release.id);
                           await queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                         }}
                       >
-                        approve
+                        Approve
                       </GesteConfirme>
                       <GesteConfirme
                         tonDuBouton="danger"
-                        question={`abort batch R-${release.batch_no}? nothing of it reaches ${release.env}.`}
-                        confirmer={`abort R-${release.batch_no}`}
-                        raison={{ label: "why", requise: true }}
+                        question={`Abort batch R-${release.batch_no}? Nothing of it reaches ${release.env}.`}
+                        confirmer={`Abort R-${release.batch_no}`}
+                        raison={{ label: "Why", requise: true }}
                         action={async (raison) => {
                           await api.abortRelease(release.id, raison);
                           await queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                         }}
                       >
-                        abort
+                        Abort
                       </GesteConfirme>
                     </span>
                   )}
@@ -181,7 +181,7 @@ function History({ slug }: { slug: string }) {
         </table>
       </div>
       <EtatDeLecture lecture={releases} quoi="the batches" />
-      {releases.data?.items.length === 0 && <Empty>no batch</Empty>}
+      {releases.data?.items.length === 0 && <Empty>No batch</Empty>}
     </Card>
   );
 }

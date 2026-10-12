@@ -251,7 +251,7 @@ export function modeler(journey: Pick<WorkItemJourney, "graph" | "process" | "in
       depuis: d.etape.id,
       jusqua: { etat: d.retour },
       genre: "retour",
-      libelle: `back to ${nom(d.retour)}`,
+      libelle: `Back to ${nom(d.retour)}`,
     });
   }
 

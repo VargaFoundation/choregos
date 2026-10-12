@@ -30,7 +30,7 @@ function Connexion() {
     <div className="mx-auto max-w-md space-y-8 py-12">
       <div className="space-y-3">
         <Heading as="h1" size="xl">
-          sign in
+          Sign in
         </Heading>
         <Lead>A ticket goes in, a controlled production release comes out. But first, who are you?</Lead>
       </div>
@@ -38,7 +38,7 @@ function Connexion() {
         <p className="text-sm text-ink-muted">Demo mode: the session is simulated, nothing to do here.</p>
       ) : (
         <a href={api.loginUrl(next)} className={buttonClasses("primary", "md")}>
-          continue with the identity provider
+          Continue with the identity provider
         </a>
       )}
       {devLogin && !IS_MOCK && (
@@ -49,16 +49,16 @@ function Connexion() {
             if (email) window.location.assign(api.loginUrl(next, email));
           }}
         >
-          <p className="text-xs text-ink-muted">development login — this bench has no IdP</p>
+          <p className="text-xs text-ink-muted">Development login — this bench has no IdP</p>
           <Input
-            aria-label="development e-mail"
+            aria-label="Development e-mail"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="admin@acme.dev"
             className="w-full"
           />
           <button type="submit" className={buttonClasses("secondary", "sm")}>
-            enter
+            Enter
           </button>
         </form>
       )}

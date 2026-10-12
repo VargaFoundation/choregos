@@ -17,13 +17,13 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   const { org } = useSession();
   const agent = useQuery({ queryKey: ["agent", org, slug], queryFn: () => api.agent(org, slug) });
   if (agent.error) return <ErrorNote>{String(agent.error)}</ErrorNote>;
-  if (!agent.data) return <Empty>reading the agent…</Empty>;
+  if (!agent.data) return <Empty>Reading the agent…</Empty>;
   const a = agent.data;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-3">
         <Link href="/agents" className="text-sm text-ink-muted hover:underline">
-          agents
+          Agents
         </Link>
         <span aria-hidden className="text-ink-muted">
           /
@@ -34,8 +34,8 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         <span className="text-sm text-ink-muted">{a.slug}</span>
         <Badge tone={a.kind === "external" ? "accent" : "neutral"}>{a.kind}</Badge>
         <Badge tone={a.status === "active" ? "ok" : "danger"}>{a.status}</Badge>
-        {a.owner && <span className="text-xs text-ink-muted">owned by {a.owner}</span>}
-        {a.expires_at && <span className="text-xs text-ink-muted">expires {shortDate(a.expires_at)}</span>}
+        {a.owner && <span className="text-xs text-ink-muted">Owned by {a.owner}</span>}
+        {a.expires_at && <span className="text-xs text-ink-muted">Expires {shortDate(a.expires_at)}</span>}
       </div>
       {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
       <Statut org={org} agent={a} />
@@ -67,26 +67,26 @@ function Statut({ org, agent }: { org: string; agent: Agent }) {
     <div className="flex flex-wrap items-center gap-2">
       {agent.status === "active" ? (
         <Button size="sm" onClick={() => void passer("suspended")}>
-          suspend
+          Suspend
         </Button>
       ) : (
         <Button size="sm" onClick={() => void passer("active")}>
-          reactivate
+          Reactivate
         </Button>
       )}
       {aConfirmer ? (
         <span className="inline-flex items-center gap-2 text-sm">
-          revoked for good: its next call is refused.
+          Revoked for good: its next call is refused.
           <Button size="sm" tone="danger" onClick={() => void passer("revoked")}>
-            revoke
+            Revoke
           </Button>
           <Button size="sm" onClick={() => setAConfirmer(false)}>
-            cancel
+            Cancel
           </Button>
         </span>
       ) : (
         <Button size="sm" tone="danger" onClick={() => setAConfirmer(true)}>
-          revoke…
+          Revoke…
         </Button>
       )}
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
@@ -100,24 +100,24 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
   if (mesures.error) return <ErrorNote>{String(mesures.error)}</ErrorNote>;
   const m = mesures.data;
   return (
-    <Card title="last 30 days">
+    <Card title="Last 30 days">
       {!m ? (
-        <p className="text-sm text-ink-muted">reading…</p>
+        <p className="text-sm text-ink-muted">Reading…</p>
       ) : (
         <div className="space-y-3" data-testid="mesures">
           <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
             <div>
-              <dt className="text-xs text-ink-muted">runs</dt>
+              <dt className="text-xs text-ink-muted">Runs</dt>
               <dd>
                 {m.runs} ({m.succeeded} succeeded, {m.failed} failed)
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-ink-muted">success rate</dt>
+              <dt className="text-xs text-ink-muted">Success rate</dt>
               <dd>{m.success_rate == null ? "—" : percent(m.success_rate)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-ink-muted">cost</dt>
+              <dt className="text-xs text-ink-muted">Cost</dt>
               <dd>
                 {usd(m.cost_usd ?? 0)}
                 {Object.entries(m.cost_by_kind ?? {}).length > 0 && (
@@ -132,7 +132,7 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-ink-muted">today</dt>
+              <dt className="text-xs text-ink-muted">Today</dt>
               <dd>
                 {usd(m.spent_today_usd ?? 0)}
                 {m.daily_budget_usd != null && ` of ${usd(m.daily_budget_usd)}`}
@@ -144,9 +144,9 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
               <table className="w-full text-sm">
                 <thead className="text-left text-xs text-ink-muted">
                   <tr>
-                    <th className="py-1 font-normal">project</th>
-                    <th className="py-1 font-normal">runs</th>
-                    <th className="py-1 font-normal">cost</th>
+                    <th className="py-1 font-normal">Project</th>
+                    <th className="py-1 font-normal">Runs</th>
+                    <th className="py-1 font-normal">Cost</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -181,13 +181,13 @@ function Versions({ org, agent }: { org: string; agent: Agent }) {
   return (
     <>
       <Card
-        title={`version ${version?.version ?? "—"}`}
+        title={`Version ${version?.version ?? "—"}`}
         action={
           versions.length > 1 ? (
             <label className="flex items-center gap-2 text-xs">
-              <span className="text-ink-muted">see</span>
+              <span className="text-ink-muted">See</span>
               <Select
-                aria-label="version to see"
+                aria-label="Version to see"
                 className="w-auto"
                 value={choisie}
                 onChange={(e) => setChoisie(Number(e.target.value))}
@@ -202,10 +202,10 @@ function Versions({ org, agent }: { org: string; agent: Agent }) {
           ) : undefined
         }
       >
-        {version ? <Specification spec={version.spec} /> : <p className="text-sm text-ink-muted">no version</p>}
+        {version ? <Specification spec={version.spec} /> : <p className="text-sm text-ink-muted">No version</p>}
         {version && (
           <p className="mt-3 text-xs text-ink-muted">
-            {version.created_by ? `published by ${version.created_by}` : "published"}
+            {version.created_by ? `Published by ${version.created_by}` : "Published"}
             {version.created_at ? ` ${relative(version.created_at)}` : ""} · {version.checksum.slice(0, 19)}
           </p>
         )}
@@ -234,23 +234,23 @@ function Specification({ spec }: { spec: AgentSpec }) {
     <div className="space-y-3 text-sm" data-testid="version">
       <p className="text-ink-muted">{resumeDeLaVersion(spec)}</p>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
-        <dt className="text-ink-muted">model</dt>
-        <dd>{spec.model ?? "the project's profile"}</dd>
-        <dt className="text-ink-muted">backend</dt>
-        <dd>{spec.backend ?? "the project's"}</dd>
-        <dt className="text-ink-muted">limits</dt>
+        <dt className="text-ink-muted">Model</dt>
+        <dd>{spec.model ?? "The project's profile"}</dd>
+        <dt className="text-ink-muted">Backend</dt>
+        <dd>{spec.backend ?? "The project's"}</dd>
+        <dt className="text-ink-muted">Limits</dt>
         <dd>
           {spec.limits?.max_turns ?? "—"} turns · {spec.limits?.max_minutes ?? "—"} min
         </dd>
-        <dt className="text-ink-muted">budget</dt>
+        <dt className="text-ink-muted">Budget</dt>
         <dd>
           {spec.budget?.run_usd != null ? `${usd(spec.budget.run_usd)}/run` : "—"} ·{" "}
           {spec.budget?.daily_usd != null ? `${usd(spec.budget.daily_usd)}/day` : "—"}
         </dd>
-        <dt className="text-ink-muted">skills</dt>
+        <dt className="text-ink-muted">Skills</dt>
         <dd>
           {(spec.skills ?? []).length === 0
-            ? "none"
+            ? "None"
             : (spec.skills ?? []).map((s) => (
                 <Link key={s.slug} href={`/skills/${s.slug}`} className="mr-2 underline">
                   {s.slug}
@@ -258,11 +258,11 @@ function Specification({ spec }: { spec: AgentSpec }) {
                 </Link>
               ))}
         </dd>
-        <dt className="text-ink-muted">tools</dt>
-        <dd>{outils.length === 0 ? "those of the platform (or of its human)" : outils.join(", ")}</dd>
+        <dt className="text-ink-muted">Tools</dt>
+        <dd>{outils.length === 0 ? "Those of the platform (or of its human)" : outils.join(", ")}</dd>
       </dl>
       {spec.instructions ? (
-        <pre aria-label="instructions" className="whitespace-pre-wrap break-words rounded bg-surface-muted p-3 text-xs">
+        <pre aria-label="Instructions" className="whitespace-pre-wrap break-words rounded bg-surface-muted p-3 text-xs">
           {spec.instructions}
         </pre>
       ) : (
@@ -319,7 +319,7 @@ function NouvelleVersion({
     }
   }
   return (
-    <Card title={`new version (v${agent.latest_version + 1})`}>
+    <Card title={`New version (v${agent.latest_version + 1})`}>
       <form
         className="grid gap-3 md:grid-cols-3"
         onSubmit={(event) => {
@@ -328,7 +328,7 @@ function NouvelleVersion({
         }}
       >
         <label className="space-y-1 md:col-span-3">
-          <span className="text-xs text-ink-muted">instructions</span>
+          <span className="text-xs text-ink-muted">Instructions</span>
           <Textarea
             className="w-auto font-mono text-xs"
             rows={8}
@@ -337,7 +337,7 @@ function NouvelleVersion({
           />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">model</span>
+          <span className="text-xs text-ink-muted">Model</span>
           <Input
             value={modele}
             onChange={(e) => setModele(e.target.value)}
@@ -345,11 +345,11 @@ function NouvelleVersion({
           />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">max turns</span>
+          <span className="text-xs text-ink-muted">Max turns</span>
           <Input type="number" min={1} value={tours} onChange={(e) => setTours(e.target.value)} />
         </label>
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">daily budget (USD)</span>
+          <span className="text-xs text-ink-muted">Daily budget (USD)</span>
           <Input
             type="number"
             min={0}
@@ -359,7 +359,7 @@ function NouvelleVersion({
           />
         </label>
         <fieldset className="space-y-2 md:col-span-3" data-testid="skills-de-la-version">
-          <legend className="text-xs text-ink-muted">skills</legend>
+          <legend className="text-xs text-ink-muted">Skills</legend>
           {competences.length === 0 ? (
             <p className="text-xs text-ink-muted">None — the playbook of its role is all it reads.</p>
           ) : (
@@ -373,7 +373,7 @@ function NouvelleVersion({
                     className="ml-1 text-ink-muted hover:text-ink"
                     onClick={() => setCompetences(competences.filter((c) => c.slug !== competence.slug))}
                   >
-                    remove<span className="sr-only"> {competence.slug}</span>
+                    Remove<span className="sr-only"> {competence.slug}</span>
                   </button>
                 </li>
               ))}
@@ -381,7 +381,7 @@ function NouvelleVersion({
           )}
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-ink-muted">add a skill</span>
+              <span className="text-xs text-ink-muted">Add a skill</span>
               <Select
                 value={ajout}
                 onChange={(e) => {
@@ -399,9 +399,9 @@ function NouvelleVersion({
             </label>
             {choisie && (
               <label className="flex min-w-0 flex-col gap-1">
-                <span className="text-xs text-ink-muted">version</span>
+                <span className="text-xs text-ink-muted">Version</span>
                 <Select value={versionDAjout} onChange={(e) => setVersionDAjout(e.target.value)}>
-                  <option value="">latest, read at each run</option>
+                  <option value="">Latest, read at each run</option>
                   {Array.from({ length: choisie.latest_version }, (_, i) => choisie.latest_version - i).map((v) => (
                     <option key={v} value={v}>
                       v{v}, pinned
@@ -423,14 +423,14 @@ function NouvelleVersion({
                 setVersionDAjout("");
               }}
             >
-              attach
+              Attach
             </Button>
           </div>
           <EtatDeLecture lecture={bibliotheque} quoi="the skill library" />
         </fieldset>
         <div className="flex items-center gap-3 md:col-span-3">
           <Button type="submit" tone="accent">
-            publish v{agent.latest_version + 1}
+            Publish v{agent.latest_version + 1}
           </Button>
         </div>
         {erreur && (
@@ -478,16 +478,16 @@ function Clients({ org, slug }: { org: string; slug: string }) {
                 <li key={lien.id} className="flex flex-wrap items-center gap-3 text-sm">
                   <span className="font-medium">{lien.token_name ?? lien.client_id ?? lien.kind}</span>
                   <Badge tone={etat.connecte ? (etat.recent ? "ok" : "neutral") : "neutral"}>
-                    {etat.connecte ? "connected" : "never called"}
+                    {etat.connecte ? "Connected" : "Never called"}
                   </Badge>
                   <span className="text-xs text-ink-muted">
-                    {lien.last_used_at ? `last call ${relative(lien.last_used_at)}` : lien.kind}
+                    {lien.last_used_at ? `Last call ${relative(lien.last_used_at)}` : lien.kind}
                     {lien.last_client ? ` · ${lien.last_client}` : ""}
                     {lien.created_by ? ` · attached by ${lien.created_by}` : ""}
                   </span>
                   <span className="ml-auto">
                     <Button size="sm" onClick={() => void agir(() => api.detachAgentCredential(org, slug, lien.id))}>
-                      detach
+                      Detach
                     </Button>
                   </span>
                 </li>
@@ -504,7 +504,7 @@ function Clients({ org, slug }: { org: string; slug: string }) {
             }}
           >
             <label className="space-y-1">
-              <span className="text-xs text-ink-muted">attach one of your MCP tokens</span>
+              <span className="text-xs text-ink-muted">Attach one of your MCP tokens</span>
               <Select value={choisi} onChange={(e) => setChoisi(e.target.value)}>
                 <option value="">—</option>
                 {libres.map((j) => (
@@ -515,7 +515,7 @@ function Clients({ org, slug }: { org: string; slug: string }) {
               </Select>
             </label>
             <Button size="sm" type="submit" disabled={!choisi}>
-              attach
+              Attach
             </Button>
           </form>
         )}

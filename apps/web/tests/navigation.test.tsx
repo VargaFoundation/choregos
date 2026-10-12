@@ -36,7 +36,7 @@ function rendre(pathname: string) {
       </ThemeProvider>
     </QueryClientProvider>,
   );
-  return screen.getByRole("navigation", { name: "main navigation" });
+  return screen.getByRole("navigation", { name: "Main navigation" });
 }
 
 describe("la navigation (S21-03, S24-03)", () => {
@@ -45,7 +45,7 @@ describe("la navigation (S21-03, S24-03)", () => {
   });
 
   it("chaque entrée est rangée dans un groupe, une seule fois ; les skills ont la leur", () => {
-    expect(NAV.map((entree) => entree.label)).toContain("skills");
+    expect(NAV.map((entree) => entree.label)).toContain("Skills");
     const rangees = GROUPES.flatMap((groupe) => groupe.entrees);
     expect([...rangees].sort()).toEqual(NAV.map((entree) => entree.href).sort());
   });
@@ -59,7 +59,7 @@ describe("la navigation (S21-03, S24-03)", () => {
 
   it("sous 1280 px, se replie derrière « menu » : le panneau s'ouvre, se ferme sur Échap et rend le focus (S23-01)", () => {
     const navigation = rendre("/p/billing-api");
-    const menu = screen.getByRole("button", { name: /^menu/ });
+    const menu = screen.getByRole("button", { name: /^Menu/ });
     expect(menu).toHaveAttribute("aria-expanded", "false");
     expect(navigation.querySelector("#menu-principal")).toBeNull();
 
@@ -69,10 +69,10 @@ describe("la navigation (S21-03, S24-03)", () => {
     expect(panneau).not.toBeNull();
     // Les six entrées y sont, dans leurs groupes, et celle de la page courante y est marquée.
     expect(panneau?.querySelectorAll("a")).toHaveLength(NAV.length + 1); // + « sign in »
-    expect(panneau?.querySelector('a[aria-current="page"]')?.textContent).toBe("projects");
-    expect(within(panneau!).getByRole("list", { name: "catalogue" })).toBeInTheDocument();
+    expect(panneau?.querySelector('a[aria-current="page"]')?.textContent).toBe("Projects");
+    expect(within(panneau!).getByRole("list", { name: "Catalogue" })).toBeInTheDocument();
     // Le choix du thème y est aussi : sous 1280 px, l'en-tête ne le montre plus ailleurs.
-    expect(within(panneau!).getByRole("group", { name: "theme" })).toBeInTheDocument();
+    expect(within(panneau!).getByRole("group", { name: "Theme" })).toBeInTheDocument();
 
     fireEvent.keyDown(menu, { key: "Escape" });
     expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -82,18 +82,18 @@ describe("la navigation (S21-03, S24-03)", () => {
 
   it("le bouton du menu compte ce qui attend une personne : un ticket et deux actions (S23-02)", async () => {
     rendre("/");
-    expect(await within(screen.getByRole("button", { name: /^menu/ })).findByText(", 3 waiting")).toBeInTheDocument();
+    expect(await within(screen.getByRole("button", { name: /^Menu/ })).findByText(", 3 waiting")).toBeInTheDocument();
   });
 
   it("les deux choix du thème de l'en-tête sont deux groupes distincts", () => {
     rendre("/");
-    fireEvent.click(screen.getByRole("button", { name: /^menu/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Menu/ }));
     // L'en-tête (à partir de 1280 px) et le panneau : un même nom n'en ferait qu'un groupe.
-    const groupes = screen.getAllByRole("group", { name: "theme" });
+    const groupes = screen.getAllByRole("group", { name: "Theme" });
     expect(groupes).toHaveLength(2);
     const noms = groupes.map((groupe) => within(groupe).getAllByRole("radio")[0]!.getAttribute("name"));
     expect(new Set(noms).size).toBe(2);
-    fireEvent.click(within(groupes[1]!).getByRole("radio", { name: "light" }));
-    for (const groupe of groupes) expect(within(groupe).getByRole("radio", { name: "light" })).toBeChecked();
+    fireEvent.click(within(groupes[1]!).getByRole("radio", { name: "Light" }));
+    for (const groupe of groupes) expect(within(groupe).getByRole("radio", { name: "Light" })).toBeChecked();
   });
 });

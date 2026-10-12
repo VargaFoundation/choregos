@@ -16,13 +16,13 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
   const { slug, id } = use(params);
   const action = useQuery({ queryKey: ["action", slug, id], queryFn: () => api.projectAction(slug, id) });
   if (action.error) return <ErrorNote>{String(action.error)}</ErrorNote>;
-  if (!action.data) return <Empty>reading the action…</Empty>;
+  if (!action.data) return <Empty>Reading the action…</Empty>;
   const a = action.data;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline gap-3">
         <Link href={`/p/${slug}/actions`} className="text-sm text-ink-muted hover:underline">
-          actions
+          Actions
         </Link>
         <span aria-hidden className="text-ink-muted">
           /
@@ -33,12 +33,12 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         <Statut statut={a.status} />
       </div>
       <p className="text-sm text-ink-muted">
-        {a.kind} · proposed by {propose(a.proposed_by)}
+        <span data-donnee>{a.kind}</span> · proposed by {propose(a.proposed_by)}
         {a.created_at ? ` · ${relative(a.created_at)}` : ""}
         {a.justification ? ` — ${a.justification}` : ""}
       </p>
       <DetailOntologie action={a} />
-      <Card title="decision">
+      <Card title="Decision">
         {a.status === "pending_approval" ? (
           <DecisionDAction projet={slug} action={a} />
         ) : (a.decisions ?? []).length === 0 ? (
@@ -59,7 +59,7 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
           </ul>
         )}
       </Card>
-      <Card title="effects">
+      <Card title="Effects">
         <ol className="space-y-2 text-sm">
           {(a.effects ?? []).map((spec, position) => {
             const fait = (a.journal ?? []).find((e) => e.position === position);
@@ -67,14 +67,14 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
               <li key={position} className="border-t border-line pt-2" data-testid={`effet-${position}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <code>{String(spec.effect)}</code>
-                  {fait ? <Statut statut={fait.status} /> : <span className="text-xs text-ink-muted">not started</span>}
-                  {fait && <span className="text-xs text-ink-muted">key {fait.key} · {fait.attempts} attempt(s)</span>}
+                  {fait ? <Statut statut={fait.status} /> : <span className="text-xs text-ink-muted">Not started</span>}
+                  {fait && <span className="text-xs text-ink-muted">Key {fait.key} · {fait.attempts} attempt(s)</span>}
                 </div>
                 <pre className="mt-1 whitespace-pre-wrap break-words text-xs text-ink-muted">
                   {JSON.stringify(spec.with ?? {}, null, 1)}
                 </pre>
                 {spec.compensate ? (
-                  <p className="text-xs text-ink-muted">undone by {String((spec.compensate as { effect?: string }).effect)}</p>
+                  <p className="text-xs text-ink-muted">Undone by {String((spec.compensate as { effect?: string }).effect)}</p>
                 ) : null}
                 {fait?.error && <p className="text-xs text-danger">{fait.error}</p>}
               </li>

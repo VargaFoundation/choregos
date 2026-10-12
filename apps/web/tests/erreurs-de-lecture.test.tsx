@@ -50,38 +50,38 @@ async function rendre(page: ReactNode) {
 describe("une lecture qui échoue se dit, elle ne passe pas pour du vide (S23-08)", () => {
   it("la vue d'ensemble : coûts, mesures, tickets", async () => {
     await rendre(<ProjectOverview params={Promise.resolve({ slug: "billing-api" })} />);
-    expect(await screen.findByText(/could not read the costs: 503 Service Unavailable/)).toBeInTheDocument();
-    expect(screen.getByText(/could not read the delivery measures/)).toBeInTheDocument();
-    expect(screen.getByText(/could not read the tickets/)).toBeInTheDocument();
-    expect(screen.queryByText("no spend recorded.")).toBeNull();
-    expect(screen.queryByText("measurements being computed.")).toBeNull();
+    expect(await screen.findByText(/Could not read the costs: 503 Service Unavailable/)).toBeInTheDocument();
+    expect(screen.getByText(/Could not read the delivery measures/)).toBeInTheDocument();
+    expect(screen.getByText(/Could not read the tickets/)).toBeInTheDocument();
+    expect(screen.queryByText("No spend recorded.")).toBeNull();
+    expect(screen.queryByText("Measurements being computed.")).toBeNull();
   });
 
   it("les trains : le train et l'historique, et « retry » relit", async () => {
     await rendre(<TrainsPage params={Promise.resolve({ slug: "billing-api" })} />);
-    expect(await screen.findByText(/could not read the batches/)).toBeInTheDocument();
-    expect(screen.getAllByText(/could not read the (prod|staging|[a-z]+) train/).length).toBeGreaterThan(0);
-    expect(screen.queryByText("no batch")).toBeNull();
+    expect(await screen.findByText(/Could not read the batches/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Could not read the (prod|staging|[a-z]+) train/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("No batch")).toBeNull();
     const appels = vi.mocked(api.releases).mock.calls.length;
     await act(async () => {
-      screen.getAllByRole("button", { name: "retry" }).at(-1)?.click();
+      screen.getAllByRole("button", { name: "Retry" }).at(-1)?.click();
     });
     expect(vi.mocked(api.releases).mock.calls.length).toBeGreaterThan(appels);
   });
 
   it("la plateforme : une panne n'est pas « no backend registered », un vide l'est", async () => {
     await rendre(<PlatformPage />);
-    expect(await screen.findByText(/could not read the agent backends/)).toBeInTheDocument();
-    expect(screen.queryByText("no backend registered")).toBeNull();
-    expect(screen.getByText("no executor registered")).toBeInTheDocument();
+    expect(await screen.findByText(/Could not read the agent backends/)).toBeInTheDocument();
+    expect(screen.queryByText("No backend registered")).toBeNull();
+    expect(screen.getByText("No executor registered")).toBeInTheDocument();
   });
 
   it("les findings et les faits proposés", async () => {
     await rendre(<FindingsPage params={Promise.resolve({ slug: "billing-api" })} />);
-    expect(await screen.findByText(/could not read the findings/)).toBeInTheDocument();
+    expect(await screen.findByText(/Could not read the findings/)).toBeInTheDocument();
     await rendre(<MemoryPage params={Promise.resolve({ slug: "billing-api" })} />);
-    expect(await screen.findByText(/could not read the proposed facts/)).toBeInTheDocument();
+    expect(await screen.findByText(/Could not read the proposed facts/)).toBeInTheDocument();
     // La recherche n'est pas lancée : elle ne dit rien, pas même « reading ».
-    expect(screen.queryByText(/reading the memory/)).toBeNull();
+    expect(screen.queryByText(/Reading the memory/)).toBeNull();
   });
 });

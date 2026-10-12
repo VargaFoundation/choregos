@@ -46,7 +46,7 @@ export function Glossaire({ ici, ouvert = false }: { ici: NotionDuGlossaire; ouv
       data-testid="glossaire"
       className="max-w-3xl rounded border border-line bg-surface px-3 py-2 text-sm"
     >
-      <summary className="cursor-pointer text-ink-muted">how agents, skills, connectors and clients fit together</summary>
+      <summary className="cursor-pointer text-ink-muted">How agents, skills, connectors and clients fit together</summary>
       <dl className="mt-2 space-y-1.5">
         {NOTIONS.map((notion) => (
           <div key={notion.cle} className="flex gap-2">
@@ -63,14 +63,14 @@ export function Glossaire({ ici, ouvert = false }: { ici: NotionDuGlossaire; ouv
           </div>
         ))}
       </dl>
-      <ol aria-label="how a request flows" className="mt-3 flex flex-wrap items-center gap-1 text-xs text-ink-muted">
-        <li>a client or a tracker opens a work item</li>
+      <ol aria-label="How a request flows" className="mt-3 flex flex-wrap items-center gap-1 text-xs text-ink-muted">
+        <li>A client or a tracker opens a work item</li>
         <li aria-hidden="true">→</li>
-        <li>its workflow hands each step to an agent</li>
+        <li>Its workflow hands each step to an agent</li>
         <li aria-hidden="true">→</li>
-        <li>the agent calls connectors under the policy</li>
+        <li>The agent calls connectors under the policy</li>
         <li aria-hidden="true">→</li>
-        <li>a person approves what the policy asks</li>
+        <li>A person approves what the policy asks</li>
       </ol>
       <p className="mt-2 text-xs text-ink-muted">
         A supplier&apos;s agent that you call over MCP is a connector (an MCP server), not an agent of your registry.

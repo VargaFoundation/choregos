@@ -72,7 +72,7 @@ describe("les connecteurs, rangés par ce qu'ils sont (S21-04)", () => {
       ],
       [{ error: new ApiError(403, {}) }, { data: [outil("scm", "github")] }],
     );
-    expect(lignes.map((l) => l.refus)).toEqual(["no access", null]);
+    expect(lignes.map((l) => l.refus)).toEqual(["No access", null]);
     expect(lignes[1]!.outils).toHaveLength(1);
   });
 
@@ -84,19 +84,19 @@ describe("les connecteurs, rangés par ce qu'ils sont (S21-04)", () => {
     );
     const metier = screen.getByTestId("section-metier");
     const mcp = screen.getByTestId("section-mcp");
-    expect(within(metier).getByRole("heading", { name: "business systems (API)" })).toBeInTheDocument();
+    expect(within(metier).getByRole("heading", { name: "Business systems (API)" })).toBeInTheDocument();
     expect(await within(metier).findByText(/entra-acme/)).toBeInTheDocument();
     expect(within(metier).getByText(/parc/)).toBeInTheDocument();
     expect(within(metier).queryByText(/supplier-agent/)).toBeNull();
     expect(await within(mcp).findByText(/supplier-agent/)).toBeInTheDocument();
     expect(mcp).toHaveTextContent("A supplier's agent served over MCP is declared here");
     // Les outils de livraison, en lecture, et le projet refusé ne cache pas l'autre.
-    expect(await screen.findByTestId("livraison-billing-api")).toHaveTextContent("work tracker: jira");
-    expect(await screen.findByText("no access")).toBeInTheDocument();
+    expect(await screen.findByTestId("livraison-billing-api")).toHaveTextContent("Work tracker: jira");
+    expect(await screen.findByText("No access")).toBeInTheDocument();
     // Le choix du type : des familles, jamais un tracker (il se règle dans le projet).
     await screen.findAllByRole("option", { name: /entra/ });
     const groupes = [...document.querySelectorAll("optgroup")].map((g) => g.getAttribute("label"));
-    expect(groupes).toEqual(["business systems (API)", "MCP servers"]);
+    expect(groupes).toEqual(["Business systems (API)", "MCP servers"]);
     expect(screen.queryByRole("option", { name: /jira/ })).toBeNull();
   });
 });
