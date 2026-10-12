@@ -175,6 +175,22 @@ async def list_gateway_keys(session: Db, principal: Me) -> list[GatewayKeyInfo]:
 
 @router.get("/orgs/{org}/members", response_model=list[MembershipDto], operation_id="listMembers")
 async def list_members(org: str, session: Db, principal: Me) -> list[MembershipDto]:
+    """Who belongs to the organisation (S26-04: any signed-in user could list any organisation).
+
+    A role in the organisation reads every membership; a role on some of its projects only reads the
+    memberships of those projects; anyone else gets 403 — before the lookup, so an organisation's
+    existence is not told to a stranger (as `/orgs/{org}/agents` does).
+    """
+    from ..rbac import Permission
+
+    org_wide = principal.can(Permission.MEMBER_READ, org)
+    readable_projects = {
+        key.split("/", 1)[1]
+        for key in principal.project_roles
+        if key.startswith(f"{org}/") and principal.can(Permission.MEMBER_READ, org, key.split("/", 1)[1])
+    }
+    if not org_wide and not readable_projects:
+        raise forbidden(f"reading the members of {org} requires being a member of it")
     organization = (
         await session.execute(select(Organization).where(Organization.slug == org))
     ).scalar_one_or_none()
@@ -197,6 +213,7 @@ async def list_members(org: str, session: Db, principal: Me) -> list[MembershipD
             role=Role(membership.role),
         )
         for membership, user, project in rows
+        if org_wide or (project is not None and project.slug in readable_projects)
     ]
 
 
