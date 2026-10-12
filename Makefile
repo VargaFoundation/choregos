@@ -27,9 +27,10 @@ setup:  ## Installe les dépendances (Python + web)
 ci: lint typecheck test contracts-check charts-lint  ## Tout ce qui bloque une PR
 
 .PHONY: lint
-lint:  ## ruff check + format --check
+lint:  ## ruff check + format --check + no French in lines added since origin/main (ADR 0046)
 	$(UV) run ruff check $(PY_PATHS)
 	$(UV) run ruff format --check $(PY_PATHS)
+	$(UV) run python tools/check_english.py
 
 .PHONY: format
 format:  ## Formate le code Python

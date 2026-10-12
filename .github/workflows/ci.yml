@@ -293,6 +293,21 @@ jobs:
           fi
           echo "tous les commits portent leur Signed-off-by"
 
+  english:
+    # ADR 0046: everything new is in English. The guard reads only the lines the pull request adds
+    # (and its commit messages), so it runs on every pull request — a docs-only change included,
+    # which the `python` job's path filter would skip. It diffs against the base: full history.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@v7
+      - name: no French in new or modified lines
+        run: >-
+          uv run --no-project --python 3.12 tools/check_english.py
+          --range '${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}'
+
   ci-ok:
     # Cible unique pour la protection de branche et la merge queue.
     #
@@ -309,7 +324,7 @@ jobs:
     # 2026-10-05, les runners hébergés n'acquéraient plus les jobs, `python` est revenu
     # `abandoned`, et la porte d'une PR était verte sans qu'un seul test Python ait tourné. Ce que
     # GitHub inventera demain fermera la porte aussi : on énumère ce qui passe, pas ce qui casse.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, secrets, dco]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

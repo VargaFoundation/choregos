@@ -23,7 +23,7 @@ AGENTS = RACINE / "AGENTS.md"
 MAKEFILE = RACINE / "Makefile"
 
 #: Sections sans lesquelles le fichier ne rend plus le service qu'on attend de lui.
-SECTIONS = ("## Contexte", "## Commandes", "## Conventions", "## Definition of done")
+SECTIONS = ("## Context", "## Languages", "## Commands", "## Conventions", "## Definition of done")
 
 
 def _texte() -> str:
