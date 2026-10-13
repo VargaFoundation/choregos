@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The budget given at launch (S27-06, ADR 0047): `work_items.budget_usd`
 
-Revision ID: e8a0c2d4f6b8
-Revises: d7f9b1c3e5a7
+Revision ID: 2c4e6a8b0d1f
+Revises: 1b3d5f7a9c0e
 Create Date: 2026-10-13 14:00:00+00:00
 """
 
@@ -13,8 +13,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "e8a0c2d4f6b8"
-down_revision: str | None = "d7f9b1c3e5a7"
+revision: str = "2c4e6a8b0d1f"
+down_revision: str | None = "1b3d5f7a9c0e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
