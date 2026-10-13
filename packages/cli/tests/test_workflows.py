@@ -1,5 +1,5 @@
-"""La CLI et les workflows d'un projet (ADR 0031, S16-06) : lister, publier par nom, poser une
-demande dans un workflow choisi, avec ses étiquettes et ses champs."""
+"""The CLI and a project's workflows (ADR 0031, S16-06): list, publish by name, file a request in a
+chosen workflow, with its labels and its fields."""
 
 from __future__ import annotations
 
@@ -13,28 +13,28 @@ from httpx import Response
 from typer.testing import CliRunner
 
 API = "http://api.test"
-ARRIVEE = """apiVersion: choregos/v1
+ONBOARDING = """apiVersion: choregos/v1
 kind: Workflow
 metadata: {name: onboarding, version: 1}
 actors:
-  rh: {type: human, group: rh}
+  hr: {type: human, group: hr}
 states:
-  demande: {display: Demande, kind: wait}
-  fait: {display: Fait, terminal: true}
+  requested: {display: Requested, kind: wait}
+  done: {display: Done, terminal: true}
 transitions:
-  - {id: t-faire, from: demande, to: fait, by: rh}
+  - {id: t-do, from: requested, to: done, by: hr}
 """
 
 
 @pytest.fixture(autouse=True)
-def profil(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    chemin = tmp_path / "config.json"
-    chemin.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
-    monkeypatch.setenv("CHOREGOS_CONFIG", str(chemin))
+def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
+    monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
     import choregos_cli.client as client_module
 
-    monkeypatch.setattr(client_module, "CONFIG_PATH", chemin)
-    return chemin
+    monkeypatch.setattr(client_module, "CONFIG_PATH", path)
+    return path
 
 
 def _run(*args: str) -> Any:
@@ -44,8 +44,8 @@ def _run(*args: str) -> Any:
 
 
 @respx.mock
-def test_les_workflows_d_un_projet_se_listent() -> None:
-    respx.get(f"{API}/api/v1/projects/rh/workflows").mock(
+def test_a_projects_workflows_are_listed() -> None:
+    respx.get(f"{API}/api/v1/projects/hr/workflows").mock(
         return_value=Response(
             200,
             json=[
@@ -54,53 +54,53 @@ def test_les_workflows_d_un_projet_se_listent() -> None:
             ],
         )
     )
-    resultat = _run("workflow", "list", "rh")
-    assert resultat.exit_code == 0, resultat.output
-    assert "onboarding" in resultat.output and "v3" in resultat.output and "offboarding" in resultat.output
+    result = _run("workflow", "list", "hr")
+    assert result.exit_code == 0, result.output
+    assert "onboarding" in result.output and "v3" in result.output and "offboarding" in result.output
 
 
 @respx.mock
-def test_push_publie_par_le_nom_du_yaml(tmp_path: Path) -> None:
-    fichier = tmp_path / "arrivee.yaml"
-    fichier.write_text(ARRIVEE, encoding="utf-8")
-    publie = respx.put(f"{API}/api/v1/projects/rh/workflows/onboarding").mock(
+def test_push_publishes_under_the_yamls_name(tmp_path: Path) -> None:
+    file = tmp_path / "onboarding.yaml"
+    file.write_text(ONBOARDING, encoding="utf-8")
+    published = respx.put(f"{API}/api/v1/projects/hr/workflows/onboarding").mock(
         return_value=Response(200, json={"name": "onboarding", "version": 4})
     )
-    resultat = _run("workflow", "push", "rh", str(fichier), "--base-version", "3")
-    assert resultat.exit_code == 0, resultat.output
-    assert "onboarding v4 publié" in resultat.output
-    assert json.loads(publie.calls[0].request.content) == {"yaml": ARRIVEE, "base_version": 3}
+    result = _run("workflow", "push", "hr", str(file), "--base-version", "3")
+    assert result.exit_code == 0, result.output
+    assert "onboarding v4 published" in result.output
+    assert json.loads(published.calls[0].request.content) == {"yaml": ONBOARDING, "base_version": 3}
 
 
-def test_push_refuse_un_yaml_sans_nom(tmp_path: Path) -> None:
-    fichier = tmp_path / "sans-nom.yaml"
-    fichier.write_text(ARRIVEE.replace("name: onboarding, ", ""), encoding="utf-8")
-    resultat = _run("workflow", "push", "rh", str(fichier))
-    assert resultat.exit_code == 1 and "metadata.name" in resultat.output
+def test_push_refuses_a_yaml_without_a_name(tmp_path: Path) -> None:
+    file = tmp_path / "no-name.yaml"
+    file.write_text(ONBOARDING.replace("name: onboarding, ", ""), encoding="utf-8")
+    result = _run("workflow", "push", "hr", str(file))
+    assert result.exit_code == 1 and "metadata.name" in result.output
 
 
 @respx.mock
-def test_une_demande_choisit_son_workflow_ses_etiquettes_et_ses_champs() -> None:
-    cree = respx.post(f"{API}/api/v1/projects/rh/work-items").mock(
-        return_value=Response(201, json={"tracker_key": "RH-7", "state": "depart", "temporal_wf_id": "wi-7"})
+def test_a_request_chooses_its_workflow_its_labels_and_its_fields() -> None:
+    created = respx.post(f"{API}/api/v1/projects/hr/work-items").mock(
+        return_value=Response(201, json={"tracker_key": "HR-7", "state": "leaving", "temporal_wf_id": "wi-7"})
     )
-    resultat = _run(
-        "items", "create", "rh", "--title", "Départ de Camille",
-        "--workflow", "offboarding", "--label", "leaver", "--label", "cdi",
-        "--field", "date_depart=2026-11-30", "--field", "materiel=[\"pc\", \"badge\"]", "--field", "jours=3",
+    result = _run(
+        "items", "create", "hr", "--title", "Camille leaves",
+        "--workflow", "offboarding", "--label", "leaver", "--label", "permanent",
+        "--field", "last_day=2026-11-30", "--field", "devices=[\"laptop\", \"badge\"]", "--field", "days=3",
     )  # fmt: skip
-    assert resultat.exit_code == 0, resultat.output
-    assert json.loads(cree.calls[0].request.content) == {
-        "title": "Départ de Camille",
+    assert result.exit_code == 0, result.output
+    assert json.loads(created.calls[0].request.content) == {
+        "title": "Camille leaves",
         "body": "",
         "size": None,
         "start": True,
         "workflow": "offboarding",
-        "labels": ["leaver", "cdi"],
-        "fields": {"date_depart": "2026-11-30", "materiel": ["pc", "badge"], "jours": 3},
+        "labels": ["leaver", "permanent"],
+        "fields": {"last_day": "2026-11-30", "devices": ["laptop", "badge"], "days": 3},
     }
 
 
-def test_un_champ_sans_egal_est_refuse() -> None:
-    resultat = _run("items", "create", "rh", "--title", "x", "--field", "date_depart")
-    assert resultat.exit_code == 1 and "cle=valeur" in resultat.output
+def test_a_field_without_an_equals_sign_is_refused() -> None:
+    result = _run("items", "create", "hr", "--title", "x", "--field", "last_day")
+    assert result.exit_code == 1 and "key=value" in result.output

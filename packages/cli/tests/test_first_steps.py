@@ -1,8 +1,7 @@
-"""La CLI sait faire le parcours d'une installation neuve — contre une API simulée.
+"""The CLI knows the path of a new installation — against a simulated API.
 
-Zéro test couvrait 30 commandes (état des lieux du 2026-09-24). Ceux-ci vérifient ce
-qu'un nouvel arrivant tape en premier : se connecter, créer un projet sans dépôt, poser
-une demande, frapper un jeton.
+No test covered 30 commands (review of 2026-09-24). These check what a newcomer types first: sign in,
+create a project without a repository, file a request, mint a token.
 """
 
 from __future__ import annotations
@@ -20,14 +19,14 @@ API = "http://api.test"
 
 
 @pytest.fixture
-def profil(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    chemin = tmp_path / "config.json"
-    chemin.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
-    monkeypatch.setenv("CHOREGOS_CONFIG", str(chemin))
+def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
+    monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
     import choregos_cli.client as client_module
 
-    monkeypatch.setattr(client_module, "CONFIG_PATH", chemin)
-    return chemin
+    monkeypatch.setattr(client_module, "CONFIG_PATH", path)
+    return path
 
 
 def _run(*args: str) -> Any:
@@ -37,7 +36,7 @@ def _run(*args: str) -> Any:
 
 
 @respx.mock
-def test_un_projet_sans_depot_puis_une_demande(profil: Path) -> None:
+def test_a_project_without_a_repository_then_a_request(profile: Path) -> None:
     respx.post(f"{API}/api/v1/orgs/acme/projects").mock(
         return_value=Response(201, json={"id": "p-1", "slug": "staffing", "name": "Staffing"})
     )
@@ -46,25 +45,25 @@ def test_un_projet_sans_depot_puis_une_demande(profil: Path) -> None:
     )
     result = _run("projects", "create", "staffing", "--name", "Staffing")
     assert result.exit_code == 0, result.output
-    assert "staffing créé" in result.output
-    envoye = json.loads(respx.calls[0].request.content)
-    assert "repo" not in envoye["config"], "sans --repo, pas de dépôt inventé"
+    assert "staffing created" in result.output
+    sent = json.loads(respx.calls[0].request.content)
+    assert "repo" not in sent["config"], "without --repo, no invented repository"
     assert tracker.called and json.loads(tracker.calls[0].request.content)["type"] == "internal"
 
     respx.post(f"{API}/api/v1/projects/staffing/work-items").mock(
         return_value=Response(
-            201, json={"tracker_key": "STAFFING-1", "state": "demande", "temporal_wf_id": "wi-1"}
+            201, json={"tracker_key": "STAFFING-1", "state": "request", "temporal_wf_id": "wi-1"}
         )
     )
-    result = _run("items", "create", "staffing", "--title", "Chef de projet data", "--size", "M")
+    result = _run("items", "create", "staffing", "--title", "Data project manager", "--size", "M")
     assert result.exit_code == 0, result.output
-    assert "STAFFING-1 créé" in result.output
-    corps = json.loads(respx.calls[-1].request.content)
-    assert corps == {"title": "Chef de projet data", "body": "", "size": "M", "start": True}
+    assert "STAFFING-1 created" in result.output
+    body = json.loads(respx.calls[-1].request.content)
+    assert body == {"title": "Data project manager", "body": "", "size": "M", "start": True}
 
 
 @respx.mock
-def test_un_jeton_se_frappe_et_ne_s_affiche_qu_une_fois(profil: Path) -> None:
+def test_a_token_is_minted_and_shown_only_once(profile: Path) -> None:
     respx.post(f"{API}/api/v1/me/tokens").mock(
         return_value=Response(
             201, json={"id": "t-1", "name": "ci", "expires_at": "2027-01-01T00:00:00Z", "token": "chg_secret"}
@@ -83,9 +82,9 @@ def test_un_jeton_se_frappe_et_ne_s_affiche_qu_une_fois(profil: Path) -> None:
 
 
 @respx.mock
-def test_une_erreur_de_l_api_se_lit(profil: Path) -> None:
+def test_an_api_error_reads_clearly(profile: Path) -> None:
     respx.post(f"{API}/api/v1/orgs").mock(
-        return_value=Response(403, json={"detail": "créer une organisation demande le rôle org_admin"})
+        return_value=Response(403, json={"detail": "creating an organisation needs the org_admin role"})
     )
     result = _run("orgs", "create", "pirate")
     assert result.exit_code != 0
