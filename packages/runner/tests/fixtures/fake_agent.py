@@ -77,6 +77,28 @@ def _load(message: dict[str, Any], script: dict[str, Any]) -> None:
     send({"jsonrpc": "2.0", "id": message.get("id"), "result": None})
 
 
+def _initialize(message_id: Any, script: dict[str, Any]) -> bool:
+    """Answer `initialize`; False when the script asks the agent to fail it."""
+    if script.get("fail_initialize"):
+        send({"jsonrpc": "2.0", "id": message_id, "error": {"code": -32000, "message": "cassé"}})
+        return False
+    send(
+        {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "result": {
+                "protocolVersion": PROTOCOL_VERSION,
+                "agentCapabilities": {
+                    "loadSession": bool(script.get("load_session")),
+                    "promptCapabilities": {"image": False},
+                },
+                "agentInfo": {"name": "fake-agent", "version": "1.0.0"},
+            },
+        }
+    )
+    return True
+
+
 def main() -> int:
     script: dict[str, Any] = json.loads(os.environ.get("FAKE_AGENT_SCRIPT", "{}"))
     workspace = Path(os.environ.get("CHOREGOS_WORKSPACE_PATH", ".")).resolve()
@@ -91,23 +113,8 @@ def main() -> int:
         message_id = message.get("id")
 
         if method == "initialize":
-            if script.get("fail_initialize"):
-                send({"jsonrpc": "2.0", "id": message_id, "error": {"code": -32000, "message": "cassé"}})
+            if not _initialize(message_id, script):
                 return 3
-            send(
-                {
-                    "jsonrpc": "2.0",
-                    "id": message_id,
-                    "result": {
-                        "protocolVersion": PROTOCOL_VERSION,
-                        "agentCapabilities": {
-                            "loadSession": bool(script.get("load_session")),
-                            "promptCapabilities": {"image": False},
-                        },
-                        "agentInfo": {"name": "fake-agent", "version": "1.0.0"},
-                    },
-                }
-            )
             continue
 
         if method == "session/new":
@@ -194,28 +201,7 @@ def main() -> int:
                     },
                 )
 
-            # `reads`: files the agent opens; their sha256 (or null when absent) go into the result's
-            # `outputs.seen`, so a test can tell what the agent actually found in its workspace.
-            seen = {
-                path: (
-                    "sha256:" + hashlib.sha256((workspace / path).read_bytes()).hexdigest()
-                    if (workspace / path).is_file()
-                    else None
-                )
-                for path in plan.get("reads", [])
-            }
-            if "result" in plan:
-                result_path = workspace / ".choregos" / "result.json"
-                result_path.parent.mkdir(parents=True, exist_ok=True)
-                content = plan["result"]
-                if seen and isinstance(content, dict):
-                    content = {**content, "outputs": {**content.get("outputs", {}), "seen": seen}}
-                result_path.write_text(
-                    content
-                    if isinstance(content, str)
-                    else json.dumps(content, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
+            _write_result(plan, workspace)
 
             send(
                 {
@@ -246,6 +232,30 @@ def _write(target: Path, write: dict[str, Any]) -> None:
         target.write_bytes(base64.b64decode(write["b64"]))
     else:
         target.write_text(write.get("content", ""), encoding="utf-8")
+
+
+def _write_result(plan: dict[str, Any], workspace: Path) -> None:
+    """Write the scripted `result.json`, with what the agent `reads` hashed into `outputs.seen`."""
+    # `reads`: files the agent opens; their sha256 (or null when absent) go into the result's
+    # `outputs.seen`, so a test can tell what the agent actually found in its workspace.
+    seen = {
+        path: (
+            "sha256:" + hashlib.sha256((workspace / path).read_bytes()).hexdigest()
+            if (workspace / path).is_file()
+            else None
+        )
+        for path in plan.get("reads", [])
+    }
+    if "result" in plan:
+        result_path = workspace / ".choregos" / "result.json"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        content = plan["result"]
+        if seen and isinstance(content, dict):
+            content = {**content, "outputs": {**content.get("outputs", {}), "seen": seen}}
+        result_path.write_text(
+            content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
 
 def _plan_for(script: dict[str, Any], prompt_index: int) -> dict[str, Any]:
