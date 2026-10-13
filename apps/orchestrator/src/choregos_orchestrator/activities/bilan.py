@@ -110,8 +110,18 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
             item.allowed_paths = list(outputs.allowed_paths)
         declarees = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
         documents = ranger_les_sorties(item, outputs, declarees)
+        # Une PR d'infra déclarée par l'agent (`artifacts.reports["infra_pr"]`) suit le
+        # ticket jusqu'au train, qui en déclenchera l'`apply` Atlantis après approbation.
+        infra_pr = result.artifacts.reports.get("infra_pr")
+        if infra_pr:
+            documents["infra_pr_url"] = infra_pr
+        if result.status == StageStatus.DONE:
+            documents.pop("human_answer", None)  # la réponse a servi à l'étape qui la demandait
+        item.documents = documents
         # The same outputs as typed artifacts (ADR 0049). Usually already recorded when the runner
         # posted its result; the same content makes no new version, so this is a no-op then.
+        # After `documents` is final: recording flushes, and a later in-place change of the same
+        # dict would no longer be seen.
         project = await session.get(Project, run.project_id)
         if project is not None:
             await record_inline_outputs(
@@ -121,14 +131,6 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
                 run=run,
                 outputs=sorties_a_ranger(outputs, declarees),
             )
-        # Une PR d'infra déclarée par l'agent (`artifacts.reports["infra_pr"]`) suit le
-        # ticket jusqu'au train, qui en déclenchera l'`apply` Atlantis après approbation.
-        infra_pr = result.artifacts.reports.get("infra_pr")
-        if infra_pr:
-            documents["infra_pr_url"] = infra_pr
-        if result.status == StageStatus.DONE:
-            documents.pop("human_answer", None)  # la réponse a servi à l'étape qui la demandait
-        item.documents = documents
         if result.artifacts.pr_url:
             item.pr_url = result.artifacts.pr_url
         recorded = await _persist_findings(session, run, item, result)
