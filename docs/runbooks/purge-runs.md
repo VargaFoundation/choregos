@@ -15,10 +15,10 @@ kubectl -n choregos-data exec -it choregos-pg-1 -- psql choregos -c "
 | Data | Retention | Reason |
 | :-- | :-- | :-- |
 | `runs` (metadata, result) | indefinite | a ticket's history must stay readable |
-| `run_events` (ACP journal) | 90 days | large; the archived transcript remains |
+| `run_events` (ACP journal) | 90 days | large; it **is** the run's transcript (`GET /runs/{id}/transcript` serves it), so purging it purges the transcript |
 | `events` (internal bus) | 180 days | audit and statistics |
 | `cost_ledger` | indefinite | accounting |
-| transcripts, reports (object store) | 180 days (lifecycle) | evidence of a run |
+| reports, context packs (object store) | 180 days (lifecycle) | evidence of a run |
 | `audit_log` | indefinite | audit requirement |
 
 ## Purge

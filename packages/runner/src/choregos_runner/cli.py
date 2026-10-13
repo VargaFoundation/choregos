@@ -59,8 +59,9 @@ def run(
     if write_status is not None:
         write_status.write_text(status, encoding="utf-8")
     if write_result_url is not None and outcome.result is not None:
-        url = outcome.result.artifacts.transcript_url or ""
-        write_result_url.write_text(url.replace("transcript.jsonl", "result.json"), encoding="utf-8")
+        # Derived from the context pack URL, as it was through the transcript URL before S36-01.
+        url = outcome.result.artifacts.context_pack_url or ""
+        write_result_url.write_text(url.replace("context.json", "result.json"), encoding="utf-8")
     raise typer.Exit(int(outcome.exit_code))
 
 
