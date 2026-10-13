@@ -5,7 +5,7 @@ A version imported from git records its repository, the commit SHA it is pinned 
 and the licence found there. Nullable: a zip, the console or a template has no git source.
 
 Revision ID: 4e6a8c0b2d3f
-Revises: a3c5e7f9b1d2
+Revises: 9e41c7a0d35b
 Create Date: 2026-10-12 10:00:00+00:00
 """
 
@@ -19,7 +19,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "4e6a8c0b2d3f"
-down_revision: str | None = "a3c5e7f9b1d2"
+down_revision: str | None = "9e41c7a0d35b"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
