@@ -3,7 +3,7 @@
 the last sign-in through it, and `connector_operations.approver_group`, the group whose members
 approve the actions an operation proposes.
 
-Revision ID: b4d6f8a0c2e4
+Revision ID: 3d5f7b9c1e2a
 Revises: a3c5e7f9b1d2
 Create Date: 2026-10-13 10:00:00+00:00
 """
@@ -17,7 +17,7 @@ from alembic import op
 
 from choregos_api.db.base import Json
 
-revision: str = "b4d6f8a0c2e4"
+revision: str = "3d5f7b9c1e2a"
 down_revision: str | None = "a3c5e7f9b1d2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
