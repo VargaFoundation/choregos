@@ -171,6 +171,13 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
 
         await _admettre(bundle, item, run_id, plan, backend, budget.usd)
 
+        # The project's day budget is also the gateway's, through a team every key of the project joins
+        # (S27-10): the reservation above is the platform's read of it, the team is the hard stop.
+        team_id = None
+        if (daily := engine.daily_budget()) is not None:
+            from .provisioning import project_team_id
+
+            team_id = await bundle.adapters.gateway.ensure_team(project_team_id(bundle.project.id), daily)
         key = await bundle.adapters.gateway.mint_key(
             {
                 "project": bundle.slug,
@@ -184,6 +191,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             budget_usd=budget.usd,
             ttl_s=(budget.max_minutes + 30) * 60,
             models=[resolved.litellm_model],
+            team_id=team_id,
         )
         # Rejouable : une activité Temporal peut repasser ici sur le MÊME run, et la clé
         # est déterministe. Un `INSERT` sec répondait alors « duplicate key value violates

@@ -28,8 +28,17 @@ class DirectGateway:
         self.key = key
         self.models = list(models or [])
 
+    async def ensure_team(self, team_id: str, budget_usd: float, duration: str = "1d") -> str:
+        """No gateway, no team: the project's day is enforced by the platform's own reservation."""
+        return team_id
+
     async def mint_key(
-        self, metadata: dict[str, Any], budget_usd: float, ttl_s: int, models: list[str]
+        self,
+        metadata: dict[str, Any],
+        budget_usd: float,
+        ttl_s: int,
+        models: list[str],
+        team_id: str | None = None,
     ) -> VirtualKey:
         # L'identifiant doit être UNIQUE par run : la plateforme range chaque clé dans une
         # table où `key_id` porte un index unique. Un identifiant constant passait au premier

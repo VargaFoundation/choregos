@@ -64,7 +64,12 @@ class LiteLlmGateway:
         return response.json() if response.content else {}
 
     async def mint_key(
-        self, metadata: dict[str, Any], budget_usd: float, ttl_s: int, models: list[str]
+        self,
+        metadata: dict[str, Any],
+        budget_usd: float,
+        ttl_s: int,
+        models: list[str],
+        team_id: str | None = None,
     ) -> VirtualKey:
         payload: dict[str, Any] = {
             "max_budget": budget_usd,
@@ -78,8 +83,9 @@ class LiteLlmGateway:
                 f"project:{metadata.get('project', '')}",
                 f"run:{metadata.get('run_id', '')}",
             ]
-        if self.team_id:
-            payload["team_id"] = self.team_id
+        # The project's team (S27-10) wins over the gateway-wide one: its budget is the project's day.
+        if team_id or self.team_id:
+            payload["team_id"] = team_id or self.team_id
         data = await self._mint(payload)
         return VirtualKey(
             key=data["key"],
@@ -175,6 +181,27 @@ class LiteLlmGateway:
                     )
                 )
         return models
+
+    async def ensure_team(self, team_id: str, budget_usd: float, duration: str = "1d") -> str:
+        """The team of a project, with its budget per `duration` (S27-10, ADR 0047). Idempotent: a
+        team that exists gets its budget updated, so a policy change reaches the gateway."""
+        body = {
+            "team_id": team_id,
+            "team_alias": team_id,
+            "max_budget": budget_usd,
+            "budget_duration": duration,
+        }
+        try:
+            await self._request("POST", "/team/new", json=body)
+        except UpstreamError as exc:
+            if exc.status_code not in {400, 409}:
+                raise
+            await self._request(
+                "POST",
+                "/team/update",
+                json={"team_id": team_id, "max_budget": budget_usd, "budget_duration": duration},
+            )
+        return team_id
 
     async def create_team(self, name: str, budget_usd: float) -> str:
         """Équipe LiteLLM d'un projet, avec son budget (étape de provisioning)."""
