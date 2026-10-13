@@ -56,7 +56,16 @@ global:
     embedded: false                 # true deploys Ecphoria
     url: http://ecphoria.choregos-memory.svc:8432
     tokenSecret: ""                 # key `token`, empty means no auth header
+  objectStore:                      # file artifacts: decks, spreadsheets, images (ADR 0049)
+    url: s3://choregos              # bucket and optional prefix
+    endpoint: ""                    # an S3-compatible server (RustFS, MinIO); empty means AWS
+    region: us-east-1
+    secretRef: ""                   # keys `access-key`, `secret-key`; read by the API only
 ```
+
+Only the API reads and writes the object store: a runner hands its files to the internal API
+under its run token and never holds the store's keys. Under `CHOREGOS_FAKES=1` (or with a
+`memory://` URL) the store is in memory and lost on restart.
 
 Turning all four on gives a self-contained bench on a single node:
 `-f charts/choregos/values/local.yaml`.
@@ -72,6 +81,7 @@ The chart never writes production secrets. It expects them to exist:
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
 | `global.gateway.secretRef` | `master-key` | orchestrator |
 | `global.memory.tokenSecret` | `token` | orchestrator |
+| `global.objectStore.secretRef` | `access-key`, `secret-key` | API |
 
 `run-token-private-key` is the one to get right. The **orchestrator mints** run tokens and
 the **API verifies** them, so both deployments read the same key. Give it only to the API and

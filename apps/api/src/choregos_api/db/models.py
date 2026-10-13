@@ -635,6 +635,38 @@ class HandOffReceipt(Base, PkMixin, TimestampMixin):
     stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class ArtifactRecord(Base, PkMixin, TimestampMixin):
+    """One revision of a named output of a work item (ADR 0049): typed, stored, traced.
+
+    An inline artifact (markdown, JSON) keeps its value in `content`; a file keeps its bytes in the
+    object store under `storage_key`. Either way `digest` is the sha256 of the bytes served on
+    download, recomputed on every read. A row never changes: a new content makes the next version.
+    """
+
+    __tablename__ = "artifacts"
+    __table_args__ = (UniqueConstraint("work_item_id", "name", "version", name="uq_artifacts_version"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(128))
+    version: Mapped[int] = mapped_column(Integer)
+    #: a key of `choregos_contracts.ARTIFACT_TYPES`
+    type: Mapped[str] = mapped_column(String(16))
+    kind: Mapped[str] = mapped_column(String(16))
+    media_type: Mapped[str] = mapped_column(String(200))
+    digest: Mapped[str] = mapped_column(String(80))
+    size: Mapped[int] = mapped_column(Integer)
+    content: Mapped[Any | None] = mapped_column(Json, nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    storage_url: Mapped[str | None] = mapped_column(String(700), nullable=True)
+    #: who produced it: the run, its stage and attempt, the registry agent and its version
+    run_id: Mapped[str] = mapped_column(String(128))
+    stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attempt: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
 class Agent(Base, PkMixin, TimestampMixin):
     """Un agent de l'organisation : interne (la plateforme le fait tourner) ou externe (un client
     de la porte MCP). Ce qu'il EST vit dans ses versions, immuables ; ici, son identité et son

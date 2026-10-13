@@ -32,6 +32,7 @@ from ..schemas import (
     ScopeChangeRequestIn,
 )
 from ..services import active_policy, persist_event, policy_model, ranger_les_sorties
+from ..services.artifacts import record_inline_outputs
 from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner
 from ..services.tickets import sorties_a_ranger
 from ..temporal import get_temporal, interpreter_id
@@ -130,6 +131,14 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
         stage=run.stage_role,
         sorties=sorties_a_ranger(outputs, declarees),
         genre=PRODUITE,
+    )
+    # And each becomes a typed artifact revision, traced to this run (S31-01, ADR 0049).
+    await record_inline_outputs(
+        session,
+        org_id=project.org_id,
+        item=item,
+        run=run,
+        outputs=sorties_a_ranger(outputs, declarees),
     )
 
     await persist_event(

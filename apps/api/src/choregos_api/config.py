@@ -128,6 +128,13 @@ class Settings(BaseSettings):
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     memory_url: str = "http://localhost:8432"
     object_store_url: str = "s3://choregos"
+    #: The S3 endpoint (RustFS in development: `http://localhost:9000`); empty means AWS.
+    object_store_endpoint: str = ""
+    object_store_region: str = "us-east-1"
+    object_store_access_key: str = ""
+    object_store_secret_key: str = ""
+    #: The largest file artifact the internal API accepts from a runner, in bytes (ADR 0049).
+    artifact_max_bytes: int = 200 * 1024 * 1024
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
 

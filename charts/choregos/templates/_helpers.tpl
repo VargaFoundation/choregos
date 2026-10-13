@@ -34,7 +34,7 @@ seuls son `image.digest` ou son étiquette comptent.
 
 {{/* Variables d'environnement communes : configuration 12-factor, secrets par référence. */}}
 {{- define "choregos.commonEnv" -}}
-{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" }}
+{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" }}
 {{- range (.Values.global.extraEnv | default list) }}
 {{- if has .name $poses }}
 {{- fail (printf "global.extraEnv : %s est déjà posé par le chart ; deux valeurs pour un même nom, Kubernetes garderait la dernière sans rien dire" .name) }}
@@ -65,6 +65,22 @@ seuls son `image.digest` ou son étiquette comptent.
 {{- end }}
 - name: CHOREGOS_OBJECT_STORE_URL
   value: {{ .Values.global.objectStore.url | quote }}
+- name: CHOREGOS_OBJECT_STORE_ENDPOINT
+  value: {{ .Values.global.objectStore.endpoint | default "" | quote }}
+- name: CHOREGOS_OBJECT_STORE_REGION
+  value: {{ .Values.global.objectStore.region | default "us-east-1" | quote }}
+{{- with .Values.global.objectStore.secretRef }}
+- name: CHOREGOS_OBJECT_STORE_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: access-key
+- name: CHOREGOS_OBJECT_STORE_SECRET_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: secret-key
+{{- end }}
 - name: CHOREGOS_PUBLIC_URL
   value: {{ .Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain) | quote }}
 - name: CHOREGOS_API_URL
