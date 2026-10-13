@@ -225,11 +225,15 @@ export type Policy = {
     scope_change?: PolicyApprovalRule;
   };
   attempts?: {
+    /** Accepted, not enforced: a transition's attempts are its workflow's max_attempts, lowered only by by_role. */
     default_max?: number;
+    /** A ceiling on an agent transition's max_attempts, per role (ADR 0047). */
     by_role?: {
       [key: string]: number;
     };
     dod_iterations?: number;
+    /** Agent stages a work item may run, retries included; the next is refused and the work item goes to a person (ADR 0047). */
+    max_stages_per_ticket?: number;
   };
   scope?: {
     auto_grant_max_files?: number;

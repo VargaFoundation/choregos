@@ -97,7 +97,18 @@ class PolicyEngine:
     # ───────────────────────── tentatives ─────────────────────────
 
     def attempts_for(self, role: str) -> int:
+        """The most attempts an agent transition of this role gets: a ceiling on the workflow's
+        `max_attempts` (S27-08)."""
         return self.policy.attempts.by_role.get(role, self.policy.attempts.default_max)
+
+    def attempts_ceilings(self) -> dict[str, int]:
+        """The ceiling on an agent transition's `max_attempts`, for each role `by_role` names
+        (S27-08). `default_max` is not one: applied to every role, it would silently cut the
+        attempts the shipped workflows declare; `policy_warnings` says so to whoever writes it."""
+        return dict(self.policy.attempts.by_role)
+
+    def max_stages_per_ticket(self) -> int:
+        return self.policy.attempts.max_stages_per_ticket
 
     def dod_iterations(self) -> int:
         return self.policy.attempts.dod_iterations
@@ -204,6 +215,15 @@ def policy_warnings(policy: Policy) -> list[Issue]:
                     f"approvals.{cle}",
                 )
             )
+    if "default_max" in policy.attempts.model_fields_set:
+        issues.append(
+            Issue(
+                "policy.default_max_not_enforced",
+                "`attempts.default_max` is not enforced: a transition's attempts are its workflow's "
+                "`max_attempts`, lowered only by `attempts.by_role` for the roles it names.",
+                "attempts.default_max",
+            )
+        )
     revue = policy.review
     if "require_human_for_risk" in revue.model_fields_set and revue.require_human_for_risk:
         issues.append(

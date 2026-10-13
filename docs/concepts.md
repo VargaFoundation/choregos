@@ -146,6 +146,12 @@ is created (API, MCP door, the board's form), or a workflow's `budget: {ticket_u
 block. Wider than the workflow's or the policy's ticket budget is refused (422). `on_exceeded` names
 where a work item of that workflow goes when its budget is spent.
 
+The policy also bounds how long a work item may keep trying. `attempts.by_role` caps an agent
+transition's `max_attempts` for the roles it names (it only lowers what the workflow says), and
+`attempts.max_stages_per_ticket` (default 50) caps the agent stages a work item runs, retries
+included: the next stage is refused and the work item goes to a person. `attempts.default_max` is
+accepted but not enforced, and saying so is logged.
+
 More money is a decision. "Replay the stage" on a work item whose budget is spent is refused (409)
 unless it carries a top-up (`top_up_usd`, or `choregos items action <id> rerun_stage --top-up 5`);
 the top-up adds to the work item's budget and the audit log records who granted it

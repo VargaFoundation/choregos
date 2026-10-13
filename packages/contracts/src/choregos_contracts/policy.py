@@ -42,9 +42,16 @@ class Approvals(Strict):
 
 
 class Attempts(Strict):
+    #: Accepted, NOT enforced (S27-08): a transition's attempts are its workflow's `max_attempts`.
+    #: `policy_warnings` says so to whoever writes it; the presets no longer do.
     default_max: int = Field(default=2, ge=1)
+    #: A ceiling on an agent transition's `max_attempts`, per role: the policy only lowers what the
+    #: workflow declares (S27-08, ADR 0047).
     by_role: dict[str, int] = Field(default_factory=dict)
     dod_iterations: int = Field(default=3, ge=0, le=10)
+    #: Agent stages a work item may run, retries included; the next is refused and the work item
+    #: goes to a person (S27-08, ADR 0047).
+    max_stages_per_ticket: int = Field(default=50, ge=1)
 
 
 class ScopePolicy(Strict):

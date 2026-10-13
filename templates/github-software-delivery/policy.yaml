@@ -23,7 +23,6 @@ budgets:
   daily_project_usd: 150
   alert_at_ratio: 0.8
 attempts:
-  default_max: 2
   by_role: { implement: 3, fix_ci: 3 }
   dod_iterations: 3
 scope:
