@@ -117,6 +117,14 @@ spec:
             # cluster qui a gVisor ou Kata le dit ici une fois. Vide : celle du cluster.
             - name: CHOREGOS_RUNNER_RUNTIME_CLASS
               value: {{ $root.Values.runner.runtimeClass | default "" | quote }}
+            {{- if eq $root.Values.runner.executor "agent_sandbox" }}
+            # The warm pool the `agent_sandbox` executor claims from, and the port its warm
+            # runners listen on for their one assignment (sandbox.yaml renders both).
+            - name: CHOREGOS_SANDBOX_WARM_POOL
+              value: "choregos-runner"
+            - name: CHOREGOS_SANDBOX_ASSIGNMENT_PORT
+              value: {{ (($root.Values.runner.sandbox | default dict).assignmentPort | default 8765) | quote }}
+            {{- end }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}

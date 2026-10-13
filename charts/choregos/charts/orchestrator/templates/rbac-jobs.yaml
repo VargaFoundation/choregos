@@ -56,6 +56,11 @@ rules:
   - apiGroups: ["agents.x-k8s.io"]
     resources: ["sandboxes"]
     verbs: ["get", "list", "watch", "patch"]
+  # The runs waiting for a slot (`queue`) are their Secrets, labelled `choregos/queued=true`:
+  # listing them is how arrival order is read. `get` on secrets above already reads any of them.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list"]
   {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

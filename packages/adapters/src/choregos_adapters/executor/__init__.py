@@ -3,8 +3,15 @@
 
 from __future__ import annotations
 
+from .agent_sandbox import AgentSandboxExecutor
 from .k8s_job import KubernetesJobExecutor
 from .local_docker import LocalDockerExecutor
 from .tekton import KubernetesClient, TektonExecutor
 
-__all__ = ["KubernetesClient", "KubernetesJobExecutor", "LocalDockerExecutor", "TektonExecutor"]
+__all__ = [
+    "AgentSandboxExecutor",
+    "KubernetesClient",
+    "KubernetesJobExecutor",
+    "LocalDockerExecutor",
+    "TektonExecutor",
+]

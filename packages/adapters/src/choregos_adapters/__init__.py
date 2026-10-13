@@ -232,6 +232,19 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             }
         ),
     ),
+    ("runtime", "agent_sandbox"): ConnectorTypeSpec(
+        "kubernetes-sigs/agent-sandbox (warm pool, opt-in)",
+        ("runtime",),
+        _objet(
+            {
+                "warm_pool": {"type": "string", "default": "choregos-runner"},
+                "assignment_port": _ENTIER,
+                "runtime_class": _TEXTE,
+                "max_active": _ENTIER,
+                "env_from_secrets": {"type": "array", "items": _TEXTE},
+            }
+        ),
+    ),
     ("runtime", "aca"): ConnectorTypeSpec(
         "Azure Container Apps jobs",
         ("runtime",),
@@ -473,6 +486,7 @@ def _register_builtins() -> None:
     from .cd.argocd import ArgoCdAdapter
     from .ci.tekton import TektonCi
     from .executor.aca import AcaExecutor, AzureArmClient
+    from .executor.agent_sandbox import AgentSandboxExecutor
     from .executor.k8s_job import KubernetesJobExecutor
     from .executor.local_docker import LocalDockerExecutor
     from .executor.tekton import KubernetesClient, TektonExecutor
@@ -564,6 +578,23 @@ def _register_builtins() -> None:
             or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
             # Combien de runs tournent en même temps dans le namespace. 0 = sans plafond.
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
+        )
+    )
+    register("runtime", "agent_sandbox", _SPECS_LIVREES[("runtime", "agent_sandbox")])(
+        lambda cfg: AgentSandboxExecutor(
+            KubernetesClient(**cfg.get("kubernetes", {})),
+            warm_pool=cfg.get(
+                "warm_pool", os.environ.get("CHOREGOS_SANDBOX_WARM_POOL", "") or "choregos-runner"
+            ),
+            assignment_port=int(
+                cfg.get("assignment_port", os.environ.get("CHOREGOS_SANDBOX_ASSIGNMENT_PORT", "") or 8765)
+            ),
+            # The template's RuntimeClass, which the chart sets from `runner.runtimeClass`.
+            runtime_class=cfg.get("runtime_class", os.environ.get("CHOREGOS_RUNNER_RUNTIME_CLASS", ""))
+            or None,
+            max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
+            env_from_secrets=cfg.get("env_from_secrets")
+            or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
         )
     )
     register("runtime", "aca", _SPECS_LIVREES[("runtime", "aca")])(

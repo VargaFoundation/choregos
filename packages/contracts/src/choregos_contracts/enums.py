@@ -150,6 +150,8 @@ class ExecutorKind(StrEnum):
     K8S_JOB = "k8s_job"
     LOCAL_DOCKER = "local_docker"
     ACA = "aca"
+    #: kubernetes-sigs/agent-sandbox: warm pool, suspend across a human question (ADR 0016).
+    AGENT_SANDBOX = "agent_sandbox"
     FAKE = "fake"
 
 

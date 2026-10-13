@@ -36,7 +36,7 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 | `tracker` | `github-issues`, `jira`, `gitlab-issues`, `internal`, `fake` |
 | `scm` | `github`, `fake` |
 | `ci` / `cd` | `tekton` / `argocd`, `demo`, `fake` |
-| `runtime` | `tekton`, `k8s_job`, `aca`, `local_docker`, `fake` |
+| `runtime` | `tekton`, `k8s_job`, `aca`, `local_docker`, `agent_sandbox`, `fake` |
 | `gateway` | `litellm`, `direct`, `fake` |
 | `memory` | `ecphoria`, `lexical`, `fake` |
 | `notify` | `slack`, `fake` |

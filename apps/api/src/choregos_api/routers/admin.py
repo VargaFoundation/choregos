@@ -120,6 +120,8 @@ async def list_executors(session: Db, principal: Me) -> list[ExecutorInfo]:
         ExecutorInfo(kind="k8s_job", enabled=True, namespace_pattern="proj-{slug}-runners"),
         ExecutorInfo(kind="local_docker", enabled=False),
         ExecutorInfo(kind="aca", enabled=False),
+        # Opt-in: needs the agent-sandbox operator, installed by a platform team (ADR 0016).
+        ExecutorInfo(kind="agent_sandbox", enabled=False),
     ]
 
 
