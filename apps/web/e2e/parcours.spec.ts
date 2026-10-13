@@ -382,8 +382,8 @@ test("agents : le catalogue s'installe, et Claude Code se connecte en un clic", 
 
 test("inbox : un ticket arrêté sur une demande humaine s'y décide, et l'en-tête le compte (S23-02)", async ({ page }) => {
   await page.goto("/");
-  // Un ticket (Spec to approve) et deux actions attendent quelqu'un.
-  await expect(page.getByRole("link", { name: /^inbox/ })).toContainText("3");
+  // Two tickets (Spec to approve; the HR badge task, S30-08) and two actions wait for someone.
+  await expect(page.getByRole("link", { name: /^inbox/ })).toContainText("4");
   await page.getByRole("link", { name: /^inbox/ }).click();
   await expect(page).toHaveURL(/\/inbox$/);
   const ticket = page.getByTestId("attente-w2");
