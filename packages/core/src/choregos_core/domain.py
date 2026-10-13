@@ -267,6 +267,9 @@ class ExecStatus(Model):
     state: Literal["pending", "running", "succeeded", "failed", "cancelled", "unknown"] = "unknown"
     exit_code: int | None = None
     message: str = ""
+    #: Why the runner container ended or never started, as the runtime names it: `OOMKilled`,
+    #: `Error`, `ErrImagePull`, `ImagePullBackOff`, `DeadlineExceeded`… `None` when unknown.
+    reason: str | None = None
     result_url: str | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
@@ -274,6 +277,26 @@ class ExecStatus(Model):
     @property
     def finished(self) -> bool:
         return self.state in {"succeeded", "failed", "cancelled"}
+
+
+class RunLogArchive(Model):
+    """What is kept of a run's pod once it is gone (S36-02): how it ended, and its last lines.
+
+    Written once per run by the orchestrator at the end of the run, success or failure, through
+    the `Executor` protocol only (`status` and `logs`). Every line and the message are redacted.
+    """
+
+    state: str = "unknown"
+    exit_code: int | None = None
+    reason: str | None = None
+    message: str = ""
+    #: The last lines of the runner's log, oldest first, each one redacted and capped in length.
+    lines: list[str] = Field(default_factory=list)
+    #: More lines existed than were kept.
+    truncated: bool = False
+    #: Why the logs could not be read, when they could not (the run still gets its archive).
+    error: str | None = None
+    archived_at: datetime = Field(default_factory=utcnow)
 
 
 # ───────────────────────────── gateway ─────────────────────────────

@@ -14,11 +14,12 @@ from datetime import timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
+from choregos_adapters.executor.log_archive import archive_run_logs
 from choregos_api.db.models import Run, WorkItem
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
-from choregos_core import ExecRef, StageJobSpec, utcnow
+from choregos_core import ExecRef, ExecStatus, StageJobSpec, utcnow
 from temporalio import activity
 
 from ..config import get_settings
@@ -98,6 +99,26 @@ def classe_d_execution(settings: Any, policy: Any) -> str | None:
 #: Combien de temps un run peut attendre une place avant d'être abandonné — six heures :
 #: une nuit de pointe, pas une éternité.
 FILE_MAX_MINUTES = 360
+
+
+async def archive_once(
+    executor: Any, run: Run | None, ref: ExecRef, status: ExecStatus | None = None
+) -> None:
+    """Archive how the run's pod ended and the tail of its log, redacted, once per run (S36-02).
+
+    Called on every way a run ends — result posted, pod finished, timed out, abandoned in the
+    queue, cancelled — and always BEFORE the executor is told to cancel, because deleting a Job
+    deletes its pods and their logs. Only the `Executor` protocol is used (`status`, `logs`), so a
+    new executor gets its runs archived without a line here.
+
+    Idempotent (ADR 0008): the first archive stays; a replayed activity finds it and does nothing.
+    Never raises: a run must end even when its logs cannot be read, and the archive says why.
+    """
+    if run is None or run.log_archive is not None:
+        return
+    with contextlib.suppress(Exception):
+        archive = await archive_run_logs(executor, ref, status)
+        run.log_archive = archive.model_dump(mode="json")
 
 
 @activity.defn(name="start_run")
@@ -183,8 +204,6 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
         async with db() as session:
             bundle = await project_bundle(session, payload["project_id"])
             run = await session.get(Run, run_id)
-            if run is not None and run.result is not None:
-                return {"status": "finished", "result": run.result}
             ref = ExecRef(
                 kind=(run.executor_kind if run and run.executor_kind else "fake"),
                 name=(run.executor_ref if run and run.executor_ref else run_id),
@@ -194,6 +213,9 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 namespace=_runner_namespace(settings, bundle.slug),
                 run_id=run_id,
             )
+            if run is not None and run.result is not None:
+                await archive_once(bundle.adapters.executor, run, ref)
+                return {"status": "finished", "result": run.result}
             status = await bundle.adapters.executor.status(ref)
             # Tant qu'il attend, son jeton vieillit. Minté à la préparation pour
             # `max_minutes + 15`, il expire PENDANT l'attente si la file est longue, et
@@ -243,6 +265,7 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
             async with db() as session:
                 bundle = await project_bundle(session, payload["project_id"])
                 run = await session.get(Run, run_id)
+                await archive_once(bundle.adapters.executor, run, ref, status)
                 if run is not None and run.result is not None:
                     return {"status": "finished", "result": run.result}
                 # Le runner n'a pas pu poster : on lit le résultat publié par l'exécuteur
@@ -310,8 +333,10 @@ async def _abandonner(project_id: str, run_id: str, ref: ExecRef) -> None:
     with contextlib.suppress(Exception):
         async with db() as session:
             bundle = await project_bundle(session, project_id)
-            await bundle.adapters.executor.cancel(ref)
             run = await session.get(Run, run_id)
+            # Before the cancel: deleting the Job deletes its pods, and their logs with them.
+            await archive_once(bundle.adapters.executor, run, ref)
+            await bundle.adapters.executor.cancel(ref)
             if run is not None and run.status in {"queued", "running"}:
                 run.status = "failed"
                 run.ended_at = utcnow()
@@ -330,6 +355,7 @@ async def cancel_run(payload: dict[str, Any]) -> None:
             namespace=_runner_namespace(get_settings(), bundle.slug),
             run_id=run.id,
         )
+        await archive_once(bundle.adapters.executor, run, ref)
         await bundle.adapters.executor.cancel(ref)
         run.status = "cancelled"
         run.ended_at = utcnow()

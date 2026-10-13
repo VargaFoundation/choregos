@@ -18,6 +18,7 @@ organisations must assume **a member of one will try to read another**.
 | exfiltrating data | egress denied by default; the only way out is a **per-project Squid proxy** whose allowlist is the policy's `allow_domains`, non-root, read-only, `CONNECT` to 443 only; the agent's own guardrails refuse the same domains first | `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
 | using credentials | there are none in the workspace; the run token only authenticates the agent **to us**, and never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py` |
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
+| leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
 | spending without limit | one virtual key per run with a hard cap, a budget per ticket, tool calls in the same ledger | ADR 0004, ADR 0014 |
 | touching production | `prod.requires_train` in the DSL, release train, Argo windows, GitHub Environment | ADR 0006 |
 | changing its own configuration | `.choregos/**` refused for writing (except `result.json`) | `guardrails.py` |

@@ -32,10 +32,36 @@ class FakeExecutor:
         self.cancelled: list[str] = []
         self._queue: list[StageResult] = []
         self.log_lines: list[str] = ["runner: démarrage", "runner: résultat posté"]
+        #: Log lines of one run, when scripted (`crash_next`); otherwise `log_lines`.
+        self.run_logs: dict[str, list[str]] = {}
         self.start_calls_by_run: dict[str, int] = {}
+        self._crashes: list[tuple[ExecStatus, list[str]]] = []
 
     def queue_result(self, result: StageResult) -> None:
         self._queue.append(result)
+
+    def crash_next(
+        self,
+        *,
+        exit_code: int | None = 137,
+        reason: str = "OOMKilled",
+        message: str = "",
+        log_lines: list[str] | None = None,
+    ) -> None:
+        """Script the next started run as a pod that dies without posting a result (S36-02).
+
+        `exit_code=None` with `reason="ImagePullBackOff"` plays a runner that never started.
+        The run fails with this status, and `logs()` yields `log_lines` for it.
+        """
+        status = ExecStatus(
+            state="failed",
+            exit_code=exit_code,
+            reason=reason,
+            message=message or f"runner container {reason}",
+            started_at=utcnow(),
+            ended_at=utcnow(),
+        )
+        self._crashes.append((status, list(log_lines or [])))
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent par `run_id` : deux démarrages du même run ne produisent qu'une exécution."""
@@ -45,6 +71,13 @@ class FakeExecutor:
                 kind=self.kind, name=f"fake-{spec.run_id}", namespace=spec.namespace, run_id=spec.run_id
             )
         self.started.append(spec)
+        if self._crashes:
+            crashed, lines = self._crashes.pop(0)
+            self.statuses[spec.run_id] = crashed
+            self.run_logs[spec.run_id] = lines
+            return ExecRef(
+                kind=self.kind, name=f"fake-{spec.run_id}", namespace=spec.namespace, run_id=spec.run_id
+            )
         result: StageResult
         if self._queue:
             result = self._queue.pop(0)
@@ -57,6 +90,7 @@ class FakeExecutor:
         self.statuses[spec.run_id] = ExecStatus(
             state="succeeded",
             exit_code=0,
+            reason="Completed",
             result_url=f"fake://runs/{spec.run_id}/result.json",
             started_at=utcnow(),
             ended_at=utcnow(),
@@ -70,7 +104,7 @@ class FakeExecutor:
         return self.statuses.get(ref.run_id or "", ExecStatus(state="unknown"))
 
     async def logs(self, ref: ExecRef) -> AsyncIterator[str]:
-        for line in self.log_lines:
+        for line in self.run_logs.get(ref.run_id or "", self.log_lines):
             yield line
 
     async def cancel(self, ref: ExecRef) -> None:
