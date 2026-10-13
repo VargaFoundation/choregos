@@ -136,3 +136,7 @@ budgets, the ticket budget and the project's day budget (`daily_project_usd`), e
 cost ledger says was spent (models and tools) and minus the keys still open. Below
 `CHOREGOS_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
 the work item goes to a person the same way.
+
+What a work item has spent is read from the cost ledger, models and tools alike, not kept in the
+interpreter's memory: an interpreter started again for the same work item starts from what was
+already spent.
