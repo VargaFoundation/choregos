@@ -514,6 +514,7 @@ scope:
 sandbox:
   unknown_requests: reject      # refuse what the runner cannot classify (default: allow + journal)
   prompt_injection: block       # warn (default) journals; block stops the stage before any run
+  suspend_max_hours: 24         # agent_sandbox only: how long a sandbox waits for an answer; 0 = never
 ```
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.

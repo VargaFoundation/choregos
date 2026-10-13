@@ -24,8 +24,18 @@ class FakeExecutor:
     kind = ExecutorKind.FAKE
     capabilities: frozenset[str] = frozenset()
 
-    def __init__(self, handler: StageHandler | None = None) -> None:
+    def __init__(
+        self, handler: StageHandler | None = None, capabilities: frozenset[str] = frozenset()
+    ) -> None:
         self.handler = handler
+        # Scriptable: a test announces `suspend`/`resume` to play an executor that can keep a
+        # sandbox across a person's answer (ADR 0016), without one.
+        self.capabilities = frozenset(capabilities)
+        #: `(run_id, until)` of each suspension; the run ids resumed, in order.
+        self.suspended: list[tuple[str, Any]] = []
+        self.resumed: list[str] = []
+        #: The resumed run's sandbox is gone (the bound passed): `resume` answers False.
+        self.lost: set[str] = set()
         self.started: list[StageJobSpec] = []
         self.results: dict[str, StageResult] = {}
         self.statuses: dict[str, ExecStatus] = {}
@@ -107,9 +117,36 @@ class FakeExecutor:
         for line in self.run_logs.get(ref.run_id or "", self.log_lines):
             yield line
 
+    async def suspend(self, ref: ExecRef, until: Any) -> bool:
+        run_id = ref.run_id or ""
+        if run_id not in self.statuses or run_id in self.lost:
+            return False
+        self.suspended.append((run_id, until))
+        return True
+
+    async def resume(self, ref: ExecRef, run_token: str, until: Any) -> bool:
+        """The same run goes on: its next result is the next one scripted."""
+        run_id = ref.run_id or ""
+        if run_id in self.lost or not any(r == run_id for r, _ in self.suspended):
+            return False
+        self.resumed.append(run_id)
+        result = (
+            self._queue.pop(0) if self._queue else StageResult(status=StageStatus.DONE, summary="resumed")
+        )
+        self.results[run_id] = result
+        self.statuses[run_id] = ExecStatus(
+            state="succeeded",
+            exit_code=0,
+            result_url=f"fake://runs/{run_id}/result.json",
+            started_at=utcnow(),
+            ended_at=utcnow(),
+        )
+        return True
+
     async def cancel(self, ref: ExecRef) -> None:
         run_id = ref.run_id or ""
         self.cancelled.append(run_id)
+        self.lost.add(run_id)  # a cancelled run's sandbox is gone: it cannot be resumed
         self.statuses[run_id] = ExecStatus(state="cancelled", message="annulé par l'orchestrateur")
 
     def result_for(self, run_id: str) -> StageResult | None:

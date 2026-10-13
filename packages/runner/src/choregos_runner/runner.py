@@ -142,7 +142,10 @@ class Runner:
             self.settings.workspace, self.settings.git_user_name, self.settings.git_user_email
         )
         journal = EventJournal(
-            client, workspace.path / ".choregos" / "transcript.jsonl", self.settings.event_batch_size
+            client,
+            workspace.path / ".choregos" / "transcript.jsonl",
+            self.settings.event_batch_size,
+            seq=_events_already_journaled(workspace.path / ".choregos" / "transcript.jsonl"),
         )
         await journal.record(
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
@@ -527,6 +530,16 @@ def _agent_exit(stop_reason: str, cancelled: bool) -> str:
         "timeout": "timeout",
         "error": "crashed",
     }.get(stop_reason, "normal")
+
+
+def _events_already_journaled(path: Path) -> int:
+    """A run resumed in its own sandbox after a person's answer (S35-03) finds its journal on the
+    workspace volume: it goes on from there, or the API, idempotent by `seq`, would drop every
+    event of the continuation as already received. A fresh workspace has none."""
+    if not path.exists():
+        return 0
+    with path.open(encoding="utf-8") as lines:
+        return sum(1 for _ in lines)
 
 
 async def run_stage(settings: RunnerSettings | None = None) -> RunOutcome:

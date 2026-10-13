@@ -77,6 +77,10 @@ class SandboxPolicy(Strict):
     #: sécurité (le défaut), `block` arrête l'étape avant tout run — le ticket est marqué
     #: mort avec la raison, un humain relit —, `ignore` ne regarde pas.
     prompt_injection: Literal["ignore", "warn", "block"] = "warn"
+    #: How long a sandbox may stay suspended while a person answers its agent's question, with an
+    #: executor that announces `suspend` and `resume` (ADR 0016). Beyond it the sandbox is
+    #: destroyed and the stage replays from scratch, as with every other executor. 0: never.
+    suspend_max_hours: float = Field(default=24, ge=0)
 
 
 class FindingsPolicy(Strict):

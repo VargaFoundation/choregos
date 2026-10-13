@@ -26,6 +26,12 @@ arrival order along status polls. The cap is soft, as for `k8s_job`.
 
 `renew` replaces the token of a run not yet assigned (its Secret); once pushed, the pod has it.
 
+`suspend`/`resume` (S35-03): around a person's answer to its agent's question, the sandbox is
+suspended — the pod goes, the workspace volume stays — and resumed for the SAME run, which is
+pushed again to the new pod with a fresh token. The claim's `shutdownTime` holds the policy's
+bound (`sandbox.suspend_max_hours`) while it waits: past it the controller deletes everything,
+and the orchestrator replays the stage as it would with any other executor.
+
 The API is PINNED: `agents.x-k8s.io/v1beta1` and `extensions.agents.x-k8s.io/v1beta1`, as served
 by the release in `infra/operators/agent-sandbox/`. What the executor writes is validated
 against that release's CRD schemas in the tests (`tests/fixtures/agent_sandbox/`).
@@ -36,7 +42,7 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import AsyncIterator
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -63,7 +69,7 @@ POD_NAME_ANNOTATION = "agents.x-k8s.io/pod-name"
 
 class AgentSandboxExecutor:
     kind = ExecutorKind.AGENT_SANDBOX
-    capabilities: frozenset[str] = frozenset({"queue", "renew", "snapshot"})
+    capabilities: frozenset[str] = frozenset({"queue", "renew", "snapshot", "suspend", "resume"})
 
     def __init__(
         self,
@@ -275,6 +281,8 @@ class AgentSandboxExecutor:
                 started_at=_parse_time(assigned_at),
                 ended_at=utcnow(),
             )
+        if reason == "SandboxSuspended":
+            return ExecStatus(state="pending", message="suspended: waiting for a person's answer")
         if reason == "SandboxExpired":
             return ExecStatus(state="failed", message="the sandbox expired (stage budget reached)")
         if ready.get("status") != "True":
@@ -388,6 +396,84 @@ class AgentSandboxExecutor:
             return None, f"runner never started: {waiting.get('reason')}"
         return None, ""
 
+    # ──────────────────────── suspend and resume (S35-03) ────────────────────────
+
+    async def suspend(self, ref: ExecRef, until: datetime) -> bool:
+        """Suspends the run's sandbox while a person answers its agent's question.
+
+        The pod goes; the sandbox and its workspace volume stay. The claim's `shutdownTime`
+        becomes `until` (the policy's `sandbox.suspend_max_hours`), and its
+        `ttlSecondsAfterFinished` is dropped — the runner exited after asking, and that clock
+        would otherwise delete the sandbox an hour later. So the bound is held by the
+        controller itself: past it, the claim, the sandbox and the volume are deleted even if
+        no workflow is there to say so. False when there is nothing left to suspend.
+        """
+        namespace = ref.namespace or ""
+        claim = await self.client.request("GET", f"{self._claims(namespace)}/{ref.name}")
+        sandbox_name = (((claim or {}).get("status") or {}).get("sandbox") or {}).get("name")
+        if not sandbox_name:
+            return False
+        await self._patch_claim(
+            namespace,
+            ref.name,
+            {"spec": {"lifecycle": {"shutdownTime": _rfc3339(until), "ttlSecondsAfterFinished": None}}},
+        )
+        await self.client.request(
+            "PATCH",
+            f"{SANDBOX_API}/namespaces/{namespace}/sandboxes/{sandbox_name}",
+            json={"spec": {"operatingMode": "Suspended"}},
+            headers={"Content-Type": "application/merge-patch+json"},
+        )
+        return True
+
+    async def resume(self, ref: ExecRef, run_token: str, until: datetime) -> bool:
+        """Brings the suspended sandbox back for the SAME run, with its workspace.
+
+        A new pod comes up on the same volume and waits for an assignment, like a warm one: the
+        next `status` pushes it the run again, with `run_token` — a fresh one, the first having
+        expired during the wait. `until` is the new stage deadline. False when the sandbox is
+        gone (the bound passed, someone deleted it): the caller then replays the stage.
+        """
+        namespace = ref.namespace or ""
+        claim = await self.client.request("GET", f"{self._claims(namespace)}/{ref.name}")
+        sandbox_name = (((claim or {}).get("status") or {}).get("sandbox") or {}).get("name")
+        if not sandbox_name:
+            return False
+        sandbox = await self.client.request(
+            "GET", f"{SANDBOX_API}/namespaces/{namespace}/sandboxes/{sandbox_name}"
+        )
+        if sandbox is None:
+            return False
+        await self.renew(ref, run_token)
+        await self._patch_claim(
+            namespace,
+            ref.name,
+            {
+                "metadata": {"annotations": {ASSIGNED: None}},
+                "spec": {
+                    "lifecycle": {
+                        "shutdownTime": _rfc3339(until),
+                        "ttlSecondsAfterFinished": self.ttl_seconds,
+                    }
+                },
+            },
+        )
+        await self.client.request(
+            "PATCH",
+            f"{SANDBOX_API}/namespaces/{namespace}/sandboxes/{sandbox_name}",
+            json={"spec": {"operatingMode": "Running"}},
+            headers={"Content-Type": "application/merge-patch+json"},
+        )
+        return True
+
+    async def _patch_claim(self, namespace: str, name: str, patch: dict[str, Any]) -> None:
+        await self.client.request(
+            "PATCH",
+            f"{self._claims(namespace)}/{name}",
+            json=patch,
+            headers={"Content-Type": "application/merge-patch+json"},
+        )
+
     # ───────────────────────────── the rest ─────────────────────────────
 
     async def renew(self, ref: ExecRef, run_token: str) -> None:
@@ -458,6 +544,13 @@ def _finished(claim: dict[str, Any]) -> bool:
 def _label_value(value: Any) -> str:
     text = "".join(c if c.isalnum() or c in "-_." else "-" for c in str(value))[:63]
     return text.strip("-_.")
+
+
+def _rfc3339(instant: datetime) -> str:
+    """The instant in UTC, as Kubernetes writes it. A naive one is taken as UTC."""
+    if instant.tzinfo is not None:
+        instant = instant.astimezone(UTC)
+    return instant.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _host(ip: str) -> str:

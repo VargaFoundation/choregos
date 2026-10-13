@@ -243,7 +243,7 @@ class FakeSandboxCluster:
         pod = sandbox.pod
         conditions: list[dict[str, Any]] = []
         if sandbox.mode == "Suspended":
-            conditions.append({"type": "Ready", "status": "False", "reason": "Suspended"})
+            conditions.append({"type": "Ready", "status": "False", "reason": "SandboxSuspended"})
             conditions.append({"type": "Suspended", "status": "True" if pod is None else "False"})
         elif pod is None:
             conditions.append({"type": "Ready", "status": "False", "reason": "DependenciesNotReady"})

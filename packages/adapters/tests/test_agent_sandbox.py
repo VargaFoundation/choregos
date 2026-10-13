@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import pathlib
+from datetime import UTC, datetime
 from types import ModuleType
 from typing import Any
 
@@ -208,6 +209,74 @@ async def test_the_queue_holds_runs_without_a_claim_and_admits_in_arrival_order(
     admitted = await executor.status(second)
     assert admitted.state == "pending" and not admitted.message
     assert sorted(cluster.claims) == ["run-r-1", "run-r-2"]
+
+
+async def _asked(cluster: FakeSandboxCluster, executor: AgentSandboxExecutor) -> ExecRef:
+    """A run whose agent asked a question: pushed, then its runner exited after posting."""
+    ref = await executor.start(_spec("r-1", token="first"))
+    cluster.reconcile()
+    await executor.status(ref)
+    cluster.finish("r-1")
+    return ref
+
+
+async def test_suspend_keeps_the_sandbox_and_its_volume_without_a_pod() -> None:
+    cluster = FakeSandboxCluster()
+    cluster.warm(1)
+    executor = _executor(cluster)
+    ref = await _asked(cluster, executor)
+    sandbox = cluster.sandbox_of("r-1")
+    assert sandbox is not None
+    sandbox.volume["work.md"] = "half done"
+    until = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
+
+    assert await executor.suspend(ref, until) is True
+    assert sandbox.pod is None and sandbox.name in cluster.sandboxes, "the pod goes, the sandbox stays"
+    lifecycle = cluster.claims["run-r-1"]["spec"]["lifecycle"]
+    assert lifecycle["shutdownTime"] == "2026-10-14T12:00:00Z", "the bound is the controller's to hold"
+    assert "ttlSecondsAfterFinished" not in lifecycle, "the finished-pod clock would delete it in an hour"
+    status = await executor.status(ref)
+    assert status.state == "pending" and "suspended" in status.message
+    assert (
+        _crds().problems(
+            {k: v for k, v in cluster.claims["run-r-1"].items() if k != "status"}
+            | {"metadata": {"name": "run-r-1", "namespace": "choregos"}}
+        )
+        == []
+    )
+
+
+async def test_resume_gives_the_same_run_a_new_pod_on_the_same_volume_with_a_fresh_token() -> None:
+    cluster = FakeSandboxCluster()
+    cluster.warm(1)
+    executor = _executor(cluster)
+    ref = await _asked(cluster, executor)
+    sandbox = cluster.sandbox_of("r-1")
+    assert sandbox is not None
+    sandbox.volume["work.md"] = "half done"
+    await executor.suspend(ref, datetime(2026, 10, 14, tzinfo=UTC))
+
+    assert await executor.resume(ref, "second", datetime(2026, 10, 14, 1, tzinfo=UTC)) is True
+    cluster.reconcile()
+    assert (await executor.status(ref)).state == "running"
+    assert cluster.sandbox_of("r-1") is sandbox and sandbox.volume == {"work.md": "half done"}
+    first_pod, second_pod = sandbox.pods
+    assert [a["run_token"] for a in first_pod.assignments] == ["first"]
+    assert [(a["run_id"], a["run_token"]) for a in second_pod.assignments] == [("r-1", "second")]
+    assert cluster.claims["run-r-1"]["spec"]["lifecycle"]["ttlSecondsAfterFinished"] == 3600
+
+
+async def test_past_the_bound_there_is_nothing_to_resume() -> None:
+    cluster = FakeSandboxCluster()
+    cluster.warm(1)
+    executor = _executor(cluster)
+    ref = await _asked(cluster, executor)
+    await executor.suspend(ref, datetime(2026, 10, 14, tzinfo=UTC))
+    sandbox = cluster.sandbox_of("r-1")
+    assert sandbox is not None
+    cluster.expire("r-1")  # the claim's shutdownTime passed: the controller deleted everything
+    assert sandbox.name in cluster.deleted and "run-r-1" not in cluster.secrets
+    assert await executor.resume(ref, "second", datetime(2026, 10, 14, 1, tzinfo=UTC)) is False
 
 
 async def test_logs_are_the_runner_pod_log() -> None:

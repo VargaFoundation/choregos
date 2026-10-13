@@ -86,6 +86,28 @@ what is built — a sandbox is claimed once and deleted with its claim — and i
 conformance rule follow 0016; freezing a running sandbox is not offered by the operator and is
 not claimed.
 
+## Decision 4 — Suspend and resume: the same run, its workspace, a fresh token
+
+When a stage ends on `needs_human` with a question and the executor announces `suspend` and
+`resume`, the interpreter (marker `suspend-around-human`) suspends the run's sandbox: the pod
+goes, the sandbox and its workspace volume stay. The answer resumes **that** run — the
+answer at the head of its prompt, a fresh run token and gateway key (the first ones expired
+or were revoked during the wait), the same workspace, the journal continued — instead of
+preparing a second one. An answered question costs one run, not two; the run's spend is the
+sum of its two segments and the work item counts one run.
+
+- `suspend(ref, until)` and `resume(ref, run_token, until)`: 0016 wrote `resume(ref)`, but a
+  resumed run needs a new token, so the executor takes it. Neither is in the `Executor`
+  protocol: the interpreter calls them only when the executor announces both capabilities.
+- The bound, `sandbox.suspend_max_hours` (policy, default 24, 0 = never; a `contract-change`),
+  is written into the claim's `shutdownTime` at suspension and its `ttlSecondsAfterFinished`
+  is dropped: the controller deletes the sandbox at the bound even if no workflow is running.
+  The interpreter releases it too (hourly, while it waits), and an answer after the bound
+  replays the stage as with any other executor.
+- "Its context" is the workspace — the files, the branch, `.choregos/` and the journal. The
+  agent's own conversation is NOT reloaded: the runner starts a new ACP session in that
+  workspace (it does not call `session/load`). Reloading the session is a later step.
+
 ## Conditions
 
 - The template and the pool live in the release namespace; a per-project `namespacePattern` is
