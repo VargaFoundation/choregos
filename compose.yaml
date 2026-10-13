@@ -232,6 +232,9 @@ services:
         # Baked at build time: Next.js computes its rewrites and `NEXT_PUBLIC_*` when it builds.
         CHOREGOS_API_URL: http://api:8000
         NEXT_PUBLIC_DEV_LOGIN: "true"
+        # One click: the demo admin filled in, and the first sign-in lands on the demo project.
+        NEXT_PUBLIC_DEV_LOGIN_EMAIL: ${CHOREGOS_ADMIN_EMAIL:-admin@choregos.local}
+        NEXT_PUBLIC_DEV_LOGIN_NEXT: /p/demo
     environment:
       CHOREGOS_API_URL: http://api:8000
     ports: ["127.0.0.1:${CHOREGOS_PORT_WEB:-3000}:3000"]

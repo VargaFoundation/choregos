@@ -164,6 +164,16 @@ def main() -> int:
         if status != 200:
             return fail(f"/api/v1/me answered {status} after sign-in: {me}")
 
+        step("the demo project and its seeded work item (S28-03)")
+        status, page = console.get(f"/api/v1/projects/{args.project}/work-items")
+        seeded = [i for i in (page or {}).get("items", []) if i.get("tracker_key") == "DEMO-1"]
+        if status != 200 or not seeded:
+            return fail(f"no seeded DEMO-1 in {args.project} ({status}): {page}")
+        print(f"  DEMO-1 is `{seeded[0]['state']}`")
+        status, _ = console.get("/p/demo")
+        if status != 200:
+            return fail(f"the demo project's page answered {status}")
+
         step(f"creating a work item in {args.project}")
         status, item = console.post(
             f"/api/v1/projects/{args.project}/work-items",

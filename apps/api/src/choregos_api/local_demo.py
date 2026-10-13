@@ -38,7 +38,7 @@ import yaml
 from sqlalchemy import select
 
 from .config import Settings, get_settings
-from .db.models import Connector, Organization, Project
+from .db.models import Connector, Organization, Project, WorkItem
 from .db.session import session_scope
 from .logging import configure_logging, get_logger
 
@@ -92,6 +92,12 @@ defaults:
     on_answer: resume
     on_abandon: abandoned
 """
+
+DEMO_TICKET_TITLE = "Plan the team offsite"
+DEMO_TICKET_BODY = (
+    "Two days for twelve people near Lyon, in May. The agent drafts a plan; you approve it or send "
+    "it back from the work item's page."
+)
 
 Provider = Literal["anthropic", "openai"]
 
@@ -225,12 +231,19 @@ async def seed_local_demo(
     """Create what is missing of the demo organisation and project, switch what follows the mode;
     return what was created and what switched."""
     from .rbac import SYSTEM
-    from .services import ensure_defaults, publier_workflow
+    from .schemas.tickets import WorkItemCreate
+    from .services import creer_un_ticket, ensure_defaults, publier_workflow
 
     settings = settings or get_settings()
     org_slug = settings.bootstrap_org or "demo"
     backend = demo_backend(provider)
-    report: dict[str, list[str]] = {"organisations": [], "projects": [], "connectors": [], "switched": []}
+    report: dict[str, list[str]] = {
+        "organisations": [],
+        "projects": [],
+        "connectors": [],
+        "switched": [],
+        "work_items": [],
+    }
     async with session_scope(orgs="*") as session:
         org = (
             await session.execute(select(Organization).where(Organization.slug == org_slug))
@@ -300,6 +313,22 @@ async def seed_local_demo(
                 row.type, row.config = type_name, config
                 report["switched"].append(kind)
         await session.flush()
+
+        # One work item, so that the first sign-in lands on something that moves. Started at once
+        # in fakes mode (free); with a model key it waits for a person to start it: an install
+        # does not spend someone's money before they have opened the console.
+        has_items = (
+            await session.execute(select(WorkItem.id).where(WorkItem.project_id == project.id).limit(1))
+        ).first() is not None
+        if not has_items:
+            item = await creer_un_ticket(
+                session,
+                SYSTEM,
+                project,
+                WorkItemCreate(title=DEMO_TICKET_TITLE, body=DEMO_TICKET_BODY, start=provider is None),
+                canal="local-install",
+            )
+            report["work_items"].append(item.tracker_key)
     logger.info(
         "local demo seeded", organisation=org_slug, project=DEMO_PROJECT, mode=provider or "fakes", **report
     )

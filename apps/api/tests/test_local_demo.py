@@ -46,7 +46,7 @@ async def test_the_seed_creates_the_project_once(app: Any) -> None:
     assert sorted(first["connectors"]) == sorted(demo_connectors())
 
     again = await seed_local_demo(_settings())
-    assert again == {"organisations": [], "projects": [], "connectors": [], "switched": []}
+    assert again == {"organisations": [], "projects": [], "connectors": [], "switched": [], "work_items": []}
 
 
 async def test_a_request_created_in_the_demo_project_starts_its_workflow(
@@ -161,3 +161,46 @@ def test_with_a_key_the_agent_backend_accepts_the_model_litellm_serves(provider:
     )
     served = {m["model_name"] for m in litellm_config(provider)["model_list"]}
     assert model in served and "platform/standard" in served
+
+
+# ───────────────────────── S28-03: the first sign-in lands on a work item ─────────────────────────
+
+
+async def test_the_first_sign_in_finds_the_demo_project_with_one_running_work_item(
+    app: Any, client: AsyncClient
+) -> None:
+    from choregos_api.temporal import get_temporal
+
+    report = await seed_local_demo(_settings())
+    assert report["work_items"] == ["DEMO-1"]
+    await login(client, "admin@varga.dev")
+    projects = (await client.get("/api/v1/orgs/demo/projects")).json()["items"]
+    assert [p["slug"] for p in projects] == ["demo"]
+    items = (await client.get("/api/v1/projects/demo:demo/work-items")).json()["items"]
+    assert [(i["tracker_key"], i["state"]) for i in items] == [("DEMO-1", "inbox")]
+    assert items[0]["temporal_wf_id"] in get_temporal().started  # type: ignore[attr-defined]
+    assert (await seed_local_demo(_settings()))["work_items"] == [], "one work item, not one per start"
+
+
+async def test_with_a_model_key_the_demo_work_item_waits_to_be_started(app: Any) -> None:
+    """A real model costs money: the install does not spend it before anyone has opened the console."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.temporal import get_temporal
+    from sqlalchemy import select
+
+    assert (await seed_local_demo(_settings(), "anthropic"))["work_items"] == ["DEMO-1"]
+    async with session_scope(orgs="*") as session:
+        item = (await session.execute(select(WorkItem))).scalar_one()
+    assert item.temporal_wf_id is None
+    assert not get_temporal().started  # type: ignore[attr-defined]
+
+
+async def test_development_sign_in_is_refused_outside_a_development_environment() -> None:
+    """The compose turns development sign-in on; the API refuses it in staging and prod (config.py)."""
+    import pydantic
+
+    for env in ("staging", "prod"):
+        with pytest.raises(pydantic.ValidationError, match="DEV_LOGIN_ENABLED"):
+            Settings(env=env, dev_login_enabled=True)
+    assert Settings(env="dev", dev_login_enabled=True).dev_login_enabled
