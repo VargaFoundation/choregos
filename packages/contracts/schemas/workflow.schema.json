@@ -507,6 +507,12 @@
                   "org_admin"
                 ]
               },
+              "group": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052)"
+              },
               "min": {
                 "type": "integer",
                 "minimum": 1,

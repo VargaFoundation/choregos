@@ -24,6 +24,8 @@ class ActionEffectSpec(Dto):
 
 class Approbateur(Dto):
     role: Literal["developer", "release_captain", "project_owner", "org_admin"] = "project_owner"
+    #: An identity-provider group the approver must also belong to (ADR 0052).
+    group: str | None = Field(default=None, min_length=1, max_length=200)
     min: int = Field(default=1, ge=1, le=5)
 
 

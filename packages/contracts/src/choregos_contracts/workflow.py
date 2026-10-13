@@ -135,6 +135,9 @@ class ActionEffectSpec(Strict):
 
 class ActionApprover(Strict):
     role: Literal["developer", "release_captain", "project_owner", "org_admin"] = "project_owner"
+    #: An identity-provider group the approver must ALSO belong to (ADR 0052): a rank says how
+    #: much someone may decide, a group says who is competent to — `netops-approvers` for a firewall.
+    group: str | None = Field(default=None, min_length=1, max_length=200)
     min: int = Field(default=1, ge=1, le=5)
 
 
