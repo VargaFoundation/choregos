@@ -22,6 +22,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from choregos_adapters.sealing import key_from_log, new_key, seal
 
 from .conftest import kubectl_shared
 from .test_agent_sandbox import _condition, _get, _wait, operator_installed
@@ -78,9 +79,10 @@ def _ready(sandbox: dict[str, Any]) -> bool:
     return _condition(sandbox, "Ready").get("status") == "True"
 
 
-def _push(ns: str, ip: str, run_id: str) -> str:
-    """POSTs an assignment from inside the namespace; returns the HTTP status code."""
-    body = json.dumps({"run_id": run_id, "api_url": "http://nowhere.invalid", "run_token": "t", "env": {}})
+def _push(ns: str, ip: str, run_id: str, public_key: str) -> str:
+    """POSTs an assignment SEALED to `public_key` from inside the namespace; returns the status."""
+    secret = {"api_url": "http://nowhere.invalid", "run_token": "t", "env": {}}
+    body = json.dumps({"run_id": run_id, "sealed": seal(public_key, run_id, secret)})
     name = f"push-{run_id}"
     pod = {
         "apiVersion": "v1",
@@ -146,8 +148,13 @@ def test_a_claim_adopts_a_warm_sandbox_that_holds_nothing_and_serves_one_run(ns:
     assert bound == warm, "the claim adopted the warm sandbox instead of making another"
 
     ip = (_get(ns, "sandbox", bound) or {})["status"]["podIPs"][0]
-    assert _push(ns, ip, "run-a") == "200"
-    assert _push(ns, ip, "run-b") == "409", "a sandbox serves one run, never two"
+    # The key the runner printed at boot, read through the API server as the executor reads it.
+    public_key = key_from_log(kubectl_shared("-n", ns, "logs", bound))
+    assert public_key, "the warm runner printed no key: nothing could be sealed to it"
+    _, other_key = new_key()
+    assert _push(ns, ip, "run-x", other_key) == "400", "sealed to another key: refused"
+    assert _push(ns, ip, "run-a", public_key) == "200"
+    assert _push(ns, ip, "run-b", public_key) == "409", "a sandbox serves one run, never two"
 
     kubectl_shared("-n", ns, "delete", "sandboxclaim", "run-probe")
     _wait(lambda: _get(ns, "sandbox", bound) is None, "the claimed sandbox to be deleted")

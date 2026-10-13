@@ -11,8 +11,10 @@ assignment. A run goes like this:
    cold-starts one from the same template when the pool is empty: either way a clean sandbox,
    never one a previous run has touched (`snapshot`, in ADR 0016's sense).
 2. `status`, once the bound sandbox is Ready, pushes the assignment — run id, token,
-   environment — to THAT pod, and marks the claim assigned. Before this push the token exists
-   only in the run's Secret, which no runner pod can read; after it, exactly one pod holds it.
+   environment — to THAT pod, SEALED to the key the pod printed at boot (read through the API
+   server), and marks the claim assigned. Before this push the token exists only in the run's
+   Secret, which no runner pod can read; after it, exactly one pod holds it, and the pod network
+   only ever carried ciphertext.
 3. The runner runs the stage and exits; the claim reports the pod's end, and is deleted
    `ttl_seconds` later by the controller, taking the sandbox, its volume and (through the owner
    reference) the run's Secret with it. A sandbox is never handed out twice.
@@ -43,6 +45,7 @@ from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 from choregos_core.sorties import explication
 
 from ..errors import ConfigurationError, UpstreamError
+from ..sealing import key_from_log, seal
 from .tekton import CORE_API, KubernetesClient, _parse_time
 
 #: The operator release whose API this executor speaks. Upgrading it is a change here AND in
@@ -287,25 +290,41 @@ class AgentSandboxExecutor:
     async def _assign(self, ref: ExecRef, claim: dict[str, Any], sandbox: dict[str, Any]) -> str | None:
         """Pushes the run to the pod of the sandbox bound to ITS claim; marks the claim.
 
-        The only moment a token leaves its Secret. The runner accepts one assignment: the same
-        run again (a lost answer, a retried poll) is answered 200, another run 409 — and a 409
-        means this sandbox is not clean, so the run fails rather than share it.
+        The only moment a token leaves its Secret, and it leaves SEALED (ADR 0053): to the public
+        key the pod printed at boot, read here through the API server (`pods/log` — the API
+        server reaches the kubelet over authenticated TLS, so the pod network cannot swap the
+        key), and bound to the run id. Only the run id crosses the pod network in clear. A pod
+        that printed no key gets nothing. The runner accepts one assignment: the same run again
+        (a lost answer, a retried poll) is answered 200, another run 409 — and a 409 means this
+        sandbox is not clean, so the run fails rather than share it.
         """
         namespace = ref.namespace or ""
         ips = (sandbox.get("status") or {}).get("podIPs") or []
         if not ips:
             return None
+        pod = _annotations(sandbox).get(POD_NAME_ANNOTATION) or sandbox.get("metadata", {}).get("name")
+        log = await self.client.request("GET", f"{CORE_API}/namespaces/{namespace}/pods/{pod}/log")
+        public_key = key_from_log(str(log or ""))
+        if public_key is None:
+            return None  # no key printed (yet): nothing is sent
         secret = await self.client.request("GET", f"{self._secrets(namespace)}/{ref.name}")
         if secret is None:
             raise UpstreamError("kubernetes", f"the Secret of run {ref.run_id} is gone before its assignment")
         assignment = _assignment(secret)
         env = await self._shared_env(namespace)
         env.update({str(k): str(v) for k, v in (assignment.get("env") or {}).items()})
+        run_id = str(assignment.get("run_id") or ref.run_id)
         payload = {
-            "run_id": assignment.get("run_id") or ref.run_id,
-            "api_url": assignment.get("api_url", ""),
-            "run_token": base64.b64decode((secret.get("data") or {}).get("token", "")).decode(),
-            "env": env,
+            "run_id": run_id,
+            "sealed": seal(
+                public_key,
+                run_id,
+                {
+                    "api_url": assignment.get("api_url", ""),
+                    "run_token": base64.b64decode((secret.get("data") or {}).get("token", "")).decode(),
+                    "env": env,
+                },
+            ),
         }
         try:
             response = await self.http.post(

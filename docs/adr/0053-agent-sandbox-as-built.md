@@ -1,4 +1,4 @@
-# 0053 — The `agent_sandbox` executor as built: a pushed assignment, a queue we hold, a clean sandbox
+# 0053 — The `agent_sandbox` executor as built: a sealed assignment, a queue we hold, a clean sandbox
 
 - **Status**: accepted, 2026-10-12 — amends [ADR 0016](0016-executeur-agent-sandbox.md); stream S35
 - **Concerns**: `packages/adapters/.../executor/agent_sandbox.py`, `choregos-runner await-assignment`,
@@ -11,29 +11,48 @@ operator's primitives. Building it on the pinned release (v1.0.6, API `v1beta1`)
 places where those primitives do not do what 0016 assumed. This record says what was built
 instead, so that the next reader does not take 0016's table for the implementation.
 
-## Decision 1 — The run token is pushed to the claimed pod, not mounted
+## Decision 1 — The run token is pushed, sealed to the claimed pod, not mounted
 
 0016 kept "the run token mounted per sandbox, by reference". A warm pod cannot mount it: its
 spec is made before any run exists, a pod's volumes cannot change afterwards, and the only
 per-claim injection the operator offers (`SandboxClaim.spec.env`) forces a cold start and writes
 the value, in clear, into the claim's spec.
 
-So the token is **pushed**:
+So the token is **pushed, sealed to the one pod that will run it**:
 
 - the run's token lives in a Secret named after the run, owned by its SandboxClaim — the
   reference, as with `k8s_job`; no runner pod can read it (no service account token, no RBAC);
-- the warm pod runs `choregos-runner await-assignment`, listening on one port;
+- the warm pod runs `choregos-runner await-assignment`: at boot it makes an X25519 key pair in
+  memory and prints the public key on one line of its stdout, then listens on one port;
 - once the controller has bound a sandbox to the run's claim and the sandbox is Ready, the
-  executor reads the Secret and POSTs `{run_id, api_url, run_token, env}` to **that** pod's IP;
-- the runner accepts one run for the life of the process: the same run again is 200, another
-  run 409 — and a 409 fails the run instead of sharing the sandbox.
+  executor reads that line **through the API server** (`pods/log`, already in its Role). The API
+  server reaches the kubelet over authenticated TLS: nobody on the pod network can substitute
+  their own key. A pod that printed no key gets nothing;
+- the executor seals `{api_url, run_token, env}` to that key — an ephemeral X25519 exchange,
+  HKDF-SHA256, ChaCha20-Poly1305 with the run id as associated data (`choregos_adapters.sealing`,
+  on `cryptography`, already a dependency) — and POSTs `{run_id, sealed}` to **that** pod's IP;
+- the runner opens it in memory and drops its private key: it can open one assignment, ever.
+  What does not open with its key for that run id is refused; the same run again is 200,
+  another run 409 — and a 409 fails the run instead of sharing the sandbox.
 
-What holds: a warm sandbox holds no credential; exactly one pod receives a given token, after it
-was chosen for that run. What it costs: the token crosses the pod network in HTTP inside the
-cluster (encrypted only if the CNI encrypts), and a pod of the same namespace that pushes first
-can occupy a warm sandbox — with its own token, gaining nothing, and the run then fails visibly.
-Deployment-wide secrets a `k8s_job` pod mounts with `envFrom` are pushed with the assignment for
-the same reason.
+What holds: a warm sandbox holds no credential; exactly one pod can read a given token, after it
+was chosen for that run; the pod network only ever carries the run id and ciphertext — the
+deployment-wide secrets a `k8s_job` pod mounts with `envFrom`, pushed with the assignment, are
+sealed with it. What remains: a pod of the same namespace that pushes first can occupy a warm
+sandbox — with a token of its own, gaining nothing — and the run then fails visibly (409). The
+public key is in the pod's log, which is public by nature.
+
+### Alternatives discarded for the push
+
+- **mTLS between executor and runner, or a SPIFFE identity** ([ADR 0021](0021-spiffe-derriere-le-jeton-de-run.md)):
+  0021 is *proposed*, not implemented; it needs SPIRE, cluster-scoped, on top of the operator.
+  A per-pod key read through the API server gives the property needed here — only that pod
+  reads the token — with nothing to install.
+- **Relying on the CNI's encryption** (WireGuard, IPsec): a property of one cluster's
+  configuration, invisible to the platform and absent from many; the token would be in clear
+  wherever it is off.
+- **The token in clear over HTTP inside the cluster**: the first version of this record. Anyone
+  able to read the pod network read the token.
 
 ## Decision 2 — The queue is the executor's, not a waiting claim
 

@@ -95,6 +95,9 @@ async def _serve_then_run(port: int, workspace: Path | None) -> tuple[RunOutcome
     import os
 
     server = AssignmentServer(port=port)
+    # The public key first, on its own line: the executor reads it through the API server
+    # (`pods/log`) and seals the run to it. Nothing but this pod can open what it then pushes.
+    print(server.key_line, flush=True)
     await server.start()
     try:
         assignment = await server.wait()

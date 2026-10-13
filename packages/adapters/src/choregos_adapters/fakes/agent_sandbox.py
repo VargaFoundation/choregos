@@ -13,8 +13,10 @@ operator's part when told to:
 - `finish(run_id, exit_code)` ends the pod serving a run.
 
 Its `transport` stands for the pod network: the executor's push to `http://<pod ip>:<port>/assign`
-lands in the pod's `assignments`, so a test can say which pod received which token, and when.
-A pod accepts one run; the same run again is 200, another is 409, as the real runner answers.
+lands in the pod's `wire` as sent, and in its `assignments` once opened with the pod's key, so a
+test can say what crossed the network and which pod could read which token. Each pod prints its
+public key in its log at boot, as the real runner does. A pod opens one run; the same run again
+is 200, another is 409, what does not open is 400, as the real runner answers.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from typing import Any
 import httpx
 
 from ..errors import UpstreamError
+from ..sealing import SealError, key_line, new_key, open_sealed
 
 CLAIMS = "/apis/extensions.agents.x-k8s.io/v1beta1/namespaces/"
 SANDBOXES = "/apis/agents.x-k8s.io/v1beta1/namespaces/"
@@ -44,8 +47,12 @@ class FakePod:
     ready: bool = True
     exit_code: int | None = None
     log: list[str] = field(default_factory=list)
-    #: Every assignment pushed to this pod, in order — the run token included.
+    #: Every assignment this pod OPENED, in order: `{run_id, api_url, run_token, env}`.
     assignments: list[dict[str, Any]] = field(default_factory=list)
+    #: The raw bodies that reached this pod over the network: what an eavesdropper reads.
+    wire: list[bytes] = field(default_factory=list)
+    #: The pod's private key, as the real runner holds it: in memory, dropped once used.
+    private: Any = None
 
 
 @dataclass
@@ -65,6 +72,8 @@ class FakeSandbox:
 class FakeSandboxCluster:
     def __init__(self, namespace: str = "choregos") -> None:
         self.namespace = namespace
+        #: False plays a pod whose runner never printed its key (another image, a crash).
+        self.publish_keys = True
         self.secrets: dict[str, dict[str, Any]] = {}
         self.claims: dict[str, dict[str, Any]] = {}
         self.sandboxes: dict[str, FakeSandbox] = {}
@@ -140,6 +149,9 @@ class FakeSandboxCluster:
 
     def _new_pod(self, sandbox: FakeSandbox) -> FakePod:
         pod = FakePod(name=sandbox.name, ip=f"10.0.0.{next(self._ids)}", sandbox=sandbox.name)
+        if self.publish_keys:  # what `choregos-runner await-assignment` prints at boot
+            pod.private, public = new_key()
+            pod.log.append(key_line(public))
         sandbox.pods.append(pod)
         return pod
 
@@ -308,10 +320,20 @@ class FakeSandboxCluster:
         pod = next((s.pod for s in self.sandboxes.values() if s.pod and s.pod.ip == host), None)
         if pod is None or not pod.ready or request.url.path != "/assign":
             raise httpx.ConnectError("connection refused", request=request)
+        pod.wire.append(bytes(request.content))
         payload = json.loads(request.content)
-        if pod.assignments and pod.assignments[0]["run_id"] != payload["run_id"]:
-            return httpx.Response(409, json={"error": "already assigned"})
-        pod.assignments.append(payload)
+        if pod.assignments:
+            if pod.assignments[0]["run_id"] != payload["run_id"]:
+                return httpx.Response(409, json={"error": "already assigned"})
+            return httpx.Response(200, json={"run_id": payload["run_id"]})
+        if pod.private is None:
+            return httpx.Response(400, json={"error": "no key"})
+        try:
+            opened = open_sealed(pod.private, payload["run_id"], payload["sealed"])
+        except SealError:
+            return httpx.Response(400, json={"error": "not sealed to this pod"})
+        pod.private = None
+        pod.assignments.append({"run_id": payload["run_id"], **opened})
         return httpx.Response(200, json={"run_id": payload["run_id"]})
 
 

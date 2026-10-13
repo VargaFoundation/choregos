@@ -161,8 +161,9 @@ global:
 How a run goes ([ADR 0053](adr/0053-agent-sandbox-as-built.md)): the executor writes the run's
 token into a Secret owned by the run's `SandboxClaim`; the controller binds a warm sandbox to
 the claim (or cold-starts one from the template when the pool is empty); once it is Ready, the
-executor pushes `{run_id, api_url, run_token, env}` to that pod, which accepts one run for its
-whole life. Beyond `maxActive`, a run waits as its Secret alone, with no claim and no pod, and
+executor reads the public key the pod printed at boot (through the API server, `pods/log`), seals
+the token and the run's environment to it, and pushes only that ciphertext; the pod opens it,
+drops its key, and serves that one run for its whole life. Beyond `maxActive`, a run waits as its Secret alone, with no claim and no pod, and
 is admitted in arrival order. A policy that asks for a RuntimeClass the pool was not made with
 is refused, never run without it.
 

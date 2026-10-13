@@ -219,8 +219,45 @@ async def test_logs_are_the_runner_pod_log() -> None:
     pod = cluster.pod_of("r-1")
     assert pod is not None
     pod.log.extend(["runner: started", "runner: result posted"])
-    assert [line async for line in executor.logs(ref)] == ["runner: started", "runner: result posted"]
+    lines = [line async for line in executor.logs(ref)]
+    assert lines[0].startswith("choregos-assignment-key: "), "the public key, printed at boot"
+    assert lines[1:] == ["runner: started", "runner: result posted"]
     assert [line async for line in executor.logs(_ref("absent"))] == []
+
+
+async def test_the_bytes_on_the_wire_never_contain_the_token_or_a_secret() -> None:
+    """Sealed to the pod's key (ADR 0053): an eavesdropper on the pod network reads the run id."""
+    cluster = FakeSandboxCluster()
+    cluster.warm(1)
+    cluster.secrets["git-credentials"] = {
+        "metadata": {"name": "git-credentials"},
+        "data": {"GIT_TOKEN": base64.b64encode(b"ghp_secretvalue").decode()},
+    }
+    executor = _executor(cluster, env_from_secrets=["git-credentials"])
+    ref = await executor.start(_spec("r-1", token="secret-r1"))
+    cluster.reconcile()
+    assert (await executor.status(ref)).state == "running"
+    pod = cluster.pod_of("r-1")
+    assert pod is not None and pod.wire, "something was pushed"
+    for body in pod.wire:
+        for clear in (b"secret-r1", b"ghp_secretvalue", b"proxy:3128", base64.b64encode(b"secret-r1")):
+            assert clear not in body, f"{clear!r} crossed the pod network in clear"
+    assert pod.assignments[0]["run_token"] == "secret-r1", "and the pod, only it, opened it"
+    assert pod.private is None, "its key is dropped once used"
+
+
+async def test_a_pod_that_never_printed_a_key_gets_nothing() -> None:
+    cluster = FakeSandboxCluster()
+    cluster.publish_keys = False
+    cluster.warm(1)
+    executor = _executor(cluster)
+    ref = await executor.start(_spec("r-1", token="secret-r1"))
+    cluster.reconcile()
+    for _ in range(3):
+        assert (await executor.status(ref)).state == "pending"
+    pod = cluster.pod_of("r-1")
+    assert pod is not None and pod.wire == [] and pod.assignments == []
+    assert "choregos/assigned-at" not in str(cluster.claims["run-r-1"])
 
 
 async def test_a_failed_pod_says_why() -> None:
