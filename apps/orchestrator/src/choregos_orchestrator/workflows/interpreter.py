@@ -19,6 +19,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
+from .activity_names import named
 from .planification import executer_activite
 
 #: Attente maximale d'un run EN FILE (six heures), la même valeur que
@@ -68,21 +69,21 @@ POLL_RETRY = RetryPolicy(
 HISTORY_THRESHOLD = 20_000
 #: `migrate` reçoit la définition cible dans le signal, la consigne et ne tue plus le ticket
 #: (ADR 0031, S16-05). Les historiques d'avant ce marqueur rejouent l'ancien chemin.
-MIGRATION_PAR_DEFINITION = "migration-par-definition"
+MIGRATION_PAR_DEFINITION = "migration-par-definition"  # lang: fr-ok — a patch id is never renamed
 #: Rendu par `_wait_external` quand une migration le réveille : l'état ne bouge pas, la boucle migre.
 _MIGRATION = "\x00migration"
 #: Une transition système propose une action gouvernée, à date (S20-05). Les historiques d'avant
 #: ce marqueur n'en avaient pas : leurs transitions système ne connaissent que des garanties.
-ACTIONS_DE_TRANSITION = "actions-de-transition"
+ACTIONS_DE_TRANSITION = "actions-de-transition"  # lang: fr-ok — a patch id is never renamed
 #: Le filet d'une action qui attend : relue en base à ce rythme, au cas où `action_settled` se perd.
 RELECTURE_D_UNE_ACTION = timedelta(hours=6)
 #: Une transition humaine peut être une TÂCHE : un formulaire, une attestation (S20-06). Avant ce
 #: marqueur, toute transition humaine demandait une approbation.
-TACHES_HUMAINES = "taches-humaines"
+TACHES_HUMAINES = "taches-humaines"  # lang: fr-ok — a patch id is never renamed
 #: Le train porte au ticket la fin de SON départ, et l'approbation que son workflow exige (ADR 0041,
 #: S21-21). Avant ce marqueur, le ticket prenait pour sien tout événement `cd.*`, quel qu'en soit
 #: l'environnement : le staging terminé valait la prod.
-TRAIN_PAR_ENVIRONNEMENT = "train-par-environnement"
+TRAIN_PAR_ENVIRONNEMENT = "train-par-environnement"  # lang: fr-ok — a patch id is never renamed
 #: Un ticket garé par une question ou une escalade REPREND (#313) : une réponse, ou « Replay the
 #: stage », le ramène à l'état d'où il est parti, avec un budget de tentatives neuf. Avant ce
 #: marqueur, `on_answer: resume` était déclaré et rien ne le jouait : seul l'abandon en sortait.
@@ -706,7 +707,9 @@ class WorkflowInterpreter:
         if spec.not_before and not await self._attendre_la_date(spec.not_before):
             return None  # arrêté, ou une migration à appliquer : la boucle s'en charge
         proposee = await executer_activite(
-            action_activities.proposer_l_action_de_transition,
+            named(
+                action_activities.propose_transition_action, action_activities.proposer_l_action_de_transition
+            ),
             {
                 "project_id": params.project_id,
                 "work_item_id": params.work_item_id,
@@ -733,7 +736,7 @@ class WorkflowInterpreter:
                 statut = self.actions_reglees.pop(action_id)
             elif not self.stopped:
                 relue = await executer_activite(
-                    action_activities.etat_de_l_action,
+                    named(action_activities.action_state, action_activities.etat_de_l_action),
                     action_id,
                     start_to_close_timeout=timedelta(seconds=30),
                     retry_policy=DEFAULT_RETRY,

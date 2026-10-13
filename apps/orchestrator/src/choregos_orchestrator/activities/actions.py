@@ -55,7 +55,7 @@ async def _faits(session: Any, action_id: str, avant: int) -> list[dict[str, Any
 
 
 @activity.defn
-async def charger_l_action(action_id: str) -> dict[str, Any]:
+async def load_action(action_id: str) -> dict[str, Any]:
     async with db() as session:
         if await session.get(Action, action_id) is None:
             # Démarrée par la requête qui l'a décidée, AVANT que celle-ci ne valide sa transaction :
@@ -68,7 +68,7 @@ async def charger_l_action(action_id: str) -> dict[str, Any]:
 
 
 @activity.defn
-async def executer_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
+async def execute_effect(entree: dict[str, Any]) -> dict[str, Any]:
     action_id, position = str(entree["action_id"]), int(entree["position"])
     cle = f"{action_id}:{position}"
     async with db() as session:
@@ -137,7 +137,7 @@ async def _noter_l_echec(cle: str, erreur: str) -> None:
 
 
 @activity.defn
-async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
+async def compensate_effect(entree: dict[str, Any]) -> dict[str, Any]:
     """Défait un effet fait, avec ce que l'action a déclaré pour lui. Ne lève jamais : ce qu'elle
     n'a pas pu défaire, elle le dit, et le workflow compense les suivants quand même."""
     action_id, position = str(entree["action_id"]), int(entree["position"])
@@ -179,7 +179,7 @@ async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn
-async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:
+async def close_action(entree: dict[str, Any]) -> dict[str, Any]:
     action_id, statut = str(entree["action_id"]), str(entree["status"])
     ticket: str | None = None
     async with db() as session:
@@ -233,7 +233,7 @@ async def _prevenir(workflow_id: str, action_id: str, statut: str) -> None:
 
 
 @activity.defn
-async def proposer_l_action_de_transition(entree: dict[str, Any]) -> dict[str, Any]:
+async def propose_transition_action(entree: dict[str, Any]) -> dict[str, Any]:
     """L'action d'une transition système (S20-05), proposée une fois par tentative. Née approuvée —
     chaque opération est permise à ce projet —, elle part aussitôt dans son `ActionWorkflow`.
 
@@ -282,7 +282,7 @@ async def _demarrer(action_id: str) -> None:
 
 
 @activity.defn
-async def marquer_l_attente(entree: dict[str, Any]) -> dict[str, Any]:
+async def mark_awaiting_evidence(entree: dict[str, Any]) -> dict[str, Any]:
     """L'action attend la preuve d'un de ses effets (S20-08) — `awaiting_evidence`, avec l'effet et
     l'échéance —, ou ne l'attend plus. Ce que l'on montre ; l'attente elle-même est au workflow."""
     action_id = str(entree["action_id"])
@@ -301,8 +301,61 @@ async def marquer_l_attente(entree: dict[str, Any]) -> dict[str, Any]:
 
 
 @activity.defn
-async def etat_de_l_action(action_id: str) -> dict[str, Any]:
+async def action_state(action_id: str) -> dict[str, Any]:
     """Relu en base : le filet quand un signal `action_settled` se perd."""
     async with db() as session:
         action = await session.get(Action, action_id)
         return {"status": action.status if action is not None else ActionStatus.FAILED.value}
+
+
+# ─────────────── the French names, still registered (S34-02, ADR 0046) ───────────────
+#
+# A recorded history, and every workflow in flight when this version deploys, schedules these
+# activities under their French names: the worker must keep answering to them, with the same
+# implementation, or those workflows stop. New workflows schedule the English names (behind the
+# `english-activity-names` patch). Remove an alias only when no history that uses it can replay.
+
+ENGLISH_TO_FRENCH: dict[str, str] = {  # lang: fr-ok
+    "load_action": "charger_l_action",
+    "execute_effect": "executer_l_effet",
+    "compensate_effect": "compenser_l_effet",
+    "close_action": "cloturer_l_action",
+    "propose_transition_action": "proposer_l_action_de_transition",
+    "mark_awaiting_evidence": "marquer_l_attente",
+    "action_state": "etat_de_l_action",
+}
+
+
+@activity.defn(name="charger_l_action")  # lang: fr-ok
+async def charger_l_action(action_id: str) -> dict[str, Any]:
+    return await load_action(action_id)
+
+
+@activity.defn(name="executer_l_effet")  # lang: fr-ok
+async def executer_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
+    return await execute_effect(entree)
+
+
+@activity.defn(name="compenser_l_effet")  # lang: fr-ok
+async def compenser_l_effet(entree: dict[str, Any]) -> dict[str, Any]:
+    return await compensate_effect(entree)
+
+
+@activity.defn(name="cloturer_l_action")  # lang: fr-ok
+async def cloturer_l_action(entree: dict[str, Any]) -> dict[str, Any]:
+    return await close_action(entree)
+
+
+@activity.defn(name="proposer_l_action_de_transition")  # lang: fr-ok
+async def proposer_l_action_de_transition(entree: dict[str, Any]) -> dict[str, Any]:
+    return await propose_transition_action(entree)
+
+
+@activity.defn(name="marquer_l_attente")  # lang: fr-ok
+async def marquer_l_attente(entree: dict[str, Any]) -> dict[str, Any]:
+    return await mark_awaiting_evidence(entree)
+
+
+@activity.defn(name="etat_de_l_action")  # lang: fr-ok
+async def etat_de_l_action(action_id: str) -> dict[str, Any]:
+    return await action_state(action_id)

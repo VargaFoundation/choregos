@@ -266,7 +266,10 @@ async def signaler_une_preuve(action_id: str, position: int, ok: bool, detail: s
     from ..temporal import get_temporal
 
     await get_temporal().signal(
-        identifiant(action_id), "preuve", {"position": position, "ok": ok, "detail": detail}
+        # `evidence`: the English name of the signal (S34-02); the workflow still accepts `preuve`.
+        identifiant(action_id),
+        "evidence",
+        {"position": position, "ok": ok, "detail": detail},
     )
 
 

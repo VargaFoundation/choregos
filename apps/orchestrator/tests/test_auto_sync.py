@@ -104,7 +104,10 @@ async def test_un_environnement_auto_sync_sain_livre_le_ticket(
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
     if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
-        cible = HISTORIQUES / "train-auto-sync-S21-27.json"
+        english = os.environ["CHOREGOS_ARCHIVER_HISTORIQUE"] == "english"  # S34-02
+        cible = HISTORIQUES / (
+            "train-auto-sync-english-S34-02.json" if english else "train-auto-sync-S21-27.json"
+        )
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
 
 

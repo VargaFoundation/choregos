@@ -17,6 +17,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
+from .activity_names import named
 from .planification import executer_activite
 
 with workflow.unsafe.imports_passed_through():
@@ -25,7 +26,7 @@ with workflow.unsafe.imports_passed_through():
 #: Un effet peut demander qu'on attende la PREUVE qu'il a servi (S20-08) : il rend
 #: `{"attendre_une_preuve": {"jusqu_a": <iso>}}`, et le workflow attend le signal `preuve` jusque-là.
 #: Les historiques d'avant ce marqueur n'avaient aucun effet qui le demandât.
-PREUVE_ATTENDUE = "preuve-attendue"
+PREUVE_ATTENDUE = "preuve-attendue"  # lang: fr-ok — a patch id is never renamed
 
 
 class PreuveManquante(Exception):  # noqa: N818 - un refus nommé : la preuve n'est pas venue, ou dit non
@@ -60,11 +61,17 @@ class ActionWorkflow:
         """Ce que l'extérieur a constaté (un rapport du collecteur, une livraison) : `ok` et `detail`."""
         self.preuves[int(payload.get("position", -1))] = dict(payload)
 
+    @workflow.signal(name="evidence")
+    def evidence(self, payload: dict[str, Any]) -> None:
+        """The English name of `preuve` (S34-02): senders use it; `preuve` stays accepted for the
+        signals already in histories and the senders of an older version."""
+        self.preuve(payload)
+
     @workflow.run
     async def run(self, entree: dict[str, Any]) -> dict[str, Any]:
         action_id = str(entree["action_id"])
         plan = await executer_activite(
-            activites.charger_l_action,
+            named(activites.load_action, activites.charger_l_action),
             action_id,
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=LECTURE,
@@ -72,7 +79,7 @@ class ActionWorkflow:
         try:
             for position in range(int(plan["effets"])):
                 fait = await executer_activite(
-                    activites.executer_l_effet,
+                    named(activites.execute_effect, activites.executer_l_effet),
                     {"action_id": action_id, "position": position},
                     start_to_close_timeout=timedelta(minutes=5),
                     retry_policy=EFFET,
@@ -92,7 +99,7 @@ class ActionWorkflow:
             for position in reversed(self.faits):
                 compensations.append(
                     await executer_activite(
-                        activites.compenser_l_effet,
+                        named(activites.compensate_effect, activites.compenser_l_effet),
                         {"action_id": action_id, "position": position},
                         start_to_close_timeout=timedelta(minutes=5),
                         retry_policy=LECTURE,
@@ -100,7 +107,7 @@ class ActionWorkflow:
                 )
             self.etat = "failed"
             await executer_activite(
-                activites.cloturer_l_action,
+                named(activites.close_action, activites.cloturer_l_action),
                 {"action_id": action_id, "status": "failed", "error": cause, "compensations": compensations},
                 start_to_close_timeout=timedelta(seconds=30),
                 retry_policy=LECTURE,
@@ -108,7 +115,7 @@ class ActionWorkflow:
             return {"status": "failed", "error": cause, "compensations": compensations}
         self.etat = "succeeded"
         await executer_activite(
-            activites.cloturer_l_action,
+            named(activites.close_action, activites.cloturer_l_action),
             {"action_id": action_id, "status": "succeeded"},
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=LECTURE,
@@ -122,7 +129,7 @@ class ActionWorkflow:
         jusqu_a = datetime.fromisoformat(str(attente["jusqu_a"]))
         self.etat = "awaiting_evidence"
         await executer_activite(
-            activites.marquer_l_attente,
+            named(activites.mark_awaiting_evidence, activites.marquer_l_attente),
             {
                 "action_id": action_id,
                 "position": position,
@@ -142,7 +149,7 @@ class ActionWorkflow:
             raise PreuveManquante(f"the evidence says no: {preuve.get('detail') or 'no detail'}")
         self.etat = "running"
         await executer_activite(
-            activites.marquer_l_attente,
+            named(activites.mark_awaiting_evidence, activites.marquer_l_attente),
             {"action_id": action_id, "position": position, "en_attente": False, "preuve": preuve},
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=LECTURE,

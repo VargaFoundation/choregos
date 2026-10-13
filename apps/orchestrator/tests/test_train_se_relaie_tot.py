@@ -82,11 +82,11 @@ def _en_auto_sync() -> dict[str, Any]:
     async def load_train_config(payload: dict[str, Any]) -> dict[str, Any]:
         return {"mode": "auto_sync"}
 
-    @activity.defn(name="confirmer_auto_sync")
-    async def confirmer_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
+    @activity.defn(name="confirm_auto_sync")
+    async def confirm_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True}
 
-    return {"load_train_config": load_train_config, "confirmer_auto_sync": confirmer_auto_sync}
+    return {"load_train_config": load_train_config, "confirm_auto_sync": confirm_auto_sync}
 
 
 async def _premier_run_se_relaie(handle: Any, timeout: float = 60) -> str:
@@ -220,7 +220,7 @@ async def test_une_synchro_auto_sync_se_relaie(temporal_env: Any, worker_factory
         await suite.signal("abort", {"by": "test"})
         await suite.result()
 
-    assert _activites(historique)[-1] == "confirmer_auto_sync"
+    assert _activites(historique)[-1] == "confirm_auto_sync", "English name (S34-02)"
     assert LE_TRAIN_SE_RELAIE_TOT in _marqueurs(historique)
     assert _entree_du_relais(historique)["batch_no"] == 2
 

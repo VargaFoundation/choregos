@@ -152,3 +152,40 @@ async def test_sans_preuve_avant_l_echeance_l_action_echoue(
         resultat = await handle.result()  # le temps saute jusqu'à l'échéance
     assert resultat["status"] == "failed" and "timed out" in resultat["error"]
     assert [nom for nom, _ in faits][-1] == "defaire"
+
+
+async def test_the_evidence_signal_and_english_activity_names(
+    setup: Fixture, temporal_env: Any, worker_factory: Any, faits: list[Any]
+) -> None:
+    """S34-02: a new action schedules the English activity names, takes the `evidence` signal, and
+    its history replays. Archived as the English counterpart of `action-preuve-S20-08`."""
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.api.enums.v1 import EventType
+    from temporalio.worker import Replayer
+
+    jusqu_a = (await temporal_env.get_current_time() + timedelta(hours=1)).isoformat()
+    action_id = await _action(setup, jusqu_a)
+    async with worker_factory():
+        handle = await _demarrer(temporal_env, action_id)
+        await _en_attente(action_id)
+        await handle.signal("evidence", {"position": 1, "ok": True, "detail": "the key is gone"})
+        resultat = await handle.result()
+        historique = await handle.fetch_history()
+    assert resultat["status"] == "succeeded"
+    activites = [
+        e.activity_task_scheduled_event_attributes.activity_type.name
+        for e in historique.events
+        if e.event_type == EventType.EVENT_TYPE_ACTIVITY_TASK_SCHEDULED
+    ]
+    assert activites == [
+        "load_action",
+        "execute_effect",
+        "execute_effect",
+        "mark_awaiting_evidence",
+        "mark_awaiting_evidence",
+        "close_action",
+    ], activites
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
+    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+        cible = HISTORIQUES / "action-evidence-english-S34-02.json"
+        cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")

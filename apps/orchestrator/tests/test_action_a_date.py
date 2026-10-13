@@ -180,7 +180,8 @@ async def test_l_action_attend_j_moins_10_puis_part_et_le_ticket_l_apprend_par_u
     assert "action_settled" in signaux, "l'ActionWorkflow prévient le ticket : il n'attend pas sa relecture"
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
     if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
-        cible = HISTORIQUES / "wi-action-a-date-S20-05.json"
+        english = os.environ["CHOREGOS_ARCHIVER_HISTORIQUE"] == "english"  # S34-02
+        cible = HISTORIQUES / ("wi-action-english-S34-02.json" if english else "wi-action-a-date-S20-05.json")
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
