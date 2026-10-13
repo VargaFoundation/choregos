@@ -91,6 +91,30 @@ async def validate(body: WorkflowValidateRequest) -> WorkflowValidation:
     )
 
 
+@router.post(
+    "/projects/{id}/workflows/validate",
+    response_model=WorkflowValidation,
+    operation_id="validateProjectWorkflow",
+)
+async def validate_for_project(
+    ctx: ProjectCtx, body: WorkflowValidateRequest, session: Db
+) -> WorkflowValidation:
+    """The same validation, in the context of a project: it also warns about a human actor whose group
+    nobody in the project's organisation carries (a step addressed to it waits for an administrator)."""
+    from ..services.human_groups import groups_known_in, unknown_group_warnings
+
+    validation = await validate(body)
+    if not validation.valid or validation.graph is None:
+        return validation
+    import yaml as yaml_lib
+
+    source = body.yaml or yaml_lib.safe_dump(body.json_doc or {}, sort_keys=False, allow_unicode=True)
+    workflow, _ = parse_workflow(source, strict=False)
+    known = await groups_known_in(session, ctx.project.org_id)
+    validation.warnings += [WorkflowIssue(**issue) for issue in unknown_group_warnings(workflow, known)]
+    return validation
+
+
 @router.post("/workflows/edit", response_model=WorkflowEditResult, operation_id="editWorkflow")
 async def edit(body: WorkflowEditRequest) -> WorkflowEditResult:
     """Des opérations typées, greffées dans le texte ; rien n'est enregistré (ADR 0031).

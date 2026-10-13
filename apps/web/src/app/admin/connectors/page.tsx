@@ -140,6 +140,7 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
                 <th className="py-1 font-normal">Access</th>
                 <th className="py-1 font-normal">Policy</th>
                 <th className="py-1 font-normal">Project groups</th>
+                <th className="py-1 font-normal">Approver group</th>
               </tr>
             </thead>
             <tbody>
@@ -157,6 +158,7 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
 function Operation({ org, connecteur, operation }: { org: string; connecteur: string; operation: ConnectorOperation }) {
   const client = useQueryClient();
   const [groupes, setGroupes] = useState((operation.groups ?? []).join(", "));
+  const [approbateurs, setApprobateurs] = useState(operation.approver_group ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
   const [assouplir, setAssouplir] = useState<OperationPatch["policy"] | null>(null);
   async function changer(corps: OperationPatch) {
@@ -252,6 +254,34 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
             Set
           </Button>
         </form>
+      </td>
+      <td>
+        {operation.access === "write" ? (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              // Empty clears it: the project's owners decide again.
+              void changer({ approver_group: approbateurs.trim() || null });
+            }}
+          >
+            <label className="sr-only" htmlFor={`approbateurs-${connecteur}-${operation.name}`}>
+              Approver group of {operation.name}
+            </label>
+            <Input
+              id={`approbateurs-${connecteur}-${operation.name}`}
+              className="w-40"
+              placeholder="Project owners"
+              value={approbateurs}
+              onChange={(event) => setApprobateurs(event.target.value)}
+            />
+            <Button size="sm" type="submit" disabled={approbateurs.trim() === (operation.approver_group ?? "")}>
+              Set
+            </Button>
+          </form>
+        ) : (
+          <span className="text-xs text-ink-muted">A read: nobody approves it</span>
+        )}
       </td>
     </tr>
   );

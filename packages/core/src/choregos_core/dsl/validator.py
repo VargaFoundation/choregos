@@ -580,6 +580,15 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
             ["transitions"],
             source,
         )
+    for actor_id, declared in wf.actors.items():
+        if isinstance(declared, HumanActor) and not declared.group.strip():
+            report.warn(
+                "actor.group_empty",
+                f"human actor `{actor_id}` names no group: nobody can answer its steps but an "
+                "organisation administrator",
+                ["actors", actor_id, "group"],
+                source,
+            )
     for actor_id in wf.actors:
         used = any(t.by == actor_id for t in wf.transitions) or any(
             actor_id in (t.review.agents if t.review else []) for t in wf.transitions
