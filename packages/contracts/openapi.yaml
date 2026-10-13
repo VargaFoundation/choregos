@@ -963,7 +963,7 @@ paths:
       tags: [costs]
       operationId: getProjectCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
@@ -975,7 +975,7 @@ paths:
       operationId: exportProjectCostsCsv
       summary: The cost report as CSV (`;` separator, UTF-8 BOM)
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
       responses:
@@ -1008,10 +1008,23 @@ paths:
       tags: [costs]
       operationId: getOrgCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, project, model], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key" }
         - { name: since, in: query, schema: { type: string, format: date } }
+        - { name: until, in: query, schema: { type: string, format: date } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
+  /orgs/{org}/costs.csv:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [costs]
+      operationId: exportOrgCostsCsv
+      summary: The organisation's cost report as CSV, in any grouping
+      parameters:
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
+        - { name: since, in: query, schema: { type: string, format: date } }
+        - { name: until, in: query, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /templates:
     get:
       tags: [templates]

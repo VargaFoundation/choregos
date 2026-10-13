@@ -14,7 +14,7 @@ from choregos_core import aware, utcnow
 from fastapi import APIRouter, Query, Response
 from sqlalchemy import func, select
 
-from ..db.models import CostLedger, Deployment, Finding, Organization, Project, Release, Run
+from ..db.models import CostLedger, Deployment, Finding, Organization, Project, Release, Run, WorkItem
 from ..deps import Db, Me, ProjectCtx
 from ..errors import forbidden, not_found
 from ..rbac import Permission
@@ -41,7 +41,13 @@ GROUPS: dict[str, Any] = {
     "backend": CostLedger.backend,
     "size": CostLedger.size,
     "project": CostLedger.project_id,
+    # Who spent it (S29-01, S29-02).
+    "agent": CostLedger.agent_slug,
+    "workflow": CostLedger.workflow_name,
+    "work_item": CostLedger.work_item_id,
 }
+#: Every grouping, at project and organisation scope alike, and in the CSV.
+GROUP_PATTERN = "^(day|stage|model|backend|size|kind|agent|workflow|work_item|project)$"
 
 
 def _default_since() -> datetime:
@@ -96,22 +102,50 @@ async def _report(
     )
 
 
+def _period(since: date | None, until: date | None) -> list[Any]:
+    """The ledger lines of a period: `since` (default 30 days ago) to `until`, both inclusive."""
+    where: list[Any] = [
+        CostLedger.ts >= (datetime.combine(since, datetime.min.time()) if since else _default_since())
+    ]
+    if until:
+        where.append(CostLedger.ts <= datetime.combine(until, datetime.max.time()))
+    return where
+
+
+async def _readable_keys(session: Db, report: CostReport, org_id: str | None) -> CostReport:
+    """A project is named by its slug and a work item by its tracker key, not by their identifiers."""
+    if report.group_by == "project":
+        query = select(Project.id, Project.slug)
+        if org_id is not None:
+            query = query.where(Project.org_id == org_id)
+        names = {str(r[0]): str(r[1]) for r in (await session.execute(query)).all()}
+    elif report.group_by == "work_item":
+        ids = [r.key for r in report.rows if r.key != "—"]
+        rows = (
+            await session.execute(select(WorkItem.id, WorkItem.tracker_key).where(WorkItem.id.in_(ids)))
+        ).all()
+        names = {str(r[0]): str(r[1]) for r in rows}
+    else:
+        return report
+    for row in report.rows:
+        row.key = names.get(row.key, row.key)
+    return report
+
+
 @router.get("/projects/{id}/costs", response_model=CostReport, operation_id="getProjectCosts")
 async def project_costs(
     ctx: ProjectCtx,
     session: Db,
-    group_by: Annotated[str, Query(pattern="^(day|stage|model|backend|size|kind)$")] = "day",
+    group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
 ) -> CostReport:
-    where: list[Any] = [CostLedger.project_id == ctx.id]
-    where.append(
-        CostLedger.ts >= (datetime.combine(since, datetime.min.time()) if since else _default_since())
-    )
-    if until:
-        where.append(CostLedger.ts <= datetime.combine(until, datetime.max.time()))
+    where: list[Any] = [CostLedger.project_id == ctx.id, *_period(since, until)]
     policy = await effective_policy(session, ctx.id)
-    return await _report(session, where=where, group_by=group_by, budget_usd=policy.budgets.daily_project_usd)
+    report = await _report(
+        session, where=where, group_by=group_by, budget_usd=policy.budgets.daily_project_usd
+    )
+    return await _readable_keys(session, report, None)
 
 
 @router.get("/orgs/{org}/costs", response_model=CostReport, operation_id="getOrgCosts")
@@ -119,8 +153,9 @@ async def org_costs(
     org: str,
     session: Db,
     principal: Me,
-    group_by: Annotated[str, Query(pattern="^(day|project|model)$")] = "day",
+    group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
+    until: Annotated[date | None, Query()] = None,
 ) -> CostReport:
     organization = (
         await session.execute(select(Organization).where(Organization.slug == org))
@@ -132,19 +167,9 @@ async def org_costs(
     project_ids = (
         (await session.execute(select(Project.id).where(Project.org_id == organization.id))).scalars().all()
     )
-    where: list[Any] = [CostLedger.project_id.in_(list(project_ids) or [""])]
-    where.append(
-        CostLedger.ts >= (datetime.combine(since, datetime.min.time()) if since else _default_since())
-    )
+    where: list[Any] = [CostLedger.project_id.in_(list(project_ids) or [""]), *_period(since, until)]
     report = await _report(session, where=where, group_by=group_by)
-    if group_by == "project":
-        slug_rows = (
-            await session.execute(select(Project.id, Project.slug).where(Project.org_id == organization.id))
-        ).all()
-        slugs: dict[str, str] = {str(row[0]): str(row[1]) for row in slug_rows}
-        for row in report.rows:
-            row.key = slugs.get(row.key, row.key)
-    return report
+    return await _readable_keys(session, report, organization.id)
 
 
 @router.get(
@@ -156,12 +181,36 @@ async def org_costs(
 async def project_costs_csv(
     ctx: ProjectCtx,
     session: Db,
-    group_by: Annotated[str, Query(pattern="^(day|stage|model|backend|size|kind)$")] = "day",
+    group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
 ) -> Response:
     """Le même rapport, en CSV : de quoi le recoller dans un tableur ou une facturation."""
     report = await project_costs(ctx, session, group_by=group_by, since=since, until=until)
+    return _csv_response(report, f"couts-{ctx.slug}-{group_by}-{utcnow():%Y%m%d}.csv")
+
+
+@router.get(
+    "/orgs/{org}/costs.csv",
+    operation_id="exportOrgCostsCsv",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}, "description": "Organisation cost report as CSV"}},
+)
+async def org_costs_csv(
+    org: str,
+    session: Db,
+    principal: Me,
+    group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
+    since: Annotated[date | None, Query()] = None,
+    until: Annotated[date | None, Query()] = None,
+) -> Response:
+    """The organisation's report, in the grouping the screen shows."""
+    report = await org_costs(org, session, principal, group_by=group_by, since=since, until=until)
+    return _csv_response(report, f"couts-{org}-{group_by}-{utcnow():%Y%m%d}.csv")
+
+
+def _csv_response(report: CostReport, filename: str) -> Response:
+    group_by = report.group_by
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow([group_by, "cout_usd", "cout_eur", "tokens_in", "tokens_out", "tokens_caches", "runs"])
@@ -181,7 +230,6 @@ async def project_costs_csv(
     writer.writerow(["total", f"{report.total.cost_usd:.6f}", f"{report.total.cost_eur:.6f}"])
     if report.total.budget_usd is not None:
         writer.writerow(["budget_quotidien_usd", f"{report.total.budget_usd:.2f}"])
-    filename = f"couts-{ctx.slug}-{group_by}-{utcnow():%Y%m%d}.csv"
     return Response(
         # Excel francophone lit le point-virgule ; le BOM lui évite de casser les accents.
         content="﻿" + buffer.getvalue(),
