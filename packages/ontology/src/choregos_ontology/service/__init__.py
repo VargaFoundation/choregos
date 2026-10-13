@@ -1,14 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""L'ontologie servie par le cœur de Choregos, comme un greffon (essai, éléments 2 et 3).
+"""The ontology served by the Choregos core, as a plugin (trial, items 2 and 3).
 
-Ce sous-paquet est la partie « service » de l'essai : il parle à PostgreSQL et à l'API du cœur
-(`choregos-api`, extra `service`). Le reste de `choregos_ontology` — modèle, chargement,
-validation, compilation, observations — reste sans I/O.
+This sub-package is the trial's "service" part: it talks to PostgreSQL and to the core's API
+(`choregos-api`, extra `service`). The rest of `choregos_ontology` — model, loading, validation,
+compilation, observations — has no I/O.
 
-Le greffon passe par les coutures du cœur, et par elles seules :
-- `choregos.plugins` → `plugin.brancher()` déclare ses routes (`declarer_un_routeur`) et ses
-  outils de run (`declarer_un_fournisseur_d_outils`) ;
-- `choregos.migrations` → `plugin.MIGRATIONS`, une branche Alembic qui crée SES tables, sous RLS.
+The plugin goes through the core's seams, and through them only:
+- `choregos.plugins` → `plugin.register()` declares its routes and its run tools;
+- `choregos.migrations` → `plugin.MIGRATIONS`, an Alembic branch that creates ITS tables, under RLS.
 
-Rien n'est importé du cœur au chargement de ce module : `brancher()` importe ce qu'il faut.
+Nothing is imported from the core when this module loads: `register()` imports what it needs.
 """

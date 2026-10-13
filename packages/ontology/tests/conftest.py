@@ -47,7 +47,7 @@ def mutate(core_ref: Path) -> Mutate:
 
 
 @pytest.fixture
-def greffon(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def plugin(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """The plugin, active for the duration of the test: its entry points come from the installed
     package, and `CHOREGOS_ESSAI_ONTOLOGIE=1` switches it on — exactly as in a deployment."""
     from choregos_api.greffons import reinitialiser
@@ -60,7 +60,7 @@ def greffon(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 @pytest.fixture
-async def app(greffon: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
+async def app(plugin: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     """The core's application, built AFTER the plugin is installed — as a pod would start."""
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
@@ -68,7 +68,7 @@ async def app(greffon: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     from choregos_api.main import create_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/greffon.db")
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/plugin.db")
     reset_settings_cache()
     await db_session.dispose_engine()
     set_temporal(FakeTemporal())
@@ -86,25 +86,27 @@ async def client(app: Any) -> AsyncIterator[AsyncClient]:
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
 
-    from .aides import connecter
+    from .helpers import sign_in
 
     async with session_scope() as session:
         session.add(Organization(slug="varga", name="Varga Foundation"))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
-        await connecter(http, "admin@varga.dev")
+        await sign_in(http, "admin@varga.dev")
         yield http
 
 
 @pytest.fixture
-async def projet(client: AsyncClient) -> dict[str, Any]:
-    from .aides import creer_projet
+async def project(client: AsyncClient) -> dict[str, Any]:
+    from .helpers import create_project
 
-    return await creer_projet(client, "infra")
+    return await create_project(client, "infra")
 
 
-class PasserelleDeTest:
-    """La passerelle Temporal de l'API branchée sur le serveur de test (S20-08) : une action approuvée
-    part VRAIMENT dans un `ActionWorkflow`, et une preuve remise atteint le workflow qui l'attend."""
+class TestServerGateway:
+    """The API's Temporal gateway wired to the test server (S20-08): an approved action REALLY leaves
+    for an `ActionWorkflow`, and evidence handed back reaches the workflow that waits for it."""
+
+    __test__ = False  # not a test class, despite its name
 
     def __init__(self, client: Any) -> None:
         self.client = client
@@ -144,23 +146,23 @@ class PasserelleDeTest:
 
 @pytest.fixture
 async def temporal(app: Any) -> AsyncIterator[Any]:
-    """Un serveur Temporal de test et les workers de la plateforme : l'`ActionWorkflow` joue les
-    effets de l'ontologie, comme dans un déploiement."""
+    """A Temporal test server and the platform's workers: the `ActionWorkflow` plays the ontology's
+    effects, as in a deployment."""
     from choregos_api.temporal import set_temporal
     from choregos_orchestrator.activities import ALL_ACTIVITIES
     from choregos_orchestrator.testing import workers_repartis
     from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
     from temporalio.testing import WorkflowEnvironment
 
-    environnement = await WorkflowEnvironment.start_time_skipping()
-    set_temporal(PasserelleDeTest(environnement.client))
+    environment = await WorkflowEnvironment.start_time_skipping()
+    set_temporal(TestServerGateway(environment.client))
     try:
         async with workers_repartis(
-            environnement.client,
+            environment.client,
             activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
             workflows=ALL_WORKFLOWS,
             file_du_workflow="test",
         ):
-            yield environnement
+            yield environment
     finally:
-        await environnement.shutdown()
+        await environment.shutdown()

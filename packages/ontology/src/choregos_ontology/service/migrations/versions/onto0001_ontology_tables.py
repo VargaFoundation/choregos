@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les tables de l'ontologie : versions compilées et objets des datasources `table`, sous RLS
+"""The ontology's tables: compiled versions and the objects of `table` datasources, under RLS
 
-Branche `ontology` du greffon de l'essai : elle dépend de la tête du cœur et ne touche à aucune
-table du cœur. Sur PostgreSQL, les deux tables sont sous RLS forcée, rattachées à l'organisation
-par leur projet — la même politique que les tables du cœur.
+The `ontology` branch of the trial's plugin: it depends on the core's head and touches none of the
+core's tables. On PostgreSQL both tables are under forced RLS, attached to the organisation through
+their project — the same policy as the core's tables.
 
 Revision ID: onto0001
 Revises:

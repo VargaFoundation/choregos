@@ -1,22 +1,22 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les éléments 4 à 6 de l'essai, sur le paquet IT4IT : proposer, valider, ouvrir la PR, prouver.
+"""Trial items 4 to 6, on the IT4IT package: propose, approve, open the PR, prove.
 
-4. L'agent propose, par l'outil généré `action_open_infra_pr` et avec son jeton de run, une action
-   dont l'effet est `gitops.pull_request` : la proposition attend une validation, avec sa
-   justification. Rien n'est encore ouvert.
-5. Un humain valide avec une authentification récente (sinon 401 vers `?reauth=1`) ; la PLATEFORME
-   écrit les fichiers et ouvre la PR sur `choregos/<proposition>` par l'adaptateur SCM du cœur. La
-   décision est consignée avec l'âge de l'authentification (`auth_age_seconds`).
-6. La preuve : `verify_finding_fixed` attend le rapport suivant du collecteur ; `succeeded` seulement
-   si la clé du constat en est absente. Une couche absente, une ligne `unreachable`, un rapport
-   partiel ou un délai dépassé la font échouer — jamais « clé absente ».
+4. The agent proposes, through the generated tool `action_open_infra_pr` and with its run token, an
+   action whose effect is `gitops.pull_request`: the proposal waits for an approval, with its
+   justification. Nothing is open yet.
+5. A person approves with a recent authentication (otherwise 401 towards `?reauth=1`); the PLATFORM
+   writes the files and opens the PR on `choregos/<proposal>` through the core's SCM adapter. The
+   decision is recorded with the age of the authentication (`auth_age_seconds`).
+6. The evidence: `verify_finding_fixed` waits for the collector's next report; `succeeded` only if the
+   finding's key is absent from it. An absent layer, an `unreachable` line, a partial report or a
+   timeout fail it — never "key absent".
 
-Depuis S20-08, une proposition est une action du CŒUR : décidée par `decider`, jouée par
-l'`ActionWorkflow` dans un serveur Temporal de test — jamais dans la requête qui l'approuve. Les
-tests attendent donc l'état qu'ils vérifient.
+Since S20-08, a proposal is a CORE action: decided by `decider`, played by the `ActionWorkflow` in a
+Temporal test server — never in the request that approves it. The tests therefore wait for the state
+they check.
 
-Ce que ces tests ne prouvent pas : la console (la décision passe par l'API), un vrai GitHub (le SCM
-est le faux du cœur, dont l'adaptateur GitHub a ses propres tests).
+What these tests do not prove: the console (the decision goes through the API), a real GitHub (the SCM
+is the core's fake, whose GitHub adapter has its own tests).
 """
 
 from __future__ import annotations
@@ -28,16 +28,26 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from .aides import IT4IT, appeler_outil, connecter, creer_run, ligne, objets, paquet, poster, rapport
+from .helpers import (
+    IT4IT,
+    call_tool,
+    create_run,
+    line,
+    package_files,
+    post_report,
+    report,
+    sign_in,
+    stored_objects,
+)
 
 RUN = "run-agent-1"
-CLE = "os-reboot-required"
-SEMAINE_1 = rapport(
-    ligne("reboot-required", "node-1", "finding", severity="medium", observed_at="2026-10-03T08:00:00Z"),
-    ligne("reboot-required", "node-2", "finding", severity="high", observed_at="2026-10-03T08:00:01Z"),
-    ligne("ntp-drift", "node-1", "finding", severity="low", observed_at="2026-10-03T08:00:02Z"),
+KEY = "os-reboot-required"
+WEEK_1 = report(
+    line("reboot-required", "node-1", "finding", severity="medium", observed_at="2026-10-03T08:00:00Z"),
+    line("reboot-required", "node-2", "finding", severity="high", observed_at="2026-10-03T08:00:01Z"),
+    line("ntp-drift", "node-1", "finding", severity="low", observed_at="2026-10-03T08:00:02Z"),
 )
-CORRECTIF = {
+FIX = {
     "title": "Reboot the nodes that need it",
     "path": "platform/maintenance/reboot.yaml",
     "content": "nodes: [node-1, node-2]\nstrategy: one-at-a-time\n",
@@ -46,411 +56,414 @@ CORRECTIF = {
 
 @pytest.fixture
 def scm() -> Iterator[Any]:
-    """Un SCM partagé par toutes les requêtes du test, et l'horloge du moteur remise à l'heure."""
+    """One SCM shared by every request of the test, and the engine's clock reset."""
     from choregos_adapters.fakes import FakeScm
     from choregos_ontology.service import actions
 
-    faux = FakeScm()
-    actions.replace_scm(faux)
+    fake = FakeScm()
+    actions.replace_scm(fake)
     try:
-        yield faux
+        yield fake
     finally:
         actions.replace_scm(None)
         actions.CLOCK.offset = timedelta()
 
 
 @pytest.fixture
-async def it4it(client: AsyncClient, projet: dict[str, Any], scm: Any, temporal: Any) -> dict[str, str]:
-    depot = await client.put(f"/api/v1/projects/{projet['id']}/ontology", json={"files": paquet(IT4IT)})
-    assert depot.status_code == 200, depot.text
-    assert (await poster(client, projet, SEMAINE_1)).status_code == 200
-    return await creer_run(projet, RUN)
+async def it4it(client: AsyncClient, project: dict[str, Any], scm: Any, temporal: Any) -> dict[str, str]:
+    upload = await client.put(
+        f"/api/v1/projects/{project['id']}/ontology", json={"files": package_files(IT4IT)}
+    )
+    assert upload.status_code == 200, upload.text
+    assert (await post_report(client, project, WEEK_1)).status_code == 200
+    return await create_run(project, RUN)
 
 
-async def _proposer(client: AsyncClient, entetes: dict[str, str], **correctif: Any) -> Any:
+async def _propose(client: AsyncClient, headers: dict[str, str], **fix: Any) -> Any:
     arguments = {
-        "target": [correctif.pop("target", CLE)],
+        "target": [fix.pop("target", KEY)],
         "justification": "Two nodes report reboot-required since the last kernel update; one PR fixes both.",
-        "params": {**CORRECTIF, **correctif},
+        "params": {**FIX, **fix},
     }
-    return await appeler_outil(client, RUN, entetes, "action_open_infra_pr", arguments)
+    return await call_tool(client, RUN, headers, "action_open_infra_pr", arguments)
 
 
-async def _decider(client: AsyncClient, projet: dict[str, Any], proposition: str, decision: str) -> Any:
-    chemin = f"/api/v1/projects/{projet['id']}/proposals/{proposition}/decision"
-    return await client.post(chemin, json={"decision": decision, "reason": "checked the diff"})
+async def _decide(client: AsyncClient, project: dict[str, Any], proposal: str, decision: str) -> Any:
+    path = f"/api/v1/projects/{project['id']}/proposals/{proposal}/decision"
+    return await client.post(path, json={"decision": decision, "reason": "checked the diff"})
 
 
-async def _proposition(client: AsyncClient, projet: dict[str, Any], proposition: str) -> dict[str, Any]:
-    reponse = await client.get(f"/api/v1/projects/{projet['id']}/proposals/{proposition}")
-    assert reponse.status_code == 200, reponse.text
-    return dict(reponse.json())
+async def _proposal(client: AsyncClient, project: dict[str, Any], proposal: str) -> dict[str, Any]:
+    response = await client.get(f"/api/v1/projects/{project['id']}/proposals/{proposal}")
+    assert response.status_code == 200, response.text
+    return dict(response.json())
 
 
-async def _jusqu_a(
-    client: AsyncClient, projet: dict[str, Any], proposition: str, *statuts: str
+async def _until(
+    client: AsyncClient, project: dict[str, Any], proposal: str, *statuses: str
 ) -> dict[str, Any]:
-    """L'`ActionWorkflow` joue l'action hors de la requête : on attend l'état qu'on vérifie."""
+    """The `ActionWorkflow` plays the action outside the request: wait for the state to check."""
     import asyncio
 
     for _ in range(400):
-        dossier = await _proposition(client, projet, proposition)
-        if dossier["status"] in statuts:
-            return dossier
+        file = await _proposal(client, project, proposal)
+        if file["status"] in statuses:
+            return file
         await asyncio.sleep(0.05)
-    raise AssertionError(f"{proposition} : {dossier['status']}, jamais {statuts} ({dossier.get('error')})")
+    raise AssertionError(f"{proposal}: {file['status']}, never {statuses} ({file.get('error')})")
 
 
-# ───────────────────────────── élément 4 : proposer ─────────────────────────────
+# ───────────────────────────── item 4: propose ─────────────────────────────
 
 
-async def test_l_agent_propose_une_pr_qui_attend_une_validation(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], scm: Any
+async def test_the_agent_proposes_a_pr_that_waits_for_an_approval(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
-    reponse = await _proposer(client, it4it)
-    assert reponse["status_code"] == 201, reponse
-    proposition = reponse["result"]
-    assert proposition["status"] == "pending_approval"
-    assert proposition["justification"].startswith("Two nodes report")
-    assert proposition["proposed_by"] == {"kind": "agent", "id": "agent:platform", "run_id": RUN}
-    assert proposition["approval"]["mode"] == "human"
-    assert proposition["approval"]["step_up_minutes"] == 10
-    assert scm.prs == {} and scm.commits == [], "rien n'est ouvert avant la validation"
-    lue = await _proposition(client, projet, proposition["proposal"])
-    assert lue["status"] == "pending_approval"
+    response = await _propose(client, it4it)
+    assert response["status_code"] == 201, response
+    proposal = response["result"]
+    assert proposal["status"] == "pending_approval"
+    assert proposal["justification"].startswith("Two nodes report")
+    assert proposal["proposed_by"] == {"kind": "agent", "id": "agent:platform", "run_id": RUN}
+    assert proposal["approval"]["mode"] == "human"
+    assert proposal["approval"]["step_up_minutes"] == 10
+    assert scm.prs == {} and scm.commits == [], "nothing is open before the approval"
+    read = await _proposal(client, project, proposal["proposal"])
+    assert read["status"] == "pending_approval"
 
 
-async def test_la_meme_proposition_deux_fois_rend_la_premiere(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+async def test_the_same_proposal_twice_returns_the_first(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
 ) -> None:
-    premiere = await _proposer(client, it4it)
-    seconde = await _proposer(client, it4it)
-    assert seconde["status_code"] == 200
-    assert seconde["result"]["proposal"] == premiere["result"]["proposal"]
-    assert seconde["result"]["idempotent_replay"] is True
-    toutes = await client.get(f"/api/v1/projects/{projet['id']}/proposals")
-    assert len(toutes.json()) == 1
+    first = await _propose(client, it4it)
+    second = await _propose(client, it4it)
+    assert second["status_code"] == 200
+    assert second["result"]["proposal"] == first["result"]["proposal"]
+    assert second["result"]["idempotent_replay"] is True
+    every = await client.get(f"/api/v1/projects/{project['id']}/proposals")
+    assert len(every.json()) == 1
 
 
-async def test_un_chemin_hors_de_paths_allowed_est_refuse_a_la_proposition(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+async def test_a_path_outside_paths_allowed_is_refused_at_proposal_time(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
 ) -> None:
-    refus = await _proposer(client, it4it, path="secrets/vault-token.yaml")
-    assert refus["status_code"] == 422
-    assert "outside paths_allowed" in refus["result"]["message"]
-    remontee = await _proposer(client, it4it, path="platform/../secrets/x.yaml")
-    assert remontee["status_code"] == 422
-    assert (await client.get(f"/api/v1/projects/{projet['id']}/proposals")).json() == []
+    refusal = await _propose(client, it4it, path="secrets/vault-token.yaml")
+    assert refusal["status_code"] == 422
+    assert "outside paths_allowed" in refusal["result"]["message"]
+    climbing = await _propose(client, it4it, path="platform/../secrets/x.yaml")
+    assert climbing["status_code"] == 422
+    assert (await client.get(f"/api/v1/projects/{project['id']}/proposals")).json() == []
 
 
-async def test_une_precondition_fausse_rend_la_proposition_invalide(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+async def test_a_false_precondition_makes_the_proposal_invalid(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
 ) -> None:
-    assert (await poster(client, projet, rapport(ligne("ntp-drift", "node-1", "ok")))).status_code == 200
-    refus = await _proposer(client, it4it, target="os-ntp-drift", path="platform/ntp.yaml")
-    assert refus["status_code"] == 422
-    assert refus["result"]["precondition"] == "finding_open"
-    assert (await client.get(f"/api/v1/projects/{projet['id']}/proposals")).json() == []
+    assert (await post_report(client, project, report(line("ntp-drift", "node-1", "ok")))).status_code == 200
+    refusal = await _propose(client, it4it, target="os-ntp-drift", path="platform/ntp.yaml")
+    assert refusal["status_code"] == 422
+    assert refusal["result"]["precondition"] == "finding_open"
+    assert (await client.get(f"/api/v1/projects/{project['id']}/proposals")).json() == []
 
 
-async def test_les_outils_de_statut_et_de_liste(client: AsyncClient, it4it: dict[str, str]) -> None:
-    proposition = (await _proposer(client, it4it))["result"]["proposal"]
-    statut = await appeler_outil(client, RUN, it4it, "action_status", {"proposal": proposition})
-    assert statut["result"]["status"] == "pending_approval"
-    liste = await appeler_outil(client, RUN, it4it, "action_list", {"status": "pending_approval"})
-    assert [p["proposal"] for p in liste["result"]["proposals"]] == [proposition]
+async def test_the_status_and_list_tools(client: AsyncClient, it4it: dict[str, str]) -> None:
+    proposal = (await _propose(client, it4it))["result"]["proposal"]
+    status = await call_tool(client, RUN, it4it, "action_status", {"proposal": proposal})
+    assert status["result"]["status"] == "pending_approval"
+    listed = await call_tool(client, RUN, it4it, "action_list", {"status": "pending_approval"})
+    assert [p["proposal"] for p in listed["result"]["proposals"]] == [proposal]
 
 
-# ───────────────────────────── élément 5 : valider, la plateforme ouvre la PR ─────────────────────────────
+# ───────────────────────────── item 5: approve, the platform opens the PR ─────────────────────────────
 
 
-async def test_valider_exige_une_authentification_recente_puis_la_plateforme_ouvre_la_pr(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], scm: Any
+async def test_approving_needs_a_recent_authentication_then_the_platform_opens_the_pr(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
     import time
 
     from choregos_api import fraicheur
 
-    proposition = (await _proposer(client, it4it))["result"]["proposal"]
+    proposal = (await _propose(client, it4it))["result"]["proposal"]
 
-    # Onze minutes plus tard, l'authentification de la session a vieilli au-delà de `stepUp`.
-    plus_tard = time.time() + 11 * 60
+    # Eleven minutes later, the session's authentication is older than `stepUp`.
+    later = time.time() + 11 * 60
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(fraicheur.time, "time", lambda: plus_tard)
-        refus = await _decider(client, projet, proposition, "approve")
-    assert refus.status_code == 401, refus.text
-    assert refus.json()["errors"][0]["error"] == "step_up_required"
-    assert refus.json()["errors"][0]["reauth"] == "GET /api/v1/auth/login?reauth=1"
+        patch.setattr(fraicheur.time, "time", lambda: later)
+        refusal = await _decide(client, project, proposal, "approve")
+    assert refusal.status_code == 401, refusal.text
+    assert refusal.json()["errors"][0]["error"] == "step_up_required"
+    assert refusal.json()["errors"][0]["reauth"] == "GET /api/v1/auth/login?reauth=1"
     assert scm.prs == {}
 
-    # L'humain se ré-authentifie (`?reauth=1`), puis valide : l'action part dans Temporal.
-    await connecter(client, "admin@varga.dev", reauth=True)
-    validee = await _decider(client, projet, proposition, "approve")
-    assert validee.status_code == 200, validee.text
-    assert validee.json()["status"] == "approved", "rien ne s'exécute dans la requête"
-    dossier = await _jusqu_a(client, projet, proposition, "succeeded", "failed")
-    assert dossier["status"] == "succeeded", dossier.get("error")
+    # The person authenticates again (`?reauth=1`), then approves: the action leaves for Temporal.
+    await sign_in(client, "admin@varga.dev", reauth=True)
+    approved = await _decide(client, project, proposal, "approve")
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved", "nothing runs in the request"
+    file = await _until(client, project, proposal, "succeeded", "failed")
+    assert file["status"] == "succeeded", file.get("error")
 
-    decision = dossier["decisions"][-1]
+    decision = file["decisions"][-1]
     assert (decision["by"], decision["decision"]) == ("admin@varga.dev", "approve")
     assert decision["auth_age_seconds"] < 60
 
-    branche = f"choregos/{proposition}"
-    assert scm.files[("example/infra", branche)] == {CORRECTIF["path"]: CORRECTIF["content"]}
+    branch = f"choregos/{proposal}"
+    assert scm.files[("example/infra", branch)] == {FIX["path"]: FIX["content"]}
     (pr,) = scm.prs.values()
-    assert (pr.ref.head, pr.ref.base, pr.title) == (branche, "main", CORRECTIF["title"])
-    assert CLE in pr.body
-    assert dossier["effects"][0]["pr"] == pr.ref.number
-    assert dossier["evidence"] == [
+    assert (pr.ref.head, pr.ref.base, pr.title) == (branch, "main", FIX["title"])
+    assert KEY in pr.body
+    assert file["effects"][0]["pr"] == pr.ref.number
+    assert file["evidence"] == [
         {
             "name": "pull_request_open",
             "type": "connector.query",
             "expect": "result.state == 'open' && result.head == 'choregos/' + proposal.id",
             "status": "passed",
-            "result": {"number": pr.ref.number, "state": "open", "head": branche, "url": pr.ref.url},
+            "result": {"number": pr.ref.number, "state": "open", "head": branch, "url": pr.ref.url},
             "index": 0,
             "position": 1,
         }
     ]
 
 
-async def test_un_developpeur_ne_valide_pas_une_action_qui_exige_un_owner(
-    app: Any, client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], scm: Any
+async def test_a_developer_does_not_approve_an_action_that_needs_an_owner(
+    app: Any, client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
-    proposition = (await _proposer(client, it4it))["result"]["proposal"]
-    membre = {"email": "dev@varga.dev", "role": "developer"}
-    assert (await client.post("/api/v1/orgs/varga/members", json=membre)).status_code in {200, 201}
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as developpeur:
-        await connecter(developpeur, "dev@varga.dev")
-        refus = await _decider(developpeur, projet, proposition, "approve")
-    assert refus.status_code == 403, refus.text
+    proposal = (await _propose(client, it4it))["result"]["proposal"]
+    member = {"email": "dev@varga.dev", "role": "developer"}
+    assert (await client.post("/api/v1/orgs/varga/members", json=member)).status_code in {200, 201}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as developer:
+        await sign_in(developer, "dev@varga.dev")
+        refusal = await _decide(developer, project, proposal, "approve")
+    assert refusal.status_code == 403, refusal.text
     assert scm.prs == {}
 
 
-async def test_rejeter_clot_sans_effet_et_une_decision_ne_se_reprend_pas(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], scm: Any
+async def test_rejecting_closes_without_effect_and_a_decision_is_not_taken_back(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
-    proposition = (await _proposer(client, it4it))["result"]["proposal"]
-    rejet = await _decider(client, projet, proposition, "reject")
-    assert rejet.status_code == 200, rejet.text
-    assert rejet.json()["status"] == "rejected"
+    proposal = (await _propose(client, it4it))["result"]["proposal"]
+    rejection = await _decide(client, project, proposal, "reject")
+    assert rejection.status_code == 200, rejection.text
+    assert rejection.json()["status"] == "rejected"
     assert scm.prs == {} and scm.commits == []
-    encore = await _decider(client, projet, proposition, "approve")
-    assert encore.status_code == 409, encore.text
+    again = await _decide(client, project, proposal, "approve")
+    assert again.status_code == 409, again.text
 
 
-async def test_une_pr_qui_n_est_pas_celle_attendue_fait_echouer_la_preuve(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], scm: Any
+async def test_a_pr_that_is_not_the_expected_one_fails_the_evidence(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
-    """La preuve constate la PR : si le SCM rend une autre branche, l'action échoue."""
+    """The evidence checks the PR: if the SCM returns another branch, the action fails."""
     original = scm.get_pr
 
-    async def autre_branche(ref: Any) -> Any:
-        etat = await original(ref)
-        etat.ref.head = "someone-else/branch"
-        return etat
+    async def other_branch(ref: Any) -> Any:
+        state = await original(ref)
+        state.ref.head = "someone-else/branch"
+        return state
 
-    scm.get_pr = autre_branche
-    proposition = (await _proposer(client, it4it))["result"]["proposal"]
-    assert (await _decider(client, projet, proposition, "approve")).status_code == 200
-    dossier = await _jusqu_a(client, projet, proposition, "succeeded", "failed")
-    assert dossier["status"] == "failed"
-    assert dossier["evidence"][0]["status"] == "failed"
-
-
-# ───────────────────────────── élément 6 : la relance du collecteur ─────────────────────────────
+    scm.get_pr = other_branch
+    proposal = (await _propose(client, it4it))["result"]["proposal"]
+    assert (await _decide(client, project, proposal, "approve")).status_code == 200
+    file = await _until(client, project, proposal, "succeeded", "failed")
+    assert file["status"] == "failed"
+    assert file["evidence"][0]["status"] == "failed"
 
 
-async def _verifier(client: AsyncClient, entetes: dict[str, str], projet: dict[str, Any]) -> dict[str, Any]:
-    arguments = {"target": [CLE], "justification": "The PR is merged and applied by GitOps.", "params": {}}
-    reponse = await appeler_outil(client, RUN, entetes, "action_verify_finding_fixed", arguments)
-    assert reponse["status_code"] == 201, reponse
-    assert reponse["result"]["status"] == "approved", "la politique approuve ; Temporal joue"
-    return await _jusqu_a(client, projet, reponse["result"]["proposal"], "awaiting_evidence", "failed")
+# ───────────────────────────── item 6: the collector's rerun ─────────────────────────────
 
 
-async def test_sans_la_cle_dans_le_rapport_suivant_la_correction_est_prouvee(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+async def _verify(client: AsyncClient, headers: dict[str, str], project: dict[str, Any]) -> dict[str, Any]:
+    arguments = {"target": [KEY], "justification": "The PR is merged and applied by GitOps.", "params": {}}
+    response = await call_tool(client, RUN, headers, "action_verify_finding_fixed", arguments)
+    assert response["status_code"] == 201, response
+    assert response["result"]["status"] == "approved", "the policy approves; Temporal plays"
+    return await _until(client, project, response["result"]["proposal"], "awaiting_evidence", "failed")
+
+
+async def test_without_the_key_in_the_next_report_the_fix_is_proven(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
 ) -> None:
-    verification = await _verifier(client, it4it, projet)
-    assert verification["approval"]["mode"] == "auto", "risque faible : la politique approuve d'office"
+    """#440: the action's workflow wrote its stale `result` over the evidence just settled."""
+    verification = await _verify(client, it4it, project)
+    assert verification["approval"]["mode"] == "auto", "low risk: the policy approves on its own"
     assert verification["status"] == "awaiting_evidence", verification.get("error")
-    assert (await objets(projet["id"]))[CLE][1]["verification_requested_at"]
+    assert (await stored_objects(project["id"]))[KEY][1]["verification_requested_at"]
 
-    relance = rapport(
-        ligne("reboot-required", "node-1", "ok"),
-        ligne("reboot-required", "node-2", "ok"),
-        ligne("ntp-drift", "node-1", "finding", severity="low"),
+    rerun = report(
+        line("reboot-required", "node-1", "ok"),
+        line("reboot-required", "node-2", "ok"),
+        line("ntp-drift", "node-1", "finding", severity="low"),
     )
-    reponse = await poster(client, projet, relance)
-    assert reponse.json()["proposals_decided"] == [verification["proposal"]]
-    dossier = await _jusqu_a(client, projet, verification["proposal"], "succeeded", "failed")
-    assert dossier["status"] == "succeeded", dossier.get("error")
-    preuve = dossier["evidence"][0]
-    assert preuve["result"]["key_present"] is False
-    assert preuve["fact"] == {
+    response = await post_report(client, project, rerun)
+    assert response.json()["proposals_decided"] == [verification["proposal"]]
+    file = await _until(client, project, verification["proposal"], "succeeded", "failed")
+    assert file["status"] == "succeeded", file.get("error")
+    evidence = file["evidence"][0]
+    assert evidence["result"]["key_present"] is False
+    assert evidence["fact"] == {
         "name": "collector_clean",
-        "scope": CLE,
+        "scope": KEY,
         "value": True,
         "source": "collector.rerun",
     }
-    assert (await objets(projet["id"]))[CLE][1]["status"] == "resolved", "la synchronisation a suivi"
+    assert (await stored_objects(project["id"]))[KEY][1]["status"] == "resolved", "the sync followed"
 
 
 @pytest.mark.parametrize(
-    ("relance", "raison"),
+    ("rerun", "reason"),
     [
         (
-            rapport(ligne("reboot-required", "node-1", "ok"), ligne("reboot-required", "node-2", "finding")),
+            report(line("reboot-required", "node-1", "ok"), line("reboot-required", "node-2", "finding")),
             None,
         ),
-        (rapport({"layer": "k8s", "check": "pods", "scope": "ns/a", "status": "ok"}), "absent"),
+        (report({"layer": "k8s", "check": "pods", "scope": "ns/a", "status": "ok"}), "absent"),
         (
-            rapport(ligne("reboot-required", "node-1", "ok"), ligne("disk", "node-2", "unreachable")),
+            report(line("reboot-required", "node-1", "ok"), line("disk", "node-2", "unreachable")),
             "unreachable",
         ),
     ],
-    ids=["cle-encore-presente", "couche-absente", "couche-injoignable"],
+    ids=["key-still-present", "layer-absent", "layer-unreachable"],
 )
-async def test_la_preuve_echoue_si_la_relance_ne_montre_pas_la_cle_absente(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], relance: str, raison: str | None
+async def test_the_evidence_fails_if_the_rerun_does_not_show_the_key_absent(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], rerun: str, reason: str | None
 ) -> None:
-    verification = await _verifier(client, it4it, projet)
-    await poster(client, projet, relance)
-    dossier = await _jusqu_a(client, projet, verification["proposal"], "succeeded", "failed")
-    assert dossier["status"] == "failed"
-    preuve = dossier["evidence"][0]
-    if raison is None:
-        assert preuve["result"]["key_present"] is True
-        assert preuve["fact"]["value"] is False
+    verification = await _verify(client, it4it, project)
+    await post_report(client, project, rerun)
+    file = await _until(client, project, verification["proposal"], "succeeded", "failed")
+    assert file["status"] == "failed"
+    evidence = file["evidence"][0]
+    if reason is None:
+        assert evidence["result"]["key_present"] is True
+        assert evidence["fact"]["value"] is False
     else:
-        assert raison in preuve["error"]
+        assert reason in evidence["error"]
 
 
-async def test_un_rapport_partiel_fait_echouer_la_preuve_et_n_ecrit_aucun_objet(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+async def test_a_partial_report_fails_the_evidence_and_writes_no_object(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
 ) -> None:
-    verification = await _verifier(client, it4it, projet)
-    avant = await objets(projet["id"])
-    tronque = rapport(ligne("reboot-required", "node-1", "ok"), fin={"_end": True, "lines": 9})
-    refus = await poster(client, projet, tronque)
-    assert refus.status_code == 422, refus.text
-    assert refus.json()["proposals_decided"] == [verification["proposal"]]
-    assert (await _jusqu_a(client, projet, verification["proposal"], "failed", "succeeded"))[
+    verification = await _verify(client, it4it, project)
+    before = await stored_objects(project["id"])
+    truncated = report(line("reboot-required", "node-1", "ok"), end={"_end": True, "lines": 9})
+    refusal = await post_report(client, project, truncated)
+    assert refusal.status_code == 422, refusal.text
+    assert refusal.json()["proposals_decided"] == [verification["proposal"]]
+    assert (await _until(client, project, verification["proposal"], "failed", "succeeded"))[
         "status"
     ] == "failed"
-    assert await objets(projet["id"]) == avant
+    assert await stored_objects(project["id"]) == before
 
 
-async def test_sans_rapport_dans_le_delai_la_preuve_echoue(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], temporal: Any
+async def test_without_a_report_in_time_the_evidence_fails(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], temporal: Any
 ) -> None:
-    verification = await _verifier(client, it4it, projet)
-    await temporal.sleep(timedelta(minutes=16))  # l'échéance de l'action passe, dans Temporal
-    dossier = await _jusqu_a(client, projet, verification["proposal"], "failed", "succeeded")
-    assert dossier["status"] == "failed"
-    assert "timed out" in dossier["error"]
+    verification = await _verify(client, it4it, project)
+    await temporal.sleep(timedelta(minutes=16))  # the action's deadline passes, in Temporal
+    file = await _until(client, project, verification["proposal"], "failed", "succeeded")
+    assert file["status"] == "failed"
+    assert "timed out" in file["error"]
 
 
-async def test_l_agent_propose_par_son_serveur_mcp(app: Any, it4it: dict[str, str]) -> None:
-    """Le chemin de l'agent : `choregos-tools` relaie la proposition à l'API interne, jeton du run compris."""
+async def test_the_agent_proposes_through_its_mcp_server(app: Any, it4it: dict[str, str]) -> None:
+    """The agent's path: `choregos-tools` relays the proposal to the internal API, run token included."""
     import json
 
     from choregos_tools_mcp.client import InternalClient
     from choregos_tools_mcp.server import McpServer
 
-    interne = InternalClient("http://test/api/v1/internal", RUN, "inutilise")
-    await interne.aclose()
-    interne._client = AsyncClient(transport=ASGITransport(app=app), headers=it4it)
+    internal = InternalClient("http://test/api/v1/internal", RUN, "unused")
+    await internal.aclose()
+    internal._client = AsyncClient(transport=ASGITransport(app=app), headers=it4it)
     try:
-        appel = await McpServer(interne).handle(
+        call = await McpServer(internal).handle(
             {
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
                 "params": {
                     "name": "action_open_infra_pr",
-                    "arguments": {"target": [CLE], "justification": "Reboot needed.", "params": CORRECTIF},
+                    "arguments": {"target": [KEY], "justification": "Reboot needed.", "params": FIX},
                 },
             }
         )
     finally:
-        await interne.aclose()
-    assert appel is not None and not appel["result"].get("isError"), appel
-    assert json.loads(appel["result"]["content"][0]["text"])["status"] == "pending_approval"
+        await internal.aclose()
+    assert call is not None and not call["result"].get("isError"), call
+    assert json.loads(call["result"]["content"][0]["text"])["status"] == "pending_approval"
 
 
-async def test_un_jeton_d_api_ne_decide_pas_et_un_refus_exige_un_motif(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str], scm: Any
+async def test_an_api_token_does_not_decide_and_a_rejection_needs_a_reason(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
-    """Une décision exige une session humaine (403 `decision_requires_session`), et un refus, un motif."""
-    proposition = (await _proposer(client, it4it))["result"]["proposal"]
-    emis = await client.post("/api/v1/me/tokens", json={"name": "automate", "expires_in_days": 1})
-    assert emis.status_code == 201, emis.text
-    chemin = f"/api/v1/projects/{projet['id']}/proposals/{proposition}/decision"
-    async with AsyncClient(transport=client._transport, base_url="http://test") as porteur:
-        jeton = {"Authorization": f"Bearer {emis.json()['token']}"}
-        refus = await porteur.post(chemin, headers=jeton, json={"decision": "approve", "reason": "ok"})
-    assert refus.status_code == 403, refus.text
-    assert "decision_requires_session" in refus.text
-    sans_motif = await client.post(chemin, json={"decision": "reject"})
-    assert sans_motif.status_code == 422, sans_motif.text
+    """A decision needs a human session (403 `decision_requires_session`), and a rejection, a reason."""
+    proposal = (await _propose(client, it4it))["result"]["proposal"]
+    issued = await client.post("/api/v1/me/tokens", json={"name": "automation", "expires_in_days": 1})
+    assert issued.status_code == 201, issued.text
+    path = f"/api/v1/projects/{project['id']}/proposals/{proposal}/decision"
+    async with AsyncClient(transport=client._transport, base_url="http://test") as bearer:
+        token = {"Authorization": f"Bearer {issued.json()['token']}"}
+        refusal = await bearer.post(path, headers=token, json={"decision": "approve", "reason": "ok"})
+    assert refusal.status_code == 403, refusal.text
+    assert "decision_requires_session" in refusal.text
+    without_reason = await client.post(path, json={"decision": "reject"})
+    assert without_reason.status_code == 422, without_reason.text
     assert scm.prs == {}
-    assert (await _proposition(client, projet, proposition))["status"] == "pending_approval"
+    assert (await _proposal(client, project, proposal))["status"] == "pending_approval"
 
 
-# ───────────────────────────── une proposition faite par un humain ─────────────────────────────
+# ───────────────────────────── a proposal made by a person ─────────────────────────────
 
 
-async def test_un_humain_enregistre_un_hote_par_le_moteur_d_actions(
-    client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+async def test_a_person_registers_a_host_through_the_action_engine(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
 ) -> None:
-    """L'inventaire s'écrit par une action (`register_host`, risque faible : d'office), jamais en base."""
-    corps = {
+    """The inventory is written by an action (`register_host`, low risk: automatic), never in the database."""
+    body = {
         "action_type": "register_host",
         "params": {"id": "node-7", "name": "node-7", "os": "rhel", "ip": "10.0.0.17"},
         "justification": "New node delivered by the infrastructure team.",
     }
-    reponse = await client.post(f"/api/v1/projects/{projet['id']}/proposals", json=corps)
-    assert reponse.status_code == 201, reponse.text
-    assert reponse.json()["proposed_by"]["kind"] == "user"
-    dossier = await _jusqu_a(client, projet, reponse.json()["proposal"], "succeeded", "failed")
-    assert dossier["status"] == "succeeded", dossier.get("error")
-    assert (await objets(projet["id"], "host"))["node-7"][1]["os"] == "rhel"
-    rejeu = await client.post(f"/api/v1/projects/{projet['id']}/proposals", json=corps)
-    assert rejeu.status_code == 200, "même clé d'idempotence : la première proposition"
+    response = await client.post(f"/api/v1/projects/{project['id']}/proposals", json=body)
+    assert response.status_code == 201, response.text
+    assert response.json()["proposed_by"]["kind"] == "user"
+    file = await _until(client, project, response.json()["proposal"], "succeeded", "failed")
+    assert file["status"] == "succeeded", file.get("error")
+    assert (await stored_objects(project["id"], "host"))["node-7"][1]["os"] == "rhel"
+    replay = await client.post(f"/api/v1/projects/{project['id']}/proposals", json=body)
+    assert replay.status_code == 200, "same idempotency key: the first proposal"
 
 
-async def test_une_proposition_humaine_respecte_les_parametres_et_les_roles(
-    app: Any, client: AsyncClient, projet: dict[str, Any], it4it: dict[str, str]
+async def test_a_human_proposal_respects_the_parameters_and_the_roles(
+    app: Any, client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
 ) -> None:
-    chemin = f"/api/v1/projects/{projet['id']}/proposals"
-    mauvais = {"action_type": "register_host", "params": {"id": "x"}, "justification": "test"}
-    assert (await client.post(chemin, json=mauvais)).status_code == 422
-    membre = {"email": "lecteur@varga.dev", "role": "viewer"}
-    assert (await client.post("/api/v1/orgs/varga/members", json=membre)).status_code in {200, 201}
-    corps = {
+    path = f"/api/v1/projects/{project['id']}/proposals"
+    wrong = {"action_type": "register_host", "params": {"id": "x"}, "justification": "test"}
+    assert (await client.post(path, json=wrong)).status_code == 422
+    member = {"email": "reader@varga.dev", "role": "viewer"}
+    assert (await client.post("/api/v1/orgs/varga/members", json=member)).status_code in {200, 201}
+    body = {
         "action_type": "register_host",
         "params": {"id": "node-8", "name": "node-8", "os": "debian", "ip": "10.0.0.18"},
         "justification": "test",
     }
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as lecteur:
-        await connecter(lecteur, "lecteur@varga.dev")
-        refus = await lecteur.post(chemin, json=corps)
-    assert refus.status_code == 403, refus.text
-    assert "node-8" not in await objets(projet["id"], "host")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as reader:
+        await sign_in(reader, "reader@varga.dev")
+        refusal = await reader.post(path, json=body)
+    assert refusal.status_code == 403, refusal.text
+    assert "node-8" not in await stored_objects(project["id"], "host")
 
 
-async def test_l_agent_ne_voit_pas_une_action_qu_il_n_a_pas_le_droit_de_proposer(
+async def test_the_agent_does_not_see_an_action_it_may_not_propose(
     client: AsyncClient, it4it: dict[str, str]
 ) -> None:
-    outils = await client.get(f"/api/v1/internal/runs/{RUN}/tools", headers=it4it)
-    noms = {o["name"] for o in outils.json()["tools"]}
-    assert "action_open_infra_pr" in noms
-    assert "action_register_host" not in noms, "réservée aux humains et au système"
-    refus = await client.post(
+    tools = await client.get(f"/api/v1/internal/runs/{RUN}/tools", headers=it4it)
+    names = {o["name"] for o in tools.json()["tools"]}
+    assert "action_open_infra_pr" in names
+    assert "action_register_host" not in names, "reserved to people and to the system"
+    refusal = await client.post(
         f"/api/v1/internal/runs/{RUN}/tools/action_register_host",
         headers=it4it,
         json={"justification": "x", "params": {"id": "n", "name": "n", "os": "rhel", "ip": "10.0.0.1"}},
     )
-    assert refus.status_code == 404, "un outil hors droits répond comme un outil inexistant"
+    assert refusal.status_code == 404, "a tool outside the rights answers like a tool that does not exist"

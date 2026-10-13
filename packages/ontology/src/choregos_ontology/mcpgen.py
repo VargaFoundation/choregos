@@ -16,7 +16,7 @@ from choregos_ontology.model import ActionTypeSpec, LinkTypeSpec, ObjectTypeSpec
 TOOL_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RESERVED_TOOLS = frozenset(
     {"ontology_describe", "action_status", "action_list", "sql_query", "dataset_search", "dataset_describe"}
-    # Les outils de la porte MCP du cœur (ADR 0030) : une ontologie ne les masque pas.
+    # The tools of the core's MCP gate (ADR 0030): an ontology does not hide them.
     | {
         "list_projects",
         "describe_workflow",

@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les tables du greffon : versions d'ontologie et objets des datasources `table` (spec 10 §1.2).
+"""The plugin's tables: ontology versions and the objects of `table` datasources (spec 10 §1.2).
 
-Elles s'inscrivent dans le `Base` du cœur, donc dans `create_all()` (dev, tests) ; en base migrée,
-c'est la branche `ontology` (`migrations/versions/`) qui les crée, avec leur RLS. Les deux se
-rattachent à un projet, donc à une organisation, par `project_id` : la politique RLS est celle des
-tables du cœur (`choregos_project_org(project_id)`).
+They join the core's `Base`, hence `create_all()` (dev, tests); in a migrated database, the `ontology`
+branch (`migrations/versions/`) creates them, with their RLS. Both belong to a project, hence to an
+organisation, through `project_id`: the RLS policy is the one of the core's tables
+(`choregos_project_org(project_id)`).
 
-Écart assumé avec la spec : pas de colonne `org_id` (la RLS la déduit du projet, comme le cœur), et
-deux statuts seulement pour une version (`active`, `superseded`) — le plan et l'application en
-deux temps viendront avec SOC-010.
+Deliberate departure from the spec: no `org_id` column (RLS derives it from the project, as the core
+does), and only two statuses for a version (`active`, `superseded`) — the plan and the two-step apply
+come with SOC-010.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class OntologyVersion(Base, PkMixin):
 
 
 class ManagedObject(Base, TimestampMixin):
-    """Un objet d'une datasource `table` : ses propriétés en JSON, sous RLS (R-SOC-ONT-16)."""
+    """An object of a `table` datasource: its properties as JSON, under RLS (R-SOC-ONT-16)."""
 
     __tablename__ = "managed_objects"
 
