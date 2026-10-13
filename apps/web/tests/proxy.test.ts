@@ -33,6 +33,8 @@ describe("la politique de sécurité du contenu (S21-05)", () => {
   it("lets an artifact's image be shown from its bytes, and nothing else from a blob (ADR 0049)", () => {
     const csp = directives();
     expect(csp.get("img-src")).toContain("blob:");
+    expect(csp.get("media-src")).toContain("blob:");
+    expect(csp.get("frame-src")).toContain("blob:");
     for (const nom of ["script-src", "default-src", "object-src"]) expect(csp.get(nom) ?? [], nom).not.toContain("blob:");
   });
 });

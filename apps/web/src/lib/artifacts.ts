@@ -23,10 +23,11 @@ export function groupArtifacts(artifacts: Artifact[]): ArtifactGroup[] {
 
 /**
  * How an artifact is shown. Only formats the console can render without running the agent's
- * content: text as text, markdown by a renderer that builds elements (no HTML), images in `<img>`.
- * Everything else is downloaded.
+ * content: text as text, markdown by a renderer that builds elements (no HTML), images in `<img>`,
+ * a PDF in the browser's viewer, a video in `<video>`. Everything else — office files included — is
+ * downloaded.
  */
-export type ViewerKind = "markdown" | "sarif" | "json" | "text" | "image" | "download";
+export type ViewerKind = "markdown" | "sarif" | "json" | "text" | "image" | "pdf" | "video" | "download";
 
 export function viewerOf(artifact: Pick<Artifact, "type" | "kind" | "media_type">): ViewerKind {
   if (artifact.type === "sarif") return "sarif";
@@ -35,6 +36,9 @@ export function viewerOf(artifact: Pick<Artifact, "type" | "kind" | "media_type"
   if (artifact.type === "text" || artifact.type === "csv" || artifact.type === "mermaid") return "text";
   // SVG can carry script: shown as an image only, where a browser never runs it.
   if (artifact.media_type.startsWith("image/")) return "image";
+  // A PDF in the browser's viewer, a video in a player (S31-06); office files are downloaded.
+  if (artifact.media_type === "application/pdf") return "pdf";
+  if (artifact.media_type.startsWith("video/")) return "video";
   return "download";
 }
 

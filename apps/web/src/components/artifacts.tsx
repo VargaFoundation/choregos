@@ -182,6 +182,9 @@ function useText(blob: Blob): string | null {
   return text;
 }
 
+/** Office files are downloaded, never rendered in the browser (S31-06). */
+const OFFICE = new Set(["docx", "xlsx", "pptx"]);
+
 function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: string | null }) {
   const kind = viewerOf(artifact);
   if (kind === "image") {
@@ -190,10 +193,30 @@ function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: 
       <img src={url} alt={artifact.name} className="max-h-[32rem] max-w-full border border-line" data-testid="artifact-image" />
     ) : null;
   }
+  if (kind === "pdf") {
+    // The browser's own PDF viewer, on bytes typed `application/pdf`: never rendered as a page.
+    return url ? (
+      <iframe src={url} title={`${artifact.name} (PDF)`} className="h-[36rem] w-full border border-line" data-testid="artifact-pdf" />
+    ) : null;
+  }
+  if (kind === "video") {
+    return url ? (
+      <video controls preload="metadata" className="max-h-[32rem] max-w-full border border-line" data-testid="artifact-video">
+        <source src={url} type={artifact.media_type} />
+        <track kind="captions" />
+        Your browser cannot play {artifact.media_type}: download the file.
+      </video>
+    ) : null;
+  }
   if (kind === "download") {
+    const office = OFFICE.has(artifact.type);
     return (
       <Empty title={filenameOf(artifact)}>
-        The console does not open this type; download it to read it.
+        <span data-testid="artifact-download-only">
+          {office
+            ? "An office file is downloaded and opened in its application; the console does not render it."
+            : "The console does not open this type; download it to read it."}
+        </span>
       </Empty>
     );
   }
