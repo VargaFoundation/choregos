@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
 from choregos_core import WorkflowEngine
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,6 +122,28 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
     )
     if naissance.labels:
         noter_les_etiquettes(item, naissance.labels)
+    session.add(item)
+    await session.flush()
+    return item
+
+
+async def nouveau_ticket_d_essai(
+    session: AsyncSession, project: Project, *, title: str, body: str | None, created_by: str | None
+) -> WorkItem:
+    """The work item of an agent trial (S32-03): it never enters a workflow, so its state is `trial`.
+
+    It lives here, with the only other `WorkItem(`, so that the single-constructor guard
+    (test_un_seul_constructeur_de_ticket) still holds: a trial is not routed, it only needs a row
+    the run, its cost and its log hang from.
+    """
+    item = WorkItem(
+        project_id=project.id,
+        tracker_key=f"TRIAL-{uuid4().hex[:8]}",
+        title=title,
+        body_snapshot=body,
+        state="trial",
+        created_by=created_by,
+    )
     session.add(item)
     await session.flush()
     return item

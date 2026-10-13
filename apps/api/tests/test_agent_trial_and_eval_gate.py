@@ -35,7 +35,7 @@ async def test_a_failing_eval_blocks_publishing(client: AsyncClient, admin: str)
     assert refuse.status_code == 409, refuse.text
     probleme = refuse.json()
     assert [e["loc"] for e in probleme["errors"]] == [["evals", "vip"]]
-    assert "missing «Escalate VIP outage»" in probleme["errors"][0]["msg"]
+    assert "missing “Escalate VIP outage”" in probleme["errors"][0]["msg"]
     versions = (await client.get(f"{AGENTS}/triage")).json()["latest_version"]
     assert versions == 1, "the refused version is not published"
     passe = await client.post(f"{AGENTS}/triage/versions", json=_spec("Escalate {{ ticket.title }} now."))

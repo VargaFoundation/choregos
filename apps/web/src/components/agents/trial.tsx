@@ -85,7 +85,7 @@ export function EvalResults({ results }: { results: AgentEvalResult[] }) {
           <span className="font-mono">{r.name}</span>
           {!r.passed && (
             <span className="text-xs text-ink-muted">
-              {r.error ?? [...(r.missing ?? []).map((m) => `missing «${m}»`), ...(r.forbidden ?? []).map((f) => `contains «${f}»`)].join("; ")}
+              {r.error ?? [...(r.missing ?? []).map((m) => `missing “${m}”`), ...(r.forbidden ?? []).map((f) => `contains “${f}”`)].join("; ")}
             </span>
           )}
         </li>

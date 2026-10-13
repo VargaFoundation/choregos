@@ -67,6 +67,7 @@ from ..services.agent_lifecycle import (
     unused,
 )
 from ..services.agents import depense_du_jour, effective, elargissements, empreinte, erreurs_d_une_version
+from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
 
 router = APIRouter(tags=["agents"])
@@ -765,9 +766,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     0.50 $ and at the draft's budget per run; the orchestrator tightens it further to the project's
     budget for the role (policy). The gateway key is minted at that amount: the trial cannot spend more.
     """
-    from uuid import uuid4
-
-    from ..db.models import Project, WorkItem
+    from ..db.models import Project
     from ..temporal import get_temporal, trial_run_id, trial_workflow_id
 
     _gerer(principal, org)
@@ -791,16 +790,13 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     if body.spec.budget.run_usd is not None:
         plafonds.append(body.spec.budget.run_usd)
     budget = round(min(plafonds), 4)
-    item = WorkItem(
-        project_id=projet.id,
-        tracker_key=f"TRIAL-{uuid4().hex[:8]}",
+    item = await nouveau_ticket_d_essai(
+        session,
+        projet,
         title=body.input.title or "Trial",
-        body_snapshot=body.input.body,
-        state="trial",
+        body=body.input.body,
         created_by=principal.email,
     )
-    session.add(item)
-    await session.flush()
     await get_temporal().start_trial(
         trial_workflow_id(item.id),
         {

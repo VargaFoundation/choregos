@@ -63,7 +63,7 @@ def gate(new: AgentSpec, published: AgentSpec | None) -> list[AgentEvalResult]:
                     "loc": ["evals", r.name],
                     "msg": r.error
                     or "; ".join(
-                        [*(f"missing «{m}»" for m in r.missing), *(f"contains «{f}»" for f in r.forbidden)]
+                        [*(f"missing “{m}”" for m in r.missing), *(f"contains “{f}”" for f in r.forbidden)]
                     ),
                     "type": "eval_failed",
                 }

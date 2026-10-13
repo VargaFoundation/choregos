@@ -1250,7 +1250,7 @@ function evalGate(spec: AgentSpec, published?: AgentSpec): void {
     throw new ApiError(409, {
       title: "Eval suite failed",
       detail: `${failing.length} case(s) of the agent's eval suite fail: the version is not published`,
-      errors: failing.map((r) => ({ loc: ["evals", r.name], msg: (r.missing ?? []).map((m) => `missing «${m}»`).join("; ") })),
+      errors: failing.map((r) => ({ loc: ["evals", r.name], msg: (r.missing ?? []).map((m) => `missing “${m}”`).join("; ") })),
     });
   }
 }

@@ -374,7 +374,7 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   const suivante = page.getByTestId("agent-builder");
   await suivante.getByLabel("Instructions").fill("Handle {{ ticket.title }} calmly.");
   await suivante.getByRole("button", { name: "Publish v2" }).click();
-  await expect(suivante.getByTestId("evals-en-echec")).toContainText("vip: missing «Escalate VIP outage»");
+  await expect(suivante.getByTestId("evals-en-echec")).toContainText("vip: missing “Escalate VIP outage”");
   await page.getByRole("link", { name: "Versions" }).click();
   await expect(page.getByRole("table", { name: "Versions" }).getByRole("row")).toHaveCount(2);
 });
