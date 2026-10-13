@@ -121,6 +121,7 @@ from .workflow import (
     Transition,
     TransitionAction,
     Workflow,
+    WorkflowBudget,
     WorkflowDefaults,
     WorkflowMetadata,
 )
@@ -275,6 +276,7 @@ __all__ = [
     "WorkItemLinks",
     "WorkItemRef",
     "Workflow",
+    "WorkflowBudget",
     "WorkflowDefaults",
     "WorkflowMetadata",
     "artifact_digest",

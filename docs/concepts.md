@@ -141,6 +141,11 @@ What a work item has spent is read from the cost ledger, models and tools alike,
 interpreter's memory: an interpreter started again for the same work item starts from what was
 already spent.
 
+A work item can be given its own budget, which only **tightens** the others: `budget_usd` when it
+is created (API, MCP door, the board's form), or a workflow's `budget: {ticket_usd, on_exceeded}`
+block. Wider than the workflow's or the policy's ticket budget is refused (422). `on_exceeded` names
+where a work item of that workflow goes when its budget is spent.
+
 More money is a decision. "Replay the stage" on a work item whose budget is spent is refused (409)
 unless it carries a top-up (`top_up_usd`, or `choregos items action <id> rerun_stage --top-up 5`);
 the top-up adds to the work item's budget and the audit log records who granted it

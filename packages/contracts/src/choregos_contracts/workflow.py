@@ -259,6 +259,15 @@ class WorkflowDefaults(Strict):
     needs_human: NeedsHumanDefaults | None = None
 
 
+class WorkflowBudget(Strict):
+    """What a work item of this workflow may spend (S27-06, ADR 0047). It only tightens the policy's
+    ticket budget; `on_exceeded` is where a work item goes when it is spent (before
+    `defaults.from_any_agent_state.on_budget_exceeded`)."""
+
+    ticket_usd: float | None = Field(default=None, gt=0)
+    on_exceeded: Identifier | None = None
+
+
 class Workflow(Strict):
     """Définition complète d'un workflow. La validation statique vit dans `choregos_core.dsl`."""
 
@@ -269,6 +278,7 @@ class Workflow(Strict):
     states: dict[str, State]
     transitions: list[Transition]
     defaults: WorkflowDefaults | None = None
+    budget: WorkflowBudget | None = None
     #: Où commence le workflow. **Facultatif dans le YAML** : le parseur le remplit avec le premier
     #: état déclaré, qui reste la règle (§1.4). Mais il faut que ce soit ÉCRIT dans le document, et
     #: non déduit de l'ordre des clés — parce que cet ordre ne survit pas au stockage.

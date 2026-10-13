@@ -311,6 +311,14 @@ def _check_transition_references(
 
 
 def _check_defaults_references(wf: Workflow, states: set[str], report: ValidationReport, source: Any) -> None:
+    exceeded = wf.budget.on_exceeded if wf.budget is not None else None
+    if exceeded is not None and exceeded not in states:
+        report.error(
+            "state.unknown",
+            f"unknown state in budget.on_exceeded: {exceeded}",
+            ["budget", "on_exceeded"],
+            source,
+        )
     defaults = wf.defaults
     if not defaults:
         return
@@ -379,6 +387,8 @@ def _all_targets(wf: Workflow) -> list[str]:
     if defaults and defaults.from_any_agent_state:
         d = defaults.from_any_agent_state
         targets += [x for x in (d.on_question, d.on_budget_exceeded, d.on_timeout) if x]
+    if wf.budget is not None and wf.budget.on_exceeded:
+        targets.append(wf.budget.on_exceeded)
     if defaults and defaults.needs_human and defaults.needs_human.on_abandon:
         targets.append(defaults.needs_human.on_abandon)
     return targets
@@ -400,6 +410,8 @@ def _reachable_states(wf: Workflow) -> set[str]:
             if wf.defaults and wf.defaults.from_any_agent_state and current in agent_states:
                 d = wf.defaults.from_any_agent_state
                 targets += [d.on_question, d.on_budget_exceeded, d.on_timeout]
+            if wf.budget is not None and current in agent_states:
+                targets.append(wf.budget.on_exceeded)
             for target in targets:
                 if target and target in wf.states and target not in seen:
                     seen.add(target)

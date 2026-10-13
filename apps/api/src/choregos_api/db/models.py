@@ -208,6 +208,9 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     #: What people granted on top of the ticket budget, in USD (S27-04, ADR 0047). Each grant is in
     #: the audit log (`workitem.budget_top_up`).
     budget_top_up_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    #: The budget given at launch, or by the workflow's `budget.ticket_usd` (S27-06, ADR 0047). It
+    #: only tightens the policy's ticket budget; `None`: the policy's applies.
+    budget_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     runs: Mapped[list[Run]] = relationship(back_populates="work_item", cascade="all, delete-orphan")
 

@@ -202,8 +202,10 @@ class WorkflowEngine:
         key at the full stage budget: the very overspend the budget was there to stop.
         """
         retry = transition.on_fail or transition.on_changes_requested
+        budget = self.wf.budget
         target = (
-            self._default_state("on_budget_exceeded")
+            (budget.on_exceeded if budget is not None else None)
+            or self._default_state("on_budget_exceeded")
             or self._default_state("on_question")
             or (retry.escalate_to if retry else None)
             or transition.from_

@@ -3168,6 +3168,7 @@ components:
         workflow: { type: [string, "null"], description: "The workflow the ticket starts in; otherwise the routing, otherwise the default one (ADR 0031)." }
         labels: { type: array, items: { type: string }, description: "Read by the routing rules." }
         fields: { type: object, additionalProperties: true, description: "The ticket's fields, validated by its workflow's `metadata.inputs`." }
+        budget_usd: { type: [number, "null"], exclusiveMinimum: 0, description: "The most this work item may spend, in USD. Only tightens the workflow's `budget.ticket_usd` and the policy's ticket budget; wider is 422 (ADR 0047)." }
     WorkItemUpdate:
       type: object
       required: [fields]
@@ -3274,6 +3275,7 @@ components:
         pending_request: { oneOf: [{ $ref: "#/components/schemas/HumanRequest" }, { type: "null" }] }
         pr_url: { type: [string, "null"] }
         totals: { $ref: "#/components/schemas/Totals" }
+        budget_usd: { type: [number, "null"], description: "The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise." }
         estimate: { oneOf: [{ $ref: "#/components/schemas/CostEstimate" }, { type: "null" }] }
         created_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }

@@ -31,8 +31,12 @@ def start_of_day() -> datetime:
 
 def ticket_budget(engine: Any, item: Any) -> float:
     """The work item's budget: the policy's, for its CURRENT size (a refinement may change it), plus
-    what people granted on top (S27-04)."""
-    return float(engine.budget_ticket(item.size)) + float(item.budget_top_up_usd or 0.0)
+    what people granted on top (S27-04). A budget given at launch, or by the workflow, only tightens
+    the policy's (S27-06)."""
+    budget = float(engine.budget_ticket(item.size))
+    if item.budget_usd is not None:
+        budget = min(budget, float(item.budget_usd))
+    return budget + float(item.budget_top_up_usd or 0.0)
 
 
 async def ticket_left(session: AsyncSession, engine: Any, item: Any, exclude_run: str | None = None) -> float:
