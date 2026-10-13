@@ -236,6 +236,9 @@ class WorkItemAction(Dto):
     state_mapping: dict[str, str] = Field(default_factory=dict)
     run_id: str | None = None
     reason: str | None = None
+    #: `rerun_stage`: money granted on top of the ticket budget (USD), recorded in the audit log.
+    #: Required when the work item's budget is spent (S27-04, ADR 0047).
+    top_up_usd: float | None = Field(default=None, gt=0)
 
 
 class RunDto(RunSummary):

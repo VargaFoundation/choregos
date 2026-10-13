@@ -341,8 +341,15 @@ def items_answer(item_id: str, answer: Annotated[str, typer.Argument()]) -> None
 def items_action(
     item_id: str,
     action: Annotated[str, typer.Argument(help="pause|resume|stop|rerun_stage|mark_agent_ready")],
+    top_up: Annotated[
+        float | None,
+        typer.Option("--top-up", help="rerun_stage: USD granted on top of a spent budget (audited)"),
+    ] = None,
 ) -> None:
-    client().post(f"/work-items/{item_id}/actions", json={"action": action})
+    body: dict[str, Any] = {"action": action}
+    if top_up is not None:
+        body["top_up_usd"] = top_up
+    client().post(f"/work-items/{item_id}/actions", json=body)
     console.print(f"[green]✓[/green] action `{action}` sent")
 
 

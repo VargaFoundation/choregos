@@ -202,6 +202,9 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     totals: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     documents: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)  # spec_markdown, plan_markdown…
+    #: What people granted on top of the ticket budget, in USD (S27-04, ADR 0047). Each grant is in
+    #: the audit log (`workitem.budget_top_up`).
+    budget_top_up_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
 
     runs: Mapped[list[Run]] = relationship(back_populates="work_item", cascade="all, delete-orphan")
 
