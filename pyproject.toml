@@ -151,6 +151,7 @@ markers = [
   "slow: test long",
   "live: nécessite des identifiants réels (Jira, GitLab, Azure) — ignoré sans eux",
   "cluster: nécessite un vrai cluster Kubernetes (CNI appliquant les NetworkPolicy)",
+  "capability(executor, name): this cluster test proves that capability of that executor (S35-04)",
 ]
 filterwarnings = ["ignore::DeprecationWarning"]
 

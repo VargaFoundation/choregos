@@ -91,6 +91,8 @@ def _logs(ns: str, pod: str) -> str:
     return kubectl_shared("-n", ns, "logs", pod, check=False).strip()
 
 
+@pytest.mark.capability("agent_sandbox", "suspend")
+@pytest.mark.capability("agent_sandbox", "resume")
 def test_a_resumed_sandbox_finds_its_volume_as_it_was_left(ns: str) -> None:
     sandbox = {
         "apiVersion": "agents.x-k8s.io/v1beta1",
@@ -120,6 +122,7 @@ def test_a_resumed_sandbox_finds_its_volume_as_it_was_left(ns: str) -> None:
     assert _logs(ns, "asked") == born, "the resumed pod read what the first one wrote"
 
 
+@pytest.mark.capability("agent_sandbox", "suspend")
 def test_past_its_shutdown_time_a_suspended_claim_is_gone(ns: str) -> None:
     """The executor puts `sandbox.suspend_max_hours` in the claim's `shutdownTime` when it
     suspends; here the bound is 45 seconds."""

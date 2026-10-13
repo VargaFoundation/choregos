@@ -119,5 +119,11 @@ sum of its two segments and the work item counts one run.
   refused at render time until the provisioning writes them per project.
 - The template's RuntimeClass is the pool's: a run whose policy asks for another one is refused,
   never run without it.
-- Everything a cluster must prove is in `tests/cluster/test_agent_sandbox.py`, which is skipped
-  where the operator is absent and says so.
+- Everything a cluster must prove is in `tests/cluster/test_agent_sandbox*.py`, skipped where
+  the operator is absent, saying so.
+- **No capability is announced without its cluster test** (S35-04): every capability an
+  executor announces must be carried by a test in `tests/cluster` marked
+  `@pytest.mark.capability(executor, capability)`, in a module marked `cluster`;
+  `tests/conformance/executeurs/test_cluster_proofs.py` fails CI otherwise. CI has no cluster: it
+  checks that the proof exists, `make test-cluster` runs it. `k8s_job`'s `queue` and `renew`
+  predate the rule and are listed as exempt, with the reason; that list can only shrink.

@@ -124,6 +124,7 @@ def _push(ns: str, ip: str, run_id: str, public_key: str, *, labels: dict[str, s
     return kubectl_shared("-n", ns, "logs", name).strip()
 
 
+@pytest.mark.capability("agent_sandbox", "snapshot")
 def test_a_claim_adopts_a_warm_sandbox_that_holds_nothing_and_serves_one_run(ns: str) -> None:
     image = _runner_image()
     kubectl_shared("create", "serviceaccount", "choregos-runner", "-n", ns)
