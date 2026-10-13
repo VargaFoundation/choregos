@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from choregos_adapters.registry import default_executor_kind
 from choregos_contracts import Role
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
@@ -118,7 +119,8 @@ async def list_executors(session: Db, principal: Me) -> list[ExecutorInfo]:
     return [
         ExecutorInfo(kind="tekton", enabled=True, namespace_pattern="proj-{slug}-runners"),
         ExecutorInfo(kind="k8s_job", enabled=True, namespace_pattern="proj-{slug}-runners"),
-        ExecutorInfo(kind="local_docker", enabled=False),
+        # On when the deployment runs its agents through it (the local install, `compose.yaml`).
+        ExecutorInfo(kind="local_docker", enabled=default_executor_kind() == "local_docker"),
         ExecutorInfo(kind="aca", enabled=False),
     ]
 
