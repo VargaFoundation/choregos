@@ -10,7 +10,8 @@ import { Provenance } from "@/components/provenance";
 import { Acces } from "@/components/acces";
 import { Garanties, verdictsDe } from "@/components/garanties";
 import { Preuves } from "@/components/preuves";
-import { Badge, Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge } from "@/components/ui";
+import { Badge, Card, Empty, ErrorNote, FilDAriane, Heading, StateBadge, tabClasses } from "@/components/ui";
+import { PodLogs } from "@/components/pod-logs";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { activiteDuRun } from "@/lib/activite-du-run";
@@ -41,6 +42,15 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
     queryFn: () => api.transcript(id),
     enabled: run.data?.status === "succeeded" || run.data?.status === "failed",
     retry: false,
+  });
+  // The journal says what the agent did; the pod logs say what happened to the pod (S36-03).
+  const [output, setOutput] = useState<"journal" | "logs">("journal");
+  const podLogs = useQuery({
+    queryKey: ["run-logs", id],
+    queryFn: () => api.runLogs(id),
+    enabled: output === "logs",
+    // While the pod runs, the orchestrator refreshes the tail at each poll: follow it.
+    refetchInterval: (query) => (query.state.data?.source === "live" ? 10_000 : false),
   });
   const live = useEventStream<RunEventDto>({
     path: `/runs/${id}/events`,
@@ -160,14 +170,46 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       )}
 
       <Card
-        title="ACP journal"
+        title={
+          <div role="tablist" aria-label="run output" className="flex gap-4">
+            {(
+              [
+                ["journal", "ACP journal"],
+                ["logs", "pod logs"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                id={`run-output-${key}`}
+                aria-selected={output === key}
+                aria-controls="run-output-panel"
+                onClick={() => setOutput(key)}
+                className={tabClasses(output === key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
         action={
-          <span className="text-xs text-ink-muted">
-            {live.connected ? "● live" : live.error ? live.error : "stream closed"}
-          </span>
+          output === "journal" ? (
+            <span className="text-xs text-ink-muted">
+              {live.connected ? "● live" : live.error ? live.error : "stream closed"}
+            </span>
+          ) : undefined
         }
       >
-        <LiveLog events={events} />
+        <div role="tabpanel" id="run-output-panel" aria-labelledby={`run-output-${output}`}>
+          {output === "journal" ? (
+            <LiveLog events={events} />
+          ) : podLogs.error ? (
+            <ErrorNote>{(podLogs.error as Error).message}</ErrorNote>
+          ) : (
+            <PodLogs logs={podLogs.data} />
+          )}
+        </div>
       </Card>
 
       <Card title="diff" action={<Provenance de="observed" />}>

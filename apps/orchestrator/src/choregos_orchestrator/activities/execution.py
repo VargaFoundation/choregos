@@ -115,7 +115,7 @@ async def archive_once(
     Idempotent (ADR 0008): the first archive stays; a replayed activity finds it and does nothing.
     Never raises: a run must end even when its logs cannot be read, and the archive says why.
     """
-    if run is None or run.log_archive is not None:
+    if run is None or _archived(run):
         return
     with contextlib.suppress(Exception):
         archive = await archive_run_logs(executor, ref, status)
@@ -145,6 +145,25 @@ async def result_from_journal(session: Any, run_id: str) -> StageResult | None:
             with contextlib.suppress(ValueError):
                 return StageResult.model_validate(payload)
     return None
+
+
+def _archived(run: Run) -> bool:
+    """A final archive exists; a live snapshot (`final: false`) does not count."""
+    return run.log_archive is not None and bool(run.log_archive.get("final", True))
+
+
+async def snapshot_live(executor: Any, run: Run | None, ref: ExecRef, status: ExecStatus) -> None:
+    """While the pod runs, refresh the live tail of its log at each poll (S36-03).
+
+    The API never talks to the cluster: it serves this snapshot, which is as fresh as the poll
+    interval (`heartbeat_seconds`). Reading pod logs stays a right of the orchestrator alone.
+    A final archive is never overwritten. Never raises.
+    """
+    if run is None or status.state != "running" or _archived(run):
+        return
+    with contextlib.suppress(Exception):
+        snapshot = await archive_run_logs(executor, ref, status, final=False)
+        run.log_archive = snapshot.model_dump(mode="json")
 
 
 @activity.defn(name="start_run")
@@ -243,6 +262,7 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 await archive_once(bundle.adapters.executor, run, ref)
                 return {"status": "finished", "result": run.result}
             status = await bundle.adapters.executor.status(ref)
+            await snapshot_live(bundle.adapters.executor, run, ref, status)
             # Tant qu'il attend, son jeton vieillit. Minté à la préparation pour
             # `max_minutes + 15`, il expire PENDANT l'attente si la file est longue, et
             # l'agent démarre pour recevoir « Signature has expired » — vu sur le banc du

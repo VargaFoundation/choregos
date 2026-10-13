@@ -175,7 +175,7 @@ choregos items reject  <item-id> --reason "…"
 In the front: the **board** (columns are the workflow's states), a ticket's **timeline** and
 cost per stage, a run's **guarantees** (which gates ran and what each decided), its
 **evidence**, its **access card** (what the agent read, wrote, ran, reached — and what was
-refused) and its live journal.
+refused), its live journal and its pod logs (the log tail and how the pod ended, secrets masked).
 
 ---
 

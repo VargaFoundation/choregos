@@ -48,6 +48,7 @@ import type {
   WorkItemCreate,
   DiffSummary,
   RunEventDto,
+  RunLogs,
   TimelineEntry,
   ConnectorDto,
   ConnectorTestResult,
@@ -293,6 +294,8 @@ export const api = {
   abortRelease: (releaseId: string, reason: string) =>
     request<unknown>(`/releases/${releaseId}/abort`, { method: "POST", body: JSON.stringify({ reason }) }),
   transcript: (runId: string) => request<ArtifactRef>(`/runs/${runId}/transcript`),
+  /** The runner pod's log tail and termination, redacted: live while it runs, archived after (S36-03). */
+  runLogs: (runId: string) => request<RunLogs>(`/runs/${runId}/logs`),
 
   projects: (org: string = DEFAULT_ORG) => request<ProjectPage>(`/orgs/${org}/projects`),
   project: (id: string) => request<ProjectDto>(`/projects/${qualify(id)}`),

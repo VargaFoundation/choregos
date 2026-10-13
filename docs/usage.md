@@ -700,6 +700,13 @@ In the UI, a run shows its cost, its duration, its **evidence**, its scope, its 
 journal, the diff and the artefacts. Evidence is what gates read: tests actually executed,
 lint, typing, coverage — or, for work that has none of those, the facts the business named.
 
+Next to the journal, the **pod logs** tab (`GET /runs/{id}/logs`) shows what happened to the
+runner's pod: the last 200 lines of its log, secrets masked, and how it ended — exit code and
+the runtime's reason (`OOMKilled`, `ErrImagePull`…). It is what explains a run that failed
+before the agent said anything. While the pod runs the tail is a snapshot the orchestrator
+refreshes at each poll (every `heartbeat_seconds`, 60 s by default), not a stream; once the run
+ends it is archived with the run (ADR 0054).
+
 When an agent is blocked it does not guess: it asks, the ticket moves to a waiting state, a
 human is notified with an SLA, and the answer resumes the workflow where it stopped.
 

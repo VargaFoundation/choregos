@@ -72,7 +72,12 @@ async def tail_logs(
 
 
 async def archive_run_logs(
-    executor: Any, ref: ExecRef, status: ExecStatus | None = None, *, lines: int = TAIL_LINES
+    executor: Any,
+    ref: ExecRef,
+    status: ExecStatus | None = None,
+    *,
+    lines: int = TAIL_LINES,
+    final: bool = True,
 ) -> RunLogArchive:
     """How the run ended and its last log lines, redacted. Asks `status` when not given. Never raises."""
     if status is None:
@@ -89,6 +94,7 @@ async def archive_run_logs(
         lines=tail.lines,
         truncated=tail.truncated,
         error=tail.error,
+        final=final,
     )
 
 
