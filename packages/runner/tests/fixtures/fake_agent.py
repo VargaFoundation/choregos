@@ -48,6 +48,35 @@ def request(request_id: int, method: str, params: dict[str, Any]) -> dict[str, A
             return message
 
 
+def _load(message: dict[str, Any], script: dict[str, Any]) -> None:
+    """A resumed conversation (S35-03): refused when the script says so, otherwise the history
+    is replayed as one update, then the load answers null."""
+    params = message.get("params") or {}
+    if script.get("load_fails"):
+        send(
+            {
+                "jsonrpc": "2.0",
+                "id": message.get("id"),
+                "error": {"code": -32002, "message": "unknown session"},
+            }
+        )
+        return
+    send(
+        {
+            "jsonrpc": "2.0",
+            "method": "session/update",
+            "params": {
+                "sessionId": params.get("sessionId"),
+                "update": {
+                    "sessionUpdate": "agent_message_chunk",
+                    "content": {"type": "text", "text": f"history of {params.get('sessionId')}"},
+                },
+            },
+        }
+    )
+    send({"jsonrpc": "2.0", "id": message.get("id"), "result": None})
+
+
 def main() -> int:
     script: dict[str, Any] = json.loads(os.environ.get("FAKE_AGENT_SCRIPT", "{}"))
     workspace = Path(os.environ.get("CHOREGOS_WORKSPACE_PATH", ".")).resolve()
@@ -71,7 +100,10 @@ def main() -> int:
                     "id": message_id,
                     "result": {
                         "protocolVersion": PROTOCOL_VERSION,
-                        "agentCapabilities": {"loadSession": False, "promptCapabilities": {"image": False}},
+                        "agentCapabilities": {
+                            "loadSession": bool(script.get("load_session")),
+                            "promptCapabilities": {"image": False},
+                        },
                         "agentInfo": {"name": "fake-agent", "version": "1.0.0"},
                     },
                 }
@@ -80,6 +112,10 @@ def main() -> int:
 
         if method == "session/new":
             send({"jsonrpc": "2.0", "id": message_id, "result": {"sessionId": "sess-fake-1"}})
+            continue
+
+        if method == "session/load":
+            _load(message, script)
             continue
 
         if method == "session/prompt":

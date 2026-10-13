@@ -104,9 +104,14 @@ sum of its two segments and the work item counts one run.
   is dropped: the controller deletes the sandbox at the bound even if no workflow is running.
   The interpreter releases it too (hourly, while it waits), and an answer after the bound
   replays the stage as with any other executor.
-- "Its context" is the workspace — the files, the branch, `.choregos/` and the journal. The
-  agent's own conversation is NOT reloaded: the runner starts a new ACP session in that
-  workspace (it does not call `session/load`). Reloading the session is a later step.
+- "Its context" is the workspace — the files, the branch, `.choregos/`, the journal — and the
+  agent's conversation when the agent can reload it. The runner saves the ACP session id on the
+  workspace (`.choregos/acp-session.json`, never committed); the agent keeps the conversation
+  in its home, which is the workspace in the runner image (`HOME=/workspace`), so both survive
+  the suspension. On the resumed run, an agent that announces `loadSession` gets `session/load`
+  with that id and continues the conversation with the answer; one that does not is journaled
+  (`session/load.unsupported`) and starts a new conversation in the kept workspace; a refused
+  load is journaled too (`session/load.failed`) and the run goes on the same way.
 
 ## Conditions
 
