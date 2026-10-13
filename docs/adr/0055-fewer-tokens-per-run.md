@@ -29,9 +29,10 @@ store holds plaintext originals.
 
 ## Decision
 
-1. **Integrate both, re-implement neither.** rtk ships as a pinned static binary in the runner
-   image; headroom as a pinned package in its own virtual environment there, its model downloaded at
-   build time, never at run time.
+1. **Integrate both, re-implement neither.** rtk ships pinned in the runner image, its digest
+   checked at build time (amd64: the static release binary; arm64: the release built from
+   source); headroom as a pinned package in its own virtual environment there, its model
+   downloaded at build time, never at run time.
 2. **headroom runs inside the runner pod, one process per run, on loopback only**, stateless,
    offline (`HEADROOM_OFFLINE=1`), beacon off. A shared proxy is refused: it would hold several
    projects' plaintext in one process. The pod is the isolation, and it holds on every executor.

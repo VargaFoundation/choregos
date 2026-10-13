@@ -16,12 +16,53 @@ COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 RUN mkdir -p apps/api/src apps/orchestrator/src \
  && uv sync --frozen --no-dev --package choregos-runner
 
+# rtk (ADR 0055): the version and its digests come from `versions.lock`. `sha256sum -c` fails the
+# build on a wrong digest. amd64 takes the static release binary. arm64 builds the same release from
+# source, because upstream's aarch64 binary needs glibc 2.39 and bookworm has 2.36. The stage runs
+# on the build platform: an LTO build of rtk takes over ten minutes natively, and the main CI builds
+# arm64 under QEMU. So arm64 is cross-compiled against bookworm's glibc. The runtime stage below
+# runs the result. BuildKit sets `BUILDPLATFORM`. The legacy builder (no buildx) does not, and
+# falls back to an amd64 build host.
+FROM --platform=${BUILDPLATFORM:-linux/amd64} rust:1.91-slim-bookworm AS rtk
+ARG TARGETARCH
+COPY packages/runner/src/choregos_runner/backends/versions.lock /tmp/versions.lock
+WORKDIR /src
+RUN set -eux; \
+    version() { grep "^$1=" /tmp/versions.lock | cut -d= -f2; }; \
+    release="https://github.com/rtk-ai/rtk"; \
+    rtk="$(version rtk)"; \
+    host="$(dpkg --print-architecture)"; \
+    apt-get update && apt-get install -y --no-install-recommends curl ca-certificates; \
+    case "${TARGETARCH:-${host}}" in \
+      amd64) \
+        curl -fsSL -o rtk.tar.gz "${release}/releases/download/v${rtk}/rtk-x86_64-unknown-linux-musl.tar.gz"; \
+        echo "$(version rtk-sha256-x86_64-unknown-linux-musl)  rtk.tar.gz" | sha256sum -c -; \
+        tar xzf rtk.tar.gz rtk; \
+        install -m 0755 rtk /usr/local/bin/rtk ;; \
+      arm64) \
+        curl -fsSL -o rtk.tar.gz "${release}/archive/refs/tags/v${rtk}.tar.gz"; \
+        echo "$(version rtk-sha256-source)  rtk.tar.gz" | sha256sum -c -; \
+        tar xzf rtk.tar.gz --strip-components=1; \
+        if [ "${host}" != arm64 ]; then \
+          apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
+          rustup target add aarch64-unknown-linux-gnu; \
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+                 CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc; \
+        fi; \
+        cargo build --release --locked --target aarch64-unknown-linux-gnu; \
+        install -m 0755 target/aarch64-unknown-linux-gnu/release/rtk /usr/local/bin/rtk ;; \
+      *) echo "no rtk for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac
+
 FROM python:3.12-slim-bookworm AS runtime
 ARG NODE_VERSION=22
+# `RTK_TELEMETRY_DISABLED`: rtk carries an HTTP client for its usage telemetry, and a runner
+# reports to nobody but Choregos.
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     HOME=/workspace \
-    GIT_TERMINAL_PROMPT=0
+    GIT_TERMINAL_PROMPT=0 \
+    RTK_TELEMETRY_DISABLED=1
 
 # Outils du travail d'un développeur : git, gh, jq, ripgrep, make, compilateurs usuels. Les
 # correctifs de sécurité de Debian d'abord : l'image de base peut porter un paquet déjà corrigé.
@@ -41,6 +82,8 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 # Scanners de sécurité, utilisés par la boucle DoD et la CI des projets.
 COPY --from=aquasec/trivy:0.74.0 /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=zricethezav/gitleaks:v8.30.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
+# rtk is installed but switched off: only a policy turns it on for a run (ADR 0055).
+COPY --from=rtk /usr/local/bin/rtk /usr/local/bin/rtk
 
 # Agents ACP, à versions épinglées (packages/runner/backends/versions.lock).
 COPY packages/runner/src/choregos_runner/backends/versions.lock /etc/choregos/versions.lock
@@ -71,7 +114,8 @@ RUN set -eux; \
 RUN set -eux; \
     timeout 30 claude-code-acp --version >/dev/null </dev/null; \
     timeout 30 gemini --version >/dev/null; \
-    timeout 30 opencode --version >/dev/null
+    timeout 30 opencode --version >/dev/null; \
+    timeout 30 rtk --version >/dev/null
 
 # Mutation testing, for the `qa` agent of the catalogue (S33-06): a test that still passes with the
 # code broken proves nothing. mutmut for Python, Stryker for JavaScript and TypeScript; pinned, and
