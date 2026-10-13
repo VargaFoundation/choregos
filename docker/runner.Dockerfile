@@ -54,15 +54,37 @@ RUN set -eux; \
       *) echo "no rtk for ${TARGETARCH}" >&2; exit 1 ;; \
     esac
 
+# headroom (ADR 0055): its own venv, so its dependency tree (litellm, onnxruntime, transformers)
+# never meets the runner's. `--require-hashes` checks every wheel against
+# `docker/headroom/requirements.txt` (`make headroom-lock`). The Kompress model is fetched here, at
+# the revision headroom pins, then loaded again with the network forbidden: a run never downloads it.
+FROM python:3.12-slim-bookworm AS headroom
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+ENV UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1 HF_HOME=/opt/headroom/models
+COPY docker/headroom/requirements.txt /tmp/headroom-requirements.txt
+RUN uv venv /opt/headroom --python /usr/local/bin/python3.12 \
+ && VIRTUAL_ENV=/opt/headroom uv pip install --require-hashes --no-deps \
+      -r /tmp/headroom-requirements.txt
+RUN set -eux; \
+    warm='import sys; from headroom.transforms.kompress_compressor import warm_kompress_model as w; sys.exit(0 if w(allow_download=sys.argv[1] == "online") else 1)'; \
+    /opt/headroom/bin/python -c "$warm" online; \
+    HEADROOM_OFFLINE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 /opt/headroom/bin/python -c "$warm" offline
+
 FROM python:3.12-slim-bookworm AS runtime
 ARG NODE_VERSION=22
 # `RTK_TELEMETRY_DISABLED`: rtk carries an HTTP client for its usage telemetry, and a runner
-# reports to nobody but Choregos.
+# reports to nobody but Choregos. `HEADROOM_OFFLINE`: headroom's one switch for all its egress
+# (beacon, update check, usage reporter, model downloads); its models are under `HF_HOME`. It does
+# not cover the litellm it imports, which fetches its price list from GitHub at every start:
+# `LITELLM_LOCAL_MODEL_COST_MAP` makes it read the copy in its own package.
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
     HOME=/workspace \
     GIT_TERMINAL_PROMPT=0 \
-    RTK_TELEMETRY_DISABLED=1
+    RTK_TELEMETRY_DISABLED=1 \
+    HEADROOM_OFFLINE=1 \
+    LITELLM_LOCAL_MODEL_COST_MAP=True \
+    HF_HOME=/opt/headroom/models
 
 # Outils du travail d'un développeur : git, gh, jq, ripgrep, make, compilateurs usuels. Les
 # correctifs de sécurité de Debian d'abord : l'image de base peut porter un paquet déjà corrigé.
@@ -84,6 +106,10 @@ COPY --from=aquasec/trivy:0.74.0 /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=zricethezav/gitleaks:v8.30.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
 # rtk is installed but switched off: only a policy turns it on for a run (ADR 0055).
 COPY --from=rtk /usr/local/bin/rtk /usr/local/bin/rtk
+# headroom too: only a policy starts it, on loopback, for one run (ADR 0055). Its venv stays off
+# the `PATH`, so its packages never shadow the runner's or a project's.
+COPY --from=headroom /opt/headroom /opt/headroom
+RUN ln -s /opt/headroom/bin/headroom /usr/local/bin/headroom
 
 # Agents ACP, à versions épinglées (packages/runner/backends/versions.lock).
 COPY packages/runner/src/choregos_runner/backends/versions.lock /etc/choregos/versions.lock
@@ -115,7 +141,8 @@ RUN set -eux; \
     timeout 30 claude-code-acp --version >/dev/null </dev/null; \
     timeout 30 gemini --version >/dev/null; \
     timeout 30 opencode --version >/dev/null; \
-    timeout 30 rtk --version >/dev/null
+    timeout 30 rtk --version >/dev/null; \
+    timeout 60 headroom --version >/dev/null
 
 # Mutation testing, for the `qa` agent of the catalogue (S33-06): a test that still passes with the
 # code broken proves nothing. mutmut for Python, Stryker for JavaScript and TypeScript; pinned, and

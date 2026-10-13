@@ -57,6 +57,11 @@ contracts:  ## Régénère les types depuis packages/contracts (à committer)
 docs-cli:  ## Régénère docs/cli.md depuis la CLI (à committer)
 	$(UV) run python tools/gen_cli_reference.py
 
+.PHONY: headroom-lock
+headroom-lock:  ## Recompile docker/headroom/requirements.txt (hashes, releases at least 14 days old)
+	$(UV) pip compile docker/headroom/requirements.in --universal --python-version 3.12 \
+	  --generate-hashes --exclude-newer P14D -o docker/headroom/requirements.txt
+
 .PHONY: contracts-check
 contracts-check:  ## Vérifie que les types générés sont à jour
 	$(UV) run python tools/gen_contracts.py --check

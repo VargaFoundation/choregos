@@ -1,0 +1,2 @@
+# headroom (ADR 0055), in its own venv: `make headroom-lock` recompiles requirements.txt.
+headroom-ai[proxy,code]==0.39.1
