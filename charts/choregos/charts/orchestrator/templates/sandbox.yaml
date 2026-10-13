@@ -1,0 +1,110 @@
+{{- if and .Values.enabled (eq .Values.runner.executor "agent_sandbox") }}
+{{- /*
+The `agent_sandbox` executor (ADR 0016, ADR 0053): a SandboxTemplate that describes the runner
+pod, and a SandboxWarmPool of sandboxes made from it that have NEVER run anything.
+
+A warm sandbox holds no credential. Its pod runs `choregos-runner await-assignment`, which
+listens on one port for exactly one assignment — the run id, its token and its environment —
+pushed by the executor once a SandboxClaim has bound that sandbox to a run. Before that push
+the pod has no run token, no git identity, no backend key, and no service account token:
+everything a run needs reaches it after it has been chosen for that run, never before.
+
+The template lives in the release namespace, and so do the runs: the executor creates its
+claims in `runner.namespacePattern`, which must therefore name this namespace. Per-project
+runner namespaces (`proj-{slug}-runners`) would need the provisioning to write a template and a
+pool per project; it does not yet, and rendering one here that no claim can reach would be a
+pool that warms for nothing.
+
+Requires the agent-sandbox operator (`infra/bootstrap/agent-sandbox.yaml`): its CRDs are
+cluster-scoped, so a tenant of a shared cluster asks its platform team.
+*/ -}}
+{{- if contains "{slug}" .Values.runner.namespacePattern }}
+{{- fail (printf "runner.executor=agent_sandbox needs runner.namespacePattern to name the release namespace (%s), not a per-project pattern (%s): the SandboxTemplate and its warm pool are rendered in the release namespace only." .Release.Namespace .Values.runner.namespacePattern) }}
+{{- end }}
+{{- $sandbox := .Values.runner.sandbox | default dict }}
+{{- $port := int ($sandbox.assignmentPort | default 8765) }}
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: choregos-runner
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  # The claim never injects environment variables: they would force a cold start, and a token
+  # passed that way would be written, by value, in the claim's spec.
+  envVarsInjectionPolicy: Disallowed
+  volumeClaimTemplatesPolicy: Disallowed
+  # The controller's default policy lets a sandbox reach the public internet only, which cuts
+  # the runner off from the internal API it reports to. The runner pods carry the labels the
+  # platform's own NetworkPolicies select (`app.kubernetes.io/name: choregos-runner`), so those
+  # apply, as they do to `k8s_job` pods.
+  networkPolicyManagement: Unmanaged
+  podTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-runner
+        app.kubernetes.io/component: runner
+        app.kubernetes.io/part-of: choregos
+    spec:
+      restartPolicy: Never
+      serviceAccountName: choregos-runner
+      automountServiceAccountToken: false
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      {{- with .Values.runner.runtimeClass }}
+      runtimeClassName: {{ . | quote }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: runner
+          image: {{ .Values.global.imageRegistry }}/{{ .Values.runner.image }}:{{ .Values.runner.tag | default .Values.global.imageTag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          args: ["await-assignment", "--port", {{ $port | quote }}]
+          ports:
+            - { name: assignment, containerPort: {{ $port }} }
+          # Ready = listening for its assignment. The controller only hands out a Ready sandbox.
+          readinessProbe:
+            httpGet: { path: /healthz, port: assignment }
+            periodSeconds: 2
+          {{- with .Values.runner.env }}
+          # Plain values for every run of the deployment, never a secret. What is per run, the
+          # token included, is pushed with the assignment.
+          env:
+            {{- range $name, $value := . }}
+            - { name: {{ $name | quote }}, value: {{ $value | quote }} }
+            {{- end }}
+          {{- end }}
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: {{ .Values.runner.limits.cpu | quote }}, memory: {{ .Values.runner.limits.memory | quote }} }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+          volumeMounts:
+            - { name: workspace, mountPath: /workspace }
+  # A volume, not an emptyDir: a suspended sandbox loses its pod and keeps this (ADR 0016).
+  volumeClaimTemplates:
+    - metadata:
+        name: workspace
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $sandbox.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests: { storage: {{ $sandbox.storage | default "10Gi" | quote }} }
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxWarmPool
+metadata:
+  name: choregos-runner
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  # 0 is a valid size: every claim then cold-starts from the template, still clean.
+  replicas: {{ int (.Values.runner.warmPool.size | default 0) }}
+  sandboxTemplateRef:
+    name: choregos-runner
+{{- end }}

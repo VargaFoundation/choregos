@@ -30,6 +30,13 @@ runner:
   namespacePattern: "proj-{slug}-runners"
   executor: tekton
   runtimeClass: ""
+  # `executor: agent_sandbox` only (ADR 0016): see the umbrella chart's values.
+  warmPool:
+    size: 0
+  sandbox:
+    storage: 10Gi
+    storageClassName: ""
+    assignmentPort: 8765
   egressProxy: "http://choregos-egress.{namespace}.svc:3128"
   egressImage: ""
 podDisruptionBudget:

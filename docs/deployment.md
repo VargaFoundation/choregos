@@ -127,6 +127,49 @@ choregos-orchestrator:
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
 
+### The `agent_sandbox` executor (opt-in)
+
+[ADR 0016](adr/0016-executeur-agent-sandbox.md) adds an executor on
+[`kubernetes-sigs/agent-sandbox`](https://github.com/kubernetes-sigs/agent-sandbox): a warm pool
+of sandboxes that have never run anything, and a sandbox that can be suspended across a human
+question. It needs the operator, whose CRDs are **cluster-scoped**: a platform team installs it,
+a tenant of a shared cluster cannot. `tekton` and `k8s_job` remain the defaults.
+
+1. **The operator**, pinned to v1.0.6 (API `agents.x-k8s.io/v1beta1` and
+   `extensions.agents.x-k8s.io/v1beta1`): `infra/bootstrap/agent-sandbox.yaml` is the Argo CD
+   Application, `infra/operators/agent-sandbox/` the pinned source (upstream tag and controller
+   image digest). Without Argo CD, the same thing by hand, once:
+   `kubectl apply --server-side -k infra/operators/agent-sandbox`.
+2. **The policy**: `infra/policies/sandbox-template.yaml` applies Kyverno's non-root rule to the
+   pod a SandboxTemplate or a Sandbox describes, so a template that breaks it is refused where it
+   is written, not pod after pod in the controller's log.
+3. **The chart**:
+
+```yaml
+choregos-orchestrator:
+  runner:
+    executor: agent_sandbox
+    namespacePattern: choregos        # the release namespace: the template lives there
+    warmPool: { size: 2 }             # sandboxes made in advance, never used, holding nothing
+    runtimeClass: gvisor              # the template's RuntimeClass; "" = the cluster's
+    sandbox: { storage: 10Gi, storageClassName: "", assignmentPort: 8765 }
+global:
+  rbac: { jobRunner: true }           # or the platform grants the same verbs (see rbac-jobs.yaml)
+```
+
+The chart then renders a `SandboxTemplate` and a `SandboxWarmPool`, both named
+`choregos-runner`. A warm sandbox's pod mounts no service account token and no secret: its
+runner waits for one assignment, pushed by the executor after a claim has bound the sandbox to a
+run. A per-project `namespacePattern` (`proj-{slug}-runners`) is refused at render time; the
+provisioning does not write a template per project yet.
+
+To prove it on a cluster that has the operator (non-destructive: one namespace of its own,
+deleted afterwards), name that cluster explicitly:
+
+```bash
+CHOREGOS_CLUSTER_CONTEXT=<context> CHOREGOS_CLUSTER_ALLOW_SHARED=<context> make test-cluster
+```
+
 **Say what this installation can run.** A project created without an `agent` or `models`
 section inherits the deployment's backend and model profiles; without them, it falls back to the
 contract's defaults (`claude-code`, no profile), and a template's agents never reach a model on an

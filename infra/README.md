@@ -26,6 +26,7 @@ argocd app sync bootstrap                        # puis Argo CD fait le reste
 | --: | :-- | :-- |
 | 0 | cert-manager, External Secrets, Kyverno | rien ne démarre sans secrets ni certificats |
 | 1 | CNPG, Envoy Gateway, Tekton, Argo Rollouts, gVisor | les opérateurs avant leurs objets |
+| 1 | agent-sandbox, pinned in `operators/agent-sandbox/` (ADR 0016) | an operator before its objects; only where `runner.executor: agent_sandbox` |
 | 2 | monitoring (kube-prometheus-stack, Loki, Tempo, OTel) | pour voir le reste démarrer |
 | 3 | `platform/` — l'umbrella Choregos | la plateforme elle-même |
 | 4 | `projects/` — ApplicationSet par répertoire | les projets provisionnés |

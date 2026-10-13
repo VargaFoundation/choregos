@@ -20,18 +20,26 @@ from collections.abc import Sequence
 import pytest
 
 
-def context() -> str:
-    """Le contexte kube à utiliser, ou un `skip` qui dit précisément ce qui manque."""
+def context(*, non_destructive: bool = False) -> str:
+    """The kube context to use, or a `skip` that says exactly what is missing.
+
+    `non_destructive`: the caller only creates objects in a namespace of its own and deletes
+    it afterwards (the agent-sandbox tests, S35). Such a test may run on a shared cluster
+    named, explicitly and exactly, by `CHOREGOS_CLUSTER_ALLOW_SHARED=<context>`; every other
+    test keeps refusing it.
+    """
     name = os.environ.get("CHOREGOS_CLUSTER_CONTEXT", "")
     if not name:
         pytest.skip("test cluster ignoré — CHOREGOS_CLUSTER_CONTEXT n'est pas défini")
+    shared_ok = non_destructive and os.environ.get("CHOREGOS_CLUSTER_ALLOW_SHARED", "") == name
     # Ces tests arrêtent des nœuds, créent et détruisent des namespaces, installent des
     # opérateurs et coupent le réseau. Sur un cluster jetable, c'est leur travail ; sur un
     # cluster partagé, c'est un incident. Le contexte d'un poste de développement en compte
     # souvent un de chaque — `dev` et `prod` à côté de `kind-choregos` — et une variable mal
     # recopiée suffit. On exige donc un cluster kind, sauf dérogation écrite noir sur blanc.
     if (
-        not name.startswith("kind-")
+        not shared_ok
+        and not name.startswith("kind-")
         and os.environ.get("CHOREGOS_CLUSTER_ALLOW_NON_KIND") != "je-sais-ce-que-je-fais"
     ):
         pytest.skip(
@@ -60,7 +68,21 @@ def kubectl(*args: str, input_text: str | None = None, check: bool = True, timeo
     démarrage tire des images, et un timeout de processus plus court que l'attente demandée
     transforme une lenteur en échec de test.
     """
-    command = ["kubectl", "--context", context(), *args]
+    return _kubectl(context(), *args, input_text=input_text, check=check, timeout_s=timeout_s)
+
+
+def kubectl_shared(
+    *args: str, input_text: str | None = None, check: bool = True, timeout_s: float = 180
+) -> str:
+    """`kubectl` for a NON-destructive test, allowed on the shared cluster that
+    `CHOREGOS_CLUSTER_ALLOW_SHARED` names (see `context`)."""
+    return _kubectl(
+        context(non_destructive=True), *args, input_text=input_text, check=check, timeout_s=timeout_s
+    )
+
+
+def _kubectl(name: str, *args: str, input_text: str | None, check: bool, timeout_s: float) -> str:
+    command = ["kubectl", "--context", name, *args]
     result = subprocess.run(
         command, capture_output=True, text=True, input=input_text, timeout=timeout_s, check=False
     )

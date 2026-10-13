@@ -1,0 +1,20 @@
+# kubernetes-sigs/agent-sandbox, PINNED (ADR 0016, ADR 0053). Rendered by Argo CD from
+# `bootstrap/agent-sandbox.yaml`; never applied by hand.
+#
+# The upstream `k8s/` directory is the release's own GitOps assembly: core + extensions, one
+# controller Deployment. Its image is a `ko://` placeholder that the release tooling replaces;
+# the `images` entry below does the same, by digest. Rendered, this directory is identical,
+# object for object, to the `sandbox-with-extensions.yaml` asset of the same release
+# (`tests/infra/test_agent_sandbox_pin.py` keeps the pins in step with the executor).
+#
+# Upgrading = changing the tag AND the digest together, then running `make test-cluster`
+# against a cluster that has it: the executor speaks `v1beta1`, and an API that moved under it
+# is found there, not in production.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/kubernetes-sigs/agent-sandbox//k8s?ref=v1.0.6
+images:
+  - name: ko://sigs.k8s.io/agent-sandbox/cmd/agent-sandbox-controller
+    newName: registry.k8s.io/agent-sandbox/agent-sandbox-controller
+    digest: sha256:14c479c9e89ca87d05dfcf597840473c0196d6e6eec622a7959e72108d75b24e
