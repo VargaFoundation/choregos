@@ -63,6 +63,9 @@ class KnowledgeDocumentDto(Dto):
     converted_at: datetime | None = None
     #: Returned by the reading of ONE document; a listing does not carry it.
     markdown: str | None = None
+    #: synced from a source (S33-04): which one, and where to open the original
+    source_id: str | None = None
+    source_url: str | None = None
 
 
 class KnowledgeBaseDto(Dto):
@@ -87,6 +90,8 @@ class KnowledgeBaseDto(Dto):
     eval_set: list[dict[str, Any]] = Field(default_factory=list)
     #: the last run of the eval set: `recall` (at `k`), per question, `mode`, `ran_at`
     eval_result: dict[str, Any] | None = None
+    #: where its documents are synced from (S33-04); a reading of ONE base carries them
+    sources: list[KnowledgeSourceDto] | None = None
 
 
 class KnowledgeEvalCase(Dto):
@@ -120,3 +125,37 @@ class KnowledgeSearchResult(Dto):
     #: hybrid (full-text + pgvector) | full-text (no pgvector, or no embedder) | in-process (SQLite)
     mode: str
     hits: list[KnowledgeCitation] = Field(default_factory=list)
+
+
+SourceKind = Literal["sharepoint", "web", "git"]
+
+
+class KnowledgeSourceCreate(Dto):
+    kind: SourceKind
+    name: str = Field(min_length=1, max_length=200)
+    #: `sharepoint`: the organisation connector (capability `documents`) holding the credentials
+    connector: str | None = None
+    #: `sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url`, `max_depth`, `max_pages`;
+    #: `git`: `url`, `ref`, `paths`
+    config: dict[str, Any] = Field(default_factory=dict)
+    interval_minutes: int = Field(default=60, ge=5, le=7 * 24 * 60)
+
+
+class KnowledgeSourcePatch(Dto):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    config: dict[str, Any] | None = None
+    interval_minutes: int | None = Field(default=None, ge=5, le=7 * 24 * 60)
+
+
+class KnowledgeSourceDto(Dto):
+    id: str
+    kind: SourceKind
+    name: str
+    connector: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    interval_minutes: int
+    status: str
+    last_synced_at: datetime | None = None
+    last_error: str | None = None
+    last_summary: dict[str, Any] | None = None
+    document_count: int = 0

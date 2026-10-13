@@ -13,6 +13,7 @@ from . import (
     execution,
     findings,
     gates,
+    knowledge,
     memory,
     provisioning,
     scm,
@@ -23,6 +24,7 @@ from . import (
 )
 
 ALL_ACTIVITIES = [
+    knowledge.sync_knowledge_source,
     actions.load_action,
     actions.execute_effect,
     actions.compensate_effect,

@@ -44,6 +44,8 @@ import type {
   KnowledgeDocument,
   KnowledgeEvalCase,
   KnowledgeSearchResult,
+  KnowledgeSource,
+  KnowledgeSourceCreate,
   AgentBackendInfo,
   ApiToken,
   ApiTokenCreate,
@@ -384,6 +386,12 @@ export const api = {
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval`, { method: "PUT", body: JSON.stringify({ cases }) }),
   runKnowledgeEval: (org: string, slug: string) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval/run`, { method: "POST" }),
+  createKnowledgeSource: (org: string, slug: string, body: KnowledgeSourceCreate) =>
+    request<KnowledgeSource>(`/orgs/${org}/knowledge/${slug}/sources`, { method: "POST", body: JSON.stringify(body) }),
+  syncKnowledgeSource: (org: string, slug: string, id: string) =>
+    request<KnowledgeSource>(`/orgs/${org}/knowledge/${slug}/sources/${id}/sync`, { method: "POST" }),
+  deleteKnowledgeSource: (org: string, slug: string, id: string) =>
+    request<void>(`/orgs/${org}/knowledge/${slug}/sources/${id}`, { method: "DELETE" }),
   myTokens: () => request<ApiToken[]>("/me/tokens"),
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),

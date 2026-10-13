@@ -81,3 +81,27 @@ there (D10), with full-text search built in and `pgvector` one extension away.
 - Operations must give the database pgvector for the hybrid mode: the CloudNativePG standard
   images carry it, and the extension must be created in the **application** database
   (`postInitApplicationSQL`, not `postInitSQL`, which runs in `postgres`).
+
+## Update — 2026-10-13: sources (S33-04)
+
+8. **A knowledge base syncs from sources**, kept apart from uploads: `sharepoint` (a site or a
+   drive, SharePoint or OneDrive, through an organisation connector of capability `documents`),
+   `web` (one https site) and `git` (an https repository).
+   - **Graph with `Sites.Selected` only.** The Entra application holds the application permission
+     `Sites.Selected` and is granted `read` on the chosen sites by a tenant administrator; never
+     `Files.Read.All` nor `Sites.Read.All`, which would open the whole tenant. Its secret is a
+     reference (`secret_refs`), resolved when the source opens. Sync is **delta**
+     (`/drives/{id}/root/delta`, the `deltaLink` kept as the source's cursor).
+   - **Web**: same scheme and host, under the start URL's path, `robots.txt` obeyed, depth ≤ 5 and
+     pages ≤ 500; a host resolving to a private, loopback or link-local address is refused.
+   - **Git**: https only, a branch followed or a commit pinned, files matched by globs (markdown by
+     default); the worker image carries `git` for it.
+9. **A document deleted at the source leaves the base and its index** at the next sync: Graph says
+   so (`deleted` facet); a crawl or a commit lists everything, and what it no longer lists is gone —
+   except when a page answered a server error: a 500 is not a deletion, and that sync deletes
+   nothing.
+10. **The sync is a Temporal loop per source** (`KnowledgeSync`), started by the API with the source
+    and by the worker at start-up, woken by `sync_now`, ended by `stop` or a source removed. Its
+    activity is idempotent (ADR 0008): the cursor moves only once the changes are applied, and an
+    item whose version is stored is not fetched again. The page shows each source's last sync, what
+    it did, and its last error.

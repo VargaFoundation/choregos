@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { use, useRef, useState } from "react";
+import { KnowledgeSources } from "@/components/knowledge-sources";
 import { Badge, Card, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
@@ -108,6 +109,14 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
                       </button>
                       <p className="font-mono text-xs text-ink-muted">
                         {doc.filename} · {Math.max(1, Math.round(doc.size_bytes / 1024))} KiB
+                        {doc.source_url && (
+                          <>
+                            {" · "}
+                            <a href={doc.source_url} className="underline" target="_blank" rel="noreferrer">
+                              at the source
+                            </a>
+                          </>
+                        )}
                       </p>
                       {doc.error && <p className="text-xs text-danger">{doc.error}</p>}
                     </td>
@@ -133,11 +142,11 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
         )}
       </Card>
       {base.data.serving_mode === "index" && <KnowledgeIndex org={org} base={base.data} onChange={() => void refresh()} />}
+      <KnowledgeSources org={org} slug={slug} sources={base.data.sources ?? []} onChange={() => void refresh()} />
       <Card title="Upload documents">
         <div className="space-y-2 text-sm">
           <p className="text-ink-muted">
-            Word, PowerPoint, Excel, PDF, HTML, markdown or text. Each file is converted to markdown in the background: headings,
-            slide titles and tables are kept; a scanned PDF needs OCR and fails.
+            Office, PDF, HTML, markdown or text, converted in the background; a scanned PDF fails (no OCR).
           </p>
           <input
             ref={file}

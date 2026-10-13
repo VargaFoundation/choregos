@@ -1715,6 +1715,60 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/sources:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: createKnowledgeSource
+      description: >-
+        Where the base's documents are synced from (S33-04): `sharepoint` (a site or drive through an
+        organisation connector of capability `documents`, Graph `Sites.Selected`, delta sync), `web` (one
+        https site, same host, robots.txt obeyed) or `git` (an https repository). Synced at once, then every
+        `interval_minutes`; a document deleted at the source leaves the base and its index. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSourceCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSource" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/sources/{source_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: source_id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [knowledge]
+      operationId: updateKnowledgeSource
+      description: Renames it, changes its interval or configuration (a new configuration syncs from scratch). `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSourcePatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSource" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [knowledge]
+      operationId: deleteKnowledgeSource
+      description: The source and the documents it brought leave the base. `agent:manage`.
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/knowledge/{slug}/sources/{source_id}/sync:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: source_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: syncKnowledgeSource
+      description: Syncs now rather than at the end of the interval. `agent:manage`.
+      responses:
+        "202": { description: Sync requested, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSource" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/agents:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3038,6 +3092,8 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         converted_at: { type: [string, "null"], format: date-time }
         markdown: { type: [string, "null"], description: returned by the reading of one document }
+        source_id: { type: [string, "null"], description: the source it was synced from; none for an upload }
+        source_url: { type: [string, "null"], description: where to open the original }
     KnowledgeBase:
       type: object
       required: [slug, name, scope, serving_mode, status]
@@ -3064,6 +3120,7 @@ components:
             documents: { type: integer }
             mode: { type: string }
         eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
+        sources: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeSource" }, description: returned by the reading of one base }
         eval_result:
           type: [object, "null"]
           description: the last run of the eval set
@@ -3081,6 +3138,49 @@ components:
                   expected: { type: array, items: { type: string } }
                   found: { type: array, items: { type: string } }
                   returned: { type: array, items: { type: string } }
+    KnowledgeSourceCreate:
+      type: object
+      required: [kind, name]
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [sharepoint, web, git] }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        connector: { type: [string, "null"], description: "`sharepoint`: the organisation connector of capability `documents`" }
+        config:
+          type: object
+          description: "`sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`)"
+        interval_minutes: { type: integer, minimum: 5, maximum: 10080, default: 60 }
+    KnowledgeSourcePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: [string, "null"], minLength: 1, maxLength: 200 }
+        config: { type: [object, "null"] }
+        interval_minutes: { type: [integer, "null"], minimum: 5, maximum: 10080 }
+    KnowledgeSource:
+      type: object
+      required: [id, kind, name, interval_minutes, status]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [sharepoint, web, git] }
+        name: { type: string }
+        connector: { type: [string, "null"] }
+        config: { type: object }
+        interval_minutes: { type: integer }
+        status: { type: string, enum: [idle, syncing, failed] }
+        last_synced_at: { type: [string, "null"], format: date-time }
+        last_error: { type: [string, "null"] }
+        last_summary:
+          type: [object, "null"]
+          description: what the last sync did
+          properties:
+            added: { type: integer }
+            updated: { type: integer }
+            deleted: { type: integer }
+            unchanged: { type: integer }
+            skipped: { type: integer }
+            skipped_reasons: { type: array, items: { type: string } }
+        document_count: { type: integer }
     KnowledgeEvalCase:
       type: object
       required: [question, expected]

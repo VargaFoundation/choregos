@@ -50,10 +50,8 @@ export default function KnowledgePage() {
           Knowledge
         </Heading>
         <p className="max-w-3xl text-sm text-ink-muted">
-          A knowledge base is a corpus you choose — a framework, a policy, runbooks — uploaded as Word, PowerPoint, Excel,
-          PDF, HTML or markdown, and converted to markdown. Agents read it, never write it. In <em>files</em> mode the
-          corpus is mounted in the agent&apos;s workspace; in <em>index</em> mode the agent searches it and cites what it
-          used.
+          Documents you choose, converted to markdown. Agents read them, never write them: mounted as <em>files</em>, or
+          searched in an <em>index</em> with citations.
         </p>
       </div>
       <Card title="Knowledge bases">
