@@ -6,6 +6,12 @@ Une cellule = (backend × modèle × mémoire) jouée sur les tickets de référ
 jouet est recopié dans un espace de travail jetable, la modification est appliquée, puis
 les assertions du ticket sont vérifiées pour de bon (fichier présent, motif présent ou
 absent, fichier non touché, commande de test verte).
+
+S37-09 (ADR 0055): a cell also has a context reduction (`none`, `rtk`, `headroom`,
+`rtk+headroom`), and its tokens and cost are read from the ledger: every ticket is played under
+its own gateway key, and what the gateway says that key spent is the cell's measure. In scripted
+mode the fixture's `scripted_usage` is billed on a fake gateway; a real gateway is never billed
+by the evals, so a ticket nothing was sent for has no measure, never a guessed one.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ from choregos_api.db.models import ModelProfileRow
 from choregos_core import utcnow
 from sqlalchemy import select
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from .base import db, project_bundle
 
@@ -32,6 +39,9 @@ ASSERTION_TIMEOUT_S = 300.0
 FIXTURES = Path(__file__).resolve().parents[5] / "tests" / "fixtures"
 TICKETS = FIXTURES / "tickets"
 REPOS = FIXTURES / "repos"
+CONTEXTS = ("none", "rtk", "headroom", "rtk+headroom")
+EVAL_KEY_BUDGET_USD = 50.0
+EVAL_KEY_TTL_S = 3 * 3600
 
 
 @dataclass(slots=True)
@@ -60,9 +70,16 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
     est ignoré, jamais compté comme réussi — même règle que la boucle DoD du runner.
     """
     fixtures: list[str] = payload.get("fixtures", [])
+    context = str(payload.get("context", "none"))
+    if context not in CONTEXTS:
+        raise ApplicationError(
+            f"unknown context reduction {context!r}, expected one of {', '.join(CONTEXTS)}",
+            non_retryable=True,
+        )
     successes: list[bool] = []
     costs: list[float] = []
     durations: list[float] = []
+    metered: list[dict[str, Any]] = []
     details: list[dict[str, Any]] = []
     for name in fixtures:
         spec = _load_spec(name)
@@ -73,7 +90,9 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
             details.append({"fixture": name, "skipped": True, "reason": outcome["reason"]})
             continue
         successes.append(bool(outcome["ok"]))
-        costs.append(outcome["cost_usd"])
+        if outcome["usage"] is not None:
+            metered.append(outcome["usage"])
+            costs.append(outcome["usage"]["cost_usd"])
         durations.append(outcome["duration_s"])
         details.append({"fixture": name, "ok": outcome["ok"], "reason": outcome["reason"]})
         with contextlib.suppress(RuntimeError):
@@ -83,14 +102,26 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
         "backend": payload["backend"],
         "model": payload["model"],
         "with_memory": payload["with_memory"],
+        "context": context,
         "cases": len(successes),
         "skipped": sum(1 for d in details if d.get("skipped")),
+        # Cases the ledger has a measure for: tokens and cost are medians over these only.
+        "metered": len(metered),
         "success_rate": round(rate, 4),
         "median_cost_usd": round(statistics.median(costs), 4) if costs else None,
+        "median_tokens_in": _median(metered, "tokens_in"),
+        "median_tokens_cached": _median(metered, "tokens_cached"),
+        "median_tokens_out": _median(metered, "tokens_out"),
+        "median_turns": _median([u for u in metered if u["turns"] is not None], "turns"),
         "median_duration_s": round(statistics.median(durations), 2) if durations else None,
         "validated": bool(successes) and rate >= MIN_SUCCESS_RATE,
         "details": details,
     }
+
+
+def _median(usages: list[dict[str, Any]], key: str) -> float | None:
+    values = [float(usage[key]) for usage in usages]
+    return round(statistics.median(values), 1) if values else None
 
 
 def _load_spec(name: str) -> dict[str, Any] | None:
@@ -108,39 +139,99 @@ async def _play(spec: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]
     repo = REPOS / str(spec.get("repo", ""))
     if not repo.is_dir():
         return _skip(f"dépôt jouet absent : {spec.get('repo')}")
-    with_memory = bool(payload.get("with_memory"))
-    with tempfile.TemporaryDirectory(prefix="choregos-eval-") as tmp:
-        work = Path(tmp) / "repo"
-        shutil.copytree(repo, work)
-        before = _snapshot(work)
-        patch = await _apply_change(spec, payload, work)
-        if patch.get("skipped"):
-            return _skip(str(patch.get("reason", "")))
-        checks = await _verify(spec, work, before)
-        blocking = [c for c in checks if c.ok is False]
-        missing_tools = [c for c in checks if c.ok is None]
-        if missing_tools and not blocking:
-            return _skip(missing_tools[0].detail)
-        expected_blocked = spec.get("expect_status") == "blocked"
-        declared = str(patch.get("status", "done"))
-        ok = not blocking and (declared == "blocked") == expected_blocked
-        reason = (
-            blocking[0].label + " — " + blocking[0].detail
-            if blocking
-            else ("" if ok else f"statut attendu {spec.get('expect_status', 'done')}, obtenu {declared}")
-        )
-    cost = float(spec.get("expected_cost_usd", 1.0)) * (0.9 if with_memory else 1.0)
+    async with db() as session:
+        gateway = (await project_bundle(session, payload["project_slug"])).adapters.gateway
+    context = str(payload.get("context", "none"))
+    model = str(payload.get("model", "platform/standard"))
+    key = await gateway.mint_key(
+        {
+            "purpose": "eval",
+            "fixture": str(spec.get("id", "")),
+            "context": context,
+            "backend": payload.get("backend"),
+        },
+        EVAL_KEY_BUDGET_USD,
+        EVAL_KEY_TTL_S,
+        [model],
+    )
+    try:
+        with tempfile.TemporaryDirectory(prefix="choregos-eval-") as tmp:
+            work = Path(tmp) / "repo"
+            shutil.copytree(repo, work)
+            before = _snapshot(work)
+            patch = await _apply_change(spec, payload, work)
+            if patch.get("skipped"):
+                return _skip(str(patch.get("reason", "")))
+            turns = _bill_scripted(gateway, key.key_id, spec, context, model, patch)
+            verdict = await _judge(spec, work, before, patch)
+        usage = await _ledger(gateway, key.key_id, turns)
+    finally:
+        await gateway.revoke(key.key_id)
+    if verdict.get("skipped"):
+        return verdict
+    return {**verdict, "usage": usage, "duration_s": float(spec.get("expected_duration_s", 120.0))}
+
+
+async def _judge(
+    spec: dict[str, Any], work: Path, before: dict[str, str], patch: dict[str, Any]
+) -> dict[str, Any]:
+    """The ticket's assertions on the workspace, and the status the change declared."""
+    checks = await _verify(spec, work, before)
+    blocking = [c for c in checks if c.ok is False]
+    missing_tools = [c for c in checks if c.ok is None]
+    if missing_tools and not blocking:
+        return _skip(missing_tools[0].detail)
+    expected_blocked = spec.get("expect_status") == "blocked"
+    declared = str(patch.get("status", "done"))
+    ok = not blocking and (declared == "blocked") == expected_blocked
+    reason = (
+        blocking[0].label + " — " + blocking[0].detail
+        if blocking
+        else ("" if ok else f"statut attendu {spec.get('expect_status', 'done')}, obtenu {declared}")
+    )
+    return {"ok": ok, "skipped": False, "reason": reason}
+
+
+def _bill_scripted(
+    gateway: Any, key_id: str, spec: dict[str, Any], context: str, model: str, patch: dict[str, Any]
+) -> int | None:
+    """Bill the fixture's scripted usage on a fake gateway; returns the turns, which no ledger has.
+
+    Only a scripted change is billed, and only on a gateway that can be billed by hand
+    (`record_usage`, the fake's): a real gateway counts what was really sent, and nothing else.
+    """
+    if patch.get("source") != "scripted":
+        return patch.get("turns") if isinstance(patch.get("turns"), int) else None
+    usage = (spec.get("scripted_usage") or {}).get(context)
+    record = getattr(gateway, "record_usage", None)
+    if not isinstance(usage, dict) or record is None:
+        return None
+    record(
+        key_id,
+        tokens_in=int(usage["tokens_in"]),
+        tokens_out=int(usage["tokens_out"]),
+        cached=int(usage.get("tokens_cached", 0)),
+        model=model,
+    )
+    return int(usage["turns"]) if "turns" in usage else None
+
+
+async def _ledger(gateway: Any, key_id: str, turns: int | None) -> dict[str, Any] | None:
+    """What the gateway says the ticket's key spent; `None` when nothing went through it."""
+    spend = await gateway.spend(key_id)
+    if not spend.requests:
+        return None
     return {
-        "ok": ok,
-        "skipped": False,
-        "reason": reason,
-        "cost_usd": cost,
-        "duration_s": float(spec.get("expected_duration_s", 120.0)),
+        "tokens_in": spend.tokens_in,
+        "tokens_cached": spend.tokens_cached,
+        "tokens_out": spend.tokens_out,
+        "cost_usd": spend.cost_usd,
+        "turns": turns,
     }
 
 
 def _skip(reason: str) -> dict[str, Any]:
-    return {"ok": False, "skipped": True, "reason": reason, "cost_usd": 0.0, "duration_s": 0.0}
+    return {"ok": False, "skipped": True, "reason": reason, "usage": None, "duration_s": 0.0}
 
 
 async def _apply_change(spec: dict[str, Any], payload: dict[str, Any], work: Path) -> dict[str, Any]:
@@ -159,14 +250,19 @@ async def _apply_change(spec: dict[str, Any], payload: dict[str, Any], work: Pat
         executor = bundle.adapters.executor
     result = getattr(executor, "result_for", lambda _run: None)(str(spec.get("id", "")))
     if result is not None:
-        return {"status": str(result.status)}
+        diagnostics = getattr(result, "diagnostics", None)
+        return {
+            "status": str(result.status),
+            "source": "executor",
+            "turns": getattr(diagnostics, "turns", None),
+        }
     if variant is None:
         return {"skipped": True, "reason": f"aucune modification scriptée pour {spec.get('id')}"}
     for relative, content in (variant.get("files") or {}).items():
         target = work / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-    return {"status": str(variant.get("status", "done"))}
+    return {"status": str(variant.get("status", "done")), "source": "scripted"}
 
 
 def _snapshot(work: Path) -> dict[str, str]:
@@ -252,7 +348,11 @@ async def publish_matrix(payload: dict[str, Any]) -> dict[str, Any]:
             if row is None:
                 row = ModelProfileRow(scope="platform", name=model.split("/")[-1], litellm_model=model)
                 session.add(row)
-            row.validated_backends = sorted({e["backend"] for e in entries if e.get("validated")})
+            # A run gets no context reduction unless its policy says so: a backend is validated by
+            # its cells without one, never by a cell that only passed with rtk or headroom (S37-09).
+            row.validated_backends = sorted(
+                {e["backend"] for e in entries if e.get("validated") and e.get("context", "none") == "none"}
+            )
             row.params = {
                 **(row.params or {}),
                 "matrix": entries,

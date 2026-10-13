@@ -85,6 +85,17 @@ store holds plaintext originals.
   (ADR 0045), and its dollar figures are left out. The run page shows them as such, next to the
   gateway's cost, which stays the observed one. ADR 0015's attestation is not implemented; when it
   is, it reads these events.
+- The eval matrix has a context dimension: `EvalMatrix(contexts=[...])` among `none`, `rtk`,
+  `headroom`, `rtk+headroom`, default `["none"]`, so a matrix started before it keeps its commands
+  and replays. Each ticket of a cell is played under its own gateway key, revoked after; the cell's
+  input (cache reads included), cache-read and output tokens and its cost are medians of what the
+  gateway's ledger says those keys spent, over the tickets it has a measure for (`metered`). A
+  ticket nothing went through has no measure, never a guess. Turns are not in the ledger: they come
+  from the run's diagnostics. In CI the tickets' `scripted_usage` is billed on the fake gateway, so
+  the fake matrix proves the plumbing, not a gain. The matrix still runs no agent, so on a real
+  gateway its ledger stays empty: the real matrix (S37-10) needs cells that start real runs with
+  the context in their stage input. A backend is validated by its cells without reduction only:
+  a run gets none unless its policy says so.
 - A lossy filter can hide the line an agent needed: `rtk_exclude_commands` and `per_role` let a
   policy keep raw output where it matters (a reviewer, a security stage).
 - Not decided here: a context reduction for the other backends' native hooks (after the matrix), and

@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`EvalMatrix` : évals nocturnes backend × modèle × mémoire (docs/plan/04 §4.2, S12-02)."""
+"""`EvalMatrix`: nightly evals, backend × model × memory (docs/plan/04 §4.2, S12-02).
+
+S37-09 adds the context reduction as a fourth dimension (ADR 0055). Its default, `["none"]`, keeps
+the commands of a matrix started before it: one cell per backend × model × memory, in the same
+order, so its history replays (`tests/replay/histories/evals-before-s37-09.json`).
+"""
 
 from __future__ import annotations
 
@@ -26,6 +31,10 @@ class EvalInput:
     with_memory: list[bool] = field(default_factory=lambda: [True, False])
     fixtures: list[str] = field(default_factory=list)
     publish: bool = True
+    # none | rtk | headroom | rtk+headroom (ADR 0055): what the cell's runs are given as context
+    # reduction. Checked by `run_eval_cell`, not here: a workflow that raises on its input fails
+    # its task forever instead of failing once.
+    contexts: list[str] = field(default_factory=lambda: ["none"])
 
 
 @workflow.defn(name="EvalMatrix", sandboxed=False)
@@ -50,20 +59,22 @@ class EvalMatrix:
         for backend in params.backends:
             for model in params.models:
                 for memory in params.with_memory:
-                    outcome = await executer_activite(
-                        eval_activities.run_eval_cell,
-                        {
-                            "project_slug": params.project_slug,
-                            "backend": backend,
-                            "model": model,
-                            "with_memory": memory,
-                            "fixtures": fixtures,
-                        },
-                        start_to_close_timeout=timedelta(hours=2),
-                        heartbeat_timeout=timedelta(minutes=10),
-                        retry_policy=RETRY,
-                    )
-                    self.results.append(outcome)
+                    for context in params.contexts:
+                        outcome = await executer_activite(
+                            eval_activities.run_eval_cell,
+                            {
+                                "project_slug": params.project_slug,
+                                "backend": backend,
+                                "model": model,
+                                "with_memory": memory,
+                                "context": context,
+                                "fixtures": fixtures,
+                            },
+                            start_to_close_timeout=timedelta(hours=2),
+                            heartbeat_timeout=timedelta(minutes=10),
+                            retry_policy=RETRY,
+                        )
+                        self.results.append(outcome)
         if params.publish:
             await executer_activite(
                 eval_activities.publish_matrix,

@@ -13,8 +13,14 @@ prompt: |
 allowed_paths:
   - "src/panier/**"
   - "tests/**"
-expected_cost_usd: 0.62
 expected_duration_s: 210
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 198000, tokens_cached: 132000, tokens_out: 6600, turns: 14 }
+  "rtk": { tokens_in: 167200, tokens_cached: 112200, tokens_out: 6600, turns: 14 }
+  "headroom": { tokens_in: 155100, tokens_cached: 104500, tokens_out: 6800, turns: 15 }
+  "rtk+headroom": { tokens_in: 129800, tokens_cached: 86900, tokens_out: 6800, turns: 15 }
 assertions:
   - { kind: file_exists, path: src/panier/remise.py }
   - { kind: file_matches, path: src/panier/remise.py, pattern: "def remise_volume", absent: false }
