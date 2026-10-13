@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, refine_result
 from .test_interpreter import _runs, _ticket, _wait_state, _wait_until, scripted, start
 
 pytestmark = pytest.mark.asyncio
@@ -37,7 +37,7 @@ async def test_replay_the_stage_reprend_un_ticket_escalade(
 ) -> None:
     """Deux échecs épuisent `t-refine`, le ticket escalade ; « Replay the stage » le ramène à
     l'étape, avec un budget de tentatives NEUF — sans lui, le premier échec suivant réescaladerait."""
-    scripted(setup.adapters, ECHEC, ECHEC, ECHEC, stage_result("spec"))
+    scripted(setup.adapters, ECHEC, ECHEC, ECHEC, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
@@ -69,7 +69,7 @@ async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
         reason="question",
         questions=[{"text": "Which currency for credit notes?", "options": ["EUR", "order currency"]}],
     )
-    scripted(setup.adapters, question, stage_result("spec"))
+    scripted(setup.adapters, question, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
@@ -107,7 +107,7 @@ async def test_replay_hors_d_un_ticket_gare_est_oublie(
 ) -> None:
     """Sur un ticket qui attend une approbation ordinaire, `rerun_stage` ne déplace rien — et ne
     reste pas en réserve pour une escalade à venir."""
-    scripted(setup.adapters, stage_result("spec"))
+    scripted(setup.adapters, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")

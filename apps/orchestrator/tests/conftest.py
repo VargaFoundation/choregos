@@ -170,3 +170,15 @@ def stage_result(summary: str = "fait", **kwargs: Any) -> Any:
     }
     payload.update(kwargs)
     return StageResult(**payload)
+
+
+def refine_result(summary: str = "spec written", **kwargs: Any) -> Any:
+    """A `t-refine` result with the outputs the core templates declare: without them the step
+    fails (S31-02)."""
+    outputs = {
+        "spec_markdown": f"## Spec\n\n{summary}",
+        "size": "M",
+        "risk": "low",
+        **kwargs.pop("outputs", {}),
+    }
+    return stage_result(summary, outputs=outputs, **kwargs)

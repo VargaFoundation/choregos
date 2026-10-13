@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, refine_result, stage_result
 
 pytestmark = pytest.mark.asyncio
 
@@ -124,7 +124,7 @@ async def test_human_rejection_returns_to_refining(
     dans `_wait_until` et dans `test_pause_and_resume`. Ce qui se constate sans course, c'est son
     effet — une seconde étape d'agent a tourné.
     """
-    scripted(setup.adapters, stage_result("spec v1"), stage_result("spec v2"))
+    scripted(setup.adapters, refine_result("spec v1"), refine_result("spec v2"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
@@ -200,7 +200,7 @@ async def test_agent_question_creates_human_request(
 
 
 async def test_pause_and_resume(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
-    scripted(setup.adapters, stage_result("spec"), stage_result("implémenté"), stage_result("vérifié"))
+    scripted(setup.adapters, refine_result("spec"), stage_result("implémenté"), stage_result("vérifié"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
@@ -224,7 +224,7 @@ async def test_pause_and_resume(setup: Fixture, temporal_env: Any, worker_factor
 
 async def test_cost_is_counted_once_per_run(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
     """Le coût vient du gateway, une seule fois par run — pas de double comptage."""
-    scripted(setup.adapters, stage_result("spec"))
+    scripted(setup.adapters, refine_result("spec"))
     gateway = setup.adapters.gateway
     async with worker_factory():
         handle = await start(temporal_env, setup)
@@ -527,7 +527,7 @@ async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
     from sqlalchemy import select
 
     setup.adapters.notify.panne = "[slack] ni `bot_token` ni `webhook_url` configurés"
-    scripted(setup.adapters, stage_result("spec rédigée", outputs={"size": "M", "risk": "low"}))
+    scripted(setup.adapters, refine_result("spec rédigée"))
 
     async def demandes() -> list[Any]:
         async with session_scope() as session:
