@@ -383,3 +383,25 @@ async def test_le_jeton_passe_en_entete_pour_une_seule_commande() -> None:
     cle, valeur = _entete("ghs_x")
     assert cle == "-c" and valeur.startswith("http.extraHeader=Authorization: Basic ")
     assert base64.b64decode(valeur.rsplit(" ", 1)[1]).decode() == "x-access-token:ghs_x"
+
+
+async def test_a_result_whose_post_fails_is_still_in_the_journal(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """#410: the Tekton `result-url` pointed at a `result.json` nothing uploaded, so a failed post
+    lost the result. The runner journals the whole result before posting it."""
+    from choregos_contracts import StageResult
+
+    class _PostFails(FakeInternalClient):
+        async def post_result(self, result: Any) -> dict[str, Any]:
+            raise ConnectionError("internal API unreachable")
+
+    agent_script({"turns": [{"result": valid_result("fixed")}]}, stage_input, runner_settings.workspace)
+    client = _PostFails(stage_input)
+    outcome = await Runner(runner_settings, client).execute(stage_input, client)  # type: ignore[arg-type]
+    journaled = [e for e in client.events if e["type"] == "run.result"]
+    assert journaled, "the result event reached the API"
+    recovered = StageResult.model_validate(journaled[-1]["payload"]["stage_result"])
+    assert outcome.result is not None
+    assert (recovered.status, recovered.summary) == (outcome.result.status, outcome.result.summary)
+    assert any(e["type"] == "result.post_failed" for e in client.events), "the failed post is journaled too"

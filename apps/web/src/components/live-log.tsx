@@ -107,6 +107,8 @@ function summarize(event: RunEventDto): string {
     return `${payload.allowed ? "allowed" : "refused"} · ${payload.target ?? ""} — ${payload.reason ?? ""}`;
   }
   if (event.type === "session/update") return resumerLaMiseAJour(payload);
+  // The runner journals the whole result (#410); one line says its status and summary.
+  if (event.type === "run.result") return `${payload.status ?? ""} · ${payload.summary ?? ""}`;
   return JSON.stringify(payload);
 }
 
