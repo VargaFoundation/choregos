@@ -69,7 +69,7 @@ transitions:
     from: planning
     to: ready
     by: planner
-    inputs: [spec]
+    inputs: [spec_markdown]
     outputs: [plan_markdown]
     on_fail: { to: planning, max_attempts: 2, escalate_to: needs_human }
   - id: t-implement

@@ -52,7 +52,7 @@ class FakeExecutor:
             produced = self.handler(spec.stage_input)
             result = produced if isinstance(produced, StageResult) else StageResult.model_validate(produced)
         else:
-            result = StageResult(status=StageStatus.DONE, summary="fake: rien à faire")
+            result = _nothing_to_do(spec.stage_input)
         self.results[spec.run_id] = result
         self.statuses[spec.run_id] = ExecStatus(
             state="succeeded",
@@ -84,3 +84,42 @@ class FakeExecutor:
     async def fetch_result(self, ref: ExecRef) -> StageResult | None:
         """Équivalent du `result-url` Tekton : le résultat produit par le runner."""
         return self.results.get(ref.run_id or "")
+
+
+#: Values a typed field of `StageOutputs` accepts, for the outputs a fake step declares it produced.
+_PLACEHOLDERS: dict[str, Any] = {"size": "M", "risk": "low", "verdict": "approve", "allowed_paths": ["**"]}
+
+
+def _nothing_to_do(stage_input: StageInput | None) -> StageResult:
+    """The default fake result: done, with every output the transition declares (S31-02) — a
+    placeholder value, or an empty file for a typed one. An output an old core template declared
+    and nothing produces stays absent, as it always was."""
+    from choregos_contracts import ARTIFACT_TYPES, ArtifactFile, Artifacts, artifact_digest
+    from choregos_core.dsl.legacy import legacy_outputs
+
+    if stage_input is None:
+        return StageResult(status=StageStatus.DONE, summary="fake: nothing to do")
+    transition = stage_input.transition
+    legacy = set(legacy_outputs(transition.id, list(transition.outputs)))
+    files = set(transition.file_outputs())
+    outputs = {
+        name: _PLACEHOLDERS.get(name, f"fake {name}")
+        for name in transition.outputs
+        if name not in legacy and name not in files
+    }
+    stored = {
+        name: ArtifactFile(
+            filename=f"{name}.{ARTIFACT_TYPES[transition.output_types[name]].extension}",
+            type=transition.output_types[name],
+            media_type=ARTIFACT_TYPES[transition.output_types[name]].media_type,
+            digest=artifact_digest(b""),
+            size=0,
+        )
+        for name in files
+    }
+    return StageResult(
+        status=StageStatus.DONE,
+        summary="fake: nothing to do",
+        outputs=outputs,
+        artifacts=Artifacts(files=stored),
+    )

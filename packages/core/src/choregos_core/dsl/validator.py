@@ -29,6 +29,7 @@ from choregos_contracts.workflow import (
 from ..errors import Issue
 from ..gates import known_gates
 from .dates import champ_de
+from .legacy import legacy_outputs
 from .yamlsource import json_pointer, locate
 
 #: Lu encore pour les workflows écrits avant #175 ; un état de production s'écrit `production: true`.
@@ -88,6 +89,15 @@ def _check_output_types(wf: Workflow, report: ValidationReport, source: Any) -> 
 
     nom_valide = re.compile(ARTIFACT_NAME_PATTERN)
     for index, t in enumerate(wf.transitions):
+        for name in legacy_outputs(t.id, list(t.outputs)):
+            report.warn(
+                "outputs.legacy",
+                f"`{name}` on `{t.id}` is a declaration of an old core template that nothing produces: "
+                "it is not required, and the next step never receives it — remove it, or declare what "
+                "the step writes (`spec_markdown`, `plan_markdown`)",
+                ["transitions", index, "outputs"],
+                source,
+            )
         for name, type_ in t.output_types.items():
             chemin: list[str | int] = ["transitions", index, "output_types", name]
             if name not in t.outputs:

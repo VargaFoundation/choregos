@@ -22,6 +22,7 @@ from choregos_contracts import (
 )
 
 from ..gates import GateOutcome
+from .legacy import legacy_outputs
 
 
 @dataclass(slots=True, frozen=True)
@@ -165,7 +166,11 @@ class WorkflowEngine:
             return self.retry_or_escalate(transition, attempts, result.reason or str(result.status))
 
         if require_outputs:
-            missing = missing_outputs(list(transition.outputs), dict(transition.output_types), result)
+            # An output an old core template declared and nothing produces is not required: a
+            # project's modified copy keeps working as it did (`legacy.py`).
+            legacy = set(legacy_outputs(transition.id, list(transition.outputs)))
+            required = [name for name in transition.outputs if name not in legacy]
+            missing = missing_outputs(required, dict(transition.output_types), result)
             if missing:
                 return self.retry_or_escalate(
                     transition, attempts, f"missing declared outputs: {', '.join(missing)}"
