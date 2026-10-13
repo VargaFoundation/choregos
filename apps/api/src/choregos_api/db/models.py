@@ -379,6 +379,13 @@ class CostLedger(Base, PkMixin):
     cost_eur: Mapped[float] = mapped_column(Float, default=0.0)
     fx_rate: Mapped[float] = mapped_column(Float, default=1.0)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    # Who spent it (S29-01): the registry agent and version that ran, the workflow (name and
+    # version) the work item was born in. NULL for a playbook run, or a line older than the columns
+    # that no run could explain.
+    agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    workflow_name: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    workflow_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class AuditLog(Base, PkMixin):
