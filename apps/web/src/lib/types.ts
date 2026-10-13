@@ -21,6 +21,7 @@ export type {
   WorkItemCreate,
   Connector as ConnectorDto,
   ConnectorTestResult,
+  BudgetAlert,
   CostReport,
   DiffSummary,
   DoraMetric,

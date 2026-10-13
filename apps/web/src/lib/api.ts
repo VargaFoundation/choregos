@@ -65,6 +65,7 @@ import type {
   TimelineEntry,
   ConnectorDto,
   ConnectorTestResult,
+  BudgetAlert,
   CostReport,
   DoraReport,
   Edition,
@@ -559,6 +560,11 @@ export const api = {
   /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD) and `kind` filter it. */
   orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
+  /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
+  budgetAlerts: (org: string, status: "open" | "acknowledged" | "all" = "open") =>
+    request<BudgetAlert[]>(`/orgs/${org}/budget-alerts${query({ status })}`),
+  acknowledgeBudgetAlert: (org: string, id: string) =>
+    request<BudgetAlert>(`/orgs/${org}/budget-alerts/${id}/acknowledge`, { method: "POST" }),
   orgCostsCsvUrl: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     `${API_BASE}/orgs/${org}/costs.csv${query({ group_by: groupBy, ...compact(filtre) })}`,
   dora: (id: string, env = "prod") => request<DoraReport>(`/projects/${qualify(id)}/metrics/dora${query({ env })}`),

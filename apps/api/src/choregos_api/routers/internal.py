@@ -54,6 +54,7 @@ from ..services.artifacts import (
     to_contract,
 )
 from ..services.artifacts import latest as latest_artifact
+from ..services.budget_alerts import check_after_spend
 from ..services.couts import dimensions_of
 from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner, record_digests
 from ..services.tickets import sorties_a_ranger
@@ -739,6 +740,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             **await dimensions_of(session, run.id),
         )
     )
+    await check_after_spend(session, run.id)
     await persist_event(
         session,
         EventType.TOOL_CALLED,

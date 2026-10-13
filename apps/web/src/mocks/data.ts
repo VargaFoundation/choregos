@@ -24,6 +24,7 @@ import type {
   ApiToken,
   ProjectAgent,
   ProjectAgentPut,
+  BudgetAlert,
   KnowledgeBase,
   Skill,
   SkillGitPreview,
@@ -892,6 +893,11 @@ export function mockCostReport(path: string): CostReport {
   };
 }
 
+export const budgetAlerts: BudgetAlert[] = [
+  { id: "ba1", scope: "project", subject: "billing-api", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 80, spent_usd: 121.4, budget_usd: 150, status: "open", created_at: iso(35) },
+  { id: "ba2", scope: "agent", subject: "onboarding-coordinator", period: "day", period_key: now.toISOString().slice(0, 10), threshold: 100, spent_usd: 20.3, budget_usd: 20, status: "open", created_at: iso(12) },
+];
+
 export const dora: DoraReport = {
   env: "prod",
   since: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
@@ -1739,6 +1745,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const corps = JSON.parse(String(init.body ?? "{}")) as ProjectAgentPut;
     return { agent: chemin?.split("/").at(-1), version: corps.version, overrides: corps.overrides ?? {}, effective: {} } as T;
   }
+  const accuse = /^\/orgs\/[^/]+\/budget-alerts\/([^/]+)\/acknowledge$/.exec(chemin ?? "");
+  if (method === "POST" && accuse) {
+    const alerte = budgetAlerts.find((a) => a.id === accuse[1]) ?? budgetAlerts[0]!;
+    return { ...alerte, status: "acknowledged", acknowledged_by: "lea@varga.dev" } as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import$/.test(chemin ?? "")) return skills[0] as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git\/preview$/.test(chemin ?? "")) return skillGitPreview as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git$/.test(chemin ?? "")) return [skills[0]] as T;
@@ -1804,6 +1815,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/kd-2$/, knowledgeBase.documents![1]],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...knowledgeBase, documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
+    [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
     [/^\/orgs\/[^/]+\/skills\/[^/]+$/, skills[0]],
     [/^\/ui\/admin-sections$/, [sectionScim]],

@@ -56,3 +56,13 @@ test("the Spend entry is in the navigation", async ({ page }) => {
   await page.getByRole("complementary", { name: "Sidebar" }).getByRole("link", { name: "Spend" }).click();
   await expect(page).toHaveURL(/\/costs$/);
 });
+
+test("la boîte montre les budgets franchis, et un accusé les en retire", async ({ page }) => {
+  await page.goto("/inbox");
+  const liste = page.getByTestId("budgets-franchis");
+  await expect(liste.getByRole("listitem")).toHaveCount(2);
+  await expect(liste).toContainText("Project billing-api has spent 80 % of its daily budget");
+  await expect(liste).toContainText("agent onboarding-coordinator has spent its whole daily budget");
+  await expect(page.getByText("2 open")).toBeVisible();
+  await expect(liste.getByRole("button", { name: "Acknowledge" }).first()).toBeVisible();
+});

@@ -1491,6 +1491,25 @@ export type MemoryDecision = {
   reason?: string | null;
 };
 
+export type BudgetAlert = {
+  id: string;
+  scope: "project" | "agent";
+  /** the project's or the agent's slug */
+  subject: string;
+  /** day */
+  period: string;
+  /** the day */
+  period_key: string;
+  /** the share of the budget crossed, in percent */
+  threshold: number;
+  spent_usd: number;
+  budget_usd: number;
+  status: "open" | "acknowledged";
+  created_at?: string | null;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+};
+
 export type CostReport = {
   group_by: string;
   currency?: string;
@@ -1696,6 +1715,7 @@ export interface Operations {
   abortRelease: { method: "POST"; path: "/releases/{id}/abort"; body: {
   reason?: string;
 }; response: void };
+  acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
@@ -1895,6 +1915,7 @@ export interface Operations {
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
+  listBudgetAlerts: { method: "GET"; path: "/orgs/{org}/budget-alerts"; body: never; response: Array<BudgetAlert> };
   listConnectorTypes: { method: "GET"; path: "/connectors/types"; body: never; response: Array<ConnectorType> };
   listConnectors: { method: "GET"; path: "/projects/{id}/connectors"; body: never; response: Array<Connector> };
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };

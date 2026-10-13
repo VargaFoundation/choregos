@@ -117,4 +117,8 @@ async def record_cost(  # noqa: PLR0913 — une ligne du registre, champ par cha
             tokens_out=tokens_out,
         ),
     )
+    # A budget this spend has just crossed becomes an inbox item (S29-04).
+    from .budget_alerts import check_after_spend
+
+    await check_after_spend(session, run_id)
     return entry
