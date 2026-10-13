@@ -31,6 +31,9 @@ class ProjectDto(Dto):
     config: dict[str, Any]
     workflow_name: str | None = None
     policy_name: str | None = None
+    #: An active workflow of the project has a `via: release_train` transition: only then do trains
+    #: exist for it, and the console shows them (S30-07).
+    has_release_train: bool = False
     stats: ProjectStats = Field(default_factory=ProjectStats)
     created_at: datetime
     updated_at: datetime

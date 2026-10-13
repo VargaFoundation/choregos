@@ -69,6 +69,8 @@ export type Project = {
   config: S.Project;
   workflow_name?: string | null;
   policy_name?: string | null;
+  /** An active workflow of the project has a `via: release_train` transition: only then does the project have trains. */
+  has_release_train?: boolean;
   stats?: ProjectStats;
   created_at?: string;
   updated_at?: string;

@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { hasReleaseTrain } from "@/lib/release-train";
 import { useSession } from "@/lib/session";
 import { eur, percent, relative } from "@/lib/format";
 import { buttonClasses, Card, Empty, ErrorNote, Eyebrow, Heading, Lead, Stat, StateBadge } from "@/components/ui";
@@ -84,7 +85,9 @@ export default function ProjectsPage() {
                   label={project.stats?.budget_month_eur ? `of ${eur(project.stats.budget_month_eur)}` : "cost this month"}
                 />
                 <Stat value={percent(project.stats?.first_pass_merge_rate)} label="prs on first pass" />
-                <Stat value={project.stats?.trains_pending ?? 0} label="trains in flight" />
+                {hasReleaseTrain(project) && (
+                  <Stat value={project.stats?.trains_pending ?? 0} label="trains in flight" />
+                )}
               </div>
               <p className="mt-6 text-xs text-ink-muted">
                 {project.workflow_name ?? "—"} · {project.policy_name ?? "—"} · {relative(project.updated_at)}

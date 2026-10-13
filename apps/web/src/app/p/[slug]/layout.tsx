@@ -7,6 +7,7 @@ import { use, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Eyebrow, Heading, Onglets, tabClasses } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useHasReleaseTrain } from "@/lib/release-train";
 
 const TABS = [
   { suffix: "", label: "overview" },
@@ -34,6 +35,7 @@ export default function ProjectLayout({
   // reste lisible au-dessus, c'est celui des URL et de la CLI (S23-04). Même clé que la vue
   // d'ensemble : une seule lecture.
   const projet = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
+  const trains = useHasReleaseTrain(slug);
   return (
     <div className="space-y-8">
       <div className="space-y-4">
@@ -43,7 +45,7 @@ export default function ProjectLayout({
         </Heading>
       </div>
       <Onglets aria-label="project sections">
-        {TABS.map((tab) => {
+        {TABS.filter((tab) => tab.suffix !== "/trains" || trains).map((tab) => {
           const href = `/p/${slug}${tab.suffix}`;
           // Les intégrations (un sous-onglet par client), les actions (une page par action) et les
           // workflows (une page par workflow) gardent leur onglet actif sous elles ; un ticket et ses

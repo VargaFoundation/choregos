@@ -15,6 +15,7 @@ from ..db.models import (
     Project,
     Release,
     Run,
+    WorkflowDef,
     WorkItem,
 )
 from ..schemas import (
@@ -40,9 +41,27 @@ async def project_dto(session: AsyncSession, project: Project, org_slug: str | N
         config=project.config,
         workflow_name=workflow.name if workflow else None,
         policy_name=policy.name if policy else None,
+        has_release_train=await declares_a_release_train(session, project.id),
         stats=await project_stats(session, project),
         created_at=project.created_at,
         updated_at=project.updated_at,
+    )
+
+
+async def declares_a_release_train(session: AsyncSession, project_id: str) -> bool:
+    """Whether an active workflow of the project has a `via: release_train` transition: the engine
+    starts a train only for such a transition, so a project without one has no train (S30-07)."""
+    documents = (
+        await session.execute(
+            select(WorkflowDef.json_doc).where(
+                WorkflowDef.project_id == project_id, WorkflowDef.is_active.is_(True)
+            )
+        )
+    ).scalars()
+    return any(
+        transition.get("via") == "release_train"
+        for document in documents
+        for transition in (document or {}).get("transitions") or []
     )
 
 
