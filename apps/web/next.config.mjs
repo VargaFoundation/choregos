@@ -17,7 +17,22 @@ const nextConfig = {
   typedRoutes: false,
   // Le design system est livré en TypeScript source : Next le transpile comme le reste.
   transpilePackages: ["@varga/design-system"],
-  experimental: { optimizePackageImports: ["@tanstack/react-query"] },
+  experimental: {
+    optimizePackageImports: ["@tanstack/react-query"],
+    // Turbopack merged every module under 200 kB into the chunk of each route that used it: the
+    // glossary, the integrations page, the confirmation dialog or the schema form were shipped four
+    // to nine times — 160 kB of copies, measured on 2026-10-13. Small modules now stay in chunks of
+    // their own, shared by the routes: a page loads a few more files, of the same total size, and
+    // the build ships about 145 kB less (bundle budget, `scripts/bundle-budget.mjs`).
+    turbopackChunking: { maxMergeChunkSize: 5_000, minChunkSize: 5_000 },
+  },
+  // A live build does not ship the demo fixtures: the bundler emits the chunk of every `import()`
+  // it sees, even behind `IS_MOCK` — 80 kB of fake data in every live console. The demo build
+  // (`NEXT_PUBLIC_API_MODE=mock`) keeps them.
+  turbopack:
+    process.env.NEXT_PUBLIC_API_MODE === "mock"
+      ? {}
+      : { resolveAlias: { "@/mocks/data": "./src/mocks/absent.ts" } },
   async rewrites() {
     return [
       { source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` },
