@@ -10,7 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from choregos_contracts import AgentActor, HumanActor, SystemActor, Workflow
+from choregos_contracts import (
+    ARTIFACT_NAME_PATTERN,
+    ARTIFACT_TYPES,
+    AgentActor,
+    HumanActor,
+    SystemActor,
+    Workflow,
+)
 from choregos_contracts.workflow import (
     AGENT_WILDCARD,
     PREFIXE_PRODUCTION,
@@ -22,6 +29,7 @@ from choregos_contracts.workflow import (
 from ..errors import Issue
 from ..gates import known_gates
 from .dates import champ_de
+from .legacy import legacy_outputs
 from .yamlsource import json_pointer, locate
 
 #: Lu encore pour les workflows écrits avant #175 ; un état de production s'écrit `production: true`.
@@ -68,8 +76,51 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_actions(wf, report, source)
     _check_tasks(wf, report, source)
     _check_effets(wf, report, source)
+    _check_output_types(wf, report, source)
     _check_warnings(wf, report, source)
     return report
+
+
+def _check_output_types(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A typed output is a declared one, of a known type, under a name that can be a file name
+    (ADR 0049): a type for an undeclared output would never be checked, and a misspelt type
+    would make a file output look like an inline one."""
+    import re
+
+    nom_valide = re.compile(ARTIFACT_NAME_PATTERN)
+    for index, t in enumerate(wf.transitions):
+        for name in legacy_outputs(t.id, list(t.outputs)):
+            report.warn(
+                "outputs.legacy",
+                f"`{name}` on `{t.id}` is a declaration of an old core template that nothing produces: "
+                "it is not required, and the next step never receives it — remove it, or declare what "
+                "the step writes (`spec_markdown`, `plan_markdown`)",
+                ["transitions", index, "outputs"],
+                source,
+            )
+        for name, type_ in t.output_types.items():
+            chemin: list[str | int] = ["transitions", index, "output_types", name]
+            if name not in t.outputs:
+                report.error(
+                    "output_types.undeclared",
+                    f"`output_types` types `{name}`, which `outputs:` does not declare",
+                    chemin,
+                    source,
+                )
+            if type_ not in ARTIFACT_TYPES:
+                report.error(
+                    "output_types.unknown",
+                    f"unknown type `{type_}` for `{name}`: one of {', '.join(sorted(ARTIFACT_TYPES))}",
+                    chemin,
+                    source,
+                )
+            if not nom_valide.fullmatch(name):
+                report.error(
+                    "output_types.name",
+                    f"`{name}` cannot name a file: letters, digits, `_`, `.`, `-`, not starting with a dot",
+                    chemin,
+                    source,
+                )
 
 
 def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:

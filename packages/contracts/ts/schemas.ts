@@ -370,6 +370,10 @@ export type StageInput = {
     to: string;
     outputs?: Array<string>;
     inputs?: Array<string>;
+    /** The declared type of each output (ADR 0049); a file type is written in .choregos/outputs/. */
+    output_types?: {
+      [key: string]: string;
+    };
   };
   repo?: {
     url: string;
@@ -473,6 +477,16 @@ export type StageResult = {
     context_pack_url?: string | null;
     reports?: {
       [key: string]: string;
+    };
+    /** The files the step left in .choregos/outputs/, by artifact name, as the runner stored them (ADR 0049). */
+    files?: {
+      [key: string]: {
+        filename: string;
+        type: string;
+        media_type: string;
+        digest: string;
+        size: number;
+      };
     };
   };
   evidence?: {

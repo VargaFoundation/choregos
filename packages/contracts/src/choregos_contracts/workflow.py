@@ -191,6 +191,9 @@ class Transition(Strict):
     gates: list[GateSpec] = Field(default_factory=list)
     outputs: list[str] = Field(default_factory=list)
     inputs: list[str] = Field(default_factory=list)
+    #: The type of each declared output (ADR 0049): `deck: pptx` is a file the agent writes in
+    #: `.choregos/outputs/`; an output not listed is an inline value (markdown or JSON), as before.
+    output_types: dict[str, str] = Field(default_factory=dict)
     on_fail: Retry | None = None
     on_reject: Identifier | None = None
     on_changes_requested: Retry | None = None

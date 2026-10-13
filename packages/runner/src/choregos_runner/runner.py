@@ -36,7 +36,7 @@ from .outils_locaux import demarrer_si_absent
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .skills import SkillInvalide, poser
-from .workspace import Workspace, workspace_env
+from .workspace import Workspace, inline_outputs, workspace_env
 
 MAX_RESULT_REPAIRS = 2
 MAX_SCOPE_REMINDERS = 1
@@ -254,14 +254,14 @@ class Runner:
                     scope_result = await check_scope(workspace, depart, guards.allowed_paths)
 
                 # 10. résultat
-                load = load_result(workspace.result_path(), list(stage_input.transition.outputs))
+                load = load_result(workspace.result_path(), inline_outputs(stage_input))
                 while not load.ok and repairs < MAX_RESULT_REPAIRS:
                     repairs += 1
                     await journal.record("result.repair", {"attempt": repairs, "error": load.error})
                     await agent.prompt(
                         repair_prompt(load, workspace.result_path()), timeout=self._remaining(budget_seconds)
                     )
-                    load = load_result(workspace.result_path(), list(stage_input.transition.outputs))
+                    load = load_result(workspace.result_path(), inline_outputs(stage_input))
                 agent_result = load.result
                 diagnostics = Diagnostics(
                     turns=agent.outcome.turns,

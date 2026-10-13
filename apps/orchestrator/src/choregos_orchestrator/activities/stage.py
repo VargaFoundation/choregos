@@ -225,6 +225,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 to=plan.to_state,
                 outputs=plan.outputs or [],
                 inputs=plan.inputs or [],
+                output_types=plan.output_types or {},
             ),
             # Pas de dépôt, pas de `repo` : le runner prépare un répertoire vide au lieu de
             # cloner. Un dépôt factice, comme on le faisait, faisait croire à un workspace

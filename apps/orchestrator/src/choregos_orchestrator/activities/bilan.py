@@ -130,6 +130,7 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
                 item=item,
                 run=run,
                 outputs=sorties_a_ranger(outputs, declarees),
+                types=dict(((run.stage_input or {}).get("transition") or {}).get("output_types") or {}),
             )
         if result.artifacts.pr_url:
             item.pr_url = result.artifacts.pr_url
