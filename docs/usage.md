@@ -595,6 +595,15 @@ ceiling of 20`). A policy saved before the ceiling was set is not refused: what 
 ceiling, the policy keeps what was written, and `GET /projects/{id}/policy` (and the project's
 settings page) lists each clamp.
 
+**Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
+the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session
+and the stage fails with `reason: max_turns`. The same tool with the same arguments
+`CHOREGOS_RUNNER_LOOP_THRESHOLD` times in a row (5 by default; 0 disables) stops it with
+`reason: loop`. Either way the agent's partial work is published like any failed stage's, and the
+journal says `run.stopped`. When two consecutive attempts of a stage fail the same way (same
+reason, same first line of summary, numbers aside), the interpreter escalates instead of spending
+its remaining attempts.
+
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train
 ([ADR 0041](adr/0041-l-approbation-suit-ce-que-le-lot-emporte.md)). The policy's own human gate is

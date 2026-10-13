@@ -583,3 +583,74 @@ async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
     assert any((e.payload or {}).get("notified") is False for e in evenements), (
         "un silence non enregistré remplace une panne bruyante par une panne muette"
     )
+
+
+async def _refine_attempts(setup: Fixture, attempts: int) -> None:
+    """The project's workflow, with `t-refine` retried up to `attempts` times."""
+    from choregos_api.db.models import WorkflowDef
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(select(WorkflowDef).where(WorkflowDef.project_id == setup.project_id))
+        ).scalar_one()
+        document = dict(row.json_doc)
+        document["transitions"] = [
+            {**t, "on_fail": {**t["on_fail"], "max_attempts": attempts}} if t["id"] == "t-refine" else t
+            for t in document["transitions"]
+        ]
+        row.json_doc = document
+
+
+async def test_the_same_failure_twice_escalates_instead_of_retrying(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """S27-07: three attempts allowed, but the second fails exactly like the first — no third."""
+    await _refine_attempts(setup, 3)
+    failure = StageResult(
+        status=StageStatus.FAILED, summary="pytest: 3 failed in 12.4s", reason="tests_failed"
+    )
+    same = StageResult(status=StageStatus.FAILED, summary="pytest: 3 failed in 9.1s", reason="tests_failed")
+    scripted(setup.adapters, failure, same, failure)
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "needs_human")
+        status = await handle.query("status")
+        assert status["attempts"]["t-refine"] == 2, status["attempts"]
+        await handle.signal("control", {"action": "stop"})
+        await handle.result()
+        history = await handle.fetch_history()
+    assert await _runs(setup) == 2
+    # The decision is behind `workflow.patched`: the history it writes replays, and so do the
+    # archived ones written before it (`tests/replay`). Set CHOREGOS_RECORD_REPLAY=1 to archive it.
+    import os
+    from pathlib import Path
+
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.worker import Replayer
+
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
+    if os.environ.get("CHOREGOS_RECORD_REPLAY") == "1":
+        archive = (
+            Path(__file__).resolve().parents[3] / "tests/replay/histories/wi-identical-failure-S27-07.json"
+        )
+        archive.write_text(history.to_json(), encoding="utf-8")
+
+
+async def test_different_failures_use_every_attempt(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    await _refine_attempts(setup, 3)
+    scripted(
+        setup.adapters,
+        StageResult(status=StageStatus.FAILED, summary="pytest: 3 failed", reason="tests_failed"),
+        StageResult(status=StageStatus.FAILED, summary="lint: 2 errors", reason="lint_failed"),
+        StageResult(status=StageStatus.FAILED, summary="pytest: 3 failed", reason="tests_failed"),
+    )
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "needs_human")
+        assert (await handle.query("status"))["attempts"]["t-refine"] == 3
+        await handle.signal("control", {"action": "stop"})
+        await handle.result()
