@@ -25,6 +25,10 @@ class ClaudeCodeBackend(Backend):
         # sur « command not found ».
         command = list(stage_input.agent.launch.command) or ["claude-code-acp"]
         settings = {
+            # The ACP adapter (0.16.2, `getAvailableModels`) calls `setModel()` with the first model
+            # of the SDK's list unless the settings name one: without this, the run's model was
+            # replaced by Claude Code's built-in default (see `model_env`).
+            "model": stage_input.model.litellm_model,
             "permissions": {
                 "deny": [f"Bash({command})" for command in stage_input.permissions.deny_commands],
             },
@@ -58,7 +62,21 @@ class ClaudeCodeBackend(Backend):
 
     def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
         self.validate_model(model)
+        # Every alias Claude Code may pick resolves to the run's model. `ANTHROPIC_MODEL` alone
+        # does not survive the adapter's `setModel(<alias>)`: on 2026-10-12 the gateway was asked
+        # for `claude-sonnet-4-5-20250929`, and the run's key, minted for one model, was refused.
+        pinned = dict.fromkeys(
+            (
+                "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                "ANTHROPIC_SMALL_FAST_MODEL",
+                "CLAUDE_CODE_SUBAGENT_MODEL",
+            ),
+            model.litellm_model,
+        )
         return {
+            **pinned,
             **self.anthropic_env(model, key),
             "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "16000",
             "DISABLE_TELEMETRY": "1",
