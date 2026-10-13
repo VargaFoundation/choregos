@@ -39,6 +39,7 @@ streams:
   S34: "English everywhere: code, identifiers, docs, commits (plan 2026-10-12)"
   S35: "The agent_sandbox executor: warm pool, suspend across a human gate, proved on the dev cluster (ADR 0016, plan 2026-10-12)"
   S36: "Agent logs: transcript stored, pod logs and termination reason archived, a logs tab (plan 2026-10-12)"
+  S37: "Fewer tokens per run: rtk and headroom, measured, switchable at every level (ADR 0055)"
 
 stories:
 
@@ -2562,3 +2563,102 @@ stories:
     depends_on: [S36-02]
     acceptance:
       - "Playwright; another project's run answers 404"
+  # S37 — Fewer tokens per run (ADR 0055)
+  - id: S37-01
+    title: "ADR 0055: rtk and headroom inside the runner pod, off by default, three switches, default-on only once measured"
+    stream: S37
+    sprint: 19
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "ADR 0055 in the index; stream S37 in the backlog"
+  - id: S37-02
+    title: "Policy.context and StageInput.context (contract-change): shell_filter, compression, headroom_profile, on_unavailable, rtk_exclude_commands, per_role"
+    stream: S37
+    sprint: 19
+    priority: 2
+    size: M
+    depends_on: [S37-01]
+    acceptance:
+      - "A policy without context is everything off"
+      - "per_role overrides the policy for that role only"
+      - "make contracts leaves no drift"
+  - id: S37-03
+    title: "The orchestrator resolves policy, role and the deployment kill switch CHOREGOS_CONTEXT_REDUCTION into the stage input"
+    stream: S37
+    sprint: 19
+    priority: 3
+    size: S
+    depends_on: [S37-02]
+    acceptance:
+      - "The kill switch turns off a policy that enables both"
+      - "Helm runner.contextReduction.enabled renders the env var"
+  - id: S37-04
+    title: "Runner image: rtk pinned with its sha256, telemetry off, rtk --version at build"
+    stream: S37
+    sprint: 19
+    priority: 4
+    size: S
+    depends_on: [S37-01]
+    acceptance:
+      - "versions.lock carries rtk and its digest; a wrong digest fails the build"
+      - "RTK_TELEMETRY_DISABLED=1 in the image"
+  - id: S37-05
+    title: "Claude Code backend: rtk PreToolUse hook on Bash when shell_filter=rtk, its config outside the repository; the guardrails still judge the command the agent wrote"
+    stream: S37
+    sprint: 19
+    priority: 5
+    size: M
+    depends_on: [S37-03, S37-04]
+    acceptance:
+      - "The hook is present only when shell_filter=rtk"
+      - "Nothing rtk writes lands in the diff"
+      - "A dangerous command rewritten by rtk is still refused"
+  - id: S37-06
+    title: "Runner image: headroom pinned in its own venv, its model fetched at build, Trivy gate; a runner-headroom variant if the size or a CVE says so"
+    stream: S37
+    sprint: 19
+    priority: 4
+    size: M
+    depends_on: [S37-01]
+    acceptance:
+      - "headroom --version at build; no network at run time with HEADROOM_OFFLINE=1"
+  - id: S37-07
+    title: "The runner starts headroom on loopback before the agent, points the backend at it, journals bypass or fails per on_unavailable; FakeCompressor for CHOREGOS_FAKES=1"
+    stream: S37
+    sprint: 20
+    priority: 6
+    size: L
+    depends_on: [S37-03, S37-06]
+    acceptance:
+      - "The base URL is 127.0.0.1 only when compression=headroom"
+      - "A proxy that does not start is journaled context.degraded, or fails the stage with on_unavailable=fail"
+      - "make demo goes through FakeCompressor"
+  - id: S37-08
+    title: "A run says which reduction it ran with: journal, attestation, API and run page; headroom savings as an inferred signal"
+    stream: S37
+    sprint: 20
+    priority: 7
+    size: M
+    depends_on: [S37-07]
+    acceptance:
+      - "The run page shows the reduction; savings carry the inferred provenance (ADR 0045)"
+  - id: S37-09
+    title: "The eval matrix gets a context dimension (none, rtk, headroom, rtk+headroom) with input, cache-read and output tokens, cost, success and turns per cell"
+    stream: S37
+    sprint: 20
+    priority: 8
+    size: M
+    depends_on: [S37-07]
+    acceptance:
+      - "A fake matrix renders the four cells with tokens from the ledger"
+  - id: S37-10
+    title: "Real eval matrix on real models, and the default-on decision per backend"
+    stream: S37
+    sprint: 20
+    priority: 9
+    size: S
+    depends_on: [S37-09]
+    acceptance:
+      - "The matrix ran on the dev; the decision and its numbers are in ADR 0055"
