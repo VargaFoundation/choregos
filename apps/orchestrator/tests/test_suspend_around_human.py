@@ -10,6 +10,7 @@ scenario is archived for `tests/replay`.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import pathlib
@@ -114,7 +115,13 @@ async def test_past_the_bound_the_sandbox_is_gone_and_the_stage_replays(
         (first,) = [spec.run_id for spec in executor.started]
         # The default policy bound is 24 hours; the person answers on the second day.
         await temporal_env.sleep(timedelta(hours=25))
-        await _wait_until(handle, "the sandbox released", lambda s: first in executor.cancelled)
+        # Watched on the executor, not by querying the workflow: a query right after a day of
+        # skipped timers can outlast its deadline on a loaded CI runner.
+        for _ in range(600):
+            if first in executor.cancelled:
+                break
+            await asyncio.sleep(0.1)
+        assert first in executor.cancelled, "past the bound, the suspended sandbox is released"
 
         await _answer(handle, setup)
         await _wait_state(handle, "awaiting_spec_approval")
