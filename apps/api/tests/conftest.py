@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import pathlib
 from collections.abc import AsyncIterator
@@ -167,6 +168,12 @@ async def _preparer_postgres() -> None:
         f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
     )
     os.environ["CHOREGOS_DATABASE_URL"] = _url_app(PG_URL)
+    # pgvector is not a trusted extension: the cluster's bootstrap creates it as a superuser
+    # (`postInitApplicationSQL`, ADR 0051), never the application role. Done the same way here, when
+    # the image carries it; on an image without it, the knowledge index serves full-text only.
+    # `postgres:16-alpine` has no pgvector, and that is a case under test too.
+    with contextlib.suppress(Exception):
+        await _administrer(PG_URL, "CREATE EXTENSION IF NOT EXISTS vector")
 
 
 async def _migrer() -> None:

@@ -590,6 +590,18 @@ checks the digest (a base changed in between stops the run, exit 51), and lays t
 `.choregos/knowledge/<slug>/` with an `INDEX.md`, out of the diff. The prompt says where they are
 and asks the agent to cite the document and section it applies.
 
+A base served as an **index** is cut into contextual chunks (each prefixed by its document's title
+and heading path) and embedded through the gateway (`default_model_profiles["embed"]`, else
+`CHOREGOS_KNOWLEDGE_EMBEDDING_MODEL`, `platform/embed`; a deterministic fake under
+`CHOREGOS_FAKES`). Agents search it with the sidecar's `knowledge_search` tool, which answers
+numbered citations — document, section, excerpt — from the bases their run names, while those are
+served to its project. The ranking fuses PostgreSQL full-text and pgvector by reciprocal rank
+(`mode: hybrid`); without pgvector, or without a gateway key, it is full-text only and says so
+(`mode: full-text`). `POST …/search` gives the same answer in the console; `POST …/reindex`
+rebuilds the chunks. Each base keeps an **eval set** (`PUT …/eval`: questions and the documents,
+by file name or title, expected to answer them); `POST …/eval/run` measures **recall@5** and the
+base's page shows it, per question.
+
 ## 4. Write the policy
 
 ```yaml

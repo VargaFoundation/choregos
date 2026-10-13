@@ -1663,6 +1663,58 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository's host did not answer, or not usefully" }
+  /orgs/{org}/knowledge/{slug}/search:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: searchKnowledgeBase
+      description: Hybrid search of an `index` base (full-text and, with pgvector, embeddings, fused by reciprocal rank); citations, and the `mode` the database allowed. 409 for a `files` base.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchResult" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/reindex:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: reindexKnowledgeBase
+      description: Cuts and embeds every ready document again, in the background. `agent:manage`.
+      responses:
+        "202": { description: Reindexing, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/eval:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [knowledge]
+      operationId: putKnowledgeEvalSet
+      description: The base's eval set — questions and the documents (file name or title) expected to answer them. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEvalSet" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/knowledge/{slug}/eval/run:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: runKnowledgeEval
+      description: Runs the eval set against the index and records recall@5 (`eval_result`). `agent:manage`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/agents:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1957,6 +2009,18 @@ paths:
                           filename: { type: string }
                           markdown: { type: string }
         "404": { $ref: "#/components/responses/NotFound" }
+  /internal/runs/{id}/knowledge/search:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: searchRunKnowledge
+      description: The sidecar's `knowledge_search` (ADR 0051) — the `index` bases the run's StageInput names, while they are served to its project.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchRequest" } } }
+      responses:
+        "200": { description: Citations, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchResult" } } } }
   /internal/runs/{id}/ticket:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2991,6 +3055,68 @@ components:
         created_at: { type: [string, "null"], format: date-time }
         updated_at: { type: [string, "null"], format: date-time }
         documents: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeDocument" } }
+        index:
+          type: [object, "null"]
+          description: "`index` mode: chunks, documents indexed, and the search mode (`hybrid`, `full-text` without pgvector or embedder, `in-process` on SQLite)"
+          properties:
+            chunks: { type: integer }
+            documents: { type: integer }
+            mode: { type: string }
+        eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
+        eval_result:
+          type: [object, "null"]
+          description: the last run of the eval set
+          properties:
+            k: { type: integer }
+            recall: { type: [number, "null"], description: "expected documents found in the top k / expected documents" }
+            mode: { type: string }
+            ran_at: { type: string }
+            cases:
+              type: array
+              items:
+                type: object
+                properties:
+                  question: { type: string }
+                  expected: { type: array, items: { type: string } }
+                  found: { type: array, items: { type: string } }
+                  returned: { type: array, items: { type: string } }
+    KnowledgeEvalCase:
+      type: object
+      required: [question, expected]
+      additionalProperties: false
+      properties:
+        question: { type: string, minLength: 1, maxLength: 2000 }
+        expected: { type: array, minItems: 1, maxItems: 20, items: { type: string }, description: file names or titles }
+    KnowledgeEvalSet:
+      type: object
+      additionalProperties: false
+      properties:
+        cases: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
+    KnowledgeSearchRequest:
+      type: object
+      required: [query]
+      additionalProperties: false
+      properties:
+        query: { type: string, minLength: 1, maxLength: 2000 }
+        k: { type: integer, minimum: 1, maximum: 20, default: 5 }
+        knowledge_base: { type: [string, "null"], description: "internal search: one base of the run; absent, all of them" }
+    KnowledgeCitation:
+      type: object
+      required: [knowledge_base, document_id, document, filename, heading_path, excerpt, score]
+      properties:
+        knowledge_base: { type: string }
+        document_id: { type: string }
+        document: { type: string, description: the document's title }
+        filename: { type: string }
+        heading_path: { type: array, items: { type: string } }
+        excerpt: { type: string }
+        score: { type: number, description: reciprocal rank fusion score }
+    KnowledgeSearchResult:
+      type: object
+      required: [mode, hits]
+      properties:
+        mode: { type: string, enum: [hybrid, full-text, in-process] }
+        hits: { type: array, items: { $ref: "#/components/schemas/KnowledgeCitation" } }
     WorkflowIssue:
       type: object
       required: [code, message]

@@ -435,6 +435,16 @@ creates a non-superuser role (`global.database.appUser`, `choregos_app`) at init
 volume created before 2026-09-24, create that role by hand and transfer ownership of the
 schema to it (`docs/development.md` shows the statements).
 
+**pgvector, for the knowledge index** ([ADR 0051](adr/0051-knowledge-bases.md)). A knowledge base
+served as an index ranks with full-text search and, when the `vector` extension exists in the
+application database, with embeddings too (`hybrid`). The extension is not trusted, so the
+application role cannot create it: create it as a superuser — CloudNativePG's
+`bootstrap.initdb.postInitApplicationSQL` (not `postInitSQL`, which runs in the `postgres`
+database); the embedded chart's image (`pgvector/pgvector:0.8.1-pg16`) does it at initdb. Without
+it nothing breaks: the index serves full-text only and the knowledge page says so. For an existing
+database: `CREATE EXTENSION vector;` as a superuser, then `ALTER TABLE knowledge_chunks ADD COLUMN
+embedding_vec vector;` as the owner of the schema, then **reindex** each index base.
+
 **Development login** (`/auth/login?as=<email>`, no IdP) is off by default, refused by the
 API itself in `staging` and `prod`, and turned on only by `values/local.yaml`
 (`global.devLogin.enabled`, `global.devLogin.adminEmails`).

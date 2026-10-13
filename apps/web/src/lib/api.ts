@@ -42,6 +42,8 @@ import type {
   KnowledgeBaseCreate,
   KnowledgeBasePatch,
   KnowledgeDocument,
+  KnowledgeEvalCase,
+  KnowledgeSearchResult,
   AgentBackendInfo,
   ApiToken,
   ApiTokenCreate,
@@ -370,6 +372,18 @@ export const api = {
   checkSkillUpdate: (org: string, slug: string) => request<SkillUpdate>(`/orgs/${org}/skills/${slug}/update`),
   approveSkillVersion: (org: string, slug: string, version: number) =>
     request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, { method: "POST" }),
+
+  searchKnowledgeBase: (org: string, slug: string, query: string, k = 5) =>
+    request<KnowledgeSearchResult>(`/orgs/${org}/knowledge/${slug}/search`, {
+      method: "POST",
+      body: JSON.stringify({ query, k }),
+    }),
+  reindexKnowledgeBase: (org: string, slug: string) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/reindex`, { method: "POST" }),
+  putKnowledgeEvalSet: (org: string, slug: string, cases: KnowledgeEvalCase[]) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval`, { method: "PUT", body: JSON.stringify({ cases }) }),
+  runKnowledgeEval: (org: string, slug: string) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval/run`, { method: "POST" }),
   myTokens: () => request<ApiToken[]>("/me/tokens"),
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),

@@ -2,6 +2,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { use, useRef, useState } from "react";
 import { Badge, Card, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
@@ -9,6 +10,12 @@ import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
 import { useSession } from "@/lib/session";
+
+// Only an `index` base shows the search and eval panel: loaded when needed, outside the page's chunk.
+const KnowledgeIndex = dynamic(() => import("@/components/knowledge-index").then((m) => m.KnowledgeIndex), {
+  ssr: false,
+  loading: () => <p className="text-sm text-ink-muted">Loading the index…</p>,
+});
 
 const TONE: Record<string, Tone> = { ready: "ok", failed: "danger", pending: "neutral", converting: "neutral" };
 
@@ -125,6 +132,7 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
           </div>
         )}
       </Card>
+      {base.data.serving_mode === "index" && <KnowledgeIndex org={org} base={base.data} onChange={() => void refresh()} />}
       <Card title="Upload documents">
         <div className="space-y-2 text-sm">
           <p className="text-ink-muted">

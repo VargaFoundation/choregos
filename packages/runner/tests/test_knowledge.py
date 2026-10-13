@@ -50,9 +50,10 @@ def test_a_base_lands_read_only_with_its_index(tmp_path: Path) -> None:
     assert f"`{ROOT}/architecture/`" in prompt and "cite the document" in prompt
 
 
-def test_an_index_base_lays_nothing(tmp_path: Path) -> None:
+def test_an_index_base_lays_nothing_and_points_to_the_search_tool(tmp_path: Path) -> None:
     written, prompt = lay_out([], [KnowledgeRef(slug="big", mode="index")], tmp_path)
-    assert (written, prompt) == ([], "")
+    assert written == []
+    assert "`knowledge_search`" in prompt and "`big`" in prompt
     assert not (tmp_path / ROOT).exists()
 
 

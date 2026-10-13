@@ -44,6 +44,7 @@ from ..schemas import (
     ScopeChangeDecision,
     ScopeChangeRequestIn,
 )
+from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..services import effective_policy, persist_event, ranger_les_sorties
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -512,6 +513,45 @@ async def get_knowledge(id: str, session: Db, claims: RunAuth) -> list[dict[str,
         except KnowledgeRefusedError as refusal:
             raise not_found("Knowledge base of the run", str(ref.get("slug"))) from refusal
     return delivered
+
+
+@router.post(
+    "/runs/{id}/knowledge/search",
+    response_model=KnowledgeSearchResult,
+    operation_id="searchRunKnowledge",
+)
+async def search_knowledge(
+    id: str, body: KnowledgeSearchRequest, session: Db, claims: RunAuth
+) -> KnowledgeSearchResult:
+    """`knowledge_search` of the sidecar (ADR 0051): the `index` bases the run's `StageInput` names,
+    and only while they are served to the run's project. Answers citations."""
+    from dataclasses import asdict
+
+    from ..db.models import KnowledgeBase
+    from ..knowledge.access import served_to_project
+    from ..knowledge.index import search
+
+    run, _, project = await _run_and_item(session, id)
+    slugs = [
+        str(ref.get("slug"))
+        for ref in (run.stage_input or {}).get("knowledge", [])
+        if ref.get("mode") == "index" and body.knowledge_base in (None, ref.get("slug"))
+    ]
+    bases = [
+        base
+        for base in (
+            await session.execute(
+                select(KnowledgeBase).where(
+                    KnowledgeBase.org_id == project.org_id, KnowledgeBase.slug.in_(slugs)
+                )
+            )
+        ).scalars()
+        if served_to_project(base, project.slug)
+    ]
+    result = await search(session, bases, body.query, k=body.k)
+    return KnowledgeSearchResult.model_validate(
+        {"mode": result.mode, "hits": [asdict(h) for h in result.hits]}
+    )
 
 
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")

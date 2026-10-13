@@ -83,13 +83,16 @@ jobs:
     # s'exécute que si CHOREGOS_TEST_DATABASE_URL est posée.
     services:
       postgres:
-        image: postgres:16-alpine
+        # PostgreSQL 16 with pgvector: the knowledge index's hybrid ranking runs in CI (ADR 0051).
+        image: pgvector/pgvector:0.8.1-pg16
         env: { POSTGRES_USER: choregos, POSTGRES_PASSWORD: choregos, POSTGRES_DB: choregos_test }
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U choregos" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       CHOREGOS_TEST_DATABASE_URL: postgresql+asyncpg://choregos:choregos@localhost:5432/choregos_test
+      # The image carries pgvector: the knowledge index test then requires the hybrid ranking.
+      CHOREGOS_TEST_EXPECT_PGVECTOR: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

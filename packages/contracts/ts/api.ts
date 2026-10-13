@@ -916,6 +916,61 @@ export type KnowledgeBase = {
   created_at?: string | null;
   updated_at?: string | null;
   documents?: Array<KnowledgeDocument> | null;
+  /** `index` mode: chunks, documents indexed, and the search mode (`hybrid`, `full-text` without pgvector or embedder, `in-process` on SQLite) */
+  index?: {
+    chunks?: number;
+    documents?: number;
+    mode?: string;
+  } | null;
+  eval_set?: Array<KnowledgeEvalCase>;
+  /** the last run of the eval set */
+  eval_result?: {
+    k?: number;
+    /** expected documents found in the top k / expected documents */
+    recall?: number | null;
+    mode?: string;
+    ran_at?: string;
+    cases?: Array<{
+      question?: string;
+      expected?: Array<string>;
+      found?: Array<string>;
+      returned?: Array<string>;
+    }>;
+  } | null;
+};
+
+export type KnowledgeEvalCase = {
+  question: string;
+  /** file names or titles */
+  expected: Array<string>;
+};
+
+export type KnowledgeEvalSet = {
+  cases?: Array<KnowledgeEvalCase>;
+};
+
+export type KnowledgeSearchRequest = {
+  query: string;
+  k?: number;
+  /** internal search: one base of the run; absent, all of them */
+  knowledge_base?: string | null;
+};
+
+export type KnowledgeCitation = {
+  knowledge_base: string;
+  document_id: string;
+  /** the document's title */
+  document: string;
+  filename: string;
+  heading_path: Array<string>;
+  excerpt: string;
+  /** reciprocal rank fusion score */
+  score: number;
+};
+
+export type KnowledgeSearchResult = {
+  mode: "hybrid" | "full-text" | "in-process";
+  hits: Array<KnowledgeCitation>;
 };
 
 export type WorkflowIssue = {
@@ -2025,6 +2080,7 @@ export interface Operations {
   putBackend: { method: "PUT"; path: "/platform/backends"; body: AgentBackendUpdate; response: AgentBackendInfo };
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
+  putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
   putPolicyCeiling: { method: "PUT"; path: "/orgs/{org}/policy-ceiling"; body: PolicyCeilingPut; response: PolicyCeilingState };
@@ -2037,11 +2093,15 @@ export interface Operations {
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
+  reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
+  runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
+  searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
+  searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {

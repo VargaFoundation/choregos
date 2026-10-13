@@ -10,6 +10,8 @@ scope (`knowledge.access`).
 from __future__ import annotations
 
 import hashlib
+from dataclasses import asdict
+from functools import partial
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Request, Response, status
@@ -20,17 +22,21 @@ from starlette.datastructures import UploadFile
 
 from ..audit import record
 from ..config import get_settings
-from ..db.models import KnowledgeBase, KnowledgeDocument, Organization, Project
+from ..db.models import KnowledgeBase, KnowledgeChunk, KnowledgeDocument, Organization, Project
 from ..deps import Db, Me
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..knowledge.access import can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
+from ..knowledge.index import evaluate, reindex_base, search, search_mode
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
     KnowledgeBasePatch,
     KnowledgeDocumentDto,
+    KnowledgeEvalSet,
+    KnowledgeSearchRequest,
+    KnowledgeSearchResult,
 )
 
 router = APIRouter(tags=["knowledge"])
@@ -146,7 +152,21 @@ async def _dto(
         created_at=base.created_at,
         updated_at=base.updated_at,
         documents=documents,
+        index=await _index_state(session, base) if base.serving_mode == "index" else None,
+        eval_set=list(base.eval_set or []),
+        eval_result=base.eval_result,
     )
+
+
+async def _index_state(session: AsyncSession, base: KnowledgeBase) -> dict[str, object]:
+    chunks, documents = (
+        await session.execute(
+            select(
+                func.count(KnowledgeChunk.id), func.count(func.distinct(KnowledgeChunk.document_id))
+            ).where(KnowledgeChunk.knowledge_base_id == base.id)
+        )
+    ).one()
+    return {"chunks": int(chunks), "documents": int(documents), "mode": await search_mode(session)}
 
 
 @router.get("/orgs/{org}/knowledge", response_model=list[KnowledgeBaseDto], operation_id="listKnowledgeBases")
@@ -230,6 +250,7 @@ async def update_knowledge_base(
     if scope == "groups" and not groups:
         raise unprocessable("scope `groups` names at least one group")
     await _known_projects(session, await _organisation(session, org), projects if scope == "projects" else [])
+    reindex = changes.get("serving_mode") == "index" and base.serving_mode != "index"
     for field in ("name", "description", "serving_mode", "status"):
         if field in changes and changes[field] is not None:
             setattr(base, field, changes[field])
@@ -246,7 +267,12 @@ async def update_knowledge_base(
         target_id=base.id,
         changes=sorted(changes),
     )
-    return await _dto(session, base, with_documents=True)
+    dto = await _dto(session, base, with_documents=True)
+    if reindex:
+        # Switched to `index`: its ready documents are cut and embedded in the background.
+        await session.commit()
+        conversions.spawn("reindex", partial(reindex_base, org, base.id))
+    return dto
 
 
 @router.post(
@@ -409,3 +435,85 @@ async def convert_knowledge_document(
     await session.commit()
     conversions.schedule(org, document.id)
     return dto
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/search",
+    response_model=KnowledgeSearchResult,
+    operation_id="searchKnowledgeBase",
+)
+async def search_knowledge_base(
+    org: str, slug: Slug, body: KnowledgeSearchRequest, session: Db, principal: Me
+) -> KnowledgeSearchResult:
+    """The hybrid search of an `index` base, with its citations — what `knowledge_search` gives agents."""
+    _member(principal, org)
+    base = await _base(session, principal, org, slug)
+    if base.serving_mode != "index":
+        raise conflict(f"knowledge base `{slug}` is served as files: it has no index to search")
+    result = await search(session, [base], body.query, k=body.k)
+    return KnowledgeSearchResult.model_validate(
+        {"mode": result.mode, "hits": [asdict(h) for h in result.hits]}
+    )
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/reindex",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="reindexKnowledgeBase",
+)
+async def reindex_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+    """Cuts and embeds every ready document again, in the background (after pgvector was installed,
+    or the embedding model changed)."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    if base.serving_mode != "index":
+        raise conflict(f"knowledge base `{slug}` is served as files: switch it to `index` first")
+    dto = await _dto(session, base, with_documents=True)
+    await session.commit()
+    conversions.spawn("reindex", partial(reindex_base, org, base.id))
+    return dto
+
+
+@router.put(
+    "/orgs/{org}/knowledge/{slug}/eval",
+    response_model=KnowledgeBaseDto,
+    operation_id="putKnowledgeEvalSet",
+)
+async def put_knowledge_eval_set(
+    org: str, slug: Slug, body: KnowledgeEvalSet, session: Db, principal: Me
+) -> KnowledgeBaseDto:
+    """The base's eval set: questions, and the documents expected to answer each."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    base.eval_set = [case.model_dump() for case in body.cases]
+    base.eval_result = None
+    await session.flush()
+    return await _dto(session, base)
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/eval/run",
+    response_model=KnowledgeBaseDto,
+    operation_id="runKnowledgeEval",
+)
+async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+    """Runs the eval set against the index: recall@5, per question. Shown on the base's page."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    if base.serving_mode != "index":
+        raise conflict(f"knowledge base `{slug}` is served as files: it has no index to evaluate")
+    if not base.eval_set:
+        raise unprocessable("the eval set is empty: give questions and their expected documents first")
+    base.eval_result = await evaluate(session, base, k=5)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "knowledge.eval",
+        org_id=base.org_id,
+        target_type="knowledge_base",
+        target_id=base.id,
+        recall=base.eval_result["recall"],
+    )
+    return await _dto(session, base)
