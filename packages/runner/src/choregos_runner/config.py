@@ -27,6 +27,8 @@ class RunnerSettings(BaseSettings):
     #: The same tool with the same arguments this many times in a row stops the agent (`reason=loop`,
     #: S27-07). 0 or 1 disables the check.
     loop_threshold: int = Field(default=5, ge=0, validation_alias="CHOREGOS_RUNNER_LOOP_THRESHOLD")
+    #: The headroom the runner starts when a run asks for compression (ADR 0055).
+    headroom_command: str = "headroom"
 
 
 @lru_cache(maxsize=1)

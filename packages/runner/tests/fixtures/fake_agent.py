@@ -100,6 +100,38 @@ def _initialize(message_id: Any, script: dict[str, Any]) -> bool:
     return True
 
 
+def _call_model(call: dict[str, Any]) -> None:
+    """Calls the model the way a backend does: the base URL and the key from its environment.
+    The answer goes to stderr; a failure too, the turn goes on."""
+    import urllib.request
+
+    url = os.environ[call["base_env"]].rstrip("/") + call["path"]
+    body = json.dumps(call.get("body", {})).encode()
+    headers = {"content-type": "application/json", "x-api-key": os.environ.get(call["key_env"], "")}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, body, headers), timeout=10) as answer:
+            sys.stderr.write(f"model call {url}: {answer.status}\n")
+    except OSError as exc:
+        sys.stderr.write(f"model call {url}: {exc}\n")
+
+
+def _say(session_id: str, notes: list[str]) -> None:
+    for note in notes:
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "session/update",
+                "params": {
+                    "sessionId": session_id,
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": note},
+                    },
+                },
+            }
+        )
+
+
 def main() -> int:
     script: dict[str, Any] = json.loads(os.environ.get("FAKE_AGENT_SCRIPT", "{}"))
     workspace = Path(os.environ.get("CHOREGOS_WORKSPACE_PATH", ".")).resolve()
@@ -131,20 +163,9 @@ def main() -> int:
             plan = _plan_for(script, prompts_seen)
             session_id = (message.get("params") or {}).get("sessionId", "sess-fake-1")
 
-            for note in plan.get("messages", []):
-                send(
-                    {
-                        "jsonrpc": "2.0",
-                        "method": "session/update",
-                        "params": {
-                            "sessionId": session_id,
-                            "update": {
-                                "sessionUpdate": "agent_message_chunk",
-                                "content": {"type": "text", "text": note},
-                            },
-                        },
-                    }
-                )
+            _say(session_id, plan.get("messages", []))
+            for call in plan.get("model_calls", []):
+                _call_model(call)
 
             for write in plan.get("writes", []):
                 outgoing_id += 1

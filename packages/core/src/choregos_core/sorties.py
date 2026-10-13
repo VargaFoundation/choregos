@@ -28,6 +28,8 @@ class Exit(IntEnum):
     KNOWLEDGE_INVALID = 51
     #: The gateway refused the run's key: its budget is spent (S27-01). The result is posted.
     BUDGET_EXCEEDED = 70
+    #: The context reduction the run requires did not start, and the policy says `fail` (ADR 0055).
+    CONTEXT_UNAVAILABLE = 80
 
     @property
     def explanation(self) -> str:
@@ -41,6 +43,7 @@ class Exit(IntEnum):
             Exit.INPUTS_INVALID: "an input artifact does not match its digest",
             Exit.KNOWLEDGE_INVALID: "knowledge base missing, or its digest does not match",
             Exit.BUDGET_EXCEEDED: "the gateway refused the run's key: its budget is spent",
+            Exit.CONTEXT_UNAVAILABLE: "the context reduction the policy requires did not start",
         }[self]
 
 

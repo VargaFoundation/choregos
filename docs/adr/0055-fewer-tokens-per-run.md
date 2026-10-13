@@ -69,6 +69,13 @@ store holds plaintext originals.
   configuration, under the run's `$HOME`, also excludes every command the policy forbids, so
   none of them is rewritten. No `permissions.allow` rule is written: with one, rtk would grant the
   permission itself.
+- The runner starts headroom for the run, before the agent: `headroom proxy --stateless` on a free
+  loopback port, every upstream it knows set to the gateway, an environment built from nothing (no
+  run token, no key, offline), `$HOME` and working directory outside the workspace. It waits on
+  `/livez` (60 s), points the agent's base URL at it, and stops it with the run, whatever the run's
+  end. A proxy that does not answer is journaled `context.degraded`; with `on_unavailable: fail`
+  the stage fails with exit code `80`, before any model call. Only the Anthropic and OpenAI
+  formats, and only a run with a gateway key, go through it.
 - A lossy filter can hide the line an agent needed: `rtk_exclude_commands` and `per_role` let a
   policy keep raw output where it matters (a reviewer, a security stage).
 - Not decided here: a context reduction for the other backends' native hooks (after the matrix), and
