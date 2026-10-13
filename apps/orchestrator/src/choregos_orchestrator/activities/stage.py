@@ -90,6 +90,21 @@ def _serveurs_mcp(settings: Any) -> dict[str, McpServerRef]:
     return serveurs
 
 
+async def _gateway_catalogue(bundle: Any) -> list[Any]:
+    """The models the project's gateway declares, so that the resolver sees behind an alias.
+
+    Without them `provider_model` stayed empty, and the runner's `claude-code` refused every run on
+    `platform/*`: it only takes a model it can see is a Claude (S28-02, 2026-10-12). A gateway that
+    cannot list its models degrades to the old behaviour — no catalogue, no check — rather than
+    stopping the stage.
+    """
+    try:
+        return list(await bundle.adapters.gateway.list_models())
+    except Exception as error:  # the catalogue sharpens the resolution, it is not a precondition
+        logger.warning("gateway catalogue unavailable", error=str(error)[:300])
+        return []
+
+
 @activity.defn(name="prepare_stage")
 async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
     """Résout le modèle, mint la clé gateway, construit le context pack et le `StageInput`.
@@ -117,7 +132,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         if agent is not None:
             await _budget_du_jour(session, bundle, agent)
             plan = _plan_de_l_agent(plan, agent.spec)
-        resolver = ModelResolver(gateway_url=settings.gateway_url)
+        resolver = ModelResolver(
+            gateway_url=settings.gateway_url, gateway_models=await _gateway_catalogue(bundle)
+        )
         backend = plan.backend or bundle.config.agent.default_backend
         if plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
             backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
