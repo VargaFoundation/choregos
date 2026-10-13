@@ -60,6 +60,9 @@ class Backend:
     #: Où le backend lit les skills d'un agent (ADR 0033) ; `None` : il n'en lit pas, et le runner
     #: les pose sous `.choregos/skills` avec leur index dans le prompt.
     skills_dir: ClassVar[str | None] = None
+    #: The shell filters its launch plan wires (ADR 0055). Another one asked of it is not applied,
+    #: and the run says so.
+    shell_filters: ClassVar[frozenset[str]] = frozenset()
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
         raise NotImplementedError

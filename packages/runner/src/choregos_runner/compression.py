@@ -27,6 +27,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -59,6 +60,9 @@ class Compressor:
     url: str
     #: Where its output goes, outside the workspace.
     log: Path
+    port: int
+    #: What its `/livez` says it is.
+    version: str | None = None
 
 
 def wanted(stage_input: StageInput) -> bool:
@@ -151,25 +155,68 @@ async def start(
             )
     except OSError as exc:
         raise CompressionUnavailableError(f"headroom did not start: {exc}") from exc
-    compressor = Compressor(process, url, log)
+    compressor = Compressor(process, url, log, port)
     timeout = timeout or READY_TIMEOUT_S
-    if await _wait_live(compressor, port, timeout):
+    if (live := await _wait_live(compressor, timeout)) is not None:
+        version = live.get("version")
+        compressor.version = str(version) if version else None
         return compressor
     await stop(compressor)
     raise CompressionUnavailableError(f"headroom did not answer within {timeout:.0f} s: {_tail(log)}")
 
 
-async def _wait_live(compressor: Compressor, port: int, timeout: float) -> bool:
+async def _wait_live(compressor: Compressor, timeout: float) -> dict[str, Any] | None:
+    """What `/livez` answers once it answers 200, or `None` if it never does."""
     deadline = time.monotonic() + timeout
     async with httpx.AsyncClient(timeout=2.0) as http:
         while time.monotonic() < deadline:
             if compressor.process.returncode is not None:
-                return False
-            with contextlib.suppress(httpx.HTTPError):
-                if (await http.get(f"http://127.0.0.1:{port}/livez")).status_code == 200:
-                    return True
+                return None
+            with contextlib.suppress(httpx.HTTPError, ValueError):
+                answer = await http.get(f"http://127.0.0.1:{compressor.port}/livez")
+                if answer.status_code == 200:
+                    live = answer.json()
+                    return live if isinstance(live, dict) else {}
             await asyncio.sleep(0.2)
-    return False
+    return None
+
+
+async def savings(compressor: Compressor) -> dict[str, int] | None:
+    """What headroom says it saved during the run, from its `/stats` (ADR 0055).
+
+    These are headroom's own counts, made with its own tokenizer before the gateway: an inferred
+    signal (ADR 0045), never the cost. The cost is the gateway's, metered on what was really sent.
+    Its dollar figures are left out: they come from a price list that is not ours. `None` when the
+    proxy does not answer; a missing counter reads 0.
+    """
+    if compressor.process.returncode is not None:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as http:
+            answer = await http.get(f"http://127.0.0.1:{compressor.port}/stats")
+            answer.raise_for_status()
+            stats = answer.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    summary = _dict(_dict(stats).get("summary"))
+    counts = _dict(summary.get("compression"))
+    return {
+        "requests": _count(summary.get("api_requests")),
+        "requests_compressed": _count(counts.get("requests_compressed")),
+        "tokens_before": _count(counts.get("total_tokens_before")),
+        "tokens_removed": _count(counts.get("total_tokens_removed")),
+        # The originals the model asked back (CCR), each a round trip billed again. Not
+        # `summary.mcp`: that one counts headroom's MCP server, which a run does not use.
+        "retrievals": _count(_dict(_dict(stats).get("feedback_loop")).get("total_retrievals")),
+    }
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _count(value: Any) -> int:
+    return int(value) if isinstance(value, int | float) and not isinstance(value, bool) else 0
 
 
 def _tail(log: Path, size: int = 300) -> str:

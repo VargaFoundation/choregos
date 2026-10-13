@@ -76,6 +76,15 @@ store holds plaintext originals.
   end. A proxy that does not answer is journaled `context.degraded`; with `on_unavailable: fail`
   the stage fails with exit code `80`, before any model call. Only the Anthropic and OpenAI
   formats, and only a run with a gateway key, go through it.
+- A run says which reduction it ran with, in its journal: what it was given (`context.reduction`),
+  whether its backend wired the shell filter (`context.shell_filter`, `applied: false` on a backend
+  without a hook), whether headroom ran and in which version (`context.compression`) or not
+  (`context.degraded`), and what headroom says it saved (`context.savings`). The savings are read
+  from `/stats` once the agent is done: requests, requests compressed, tokens before and removed,
+  originals asked back. They are headroom's count, before the gateway, so they are **inferred**
+  (ADR 0045), and its dollar figures are left out. The run page shows them as such, next to the
+  gateway's cost, which stays the observed one. ADR 0015's attestation is not implemented; when it
+  is, it reads these events.
 - A lossy filter can hide the line an agent needed: `rtk_exclude_commands` and `per_role` let a
   policy keep raw output where it matters (a reviewer, a security stage).
 - Not decided here: a context reduction for the other backends' native hooks (after the matrix), and
