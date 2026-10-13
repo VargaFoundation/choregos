@@ -359,6 +359,10 @@ Every output is kept as an **artifact** of the ticket, revision by revision:
 `GET /work-items/{id}/artifacts` lists them (type, media type, size, sha256, the run and agent that
 produced each), `GET /work-items/{id}/artifacts/{name}` (or `{name}@{version}`) describes one, and
 `…/content` serves its bytes after checking the digest again — altered content is refused (409).
+On a work item's page, the **artifacts** card has one tab per output: its revisions, the run and
+agent that produced each one and the runs that read it (the hand-off receipts), a viewer — markdown
+rendered without HTML, a SARIF report as a table, an image — and a download. A revision the API
+refuses to serve is said, not shown.
 A step's declared `inputs:` reach its agent as files too: the runner writes each one in
 `.choregos/inputs/<name>.<ext>` (`deck.pptx`, `profiles.json`, `spec_markdown.md`) after checking
 its digest, and lists them in `.choregos/task.md`. A large report no longer has to fit in the
