@@ -208,6 +208,15 @@ async def update_operation(
     ).scalar_one_or_none()
     if ligne is None:
         raise not_found("Operation", operation)
+    if body.policy == "allowed":
+        from choregos_adapters import operation_spec
+
+        declared = operation_spec(instance.kind, instance.type, operation)
+        if declared is not None and declared.human_approval:
+            raise unprocessable(
+                f"{name}/{operation} is approved by a person, always (its type declares it): "
+                "`approval` or `forbidden` only"
+            )
     if body.policy is not None:
         ligne.policy = body.policy
     if body.groups is not None:

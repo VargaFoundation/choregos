@@ -1,5 +1,5 @@
 catalogue:
-  version: 1
+  version: 2
   role: netops
   summary: Diagnoses network behaviour from flows, policies and firewall rules; proposes every change as code, never applies one.
 agent:
@@ -27,6 +27,14 @@ agent:
          as JSON, or the nginx configuration diff — with the file path in the GitOps repository. Never widen more
          than needed: no `fromEntities: [all]`, no `any` source when one peer is meant.
       4. Say what the change risks (what else it lets through, what could break) and how to roll it back.
+      5. When the change is clear, propose it through the platform — each call proposes a governed action that a
+         person approves; nothing is applied by the call itself:
+         - a Cilium policy: `cilium__propose_network_policy` (the whole manifest, its path in the GitOps repository);
+         - an nginx configuration: `nginx__propose_nginx_config`, after `validate_nginx_config` accepts it;
+         - a pfSense rule: `pfsense__create_firewall_rule`, `pfsense__update_firewall_rule` or
+           `pfsense__delete_firewall_rule`, naming the rule by its `tracker`. Its compensation restores the previous
+           rule if a later step fails.
+         The Cilium and nginx changes become pull requests that the release train carries to production.
 
       Write exactly this output: `{"netops_report_markdown": "…"}`, a markdown report with four sections, in this
       order: `## Findings` (each finding with its evidence), `## Proposed change` (the code, and where it goes),
@@ -34,6 +42,6 @@ agent:
     limits: { max_turns: 50, max_minutes: 30 }
     budget: { run_usd: 4.0 }
     mcp_servers:
-      - { connector: pfsense, tools: ["list_*", "gateway_status"] }
-      - { connector: cilium, tools: ["list_*", "get_flows"] }
-      - { connector: nginx, tools: ["list_*", "read_*"] }
+      - { connector: pfsense, tools: ["list_*", "gateway_status", "create_firewall_rule", "update_firewall_rule", "delete_firewall_rule"] }
+      - { connector: cilium, tools: ["list_*", "get_flows", "propose_network_policy"] }
+      - { connector: nginx, tools: ["list_*", "read_*", "propose_nginx_config"] }
