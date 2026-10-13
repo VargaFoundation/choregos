@@ -65,6 +65,7 @@ jobs:
               - 'dev/local/**'
               - 'docker/**'
               - 'tools/local_install_check.py'
+              - '.github/workflows/ci.yml'
               - 'apps/api/src/choregos_api/local_demo.py'
               - 'apps/api/src/choregos_api/migrations/**'
               - 'apps/web/src/app/login/**'
