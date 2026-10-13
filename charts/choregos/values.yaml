@@ -337,5 +337,18 @@ demoFakes:
     requests: { cpu: 20m, memory: 96Mi }
     limits: { cpu: 200m, memory: 256Mi }
 
+# Netops (ADR 0052): the read-only identity of the `cilium` connector — a service account allowed
+# get/list/watch on CiliumNetworkPolicy and CiliumClusterwideNetworkPolicy, nothing else. Off by
+# default. To use it, map its token into the API and workers and reference it from the connector:
+#   global.extraEnv: [{name: CILIUM_READER_TOKEN, valueFrom: {secretKeyRef:
+#     {name: choregos-netops-cilium-reader-token, key: token}}}]
+#   connector `cilium`: secret_refs: {token: env:CILIUM_READER_TOKEN}
+netops:
+  ciliumReader:
+    enabled: false
+    name: choregos-netops-cilium-reader
+    # create a `kubernetes.io/service-account-token` Secret for it
+    tokenSecret: true
+
 networkPolicies:
   enabled: true
