@@ -92,3 +92,13 @@ async def test_without_nginx_the_configuration_is_said_not_validated(tmp_path: P
 async def test_the_real_nginx_accepts_a_minimal_configuration(tmp_path: Path, workspace: Path) -> None:
     result = await _call(_server(tmp_path, "nginx"), "nginx/nginx.conf")
     assert not result["isError"], result
+
+
+def test_the_pid_goes_to_the_throwaway_prefix_unless_the_configuration_names_one() -> None:
+    """`nginx -t` opens its pid file; the distribution's is root's — the CI caught it (PR #389)."""
+    from choregos_tools_mcp.nginx import command
+
+    plain = command("nginx", "/tmp/x", Path("/w/nginx.conf"), "events {}\n")
+    assert plain[-2:] == ["-g", "pid /tmp/x/nginx.pid;"]
+    own = command("nginx", "/tmp/x", Path("/w/nginx.conf"), "pid /run/own.pid;\nevents {}\n")
+    assert "-g" not in own, "a second `pid` would be a duplicate directive"

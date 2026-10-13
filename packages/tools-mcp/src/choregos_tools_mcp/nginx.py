@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import tempfile
 from pathlib import Path
 
@@ -23,6 +24,19 @@ MAX_REPORT = 4000
 
 class OutsideWorkspaceError(ValueError):
     """A path that resolves outside the workspace (`..`, an absolute path, a symbolic link)."""
+
+
+#: A `pid` directive in the main file: then nginx is left to it — a second one is "duplicate".
+_PID_DIRECTIVE = re.compile(r"^\s*pid\s", re.MULTILINE)
+
+
+def command(binary: str, prefix: str, target: Path, main_file: str) -> list[str]:
+    """`-t` opens the pid file even when it only tests: the distribution's (`/run/nginx.pid`) is
+    root's. Unless the configuration names its own, the pid goes to the throwaway prefix."""
+    arguments = [binary, "-t", "-e", "stderr", "-p", f"{prefix}/", "-c", str(target)]
+    if not _PID_DIRECTIVE.search(main_file):
+        arguments += ["-g", f"pid {prefix}/nginx.pid;"]
+    return arguments
 
 
 def config_path(workspace: Path, path: str) -> tuple[Path, Path]:
@@ -35,18 +49,23 @@ def config_path(workspace: Path, path: str) -> tuple[Path, Path]:
     return root, target
 
 
+def _read(target: Path) -> str:
+    return target.read_text(encoding="utf-8", errors="replace")
+
+
 async def nginx_test(binary: str, workspace: Path, path: str) -> tuple[bool, str]:
     """(valid, nginx's report). Relative `include`s resolve from the main file's directory, as on
     the server; relative log paths go to a throwaway prefix, never into the workspace."""
     root, target = config_path(workspace, path)
+    main_file = _read(target)
     with tempfile.TemporaryDirectory(prefix="choregos-nginx-") as prefix:
         (Path(prefix) / "logs").mkdir()
         try:
             process = await asyncio.create_subprocess_exec(
-                binary, "-t", "-e", "stderr", "-p", f"{prefix}/", "-c", str(target),
+                *command(binary, prefix, target, main_file),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-            )  # fmt: skip
+            )
         except FileNotFoundError:
             return False, (
                 "nginx is not installed in this container: the runner image carries it, a sidecar does not. "

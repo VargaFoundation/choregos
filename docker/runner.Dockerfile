@@ -86,10 +86,10 @@ RUN useradd --uid 1000 --create-home --home-dir /workspace --shell /bin/bash cho
 
 # nginx, for `validate_nginx_config` only (ADR 0052): `nginx -t` parses a configuration of the
 # workspace and stops; nothing is started, nothing listens. It runs as uid 1000, so the paths a
-# configuration usually names for its logs and temporary files, and the pid file `-t` opens
-# (`/run/nginx.pid`, compiled in by Debian), must be writable by it.
-RUN mkdir -p /var/log/nginx /var/lib/nginx && touch /run/nginx.pid \
- && chown -R 1000:1000 /var/log/nginx /var/lib/nginx /run/nginx.pid \
+# configuration usually names for its logs and temporary files (Debian compiles in
+# `/var/log/nginx/access.log`) must be writable by it; the tool moves the pid file itself.
+RUN mkdir -p /var/log/nginx /var/lib/nginx \
+ && chown -R 1000:1000 /var/log/nginx /var/lib/nginx \
  && nginx -v
 
 WORKDIR /app
