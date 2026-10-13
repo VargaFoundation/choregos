@@ -157,7 +157,7 @@ async def _proposer_l_action_de_l_outil(
     from choregos_contracts import ActionOrigin
 
     from ..rbac import SYSTEM
-    from ..schemas.actions import ActionCreate, ActionEffectSpec
+    from ..schemas.actions import ActionCreate, ActionEffectSpec, Approbateur, ApprovalSpec
     from .actions import proposer
 
     effet: dict[str, Any] = {
@@ -176,12 +176,20 @@ async def _proposer_l_action_de_l_outil(
             "effect": "connector.call",
             "with": {"connector": outil.connecteur.name, **declaree.compensation},
         }
+    # Who approves (ADR 0052): the members of the group the organisation named for this operation —
+    # with at least a developer's rank on the project —, otherwise the project's owners (ADR 0035).
+    approbation = (
+        ApprovalSpec(approvers=[Approbateur(role="developer", group=outil.operation.approver_group)])
+        if outil.operation.approver_group
+        else ApprovalSpec()
+    )
     corps = ActionCreate(
         kind=f"{outil.connecteur.name}.{outil.operation.name}",
         title=f"{outil.operation.description or outil.operation.name} ({outil.connecteur.name})",
         justification=f"proposed by the agent {run.agent_slug} in run {run.id}",
         params={"arguments": arguments},
         effects=[ActionEffectSpec.model_validate(effet)],
+        approval=approbation,
         work_item_id=run.work_item_id,
     )
     return await proposer(

@@ -198,6 +198,8 @@ export type ConnectorOperation = {
     [key: string]: unknown;
   } | null;
   description?: string | null;
+  /** the identity-provider group whose members approve the actions this operation proposes; none: the project's owners */
+  approver_group?: string | null;
 };
 
 export type ConnectorDiscovery = {
@@ -240,6 +242,8 @@ export type OperationPatch = {
   policy?: "allowed" | "approval" | "forbidden" | null;
   groups?: Array<string> | null;
   price_usd?: number | null;
+  /** an identity-provider group; null clears it */
+  approver_group?: string | null;
 };
 
 export type ProjectOperation = {
@@ -272,6 +276,8 @@ export type ActionEffectSpec = {
 export type ActionApproval = {
   approvers?: Array<{
     role?: "developer" | "release_captain" | "project_owner" | "org_admin";
+    /** an identity-provider group the approver must also belong to (ADR 0052) */
+    group?: string | null;
     min?: number;
   }>;
   step_up_minutes?: number;

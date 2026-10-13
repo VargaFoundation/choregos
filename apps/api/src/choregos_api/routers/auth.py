@@ -279,6 +279,11 @@ async def _map_groups_to_roles(
     `ecraser=False` (connexion de développement) : un rôle déjà posé — par l'amorçage, par
     un admin — n'est pas rétrogradé. L'IdP, lui, fait foi : ce qu'il dit remplace.
     """
+    if ecraser:
+        # The IdP's groups, kept as it states them: an approval rule naming a group checks them
+        # (ADR 0052). Replaced at each sign-in — a group withdrawn at the IdP is withdrawn here at the
+        # next one. A development sign-in (`ecraser=False`) leaves them as they are.
+        user.groups = sorted({str(g) for g in groups})
     # Le mappeur du cœur, ou celui qu'un greffon a déclaré (édition entreprise : un préfixe par
     # organisation, des groupes SAML/SCIM). L'indirection tient en une ligne et évite un fork de
     # ce fichier — c'est tout ce que la couture C3 demandait, et rien de plus.

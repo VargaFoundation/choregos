@@ -108,6 +108,7 @@ async def _principal_from_user(session: AsyncSession, user: User) -> Principal:
         kind="user",
         org_roles=org_roles,
         project_roles=project_roles,
+        groups=[str(g) for g in (user.groups or [])],
     )
     # La session de CETTE requête ne voit que les organisations du principal : c'est ici
     # que la RLS s'arme, parce que c'est ici qu'on sait qui parle.

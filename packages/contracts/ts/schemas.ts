@@ -763,6 +763,8 @@ export type WorkflowActionEffect = {
 export type WorkflowActionApproval = {
   approvers?: Array<{
     role?: "developer" | "release_captain" | "project_owner" | "org_admin";
+    /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052) */
+    group?: string;
     min?: number;
   }>;
   step_up_minutes?: number;
