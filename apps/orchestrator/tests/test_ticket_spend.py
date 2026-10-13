@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from choregos_contracts import StageInput, StageResult
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, refine_result
 from .test_budget_reservation import spend
 from .test_interpreter import _wait_state, start
 
@@ -31,7 +31,7 @@ def spending_runner(gateway: Any) -> Any:
         gateway.record_usage(
             key_id, tokens_in=100_000, tokens_out=10_000, model=gateway.keys[key_id].models[0]
         )
-        return stage_result("spec")
+        return refine_result("spec")
 
     return run
 
