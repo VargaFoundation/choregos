@@ -102,13 +102,16 @@ async def _report(
     )
 
 
-def _period(since: date | None, until: date | None) -> list[Any]:
-    """The ledger lines of a period: `since` (default 30 days ago) to `until`, both inclusive."""
+def _period(since: date | None, until: date | None, kind: str | None = None) -> list[Any]:
+    """The ledger lines of a period: `since` (default 30 days ago) to `until`, both inclusive;
+    `kind` keeps only what models cost, or only what tools cost (S29-03)."""
     where: list[Any] = [
         CostLedger.ts >= (datetime.combine(since, datetime.min.time()) if since else _default_since())
     ]
     if until:
         where.append(CostLedger.ts <= datetime.combine(until, datetime.max.time()))
+    if kind:
+        where.append(CostLedger.kind == kind)
     return where
 
 
@@ -139,12 +142,16 @@ async def project_costs(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
 ) -> CostReport:
-    where: list[Any] = [CostLedger.project_id == ctx.id, *_period(since, until)]
+    where: list[Any] = [CostLedger.project_id == ctx.id, *_period(since, until, kind)]
     policy = await effective_policy(session, ctx.id)
     report = await _report(
         session, where=where, group_by=group_by, budget_usd=policy.budgets.daily_project_usd
     )
+    organisation = await session.get(Organization, ctx.project.org_id)
+    if organisation is not None and (organisation.settings or {}).get("currency") == "USD":
+        report.currency = "USD"
     return await _readable_keys(session, report, None)
 
 
@@ -156,6 +163,7 @@ async def org_costs(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
 ) -> CostReport:
     organization = (
         await session.execute(select(Organization).where(Organization.slug == org))
@@ -167,8 +175,13 @@ async def org_costs(
     project_ids = (
         (await session.execute(select(Project.id).where(Project.org_id == organization.id))).scalars().all()
     )
-    where: list[Any] = [CostLedger.project_id.in_(list(project_ids) or [""]), *_period(since, until)]
+    where: list[Any] = [CostLedger.project_id.in_(list(project_ids) or [""]), *_period(since, until, kind)]
     report = await _report(session, where=where, group_by=group_by)
+    report.currency = "USD" if (organization.settings or {}).get("currency") == "USD" else "EUR"
+    # The organisation's daily budget: what its projects may spend a day, summed (S29-03).
+    daily = [policy_model(await active_policy(session, pid)).budgets.daily_project_usd for pid in project_ids]
+    budgets = [b for b in daily if b is not None]
+    report.total.budget_usd = round(sum(budgets), 6) if budgets else None
     return await _readable_keys(session, report, organization.id)
 
 
@@ -184,9 +197,10 @@ async def project_costs_csv(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
 ) -> Response:
     """Le même rapport, en CSV : de quoi le recoller dans un tableur ou une facturation."""
-    report = await project_costs(ctx, session, group_by=group_by, since=since, until=until)
+    report = await project_costs(ctx, session, group_by=group_by, since=since, until=until, kind=kind)
     return _csv_response(report, f"couts-{ctx.slug}-{group_by}-{utcnow():%Y%m%d}.csv")
 
 
@@ -203,9 +217,10 @@ async def org_costs_csv(
     group_by: Annotated[str, Query(pattern=GROUP_PATTERN)] = "day",
     since: Annotated[date | None, Query()] = None,
     until: Annotated[date | None, Query()] = None,
+    kind: Annotated[str | None, Query(pattern="^(model|tool)$")] = None,
 ) -> Response:
     """The organisation's report, in the grouping the screen shows."""
-    report = await org_costs(org, session, principal, group_by=group_by, since=since, until=until)
+    report = await org_costs(org, session, principal, group_by=group_by, since=since, until=until, kind=kind)
     return _csv_response(report, f"couts-{org}-{group_by}-{utcnow():%Y%m%d}.csv")
 
 

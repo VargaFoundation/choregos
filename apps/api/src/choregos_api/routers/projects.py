@@ -45,7 +45,10 @@ async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
     slugs = set(principal.org_roles) | {q.split("/", 1)[0] for q in principal.project_roles}
     rows = (await session.execute(select(Organization).where(Organization.slug.in_(slugs)))).scalars()
     return sorted(
-        (OrgDto(slug=o.slug, name=o.name, role=principal.org_roles.get(o.slug)) for o in rows),
+        (
+            OrgDto(slug=o.slug, name=o.name, role=principal.org_roles.get(o.slug), currency=moneta(o))
+            for o in rows
+        ),
         key=lambda o: o.slug,
     )
 
@@ -88,7 +91,12 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     await record(
         session, principal, "org.create", org_id=org.id, target_type="org", target_id=org.id, slug=body.slug
     )
-    return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN)
+    return OrgDto(slug=org.slug, name=org.name, role=Role.ORG_ADMIN, currency=moneta(org))
+
+
+def moneta(organisation: Organization) -> Any:
+    """The organisation's currency (S29-03): its `currency` setting, EUR when it has none."""
+    return "USD" if (organisation.settings or {}).get("currency") == "USD" else "EUR"
 
 
 @router.patch("/orgs/{org}", response_model=OrgDto, operation_id="updateOrg")
@@ -105,7 +113,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     organisation = await _org(session, org)
     if principal.org_roles.get(org) != Role.ORG_ADMIN:
         raise forbidden(f"renaming `{org}` needs the org_admin role")
-    avant = {"slug": organisation.slug, "name": organisation.name}
+    avant = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
     if body.slug is not None and body.slug != organisation.slug:
         await exiger_admin_de_plateforme(session, principal)
         # La RLS compare les SLUGS (`slug = ANY(choregos_current_orgs())`) : bornée à l'ancien, la
@@ -118,11 +126,15 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         organisation.slug = body.slug
     if body.name is not None:
         organisation.name = body.name
+    if body.currency is not None:
+        organisation.settings = {**(organisation.settings or {}), "currency": body.currency}
     await session.flush()
-    apres = {"slug": organisation.slug, "name": organisation.name}
+    apres = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
     await record(session, principal, "org.update", org_id=organisation.id, target_type="org",
                  target_id=organisation.id, avant=avant, apres=apres)  # fmt: skip
-    return OrgDto(slug=organisation.slug, name=organisation.name, role=Role.ORG_ADMIN)
+    return OrgDto(
+        slug=organisation.slug, name=organisation.name, role=Role.ORG_ADMIN, currency=moneta(organisation)
+    )
 
 
 async def _org(session: Any, slug: str) -> Organization:

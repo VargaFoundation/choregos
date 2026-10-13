@@ -19,6 +19,7 @@ import {
   TrainFront,
   TriangleAlert,
   Users,
+  Wallet,
   Workflow,
   Zap,
   BadgeCheck,
@@ -43,6 +44,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/knowledge", label: "Knowledge", icone: Library },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "AI clients", icone: Plug },
+  { href: "/costs", label: "Spend", icone: Wallet },
   { href: "/admin", label: "Admin", icone: Settings },
 ];
 
@@ -54,7 +56,7 @@ export function entreeActive(href: string, pathname: string): boolean {
 export const GROUPES: { titre: string; entrees: string[] }[] = [
   { titre: "Work", entrees: ["/", "/inbox"] },
   { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/integrations"] },
-  { titre: "Organisation", entrees: ["/admin"] },
+  { titre: "Organisation", entrees: ["/costs", "/admin"] },
 ];
 
 // ───────────────────────────── scopes (S30-03) ─────────────────────────────

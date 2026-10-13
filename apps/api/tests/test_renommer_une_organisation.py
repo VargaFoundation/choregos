@@ -26,7 +26,12 @@ async def test_le_slug_change_et_les_projets_suivent(
 ) -> None:
     renomme = await client.patch(f"{ORG}/varga", json={"slug": "fondation", "name": "Fondation Varga"})
     assert renomme.status_code == 200, renomme.text
-    assert renomme.json() == {"slug": "fondation", "name": "Fondation Varga", "role": "org_admin"}
+    assert renomme.json() == {
+        "slug": "fondation",
+        "name": "Fondation Varga",
+        "role": "org_admin",
+        "currency": "EUR",
+    }
     assert (await client.get(f"{ORG}/varga/projects")).status_code == 404
     projets = (await client.get(f"{ORG}/fondation/projects")).json()["items"]
     assert [p["slug"] for p in projets] == ["billing-api"]
@@ -34,8 +39,8 @@ async def test_le_slug_change_et_les_projets_suivent(
     assert lu.status_code == 200, "l'identifiant qualifié suit le nouveau slug"
     assert {o["slug"] for o in (await client.get(ORG)).json()} == {"fondation"}
     (ligne,) = [a for a in (await client.get("/api/v1/audit")).json()["items"] if a["action"] == "org.update"]
-    assert ligne["payload"]["avant"] == {"slug": "varga", "name": "Varga Foundation"}
-    assert ligne["payload"]["apres"] == {"slug": "fondation", "name": "Fondation Varga"}
+    assert ligne["payload"]["avant"] == {"slug": "varga", "name": "Varga Foundation", "currency": "EUR"}
+    assert ligne["payload"]["apres"] == {"slug": "fondation", "name": "Fondation Varga", "currency": "EUR"}
 
 
 async def test_le_nom_seul_se_change_sans_toucher_au_slug(client: AsyncClient, admin: str) -> None:

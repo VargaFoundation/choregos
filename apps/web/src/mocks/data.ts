@@ -834,6 +834,64 @@ export const costs: CostReport = {
   total: { cost_usd: 42.6, cost_eur: 39.2, budget_usd: 150 },
 };
 
+/**
+ * The mock ledger (S29-03): the lines every grouping is computed from, so each grouping adds up to
+ * the same total — as the API's do. Days are counted back from today, in UTC.
+ */
+type MockLine = { daysAgo: number; usd: number; kind: "model" | "tool"; model: string; agent: string | null; workflow: string; item: string; project: string };
+const FX_EUR = 0.92;
+export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).flatMap((daysAgo) => [
+  { daysAgo, usd: 1.5 + (daysAgo % 5) * 0.4, kind: "model" as const, model: "claude-sonnet", agent: "coordinator", workflow: "delivery", item: "BILL-12", project: "billing-api" },
+  { daysAgo, usd: 0.8 + (daysAgo % 3) * 0.3, kind: "model" as const, model: "claude-haiku", agent: "reviewer", workflow: "delivery", item: "BILL-14", project: "billing-api" },
+  ...(daysAgo % 4 === 0
+    ? [{ daysAgo, usd: 0.25, kind: "tool" as const, model: "crm_export", agent: "coordinator", workflow: "onboarding", item: "HR-3", project: "checkout-web" }]
+    : []),
+  ...(daysAgo % 6 === 0
+    ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web" }]
+    : []),
+]);
+
+export function mockCostReport(path: string): CostReport {
+  const query = new URLSearchParams(path.split("?")[1] ?? "");
+  const group = query.get("group_by") ?? "day";
+  const project = /^\/projects\/([^/]+)\/costs/.exec(path.split("?")[0] ?? "")?.[1]?.split(":").at(-1);
+  const since = query.get("since");
+  const kind = query.get("kind");
+  const day = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+  const key = (line: MockLine): string => {
+    switch (group) {
+      case "agent": return line.agent ?? "—";
+      case "workflow": return line.workflow;
+      case "work_item": return line.item;
+      case "project": return line.project;
+      case "model": return line.model;
+      case "kind": return line.kind;
+      default: return day(line.daysAgo);
+    }
+  };
+  const rows = new Map<string, CostReport["rows"][number]>();
+  for (const line of mockLedger) {
+    if ((since && day(line.daysAgo) < since) || (kind && line.kind !== kind) || (project && line.project !== project)) continue;
+    const k = key(line);
+    const row = rows.get(k) ?? { key: k, cost_usd: 0, cost_eur: 0, tokens_in: 0, tokens_out: 0, tokens_cached: 0, runs: 0 };
+    row.cost_usd = Math.round((row.cost_usd + line.usd) * 1e6) / 1e6;
+    row.cost_eur = Math.round(row.cost_usd * FX_EUR * 1e6) / 1e6;
+    row.runs = (row.runs ?? 0) + 1;
+    rows.set(k, row);
+  }
+  const list = [...rows.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return {
+    group_by: group,
+    currency: "EUR",
+    rows: list,
+    total: {
+      cost_usd: Math.round(list.reduce((s, r) => s + r.cost_usd, 0) * 1e6) / 1e6,
+      cost_eur: Math.round(list.reduce((s, r) => s + r.cost_eur, 0) * 1e6) / 1e6,
+      budget_usd: 150,
+    },
+  };
+}
+
 export const dora: DoraReport = {
   env: "prod",
   since: new Date(now.getTime() - 30 * 86_400_000).toISOString(),
@@ -1724,6 +1782,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
+  if (method === "GET" && /^\/(orgs|projects)\/[^/]+\/costs$/.test(chemin ?? "") && path.includes("group_by=")) {
+    // The project overview's own two reads (`day`, `kind`, no period) keep their fixed fixture.
+    const surLaPage = /^\/projects\//.test(chemin ?? "") && !/since=|group_by=(?!day&|day$|kind)/.test(path);
+    if (!surLaPage) return mockCostReport(path) as T;
+  }
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
     [/^\/edition$/, { edition: "community", features: [], version: "0.13.1" }],
@@ -1746,7 +1809,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/ui\/admin-sections$/, [sectionScim]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
-    [/^\/orgs$/, [{ slug: "acme", name: "Varga Foundation", role: "org_admin" }]],
+    [/^\/orgs$/, [{ slug: "acme", name: "Varga Foundation", role: "org_admin", currency: "EUR" }]],
     [/^\/orgs\/[^/]+\/members$/, me.memberships],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],

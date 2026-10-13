@@ -95,9 +95,14 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         eyebrow="Cost"
         title="The last 14 days"
         action={
-          <a href={api.costsCsvUrl(slug, "day")} className="text-xs text-ink-muted hover:text-ink" download>
-            Export as csv
-          </a>
+          <span className="flex gap-3 text-xs">
+            <Link href={`/costs?project=${slug}`} className="text-ink-muted hover:text-ink">
+              Spend by agent, workflow, work item
+            </Link>
+            <a href={api.costsCsvUrl(slug, "day")} className="text-ink-muted hover:text-ink" download>
+              Export as csv
+            </a>
+          </span>
         }
       >
         {!costs.data ? (

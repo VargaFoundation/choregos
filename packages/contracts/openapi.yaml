@@ -966,6 +966,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /projects/{id}/costs.csv:
@@ -978,6 +979,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
@@ -1011,6 +1013,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CostReport" } } } }
   /orgs/{org}/costs.csv:
@@ -1023,6 +1026,7 @@ paths:
         - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
+        - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
   /templates:
@@ -3063,6 +3067,7 @@ components:
         slug: { type: string }
         name: { type: string }
         role: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }] }
+        currency: { type: string, enum: [EUR, USD], default: EUR, description: "the currency the console shows spend in (S29-03); an organisation setting" }
     OrgCreate:
       type: object
       required: [slug, name]
@@ -3075,6 +3080,7 @@ components:
       properties:
         slug: { type: [string, "null"], pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
+        currency: { type: [string, "null"], enum: [EUR, USD, null], description: "the currency spend is shown in; org_admin" }
     WorkItemCreate:
       type: object
       required: [title]
