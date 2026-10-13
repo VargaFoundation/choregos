@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import HandOffReceipt, Run, WorkItem
+from ..db.models import ArtifactRecord, HandOffReceipt, Run, WorkItem
 from ..schemas import HandOff, HandOffEvent
 
 PRODUITE = "produced"
@@ -143,6 +143,17 @@ async def passages_du_ticket(session: AsyncSession, item: WorkItem) -> list[Hand
         for run in (await session.execute(select(Run).where(Run.id.in_({r.run_id for r in recus})))).scalars()
     }
     documents = item.documents or {}
+    # A file output (ADR 0049) is not in `documents`: what it is worth today is its latest revision.
+    fichiers = {
+        row.name: row.digest
+        for row in (
+            await session.execute(
+                select(ArtifactRecord)
+                .where(ArtifactRecord.work_item_id == item.id, ArtifactRecord.storage_key.is_not(None))
+                .order_by(ArtifactRecord.version)
+            )
+        ).scalars()
+    }
     passages: dict[str, HandOff] = {}
     for recu in recus:
         valeur = documents.get(recu.output)
@@ -150,7 +161,7 @@ async def passages_du_ticket(session: AsyncSession, item: WorkItem) -> list[Hand
             recu.output,
             HandOff(
                 output=recu.output,
-                current_digest=empreinte(valeur) if _presente(valeur) else None,
+                current_digest=empreinte(valeur) if _presente(valeur) else fichiers.get(recu.output),
                 events=[],
             ),
         )

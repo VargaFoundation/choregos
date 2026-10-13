@@ -1599,6 +1599,31 @@ paths:
         "200": { description: The content, content: { "*/*": { schema: { type: string, format: binary } } } }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /internal/runs/{id}/outputs/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: putRunOutput
+      description: >-
+        A deliverable the agent wrote in `.choregos/outputs/` (ADR 0049). The API hashes the bytes,
+        refuses them unless they match `X-Choregos-Digest`, stores them in the object store and records
+        a typed artifact revision with its produced receipt. Same bytes, same version. Closed once the
+        run's result is posted.
+      parameters:
+        - { name: type, in: query, required: true, description: "a type of the artifact vocabulary", schema: { type: string } }
+        - { name: X-Choregos-Digest, in: header, required: true, description: "sha256:<hex> of the body", schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/octet-stream: { schema: { type: string, format: binary } } }
+      responses:
+        "200": { description: Stored, content: { application/json: { schema: { $ref: "#/components/schemas/Artifact" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { description: Larger than CHOREGOS_ARTIFACT_MAX_BYTES, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "503": { description: Object store unavailable, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/ci-logs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:

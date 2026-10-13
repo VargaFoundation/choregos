@@ -103,6 +103,18 @@ class InternalClient:
             raise InternalApiError(response.status_code, response.text[:400])
         return response.content
 
+    async def put_output(self, name: str, type_: str, data: bytes, digest: str) -> dict[str, Any]:
+        """Hands a deliverable of `.choregos/outputs/` to the platform, which hashes and stores it."""
+        response = await self._client.put(
+            self._url(f"/outputs/{name}"),
+            params={"type": type_},
+            content=data,
+            headers={"X-Choregos-Digest": digest, "Content-Type": "application/octet-stream"},
+        )
+        if response.status_code >= 400:
+            raise InternalApiError(response.status_code, response.text[:400])
+        return dict(response.json())
+
     async def fetch_ticket(self) -> dict[str, Any]:
         return dict(await self._request("GET", "/ticket"))
 
