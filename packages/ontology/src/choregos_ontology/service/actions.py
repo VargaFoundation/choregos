@@ -679,6 +679,7 @@ async def on_report(
     from choregos_api.services.actions import signaler_une_preuve
 
     decided: list[str] = []
+    signals: list[tuple[str, int, bool, str]] = []
     for action in await actions_de_l_ontologie(session, project.id, AWAITING_EVIDENCE):
         resultat = dict(action.result or {})
         evidence = [dict(e) for e in resultat.get("evidence") or []]
@@ -732,13 +733,23 @@ async def on_report(
         if not tranchees:
             continue
         action.result = {**resultat, "evidence": evidence}
-        await session.flush()
-        for entry in tranchees:
-            await signaler_une_preuve(
+        signals.extend(
+            (
                 action.id,
                 int(entry["position"]),
-                ok=entry["status"] == "passed",
-                detail=str(entry.get("error") or f"{entry['name']}: {entry['status']}"),
+                entry["status"] == "passed",
+                str(entry.get("error") or f"{entry['name']}: {entry['status']}"),
             )
+            for entry in tranchees
+        )
         decided.append(action.id)
+    if signals:
+        # Commit BEFORE the signals (#440). A signal wakes the action's workflow at once, and its next
+        # activities (`marquer_l_attente`, `cloturer_l_action`) read `action.result`, change it and
+        # write it back. Signalled before this request's commit, they read the result without the
+        # evidence just settled, and their write, landing after ours, erased it: the action succeeded
+        # with evidence that had no `result`.
+        await session.commit()
+    for action_id, position, ok, detail in signals:
+        await signaler_une_preuve(action_id, position, ok=ok, detail=detail)
     return decided
