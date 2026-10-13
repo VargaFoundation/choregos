@@ -43,7 +43,10 @@ spec:
       labels:
         app.kubernetes.io/name: choregos-runner
         app.kubernetes.io/component: runner
-        app.kubernetes.io/part-of: choregos
+        # The label `choregos-runner-assignment` below selects. NOT `app.kubernetes.io/part-of:
+        # choregos`: `choregos-allow-ingress` admits every pod of the namespace to the pods that
+        # carry it, and NetworkPolicies add up — it would reopen the assignment port to all.
+        choregos/sandbox: "true"
     spec:
       restartPolicy: Never
       serviceAccountName: choregos-runner
@@ -107,4 +110,31 @@ spec:
   replicas: {{ int (.Values.runner.warmPool.size | default 0) }}
   sandboxTemplateRef:
     name: choregos-runner
+---
+# Who may push an assignment to a warm sandbox: the orchestrator's `executor` workers, and no one
+# else (ADR 0053). The assignment is sealed to the pod's key, so another pod could not READ a run
+# token; without this policy it could still push first, with a token of its own, and occupy the
+# sandbox until the real run fails on 409. Rendered with the template, whatever
+# `networkPolicies.enabled` says: it is part of how this executor holds its promise.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-runner-assignment
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      choregos/sandbox: "true"
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: choregos-orchestrator
+              choregos/queue: executor
+      ports:
+        - { protocol: TCP, port: {{ $port }} }
 {{- end }}

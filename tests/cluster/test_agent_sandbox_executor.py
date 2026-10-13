@@ -1,9 +1,11 @@
 """S35-02 — a warm sandbox from the chart's template, on a real agent-sandbox operator.
 
 What only a cluster shows: the pod the CONTROLLER makes from the chart's template carries no
-credential; a claim adopts that warm sandbox rather than making another; the runner in it
-accepts one run and refuses a second; deleting the claim deletes the sandbox, and the pool
-replaces it with a NEW one — a sandbox is never handed out twice.
+credential; a claim adopts that warm sandbox rather than making another; a pod of the namespace
+that is not the orchestrator's executor cannot reach its assignment port (the CNI enforces the
+chart's NetworkPolicy); the runner in it accepts one run and refuses a second; deleting the
+claim deletes the sandbox, and the pool replaces it with a NEW one — a sandbox is never handed
+out twice.
 
 It needs a runner image that has `await-assignment` (this release or later), named by
 `CHOREGOS_SANDBOX_RUNNER_IMAGE`, and the operator; without them it is skipped and says why.
@@ -79,15 +81,20 @@ def _ready(sandbox: dict[str, Any]) -> bool:
     return _condition(sandbox, "Ready").get("status") == "True"
 
 
-def _push(ns: str, ip: str, run_id: str, public_key: str) -> str:
-    """POSTs an assignment SEALED to `public_key` from inside the namespace; returns the status."""
+#: The labels of the orchestrator's `executor` workers: the only pods the assignment port admits.
+ORCHESTRATOR = {"app.kubernetes.io/name": "choregos-orchestrator", "choregos/queue": "executor"}
+
+
+def _push(ns: str, ip: str, run_id: str, public_key: str, *, labels: dict[str, str] | None = None) -> str:
+    """POSTs an assignment SEALED to `public_key` from a pod of the namespace carrying `labels`
+    (the orchestrator's by default); returns the HTTP status, `000` when the push never got in."""
     secret = {"api_url": "http://nowhere.invalid", "run_token": "t", "env": {}}
     body = json.dumps({"run_id": run_id, "sealed": seal(public_key, run_id, secret)})
     name = f"push-{run_id}"
     pod = {
         "apiVersion": "v1",
         "kind": "Pod",
-        "metadata": {"name": name, "namespace": ns},
+        "metadata": {"name": name, "namespace": ns, "labels": ORCHESTRATOR if labels is None else labels},
         "spec": {
             "restartPolicy": "Never",
             "securityContext": {
@@ -101,7 +108,7 @@ def _push(ns: str, ip: str, run_id: str, public_key: str) -> str:
                     "image": "curlimages/curl:8.11.1",
                     "command": [
                         "sh", "-c",
-                        f"curl -s -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' "
+                        f"curl -s -m 10 -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' "
                         f"-d '{body}' http://{ip}:8765/assign",
                     ],
                     "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
@@ -152,6 +159,8 @@ def test_a_claim_adopts_a_warm_sandbox_that_holds_nothing_and_serves_one_run(ns:
     public_key = key_from_log(kubectl_shared("-n", ns, "logs", bound))
     assert public_key, "the warm runner printed no key: nothing could be sealed to it"
     _, other_key = new_key()
+    # Another pod of the namespace cannot even reach the port: `choregos-runner-assignment`.
+    assert _push(ns, ip, "run-z", public_key, labels={"app": "intruder"}) == "000", "the push got in"
     assert _push(ns, ip, "run-x", other_key) == "400", "sealed to another key: refused"
     assert _push(ns, ip, "run-a", public_key) == "200"
     assert _push(ns, ip, "run-b", public_key) == "409", "a sandbox serves one run, never two"

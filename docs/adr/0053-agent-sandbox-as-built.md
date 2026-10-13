@@ -38,9 +38,22 @@ So the token is **pushed, sealed to the one pod that will run it**:
 What holds: a warm sandbox holds no credential; exactly one pod can read a given token, after it
 was chosen for that run; the pod network only ever carries the run id and ciphertext — the
 deployment-wide secrets a `k8s_job` pod mounts with `envFrom`, pushed with the assignment, are
-sealed with it. What remains: a pod of the same namespace that pushes first can occupy a warm
-sandbox — with a token of its own, gaining nothing — and the run then fails visibly (409). The
-public key is in the pod's log, which is public by nature.
+sealed with it.
+
+Who may push at all: the chart renders, with the template, the NetworkPolicy
+`choregos-runner-assignment`. It selects the sandbox pods (`choregos/sandbox: "true"`) and admits
+to the assignment port only the orchestrator's `executor` workers of the release namespace. The
+sandbox pods deliberately do not carry `app.kubernetes.io/part-of: choregos`, which
+`choregos-allow-ingress` opens to the whole namespace: NetworkPolicies add up, and that one would
+undo this one (`tests/charts/test_agent_sandbox.py` checks no other policy selects them). So a
+pod of the namespace can no longer push first and occupy a warm sandbox with a token of its own.
+
+What remains: the policy holds only where the CNI enforces NetworkPolicies (an unenforcing CNI
+accepts it and lets everything through — the cluster test `test_agent_sandbox_executor.py`
+checks the push from another pod is blocked); a pod that impersonates the orchestrator's labels
+needs the right to create pods with them in the release namespace, i.e. to be the platform. The
+public key is in the pod's log, which is public by nature. No CiliumNetworkPolicy variant: the
+repository ships none for runners, and Cilium enforces this standard policy.
 
 ### Alternatives discarded for the push
 

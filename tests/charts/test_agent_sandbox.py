@@ -181,3 +181,52 @@ def test_the_pins_agree() -> None:
         "SandboxTemplate": "v1beta1",
         "SandboxWarmPool": "v1beta1",
     }
+
+
+def _selects(selector: dict[str, Any], labels: dict[str, str]) -> bool:
+    """`matchLabels` only — what these policies use. An empty selector selects every pod."""
+    assert set(selector) <= {"matchLabels"}, f"unexpected selector form: {selector}"
+    return (selector.get("matchLabels") or {}).items() <= labels.items()
+
+
+@needs_helm
+def test_only_the_orchestrator_executor_may_reach_the_assignment_port() -> None:
+    """ADR 0053: a pod of the namespace must not push first and occupy a warm sandbox."""
+    objects = _objects("choregos-orchestrator.runner.sandbox.assignmentPort=9876")
+    sandbox_pod = objects["SandboxTemplate/choregos-runner"]["spec"]["podTemplate"]["metadata"]["labels"]
+    executor_pod = objects["Deployment/choregos-orchestrator-executor"]["spec"]["template"]["metadata"][
+        "labels"
+    ]
+    other_pods = [
+        doc["spec"]["template"]["metadata"]["labels"]
+        for name, doc in objects.items()
+        if name.startswith("Deployment/") and name != "Deployment/choregos-orchestrator-executor"
+    ]
+    policy = objects["NetworkPolicy/choregos-runner-assignment"]["spec"]
+    assert _selects(policy["podSelector"], sandbox_pod), "the policy selects the sandbox pods"
+    assert not _selects(policy["podSelector"], executor_pod), "and not the orchestrator"
+    assert policy["policyTypes"] == ["Ingress"]
+    (rule,) = policy["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 9876}]
+    (peer,) = rule["from"]
+    assert peer["namespaceSelector"] == {"matchLabels": {"kubernetes.io/metadata.name": "choregos"}}
+    assert _selects(peer["podSelector"], executor_pod), "the orchestrator's executor workers get in"
+    assert not any(_selects(peer["podSelector"], labels) for labels in other_pods), "no other pod does"
+
+
+@needs_helm
+def test_no_other_policy_reopens_the_sandbox_pods() -> None:
+    """NetworkPolicies add up: one broader ingress rule on the sandbox pods undoes the one above.
+    `choregos-allow-ingress` admits the whole namespace to `app.kubernetes.io/part-of: choregos`
+    pods — which is why the sandbox pods do not carry that label."""
+    objects = _objects("networkPolicies.enabled=true")
+    sandbox_pod = objects["SandboxTemplate/choregos-runner"]["spec"]["podTemplate"]["metadata"]["labels"]
+    assert "app.kubernetes.io/part-of" not in sandbox_pod
+    ingress_on_sandbox = sorted(
+        name
+        for name, doc in objects.items()
+        if doc["kind"] == "NetworkPolicy"
+        and "Ingress" in doc["spec"].get("policyTypes", [])
+        and _selects(doc["spec"]["podSelector"], sandbox_pod)
+    )
+    assert ingress_on_sandbox == ["NetworkPolicy/choregos-runner-assignment"], ingress_on_sandbox
