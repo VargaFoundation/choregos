@@ -170,6 +170,9 @@ class GuardRails:
             return Decision(False, f"writing to a sensitive file is forbidden: {path}", "write", path)
         if normalized == ".choregos/result.json":
             return Decision(True, "writing the step's result: allowed", "write", path)
+        if normalized.startswith(".choregos/outputs/") and ".." not in normalized.split("/"):
+            # The step's deliverables (ADR 0049): stored as artifacts, never committed.
+            return Decision(True, "writing a deliverable in `.choregos/outputs/`: allowed", "write", path)
         if normalized.startswith(".choregos/"):
             return Decision(
                 False,

@@ -8,6 +8,7 @@ ouvre une session, demande des permissions, écrit des fichiers, et produit un
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -138,7 +139,7 @@ def main() -> int:
                 if allowed:
                     target = workspace / write["path"]
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text(write.get("content", ""), encoding="utf-8")
+                    _write(target, write)
 
             for command in plan.get("commands", []):
                 outgoing_id += 1
@@ -201,6 +202,14 @@ def main() -> int:
                 }
             )
     return 0
+
+
+def _write(target: Path, write: dict[str, Any]) -> None:
+    """Text by `content`, or bytes by `b64` — a binary deliverable: a deck, an image."""
+    if "b64" in write:
+        target.write_bytes(base64.b64decode(write["b64"]))
+    else:
+        target.write_text(write.get("content", ""), encoding="utf-8")
 
 
 def _plan_for(script: dict[str, Any], prompt_index: int) -> dict[str, Any]:

@@ -37,7 +37,7 @@ class ResultLoad:
         return self.result is not None
 
 
-def load_result(path: Path, declarees: list[str] | None = None) -> ResultLoad:
+def load_result(path: Path, declarees: list[str] | None = None, files: list[str] | None = None) -> ResultLoad:
     """Lit et valide le fichier. Toute erreur est formulée pour être renvoyée à l'agent.
 
     `declarees` : les sorties que la transition déclare. Un résultat `done` qui en omet une
@@ -70,6 +70,18 @@ def load_result(path: Path, declarees: list[str] | None = None) -> ResultLoad:
             error=(
                 f"`outputs` lacks {', '.join(f'`{nom}`' for nom in manquantes)}: this step declares "
                 f"{attendues}, each a key of `outputs` of its own — not nested in another output."
+            ),
+            raw=raw,
+        )
+    # `files`: the deliverables a `done` step declares (ADR 0049), expected beside this file in
+    # `.choregos/outputs/`. A missing one goes back to the agent like a missing output.
+    absents = [name for name in files or [] if not (path.parent / "outputs" / name).is_file()]
+    if absents and resultat.status is StageStatus.DONE:
+        return ResultLoad(
+            None,
+            error=(
+                f"missing file(s) in `.choregos/outputs/`: {', '.join(f'`{name}`' for name in absents)}. "
+                "This step declares them as deliverables: write each file there, then rewrite the result."
             ),
             raw=raw,
         )

@@ -21,6 +21,7 @@ from choregos_contracts import (
     Diagnostics,
     StageInput,
     StageResult,
+    StageStatus,
 )
 
 from .acp import AcpClient, AgentUnreachableError
@@ -34,6 +35,7 @@ from .guardrails import GuardRails
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
+from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_outputs
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .skills import SkillInvalide, poser
@@ -256,14 +258,16 @@ class Runner:
                     scope_result = await check_scope(workspace, depart, guards.allowed_paths)
 
                 # 10. résultat
-                load = load_result(workspace.result_path(), inline_outputs(stage_input))
+                load = load_result(workspace.result_path(), inline_outputs(stage_input), _files(stage_input))
                 while not load.ok and repairs < MAX_RESULT_REPAIRS:
                     repairs += 1
                     await journal.record("result.repair", {"attempt": repairs, "error": load.error})
                     await agent.prompt(
                         repair_prompt(load, workspace.result_path()), timeout=self._remaining(budget_seconds)
                     )
-                    load = load_result(workspace.result_path(), inline_outputs(stage_input))
+                    load = load_result(
+                        workspace.result_path(), inline_outputs(stage_input), _files(stage_input)
+                    )
                 agent_result = load.result
                 diagnostics = Diagnostics(
                     turns=agent.outcome.turns,
@@ -331,6 +335,10 @@ class Runner:
         (S31-03, ADR 0049), listed in `task.md`. An input that does not match its digest stops the
         run; an API that cannot list them (older than this runner) leaves the agent its prompt."""
         workspace.write_context_files(stage_input, context)
+        # Deliverables (S31-05) are artifacts, never commits; the task says which files to write.
+        workspace.exclude([f"{OUTPUTS_DIR}/"])
+        task = workspace.path / ".choregos" / "task.md"
+        task.write_text(task.read_text(encoding="utf-8") + outputs_markdown(stage_input), encoding="utf-8")
         if not stage_input.transition.inputs:
             return None
         workspace.exclude([f"{INPUTS_DIR}/"])
@@ -345,9 +353,24 @@ class Runner:
             return None
         await journal.record("inputs.mounted", {"ok": True, "inputs": [m["path"] for m in mounted]})
         if mounted:
-            task = workspace.path / ".choregos" / "task.md"
             task.write_text(task.read_text(encoding="utf-8") + inputs_markdown(mounted), encoding="utf-8")
         return None
+
+    async def _deliver(
+        self, client: Any, journal: Any, workspace: Workspace, stage_input: StageInput, result: StageResult
+    ) -> None:
+        """Stores the deliverables of `.choregos/outputs/` (S31-05, ADR 0049) and lists them in
+        `artifacts.files` — what the runner stored, never what the agent claims. A declared file that
+        was not stored fails a `done` step: the platform does not take the deck on the agent's word."""
+        stored, problems = await store_outputs(client, workspace.path, stage_input)
+        result.artifacts.files = stored
+        if stored or problems:
+            await journal.record("outputs.stored", {"stored": sorted(stored), "refused": problems[:20]})
+        missing = [name for name in expected_files(stage_input) if name not in stored]
+        if missing and result.status is StageStatus.DONE:
+            result.status = StageStatus.FAILED
+            result.reason = "missing_outputs"
+            result.summary = f"{result.summary} — declared files not delivered: {', '.join(missing)}"[:4000]
 
     def _prompt(self, stage_input: StageInput, workspace: Path) -> str:
         """Playbook rendu + tâche. Le playbook vient de l'orchestrateur, jamais du dépôt."""
@@ -385,6 +408,7 @@ class Runner:
         depart: str = "",
     ) -> StageResult:
         """Commit, push, transcript, puis dépôt du résultat (étapes 11 et 12)."""
+        await self._deliver(client, journal, workspace, stage_input, result)
         commit_message = _commit_message(stage_input, result)
         sha = await workspace.commit(commit_message)
         commits = await workspace.commits_since(base)
@@ -426,6 +450,11 @@ class Runner:
         except Exception as exc:  # l'orchestrateur lira le résultat via l'exécuteur
             await journal.record("result.post_failed", {"error": str(exc)[:300]})
         return result
+
+
+def _files(stage_input: StageInput) -> list[str]:
+    """The files a `done` result must leave in `.choregos/outputs/` (ADR 0049)."""
+    return list(expected_files(stage_input).values())
 
 
 def _commit_message(stage_input: StageInput, result: StageResult) -> str:

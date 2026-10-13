@@ -135,6 +135,16 @@ class FakeInternalClient:
     async def fetch_input_content(self, name: str) -> bytes:
         return getattr(self, "inputs", {})[name][1]
 
+    async def put_output(self, name: str, type_: str, data: bytes, digest: str) -> dict[str, Any]:
+        """What the internal API would store (S31-05): refuses on demand, else keeps the bytes."""
+        refused: set[str] = getattr(self, "refuse_outputs", set())
+        if name in refused:
+            raise RuntimeError(f"internal API: 503 — object store unavailable for {name}")
+        if not hasattr(self, "outputs"):
+            self.outputs: dict[str, tuple[str, bytes, str]] = {}
+        self.outputs[name] = (type_, data, digest)
+        return {"name": name, "type": type_, "digest": digest, "size": len(data), "version": 1}
+
     async def fetch_input(self) -> StageInput:
         return self.stage_input
 

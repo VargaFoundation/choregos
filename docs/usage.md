@@ -364,6 +364,16 @@ A step's declared `inputs:` reach its agent as files too: the runner writes each
 its digest, and lists them in `.choregos/task.md`. A large report no longer has to fit in the
 prompt; an input whose bytes do not match stops the run.
 
+**Binary deliverables.** An agent that produces a slide deck, a spreadsheet, a document, an image
+or a video writes it in `.choregos/outputs/`. The runner hands each file to the platform, which
+checks its sha256, stores it in the object store and records it as a typed artifact; the runner
+lists what was stored in the result's `artifacts.files` — an agent cannot vouch for its own files.
+A declared file that is missing goes back to the agent, then fails the step. Undeclared files are
+kept too, under their own file name. Generating them is not the platform's job: office files come
+from skills run in the sandbox, images and video from models behind the gateway (their cost is in
+the ledger like any model call) or from MCP connectors. Files are limited to
+`CHOREGOS_ARTIFACT_MAX_BYTES` (200 MiB by default) and are never committed.
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated

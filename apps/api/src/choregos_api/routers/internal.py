@@ -7,20 +7,30 @@ descend dans le workspace : tout passe ici (§1.10, §2.2).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from choregos_adapters.storage import ObjectStoreError
-from choregos_contracts import ContextPack, EventType, Finding, StageInput, StageResult
+from choregos_contracts import (
+    ARTIFACT_TYPES,
+    Artifact,
+    ContextPack,
+    EventType,
+    Finding,
+    StageInput,
+    StageResult,
+    artifact_digest,
+)
 from choregos_core import PolicyEngine, matches_any, utcnow
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import func, select
 
 from ..catalogue import appeler as appeler_outil
 from ..catalogue import outils_du_projet
+from ..config import get_settings
 from ..db.models import CostLedger, HumanRequest, Project, Run, RunEvent, WorkItem
 from ..db.models import Finding as FindingRow
 from ..deps import Db, RunAuth
-from ..errors import ApiError, conflict, not_found
+from ..errors import ApiError, conflict, not_found, unprocessable
 from ..object_store import object_store
 from ..schemas import (
     CiLogs,
@@ -35,7 +45,14 @@ from ..schemas import (
     ScopeChangeRequestIn,
 )
 from ..services import active_policy, persist_event, policy_model, ranger_les_sorties
-from ..services.artifacts import ArtifactCorruptedError, filename_of, read_content, record_inline_outputs
+from ..services.artifacts import (
+    ArtifactCorruptedError,
+    filename_of,
+    read_content,
+    record_inline_outputs,
+    store_file,
+    to_contract,
+)
 from ..services.artifacts import latest as latest_artifact
 from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner, record_digests
 from ..services.tickets import sorties_a_ranger
@@ -412,6 +429,63 @@ async def get_input_content(id: str, name: str, session: Db, claims: RunAuth) ->
             genre=LUE,
         )
     return Response(content=data, media_type=row.media_type, headers={"X-Choregos-Digest": row.digest})
+
+
+@router.put("/runs/{id}/outputs/{name}", response_model=Artifact, operation_id="putRunOutput")
+async def put_output(
+    id: str,
+    name: str,
+    request: Request,
+    session: Db,
+    claims: RunAuth,
+    type: Annotated[str, Query(description="a type of the artifact vocabulary (ADR 0049)")],
+) -> Artifact:
+    """A deliverable the agent wrote in `.choregos/outputs/` (S31-05, ADR 0049).
+
+    The API hashes the bytes it received and refuses them unless they match the digest the runner
+    computed; it stores them in the object store and records a typed artifact revision with its
+    *produced* receipt. Idempotent: the same bytes again make no new version. Once the result is
+    posted, the run's outputs are closed."""
+    run, item, project = await _run_and_item(session, id)
+    if run.result is not None:
+        raise conflict("result already posted for this run: its outputs are closed")
+    if type not in ARTIFACT_TYPES:
+        raise unprocessable(f"unknown artifact type `{type}`")
+    limit = get_settings().artifact_max_bytes
+    declared_size = request.headers.get("content-length", "")
+    if declared_size.isdigit() and int(declared_size) > limit:
+        raise ApiError(status.HTTP_413_CONTENT_TOO_LARGE, "Artifact too large", f"limit {limit} bytes")
+    data = await request.body()
+    if len(data) > limit:
+        raise ApiError(status.HTTP_413_CONTENT_TOO_LARGE, "Artifact too large", f"limit {limit} bytes")
+    received = artifact_digest(data)
+    if request.headers.get("x-choregos-digest") != received:
+        raise unprocessable(f"the bytes received hash to {received}, not to the digest announced")
+    try:
+        row = await store_file(
+            session,
+            object_store(),
+            org_id=project.org_id,
+            item=item,
+            run=run,
+            name=name,
+            type_=type,
+            data=data,
+        )
+    except ValueError as exc:
+        raise unprocessable(str(exc)) from exc
+    except ObjectStoreError as exc:
+        raise ApiError(status.HTTP_503_SERVICE_UNAVAILABLE, "Object store unavailable", str(exc)) from exc
+    await record_digests(
+        session,
+        org_id=project.org_id,
+        work_item_id=item.id,
+        run_id=run.id,
+        stage=run.stage_role,
+        digests={name: row.digest},
+        genre=PRODUITE,
+    )
+    return to_contract(row)
 
 
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
