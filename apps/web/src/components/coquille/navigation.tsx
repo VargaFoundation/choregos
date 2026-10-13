@@ -211,7 +211,7 @@ export function useNavGroups(pathname: string, features?: ProjectFeatures): { sc
     enabled: scope.kind === "admin",
   });
   // Trains only exist when a workflow of the project declares a release train (S30-07): same query as
-  // the project pages, so one request.
+  // the project pages, so one request. Until it is read the section stays, so the sidebar does not jump.
   const project = useQuery({
     queryKey: ["project", scope.kind === "project" ? scope.slug : ""],
     queryFn: () => api.project(scope.kind === "project" ? scope.slug : ""),
@@ -219,7 +219,7 @@ export function useNavGroups(pathname: string, features?: ProjectFeatures): { sc
   });
   const groups =
     scope.kind === "project"
-      ? projectGroups(scope.slug, { trains: hasReleaseTrain(project.data), ...features })
+      ? projectGroups(scope.slug, { trains: project.data === undefined || hasReleaseTrain(project.data), ...features })
       : scope.kind === "admin"
         ? adminGroups(sections.data ?? [])
         : orgGroups();
