@@ -5,8 +5,8 @@
 `review_status` is `approved` for them — they were published by an administrator, as the only
 way in was then.
 
-Revision ID: c5e7a9b1d3f5
-Revises: b4d6f8a0c2e4
+Revision ID: 5f7b9d1c3e4a
+Revises: 4e6a8c0b2d3f
 Create Date: 2026-10-12 12:00:00+00:00
 """
 
@@ -19,8 +19,8 @@ from alembic import op
 
 from choregos_api.db.base import Json
 
-revision: str = "c5e7a9b1d3f5"
-down_revision: str | None = "b4d6f8a0c2e4"
+revision: str = "5f7b9d1c3e4a"
+down_revision: str | None = "4e6a8c0b2d3f"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
