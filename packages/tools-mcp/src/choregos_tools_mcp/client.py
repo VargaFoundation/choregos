@@ -92,6 +92,17 @@ class InternalClient:
         """Les fichiers des skills que le `StageInput` nomme (ADR 0033) ; l'empreinte s'y vérifie."""
         return list(await self._request("GET", "/skills") or [])
 
+    async def fetch_inputs(self) -> list[dict[str, Any]]:
+        """The declared inputs an earlier step produced (ADR 0049): name, filename, digest, size."""
+        return list(await self._request("GET", "/inputs") or [])
+
+    async def fetch_input_content(self, name: str) -> bytes:
+        """The bytes of a declared input; the caller checks them against the listed digest."""
+        response = await self._client.get(self._url(f"/inputs/{name}"))
+        if response.status_code >= 400:
+            raise InternalApiError(response.status_code, response.text[:400])
+        return response.content
+
     async def fetch_ticket(self) -> dict[str, Any]:
         return dict(await self._request("GET", "/ticket"))
 

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from choregos_adapters.storage import ObjectStoreError
 from choregos_contracts import ContextPack, EventType, Finding, StageInput, StageResult
 from choregos_core import PolicyEngine, matches_any, utcnow
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, select
 
 from ..catalogue import appeler as appeler_outil
@@ -20,20 +21,23 @@ from ..db.models import CostLedger, HumanRequest, Project, Run, RunEvent, WorkIt
 from ..db.models import Finding as FindingRow
 from ..deps import Db, RunAuth
 from ..errors import ApiError, conflict, not_found
+from ..object_store import object_store
 from ..schemas import (
     CiLogs,
     FindingAck,
     GitToken,
     QuestionIn,
     RunEventsBatch,
+    RunInputFile,
     RunTicket,
     RunTicketComment,
     ScopeChangeDecision,
     ScopeChangeRequestIn,
 )
 from ..services import active_policy, persist_event, policy_model, ranger_les_sorties
-from ..services.artifacts import record_inline_outputs
-from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner
+from ..services.artifacts import ArtifactCorruptedError, filename_of, read_content, record_inline_outputs
+from ..services.artifacts import latest as latest_artifact
+from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner, record_digests
 from ..services.tickets import sorties_a_ranger
 from ..temporal import get_temporal, interpreter_id
 
@@ -338,6 +342,76 @@ async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, An
             {"slug": ref["slug"], "version": ligne.version, "digest": ligne.digest, "files": ligne.files}
         )
     return rendues
+
+
+def _declared_inputs(run: Run) -> list[str]:
+    return [str(name) for name in ((run.stage_input or {}).get("transition") or {}).get("inputs") or []]
+
+
+@router.get("/runs/{id}/inputs", response_model=list[RunInputFile], operation_id="getRunInputs")
+async def get_inputs(id: str, session: Db, claims: RunAuth) -> list[RunInputFile]:
+    """The declared inputs of the run that an earlier step produced, latest revision of each (ADR 0049).
+
+    The runner mounts them as files in `.choregos/inputs/`, so a large report no longer has to fit
+    in the prompt. An input nothing has produced yet is simply absent."""
+    run, item, _ = await _run_and_item(session, id)
+    files: list[RunInputFile] = []
+    for name in _declared_inputs(run):
+        row = await latest_artifact(session, item.id, name)
+        if row is None:
+            continue
+        files.append(
+            RunInputFile(
+                name=row.name,
+                version=row.version,
+                filename=filename_of(row),
+                type=row.type,
+                media_type=row.media_type,
+                digest=row.digest,
+                size=row.size,
+            )
+        )
+    return files
+
+
+@router.get("/runs/{id}/inputs/{name}", operation_id="getRunInputContent")
+async def get_input_content(id: str, name: str, session: Db, claims: RunAuth) -> Response:
+    """The bytes of a declared input, digest checked; reading it leaves a *read* receipt (S25-04)
+    under the digest of what was read. Only the inputs the run's transition declares are served."""
+    run, item, project = await _run_and_item(session, id)
+    if name not in _declared_inputs(run):
+        raise not_found("Declared input of the run", name)
+    row = await latest_artifact(session, item.id, name)
+    if row is None:
+        raise not_found("Artifact", name)
+    try:
+        data = await read_content(object_store(), row)
+    except ArtifactCorruptedError as exc:
+        raise conflict(str(exc)) from exc
+    except ObjectStoreError as exc:
+        raise conflict(f"input `{name}` cannot be read from the object store: {exc}") from exc
+    # An inline value keeps the receipt convention of S25-04 (its canonical JSON); a file, its sha256.
+    if row.storage_key is None:
+        await consigner(
+            session,
+            org_id=project.org_id,
+            work_item_id=item.id,
+            run_id=run.id,
+            stage=run.stage_role,
+            sorties={name: row.content},
+            genre=LUE,
+        )
+    else:
+        await record_digests(
+            session,
+            org_id=project.org_id,
+            work_item_id=item.id,
+            run_id=run.id,
+            stage=run.stage_role,
+            digests={name: row.digest},
+            genre=LUE,
+        )
+    return Response(content=data, media_type=row.media_type, headers={"X-Choregos-Digest": row.digest})
 
 
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")

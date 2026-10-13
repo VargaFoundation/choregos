@@ -22,6 +22,7 @@ import structlog
 from choregos_adapters.storage import ObjectStore
 from choregos_contracts import (
     ARTIFACT_NAME_PATTERN,
+    ARTIFACT_TYPES,
     Artifact,
     ArtifactProducer,
     artifact_digest,
@@ -34,6 +35,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import ArtifactRecord, Run, WorkItem
+from ..errors import not_found
 
 log = structlog.get_logger(__name__)
 
@@ -247,3 +249,27 @@ async def artifacts_of(session: AsyncSession, work_item_id: str) -> list[Artifac
         .scalars()
         .all()
     )
+
+
+def filename_of(row: ArtifactRecord) -> str:
+    """The file name a revision is downloaded and mounted under: its name, with its type's extension."""
+    extension = ARTIFACT_TYPES[row.type].extension if row.type in ARTIFACT_TYPES else ""
+    if not extension or row.name.lower().endswith(f".{extension}"):
+        return row.name
+    return f"{row.name}.{extension}"
+
+
+async def revision(session: AsyncSession, work_item_id: str, ref: str) -> ArtifactRecord:
+    """`name` is the latest revision, `name@3` the third; an artifact name never holds `@`."""
+    name, _, version = ref.partition("@")
+    query = select(ArtifactRecord).where(
+        ArtifactRecord.work_item_id == work_item_id, ArtifactRecord.name == name
+    )
+    if version:
+        if not version.isdigit():
+            raise not_found("Artifact", ref)
+        query = query.where(ArtifactRecord.version == int(version))
+    row = (await session.execute(query.order_by(ArtifactRecord.version.desc()).limit(1))).scalar_one_or_none()
+    if row is None:
+        raise not_found("Artifact", ref)
+    return row

@@ -31,6 +31,7 @@ from .config import RunnerSettings, get_settings
 from .dod import run_checks
 from .exits import Exit
 from .guardrails import GuardRails
+from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
@@ -183,7 +184,8 @@ class Runner:
             context = await client.fetch_context()
         except Exception:
             context = None
-        workspace.write_context_files(stage_input, context)
+        if (refus := await self._write_context(client, journal, stage_input, workspace, context)) is not None:
+            return refus
 
         # 4-5. backend et lancement
         backend = get_backend(stage_input.agent.backend)
@@ -320,6 +322,31 @@ class Runner:
             await journal.flush()
             return RunOutcome(Exit.SKILLS_INVALID, detail=str(exc))
         workspace.exclude(ecrites)
+        return None
+
+    async def _write_context(
+        self, client: Any, journal: Any, stage_input: StageInput, workspace: Workspace, context: Any
+    ) -> RunOutcome | None:
+        """`task.md` and `context.md`, then the declared inputs as files in `.choregos/inputs/`
+        (S31-03, ADR 0049), listed in `task.md`. An input that does not match its digest stops the
+        run; an API that cannot list them (older than this runner) leaves the agent its prompt."""
+        workspace.write_context_files(stage_input, context)
+        if not stage_input.transition.inputs:
+            return None
+        workspace.exclude([f"{INPUTS_DIR}/"])
+        try:
+            mounted = await mount_inputs(client, workspace.path)
+        except InputInvalidError as exc:
+            await journal.record("run.failed", {"phase": "inputs", "error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.INPUTS_INVALID, detail=str(exc))
+        except Exception as exc:
+            await journal.record("inputs.mounted", {"ok": False, "error": str(exc)[:300]})
+            return None
+        await journal.record("inputs.mounted", {"ok": True, "inputs": [m["path"] for m in mounted]})
+        if mounted:
+            task = workspace.path / ".choregos" / "task.md"
+            task.write_text(task.read_text(encoding="utf-8") + inputs_markdown(mounted), encoding="utf-8")
         return None
 
     def _prompt(self, stage_input: StageInput, workspace: Path) -> str:

@@ -637,6 +637,50 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/HandOff" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /work-items/{id}/artifacts:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: listWorkItemArtifacts
+      description: >-
+        Every revision of every artifact of the work item (ADR 0049), by name then version: its type,
+        media type, size, sha256 digest and the run that produced it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Artifact" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /work-items/{id}/artifacts/{ref}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: ref, in: path, required: true, description: "`name` for the latest revision, `name@version` for a given one", schema: { type: string } }
+    get:
+      tags: [work-items]
+      operationId: getWorkItemArtifact
+      description: One revision of an artifact, without its content.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Artifact" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /work-items/{id}/artifacts/{ref}/content:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: ref, in: path, required: true, description: "`name` for the latest revision, `name@version` for a given one", schema: { type: string } }
+    get:
+      tags: [work-items]
+      operationId: getWorkItemArtifactContent
+      description: >-
+        The bytes of a revision, with its media type, once their sha256 has been checked again. Content
+        that no longer matches its digest is refused (409), never served. Served sandboxed (CSP) so an
+        HTML or SVG artifact cannot run as the console.
+      parameters:
+        - { name: download, in: query, description: "attachment rather than inline", schema: { type: boolean, default: false } }
+      responses:
+        "200":
+          description: The content; `X-Choregos-Digest` and `ETag` carry the digest.
+          content: { "*/*": { schema: { type: string, format: binary } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /work-items/{id}/journey:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1529,6 +1573,32 @@ paths:
                     version: { type: integer }
                     digest: { type: string }
                     files: { type: object, additionalProperties: { type: string } }
+  /internal/runs/{id}/inputs:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunInputs
+      description: >-
+        The declared inputs of the run that an earlier step produced, latest revision of each (ADR 0049).
+        The runner mounts them as files in `.choregos/inputs/`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RunInputFile" } } } } }
+  /internal/runs/{id}/inputs/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [internal]
+      security: [{ runToken: [] }]
+      operationId: getRunInputContent
+      description: >-
+        The bytes of a declared input, digest checked; the read leaves a hand-off receipt (S25-04). An
+        input the run's transition does not declare is not served.
+      responses:
+        "200": { description: The content, content: { "*/*": { schema: { type: string, format: binary } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /internal/runs/{id}/ci-logs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3028,6 +3098,19 @@ components:
               ts: { type: string, format: date-time }
     StageInput: { $ref: "./schemas/stage-input.schema.json" }
     StageResult: { $ref: "./schemas/stage-result.schema.json" }
+    Artifact: { $ref: "./schemas/artifact.schema.json" }
+    RunInputFile:
+      type: object
+      description: A declared input of a run, as the runner mounts it in `.choregos/inputs/` (ADR 0049).
+      required: [name, version, filename, type, media_type, digest, size]
+      properties:
+        name: { type: string }
+        version: { type: integer }
+        filename: { type: string, description: "The name with its type's extension: `deck.pptx`." }
+        type: { type: string }
+        media_type: { type: string }
+        digest: { type: string, description: "sha256 of the bytes" }
+        size: { type: integer }
     ContextPack: { $ref: "./schemas/context-pack.schema.json" }
     Finding: { $ref: "./schemas/finding.schema.json" }
     InboundEvent: { $ref: "./schemas/inbound-event.schema.json" }
