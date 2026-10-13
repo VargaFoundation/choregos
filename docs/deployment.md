@@ -372,6 +372,8 @@ this bench does **not** prove.
 
 **Hardened runtime for agent pods.** `choregos-orchestrator.runner.runtimeClass` (gVisor, Kata) applies to every agent pod unless the project policy demands gVisor, which always wins. The strict Kyverno rule in `infra/policies/pod-security.yaml` refuses any pod of a platform or project namespace without a non-root, seccomp-profiled security context — the chart's own pods are checked against it by `tests/charts`.
 
+**Context reduction kill switch.** `choregos-orchestrator.runner.contextReduction.enabled: false` (env `CHOREGOS_CONTEXT_REDUCTION=off`) refuses rtk and headroom to every run, whatever a project's policy asks ([ADR 0055](adr/0055-fewer-tokens-per-run.md)). Left at `true`, each policy decides, and a policy without `context` reduces nothing.
+
 ## The first organisation, and the first token
 
 A fresh database has no organisation and no member. The chart bootstraps both:

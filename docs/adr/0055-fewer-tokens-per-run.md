@@ -39,7 +39,7 @@ store holds plaintext originals.
    through unchanged; LiteLLM still meters what is really sent, retrievals included (ADR 0004).
    `headroom wrap` is not used: it edits the agent's configuration and installs tools.
 4. **Off by default, three switches, the strictest wins:**
-   - the deployment: `CHOREGOS_CONTEXT_REDUCTION=off` (Helm `runner.contextReduction.enabled`)
+   - the deployment: `CHOREGOS_CONTEXT_REDUCTION=off` (Helm `choregos-orchestrator.runner.contextReduction.enabled`)
      turns both off whatever a policy says;
    - the policy: `Policy.context` — `shell_filter: none | rtk`, `compression: none | headroom`,
      `headroom_profile`, `on_unavailable: bypass | fail`, `rtk_exclude_commands`, and `per_role`

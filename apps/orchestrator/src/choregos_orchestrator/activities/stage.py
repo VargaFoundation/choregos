@@ -44,6 +44,7 @@ from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
+from ..context_reduction import resolve_context, stage_input_payload
 from .base import db, load_work_item, project_bundle
 from .bilan import collect_spend, record_run_outcome
 from .execution import (
@@ -272,10 +273,15 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 max_findings=engine.max_findings_per_run(),
                 unknown_requests=bundle.policy.sandbox.unknown_requests,
             ),
+            context=resolve_context(
+                bundle.policy.context,
+                plan.role,
+                allowed_by_deployment=settings.context_reduction,
+            ),
             callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=token),
         )
 
-        payload = stage_input.model_dump(mode="json", by_alias=True)
+        payload = stage_input_payload(stage_input)
         run = existing or Run(id=run_id, work_item_id=item.id, project_id=bundle.project.id)
         run.transition_id = plan.transition_id
         run.stage_role = plan.role
