@@ -147,12 +147,10 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             budget = Budget(usd=budget.usd, max_turns=plan.max_turns, max_minutes=budget.max_minutes)
         if plan.max_minutes:
             budget = Budget(usd=budget.usd, max_turns=budget.max_turns, max_minutes=plan.max_minutes)
-        if agent is not None and agent.spec.budget.run_usd is not None:
-            budget = Budget(
-                usd=min(budget.usd, agent.spec.budget.run_usd),
-                max_turns=budget.max_turns,
-                max_minutes=budget.max_minutes,
-            )
+        reservation = await _reservation(session, bundle, item, run_id, agent, budget.usd)
+        if reservation.below(settings.min_run_reservation_usd):
+            return await _refuse_on_budget(session, bundle, item, run_id, plan, reservation)
+        budget = Budget(usd=reservation.usd, max_turns=budget.max_turns, max_minutes=budget.max_minutes)
 
         await _admettre(bundle, item, run_id, plan, backend, budget.usd)
 
@@ -349,6 +347,62 @@ async def _admettre(
         raise ApplicationError(
             f"run refused before it started — {refus}", type="admission_refused", non_retryable=True
         ) from refus
+
+
+async def _reservation(
+    session: Any, bundle: Any, item: Any, run_id: str, agent: Any, stage_usd: float
+) -> Any:
+    """What this run may spend (ADR 0047): the smallest of what is left under the stage budget, the
+    agent's run and day budgets, the ticket budget and the project's day budget."""
+    from choregos_api.services.agents import depense_du_jour
+    from choregos_api.services.budgets import (
+        open_reservations,
+        project_spent_since,
+        reserve,
+        start_of_day,
+        ticket_spent,
+    )
+
+    engine = bundle.engine
+    left: dict[str, float | None] = {"stage": stage_usd}
+    if agent is not None:
+        left["agent_run"] = agent.spec.budget.run_usd
+        if agent.spec.budget.daily_usd is not None:
+            spent = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
+            left["agent_day"] = agent.spec.budget.daily_usd - spent
+    left["ticket"] = (
+        engine.budget_ticket(item.size)
+        - await ticket_spent(session, item.id)
+        - await open_reservations(session, work_item_id=item.id, exclude_run=run_id)
+    )
+    if (day := engine.daily_budget()) is not None:
+        left["project_day"] = (
+            day
+            - await project_spent_since(session, bundle.project.id, start_of_day())
+            - await open_reservations(session, project_id=bundle.project.id, exclude_run=run_id)
+        )
+    return reserve(left)
+
+
+async def _refuse_on_budget(
+    session: Any, bundle: Any, item: Any, run_id: str, plan: StagePlan, reservation: Any
+) -> dict[str, Any]:
+    """Not enough left to start: no key, no run. The interpreter sends the ticket to a person."""
+    detail = f"the stage `{plan.role}` did not start: {reservation.describe()}"
+    logger.info("stage refused on budget", run_id=run_id, bound_by=reservation.bound_by)
+    await persist_event(
+        session,
+        EventType.COST_ALERT,
+        project_id=bundle.project.id,
+        work_item_id=item.id,
+        project_slug=bundle.slug,
+        subject=item.tracker_key,
+        reason="budget",
+        stage=plan.role,
+        bound_by=reservation.bound_by,
+        left=reservation.left,
+    )
+    return {"run_id": run_id, "refused": {"reason": "budget", "detail": detail}}
 
 
 def _run_id(plan: StagePlan) -> str:

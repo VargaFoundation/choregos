@@ -130,3 +130,9 @@ A budget is a reservation ([ADR 0047](adr/0047-a-budget-is-a-reservation.md)). W
 refuses a run's key because it is spent, the runner ends the run with `reason: budget`, and the
 work item goes to `on_budget_exceeded` (else `on_question`, else the retry policy's `escalate_to`):
 a person decides. A stage stopped on budget is **never retried** — a retry would mint a fresh key.
+
+A run's key is minted at what is **left**: the smallest of the stage budget, the agent's run and day
+budgets, the ticket budget and the project's day budget (`daily_project_usd`), each minus what the
+cost ledger says was spent (models and tools) and minus the keys still open. Below
+`CHOREGOS_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
+the work item goes to a person the same way.

@@ -61,6 +61,9 @@ class OrchestratorSettings(BaseSettings):
     # (`sandbox.runtime: gvisor` l'emporte). Vide : la runtime par défaut du cluster. Un
     # cluster qui a gVisor ou Kata le dit ici une fois, plutôt que projet par projet.
     runner_runtime_class: str = ""
+    #: Below this reservation (USD), a stage does not start: its key would be refused at its first
+    #: model call (ADR 0047, S27-02). `CHOREGOS_MIN_RUN_RESERVATION_USD`.
+    min_run_reservation_usd: float = Field(default=0.01, ge=0)
 
     @property
     def callback_url(self) -> str:
