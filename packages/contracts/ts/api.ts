@@ -494,6 +494,8 @@ export type AgentSpec = {
   }>;
   /** The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published */
   evals?: Array<AgentEvalCase>;
+  /** whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none */
+  memory?: "none" | "project" | "agent";
 };
 
 /** A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not. */

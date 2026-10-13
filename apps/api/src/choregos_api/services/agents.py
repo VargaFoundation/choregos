@@ -25,6 +25,10 @@ def empreinte(spec: AgentSpec) -> str:
     # Added after versions were published (ADR 0051): absent, it leaves their digest unchanged.
     if not contenu.get("knowledge"):
         contenu.pop("knowledge", None)
+    # The default memory scope (S32-02) is left out: a version published before the field existed
+    # keeps its digest, and the catalogue does not see every agent as changed.
+    if contenu.get("memory") == "project":
+        del contenu["memory"]
     blob = json.dumps(contenu, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 

@@ -378,3 +378,50 @@ async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending
         }
     with pytest.raises(ApplicationError, match="second reviewer"):
         await prepare_stage(_plan(setup, agent="coordinateur", attempt=2))
+
+async def _memory_of_the_run(
+    setup: Fixture, scope: str | None, attempt: int
+) -> tuple[dict[str, Any], list[str]]:
+    from choregos_api.db.models import AgentVersion, Run
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import prepare_stage
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        version = (await session.execute(select(AgentVersion))).scalar_one()
+        spec = {k: v for k, v in version.spec.items() if k != "memory"}
+        version.spec = spec if scope is None else {**spec, "memory": scope}
+    prepared = await prepare_stage(_plan(setup, agent="coordinateur", attempt=attempt))
+    async with session_scope() as session:
+        run = await session.get(Run, prepared["run_id"])
+        assert run is not None
+        subjects = [m["subject"] for m in (run.context_pack or {}).get("memories", [])]
+    return prepared["stage_input"], subjects
+
+
+async def test_the_agent_memory_scope_decides_what_the_run_reads(setup: Fixture) -> None:
+    """S32-02: `project` reads the project's memory (as before), `agent` its own within the
+    project, `none` nothing — and the memory server, which serves the project's memory, is only
+    handed to a run whose scope is the project."""
+    from choregos_core import memory_namespace
+
+    await _agent(setup)
+    setup.adapters.memory.seed(
+        setup.project_slug, "convention", "project:convention", "shared by the project"
+    )
+    setup.adapters.memory.seed(
+        memory_namespace(setup.project_slug, "agent", "coordinateur"),
+        "convention",
+        "agent:convention",
+        "the coordinator's own lesson",
+    )
+
+    entree, lues = await _memory_of_the_run(setup, None, attempt=1)
+    assert entree["memory_scope"] == "project" and lues == ["project:convention"], "unchanged by default"
+
+    entree, lues = await _memory_of_the_run(setup, "agent", attempt=2)
+    assert entree["memory_scope"] == "agent" and lues == ["agent:convention"]
+    assert "memory" not in entree["tools"]["mcp"]
+
+    entree, lues = await _memory_of_the_run(setup, "none", attempt=3)
+    assert entree["memory_scope"] == "none" and lues == []

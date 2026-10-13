@@ -451,6 +451,9 @@ class MemoryFact(Base, PkMixin, TimestampMixin):
     proposed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     embedding: Mapped[list[str] | None] = mapped_column(Json, nullable=True)
     paths: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: The agent whose own memory this is (S32-02, `memory: agent`); `None` for the project's
+    #: shared memory. An agent's facts are read by that agent only, in this project only.
+    agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
 
 class WebhookDelivery(Base, PkMixin):

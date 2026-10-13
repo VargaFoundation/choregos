@@ -74,7 +74,7 @@ __all__ = [
 logger = get_logger("choregos.stage")
 
 
-def _serveurs_mcp(settings: Any) -> dict[str, McpServerRef]:
+def _serveurs_mcp(settings: Any, memory_scope: str = "project") -> dict[str, McpServerRef]:
     """Les serveurs MCP qu'on annonce à l'agent — ceux qui existent, et eux seuls.
 
     Les deux étaient écrits en dur, et les deux étaient faux sur le locataire dev du 2026-09-27 :
@@ -87,7 +87,9 @@ def _serveurs_mcp(settings: Any) -> dict[str, McpServerRef]:
     serveurs: dict[str, McpServerRef] = {}
     if url := settings.url_du_sidecar_d_outils:
         serveurs["choregos"] = McpServerRef(url=url)
-    if settings.memory_url:
+    # The memory server serves the PROJECT's memory: an agent whose scope is its own (or none) does
+    # not get it — it would read and write past its scope (S32-02).
+    if settings.memory_url and memory_scope == "project":
         serveurs["memory"] = McpServerRef(url=f"{settings.memory_url.rstrip('/')}/mcp")
     return serveurs
 
@@ -204,7 +206,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             existante.budget_usd = budget.usd
             existante.expires_at = key.expires_at
 
-        context_pack = await _context_pack(bundle, item, plan)
+        memory_scope = _memory_scope(agent)
+        context_pack = await _context_pack(bundle, item, plan, memory_scope, agent)
         await garde_contre_l_injection(session, bundle, item, run_id, plan, context_pack)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
         digest = sha256(playbook_prompt.encode()).hexdigest()[:12]
@@ -274,7 +277,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             allowed_paths=allowed_paths,
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
-            tools=ToolsRef(mcp=_serveurs_mcp(settings)),
+            tools=ToolsRef(mcp=_serveurs_mcp(settings, memory_scope)),
+            memory_scope=memory_scope,
             skills=await _skills_de_l_agent(session, bundle, agent),
             knowledge=await _knowledge_of_agent(session, bundle, agent),
             permissions=Permissions(
@@ -439,11 +443,22 @@ def _run_id(plan: StagePlan) -> str:
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
 
 
-async def _context_pack(bundle: Any, item: Any, plan: StagePlan) -> ContextPack:
-    """Mémoire bornée par rôle ; une panne rend un pack vide plutôt que de bloquer l'étape."""
+def _memory_scope(agent: Any) -> str:
+    """The agent version's memory scope (S32-02); `project` for a playbook, as before."""
+    return str(getattr(getattr(agent, "spec", None), "memory", None) or "project")
+
+
+async def _context_pack(
+    bundle: Any, item: Any, plan: StagePlan, memory_scope: str = "project", agent: Any = None
+) -> ContextPack:
+    """Mémoire bornée par rôle ; une panne rend un pack vide plutôt que de bloquer l'étape. Lue
+    dans la portée de l'agent (S32-02) : le projet, la sienne, ou aucune."""
+    from choregos_core import memory_namespace
+
     engine = bundle.engine
     budget_tokens = engine.memory_budget(plan.role)
-    if budget_tokens <= 0:
+    espace = memory_namespace(bundle.slug, memory_scope, agent.agent.slug if agent is not None else None)
+    if budget_tokens <= 0 or espace is None:
         return ContextPack.empty(item.title)
     kinds_by_role = {
         "refine": ["decision", "incident", "ticket_summary"],
@@ -456,7 +471,7 @@ async def _context_pack(bundle: Any, item: Any, plan: StagePlan) -> ContextPack:
     try:
         return await asyncio.wait_for(
             bundle.adapters.memory.context_pack(
-                bundle.slug,
+                espace,
                 query,
                 list(item.allowed_paths or []),
                 budget_tokens,

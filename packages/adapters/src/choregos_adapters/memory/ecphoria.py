@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 from choregos_contracts import ContextPack, MemoryItem, RelatedItem
 from choregos_core.domain import Fact, Memory, Provenance, utcnow
+from choregos_core.memory_scope import split_namespace
 
 from ..errors import UpstreamError
 
@@ -44,7 +45,12 @@ class EcphoriaMemory:
         await self._client.aclose()
 
     def _headers(self, project: str) -> dict[str, str]:
+        # An agent's own memory (S32-02) is the namespace `<project>#agent:<slug>`: without a
+        # configured tenant it is its own tenant, so it never mixes with the project's; with one,
+        # the namespace travels in its own header.
         headers = {"Content-Type": "application/json", "X-Ecphoria-Tenant": self.tenant or project}
+        if split_namespace(project)[1] is not None:
+            headers["X-Ecphoria-Namespace"] = project
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers

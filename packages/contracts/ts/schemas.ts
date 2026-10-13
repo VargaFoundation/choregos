@@ -469,6 +469,8 @@ export type StageInput = {
     api_url: string;
     run_token: string;
   };
+  /** Whose memory the run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none. */
+  memory_scope?: "none" | "project" | "agent";
   /** The registry agent's skills (ADR 0033): name, version, digest. The runner reads the files through the internal API and checks the digest before laying them down. */
   skills?: Array<{
     slug: string;
