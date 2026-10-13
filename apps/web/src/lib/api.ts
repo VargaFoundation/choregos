@@ -31,6 +31,7 @@ import type {
   ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
+  Artifact,
   ArtifactRef,
   AdminSection,
   AuditPage,
@@ -163,6 +164,28 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+async function artifactContent(id: string, ref: string): Promise<Blob> {
+  if (IS_MOCK) {
+    const { mockArtifactContent } = await import("@/mocks/data");
+    return mockArtifactContent(id, ref);
+  }
+  const response = await fetch(`${API_BASE}/work-items/${id}/artifacts/${encodeURIComponent(ref)}/content`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    let problem: { title?: string; detail?: string } = {};
+    try {
+      problem = await response.json();
+    } catch {
+      problem = { title: response.statusText };
+    }
+    if (response.status === 401) versLaConnexion();
+    throw new ApiError(response.status, problem);
+  }
+  return response.blob();
 }
 
 export const api = {
@@ -395,6 +418,10 @@ export const api = {
   timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
   /** Les reçus de passage d'un ticket (S25-04) : qui a produit, qui a lu, sous quelle empreinte. */
   handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),
+  /** Every revision of every artifact of a work item (ADR 0049). */
+  artifacts: (id: string) => request<Artifact[]>(`/work-items/${id}/artifacts`),
+  /** The bytes of one revision (`name@version`), digest checked by the API; a refusal is an `ApiError`. */
+  artifactContent: (id: string, ref: string) => artifactContent(id, ref),
   /** Le parcours du ticket dans SON workflow, en une lecture : ce que la carte animée dessine (S22-01). */
   journey: (id: string) => request<WorkItemJourney>(`/work-items/${id}/journey`),
   decide: (id: string, body: unknown) =>

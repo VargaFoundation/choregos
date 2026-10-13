@@ -31,6 +31,7 @@ import type {
   ReleasePage,
   Run,
   RunEventDto,
+  Artifact,
   HandOff,
   TimelineEntry,
   TrainStatus,
@@ -196,6 +197,101 @@ function item(
     created_at: iso(60 * 20),
     closed_at: extra.closed ? iso(60 * 2) : undefined,
   };
+}
+
+// ─── artifacts (ADR 0049): two revisions of the spec, a SARIF report, an image ───
+const SPEC_V1 = "# Credit notes\n\nDeduct credit notes from the order total.\n";
+const SPEC_V2 =
+  "# Credit notes\n\nDeduct **credit notes** from the order total, then round half to even.\n\n## Acceptance\n\n- a credit note lowers the total\n- `total()` never goes negative\n";
+const SARIF = JSON.stringify({
+  version: "2.1.0",
+  runs: [
+    {
+      tool: { driver: { name: "semgrep" } },
+      results: [
+        {
+          ruleId: "python.lang.security.sql-injection",
+          level: "error",
+          message: { text: "SQL built from user input" },
+          locations: [{ physicalLocation: { artifactLocation: { uri: "src/orders/repository.py" }, region: { startLine: 88 } } }],
+        },
+        {
+          ruleId: "python.lang.best-practice.open-never-closed",
+          level: "warning",
+          message: { text: "file opened without a context manager" },
+          locations: [{ physicalLocation: { artifactLocation: { uri: "src/orders/export.py" }, region: { startLine: 12 } } }],
+        },
+      ],
+    },
+  ],
+});
+/** A valid 1×1 PNG: what an image model behind the gateway would have produced. */
+const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+const SPEC_V1_DIGEST = "sha256:9f2c4e1a7b3d5c8e0f6a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e";
+
+function digestOf(seed: string): string {
+  return `sha256:${seed.repeat(64).slice(0, 64)}`;
+}
+
+function artifactOf(
+  name: string,
+  version: number,
+  type: Artifact["type"],
+  kind: Artifact["kind"],
+  media_type: string,
+  size: number,
+  run_id: string,
+  stage: string,
+  minutesAgo: number,
+  agent?: [string, number],
+): Artifact {
+  return {
+    name,
+    type,
+    kind,
+    media_type,
+    version,
+    // The spec v1 carries the digest of its hand-off receipt: the receipt links to its readers.
+    digest: name === "spec_markdown" && version === 1 ? SPEC_V1_DIGEST : digestOf(`${name.length}${version}`),
+    size,
+    produced_by: { run_id, stage, attempt: 1, agent: agent?.[0] ?? null, agent_version: agent?.[1] ?? null },
+    storage_url: kind === "markdown" || kind === "json" ? null : `s3://choregos/orgs/varga/work-items/w1/artifacts/${name}`,
+    created_at: iso(minutesAgo),
+  };
+}
+
+export const artifacts: Artifact[] = [
+  artifactOf("spec_markdown", 1, "markdown", "markdown", "text/markdown", SPEC_V1.length, "r1", "refine", 235, ["analyst", 3]),
+  artifactOf("spec_markdown", 2, "markdown", "markdown", "text/markdown", SPEC_V2.length, "r2", "refine", 130, ["analyst", 3]),
+  artifactOf("security_report", 1, "sarif", "report", "application/sarif+json", SARIF.length, "r3", "implement", 50),
+  artifactOf("architecture.png", 1, "png", "file", "image/png", 68, "r3", "implement", 50),
+  // A revision whose stored bytes no longer match its digest: the API refuses it (409).
+  artifactOf("budget_summary", 1, "markdown", "markdown", "text/markdown", 120, "r3", "implement", 45),
+];
+
+const ARTIFACT_CONTENT: Record<string, [string, () => BlobPart]> = {
+  "spec_markdown@1": ["text/markdown", () => SPEC_V1],
+  "spec_markdown@2": ["text/markdown", () => SPEC_V2],
+  "security_report@1": ["application/sarif+json", () => SARIF],
+  "architecture.png@1": ["image/png", () => Uint8Array.from(atob(PNG_B64), (c) => c.charCodeAt(0))],
+};
+
+/** The bytes of a revision in demo mode; `budget_summary` plays a revision altered behind the platform. */
+export async function mockArtifactContent(_id: string, ref: string): Promise<Blob> {
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  const [name, version] = ref.split("@");
+  const latest = artifacts.filter((a) => a.name === name).at(-1);
+  const key = version ? ref : `${name}@${latest?.version ?? 1}`;
+  const entry = ARTIFACT_CONTENT[key];
+  if (!entry) {
+    const { ApiError } = await import("@/lib/api");
+    throw new ApiError(409, {
+      title: "Conflict",
+      detail: `artifact \`${name}\` v${version ?? 1}: its content no longer matches its digest — it is not served`,
+    });
+  }
+  return new Blob([entry[1]()], { type: entry[0] });
 }
 
 export const handOffs: HandOff[] = [
@@ -1505,6 +1601,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/connectors$/, [{ id: "c-tracker", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }]],
     [/^\/work-items\/[^/]+\/timeline$/, timeline],
     [/^\/work-items\/[^/]+\/hand-offs$/, handOffs],
+    [/^\/work-items\/[^/]+\/artifacts$/, artifacts],
+    [/^\/work-items\/[^/]+\/artifacts$/, artifacts],
     [/^\/work-items\/[^/]+\/runs$/, runs],
     [/^\/runs\/[^/]+\/events$/, runEvents],
     [/^\/runs\/[^/]+\/access$/, runAccess],

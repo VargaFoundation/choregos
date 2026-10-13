@@ -93,6 +93,9 @@ export type {
   SkillVersion,
 } from "@choregos/contracts/api";
 
+/** One revision of a named output of a work item (ADR 0049). */
+export type { Artifact } from "@choregos/contracts/schemas";
+
 /** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */
 export type {
   UiManifest as AdminSection,

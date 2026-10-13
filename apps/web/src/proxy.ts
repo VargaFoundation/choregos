@@ -21,7 +21,8 @@ export function proxy(request: NextRequest) {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
+    // `blob:`: an image artifact is shown from the bytes the API served, digest checked (ADR 0049).
+    "img-src 'self' data: blob:",
     "font-src 'self'",
     `connect-src 'self' ${apiUrl}`,
     "object-src 'none'",

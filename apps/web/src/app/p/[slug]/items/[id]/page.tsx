@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { GesteConfirme } from "@/components/geste-confirme";
+import { Artifacts } from "@/components/artifacts";
 import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
 
@@ -32,6 +33,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   // Les reçus de passage (S25-04) : qui a produit chaque sortie d'étape, qui l'a lue, sous quelle empreinte.
   const passages = useQuery({ queryKey: ["hand-offs", id], queryFn: () => api.handOffs(id) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
+  // What the steps left, typed, stored, digest-checked (ADR 0049).
+  const artifacts = useQuery({ queryKey: ["artifacts", id], queryFn: () => api.artifacts(id) });
   const journey = useQuery({
     queryKey: ["journey", id],
     queryFn: () => api.journey(id),
@@ -204,6 +207,16 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           {timeline.data?.length === 0 && <Empty>nothing to show</Empty>}
         </Card>
       </div>
+
+      <Card title="artifacts" action={<Provenance de="observed" />}>
+        {artifacts.error ? (
+          <p className="text-sm text-ink-muted">the artifacts cannot be read: {(artifacts.error as Error).message}</p>
+        ) : artifacts.data ? (
+          <Artifacts itemId={id} slug={slug} artifacts={artifacts.data} handOffs={passages.data ?? []} />
+        ) : (
+          <Empty>loading the artifacts…</Empty>
+        )}
+      </Card>
 
       {(passages.data ?? []).length > 0 && (
         <Card title="hand-offs" action={<Provenance de="observed" />}>
