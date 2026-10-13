@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +15,25 @@ from choregos_orchestrator.activities import evals
 from .conftest import Fixture
 
 TICKETS = sorted(evals.TICKETS.glob("*.yaml"))
+
+
+def _node_major() -> int | None:
+    """The installed Node's major version, or `None` without Node."""
+    node = shutil.which("node")
+    if node is None:
+        return None
+    found = re.match(
+        r"v(\d+)", subprocess.run([node, "--version"], capture_output=True, text=True, check=False).stdout
+    )
+    return int(found.group(1)) if found else None
+
+
+#: The node toy repos run `node --test "test/**/*.test.js"`: glob patterns need Node 21+ (CI uses 24).
+#: Under an older Node the command answers "Could not find …/*.test.js", which reads as a product bug.
+needs_node_with_globs = pytest.mark.skipif(
+    (_node_major() or 0) < 22,
+    reason="the node toy repos run `node --test` with a glob: needs Node >= 22 (CI uses 24)",
+)
 
 
 def test_il_y_a_des_tickets_de_reference_et_des_depots_jouets() -> None:
@@ -55,6 +77,7 @@ async def test_la_liste_des_fixtures_est_celle_du_depot(setup: Fixture) -> None:
     assert await evals.list_fixtures({}) == [p.stem for p in TICKETS]
 
 
+@needs_node_with_globs
 async def test_une_cellule_avec_memoire_valide_les_tickets(setup: Fixture) -> None:
     cell = await evals.run_eval_cell(
         {
@@ -73,6 +96,7 @@ async def test_une_cellule_avec_memoire_valide_les_tickets(setup: Fixture) -> No
     assert cell["median_cost_usd"] and cell["median_duration_s"]
 
 
+@needs_node_with_globs
 async def test_sans_memoire_la_convention_projet_est_perdue(setup: Fixture) -> None:
     """Sans mémoire, l'agent écrit du flottant là où le projet compte en centimes."""
     cell = await evals.run_eval_cell(

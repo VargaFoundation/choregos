@@ -90,12 +90,22 @@ def _installer(racine: pathlib.Path, nom: str, source: str) -> None:
 def greffon_ee_installe(tmp_path: pathlib.Path) -> Iterator[pathlib.Path]:
     """Installe le greffon, et **nettoie tout** : l'édition et le mappeur sont des états de module."""
     from choregos_api.edition import reinitialiser
+    from choregos_core import gates
 
+    # The plugin registers a gate (`@gate`) in the core's module-level registries: snapshot them, or
+    # the gate outlives the test and `packages/core` tests that expect the shipped gates only (and
+    # every gate to have a summary) fail depending on which tests ran before.
+    gates_avant = (dict(gates._REGISTRY), set(gates._ASYNC_GATES), dict(gates._NEEDS))
     sys.path.insert(0, str(tmp_path))
     _installer(tmp_path, "choregos_ee_factice", GREFFON_EE)
     try:
         yield tmp_path
     finally:
+        for registre, avant in zip(
+            (gates._REGISTRY, gates._ASYNC_GATES, gates._NEEDS), gates_avant, strict=True
+        ):
+            registre.clear()
+            registre.update(avant)  # type: ignore[arg-type]
         sys.path.remove(str(tmp_path))
         sys.modules.pop("choregos_ee_factice", None)
         reinitialiser()
