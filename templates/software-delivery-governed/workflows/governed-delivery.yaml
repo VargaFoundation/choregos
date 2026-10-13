@@ -1,0 +1,229 @@
+# Governed delivery (S33-07, plan item 3): study → architecture → plan → implement → QA, security,
+# supply chain and compliance → docs → release readiness → pull request → train → verification.
+#
+# The checks after implementation run one after the other: the DSL has no parallel branches. Each one
+# can send the work back (`addressing_review`) with its report; the review responder answers, and the
+# whole sequence runs again on what changed.
+#
+# People decide at four points: the architects approve the decision record, compliance officers decide
+# on the compliance review (the agent recommends, it never decides: `human_gate_after` in the
+# catalogue), maintainers approve the pull request, the release captains approve production — through
+# the train (ADR 0041). The DevOps agent never deploys: it plans before the train, and verifies after.
+#
+# The documentation writer can only write inside the work item's allowed paths: the specification should
+# name the documentation paths, or the writer asks for them with `request_scope_change`.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: governed-delivery
+  version: 1
+  description: "A change that passes everything: research, an approved decision record, a specification and a plan, implementation, QA with mutation testing, security review, supply-chain scan, compliance review decided by people, documentation, release readiness, an approved pull request, staging, production approved by a release captain, and a verification from observed signals."
+initial: inbox
+actors:
+  triager: { type: agent, role: triage, agent: triager, model: "profile:cheap" }
+  researcher: { type: agent, role: research, agent: researcher, model: "profile:standard" }
+  architect: { type: agent, role: architect, agent: architect, model: "profile:strong" }
+  spec_writer: { type: agent, role: refine, agent: spec-writer, model: "profile:standard" }
+  planner: { type: agent, role: plan, agent: planner, model: "profile:standard" }
+  developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
+  qa: { type: agent, role: verify, agent: qa, model: "profile:standard" }
+  security_reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true }
+  secops: { type: agent, role: review, agent: secops, model: "profile:standard", fresh_context: true }
+  compliance: { type: agent, role: review, agent: compliance, model: "profile:standard", fresh_context: true }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
+  docs_writer: { type: agent, role: implement, agent: docs-writer, model: "profile:standard" }
+  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard" }
+  devops: { type: agent, role: verify_prod, agent: devops, model: "profile:standard" }
+  platform: { type: system }
+  architects: { type: human, group: architects, sla_hours: 48 }
+  compliance_officers: { type: human, group: compliance-officers, sla_hours: 48 }
+  maintainers: { type: human, group: maintainers, sla_hours: 24 }
+  captain: { type: human, group: release-captains, sla_hours: 4 }
+states:
+  inbox: { display: To triage, kind: wait, tracker: { status: Todo } }
+  triaged: { display: Triaged, tracker: { status: Triaged } }
+  studied: { display: Studied, tracker: { status: In progress } }
+  awaiting_architecture_approval: { display: Decision record to approve, kind: wait, tracker: { status: Needs review } }
+  architecture_approved: { display: Architecture approved, tracker: { status: Ready } }
+  specified: { display: Specified, tracker: { status: Ready } }
+  planned: { display: Planned, tracker: { status: Ready } }
+  implemented: { display: Implemented, tracker: { status: In progress } }
+  tested: { display: Tested, tracker: { status: In progress } }
+  security_reviewed: { display: Security reviewed, tracker: { status: In progress } }
+  supply_chain_checked: { display: Supply chain checked, tracker: { status: In progress } }
+  awaiting_compliance_decision: { display: Compliance review to decide, kind: wait, tracker: { status: Needs review } }
+  compliance_cleared: { display: Compliance cleared, tracker: { status: In progress } }
+  addressing_review: { display: Addressing the reviews, tracker: { status: In progress } }
+  documented: { display: Documented, tracker: { status: In progress } }
+  ready_to_release: { display: Ready to release, tracker: { status: In progress } }
+  awaiting_pr_approval: { display: Pull request to approve, kind: wait, tracker: { status: In review } }
+  pr_approved: { display: Pull request approved, tracker: { status: In review } }
+  fixing_ci: { display: Fixing the CI, tracker: { status: In progress } }
+  integrated: { display: Merged, tracker: { status: Merged } }
+  staged: { display: In staging, tracker: { status: Staging } }
+  live: { display: In production, production: true, tracker: { status: Deployed } }
+  verified: { display: Verified in production, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-triage
+    from: inbox
+    to: triaged
+    by: triager
+    outputs: [size, risk]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-study
+    from: triaged
+    to: studied
+    by: researcher
+    outputs: [research_markdown]
+    on_fail: { to: triaged, max_attempts: 2, escalate_to: needs_human }
+  - id: t-architecture
+    from: studied
+    to: awaiting_architecture_approval
+    by: architect
+    inputs: [research_markdown, human_feedback]
+    outputs: [adr_path, adr_markdown]
+    on_fail: { to: studied, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-architecture
+    from: awaiting_architecture_approval
+    to: architecture_approved
+    by: architects
+    on_reject: studied
+  - id: t-specify
+    from: architecture_approved
+    to: specified
+    by: spec_writer
+    inputs: [adr_markdown, human_feedback]
+    outputs: [spec_markdown, allowed_paths]
+    on_fail: { to: architecture_approved, max_attempts: 2, escalate_to: needs_human }
+  - id: t-plan
+    from: specified
+    to: planned
+    by: planner
+    inputs: [adr_markdown]
+    outputs: [plan_markdown]
+    on_fail: { to: specified, max_attempts: 2, escalate_to: needs_human }
+  - id: t-implement
+    from: planned
+    to: implemented
+    by: developer
+    inputs: [test_report, human_feedback]
+    gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }]
+    on_fail: { to: planned, max_attempts: 3, escalate_to: needs_human }
+  - id: t-qa
+    from: implemented
+    to: tested
+    by: qa
+    outputs: [test_plan, mutation_report, test_report]
+    gates: [evidence_present]
+    on_fail: { to: planned, max_attempts: 3, escalate_to: needs_human }
+  - id: t-security-review
+    from: tested
+    to: security_reviewed
+    by: security_reviewer
+    outputs: [security_review_markdown, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-supply-chain
+    from: security_reviewed
+    to: supply_chain_checked
+    by: secops
+    outputs: [secops_report, sarif, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-compliance
+    from: supply_chain_checked
+    to: awaiting_compliance_decision
+    by: compliance
+    outputs: [compliance_review, verdict]
+    on_fail: { to: supply_chain_checked, max_attempts: 2, escalate_to: needs_human }
+  - id: t-decide-compliance
+    from: awaiting_compliance_decision
+    to: compliance_cleared
+    by: compliance_officers
+    on_reject: addressing_review
+  - id: t-address-review
+    from: addressing_review
+    to: implemented
+    by: responder
+    inputs: [security_review_markdown, secops_report, compliance_review, human_feedback]
+    outputs: [review_markdown]
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-document
+    from: compliance_cleared
+    to: documented
+    by: docs_writer
+    outputs: [docs_report]
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: compliance_cleared, max_attempts: 2, escalate_to: needs_human }
+  - id: t-release-readiness
+    from: documented
+    to: ready_to_release
+    by: devops
+    outputs: [rollout_plan, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-open-pr
+    from: ready_to_release
+    to: awaiting_pr_approval
+    by: platform
+    does: open_pr
+    on_fail: { to: ready_to_release, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-pr
+    from: awaiting_pr_approval
+    to: pr_approved
+    by: maintainers
+    on_reject: addressing_review
+  - id: t-merge
+    from: pr_approved
+    to: integrated
+    by: platform
+    does: merge_pr
+    gates: [ci_green]
+    timeout_hours: 24
+    on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
+  - id: t-fix-ci
+    from: fixing_ci
+    to: awaiting_pr_approval
+    by: ci_fixer
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+  - id: t-stage
+    from: integrated
+    to: staged
+    via: release_train
+    train: { env: staging }
+    timeout_hours: 72
+  - id: t-release
+    from: staged
+    to: live
+    via: release_train
+    train: { env: prod, approval: captain }
+    timeout_hours: 96
+  - id: t-verify
+    from: live
+    to: verified
+    by: devops
+    inputs: [rollout_plan]
+    outputs: [devops_report, verdict]
+    gates:
+      - { name: outputs_in, params: { values: { verdict: [approve] } } }
+    on_fail: { to: live, max_attempts: 1, escalate_to: needs_human }
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: maintainers
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned
