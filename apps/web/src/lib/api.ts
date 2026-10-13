@@ -19,6 +19,8 @@ import type {
   AgentCatalogueEntry,
   AgentCreate,
   AgentCredential,
+  AgentLifecycleChange,
+  AgentLifecycleResult,
   AgentMetrics,
   AgentPatch,
   AgentSpec,
@@ -271,6 +273,11 @@ export const api = {
     request<Agent>(`/orgs/${org}/agents`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (org: string, slug: string, body: AgentPatch) =>
     request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /** Its life (S32-04): activate a draft, deprecate, retire — retiring runs its checklist. */
+  changeAgentLifecycle: (org: string, slug: string, body: AgentLifecycleChange) =>
+    request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),
+  transferAgentOwnership: (org: string, slug: string, email: string) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/owner`, { method: "POST", body: JSON.stringify({ email }) }),
   publishAgentVersion: (org: string, slug: string, spec: AgentSpec) =>
     request<AgentVersion>(`/orgs/${org}/agents/${slug}/versions`, { method: "POST", body: JSON.stringify(spec) }),
   agentMetrics: (org: string, slug: string, days = 30) =>

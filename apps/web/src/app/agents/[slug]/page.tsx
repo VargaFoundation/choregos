@@ -4,6 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
+import { LifecycleBadges, LifecyclePanel } from "@/components/agents/lifecycle";
 import { estUnClientMcp, etatDuClient, resumeDeLaVersion } from "@/components/agents/registre";
 import { Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Input, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -34,11 +35,15 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         <span className="text-sm text-ink-muted">{a.slug}</span>
         <Badge tone={a.kind === "external" ? "accent" : "neutral"}>{a.kind}</Badge>
         <Badge tone={a.status === "active" ? "ok" : "danger"}>{a.status}</Badge>
+        <LifecycleBadges agent={a} />
         {a.owner && <span className="text-xs text-ink-muted">Owned by {a.owner}</span>}
         {a.expires_at && <span className="text-xs text-ink-muted">Expires {shortDate(a.expires_at)}</span>}
       </div>
       {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
       <Statut org={org} agent={a} />
+      <Card title="lifecycle">
+        <LifecyclePanel org={org} agent={a} />
+      </Card>
       <Mesures org={org} slug={slug} />
       <Versions org={org} agent={a} />
       {a.kind === "external" && <Clients org={org} slug={slug} />}

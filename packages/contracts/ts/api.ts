@@ -490,6 +490,8 @@ export type AgentCreate = {
   display_name: string;
   description?: string | null;
   spec?: AgentSpec;
+  /** a draft is neither pinned nor run until it is activated */
+  lifecycle?: "draft" | "active";
 };
 
 /** An agent the platform's catalogue offers (ADR 0040), and its state in the organisation. */
@@ -563,6 +565,31 @@ export type Agent = {
   latest_version: number;
   created_at?: string | null;
   versions?: Array<AgentVersion> | null;
+  /** where the agent is in its life (S32-04); apart from the operational status */
+  lifecycle?: "draft" | "active" | "deprecated" | "retired";
+  retired_at?: string | null;
+  last_run_at?: string | null;
+  /** no run for 60 days (since its creation if it never ran) */
+  unused?: boolean;
+};
+
+export type AgentLifecycleChange = {
+  to: "active" | "deprecated" | "retired";
+  /** retire although runs of the agent are in flight */
+  force?: boolean;
+  reason?: string | null;
+};
+
+export type AgentLifecycleResult = {
+  agent: Agent;
+  revoked_credentials?: number;
+  unpinned_projects?: Array<string>;
+  running_work_items?: Array<string>;
+  forced?: boolean;
+};
+
+export type AgentOwnerChange = {
+  email: string;
 };
 
 export type AgentMetrics = {
@@ -624,6 +651,8 @@ export type ProjectAgent = {
   version: number;
   overrides: AgentOverrides;
   effective: AgentSpec;
+  /** said when the agent is deprecated */
+  warning?: string | null;
 };
 
 export type SkillFiles = {
@@ -1627,6 +1656,7 @@ export interface Operations {
   result: unknown;
   remaining?: number;
 } };
+  changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
@@ -1859,6 +1889,7 @@ export interface Operations {
 }; response: WebhookAck };
   testConnector: { method: "POST"; path: "/projects/{id}/connectors/{kind}/test"; body: never; response: ConnectorTestResult };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
+  transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };

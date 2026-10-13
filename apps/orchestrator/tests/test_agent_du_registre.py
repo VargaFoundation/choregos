@@ -23,6 +23,7 @@ async def _agent(
     slug: str = "coordinateur",
     status: str = "active",
     instructions: str = INSTRUCTIONS,
+    lifecycle: str = "active",
     epingle: dict[str, Any] | None = None,
 ) -> None:
     from choregos_api.db.models import Agent, AgentVersion, Project, ProjectAgent
@@ -31,7 +32,14 @@ async def _agent(
     async with session_scope() as session:
         projet = await session.get(Project, setup.project_id)
         assert projet is not None
-        agent = Agent(org_id=projet.org_id, slug=slug, kind="internal", display_name=slug, status=status)
+        agent = Agent(
+            org_id=projet.org_id,
+            slug=slug,
+            kind="internal",
+            display_name=slug,
+            status=status,
+            lifecycle=lifecycle,
+        )
         session.add(agent)
         await session.flush()
         spec = {
@@ -104,6 +112,8 @@ async def test_l_epingle_du_projet_resserre_le_budget(setup: Fixture) -> None:
     ("agent", "motif"),
     [
         pytest.param({"status": "revoked"}, "is revoked", id="revoque"),
+        pytest.param({"lifecycle": "retired"}, "is retired", id="retired"),
+        pytest.param({"lifecycle": "draft"}, "is a draft", id="draft"),
         pytest.param({"slug": "autre"}, "does not exist", id="inconnu"),
         pytest.param(
             {"instructions": "{{ ''.__class__.__mro__ }}"}, "do not render", id="evasion-du-bac-a-sable"

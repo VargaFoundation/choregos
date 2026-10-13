@@ -64,6 +64,8 @@ class AgentCreate(Dto):
     display_name: str = Field(min_length=1, max_length=200)
     description: str | None = None
     spec: AgentSpec = Field(default_factory=AgentSpec)
+    #: `draft` until it is activated (S32-04); `active` by default, as before.
+    lifecycle: Literal["draft", "active"] = "active"
 
 
 class AgentCatalogueEntry(Dto):
@@ -140,6 +142,13 @@ class AgentDto(Dto):
     latest_version: int
     created_at: datetime | None = None
     versions: list[AgentVersionDto] | None = None
+    #: draft, active, deprecated or retired (S32-04) — apart from the operational `status`.
+    lifecycle: Literal["draft", "active", "deprecated", "retired"] = "active"
+    retired_at: datetime | None = None
+    #: Its last run, all projects together; `None` if it never ran.
+    last_run_at: datetime | None = None
+    #: No run for 60 days (since its creation if it never ran): a candidate for retirement.
+    unused: bool = False
 
 
 class AgentOverrides(Dto):
@@ -162,6 +171,8 @@ class ProjectAgentDto(Dto):
     overrides: AgentOverrides
     #: La version épinglée, surcharges appliquées : ce qui tournera.
     effective: AgentSpec
+    #: Said when the agent is deprecated: the pin holds, but the agent is on its way out.
+    warning: str | None = None
 
 
 class SkillFiles(Dto):
@@ -316,3 +327,28 @@ class AgentCredentialDto(Dto):
     token_name: str | None = None
     last_used_at: datetime | None = None
     last_client: str | None = None
+
+
+class AgentLifecycleChange(Dto):
+    """A move in the agent's life (S32-04). `retired` is final and runs its checklist."""
+
+    to: Literal["active", "deprecated", "retired"]
+    #: Retire although runs of the agent are in flight (an administrator's call, audited).
+    force: bool = False
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AgentLifecycleResult(Dto):
+    agent: AgentDto
+    #: Retirement's checklist, as executed.
+    revoked_credentials: int = 0
+    unpinned_projects: list[str] = Field(default_factory=list)
+    #: The work items whose run was in flight when the retirement was forced.
+    running_work_items: list[str] = Field(default_factory=list)
+    forced: bool = False
+
+
+class AgentOwnerChange(Dto):
+    """The new owner, a member of the organisation; the agent keeps its credentials."""
+
+    email: str = Field(min_length=3, max_length=320)

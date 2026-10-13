@@ -688,6 +688,11 @@ class Agent(Base, PkMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(16), default="active")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Where the agent is in its life (S32-04): `draft` → `active` → `deprecated` → `retired`.
+    #: Distinct from `status`, which is operational (active, suspended, revoked): a deprecated agent
+    #: may be suspended, a retired one never runs again.
+    lifecycle: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AgentVersion(Base, PkMixin, TimestampMixin):

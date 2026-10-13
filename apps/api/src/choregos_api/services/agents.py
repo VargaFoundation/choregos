@@ -101,6 +101,10 @@ async def resoudre_l_agent(
         raise AgentIndisponible(f"agent `{slug}` does not exist in the project's organisation")
     if agent.status != "active":
         raise AgentIndisponible(f"agent `{slug}` is {agent.status}: the run does not start")
+    if agent.lifecycle == "retired":
+        raise AgentIndisponible(f"agent `{slug}` is retired: the run does not start")
+    if agent.lifecycle == "draft":
+        raise AgentIndisponible(f"agent `{slug}` is a draft: activate it before a run uses it")
     if agent.expires_at is not None and _aware(agent.expires_at) <= utcnow():
         raise AgentIndisponible(f"agent `{slug}` expired on {agent.expires_at:%Y-%m-%d}")
     epingle = (
