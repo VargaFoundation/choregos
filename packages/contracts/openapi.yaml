@@ -1689,6 +1689,20 @@ paths:
       responses:
         "202": { description: Reindexing, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/distill:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: distillKnowledgeBase
+      description: >-
+        The `knowledge-distiller` agent compiles the base into a principles skill (`<slug>-principles`), each principle
+        citing its source documents, in the background. The version is published `pending_review` whatever its risk:
+        a person approves it before any agent carries it (S32-06). The outcome lands in `distillation`. `agent:manage`.
+      responses:
+        "202": { description: Distilling, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/knowledge/{slug}/eval:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3121,6 +3135,9 @@ components:
             mode: { type: string }
         eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
         sources: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeSource" }, description: returned by the reading of one base }
+        distillation:
+          type: [object, "null"]
+          description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`"
         eval_result:
           type: [object, "null"]
           description: the last run of the eval set

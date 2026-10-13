@@ -76,4 +76,11 @@ export function sourceConfig(
     ref: fields.ref.trim() || "main",
     paths: fields.paths.split(",").map((p) => p.trim()).filter(Boolean),
   };
+/** The last distillation, in words, and the skill version it waits on. */
+export function distillationLabel(d: Record<string, unknown> | null | undefined): string {
+  if (!d) return "not distilled";
+  if (d.status === "running") return "distilling…";
+  if (d.status === "failed") return `failed: ${String(d.error ?? "")}`;
+  const dropped = Array.isArray(d.dropped) ? d.dropped.length : 0;
+  return `${String(d.skill)} v${String(d.version)}: ${String(d.principles)} principles, waiting for review${dropped ? ` (${dropped} dropped: no source)` : ""}`;
 }

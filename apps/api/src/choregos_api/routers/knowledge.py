@@ -204,6 +204,7 @@ async def _source_dto(session: AsyncSession, source: KnowledgeSource) -> Knowled
         last_error=source.last_error,
         last_summary=source.last_summary,
         document_count=int(count),
+        distillation=base.distillation,
     )
 
 
@@ -747,4 +748,32 @@ async def sync_knowledge_source(
     await session.commit()
     await _start_sync_loop(org, source)
     await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/distill",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="distillKnowledgeBase",
+)
+async def distill_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+    """The `knowledge-distiller` compiles the base into a principles skill, in the background; the
+    version waits for a person's approval (`pending_review`). `agent:manage`."""
+    from ..knowledge.distill import distill
+
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    if (base.distillation or {}).get("status") == "running":
+        raise conflict(f"knowledge base `{slug}` is already being distilled")
+    base.distillation = {"status": "running", "requested_by": principal.email}
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "knowledge.distill",
+        org_id=base.org_id,
+        target_type="knowledge_base",
+        target_id=base.id,
+    )
+    dto = await _dto(session, base)
+    await session.commit()
+    conversions.spawn("distill", partial(distill, org, base.id, principal.email))
     return dto

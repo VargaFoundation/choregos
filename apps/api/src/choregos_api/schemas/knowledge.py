@@ -92,6 +92,8 @@ class KnowledgeBaseDto(Dto):
     eval_result: dict[str, Any] | None = None
     #: where its documents are synced from (S33-04); a reading of ONE base carries them
     sources: list[KnowledgeSourceDto] | None = None
+    #: the last distillation into a principles skill (S33-05)
+    distillation: dict[str, Any] | None = None
 
 
 class KnowledgeEvalCase(Dto):

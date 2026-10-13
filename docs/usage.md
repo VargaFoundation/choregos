@@ -618,6 +618,15 @@ A base also **syncs from sources** (`POST …/sources`), each on its own Tempora
 A document deleted at the source leaves the base **and its index** at the next sync. Each source
 shows when it last synced, what it did (added, updated, deleted, skipped and why) and its last
 error; each document links back to where it lives.
+A base can be **distilled** into a principles skill (`POST …/distill`, **distill** on its page): the
+`knowledge-distiller` agent of the catalogue — or the organisation's own version of it, once
+installed and edited — reads the converted documents and answers principles, each citing the
+document and section it comes from. The platform keeps only principles whose citations point into
+the base (the others are listed as dropped), writes `SKILL.md` with each principle's sources and
+`references/sources.md` with every document's sha256, and publishes the skill
+`<base>-principles` as a new version **`pending_review`**, whatever its risk tier: no agent carries
+it until an administrator approves it on the skill's page. One model call with the whole corpus in
+the prompt: a base over 400 000 characters is refused.
 
 ## 4. Write the policy
 

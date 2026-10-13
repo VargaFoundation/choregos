@@ -105,3 +105,13 @@ there (D10), with full-text search built in and `pgvector` one extension away.
     activity is idempotent (ADR 0008): the cursor moves only once the changes are applied, and an
     item whose version is stored is not fetched again. The page shows each source's last sync, what
     it did, and its last error.
+## Update — 2026-10-13: distillation (S33-05)
+
+8. **A base distils into a principles skill.** The catalogue's `knowledge-distiller` (or the
+   organisation's version of it) answers principles from the converted corpus in one model call
+   through the gateway; each must cite a document of the base and a section, or it is dropped and
+   said. The skill (`SKILL.md`, `references/sources.md` with each document's digest) is published
+   **`pending_review`** regardless of the supply-chain gate's tier (ADR 0050): machine-written
+   guidance reaches no agent before a person approves it. The version's author is the agent
+   (`agent:knowledge-distiller`), so the administrator who asked may approve it; the request and
+   the documents used are recorded on the base (`distillation`).
