@@ -43,7 +43,10 @@ async def test_la_raison_d_un_refus_parvient_au_ticket_et_une_approbation_l_effa
     """Une transition qui déclare `inputs: [human_feedback]` la reçoit ; elle se perdait, et l'agent
     refaisait le même travail sans savoir pourquoi on le lui renvoyait."""
     for resume in ("spec v1", "spec v2"):
-        setup.adapters.executor.queue_result(stage_result(resume))
+        # `t-refine` declares its outputs: a step without them fails (S31-02).
+        setup.adapters.executor.queue_result(
+            stage_result(resume, outputs={"spec_markdown": resume, "size": "M", "risk": "low"})
+        )
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             ticket = await temporal_env.client.start_workflow(

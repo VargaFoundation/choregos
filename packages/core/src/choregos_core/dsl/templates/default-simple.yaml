@@ -29,7 +29,7 @@ transitions:
     from: inbox
     to: awaiting_spec_approval
     by: refiner
-    outputs: [spec, allowed_paths, size, risk]
+    outputs: [spec_markdown, size, risk]
     on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
   - id: t-approve-spec
     from: awaiting_spec_approval
@@ -46,8 +46,7 @@ transitions:
     from: ready
     to: in_progress
     by: dev
-    inputs: [spec, allowed_paths]
-    outputs: [branch, commits]
+    inputs: [spec_markdown, allowed_paths]
     gates: [scope_respected, { name: diff_size_max, params: { files: 60 } }, no_secrets]
     on_fail: { to: ready, max_attempts: 2, escalate_to: needs_human }
   - id: t-verify

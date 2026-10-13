@@ -46,13 +46,13 @@ transitions:
     from: inbox
     to: triaged
     by: sorter
-    outputs: [size, risk, duplicate_of]
+    outputs: [size, risk]
     on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
   - id: t-refine
     from: triaged
     to: awaiting_spec_approval
     by: refiner
-    outputs: [spec, allowed_paths]
+    outputs: [spec_markdown]
     on_fail: { to: triaged, max_attempts: 2, escalate_to: needs_human }
   - id: t-approve-spec
     from: awaiting_spec_approval
@@ -70,14 +70,13 @@ transitions:
     to: ready
     by: planner
     inputs: [spec]
-    outputs: [plan]
+    outputs: [plan_markdown]
     on_fail: { to: planning, max_attempts: 2, escalate_to: needs_human }
   - id: t-implement
     from: ready
     to: in_progress
     by: dev
-    inputs: [spec, plan, allowed_paths]
-    outputs: [branch, commits]
+    inputs: [spec_markdown, plan_markdown, allowed_paths]
     gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }]
     on_fail: { to: ready, max_attempts: 3, escalate_to: needs_human }
   - id: t-verify
