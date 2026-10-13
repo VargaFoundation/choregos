@@ -61,8 +61,13 @@ store holds plaintext originals.
   costs too much, a `runner-headroom` image variant carries it instead.
 - rtk sees only Bash: Claude Code's Read, Grep and Glob bypass it. A repository's own
   `.claude/settings.json` wins over ours, as it already does for the scope hook.
-- A lossy filter can hide the line an agent needed: the guardrails still judge the command the agent
-  wrote, not the rewritten one, and `rtk_exclude_commands` and `per_role` let a policy keep raw
-  output where it matters (a reviewer, a security stage).
+- rtk rewrites the command before Claude Code asks the runner for permission, so the guardrails
+  receive the rewritten one. They judge it, then every form the agent may have written (`rtk`
+  removed, `rtk read` read as `cat`, `head` and `tail`), and refuse if any form is refused. rtk's
+  configuration, under the run's `$HOME`, also excludes every command the policy forbids, so
+  none of them is rewritten. No `permissions.allow` rule is written: with one, rtk would grant the
+  permission itself.
+- A lossy filter can hide the line an agent needed: `rtk_exclude_commands` and `per_role` let a
+  policy keep raw output where it matters (a reviewer, a security stage).
 - Not decided here: a context reduction for the other backends' native hooks (after the matrix), and
   any gain figure — none is claimed before the matrix has run on real models.

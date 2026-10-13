@@ -391,13 +391,19 @@ def _context_markdown(context: ContextPack | None) -> str:
     return "\n".join(lines) + "\n"
 
 
-def workspace_env(stage_input: StageInput, extra: dict[str, Any] | None = None) -> dict[str, str]:
-    """Variables d'environnement communes à tous les backends."""
+def agent_home(stage_input: StageInput) -> Path:
+    """The agent's `$HOME`: outside the workspace, specific to the run."""
     # Créé ici : un `HOME` qui n'existe pas ferait échouer l'agent au premier fichier d'état.
     # Le chemin est fixe et porte le run : dans un pod jetable, il n'y a personne d'autre
     # pour le préempter, et un nom aléatoire empêcherait de rejouer le même run.
     home = Path(tempfile.gettempdir()) / f"choregos-{stage_input.run_id}"
     home.mkdir(parents=True, exist_ok=True)
+    return home
+
+
+def workspace_env(stage_input: StageInput, extra: dict[str, Any] | None = None) -> dict[str, str]:
+    """The environment every backend shares."""
+    home = agent_home(stage_input)
     env = {
         # Le dépôt n'est pas le répertoire personnel de l'agent. Sans cette ligne, un agent
         # qui écrit son état sous `$HOME` le pose DANS le workspace — ses transcriptions se

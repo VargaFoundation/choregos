@@ -23,6 +23,14 @@ class LaunchPlan:
     env: dict[str, str] = field(default_factory=dict)
     files: dict[str, str] = field(default_factory=dict)
     mcp_servers: list[dict[str, Any]] = field(default_factory=list)
+    #: Files for the agent's `$HOME`, outside the repository: what is written there never lands
+    #: in the run's diff (ADR 0055: rtk's configuration).
+    home_files: dict[str, str] = field(default_factory=dict)
+
+    def materialize_home(self, home: Path) -> list[str]:
+        """Writes `home_files` under the agent's `$HOME`. The directory belongs to the run, so
+        nothing there is the project's, and a file left by a replay of the same run is replaced."""
+        return LaunchPlan(command=[], files=self.home_files).materialize(home, overwrite=True)
 
     def materialize(self, workspace: Path, *, overwrite: bool = False) -> list[str]:
         """Écrit la configuration du backend sans jamais écraser un fichier du dépôt.
