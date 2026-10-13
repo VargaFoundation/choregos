@@ -21,6 +21,17 @@ def plus_stricte(a: str, b: str | None) -> str:
     return a if b is None or RANG[a] >= RANG[b] else b
 
 
+def human_floor(connector: OrgConnector, operation: str, policy: str) -> str:
+    """An operation its type declares `human_approval` (ADR 0052) is never below `approval`: the
+    organisation cannot open it to the policy, and a row edited behind the API does not either."""
+    from choregos_adapters import operation_spec
+
+    declared = operation_spec(connector.kind, connector.type, operation)
+    if declared is not None and declared.human_approval:
+        return plus_stricte(policy, "approval")
+    return policy
+
+
 def spec_du_type(kind: str, type_name: str) -> ConnectorTypeSpec:
     from choregos_adapters import available, spec_of
 
@@ -71,9 +82,9 @@ async def politique_pour_le_projet(
     """La politique d'une opération pour CE projet (ADR 0034) : celle de l'organisation, resserrée
     par le projet. Une opération inconnue, ou dont les groupes ne croisent pas ceux du projet, est
     interdite — ce que le courtier cache à un run, une action ne le joue pas non plus."""
-    trouvee = (
+    ligne = (
         await session.execute(
-            select(ConnectorOperation)
+            select(ConnectorOperation, OrgConnector)
             .join(OrgConnector, OrgConnector.id == ConnectorOperation.connector_id)
             .where(
                 OrgConnector.org_id == projet.org_id,
@@ -81,9 +92,10 @@ async def politique_pour_le_projet(
                 ConnectorOperation.name == operation,
             )
         )
-    ).scalar_one_or_none()
-    if trouvee is None:
+    ).one_or_none()
+    if ligne is None:
         return "forbidden"
+    trouvee, instance = ligne
     groupes = {str(g) for g in ((projet.config or {}).get("groups") or [])}
     if trouvee.groups and not groupes & set(trouvee.groups):
         return "forbidden"
@@ -95,4 +107,4 @@ async def politique_pour_le_projet(
             )
         )
     ).scalar_one_or_none()
-    return plus_stricte(trouvee.policy, resserree)
+    return human_floor(instance, operation, plus_stricte(trouvee.policy, resserree))

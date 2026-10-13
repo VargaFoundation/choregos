@@ -106,9 +106,17 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
     from choregos_adapters import build, configuration_resolue
     from choregos_adapters.errors import AdapterError, UpstreamError
     from choregos_adapters.mcp import ErreurMcp
+    from choregos_contracts import ActionStatus
 
     nom, operation = str(params.get("connector", "")), str(params.get("operation", ""))
     arguments = dict(params.get("arguments") or {})
+    # An action nobody approved writes nothing (ADR 0035, ADR 0052): the workflow is started by the
+    # decision, but a workflow started by anything else must not find a way to the device.
+    approved = {ActionStatus.APPROVED.value, ActionStatus.RUNNING.value, ActionStatus.AWAITING_EVIDENCE.value}
+    if ctx.action.status not in approved:
+        raise EffetRefuse(
+            f"{nom}/{operation}: the action is {ctx.action.status}, not approved — nothing is done"
+        )
     instance = (
         await ctx.session.execute(
             select(OrgConnector).where(OrgConnector.org_id == ctx.project.org_id, OrgConnector.name == nom)
@@ -139,6 +147,7 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
             jsonschema.validate(arguments, ligne.input_schema)
         except jsonschema.ValidationError as exc:
             raise EffetRefuse(f"{nom}/{operation} : {exc.message}") from exc
+    arguments.update(await _arguments_de_la_plateforme(ctx, instance, operation, arguments))
     try:
         config = configuration_resolue(instance.kind, instance.type, instance.config, instance.secret_refs)
         client = build(instance.kind, instance.type, config)
@@ -164,6 +173,36 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
         raise
     except AdapterError as refus:
         raise EffetRefuse(f"{nom}/{operation} : {refus}") from refus
+
+
+async def _arguments_de_la_plateforme(
+    ctx: ContexteEffet, instance: OrgConnector, operation: str, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """What the operation's type asks the PLATFORM to fill (ADR 0052), after the agent's arguments
+    were checked against the schema — an agent cannot pass them, the schema closes them:
+    - `action_key`: the action and the call, hashed — the same on every retry, another for another call;
+    - `work_item_key`: the work item the action belongs to, when it has one."""
+    import hashlib
+    import json
+
+    from choregos_adapters import operation_spec
+
+    declared = operation_spec(instance.kind, instance.type, operation)
+    if declared is None or not declared.platform_arguments:
+        return {}
+    filled: dict[str, Any] = {}
+    if "action_key" in declared.platform_arguments:
+        canonical = json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str)
+        filled["action_key"] = hashlib.sha256(
+            f"{ctx.action.id}:{operation}:{canonical}".encode()
+        ).hexdigest()[:24]
+    if "work_item_key" in declared.platform_arguments and ctx.action.work_item_id:
+        from .db.models import WorkItem
+
+        item = await ctx.session.get(WorkItem, ctx.action.work_item_id)
+        if item is not None:
+            filled["work_item_key"] = item.tracker_key
+    return filled
 
 
 async def _verifier(_ctx: ContexteEffet, params: dict[str, Any]) -> dict[str, Any]:

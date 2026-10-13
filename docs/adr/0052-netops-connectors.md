@@ -1,6 +1,6 @@
 # 0052 — Netops connectors: pfSense, Cilium and Hubble, nginx — read through the platform, changed only by a governed action or a pull request
 
-- **Status**: accepted, 2026-10-12
+- **Status**: accepted, 2026-10-12; amended 2026-10-13 (§6-7, governed writes, S33-09)
 - **Concerns**: `choregos_adapters.netops` (three connector types and their fakes), the broker
   (ADR 0034), the `connector.call` effect (ADR 0035), the catalogue agent `netops` (ADR 0040), the
   tool `validate_nginx_config`, the API/worker image (Hubble CLI) and the runner image (nginx), the
@@ -65,7 +65,32 @@ and nothing must let an agent write to it directly.
 6. **Writes** (S33-09) are never a connector's direct call: a pfSense rule change is a governed
    action that a person approves, with a compensation that restores the previous rule; a Cilium
    policy or an nginx configuration change is a pull request to the GitOps repository, which the
-   release train carries to production (ADR 0006). No path applies to a cluster.
+   release train carries to production (ADR 0006). No path applies to a cluster. Four mechanisms,
+   general to any connector type, carry it:
+   - **`human_approval`** on an operation: its policy never goes below `approval` — the
+     organisation's administrator cannot set it to `allowed` (422), and a row forced to `allowed`
+     behind the API is still floored by the broker and by the effect's policy (ADR 0034 §7 would
+     otherwise let the policy approve it);
+   - **a declared `compensation`**: the type says what undoes the operation, rendered with its own
+     `result`; the broker attaches it to the action it proposes. pfSense: a created rule is deleted;
+     an updated or deleted rule is put back from the `snapshot` its write returned, at its recorded
+     position (pfrest `placement`) — a recreated rule gets a new `tracker`, as pfSense assigns it;
+   - **platform arguments**: `action_key` (the action and the call, hashed — stable across retries)
+     and `work_item_key`, filled by the `connector.call` effect after the agent's arguments were
+     checked, never accepted from the agent. A pfSense write marks the rule's description with
+     `[choregos:<hash of the key>]`, so a replay after a lost answer finds what it did; if that replay
+     finds the change already made, the previous rule is no longer known and the write says so
+     (empty snapshot): its compensation then fails, named, instead of restoring a wrong rule;
+   - **an unapproved action writes nothing**: `connector.call` refuses an action whose status is
+     not approved (or running), even if its `ActionWorkflow` were started by something else.
+   A GitOps change lands on `choregos/<number>-netops-<key>` when the action's work item belongs to
+   the GitOps repository: the forge's webhook maps the merged pull request back to that work item,
+   which boards the train its workflow takes (ADR 0041). Otherwise it lands on `netops/<key>`, and
+   the repository's own process merges it. The platform never merges it.
+7. **Who approves** is the action's approval rule (ADR 0035): by default a `project_owner`, in a
+   fresh human session, never the agent's owner. Approvers named by an identity-provider GROUP
+   (e.g. `netops-approvers`) need a field in `ActionApproval` — a contract change (ADR 0001) left to
+   its own pull request.
 
 ## Consequences
 
