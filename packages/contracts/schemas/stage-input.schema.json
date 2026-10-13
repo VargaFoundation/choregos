@@ -409,6 +409,52 @@
         }
       }
     },
+    "context": {
+      "type": "object",
+      "description": "The context reduction the run starts with, resolved by the orchestrator (ADR 0055). Absent = everything off.",
+      "additionalProperties": false,
+      "properties": {
+        "shell_filter": {
+          "type": "string",
+          "enum": [
+            "none",
+            "rtk"
+          ],
+          "default": "none"
+        },
+        "compression": {
+          "type": "string",
+          "enum": [
+            "none",
+            "headroom"
+          ],
+          "default": "none"
+        },
+        "headroom_profile": {
+          "type": "string",
+          "enum": [
+            "coding",
+            "balanced",
+            "general"
+          ],
+          "default": "coding"
+        },
+        "on_unavailable": {
+          "type": "string",
+          "enum": [
+            "bypass",
+            "fail"
+          ],
+          "default": "bypass"
+        },
+        "rtk_exclude_commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "callbacks": {
       "type": "object",
       "required": [

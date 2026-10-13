@@ -13,6 +13,7 @@ import choregos_contracts as contracts
 import pytest
 from choregos_contracts import (
     ContextPack,
+    ContextPolicy,
     Finding,
     HumanDecision,
     InboundEvent,
@@ -221,3 +222,51 @@ def test_stage_result_helpers() -> None:
     assert not result.ok
     assert result.status == "failed"
     assert ContextPack.empty("q").is_empty()
+
+
+# ───────────────────────── context reduction (S37-02, ADR 0055) ─────────────────────────
+
+
+def test_a_policy_without_context_reduces_nothing() -> None:
+    policy = Policy.model_validate(_load("policy.solo.json"))
+    assert "context" not in _load("policy.solo.json")
+    for role in ("implement", "review", "triage"):
+        assert not policy.context.for_role(role).active
+    stage_input = StageInput.model_validate(_load("stage-input.example.json"))
+    assert not stage_input.context.active
+
+
+def test_a_role_override_changes_that_role_only() -> None:
+    raw = _load("policy.solo.json") | {
+        "context": {
+            "shell_filter": "rtk",
+            "compression": "headroom",
+            "headroom_profile": "balanced",
+            "on_unavailable": "fail",
+            "rtk_exclude_commands": ["git diff"],
+            "per_role": {"review": {"compression": "none"}},
+        }
+    }
+    assert not list(_validator("policy.schema.json").iter_errors(raw))
+    context = Policy.model_validate(raw).context
+    implement, review = context.for_role("implement"), context.for_role("review")
+    assert (implement.shell_filter, implement.compression) == ("rtk", "headroom")
+    assert (review.shell_filter, review.compression) == ("rtk", "none")
+    assert review.headroom_profile == "balanced" and review.on_unavailable == "fail"
+    assert review.rtk_exclude_commands == ["git diff"]
+
+
+def test_the_context_schema_and_model_declare_the_same_fields() -> None:
+    """The whole policy is not compared yet (`budgets.tool_calls_per_run` is missing from its
+    schema, a finding); its `context` block is, overrides included."""
+    gaps: list[str] = []
+    node = contracts.load_schema("policy.schema.json")["properties"]["context"]
+    _comparer("policy.context", node, ContextPolicy, gaps)
+    assert not gaps, "\n".join(gaps)
+
+
+def test_an_unknown_reduction_is_refused_by_the_schema_and_the_model() -> None:
+    raw = _load("policy.solo.json") | {"context": {"compression": "zip"}}
+    assert list(_validator("policy.schema.json").iter_errors(raw))
+    with pytest.raises(ValueError, match="compression"):
+        Policy.model_validate(raw)

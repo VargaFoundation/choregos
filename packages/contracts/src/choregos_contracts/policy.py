@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import Field
 
 from .enums import Risk, Severity, Size
+from .stage import Compression, HeadroomProfile, ShellFilter, StageContext
 from .workflow import Strict
 
 BySize = dict[str, float]
@@ -98,6 +99,40 @@ class MemoryPolicy(Strict):
     read_timeout_ms: int = Field(default=300, ge=50)
 
 
+class ContextOverride(Strict):
+    """What a role changes in the project's context reduction; an absent field keeps the
+    project's value."""
+
+    shell_filter: ShellFilter | None = None
+    compression: Compression | None = None
+    headroom_profile: HeadroomProfile | None = None
+
+
+class ContextPolicy(Strict):
+    """Fewer tokens per run (ADR 0055): rtk filters shell output, headroom compresses tool
+    results. Everything is off unless the policy turns it on, and the deployment's kill switch
+    (`CHOREGOS_CONTEXT_REDUCTION=off`) wins over the policy."""
+
+    shell_filter: ShellFilter = "none"
+    compression: Compression = "none"
+    headroom_profile: HeadroomProfile = "coding"
+    on_unavailable: Literal["bypass", "fail"] = "bypass"
+    rtk_exclude_commands: list[str] = Field(default_factory=list)
+    #: {stage role: override}, e.g. `{"review": {"compression": "none"}}` so a reviewer reads raw.
+    per_role: dict[str, ContextOverride] = Field(default_factory=dict)
+
+    def for_role(self, role: str) -> StageContext:
+        """The policy's values for one role, before the deployment's kill switch."""
+        override = self.per_role.get(role, ContextOverride())
+        return StageContext(
+            shell_filter=override.shell_filter or self.shell_filter,
+            compression=override.compression or self.compression,
+            headroom_profile=override.headroom_profile or self.headroom_profile,
+            on_unavailable=self.on_unavailable,
+            rtk_exclude_commands=list(self.rtk_exclude_commands),
+        )
+
+
 class ReviewPolicy(Strict):
     cross_backend: bool = False
     require_human_for_risk: list[Risk] = Field(default_factory=lambda: [Risk.HIGH])
@@ -162,5 +197,6 @@ class Policy(Strict):
     sandbox: SandboxPolicy = Field(default_factory=SandboxPolicy)
     findings: FindingsPolicy = Field(default_factory=FindingsPolicy)
     memory: MemoryPolicy = Field(default_factory=MemoryPolicy)
+    context: ContextPolicy = Field(default_factory=ContextPolicy)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
     release_train: dict[str, TrainEnvPolicy] = Field(default_factory=dict)

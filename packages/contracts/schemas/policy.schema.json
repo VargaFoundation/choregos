@@ -145,6 +145,33 @@
         "read_timeout_ms": { "type": "integer", "minimum": 50, "default": 300 }
       }
     },
+    "context": {
+      "type": "object",
+      "description": "Fewer tokens per run (ADR 0055): rtk filters shell output, headroom compresses tool results. Absent = everything off; the deployment's kill switch wins over the policy.",
+      "additionalProperties": false,
+      "properties": {
+        "shell_filter": { "type": "string", "enum": ["none", "rtk"], "default": "none" },
+        "compression": { "type": "string", "enum": ["none", "headroom"], "default": "none" },
+        "headroom_profile": { "type": "string", "enum": ["coding", "balanced", "general"], "default": "coding" },
+        "on_unavailable": { "type": "string", "enum": ["bypass", "fail"], "default": "bypass",
+          "description": "When the compression proxy does not start: bypass to the gateway and journal it, or fail the stage." },
+        "rtk_exclude_commands": { "type": "array", "items": { "type": "string" }, "default": [],
+          "description": "Commands whose output the shell filter leaves raw." },
+        "per_role": {
+          "type": "object",
+          "description": "Per stage role, what changes from the project's values; an absent field keeps them.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "shell_filter": { "type": "string", "enum": ["none", "rtk"] },
+              "compression": { "type": "string", "enum": ["none", "headroom"] },
+              "headroom_profile": { "type": "string", "enum": ["coding", "balanced", "general"] }
+            }
+          }
+        }
+      }
+    },
     "review": {
       "type": "object",
       "additionalProperties": false,
