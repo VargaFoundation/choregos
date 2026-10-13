@@ -1309,7 +1309,7 @@ export type AgentBackendUpdate = {
 };
 
 export type ExecutorInfo = {
-  kind: "tekton" | "k8s_job" | "local_docker" | "aca";
+  kind: "tekton" | "k8s_job" | "local_docker" | "aca" | "agent_sandbox";
   enabled: boolean;
   cluster?: string | null;
   namespace_pattern?: string | null;

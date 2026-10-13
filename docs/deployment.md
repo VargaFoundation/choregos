@@ -107,6 +107,7 @@ Agent stages run as disposable sandboxes. Which kind is `runner.executor`:
 | `k8s_job` | A `Job` per stage | Fewest moving parts; supports queueing |
 | `aca` | Azure Container Apps job | Verified against a real subscription |
 | `local_docker` | A container on the host | Development only |
+| `agent_sandbox` | A claimed sandbox from a warm pool (`kubernetes-sigs/agent-sandbox`) | Opt-in, needs the operator; supports queueing |
 
 ```yaml
 choregos-orchestrator:
@@ -156,6 +157,15 @@ choregos-orchestrator:
 global:
   rbac: { jobRunner: true }           # or the platform grants the same verbs (see rbac-jobs.yaml)
 ```
+
+How a run goes ([ADR 0053](adr/0053-agent-sandbox-as-built.md)): the executor writes the run's
+token into a Secret owned by the run's `SandboxClaim`; the controller binds a warm sandbox to
+the claim (or cold-starts one from the template when the pool is empty); once it is Ready, the
+executor reads the public key the pod printed at boot (through the API server, `pods/log`), seals
+the token and the run's environment to it, and pushes only that ciphertext; the pod opens it,
+drops its key, and serves that one run for its whole life. Beyond `maxActive`, a run waits as its Secret alone, with no claim and no pod, and
+is admitted in arrival order. A policy that asks for a RuntimeClass the pool was not made with
+is refused, never run without it.
 
 The chart then renders a `SandboxTemplate` and a `SandboxWarmPool`, both named
 `choregos-runner`. A warm sandbox's pod mounts no service account token and no secret: its

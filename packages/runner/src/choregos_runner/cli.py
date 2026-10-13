@@ -10,10 +10,11 @@ from typing import Annotated
 
 import typer
 
+from .assignment import AssignmentServer
 from .backends import backend_version, known_backends
-from .config import get_settings, reset_settings_cache
+from .config import RunnerSettings, get_settings, reset_settings_cache
 from .exits import Exit
-from .runner import Runner
+from .runner import Runner, RunOutcome
 
 app = typer.Typer(
     add_completion=False,
@@ -63,6 +64,57 @@ def run(
         url = outcome.result.artifacts.context_pack_url or ""
         write_result_url.write_text(url.replace("context.json", "result.json"), encoding="utf-8")
     raise typer.Exit(int(outcome.exit_code))
+
+
+@app.command("await-assignment")
+def await_assignment(
+    port: Annotated[int, typer.Option("--port", envvar="CHOREGOS_ASSIGNMENT_PORT")] = 8765,
+    workspace: Annotated[Path | None, typer.Option("--workspace")] = None,
+) -> None:
+    """Warm sandbox (ADR 0016): wait for ONE assignment on `--port`, then run that stage."""
+    outcome, settings = asyncio.run(_serve_then_run(port, workspace))
+    status = str(outcome.result.status) if outcome.result else "failed"
+    typer.echo(
+        json.dumps(
+            {
+                "run_id": settings.run_id,
+                "exit": int(outcome.exit_code),
+                "explanation": outcome.exit_code.explanation,
+                "status": status,
+                "summary": outcome.result.summary if outcome.result else outcome.detail,
+            },
+            ensure_ascii=False,
+        )
+    )
+    raise typer.Exit(int(outcome.exit_code))
+
+
+async def _serve_then_run(port: int, workspace: Path | None) -> tuple[RunOutcome, RunnerSettings]:
+    """Listens until the executor pushes this sandbox's run; the token then lives in this
+    process only. The port stays open during the run so that a repeated push of the SAME run
+    is answered, and any other run refused."""
+    import os
+
+    server = AssignmentServer(port=port)
+    # The public key first, on its own line: the executor reads it through the API server
+    # (`pods/log`) and seals the run to it. Nothing but this pod can open what it then pushes.
+    print(server.key_line, flush=True)
+    await server.start()
+    try:
+        assignment = await server.wait()
+        # The run's environment (proxy, model, deployment-wide credentials) applies to this
+        # process and to the agent it starts, as a pod's `env` would have.
+        os.environ.update(assignment.env)
+        reset_settings_cache()
+        settings = get_settings()
+        settings.run_id = assignment.run_id
+        settings.api_url = assignment.api_url
+        settings.run_token = assignment.run_token
+        if workspace is not None:
+            settings.workspace = workspace
+        return await Runner(settings).run(), settings
+    finally:
+        await server.close()
 
 
 @app.command()

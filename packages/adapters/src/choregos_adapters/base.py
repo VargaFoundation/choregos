@@ -115,10 +115,11 @@ class CdAdapter(Protocol):
 #: - `renew`    : sait remplacer le jeton d'un run QUI N'A PAS ENCORE DÉMARRÉ. Indispensable
 #:                dès qu'il y a une file : un jeton minté à la mise en file expire pendant
 #:                l'attente, et l'agent démarre pour recevoir « Signature has expired ».
-#: - `snapshot` : sait figer l'état du bac à sable et le restaurer à l'identique. C'est
-#:                la seule capacité qui rendrait acceptable un pool de runners tièdes
-#:                (ADR 0013), parce qu'elle permet de repartir d'un état PROPRE entre
-#:                deux runs plutôt que de faire confiance au ménage.
+#: - `snapshot` : every run gets a sandbox made from a clean template and never used before
+#:                (ADR 0016, ADR 0053) — what makes a pool of warm runners acceptable
+#:                (ADR 0013), because no run inherits another's filesystem or credentials.
+#:                A property of `start`, like `queue`: no method. Freezing a RUNNING sandbox
+#:                and restoring it is not what this word promises.
 CAPACITES_EXECUTEUR: frozenset[str] = frozenset({"queue", "renew", "suspend", "resume", "snapshot"})
 
 

@@ -8,6 +8,7 @@ méthodes de mise en scène (`seed`, `set_diff`, `set_status`, `queue_result`,
 
 from __future__ import annotations
 
+from .agent_sandbox import FakeSandboxCluster
 from .cd import FakeCd
 from .ci import FakeCi
 from .executor import FakeExecutor
@@ -28,6 +29,7 @@ __all__ = [
     "FakeMemory",
     "FakeNotifier",
     "FakeObjectStore",
+    "FakeSandboxCluster",
     "FakeScm",
     "FakeTracker",
 ]

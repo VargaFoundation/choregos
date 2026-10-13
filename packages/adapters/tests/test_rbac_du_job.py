@@ -43,7 +43,12 @@ def _accordes() -> dict[str, set[str]]:
     # executor turns it on.
     bloc = "\n".join(line for line in texte[debut:fin].splitlines() if not line.strip().startswith("{{"))
     regles = yaml.safe_load(bloc)["rules"]
-    return {ressource: set(regle["verbs"]) for regle in regles for ressource in regle["resources"]}
+    # Several rules may grant verbs on the same resource: they add up.
+    granted: dict[str, set[str]] = {}
+    for rule in regles:
+        for resource in rule["resources"]:
+            granted.setdefault(resource, set()).update(rule["verbs"])
+    return granted
 
 
 def test_il_y_a_bien_des_appels_a_confronter() -> None:

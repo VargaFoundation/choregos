@@ -3034,7 +3034,7 @@ components:
       type: object
       required: [kind, enabled]
       properties:
-        kind: { type: string, enum: [tekton, k8s_job, local_docker, aca] }
+        kind: { type: string, enum: [tekton, k8s_job, local_docker, aca, agent_sandbox] }
         enabled: { type: boolean }
         cluster: { type: [string, "null"] }
         namespace_pattern: { type: [string, "null"] }

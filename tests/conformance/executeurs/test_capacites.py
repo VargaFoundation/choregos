@@ -21,7 +21,9 @@ pytestmark = pytest.mark.conformance
 #: La méthode que chaque capacité oblige à implémenter. `queue` n'en impose aucune : elle
 #: se joue dans `start` et `status`, et son comportement est vérifié par les tests de
 #: l'exécuteur concerné (plafond atteint, file dans l'ordre d'arrivée).
-METHODE_ATTENDUE = {"renew": "renew", "suspend": "suspend", "resume": "resume", "snapshot": "snapshot"}
+#: `snapshot` imposes none either since ADR 0053: it is a property of `start` (every run gets a
+#: sandbox made from the template, never a used one), proved by the executor's own tests.
+METHODE_ATTENDUE = {"renew": "renew", "suspend": "suspend", "resume": "resume"}
 
 # Construire un exécuteur hors cluster : sans `token`, le client Kubernetes va lire le
 # jeton du compte de service monté dans un pod, et ce fichier n'existe pas ici.
@@ -31,6 +33,7 @@ CONFIGS = {
     "tekton": KUBE,
     "local_docker": {},
     "aca": {"subscription_id": "s", "resource_group": "g", "environment_id": "e"},
+    "agent_sandbox": KUBE,
     "fake": {},
 }
 
@@ -65,16 +68,23 @@ def test_ce_qui_est_annonce_est_implemente(nom: str) -> None:
         assert inspect.iscoroutinefunction(fonction), f"{nom}.{methode}() doit être asynchrone"
 
 
-def test_aucun_executeur_ne_sait_encore_prendre_un_instantane() -> None:
-    """Ce test dit un ÉTAT, pas une règle : le jour où l'un d'eux sait le faire, il
-    échoue, et c'est le moment de relire l'ADR 0013 — un pool de runners tièdes devient
-    alors défendable, et la reprise après perte d'un nœud cesse de tout rejouer."""
-    avec_instantane = [
-        nom
-        for nom in _executeurs()
-        if "snapshot" in getattr(build("runtime", nom, CONFIGS.get(nom, {})), "capabilities", frozenset())
+def test_only_agent_sandbox_starts_every_run_from_a_clean_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A FACT, not a rule. Until S35-02 it read "no executor can take a snapshot yet", and it
+    turned red the day `agent_sandbox` announced `snapshot`: its purpose (ADR 0013, Decision 4).
+
+    What `snapshot` means is now ADR 0016's and ADR 0053's: every run gets a sandbox made from the
+    template and never used before, which is what makes a warm pool defensible again. Freezing a
+    RUNNING sandbox and restoring it is still offered by no executor. The day this list changes,
+    re-read those three records before adding a name.
+    """
+    # The real executors, not the fakes another test may have switched on.
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    with_snapshot = [
+        name
+        for name in _executeurs()
+        if "snapshot" in getattr(build("runtime", name, CONFIGS.get(name, {})), "capabilities", frozenset())
     ]
-    assert avec_instantane == [], (
-        f"{avec_instantane} sait prendre un instantané : relire docs/adr/0013 "
-        "(pool de runners tièdes, reprise sans rejeu)"
+    assert with_snapshot == ["agent_sandbox"], (
+        f"{with_snapshot} announce `snapshot`: re-read docs/adr/0013, 0016 and 0053 "
+        "(warm pool of never-used sandboxes; no restore of a running one)"
     )

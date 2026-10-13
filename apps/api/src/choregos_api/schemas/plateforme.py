@@ -35,7 +35,7 @@ class AgentBackendUpdate(Dto):
 
 
 class ExecutorInfo(Dto):
-    kind: Literal["tekton", "k8s_job", "local_docker", "aca"]
+    kind: Literal["tekton", "k8s_job", "local_docker", "aca", "agent_sandbox"]
     enabled: bool = True
     cluster: str | None = None
     namespace_pattern: str | None = None

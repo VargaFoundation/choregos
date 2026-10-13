@@ -580,7 +580,7 @@ async def test_backends_et_executeurs_se_listent_et_se_reglent(client: AsyncClie
         == "conformité KO"
     )
     executeurs = (await client.get("/api/v1/platform/executors")).json()
-    assert {e["kind"] for e in executeurs} == {"tekton", "k8s_job", "local_docker", "aca"}
+    assert {e["kind"] for e in executeurs} == {"tekton", "k8s_job", "local_docker", "aca", "agent_sandbox"}
     regle = await client.put(
         "/api/v1/platform/executors",
         json={
