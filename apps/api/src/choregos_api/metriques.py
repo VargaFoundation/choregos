@@ -222,7 +222,7 @@ async def rafraichir() -> Instantane:
     """Recalcule l'instantané depuis la base. Une passe : une dizaine de requêtes bornées."""
     from .db.models import CostLedger, MemoryFact, Project, Release, Run, RunEvent, WorkItem
     from .db.session import session_scope
-    from .services import active_policy, first_pass_merge_rate, policy_model
+    from .services import effective_policy, first_pass_merge_rate
 
     maintenant = utcnow()
     nouveau = Instantane()
@@ -263,7 +263,7 @@ async def rafraichir() -> Instantane:
         )
         nouveau.daily_cost = {slug.get(pid, "?"): float(total or 0.0) for pid, total in jour.all()}
         for pid, projet in projets.items():
-            politique = policy_model(await active_policy(session, pid))
+            politique = await effective_policy(session, pid)
             budget = politique.budgets.daily_project_usd
             if budget:
                 nouveau.daily_budget[projet.slug] = float(budget)

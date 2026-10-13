@@ -1051,6 +1051,29 @@ paths:
       operationId: listGatewayKeys
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } } } } }
+  /orgs/{org}/policy-ceiling:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [projects]
+      operationId: getPolicyCeiling
+      description: The caps every project policy of the organisation stays under (S27-05).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyCeilingState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [projects]
+      operationId: putPolicyCeiling
+      description: >-
+        Sets the ceiling (`org_admin`); `null` removes it. A project policy PUT above it is refused (422, each widened
+        field named). A project policy already above it is not refused: the policy that runs is clamped to it, and
+        `GET /projects/{id}/policy` lists what was clamped.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PolicyCeilingPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PolicyCeilingState" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/members:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -2400,6 +2423,55 @@ components:
         yaml: { type: string }
         json: { $ref: "./schemas/policy.schema.json" }
         is_active: { type: boolean }
+        clamps:
+          type: array
+          items: { type: string }
+          description: what the organisation's ceiling brings down in this policy; the policy that runs is the clamped one
+    PolicyCeiling:
+      type: object
+      additionalProperties: false
+      description: "Caps a project policy may only tighten (S27-05). A per-role table's `default` caps every role it does not name; a cap left out leaves the project free."
+      properties:
+        budgets:
+          type: object
+          additionalProperties: false
+          properties:
+            ticket_usd: { type: object, additionalProperties: { type: number } }
+            stage_usd: { type: object, additionalProperties: { type: object, additionalProperties: { type: number } } }
+            max_turns: { type: object, additionalProperties: { type: integer } }
+            max_minutes: { type: object, additionalProperties: { type: integer } }
+            tool_calls_per_run: { type: [integer, "null"], minimum: 1 }
+            daily_project_usd: { type: [number, "null"], exclusiveMinimum: 0 }
+        attempts:
+          type: object
+          additionalProperties: false
+          properties:
+            default_max: { type: [integer, "null"], minimum: 1 }
+            by_role: { type: object, additionalProperties: { type: integer } }
+            dod_iterations: { type: [integer, "null"], minimum: 0 }
+        scope:
+          type: object
+          additionalProperties: false
+          properties:
+            auto_grant_max_files: { type: [integer, "null"], minimum: 0 }
+            max_diff_files: { type: [integer, "null"], minimum: 1 }
+            max_diff_lines: { type: [integer, "null"], minimum: 1 }
+        findings:
+          type: object
+          additionalProperties: false
+          properties:
+            max_per_run: { type: [integer, "null"], minimum: 0 }
+    PolicyCeilingState:
+      type: object
+      properties:
+        ceiling: { oneOf: [{ $ref: "#/components/schemas/PolicyCeiling" }, { type: "null" }] }
+        updated_by: { type: [string, "null"] }
+        updated_at: { type: [string, "null"] }
+    PolicyCeilingPut:
+      type: object
+      required: [ceiling]
+      properties:
+        ceiling: { oneOf: [{ $ref: "#/components/schemas/PolicyCeiling" }, { type: "null" }] }
     PolicyPut:
       type: object
       required: [yaml]

@@ -18,7 +18,7 @@ from ..db.models import (
     Run,
     WorkItem,
 )
-from .definitions import active_policy, policy_model
+from .definitions import effective_policy
 
 MIN_TICKETS_PAR_GROUPE = 10
 """En dessous, on ne conclut pas : dix tickets fermés par bras, au minimum."""
@@ -53,7 +53,7 @@ async def memory_ab_comparison(session: AsyncSession, org: str, weeks: int = 4) 
             .all()
         )
         for project in projects:
-            policy = policy_model(await active_policy(session, project.id))
+            policy = await effective_policy(session, project.id)
             bucket = buckets["with_memory" if policy.memory.enabled else "without_memory"]
             stats = await _window_stats(session, project.id, since)
             if stats["tickets"] == 0:

@@ -27,7 +27,7 @@ from ..schemas import (
     DoraMetric,
     DoraReport,
 )
-from ..services import active_policy, policy_model
+from ..services import effective_policy
 
 router = APIRouter(tags=["costs"])
 
@@ -110,7 +110,7 @@ async def project_costs(
     )
     if until:
         where.append(CostLedger.ts <= datetime.combine(until, datetime.max.time()))
-    policy = policy_model(await active_policy(session, ctx.id))
+    policy = await effective_policy(session, ctx.id)
     return await _report(session, where=where, group_by=group_by, budget_usd=policy.budgets.daily_project_usd)
 
 
@@ -405,7 +405,7 @@ async def project_cross_backend(
         )
 
     same, other = to_arm(arms["same"]), to_arm(arms["other"])
-    policy = policy_model(await active_policy(session, ctx.id))
+    policy = await effective_policy(session, ctx.id)
     verdict, detail = _cross_backend_verdict(same, other)
     return CrossBackendReport(
         since=start,

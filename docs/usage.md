@@ -519,6 +519,24 @@ sandbox:
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.
 
+**An organisation sets a ceiling that every project policy may only tighten**
+(`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):
+
+```json
+{"budgets": {"ticket_usd": {"M": 20}, "stage_usd": {"default": {"M": 6}}, "max_turns": {"default": 60},
+             "max_minutes": {"implement": 45}, "tool_calls_per_run": 50, "daily_project_usd": 100},
+ "attempts": {"default_max": 2, "by_role": {"implement": 2}},
+ "scope": {"max_diff_lines": 2000}, "findings": {"max_per_run": 3}}
+```
+
+A per-role table's `default` caps every role the ceiling does not name; a cap left out leaves projects
+free. Values are compared as the engine applies them — a project policy that omits `ticket_usd` gets
+the platform's defaults, and those are compared too. Saving a project policy above the ceiling is
+refused (`422`, each widened field named, e.g. `budgets.ticket_usd.M: 30 exceeds the organisation's
+ceiling of 20`). A policy saved before the ceiling was set is not refused: what runs is clamped to the
+ceiling, the policy keeps what was written, and `GET /projects/{id}/policy` (and the project's
+settings page) lists each clamp.
+
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train
 ([ADR 0041](adr/0041-l-approbation-suit-ce-que-le-lot-emporte.md)). The policy's own human gate is

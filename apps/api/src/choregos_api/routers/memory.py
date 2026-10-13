@@ -16,7 +16,7 @@ from ..deps import Db, Me, ProjectContext, ProjectCtx
 from ..errors import forbidden
 from ..rbac import Permission
 from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryReimport
-from ..services import active_policy, policy_model
+from ..services import effective_policy
 from ..temporal import get_temporal
 
 router = APIRouter(tags=["memory"])
@@ -65,7 +65,7 @@ async def search(
     k: Annotated[int, Query(le=100)] = 10,
     kinds: Annotated[str | None, Query()] = None,
 ) -> list[MemoryDto]:
-    policy = policy_model(await active_policy(session, ctx.id))
+    policy = await effective_policy(session, ctx.id)
     if not policy.memory.enabled:
         return []
     adapter = await _adapter(ctx, session)

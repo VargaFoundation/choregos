@@ -8,6 +8,7 @@ import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/componen
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { PolicyCeilingCard } from "@/components/admin/policy-ceiling";
 import { GesteConfirme } from "@/components/geste-confirme";
 
 /**
@@ -15,7 +16,8 @@ import { GesteConfirme } from "@/components/geste-confirme";
  * plateforme, l'édition et les sections des greffons ont leur sous-page (ADR 0032).
  */
 export default function AdminPage() {
-  const { me } = useSession();
+  const { me, org } = useSession();
+  const orgAdmin = (me?.memberships ?? []).some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
   const queryClient = useQueryClient();
   const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +119,7 @@ export default function AdminPage() {
           <EtatDeLecture lecture={tokens} quoi="your access tokens" />
           {tokens.data?.length === 0 && <Empty>no token</Empty>}
         </Card>
+        <PolicyCeilingCard org={org} canEdit={orgAdmin} />
       </div>
     </div>
   );

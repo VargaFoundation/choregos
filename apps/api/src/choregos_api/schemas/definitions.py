@@ -115,8 +115,24 @@ class PolicyDto(Dto):
     yaml: str
     json_doc: dict[str, Any] | None = Field(default=None, alias="json")
     is_active: bool = True
+    #: What the organisation's ceiling brings down in this policy (S27-05): the policy that runs is
+    #: the clamped one. Empty when it is within the ceiling.
+    clamps: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid", from_attributes=True, populate_by_name=True)
+
+
+class PolicyCeilingDto(Dto):
+    """An organisation's policy ceiling (S27-05): the caps every project policy stays under."""
+
+    ceiling: dict[str, Any] | None = None
+    updated_by: str | None = None
+    updated_at: str | None = None
+
+
+class PolicyCeilingPut(Dto):
+    #: `budgets`, `attempts`, `scope`, `findings` caps; `null` removes the ceiling.
+    ceiling: dict[str, Any] | None = None
 
 
 class PolicyPut(Dto):

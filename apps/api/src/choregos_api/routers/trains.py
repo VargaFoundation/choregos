@@ -28,7 +28,7 @@ from ..schemas import (
     ReleasePage,
     TrainStatusDto,
 )
-from ..services import active_policy, persist_event, policy_model, release_dto
+from ..services import effective_policy, persist_event, release_dto
 from ..temporal import get_temporal, train_id
 
 router = APIRouter(tags=["trains"])
@@ -85,7 +85,7 @@ async def train_status(ctx: ProjectCtx, env: Annotated[str, Path()], session: Db
             .limit(1)
         )
     ).scalar_one_or_none()
-    policy = policy_model(await active_policy(session, ctx.id))
+    policy = await effective_policy(session, ctx.id)
     env_policy = policy.release_train.get(env)
     if isinstance(live, dict):
         return TrainStatusDto(
