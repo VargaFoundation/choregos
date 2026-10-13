@@ -21,6 +21,10 @@ vi.mock("@/lib/api", async (importOriginal) => {
       agentMetricsList: vi.fn(),
       agentMetrics: vi.fn(),
       agentCatalogue: vi.fn().mockResolvedValue([]),
+      platformModels: vi.fn().mockResolvedValue([]),
+      backends: vi.fn().mockResolvedValue([]),
+      orgConnectors: vi.fn().mockResolvedValue([]),
+      skills: vi.fn().mockResolvedValue([]),
       orgAgentCredentials: vi.fn(),
       agentCredentials: vi.fn(),
       myTokens: vi.fn().mockResolvedValue([]),
@@ -65,7 +69,8 @@ describe("the agents' page", () => {
     expect(screen.queryByLabelText("Slug")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "New agent" }));
     const dialogue = await screen.findByRole("dialog", { name: "New agent" });
-    expect(within(dialogue).getByLabelText("Slug")).toBeInTheDocument();
+    // The builder is loaded when the drawer opens (S32-01).
+    expect(await within(dialogue).findByLabelText("Slug")).toBeInTheDocument();
     fireEvent.click(within(dialogue).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog", { name: "New agent" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add from catalogue" }));

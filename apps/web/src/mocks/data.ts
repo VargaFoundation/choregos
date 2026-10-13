@@ -9,6 +9,8 @@
 import type {
   Action,
   Agent,
+  AgentBackendInfo,
+  GatewayModel,
   AgentCatalogueEntry,
   AgentCreate,
   ConnectorType,
@@ -1224,6 +1226,18 @@ export const agentMetrics: AgentMetrics = {
   daily_budget_usd: 5,
 };
 
+/** The gateway's models and the agent backends, for the builder's pickers (S32-01). */
+export const platformModels: GatewayModel[] = [
+  { model_name: "platform/strong", litellm_model: "anthropic/claude-opus-5", provider: "anthropic", input_cost_per_1k: 0.015, output_cost_per_1k: 0.075 },
+  { model_name: "platform/standard", litellm_model: "anthropic/claude-sonnet-5", provider: "anthropic", input_cost_per_1k: 0.003, output_cost_per_1k: 0.015 },
+  { model_name: "platform/cheap", litellm_model: "anthropic/claude-haiku-4-5", provider: "anthropic", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004 },
+];
+
+export const platformBackends: AgentBackendInfo[] = [
+  { name: "claude-code", enabled: true, version: "2.1.0", capabilities: ["mcp", "skills"] },
+  { name: "codex", enabled: false, capabilities: ["mcp"], disabled_reason: "conformance below threshold" },
+];
+
 /** The registry's columns, one line per agent (S30-04). */
 export function agentMetricsList(): AgentMetricsSummary[] {
   return agents.map((agent) =>
@@ -1586,7 +1600,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const agentEcrit = /^\/orgs\/[^/]+\/agents\/([^/]+)(\/[a-z]+)?$/.exec(chemin ?? "");
   if (method === "POST" && /^\/orgs\/[^/]+\/agents$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentCreate;
-    return {
+    const cree = {
       slug: corps.slug,
       kind: corps.kind ?? "internal",
       display_name: corps.display_name,
@@ -1595,7 +1609,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       owner: me.email,
       latest_version: 1,
       versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
-    } as T;
+    } as Agent;
+    // The agent joins the registry for the time of the page (S32-01): its page reads it back.
+    if (!agents.some((a) => a.slug === cree.slug)) agents.push(cree);
+    return structuredClone(cree) as T;
   }
   const duCatalogue = /^\/orgs\/[^/]+\/agent-catalogue\/([^/]+)\/(install|connect)$/.exec(chemin ?? "");
   if (method === "POST" && duCatalogue) {
@@ -1703,8 +1720,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
     [/^\/projects\/[^/]+\/actions$/, actions],
     [/^\/projects\/[^/]+\/operations$/, projectOperations],
-    [/^\/platform\/models$/, []],
-    [/^\/platform\/backends$/, []],
+    [/^\/platform\/models$/, platformModels],
+    [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/executors$/, []],
     [/^\/projects\/[^/]+\/models$/, { profiles: {}, allow_unvalidated: false, inherited: {} }],
     [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],

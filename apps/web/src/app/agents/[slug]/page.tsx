@@ -2,6 +2,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
@@ -16,7 +17,6 @@ import {
   ErrorNote,
   EtatDeLecture,
   Heading,
-  Input,
   Select,
   StateBadge,
   Table,
@@ -27,12 +27,16 @@ import {
   TR,
   Tabs,
   tabClasses,
-  Textarea,
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import type { Agent, AgentSpec } from "@/lib/types";
+
+// The builder is loaded when the Definition tab is opened (S32-01).
+const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {
+  loading: () => <p className="text-sm text-ink-muted">Loading the builder…</p>,
+});
 
 /** The tabs of an agent's page (S30-05, plan item 7): one subject each. */
 const AGENT_TABS = [
@@ -243,13 +247,15 @@ function Definition({ org, agent }: { org: string; agent: Agent }) {
         {courante ? <Specification spec={courante.spec} /> : <p className="text-sm text-ink-muted">No version</p>}
       </Card>
       {agent.status !== "revoked" && (
-        <NouvelleVersion
-          key={agent.latest_version}
-          org={org}
-          agent={agent}
-          depart={courante?.spec ?? {}}
-          onPubliee={setPubliee}
-        />
+        <Card title={`New version (v${agent.latest_version + 1})`}>
+          <AgentBuilder
+            key={agent.latest_version}
+            org={org}
+            mode={{ kind: "version", agent }}
+            start={courante?.spec ?? {}}
+            onDone={setPubliee}
+          />
+        </Card>
       )}
       {publiee && (
         <p className="text-sm" role="status">
@@ -420,177 +426,6 @@ function Specification({ spec }: { spec: AgentSpec }) {
         <p className="text-xs text-ink-muted">No instructions: the playbook of its role speaks.</p>
       )}
     </div>
-  );
-}
-
-/** Une nouvelle version : la dernière, changée. Rien n'est réécrit ; le projet épinglé ne bouge pas. */
-function NouvelleVersion({
-  org,
-  agent,
-  depart,
-  onPubliee,
-}: {
-  org: string;
-  agent: Agent;
-  depart: AgentSpec;
-  onPubliee: (message: string) => void;
-}) {
-  const client = useQueryClient();
-  const [instructions, setInstructions] = useState(depart.instructions ?? "");
-  const [modele, setModele] = useState(depart.model ?? "");
-  const [tours, setTours] = useState(depart.limits?.max_turns?.toString() ?? "");
-  const [quotidien, setQuotidien] = useState(depart.budget?.daily_usd?.toString() ?? "");
-  // Les skills se rattachent ici (seconde passe du 08/10, S23-13) : la page les montrait, et rien
-  // dans la console ne permettait d'en donner une à un agent — il fallait l'API ou la CLI.
-  const [competences, setCompetences] = useState(depart.skills ?? []);
-  const [ajout, setAjout] = useState("");
-  const [versionDAjout, setVersionDAjout] = useState("");
-  const bibliotheque = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
-  const disponibles = (bibliotheque.data ?? []).filter(
-    (skill) => skill.status !== "archived" && !competences.some((c) => c.slug === skill.slug),
-  );
-  const choisie = disponibles.find((skill) => skill.slug === ajout);
-  const [erreur, setErreur] = useState<string | null>(null);
-  async function publier() {
-    setErreur(null);
-    const spec: AgentSpec = {
-      ...depart,
-      instructions,
-      model: modele || null,
-      limits: { ...depart.limits, max_turns: tours ? Number(tours) : null },
-      budget: { ...depart.budget, daily_usd: quotidien ? Number(quotidien) : null },
-      skills: competences,
-    };
-    try {
-      const publiee = await api.publishAgentVersion(org, agent.slug, spec);
-      onPubliee(`v${publiee.version} published: projects keep the version they pinned`);
-      await client.invalidateQueries({ queryKey: ["agent", org, agent.slug] });
-    } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "publication refused");
-    }
-  }
-  return (
-    <Card title={`New version (v${agent.latest_version + 1})`}>
-      <form
-        className="grid gap-3 md:grid-cols-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void publier();
-        }}
-      >
-        <label className="space-y-1 md:col-span-3">
-          <span className="text-xs text-ink-muted">Instructions</span>
-          <Textarea
-            className="w-auto font-mono text-xs"
-            rows={8}
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Model</span>
-          <Input
-            value={modele}
-            onChange={(e) => setModele(e.target.value)}
-            placeholder="profile:standard"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Max turns</span>
-          <Input type="number" min={1} value={tours} onChange={(e) => setTours(e.target.value)} />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Daily budget (USD)</span>
-          <Input
-            type="number"
-            min={0}
-            step="0.5"
-            value={quotidien}
-            onChange={(e) => setQuotidien(e.target.value)}
-          />
-        </label>
-        <fieldset className="space-y-2 md:col-span-3" data-testid="skills-de-la-version">
-          <legend className="text-xs text-ink-muted">Skills</legend>
-          {competences.length === 0 ? (
-            <p className="text-xs text-ink-muted">None — the playbook of its role is all it reads.</p>
-          ) : (
-            <ul className="flex flex-wrap gap-2">
-              {competences.map((competence) => (
-                <li key={competence.slug} className="inline-flex items-center gap-1 border border-line px-2 py-0.5 text-xs">
-                  {competence.slug}
-                  {competence.version ? `@${competence.version}` : " (latest)"}
-                  <button
-                    type="button"
-                    className="ml-1 text-ink-muted hover:text-ink"
-                    onClick={() => setCompetences(competences.filter((c) => c.slug !== competence.slug))}
-                  >
-                    Remove<span className="sr-only"> {competence.slug}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-ink-muted">Add a skill</span>
-              <Select
-                value={ajout}
-                onChange={(e) => {
-                  setAjout(e.target.value);
-                  setVersionDAjout("");
-                }}
-              >
-                <option value="">—</option>
-                {disponibles.map((skill) => (
-                  <option key={skill.slug} value={skill.slug}>
-                    {skill.slug}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            {choisie && (
-              <label className="flex min-w-0 flex-col gap-1">
-                <span className="text-xs text-ink-muted">Version</span>
-                <Select value={versionDAjout} onChange={(e) => setVersionDAjout(e.target.value)}>
-                  <option value="">Latest, read at each run</option>
-                  {Array.from({ length: choisie.latest_version }, (_, i) => choisie.latest_version - i).map((v) => (
-                    <option key={v} value={v}>
-                      v{v}, pinned
-                    </option>
-                  ))}
-                </Select>
-              </label>
-            )}
-            <Button
-              size="sm"
-              disabled={!choisie}
-              onClick={() => {
-                if (!choisie) return;
-                setCompetences([
-                  ...competences,
-                  versionDAjout ? { slug: choisie.slug, version: Number(versionDAjout) } : { slug: choisie.slug },
-                ]);
-                setAjout("");
-                setVersionDAjout("");
-              }}
-            >
-              Attach
-            </Button>
-          </div>
-          <EtatDeLecture lecture={bibliotheque} quoi="the skill library" />
-        </fieldset>
-        <div className="flex items-center gap-3 md:col-span-3">
-          <Button type="submit" tone="accent">
-            Publish v{agent.latest_version + 1}
-          </Button>
-        </div>
-        {erreur && (
-          <div className="md:col-span-3">
-            <ErrorNote>{erreur}</ErrorNote>
-          </div>
-        )}
-      </form>
-    </Card>
   );
 }
 
