@@ -117,6 +117,28 @@ describe("the artifacts of a work item (S31-04)", () => {
     await waitFor(() => expect(screen.getByTestId("artifact-reader")).toHaveAttribute("href", "/p/billing-api/runs/r9"));
   });
 
+  it("previews a PDF, plays a video, downloads an office file (S31-06)", async () => {
+    expect(viewerOf({ type: "pdf", kind: "file", media_type: "application/pdf" })).toBe("pdf");
+    expect(viewerOf({ type: "mp4", kind: "file", media_type: "video/mp4" })).toBe("video");
+    for (const type of ["docx", "xlsx", "pptx"] as const) {
+      expect(viewerOf({ type, kind: "file", media_type: "application/vnd.openxmlformats-officedocument" })).toBe("download");
+    }
+    vi.mocked(api.artifactContent).mockResolvedValue(new Blob(["x"], { type: "application/octet-stream" }));
+    const file = (name: string, type: Artifact["type"], media_type: string) =>
+      artifact(name, 1, { type, kind: "file", media_type, storage_url: `s3://choregos/${name}` });
+    renderArtifacts([
+      file("report", "pdf", "application/pdf"),
+      file("demo", "mp4", "video/mp4"),
+      file("deck", "pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+    ]);
+    expect(await screen.findByTestId("artifact-download-only")).toHaveTextContent("office file is downloaded");
+    expect(screen.getByTestId("artifact-download")).toHaveAttribute("download", "deck.pptx");
+    fireEvent.click(screen.getByRole("tab", { name: "demo" }));
+    expect(await screen.findByTestId("artifact-video")).toHaveAttribute("controls");
+    fireEvent.click(screen.getByRole("tab", { name: "report" }));
+    expect(await screen.findByTestId("artifact-pdf")).toHaveAttribute("src", "blob:artifact");
+  });
+
   it("says a refused read instead of showing anything", async () => {
     vi.mocked(api.artifactContent).mockRejectedValue(new ApiError(409, { detail: "its content no longer matches its digest" }));
     renderArtifacts([artifact("budget", 1)]);

@@ -24,6 +24,9 @@ export function proxy(request: NextRequest) {
     // `blob:`: an image artifact is shown from the bytes the API served, digest checked (ADR 0049).
     "img-src 'self' data: blob:",
     "font-src 'self'",
+    // A video artifact plays, and a PDF one opens in the browser's viewer, from their bytes (S31-06).
+    "media-src 'self' blob:",
+    "frame-src 'self' blob:",
     `connect-src 'self' ${apiUrl}`,
     "object-src 'none'",
     "base-uri 'self'",

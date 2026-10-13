@@ -9,7 +9,15 @@ test("the artifacts of a work item: markdown, SARIF, image, download, producer a
 }) => {
   await page.goto("/p/billing-api/items/w1");
   const tabs = page.getByRole("tablist", { name: "artifacts" });
-  await expect(tabs.getByRole("tab")).toHaveText(["architecture.png", "budget_summary", "security_report", "spec_markdown"]);
+  await expect(tabs.getByRole("tab")).toHaveText([
+    "architecture.png",
+    "board_deck",
+    "budget_summary",
+    "demo",
+    "quarterly_report",
+    "security_report",
+    "spec_markdown",
+  ]);
 
   // An image, decoded by the browser from the bytes the API served.
   const image = page.getByTestId("artifact-image");

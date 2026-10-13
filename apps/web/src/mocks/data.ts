@@ -231,6 +231,17 @@ const SARIF = JSON.stringify({
 /** A valid 1×1 PNG: what an image model behind the gateway would have produced. */
 const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
+const PPTX_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+/** A minimal one-page PDF. */
+const PDF = [
+  "%PDF-1.4",
+  "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+  "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+  "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] >> endobj",
+  "trailer << /Root 1 0 R >>",
+  "%%EOF",
+].join("\n");
+
 const SPEC_V1_DIGEST = "sha256:9f2c4e1a7b3d5c8e0f6a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e";
 
 function digestOf(seed: string): string {
@@ -269,6 +280,10 @@ export const artifacts: Artifact[] = [
   artifactOf("spec_markdown", 2, "markdown", "markdown", "text/markdown", SPEC_V2.length, "r2", "refine", 130, ["analyst", 3]),
   artifactOf("security_report", 1, "sarif", "report", "application/sarif+json", SARIF.length, "r3", "implement", 50),
   artifactOf("architecture.png", 1, "png", "file", "image/png", 68, "r3", "implement", 50),
+  // Binary deliverables (S31-06): a deck from a skill, a report, a demo video from a gateway model.
+  artifactOf("board_deck", 1, "pptx", "file", PPTX_TYPE, 4096, "r3", "implement", 40, ["presenter", 1]),
+  artifactOf("quarterly_report", 1, "pdf", "file", "application/pdf", PDF.length, "r3", "implement", 40),
+  artifactOf("demo", 1, "mp4", "file", "video/mp4", 2048, "r3", "implement", 40),
   // A revision whose stored bytes no longer match its digest: the API refuses it (409).
   artifactOf("budget_summary", 1, "markdown", "markdown", "text/markdown", 120, "r3", "implement", 45),
 ];
@@ -278,6 +293,9 @@ const ARTIFACT_CONTENT: Record<string, [string, () => BlobPart]> = {
   "spec_markdown@2": ["text/markdown", () => SPEC_V2],
   "security_report@1": ["application/sarif+json", () => SARIF],
   "architecture.png@1": ["image/png", () => Uint8Array.from(atob(PNG_B64), (c) => c.charCodeAt(0))],
+  "board_deck@1": [PPTX_TYPE, () => new Uint8Array([0x50, 0x4b, 0x03, 0x04, ...new Array<number>(4092).fill(0)])],
+  "quarterly_report@1": ["application/pdf", () => PDF],
+  "demo@1": ["video/mp4", () => new Uint8Array(2048)],
 };
 
 /** The bytes of a revision in demo mode; `budget_summary` plays a revision altered behind the platform. */
