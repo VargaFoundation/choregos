@@ -1197,6 +1197,19 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentMetrics" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agent-trials:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: startAgentTrial
+      description: Run a draft version once on a sample input, without publishing it, under a budget capped at 0.50 $ (S32-03). The run is read at `GET /runs/{id}`; its work item is a trial, left out of the board.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentTrialCreate" } } }
+      responses:
+        "201": { description: Started, content: { application/json: { schema: { $ref: "#/components/schemas/AgentTrial" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agent-credentials:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1305,7 +1318,7 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSpec" } } }
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/AgentVersion" } } } }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "409": { description: "A case of the agent's eval suite fails (S32-03): `errors` names each failing case", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /orgs/{org}/agents/{slug}/versions/{version}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2530,6 +2543,51 @@ components:
         skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
         mcp_servers: { type: array, items: { type: object, required: [connector], properties: { connector: { type: string }, tools: { type: array, items: { type: string } } } } }
         knowledge: { type: array, description: "the knowledge bases the agent reads (ADR 0051); each must be served to the run's project", items: { type: object, required: [slug], properties: { slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } } } }
+        evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalCase" }, description: "The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published" }
+    AgentEvalCase:
+      type: object
+      description: A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not.
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        input: { $ref: "#/components/schemas/AgentSampleInput" }
+        must_contain: { type: array, items: { type: string } }
+        must_not_contain: { type: array, items: { type: string } }
+    AgentSampleInput:
+      type: object
+      description: A sample work item an agent is tried or evaluated on.
+      properties:
+        title: { type: string, maxLength: 500 }
+        body: { type: string, maxLength: 20000 }
+    AgentEvalResult:
+      type: object
+      required: [name, passed]
+      properties:
+        name: { type: string }
+        passed: { type: boolean }
+        missing: { type: array, items: { type: string } }
+        forbidden: { type: array, items: { type: string } }
+        error: { type: [string, "null"], description: "the instructions do not render on this input" }
+    AgentTrialCreate:
+      type: object
+      description: Try a draft version on a sample input, in one project, under a capped budget (S32-03).
+      required: [project, spec, input]
+      properties:
+        project: { type: string, description: "the project's slug: its model profiles, backend and tools apply" }
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+        input: { $ref: "#/components/schemas/AgentSampleInput" }
+        budget_usd: { type: [number, "null"], exclusiveMinimum: 0, description: "capped at 0.50 $, at the version's budget per run and at the project's budget per work item" }
+        agent: { type: [string, "null"], description: "the agent the draft would become a version of: its published suite is run too" }
+    AgentTrial:
+      type: object
+      required: [run_id, work_item_id, project, budget_usd, status]
+      properties:
+        run_id: { type: string, description: "read it at `GET /runs/{id}`" }
+        work_item_id: { type: string }
+        project: { type: string }
+        budget_usd: { type: number }
+        status: { type: string }
+        evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalResult" } }
     AgentCreate:
       type: object
       required: [slug, display_name]

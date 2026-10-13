@@ -12,6 +12,7 @@ from .memory import MemoryIngestion
 from .provisioning import ProjectProvisioning
 from .reconciliation import TrackerReconciliation
 from .train import ReleaseTrain
+from .trial import AgentTrial
 
 ALL_WORKFLOWS = [
     WorkflowInterpreter,
@@ -22,6 +23,7 @@ ALL_WORKFLOWS = [
     MemoryIngestion,
     EvalMatrix,
     TrackerReconciliation,
+    AgentTrial,
 ]
 
 WORKFLOW_ACTIVITIES = [load_context, record_workflow_failure, record_migration, signal_train]
@@ -30,6 +32,7 @@ __all__ = [
     "ALL_WORKFLOWS",
     "WORKFLOW_ACTIVITIES",
     "ActionWorkflow",
+    "AgentTrial",
     "EvalMatrix",
     "FindingsTriage",
     "MemoryIngestion",

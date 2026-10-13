@@ -129,9 +129,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # Un agent du registre (ADR 0033) : sa version effective — l'épinglée du projet, surcharges
         # appliquées — fixe modèle, backend, limites et budget, et ses instructions remplacent le
         # playbook. Un agent révoqué, suspendu ou expiré ne part pas.
-        agent = await _agent_du_plan(session, bundle, plan)
-        if agent is not None:
+        # A trial (S32-03) runs a draft version, unpublished, in the agent's place: no daily budget
+        # of a registry agent applies to it, its own cap does (below).
+        agent = _agent_d_essai(plan) or await _agent_du_plan(session, bundle, plan)
+        if agent is not None and plan.trial_spec is None:
             await _budget_du_jour(session, bundle, agent)
+        if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
         resolver = ModelResolver(
             gateway_url=settings.gateway_url, gateway_models=await _gateway_catalogue(bundle)
@@ -147,6 +150,13 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             budget = Budget(usd=budget.usd, max_turns=plan.max_turns, max_minutes=budget.max_minutes)
         if plan.max_minutes:
             budget = Budget(usd=budget.usd, max_turns=budget.max_turns, max_minutes=plan.max_minutes)
+        if plan.trial_budget_usd is not None:
+            # A trial's cap only tightens: the gateway key is minted at this amount (S32-03).
+            budget = Budget(
+                usd=min(budget.usd, plan.trial_budget_usd),
+                max_turns=budget.max_turns,
+                max_minutes=budget.max_minutes,
+            )
         reservation = await _reservation(session, bundle, item, run_id, agent, budget.usd)
         if reservation.below(settings.min_run_reservation_usd):
             return await _refuse_on_budget(session, bundle, item, run_id, plan, reservation)
@@ -289,8 +299,10 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         run.context_pack = context_pack.model_dump(mode="json", by_alias=True)
         run.context_pack_url = stage_input.context_pack_url
         run.playbook_checksum = stage_input.playbook.ref
-        run.agent_slug = agent.agent.slug if agent is not None else None
-        run.agent_version = agent.version if agent is not None else None
+        # A trial is no agent's run: it counts in no registry agent's metrics (S32-03).
+        registre = agent is not None and plan.trial_spec is None
+        run.agent_slug = agent.agent.slug if registre else None
+        run.agent_version = agent.version if registre else None
         run.allowed_paths = allowed_paths
         run.started_at = utcnow()
         if existing is None:
@@ -485,6 +497,20 @@ def _rendre_le_playbook(
                 non_retryable=True,
             ) from erreur
     return render_playbook(plan.playbook or plan.role, **variables)
+
+
+def _agent_d_essai(plan: StagePlan) -> Any:
+    """The draft version a trial runs (S32-03): it stands in for a registry agent — its
+    instructions, model, backend, limits and skills — without being published."""
+    if plan.trial_spec is None:
+        return None
+    from types import SimpleNamespace
+
+    from choregos_api.schemas import AgentSpec
+
+    return SimpleNamespace(
+        agent=SimpleNamespace(slug="trial"), version=0, spec=AgentSpec.model_validate(plan.trial_spec)
+    )
 
 
 async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:

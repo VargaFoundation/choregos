@@ -48,6 +48,8 @@ from ..schemas import (
     AgentPatch,
     AgentProjectMetrics,
     AgentSpec,
+    AgentTrial,
+    AgentTrialCreate,
     AgentVersionDto,
     ApiTokenCreated,
     ImplicitAgent,
@@ -55,6 +57,7 @@ from ..schemas import (
     ProjectAgentPut,
     RunDto,
 )
+from ..services.agent_evals import evaluate, gate, suite_for
 from ..services.agent_lifecycle import (
     TransitionRefused,
     check_transition,
@@ -165,6 +168,8 @@ async def list_agents(org: str, session: Db, principal: Me) -> list[AgentDto]:
 async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) -> AgentDto:
     _gerer(principal, org)
     erreurs_d_une_version(body.spec)
+    # Its own eval suite gates its version 1 (S32-03).
+    gate(body.spec, None)
     organisation = await _organisation(session, org)
     await _skills_usable(session, organisation, body.spec)
     existant = (
@@ -230,6 +235,9 @@ async def publish_version(
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":
         raise conflict(f"agent `{slug}` is retired: it can no longer publish")
+    # The published version's eval suite, and the new one's, gate the publication (S32-03).
+    publiee = (await _versions(session, agent))[:1]
+    gate(body, AgentSpec.model_validate(publiee[0].spec) if publiee else None)
     derniere = (
         await session.execute(select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == agent.id))
     ).scalar() or 0
@@ -735,6 +743,91 @@ def _credential_dto(ligne: AgentCredential, jeton: ApiToken | None = None) -> Ag
         token_name=jeton.name if jeton else None,
         last_used_at=jeton.last_used_at if jeton else None,
         last_client=jeton.last_client if jeton else None,
+    )
+
+
+#: The most a trial may spend, whatever is asked (S32-03).
+TRIAL_CAP_USD = 0.50
+TRIAL_DEFAULT_USD = 0.25
+
+
+@router.post(
+    "/orgs/{org}/agent-trials",
+    response_model=AgentTrial,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="startAgentTrial",
+)
+async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, principal: Me) -> AgentTrial:
+    """Run a draft version once on a sample input, without publishing it (S32-03).
+
+    The run machinery is the usual one — the orchestrator's `AgentTrial` prepares, starts and awaits
+    one stage — on a trial work item that no workflow, tracker or board sees. The budget is capped at
+    0.50 $ and at the draft's budget per run; the orchestrator tightens it further to the project's
+    budget for the role (policy). The gateway key is minted at that amount: the trial cannot spend more.
+    """
+    from uuid import uuid4
+
+    from ..db.models import Project, WorkItem
+    from ..temporal import get_temporal, trial_run_id, trial_workflow_id
+
+    _gerer(principal, org)
+    if not principal.can(Permission.PROJECT_READ, org, body.project):
+        raise forbidden(f"trying an agent in {org}/{body.project} requires being a member of it")
+    erreurs_d_une_version(body.spec)
+    organisation = await _organisation(session, org)
+    projet = (
+        await session.execute(
+            select(Project).where(Project.org_id == organisation.id, Project.slug == body.project)
+        )
+    ).scalar_one_or_none()
+    if projet is None:
+        raise not_found("Project", f"{org}/{body.project}")
+    publiee = None
+    if body.agent:
+        agent = await _agent(session, organisation, body.agent)
+        versions = await _versions(session, agent)
+        publiee = AgentSpec.model_validate(versions[0].spec) if versions else None
+    plafonds = [TRIAL_CAP_USD, body.budget_usd or TRIAL_DEFAULT_USD]
+    if body.spec.budget.run_usd is not None:
+        plafonds.append(body.spec.budget.run_usd)
+    budget = round(min(plafonds), 4)
+    item = WorkItem(
+        project_id=projet.id,
+        tracker_key=f"TRIAL-{uuid4().hex[:8]}",
+        title=body.input.title or "Trial",
+        body_snapshot=body.input.body,
+        state="trial",
+        created_by=principal.email,
+    )
+    session.add(item)
+    await session.flush()
+    await get_temporal().start_trial(
+        trial_workflow_id(item.id),
+        {
+            "project_id": projet.id,
+            "work_item_id": item.id,
+            "spec": body.spec.model_dump(mode="json"),
+            "budget_usd": budget,
+        },
+    )
+    item.temporal_wf_id = trial_workflow_id(item.id)
+    await record(
+        session,
+        principal,
+        "agent.trial",
+        org_id=organisation.id,
+        target_type="work_item",
+        target_id=item.id,
+        project=body.project,
+        budget_usd=budget,
+    )
+    return AgentTrial(
+        run_id=trial_run_id(item.id),
+        work_item_id=item.id,
+        project=body.project,
+        budget_usd=budget,
+        status="queued",
+        evals=evaluate(body.spec, suite_for(body.spec, publiee)),
     )
 
 

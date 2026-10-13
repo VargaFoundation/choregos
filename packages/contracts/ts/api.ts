@@ -486,6 +486,53 @@ export type AgentSpec = {
   knowledge?: Array<{
     slug: string;
   }>;
+  /** The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published */
+  evals?: Array<AgentEvalCase>;
+};
+
+/** A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not. */
+export type AgentEvalCase = {
+  name: string;
+  input?: AgentSampleInput;
+  must_contain?: Array<string>;
+  must_not_contain?: Array<string>;
+};
+
+/** A sample work item an agent is tried or evaluated on. */
+export type AgentSampleInput = {
+  title?: string;
+  body?: string;
+};
+
+export type AgentEvalResult = {
+  name: string;
+  passed: boolean;
+  missing?: Array<string>;
+  forbidden?: Array<string>;
+  /** the instructions do not render on this input */
+  error?: string | null;
+};
+
+/** Try a draft version on a sample input, in one project, under a capped budget (S32-03). */
+export type AgentTrialCreate = {
+  /** the project's slug: its model profiles, backend and tools apply */
+  project: string;
+  spec: AgentSpec;
+  input: AgentSampleInput;
+  /** capped at 0.50 $, at the version's budget per run and at the project's budget per work item */
+  budget_usd?: number | null;
+  /** the agent the draft would become a version of: its published suite is run too */
+  agent?: string | null;
+};
+
+export type AgentTrial = {
+  /** read it at `GET /runs/{id}` */
+  run_id: string;
+  work_item_id: string;
+  project: string;
+  budget_usd: number;
+  status: string;
+  evals?: Array<AgentEvalResult>;
 };
 
 export type AgentCreate = {
@@ -1956,6 +2003,7 @@ export interface Operations {
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
+  startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;

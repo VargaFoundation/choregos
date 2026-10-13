@@ -40,6 +40,16 @@ def action_id(action: str) -> str:
     return f"action-{action}"
 
 
+def trial_workflow_id(work_item_id: str) -> str:
+    """The `AgentTrial` of a trial work item (S32-03): one per trial."""
+    return f"trial-{work_item_id}"
+
+
+def trial_run_id(work_item_id: str) -> str:
+    """The run of a trial: `prepare_stage` names it `<work item>-<transition>-<attempt>`."""
+    return f"{work_item_id}-trial-1"
+
+
 def provisioning_id(project_slug: str) -> str:
     return f"prov-{project_slug}"
 
@@ -60,6 +70,7 @@ class TemporalGateway(Protocol):
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def cancel(self, workflow_id: str) -> None: ...
     async def describe(self, workflow_id: str) -> WorkflowState | None: ...
 
@@ -122,6 +133,10 @@ class FakeTemporal:
         self.started.setdefault(workflow_id, payload)  # `action-<id>` : un seul démarrage
         return workflow_id
 
+    async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        self.started.setdefault(workflow_id, payload)  # `trial-<work item>` : un seul démarrage
+        return workflow_id
+
     async def cancel(self, workflow_id: str) -> None:
         self.cancelled.append(workflow_id)
 
@@ -172,6 +187,10 @@ class RealTemporal:
 
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("ActionWorkflow", workflow_id, payload)
+
+    async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """A draft agent version, tried once (S32-03): `AgentTrial` in the orchestrator."""
+        return await self._start("AgentTrial", workflow_id, payload)
 
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("ProjectProvisioning", workflow_id, payload)

@@ -81,7 +81,11 @@ async def list_work_items(
     size: Annotated[str | None, Query()] = None,
     q: Annotated[str | None, Query()] = None,
 ) -> WorkItemPage:
+    # A trial's work item (S32-03) belongs to no workflow: the board and the inbox do not list it,
+    # unless it is asked for by its state.
     query = select(WorkItem).where(WorkItem.project_id == ctx.id)
+    if state != "trial":
+        query = query.where(WorkItem.state != "trial")
     if state:
         query = query.where(WorkItem.state == state)
     if size:
