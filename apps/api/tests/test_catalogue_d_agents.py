@@ -51,7 +51,9 @@ async def test_installer_un_agent_installe_ses_skills_d_abord(client: AsyncClien
     installe = await client.post(f"{ORG}/agent-catalogue/architect/install")
     assert installe.status_code == 201, installe.text
     agent = installe.json()
-    assert agent["versions"][0]["created_by"] == "catalogue:architect@1"
+    from choregos_core.catalogue_d_agents import entree
+
+    assert agent["versions"][0]["created_by"] == f"catalogue:architect@{entree('architect').version}"  # type: ignore[union-attr]
     assert agent["versions"][0]["spec"]["skills"] == [{"slug": "madr-4", "version": None}]
     skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
     assert skills["madr-4"]["latest_version"] == 1

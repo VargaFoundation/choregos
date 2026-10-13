@@ -1,0 +1,18 @@
+agent: qa
+description: Test plan from the spec, edge cases, mutation testing with a documented
+  fallback, tests only.
+must_contain:
+- change tests only
+- boundaries
+- empty
+- concurrency
+- errors
+- mutmut run
+- stryker run
+- manual mutation
+- surviving
+- never report a mutation score you did not measure
+- '"mutation_report"'
+- '"test_plan"'
+must_not_contain:
+- fix the application code

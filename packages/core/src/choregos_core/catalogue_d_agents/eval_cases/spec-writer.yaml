@@ -1,0 +1,10 @@
+agent: spec-writer
+description: An executable specification, minimal allowed paths, asks rather than
+  invents.
+must_contain:
+- given / when / then
+- out of scope
+- allowed_paths
+- minimal
+- ask_human
+- '"spec_markdown"'

@@ -252,8 +252,9 @@ conformance:  ## Suites de conformité (backends ACP, templates)
 	$(UV) run pytest tests/conformance -m conformance -q
 
 .PHONY: evals
-evals:  ## Évals des playbooks
+evals:  ## Évals des playbooks et des agents du catalogue
 	$(UV) run python -m choregos_playbooks.evals.runner --all
+	$(UV) run python -m choregos_core.catalogue_d_agents.evals --all
 
 .PHONY: clean
 clean:  ## Nettoie les artefacts locaux

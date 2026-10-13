@@ -1,0 +1,8 @@
+agent: prod-verifier
+description: Read-only; the platform deploys; no-go when in doubt.
+must_contain:
+- read-only
+- the platform deploys; you never do
+- no-go
+- smoke_
+- '"verdict"'

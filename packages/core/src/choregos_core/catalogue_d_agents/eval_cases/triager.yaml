@@ -1,0 +1,8 @@
+agent: triager
+description: Size, risk, duplicate; at most three questions.
+must_contain:
+- size
+- risk
+- duplicate
+- three questions
+- '"duplicate_of"'

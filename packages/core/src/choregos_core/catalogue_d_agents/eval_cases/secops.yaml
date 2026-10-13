@@ -1,0 +1,17 @@
+agent: secops
+description: Runs the image's scanners and interprets them; never calls an unscanned
+  area clean; SARIF out.
+must_contain:
+- trivy fs --scanners vuln
+- cyclonedx
+- gitleaks detect
+- trivy config
+- not scanned
+- never as clean
+- sarif 2.1.0
+- '"secops_report"'
+- '"sarif"'
+- request_changes
+must_not_contain:
+- kubectl apply
+- you may fix

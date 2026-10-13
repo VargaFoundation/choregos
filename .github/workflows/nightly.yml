@@ -94,6 +94,8 @@ jobs:
       - run: uv sync --frozen
       - name: évals des playbooks (seuil bloquant)
         run: uv run python -m choregos_playbooks.evals.runner --all --json evals.json
+      - name: evals of the catalogue's agents (S33-06)
+        run: uv run python -m choregos_core.catalogue_d_agents.evals --all
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: evals, path: evals.json, if-no-files-found: ignore }

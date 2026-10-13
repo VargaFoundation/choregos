@@ -44,6 +44,20 @@ and nothing listed the AI clients that can act through the MCP gate.
 - The catalogue is English (ADR 0039) and grows by pull request, like the playbooks.
 - An entry's text changes with the platform's releases; organisations get it only by updating
   explicitly, never silently.
+- **Specialists (S33-06, plan item 3).** An entry may state its **output contract** (`catalogue.outputs`:
+  the names a transition running it declares), the **tools** it acts with (`catalogue.tools`: runner
+  binaries, read-only connectors, skills, knowledge) and whether its result must go to people next
+  (`catalogue.human_gate_after`). The catalogue adds `secops` (the runner's scanners, interpreted,
+  SARIF out), `compliance` (licences, personal data, third-party terms; never legal advice, always
+  followed by a human gate), `devops` (release readiness and rollout plan; reads observability after the
+  train; never deploys), `docs-writer`, `ux-designer` (the organisation's design system as a skill or a
+  knowledge base; axe when the project can run it) and `qa` (edge cases and mutation testing — mutmut
+  and Stryker are in the runner image). `architect` challenges a request against the knowledge bases
+  attached to it, citations mandatory. `netops` is its own entry (S33-08).
+- **Every internal entry has an eval** (`catalogue_d_agents/eval_cases/`, ADR 0020): deterministic
+  assertions on its rendered instructions, run by `make evals` and the nightly job, and proved to turn
+  red when the instructions are emptied (`packages/core/tests/test_catalogue_evals.py`). An agent with
+  no eval does not enter the catalogue.
 
 ## Alternatives discarded
 

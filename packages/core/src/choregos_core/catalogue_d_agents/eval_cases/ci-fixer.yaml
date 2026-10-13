@@ -1,0 +1,8 @@
+agent: ci-fixer
+description: The cause, not the symptom; the smallest change; flaky tests reported.
+must_contain:
+- cause
+- not the symptom
+- smallest change
+- flaky-test
+- 'status: blocked'

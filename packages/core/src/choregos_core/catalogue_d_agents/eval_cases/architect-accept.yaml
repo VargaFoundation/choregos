@@ -1,0 +1,9 @@
+agent: architect
+description: 'Once approved: checks its number, renumbers, marks accepted.'
+inputs:
+  adr_path: docs/adr/0007-queue.md
+must_contain:
+- docs/adr/0007-queue.md
+- adr_number_free
+- git ls-tree
+- 'status: "accepted"'
