@@ -12,6 +12,7 @@ import base64
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -235,7 +236,8 @@ def _write(target: Path, write: dict[str, Any]) -> None:
 
 
 def _write_result(plan: dict[str, Any], workspace: Path) -> None:
-    """Write the scripted `result.json`, with what the agent `reads` hashed into `outputs.seen`."""
+    """Write the scripted `result.json`, with what the agent `reads` hashed into `outputs.seen` and
+    what its `greps` found in place of `{grep}`."""
     # `reads`: files the agent opens; their sha256 (or null when absent) go into the result's
     # `outputs.seen`, so a test can tell what the agent actually found in its workspace.
     seen = {
@@ -246,16 +248,41 @@ def _write_result(plan: dict[str, Any], workspace: Path) -> None:
         )
         for path in plan.get("reads", [])
     }
+    # `greps`: really searches the workspace (the knowledge corpus, ADR 0051); what it finds
+    # replaces `{grep}` in the result summary.
+    found = _grep(plan, workspace)
     if "result" in plan:
         result_path = workspace / ".choregos" / "result.json"
         result_path.parent.mkdir(parents=True, exist_ok=True)
-        content = plan["result"]
-        if seen and isinstance(content, dict):
-            content = {**content, "outputs": {**content.get("outputs", {}), "seen": seen}}
+        content = _decorate(plan["result"], seen, found)
         result_path.write_text(
             content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+
+def _decorate(content: Any, seen: dict[str, Any], found: str) -> Any:
+    """The scripted result, with what the agent read (`seen`) and found (`{grep}`) put in."""
+    if seen and isinstance(content, dict):
+        content = {**content, "outputs": {**content.get("outputs", {}), "seen": seen}}
+    if isinstance(content, dict) and "{grep}" in str(content.get("summary", "")):
+        content = {**content, "summary": content["summary"].replace("{grep}", found.strip())}
+    return content
+
+
+def _grep(plan: dict[str, Any], workspace: Path) -> str:
+    """Runs the plan's `greps` for real in the workspace and returns what they found."""
+    found = ""
+    for grep in plan.get("greps", []):
+        completed = subprocess.run(
+            ["grep", "-rn", str(grep["pattern"]), str(grep.get("path", "."))],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        found += completed.stdout
+    return found
 
 
 def _plan_for(script: dict[str, Any], prompt_index: int) -> dict[str, Any]:

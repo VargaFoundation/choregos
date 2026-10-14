@@ -449,6 +449,41 @@
           }
         }
       }
+    },
+    "knowledge": {
+      "type": "array",
+      "description": "The registry agent's knowledge bases (ADR 0051). `files`: the runner fetches the pinned documents through the internal API, checks the digest and lays them read-only under `.choregos/knowledge/<slug>/`; `index`: the agent searches the base with `knowledge_search`.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "files",
+              "index"
+            ]
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "digest": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

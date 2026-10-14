@@ -27,12 +27,13 @@ from choregos_contracts import (
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome
 from .backends import get_backend
-from .client import InternalClient
+from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, get_settings
 from .dod import run_checks
 from .exits import Exit
 from .guardrails import GuardRails
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
+from .knowledge import KnowledgeInvalidError, lay_out
 from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
 from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_outputs
@@ -115,6 +116,8 @@ class Runner:
         self.started = time.monotonic()
         #: L'index des skills qu'un backend ne lit pas lui-même, ajouté au prompt.
         self.index_des_skills = ""
+        #: Where the knowledge bases lie in the workspace (ADR 0051), added to the prompt.
+        self.knowledge_index = ""
         #: Le jeton git du run (S22-07) : en mémoire seulement, pour le clone et le push.
         self.jeton_git: str | None = None
 
@@ -197,8 +200,10 @@ class Runner:
         plan = backend.launch_plan(stage_input, workspace.path)
         written = plan.materialize(workspace.path)
         workspace.exclude(written)
+        # Skills, then knowledge bases: the first refusal stops the run before the agent starts.
         if (
             refus := await self._poser_les_skills(client, journal, stage_input, backend, workspace)
+            or await self._lay_out_knowledge(client, journal, stage_input, workspace)
         ) is not None:
             return refus
         guards = GuardRails(
@@ -374,6 +379,24 @@ class Runner:
             result.reason = "missing_outputs"
             result.summary = f"{result.summary} — declared files not delivered: {', '.join(missing)}"[:4000]
 
+    async def _lay_out_knowledge(
+        self, client: Any, journal: Any, stage_input: StageInput, workspace: Any
+    ) -> RunOutcome | None:
+        """The `files` knowledge bases (ADR 0051): checked against their digest, laid read-only
+        under `.choregos/knowledge/`, out of the diff. A base missing or changed stops the run."""
+        if not any(ref.mode == "files" for ref in stage_input.knowledge):
+            return None
+        try:
+            written, self.knowledge_index = lay_out(
+                await client.fetch_knowledge(), stage_input.knowledge, workspace.path
+            )
+        except (KnowledgeInvalidError, InternalApiError) as exc:
+            await journal.record("run.failed", {"phase": "knowledge", "error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.KNOWLEDGE_INVALID, detail=str(exc))
+        workspace.exclude(written)
+        return None
+
     def _prompt(self, stage_input: StageInput, workspace: Path) -> str:
         """Playbook rendu + tâche. Le playbook vient de l'orchestrateur, jamais du dépôt."""
         playbook = stage_input.playbook.prompt or ""
@@ -382,6 +405,8 @@ class Runner:
         task = (workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
         if self.index_des_skills:
             playbook = f"{playbook}\n\n{self.index_des_skills}"
+        if self.knowledge_index:
+            playbook = f"{playbook}\n\n{self.knowledge_index}"
         return f"{playbook}\n\n---\n\n{task}"
 
     def _remaining(self, budget_seconds: int) -> float:

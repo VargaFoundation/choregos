@@ -115,6 +115,10 @@ class InternalClient:
             raise InternalApiError(response.status_code, response.text[:400])
         return dict(response.json())
 
+    async def fetch_knowledge(self) -> list[dict[str, Any]]:
+        """The pinned documents of the run's `files` knowledge bases (ADR 0051); the digest is checked."""
+        return list(await self._request("GET", "/knowledge") or [])
+
     async def fetch_ticket(self) -> dict[str, Any]:
         return dict(await self._request("GET", "/ticket"))
 

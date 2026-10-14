@@ -79,6 +79,7 @@ from .stage import (
     Diagnostics,
     Evidence,
     Finding,
+    KnowledgeRef,
     LaunchSpec,
     McpServerRef,
     MemoryItem,
@@ -100,6 +101,7 @@ from .stage import (
     WorkItemRef,
     empreinte_de_skill,
     file_outputs,
+    knowledge_digest,
     missing_outputs,
 )
 from .workflow import (
@@ -218,6 +220,7 @@ __all__ = [
     "HumanRequestKind",
     "InboundEvent",
     "InboundEventType",
+    "KnowledgeRef",
     "LaunchSpec",
     "McpServerRef",
     "MemoryItem",
@@ -274,6 +277,7 @@ __all__ = [
     "empreinte_de_skill",
     "file_outputs",
     "inline_bytes",
+    "knowledge_digest",
     "load_openapi",
     "load_schema",
     "missing_outputs",

@@ -119,6 +119,8 @@ class FakeInternalClient:
         self.ci_logs = ""
         #: Les skills que l'API interne livrerait (ADR 0033).
         self.skills: list[dict[str, Any]] = []
+        #: The knowledge bases the internal API would deliver (ADR 0051).
+        self.knowledge: list[dict[str, Any]] = []
         #: Le jeton git que l'API frapperait pour ce run (S22-07), et combien de fois on l'a demandé.
         self.git_token: str | None = None
         self.git_token_calls = 0
@@ -144,6 +146,9 @@ class FakeInternalClient:
             self.outputs: dict[str, tuple[str, bytes, str]] = {}
         self.outputs[name] = (type_, data, digest)
         return {"name": name, "type": type_, "digest": digest, "size": len(data), "version": 1}
+
+    async def fetch_knowledge(self) -> list[dict[str, Any]]:
+        return list(self.knowledge)
 
     async def fetch_input(self) -> StageInput:
         return self.stage_input
