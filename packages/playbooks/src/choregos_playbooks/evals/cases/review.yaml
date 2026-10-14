@@ -1,5 +1,5 @@
 role: review
-description: Le playbook de review doit produire un verdict structuré et des remarques situées.
+description: The review playbook must produce a structured verdict and located remarks.
 must_contain:
   - "Security"
   - "Performance"
@@ -8,8 +8,8 @@ must_contain:
 must_not_contain:
   - "congratulate"
 rubric:
-  - critere: "classe les remarques par gravité"
-    poids: 2
-  - critere: "demande des remarques situées (fichier, ligne)"
-    poids: 2
+  - criterion: "classifies remarks by severity"
+    weight: 2
+  - criterion: "asks for located remarks (file, line)"
+    weight: 2
 min_score: 0.8

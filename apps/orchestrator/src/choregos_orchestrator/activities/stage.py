@@ -453,7 +453,7 @@ def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPa
 def _rendre_le_playbook(
     plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None
 ) -> str:
-    from choregos_playbooks import cadrer, render_playbook
+    from choregos_playbooks import frame, render_playbook
 
     documents = item.documents or {}
     variables = {
@@ -476,7 +476,7 @@ def _rendre_le_playbook(
         # gabarit qui ne rend pas — une évasion refusée par le bac à sable comprise — ne se
         # réessaie pas : il ne rendra pas mieux la cinquième fois.
         try:
-            return cadrer(rendre_les_instructions(agent.spec.instructions, **variables))
+            return frame(rendre_les_instructions(agent.spec.instructions, **variables))
         except TemplateError as erreur:
             qui = f"{agent.agent.slug}@{agent.version}"
             raise ApplicationError(

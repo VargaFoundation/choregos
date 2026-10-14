@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Évals des playbooks : des assertions déterministes, plus un juge pour le reste.
+"""Playbook evals: deterministic assertions, plus a judge for the rest.
 
-Un prompt dégradé doit faire échouer la CI. Les cas vivent dans `cases/`, chacun décrit
-ce qu'il attend du rendu (et, en mode complet, du comportement d'un agent réel).
+A degraded prompt must fail CI. The cases live in `cases/`, each one describing
+what it expects of the rendering (and, in full mode, of a real agent's behaviour).
 """
 
 from __future__ import annotations

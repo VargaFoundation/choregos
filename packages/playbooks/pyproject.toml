@@ -1,7 +1,7 @@
 [project]
 name = "choregos-playbooks"
 version = "0.17.12"
-description = "Playbooks Choregos : prompts par rôle et évals"
+description = "Choregos playbooks: prompts per role, and evals"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = ["jinja2>=3.1", "pydantic>=2.9", "PyYAML>=6.0"]
@@ -11,10 +11,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-# `packages` embarque TOUT l'arbre, y compris les gabarits `roles/*.md` et les évals : un
-# `force-include` sur `roles/` les ajoutait une seconde fois au même chemin, et hatchling
-# refuse — « A second file is being added to the wheel archive at the same path ». Le job
-# de release échouait donc sur ce seul paquet depuis qu'il construit des wheels (v0.4.0).
-# `tests/paquets/` construit CHAQUE paquet et vérifie que ses fichiers de données sont
-# bien dans le wheel, pas seulement que la construction passe.
+# `packages` ships the WHOLE tree, including the `roles/*.md` templates and the evals: a
+# `force-include` on `roles/` added them a second time at the same path, and hatchling
+# refuses ("A second file is being added to the wheel archive at the same path"). The release
+# job therefore failed on this one package ever since it started building wheels (v0.4.0).
+# `tests/paquets/` builds EVERY package and checks that its data files are really in the
+# wheel, not only that the build passes.
 packages = ["src/choregos_playbooks"]
