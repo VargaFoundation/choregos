@@ -116,7 +116,7 @@ VALIDATION_GARANTIE = "  - {from: comptes, to: fait, by: rh, gates: [action_succ
         ("not_before: fields.date_arrivee", "not_before: fields.date_depart", "action.date_field_unknown"),
         ("date_arrivee: {type: string, format: date}", SANS_DATE, "action.date_field_not_date"),
         (REPRISE, "", "action.on_fail_missing"),
-        (VALIDATION, VALIDATION_GARANTIE, "gate.sans_matiere"),
+        (VALIDATION, VALIDATION_GARANTIE, "gate.nothing_to_check"),
     ],
 )
 def test_le_validateur_refuse_ce_qu_une_action_ne_peut_pas_tenir(

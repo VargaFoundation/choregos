@@ -189,6 +189,8 @@ export function commentOnYTombe(arete: AreteDuGraphe): string {
 export function libelleSecondaire(arete: AreteDuGraphe): string {
   const brut = (arete.label ?? "").trim();
   const borne = /\(\s*≤\s*(\d+)\s*\)/.exec(brut)?.[1];
+  // Fallback only, for one release (ADR 0046, S34-03): the engine emits these labels in English
+  // (`packages/core/tests/test_graph_labels.py` holds it there). Remove the French keys after it.
   const traduction: Record<string, string> = {
     rejet: "if rejected",
     "échecs épuisés": "when retries run out",

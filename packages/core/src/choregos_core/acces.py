@@ -48,10 +48,14 @@ class Acces:
     def to_dict(self) -> dict[str, Any]:
         return {
             "nature": self.nature,
-            "cible": self.cible,
-            "demandes": self.demandes,
-            "refus": self.refus,
+            "target": self.cible,
+            "requests": self.demandes,
+            "refusals": self.refus,
             "motifs": self.motifs,
+            # Former names, still emitted for one release (ADR 0046, S34-03).
+            "cible": self.cible,  # lang: fr-ok
+            "demandes": self.demandes,  # lang: fr-ok
+            "refus": self.refus,  # lang: fr-ok
         }
 
 
@@ -71,9 +75,11 @@ class RapportAcces:
         return [a for a in self.acces if a.nature == nature]
 
     def to_dict(self) -> dict[str, Any]:
+        refusals = sum(a.refus for a in self.acces)
         return {
             "evenements": self.evenements,
-            "refus": sum(a.refus for a in self.acces),
+            "refusals": refusals,
+            "refus": refusals,  # lang: fr-ok -- former name, emitted for one release (ADR 0046)
             "deduites": self.deduites,
             "acces": [a.to_dict() for a in self.acces],
         }

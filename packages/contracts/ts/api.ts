@@ -19,6 +19,10 @@ export type Problem = {
   errors?: Array<{
     loc?: Array<string>;
     msg?: string;
+    /** Machine code of a workflow or policy issue */
+    code?: string;
+    /** @deprecated Former spelling of a code renamed to English, emitted for one release (ADR 0046) */
+    deprecated_code?: string;
     line?: number;
     column?: number;
   }>;
@@ -791,6 +795,8 @@ export type WorkflowIssue = {
   path?: string | null;
   line?: number | null;
   column?: number | null;
+  /** @deprecated Former spelling of a code renamed to English (`gate.sans_matiere` is now `gate.nothing_to_check`, `workflow.effet_implicite` is now `workflow.implicit_effect`), emitted for one release (ADR 0046) */
+  deprecated_code?: string | null;
 };
 
 export type WorkflowGraph = {
@@ -1698,14 +1704,30 @@ export interface Operations {
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
   /** Log events scanned */
   evenements: number;
+  /** Permission decisions whose kind was inferred because the agent did not state it (emitted since #27, declared by S34-03) */
+  deduites?: number;
   /** Total number of denied requests */
-  refus: number;
+  refusals: number;
+  /** @deprecated Former name of `refusals`, still emitted for one release (ADR 0046) */
+  refus?: number;
+  /** What the catalogue tools called by the run cost, in euros */
+  tool_cost_eur?: number;
+  /** @deprecated Former name of `tool_cost_eur`, still emitted for one release (ADR 0046) */
   cout_outils_eur?: number;
   acces: Array<{
     nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
-    cible: string;
-    demandes: number;
-    refus: number;
+    /** The file, command, address or tool asked for */
+    target: string;
+    /** @deprecated Former name of `target`, still emitted for one release (ADR 0046) */
+    cible?: string;
+    /** How many times the agent asked for it */
+    requests: number;
+    /** @deprecated Former name of `requests`, still emitted for one release (ADR 0046) */
+    demandes?: number;
+    /** How many of those requests were denied */
+    refusals: number;
+    /** @deprecated Former name of `refusals`, still emitted for one release (ADR 0046) */
+    refus?: number;
     motifs?: Array<string>;
   }>;
 } };

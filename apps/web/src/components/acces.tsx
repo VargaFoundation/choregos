@@ -7,11 +7,11 @@ import { cn } from "@/lib/cn";
 
 export type AccesRun = {
   evenements: number;
-  refus: number;
+  refusals: number;
   /** décisions dont la nature a été déduite du titre : l'agent n'avait pas dit `kind` */
   deduites?: number;
-  cout_outils_eur?: number;
-  acces: { nature: string; cible: string; demandes: number; refus: number; motifs?: string[] }[];
+  tool_cost_eur?: number;
+  acces: { nature: string; target: string; requests: number; refusals: number; motifs?: string[] }[];
 };
 
 const LIBELLE: Record<string, string> = {
@@ -26,15 +26,15 @@ const LIBELLE: Record<string, string> = {
 /**
  * Ce à quoi l'agent a touché.
  *
- * Tout était déjà journalisé — chaque permission, chaque refus et son motif — mais sous
- * forme de journal ACP brut : deux agents produisent deux cents événements en quelques
- * minutes, et personne ne les lit. Un journal que personne ne lit n'est pas un audit.
+ * Everything was already logged — every permission, every refusal and its reason — but as a
+ * raw ACP log: two agents produce two hundred events in a few minutes, and nobody reads them.
+ * A log nobody reads is not an audit.
  *
- * Les refus passent devant, avec leur motif : c'est ce qu'on vient chercher.
+ * Refusals come first, with their reason: that is what one comes looking for.
  */
 export function Acces({ acces }: { acces?: AccesRun }) {
   const lignes = acces?.acces ?? [];
-  const refuses = lignes.filter((l) => l.refus > 0);
+  const refuses = lignes.filter((l) => l.refusals > 0);
 
   return (
     <Card
@@ -43,7 +43,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
         <span className="flex items-center gap-3 text-xs text-ink-muted">
           <Provenance de="observed" />
           {acces
-            ? `${acces.evenements} events · ${acces.refus} refusals${acces.deduites ? ` · ${acces.deduites} kinds inferred` : ""}`
+            ? `${acces.evenements} events · ${acces.refusals} refusals${acces.deduites ? ` · ${acces.deduites} kinds inferred` : ""}`
             : "—"}
         </span>
       }
@@ -57,8 +57,8 @@ export function Acces({ acces }: { acces?: AccesRun }) {
               <p className={cn(LEGENDE, "mb-1 text-failed-ink")}>Refused</p>
               <ul className="space-y-1 text-sm">
                 {refuses.map((ligne) => (
-                  <li key={`${ligne.nature}:${ligne.cible}`}>
-                    <span className="font-mono text-xs">{ligne.cible}</span>
+                  <li key={`${ligne.nature}:${ligne.target}`}>
+                    <span className="font-mono text-xs">{ligne.target}</span>
                     <span className="text-ink-muted"> — {ligne.motifs?.join(" · ") || "no reason"}</span>
                   </li>
                 ))}
@@ -76,22 +76,22 @@ export function Acces({ acces }: { acces?: AccesRun }) {
               </thead>
               <tbody>
                 {lignes.map((ligne) => (
-                  <tr key={`${ligne.nature}:${ligne.cible}`}>
+                  <tr key={`${ligne.nature}:${ligne.target}`}>
                     <td className="text-xs">{LIBELLE[ligne.nature] ?? ligne.nature}</td>
                     <td>
-                      <span className="font-mono text-xs break-all">{ligne.cible}</span>
+                      <span className="font-mono text-xs break-all">{ligne.target}</span>
                     </td>
                     <td className="text-xs">
-                      {ligne.demandes}
-                      {ligne.refus > 0 && <span className="text-danger"> · {ligne.refus} refused</span>}
+                      {ligne.requests}
+                      {ligne.refusals > 0 && <span className="text-danger"> · {ligne.refusals} refused</span>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {acces?.cout_outils_eur ? (
-            <p className="mt-2 text-xs text-ink-muted">Catalogue tools: {acces.cout_outils_eur.toFixed(4)} €</p>
+          {acces?.tool_cost_eur ? (
+            <p className="mt-2 text-xs text-ink-muted">Catalogue tools: {acces.tool_cost_eur.toFixed(4)} €</p>
           ) : null}
         </>
       )}

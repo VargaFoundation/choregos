@@ -76,6 +76,8 @@ class WorkflowIssue(Dto):
     path: str | None = None
     line: int | None = None
     column: int | None = None
+    #: The former spelling of a code renamed to English, for one release (ADR 0046).
+    deprecated_code: str | None = None
 
 
 class WorkflowValidation(Dto):

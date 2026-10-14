@@ -94,22 +94,21 @@ describe("preuves d'une étape", () => {
 
 describe("fiche d'accès", () => {
   it("met les refus devant, avec leur motif", () => {
-    // C'est ce qu'on vient chercher dans un audit : « denied » ne se lit pas,
-    // « fichier sensible » se lit.
+    // What an audit comes for: "denied" says nothing, "sensitive file" does.
     render(
       <Acces
         acces={{
           evenements: 220,
-          refus: 1,
+          refusals: 1,
           acces: [
-            { nature: "write", cible: "/workspace/.env", demandes: 1, refus: 1, motifs: ["fichier sensible"] },
-            { nature: "read", cible: "/workspace/src/panier.py", demandes: 4, refus: 0 },
+            { nature: "write", target: "/workspace/.env", requests: 1, refusals: 1, motifs: ["sensitive file"] },
+            { nature: "read", target: "/workspace/src/panier.py", requests: 4, refusals: 0 },
           ],
         }}
       />,
     );
     expect(screen.getAllByText(/refus/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/fichier sensible/)).toBeInTheDocument();
+    expect(screen.getByText(/sensitive file/)).toBeInTheDocument();
     expect(screen.getByText(/220 events/)).toBeInTheDocument();
   });
 
