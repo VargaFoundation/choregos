@@ -18,6 +18,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
+from .activity_names import named
 from .planification import demarrer_activite, executer_activite
 
 with workflow.unsafe.imports_passed_through():
@@ -29,7 +30,7 @@ DEFAULT_RETRY = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(secon
 NO_RETRY = RetryPolicy(maximum_attempts=1)
 #: Un environnement `auto_sync` prévient ses tickets (#278, S21-27). Avant ce marqueur, le train y
 #: attendait `abort` sans rien lire, et un ticket qui y montait attendait 72 h puis un humain.
-AUTO_SYNC_PREVIENT = "auto-sync-previent"
+AUTO_SYNC_PREVIENT = "auto-sync-previent"  # lang: fr-ok — a patch id is never renamed
 #: Le ticket dont le signal DÉMARRE le train (signal-with-start) reste dans le lot (S22-22). Avant ce
 #: marqueur, `run` écrasait le lot avec les tickets reportés : sur le locataire dev, le 09/10, #4 et #6
 #: ont réveillé chacun leur train et en ont été effacés aussitôt — le train attendait, vide, et le ticket
@@ -257,7 +258,7 @@ class ReleaseTrain:
             self.batch_no += 1
             for essai in range(ESSAIS_AUTO_SYNC):
                 verdict = await executer_activite(
-                    train_activities.confirmer_auto_sync,
+                    named(train_activities.confirm_auto_sync, train_activities.confirmer_auto_sync),
                     {
                         "project_slug": params.project_slug,
                         "env": params.env,

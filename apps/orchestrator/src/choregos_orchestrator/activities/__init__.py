@@ -22,13 +22,22 @@ from . import (
 )
 
 ALL_ACTIVITIES = [
-    actions.charger_l_action,
-    actions.executer_l_effet,
-    actions.compenser_l_effet,
-    actions.cloturer_l_action,
-    actions.proposer_l_action_de_transition,
-    actions.etat_de_l_action,
-    actions.marquer_l_attente,
+    actions.load_action,
+    actions.execute_effect,
+    actions.compensate_effect,
+    actions.close_action,
+    actions.propose_transition_action,
+    actions.action_state,
+    actions.mark_awaiting_evidence,
+    # The French names stay registered: recorded histories and workflows in flight use them
+    # (S34-02). Same implementation.
+    actions.charger_l_action,  # lang: fr-ok
+    actions.executer_l_effet,  # lang: fr-ok
+    actions.compenser_l_effet,  # lang: fr-ok
+    actions.cloturer_l_action,  # lang: fr-ok
+    actions.proposer_l_action_de_transition,  # lang: fr-ok
+    actions.etat_de_l_action,  # lang: fr-ok
+    actions.marquer_l_attente,  # lang: fr-ok
     stage.prepare_stage,
     execution.start_run,
     execution.await_run,
@@ -58,7 +67,8 @@ ALL_ACTIVITIES = [
     train.promote_canary_step,
     train.verify_prod,
     train.finish_release,
-    train.confirmer_auto_sync,
+    train.confirm_auto_sync,
+    train.confirmer_auto_sync,  # lang: fr-ok
     train.rollback,
     train.mark_release,
     train.apply_terraform,

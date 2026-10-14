@@ -413,8 +413,8 @@ async def _tickets(session: Any, bundle: Any, cles: list[str]) -> dict[str, Work
     return tickets
 
 
-@activity.defn(name="confirmer_auto_sync")
-async def confirmer_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
+@activity.defn(name="confirm_auto_sync")
+async def confirm_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
     """`auto_sync` : Argo suit `main`, il n'y a pas de départ. Le ticket est livré quand les applications
     de l'environnement sont saines, rendu à un humain si elles se dégradent (#278) ; encore en cours,
     rien n'est dit — le train redemande. Au dernier essai (`conclure`), ne pas être sain vaut échec :
@@ -432,6 +432,12 @@ async def confirmer_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": None, "etats": etats}
     await _prevenir_les_tickets(prevenir, type_, str(payload["sync_id"]), str(payload["env"]))
     return {"ok": ok, "etats": etats}
+
+
+@activity.defn(name="confirmer_auto_sync")  # lang: fr-ok
+async def confirmer_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
+    """The French name, kept registered for recorded histories and trains in flight (S34-02)."""
+    return await confirm_auto_sync(payload)
 
 
 def _destinataires(slug: str, tickets: dict[str, WorkItem | None]) -> list[tuple[str, str]]:

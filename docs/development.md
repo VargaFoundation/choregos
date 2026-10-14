@@ -312,7 +312,7 @@ own: the operation it calls carries the policy, in the organisation and in the p
 
 An effect can ask the action to **wait for its proof** — the collector's next report, a delivery
 confirmed elsewhere: it returns `{"attendre_une_preuve": {"jusqu_a": "<iso datetime>"}}`. The action
-shows `awaiting_evidence` and waits for the signal `preuve` until that deadline; whatever observes
+shows `awaiting_evidence` and waits for the signal `evidence` (its former name `preuve` is still accepted) until that deadline; whatever observes
 the proof hands it over:
 
 ```python
@@ -515,3 +515,9 @@ it is written here so it costs no more.
 - **A helm upgrade during a run** used to kill the ticket (heartbeat timeout on a
   non-retried activity). `await_run` now retries; a workflow that dies for another reason
   writes why on the ticket, and the front shows it.
+- **A Temporal name travels in the history.** Renaming an activity or a signal breaks every
+  recorded history and every workflow in flight. Register the new name next to the old one, on
+  the same implementation, and ask for the new one behind a `workflow.patched` id
+  (`workflows/activity_names.py` did so for eight French activities and the `preuve` signal, S34-02).
+  A patch id is **never** renamed: the six French ones carry `lang: fr-ok`, and
+  `tests/replay/test_english_names.py` fails if one disappears.

@@ -235,7 +235,7 @@ async def test_une_preuve_se_remet_a_l_action_qui_l_attend() -> None:
     finally:
         set_temporal(None)
     attendu = {"position": 2, "ok": False, "detail": "la clé est toujours là"}
-    assert fake.signals == [("action-a1", "preuve", attendu)]
+    assert fake.signals == [("action-a1", "evidence", attendu)]
 
 
 async def test_une_regle_sans_step_up_n_exige_pas_d_authentification_recente(
