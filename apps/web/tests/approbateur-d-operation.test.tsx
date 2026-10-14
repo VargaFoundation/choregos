@@ -35,8 +35,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-describe("le groupe qui approuve une opération (ADR 0052)", () => {
-  it("se règle sur une écriture seulement, et se vide pour rendre la décision aux propriétaires", async () => {
+describe("the group that approves an operation (ADR 0052)", () => {
+  it("is set on a write only, and cleared to hand the decision back to the owners", async () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <OrgConnectorsPage />
