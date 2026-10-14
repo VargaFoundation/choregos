@@ -40,6 +40,7 @@ against that release's CRD schemas in the tests (`tests/fixtures/agent_sandbox/`
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -120,7 +121,11 @@ class AgentSandboxExecutor:
             )
         name = self._name(spec.run_id)
         ref = self._ref(name, spec.namespace, spec.run_id)
-        if await self.client.request("GET", f"{self._claims(spec.namespace)}/{name}") is not None:
+        claim = await self.client.request("GET", f"{self._claims(spec.namespace)}/{name}")
+        if claim is not None:
+            # A REPLAYED start: the claim was made, and what failed may have been handing it
+            # the Secret. Without this the Secret stays ownerless and outlives the run.
+            await self._own(spec.namespace, name, claim)
             return ref
         existing = await self.client.request("GET", f"{self._secrets(spec.namespace)}/{name}")
         if _labels(existing).get(QUEUED) == "true":
@@ -130,8 +135,23 @@ class AgentSandboxExecutor:
             active, _ = await self._queue(spec.namespace)
             if active >= self.max_active:
                 return ref  # queued: the Secret alone, no claim, no pod
-        await self._claim(spec.namespace, name)
+        try:
+            await self._claim(spec.namespace, name)
+        except Exception:
+            await self._drop_secret_without_claim(spec.namespace, name)
+            raise
         return ref
+
+    async def _drop_secret_without_claim(self, namespace: str, name: str) -> None:
+        """The claim could not be made: the Secret written just before it has no owner.
+
+        Deleted only if the claim really does not exist — a lost answer after a successful
+        create would otherwise leave the run without its token. In doubt (the API does not
+        answer), it is left: the replayed start hands it to the claim or rewrites it.
+        """
+        with contextlib.suppress(Exception):  # the original error is the one to raise
+            if await self.client.request("GET", f"{self._claims(namespace)}/{name}") is None:
+                await self.client.request("DELETE", f"{self._secrets(namespace)}/{name}")
 
     async def _write_secret(self, spec: StageJobSpec, name: str, existing: Any) -> None:
         """The run's token, and what its assignment needs, written even if a Secret of this
@@ -193,8 +213,13 @@ class AgentSandboxExecutor:
             },
         }
         created = await self.client.request("POST", self._claims(namespace), json=claim)
+        await self._own(namespace, name, created)
+
+    async def _own(self, namespace: str, name: str, claim: Any) -> None:
+        """Hands the run's Secret to its claim (owner reference), and takes it off the queue.
+        Idempotent: a replayed start calls it again on the claim it finds."""
         patch: dict[str, Any] = {"metadata": {"labels": {QUEUED: "false"}}}
-        uid = ((created or {}).get("metadata") or {}).get("uid") if isinstance(created, dict) else None
+        uid = ((claim or {}).get("metadata") or {}).get("uid") if isinstance(claim, dict) else None
         if uid:
             patch["metadata"]["ownerReferences"] = [
                 {
