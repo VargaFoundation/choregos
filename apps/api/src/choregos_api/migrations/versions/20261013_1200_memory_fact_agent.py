@@ -5,7 +5,7 @@
 within the project, read and written only by runs whose agent version says `memory: agent`.
 
 Revision ID: e7a9c1d3f5b7
-Revises: f8b0d2e4a6c8
+Revises: 5f7b9d1c3e4a
 Create Date: 2026-10-13 12:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e7a9c1d3f5b7"
-down_revision: str | None = "f8b0d2e4a6c8"
+down_revision: str | None = "5f7b9d1c3e4a"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
