@@ -212,7 +212,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </Card>
       </div>
 
-      <Card title="artifacts" action={<Provenance de="observed" />}>
+      <Card title="Artifacts" action={<Provenance de="observed" />}>
         {artifacts.error ? (
           <p className="text-sm text-ink-muted">the artifacts cannot be read: {(artifacts.error as Error).message}</p>
         ) : artifacts.data ? (

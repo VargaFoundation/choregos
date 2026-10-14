@@ -65,7 +65,7 @@ test("the badge task: its form and its attestation reach the decision", async ({
   const task = page.getByRole("main");
   await expect(task.getByText("Hand over the badge", { exact: true })).toBeVisible();
   await expect(task.getByText(/hold it to the reader to read its UID/)).toBeVisible();
-  const done = task.getByRole("button", { name: "done", exact: true });
+  const done = task.getByRole("button", { name: "Done", exact: true });
   // Nothing goes until the form is filled and the statement attested.
   await expect(done).toBeDisabled();
   await task.getByRole("textbox", { name: "Badge UID (required)" }).fill("04A1B2C3D4");

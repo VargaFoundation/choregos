@@ -111,7 +111,7 @@ describe("the artifacts of a work item (S31-04)", () => {
     );
     renderArtifacts([artifact("spec_markdown", 1), artifact("spec_markdown", 2)]);
     expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
-    expect(screen.getByTestId("artifact-producer")).toHaveTextContent("produced by refine · attempt 1 · agent analyst@3");
+    expect(screen.getByTestId("artifact-producer")).toHaveTextContent("Produced by refine · attempt 1 · agent analyst@3");
     fireEvent.change(screen.getByLabelText("revision"), { target: { value: "1" } });
     expect(await screen.findByRole("heading", { name: "First" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("artifact-reader")).toHaveAttribute("href", "/p/billing-api/runs/r9"));
