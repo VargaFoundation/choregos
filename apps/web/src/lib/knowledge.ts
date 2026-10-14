@@ -76,6 +76,8 @@ export function sourceConfig(
     ref: fields.ref.trim() || "main",
     paths: fields.paths.split(",").map((p) => p.trim()).filter(Boolean),
   };
+}
+
 /** The last distillation, in words, and the skill version it waits on. */
 export function distillationLabel(d: Record<string, unknown> | null | undefined): string {
   if (!d) return "not distilled";
