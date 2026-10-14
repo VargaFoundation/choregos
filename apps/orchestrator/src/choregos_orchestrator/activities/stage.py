@@ -157,7 +157,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 max_turns=budget.max_turns,
                 max_minutes=budget.max_minutes,
             )
-        reservation = await _reservation(session, bundle, item, run_id, agent, budget.usd)
+        reservation = await _reservation(
+            session, bundle, item, run_id, agent, budget.usd, trial=plan.trial_spec is not None
+        )
         if reservation.below(settings.min_run_reservation_usd):
             return await _refuse_on_budget(session, bundle, item, run_id, plan, reservation)
         budget = Budget(usd=reservation.usd, max_turns=budget.max_turns, max_minutes=budget.max_minutes)
@@ -362,10 +364,18 @@ async def _admettre(
 
 
 async def _reservation(
-    session: Any, bundle: Any, item: Any, run_id: str, agent: Any, stage_usd: float
+    session: Any,
+    bundle: Any,
+    item: Any,
+    run_id: str,
+    agent: Any,
+    stage_usd: float,
+    *,
+    trial: bool = False,
 ) -> Any:
     """What this run may spend (ADR 0047): the smallest of what is left under the stage budget, the
-    agent's run and day budgets, the ticket budget and the project's day budget."""
+    agent's run and day budgets, the ticket budget and the project's day budget. A trial has no
+    day budget: its runs belong to no agent, so no day spend is counted against one (S32-03)."""
     from choregos_api.services.agents import depense_du_jour
     from choregos_api.services.budgets import (
         open_reservations,
@@ -380,7 +390,7 @@ async def _reservation(
     left: dict[str, float | None] = {"stage": stage_usd}
     if agent is not None:
         left["agent_run"] = agent.spec.budget.run_usd
-        if agent.spec.budget.daily_usd is not None:
+        if agent.spec.budget.daily_usd is not None and not trial:
             spent = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
             left["agent_day"] = agent.spec.budget.daily_usd - spent
     left["ticket"] = (
