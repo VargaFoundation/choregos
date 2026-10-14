@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
  */
 test("the joiners-leavers project shows no trains tab; the software delivery one does", async ({ page }) => {
   await page.goto("/p/people-ops");
-  const tabs = page.getByRole("navigation", { name: "Project sections" });
+  const tabs = page.getByRole("navigation", { name: "Main navigation" });
   await expect(tabs.getByRole("link", { name: "Board" })).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Trains" })).toHaveCount(0);
   await expect(page.getByText("Active tickets")).toBeVisible();

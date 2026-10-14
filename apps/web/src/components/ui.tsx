@@ -12,7 +12,9 @@
 
 import Link from "next/link";
 import {
+  createContext,
   forwardRef,
+  useContext,
   useId,
   type ElementType,
   type HTMLAttributes,
@@ -697,18 +699,31 @@ export function PhraseDuMoteur({ texte }: { texte: string }) {
   );
 }
 
+export interface BreadcrumbStep {
+  href?: string;
+  label: ReactNode;
+}
+
 /**
- * Où l'on est, et le chemin pour remonter (S23-12) : la page d'un ticket et celle d'un run
- * n'avaient ni onglet actif ni fil — on n'y savait pas d'où l'on venait.
+ * The steps above the current page, set by a layout (the project, the administration): a page's
+ * breadcrumbs start with them, so the trail is one line from the organisation down (S30-03).
  */
-export function FilDAriane({ etapes }: { etapes: { href?: string; label: ReactNode }[] }) {
+export const BreadcrumbBase = createContext<BreadcrumbStep[]>([]);
+
+/**
+ * Where one is, and the way back up (S23-12, S30-03): the tab rows are gone, the trail
+ * carries the hierarchy. The steps of the enclosing layout (`BreadcrumbBase`) come first.
+ */
+export function Breadcrumbs({ steps }: { steps: BreadcrumbStep[] }) {
+  const base = useContext(BreadcrumbBase);
+  const etapes = [...base, ...steps];
   return (
     <nav aria-label="Breadcrumb" className="text-sm">
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-muted">
         {etapes.map((etape, index) => (
           <li key={index} className="flex min-w-0 items-center gap-2">
             {index > 0 && <span aria-hidden>/</span>}
-            {etape.href ? (
+            {etape.href && index < etapes.length - 1 ? (
               <Link href={etape.href} className="hover:underline">
                 {etape.label}
               </Link>

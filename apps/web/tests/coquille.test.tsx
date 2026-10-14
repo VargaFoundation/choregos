@@ -56,10 +56,14 @@ describe("la barre latérale (S24-03, ADR 0043)", () => {
   });
 
   it.each([
-    ["/p/billing-api/board", "Projects"],
+    ["/p/billing-api/board", "Board"],
+    ["/p/billing-api/items/w1", "Board"],
+    ["/p/billing-api/workflows/default-simple/map", "Workflows"],
+    ["/p/billing-api", "Overview"],
     ["/skills/onboarding-procedure", "Skills"],
     ["/integrations/cursor", "AI clients"],
-    ["/admin/connectors", "Admin"],
+    ["/admin/connectors", "Connectors"],
+    ["/admin", "Overview"],
   ])("sur %s, une seule entrée est active : %s", (pathname, attendue) => {
     const barre = rendre(pathname);
     const actives = within(barre).getAllByRole("link").filter((lien) => lien.getAttribute("aria-current") === "page");

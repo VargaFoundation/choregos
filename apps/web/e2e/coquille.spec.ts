@@ -10,7 +10,8 @@ test("à 1280 px, la navigation est dans la barre latérale, sans bouton « menu
   await page.goto("/p/billing-api/board");
   const barre = page.getByRole("complementary", { name: "Sidebar" });
   const navigation = barre.getByRole("navigation", { name: "Main navigation" });
-  await expect(navigation.getByRole("link", { name: "Projects" })).toHaveAttribute("aria-current", "page");
+  // Inside a project, the sidebar lists its sections (S30-03).
+  await expect(navigation.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: /^Menu/ })).toBeHidden();
   // Une seule navigation principale à la fois : celle de l'en-tête est cachée.
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(1);

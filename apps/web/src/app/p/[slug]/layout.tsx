@@ -1,26 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Eyebrow, Heading, Tabs, tabClasses } from "@/components/ui";
+import { projectTrail } from "@/components/coquille/navigation";
+import { BreadcrumbBase, Breadcrumbs, Heading, type BreadcrumbStep } from "@/components/ui";
 import { api } from "@/lib/api";
-import { useHasReleaseTrain } from "@/lib/release-train";
-
-const TABS = [
-  { suffix: "", label: "Overview" },
-  { suffix: "/board", label: "Board" },
-  { suffix: "/trains", label: "Trains" },
-  { suffix: "/findings", label: "Findings" },
-  { suffix: "/memory", label: "Memory" },
-  { suffix: "/workflows", label: "Workflows" },
-  { suffix: "/agents", label: "Agents" },
-  { suffix: "/actions", label: "Actions" },
-  { suffix: "/integrations", label: "Integrations" },
-  { suffix: "/settings", label: "Settings" },
-];
 
 export default function ProjectLayout({
   children,
@@ -31,43 +17,25 @@ export default function ProjectLayout({
 }) {
   const { slug } = use(params);
   const pathname = usePathname();
-  // Le titre est le NOM du projet (« Billing API »), comme sur sa carte dans la liste ; le slug
-  // reste lisible au-dessus, c'est celui des URL et de la CLI (S23-04). Même clé que la vue
-  // d'ensemble : une seule lecture.
+  // The title is the project's NAME ("Billing API"), as on its card in the list (S23-04). Same key
+  // as the overview and the sidebar: a single read.
   const projet = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
-  const trains = useHasReleaseTrain(slug);
+  const nom = projet.data?.name ?? slug;
+  // No tab row any more (S30-03): the sidebar lists the project's sections, the trail says where one is.
+  const base: BreadcrumbStep[] = [
+    { href: "/", label: "Projects" },
+    { href: `/p/${slug}`, label: <span data-donnee>{nom}</span> },
+  ];
+  const trail = projectTrail(slug, pathname);
   return (
-    <div className="space-y-8">
-      <div className="space-y-4">
-        <Eyebrow>Project · {slug}</Eyebrow>
+    <BreadcrumbBase.Provider value={base}>
+      <div className="space-y-6">
+        {trail && <Breadcrumbs steps={trail} />}
         <Heading as="h1" size="xl" data-donnee>
-          {projet.data?.name ?? slug}
+          {nom}
         </Heading>
+        {children}
       </div>
-      <Tabs aria-label="Project sections">
-        {TABS.filter((tab) => tab.suffix !== "/trains" || trains).map((tab) => {
-          const href = `/p/${slug}${tab.suffix}`;
-          // Les intégrations (un sous-onglet par client), les actions (une page par action) et les
-          // workflows (une page par workflow) gardent leur onglet actif sous elles ; un ticket et ses
-          // runs sont ceux du board (S23-12 : leurs pages n'avaient aucun onglet actif).
-          const active = ["/integrations", "/workflows", "/actions"].includes(tab.suffix)
-            ? pathname.startsWith(href)
-            : tab.suffix === "/board"
-              ? pathname === href || pathname.startsWith(`/p/${slug}/items/`) || pathname.startsWith(`/p/${slug}/runs/`)
-              : pathname === href;
-          return (
-            <Link
-              key={tab.suffix}
-              href={href}
-              aria-current={active ? "page" : undefined}
-              className={tabClasses(active)}
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-      </Tabs>
-      {children}
-    </div>
+    </BreadcrumbBase.Provider>
   );
 }
