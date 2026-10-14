@@ -1,6 +1,6 @@
 # 0016 — An `agent-sandbox` executor: warm pools, suspend across a human gate, snapshots
 
-- **Status**: proposed, 2026-09-25 — not implemented; revisits ADR 0013
+- **Status**: accepted, 2026-10-12 (proposed 2026-09-25) — not implemented, stream S35; proved on the dev cluster; revisits ADR 0013
 - **Concerns**: the `Executor` protocol, the chart, ADR 0013 (density)
 
 ## Context

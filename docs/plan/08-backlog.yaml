@@ -28,6 +28,17 @@ streams:
   S21: "Utilisabilité : console lisible, anglais partout, catalogue d'agents, gouvernance appliquée, projet de développement (revue produit du 2026-10-07)"
   S24: "L'allure d'une console d'opérations : contraste adouci, Geist, thème choisi, barre latérale (ADR 0043)"
   S25: "Ce que fait l'agent, et d'où on le sait : plan, activité, provenance, reçus entre étapes (ADR 0045)"
+  S26: "P0 fixes: train status, problem+json, train metrics, members read check, train environments (plan 2026-10-12)"
+  S27: "Budgets that hold: reservation, ledger-backed spend, org ceiling, enforced guardrails (plan 2026-10-12)"
+  S28: "One-command local install: docker compose up, real key, tested in CI (plan 2026-10-12)"
+  S29: "Spend screen by agent, workflow, work item, project (plan 2026-10-12)"
+  S30: "Console: Temporal-like look without the Varga design system, scope-switching sidebar, agents and members pages (plan 2026-10-12)"
+  S31: "Typed, stored, traced artifacts between agents (plan 2026-10-12)"
+  S32: "Agent builder, lifecycle, skills import behind a supply-chain gate (plan 2026-10-12)"
+  S33: "Knowledge bases and specialist agents, netops included (plan 2026-10-12)"
+  S34: "English everywhere: code, identifiers, docs, commits (plan 2026-10-12)"
+  S35: "The agent_sandbox executor: warm pool, suspend across a human gate, proved on the dev cluster (ADR 0016, plan 2026-10-12)"
+  S36: "Agent logs: transcript stored, pod logs and termination reason archived, a logs tab (plan 2026-10-12)"
 
 stories:
 
@@ -1954,3 +1965,600 @@ stories:
     acceptance:
       - "L'étape suivante lit la révision exacte produite ; une sortie modifiée après coup change d'empreinte, et ça se voit"
 
+  # ───────────── Plan 2026-10-12 (docs/plan/PLAN-2026-10-12.md) — written in English (S34) ─────────────
+  # S26 — P0 fixes
+  - id: S26-01
+    title: "Train status answers from the database when the train workflow does not exist or does not answer in 3 s"
+    stream: S26
+    sprint: 16
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "FakeTemporal raises NOT_FOUND like the real client; GET /projects/{id}/trains/prod on a project with no merge returns 200 collecting"
+  - id: S26-02
+    title: "Unhandled errors are answered as problem+json"
+    stream: S26
+    sprint: 16
+    priority: 2
+    size: S
+    depends_on: []
+    acceptance:
+      - "A forced exception returns application/problem+json with a correlation id"
+  - id: S26-03
+    title: "Train metrics query status_query and read its status field"
+    stream: S26
+    sprint: 16
+    priority: 3
+    size: S
+    depends_on: []
+    acceptance:
+      - "choregos_train_frozen is exported for a frozen train"
+  - id: S26-04
+    title: "GET /orgs/{org}/members requires member read rights"
+    stream: S26
+    sprint: 16
+    priority: 4
+    size: S
+    depends_on: []
+    acceptance:
+      - "A user without a membership in the organisation gets 403"
+  - id: S26-05
+    title: "The trains page lists the environments of the project's policy"
+    stream: S26
+    sprint: 16
+    priority: 5
+    size: S
+    depends_on: []
+    acceptance:
+      - "A policy with prod only shows one train"
+  # S27 — Budgets that hold
+  - id: S27-01
+    title: "The runner reports a gateway budget refusal as reason=budget; on_budget_exceeded never retries"
+    stream: S27
+    sprint: 16
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "A refusing fake gateway leaves the ticket needs_human, reason=budget, after one run only"
+  - id: S27-02
+    title: "A run key is minted at the remaining budget (stage, agent, ticket, project day, org month); below the floor the stage does not start"
+    stream: S27
+    sprint: 16
+    priority: 2
+    size: M
+    depends_on: [S27-01]
+    acceptance:
+      - "A ticket with 0.10 left gets a 0.10 key; at 0 no run starts"
+  - id: S27-03
+    title: "Ticket spend is read from the ledger, tool costs included, and survives an interpreter restart"
+    stream: S27
+    sprint: 16
+    priority: 3
+    size: M
+    depends_on: [S27-02]
+    acceptance:
+      - "A replayed restart keeps the spent amount"
+  - id: S27-04
+    title: "Replay and resume grant an explicit, audited top-up instead of resetting attempts"
+    stream: S27
+    sprint: 16
+    priority: 4
+    size: S
+    depends_on: [S27-03]
+    acceptance:
+      - "Replaying an exhausted ticket without a top-up is refused"
+  - id: S27-05
+    title: "An organisation policy ceiling that a project policy may only tighten"
+    stream: S27
+    sprint: 16
+    priority: 5
+    size: M
+    depends_on: []
+    acceptance:
+      - "PUT policy wider than the organisation returns 422"
+  - id: S27-06
+    title: "budget_usd at launch (API, DSL budget block, board form), bounded by the policy"
+    stream: S27
+    sprint: 16
+    priority: 6
+    size: M
+    depends_on: [S27-02]
+    acceptance:
+      - "Wider than the policy returns 422; the ticket stops at the given amount"
+  - id: S27-07
+    title: "The runner enforces max_turns and detects loops (repeated tool call, identical failure twice)"
+    stream: S27
+    sprint: 16
+    priority: 7
+    size: M
+    depends_on: []
+    acceptance:
+      - "A looping fake agent stops with reason=loop"
+  - id: S27-08
+    title: "max_stages_per_ticket; attempts.default_max wired or removed"
+    stream: S27
+    sprint: 16
+    priority: 8
+    size: S
+    depends_on: []
+    acceptance:
+      - "The stage beyond the cap is refused"
+  - id: S27-09
+    title: "Monthly cap per agent with hard stop, kill switch, alerts at 50/80/100 %"
+    stream: S27
+    sprint: 16
+    priority: 9
+    size: M
+    depends_on: [S27-02]
+    acceptance:
+      - "An agent at 100 % is suspended and its new runs refused; three alerts reach the fake Slack"
+  - id: S27-10
+    title: "daily_project_usd enforced through a gateway team per project"
+    stream: S27
+    sprint: 16
+    priority: 10
+    size: M
+    depends_on: [S27-02]
+    acceptance:
+      - "A project over its day gets its next key refused"
+  # S28 — One-command local install
+  - id: S28-01
+    title: "compose.yaml at the root: Postgres, Temporal dev server, API, worker, web, LiteLLM; fakes by default"
+    stream: S28
+    sprint: 16
+    priority: 1
+    size: L
+    depends_on: []
+    acceptance:
+      - "docker compose up serves the console on :3000 in under 5 minutes and 4 GB"
+  - id: S28-02
+    title: "LITELLM_REAL: the key from .env reaches a real model; the local docker executor by default"
+    stream: S28
+    sprint: 16
+    priority: 2
+    size: M
+    depends_on: [S28-01]
+    acceptance:
+      - "A ticket runs with a real key locally"
+  - id: S28-03
+    title: "Development sign-in without Keycloak and a seeded demo organisation"
+    stream: S28
+    sprint: 16
+    priority: 3
+    size: S
+    depends_on: [S28-01]
+    acceptance:
+      - "First sign-in lands on a demo project with one ticket"
+  - id: S28-04
+    title: "CI job: compose up and one ticket in fakes"
+    stream: S28
+    sprint: 16
+    priority: 4
+    size: M
+    depends_on: [S28-01]
+    acceptance:
+      - "The job turns red when the compose breaks"
+  - id: S28-05
+    title: "getting-started rewritten around the compose; make dev-up fixed or removed"
+    stream: S28
+    sprint: 16
+    priority: 5
+    size: S
+    depends_on: [S28-04]
+    acceptance:
+      - "Every command in the page exists"
+  # S29 — Spend screen
+  - id: S29-01
+    title: "The ledger records agent, agent version, workflow and work item (migration and backfill)"
+    stream: S29
+    sprint: 17
+    priority: 1
+    size: M
+    depends_on: [S27-03]
+    acceptance:
+      - "Backfill test on a seeded ledger"
+  - id: S29-02
+    title: "group_by agent, workflow, work_item, project at organisation and project scope; CSV for any grouping"
+    stream: S29
+    sprint: 17
+    priority: 2
+    size: M
+    depends_on: [S29-01]
+    acceptance:
+      - "Contract test per grouping (contract-change PR)"
+  - id: S29-03
+    title: "/costs page: over time, budget against actual, forecast, top agents, workflows and tickets, by model and tool"
+    stream: S29
+    sprint: 17
+    priority: 3
+    size: L
+    depends_on: [S29-02]
+    acceptance:
+      - "Playwright on mocks; numbers match the API"
+  - id: S29-04
+    title: "Budget alerts in the inbox"
+    stream: S29
+    sprint: 17
+    priority: 4
+    size: S
+    depends_on: [S27-09]
+    acceptance:
+      - "Crossing 80 % creates one inbox item"
+  # S30 — Console
+  - id: S30-01
+    title: "ADR: the console owns its primitives, looks like Temporal, sentence case (supersedes 0042 and 0043 §1)"
+    stream: S30
+    sprint: 17
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "Accepted"
+  - id: S30-02
+    title: "Varga components replaced; Choregos wordmark; sans for navigation and buttons; small radius; Varga Foundation in the footer"
+    stream: S30
+    sprint: 17
+    priority: 2
+    size: L
+    depends_on: [S30-01]
+    acceptance:
+      - "eslint refuses imports from the Varga design system; contrast tests green"
+  - id: S30-03
+    title: "A sidebar that switches to the project's sections; project and admin tab rows removed; breadcrumbs"
+    stream: S30
+    sprint: 17
+    priority: 3
+    size: L
+    depends_on: [S30-02]
+    acceptance:
+      - "Inside a project the sidebar lists its sections"
+  - id: S30-04
+    title: "/agents shows the registry, New agent and Add from catalogue; AI clients move to /integrations"
+    stream: S30
+    sprint: 17
+    priority: 4
+    size: M
+    depends_on: [S30-03]
+    acceptance:
+      - "One request per list"
+  - id: S30-05
+    title: "Agent page in tabs: overview, definition, versions, runs, access"
+    stream: S30
+    sprint: 17
+    priority: 5
+    size: M
+    depends_on: [S30-04]
+    acceptance:
+      - "Playwright"
+  - id: S30-06
+    title: "Members: organisation members and a project members tab; roles per scope; project picker"
+    stream: S30
+    sprint: 17
+    priority: 6
+    size: M
+    depends_on: [S30-03]
+    acceptance:
+      - "org_admin is not offered on a project row; a person appears once"
+  - id: S30-07
+    title: "Trains tab and trains-in-flight counters only when a workflow of the project declares a release train"
+    stream: S30
+    sprint: 17
+    priority: 7
+    size: S
+    depends_on: [S30-03]
+    acceptance:
+      - "Playwright: the joiners-leavers project shows no trains tab; the software-delivery one does"
+  - id: S30-08
+    title: "The two ways a person gives data are proved: creation inputs and task form"
+    stream: S30
+    sprint: 17
+    priority: 8
+    size: S
+    depends_on: []
+    acceptance:
+      - "Playwright: an onboarding ticket is created from its input form; the badge task's form and attestation reach the decision"
+  # S31 — Artifacts
+  - id: S31-01
+    title: "Artifact contract and storage in the object store, produced_by recorded"
+    stream: S31
+    sprint: 17
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "contract-change; digest verified on read"
+  - id: S31-02
+    title: "Every declared output is required, not only the four software documents"
+    stream: S31
+    sprint: 17
+    priority: 2
+    size: S
+    depends_on: [S31-01]
+    acceptance:
+      - "A missing declared output fails the stage"
+  - id: S31-03
+    title: "GET /work-items/{id}/artifacts; inputs mounted as files in the workspace"
+    stream: S31
+    sprint: 17
+    priority: 3
+    size: M
+    depends_on: [S31-01]
+    acceptance:
+      - "A downstream run sees .choregos/inputs/<name>"
+  - id: S31-04
+    title: "Work item artifacts tab: viewer, download, links to hand-off receipts"
+    stream: S31
+    sprint: 17
+    priority: 4
+    size: M
+    depends_on: [S31-03, S30-03]
+    acceptance:
+      - "Playwright"
+  - id: S31-05
+    title: "Binary deliverables: pptx, xlsx, docx, images and video stored as typed artifacts; office files from skills, media from gateway models or MCP, cost in the ledger"
+    stream: S31
+    sprint: 17
+    priority: 5
+    size: M
+    depends_on: [S31-01]
+    acceptance:
+      - "A fake agent's pptx is stored with its digest and media type; a declared xlsx output that is absent fails the stage"
+  - id: S31-06
+    title: "Viewer for binary artifacts: image and PDF preview, video player, office files downloaded"
+    stream: S31
+    sprint: 17
+    priority: 6
+    size: S
+    depends_on: [S31-04, S31-05]
+    acceptance:
+      - "Playwright on mocks"
+  # S32 — Agent builder and skills
+  - id: S32-01
+    title: "Agent builder: every spec field editable, with what each one costs and allows"
+    stream: S32
+    sprint: 18
+    priority: 1
+    size: L
+    depends_on: [S30-05]
+    acceptance:
+      - "An agent created only from the form runs"
+  - id: S32-02
+    title: "AgentSpec.knowledge (pinned knowledge base references) and memory scope none, project or agent"
+    stream: S32
+    sprint: 18
+    priority: 2
+    size: M
+    depends_on: []
+    acceptance:
+      - "contract-change; prepare_stage passes them"
+  - id: S32-03
+    title: "Try a draft version on a sample input under a capped budget; eval suite as a publish gate"
+    stream: S32
+    sprint: 18
+    priority: 3
+    size: M
+    depends_on: [S32-01]
+    acceptance:
+      - "A failing eval blocks publishing"
+  - id: S32-04
+    title: "Lifecycle: draft, active, deprecated, retired; retire checklist; unused detection; ownership transfer"
+    stream: S32
+    sprint: 18
+    priority: 4
+    size: M
+    depends_on: []
+    acceptance:
+      - "Retiring revokes credentials and refuses new runs"
+  - id: S32-05
+    title: "Skill import from a git repository at a pinned commit from allowlisted sources; updates proposed, never applied"
+    stream: S32
+    sprint: 18
+    priority: 5
+    size: M
+    depends_on: []
+    acceptance:
+      - "A branch reference is refused"
+  - id: S32-06
+    title: "Skill gate: risk tier, static scan, licence check, second reviewer for high risk; limits raised"
+    stream: S32
+    sprint: 18
+    priority: 6
+    size: M
+    depends_on: [S32-05]
+    acceptance:
+      - "A skill with a script is high risk and unusable until another person approves it"
+  # S33 — Knowledge bases and specialist agents
+  - id: S33-01
+    title: "KnowledgeBase object; upload of docx, pptx, xlsx, pdf, md, html converted to markdown; project or group scope"
+    stream: S33
+    sprint: 18
+    priority: 1
+    size: L
+    depends_on: []
+    acceptance:
+      - "A pptx becomes markdown with its slide titles; RLS test"
+  - id: S33-02
+    title: "Serving mode files: the converted corpus mounted read-only in the workspace"
+    stream: S33
+    sprint: 18
+    priority: 2
+    size: S
+    depends_on: [S33-01]
+    acceptance:
+      - "A fake run greps the corpus"
+  - id: S33-03
+    title: "Serving mode index: pgvector and full-text, contextual chunks, MCP knowledge.search with citations"
+    stream: S33
+    sprint: 18
+    priority: 3
+    size: L
+    depends_on: [S33-01]
+    acceptance:
+      - "recall@5 on the knowledge base eval set reported"
+  - id: S33-04
+    title: "Connectors: SharePoint and OneDrive (Graph, Sites.Selected, delta sync), allowlisted web crawl, git"
+    stream: S33
+    sprint: 18
+    priority: 4
+    size: L
+    depends_on: [S33-01]
+    acceptance:
+      - "A document deleted at the source leaves the index"
+  - id: S33-05
+    title: "Distillation: an agent compiles a knowledge base into a reviewed principles skill"
+    stream: S33
+    sprint: 18
+    priority: 5
+    size: M
+    depends_on: [S33-03, S32-06]
+    acceptance:
+      - "The skill cites the documents it came from"
+  - id: S33-06
+    title: "Catalogue: secops, compliance, devops, netops, docs writer, UX/UI, QA with mutation testing; architect wired to a knowledge base"
+    stream: S33
+    sprint: 18
+    priority: 6
+    size: L
+    depends_on: [S31-02, S33-02]
+    acceptance:
+      - "Each agent has an eval that turns red when its instructions are emptied"
+  - id: S33-07
+    title: "Template software-delivery-governed using them, with gates"
+    stream: S33
+    sprint: 18
+    priority: 7
+    size: M
+    depends_on: [S33-06]
+    acceptance:
+      - "One ticket traverses it on the dev"
+  - id: S33-08
+    title: "Netops connectors, read-only: pfSense REST API, Cilium policies and Hubble flows, nginx config"
+    stream: S33
+    sprint: 18
+    priority: 8
+    size: L
+    depends_on: []
+    acceptance:
+      - "Fakes per connector; netops explains a dropped flow from a recorded Hubble trace"
+  - id: S33-09
+    title: "Netops writes as governed actions: pfSense with approval and compensation; Cilium and nginx as GitOps PRs through the train"
+    stream: S33
+    sprint: 18
+    priority: 9
+    size: L
+    depends_on: [S33-08]
+    acceptance:
+      - "An unapproved pfSense write is refused; compensation restores the rule"
+  # S34 — English everywhere
+  - id: S34-01
+    title: "ADR superseding 0039 §2-3; CLAUDE.md Languages; a lint refusing French on new lines"
+    stream: S34
+    sprint: 16
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "A French comment on a new line fails CI"
+  - id: S34-02
+    title: "Temporal activities and signal renamed in English with French aliases; patch ids frozen"
+    stream: S34
+    sprint: 16
+    priority: 2
+    size: M
+    depends_on: [S34-01]
+    acceptance:
+      - "Recorded histories replay with both names"
+  - id: S34-03
+    title: "contract-change: four OpenAPI properties and two error codes in English, old names accepted for one release"
+    stream: S34
+    sprint: 16
+    priority: 3
+    size: M
+    depends_on: [S34-01]
+    acceptance:
+      - "Contract test with both names"
+  - id: S34-04
+    title: "Rename per package: identifiers, files, comments, docstrings, tests"
+    stream: S34
+    sprint: 16
+    priority: 4
+    size: L
+    depends_on: [S34-02, S34-03]
+    acceptance:
+      - "make ci green; French lint at zero per package"
+  - id: S34-05
+    title: "Docs: ADR and plan file names in English; joiners-leavers template v2"
+    stream: S34
+    sprint: 16
+    priority: 5
+    size: M
+    depends_on: [S34-04]
+    acceptance:
+      - "Link checker green"
+  # S35 — The agent_sandbox executor (ADR 0016)
+  - id: S35-01
+    title: "agent-sandbox operator on the dev cluster, API version pinned; chart values for the executor, warm pool and RuntimeClass"
+    stream: S35
+    sprint: 18
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "make test-cluster creates and deletes a Sandbox on the dev cluster"
+  - id: S35-02
+    title: "Executor agent_sandbox: queue through a waiting SandboxClaim, warm pool of never-used sandboxes, one run token per sandbox"
+    stream: S35
+    sprint: 18
+    priority: 2
+    size: L
+    depends_on: [S35-01, S36-02]
+    acceptance:
+      - "ADR 0013's no-executor-can-snapshot test turns red and is updated; a claimed sandbox holds no token before assignment"
+  - id: S35-03
+    title: "Suspend and resume the sandbox around a human question, bounded by sandbox.suspend_max_hours"
+    stream: S35
+    sprint: 18
+    priority: 3
+    size: L
+    depends_on: [S35-02]
+    acceptance:
+      - "Cluster test: an answered question costs one run, not two; past the bound the sandbox is gone and the stage replays"
+  - id: S35-04
+    title: "Conformance on the dev cluster before any executor capability is announced"
+    stream: S35
+    sprint: 18
+    priority: 4
+    size: M
+    depends_on: [S35-02]
+    acceptance:
+      - "A capability announced without its cluster test fails CI"
+  # S36 — Agent logs
+  - id: S36-01
+    title: "The run transcript is really stored, or the field is removed"
+    stream: S36
+    sprint: 17
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "GET /runs/{id}/transcript on a finished fake run returns its lines"
+  - id: S36-02
+    title: "At the end of every run the executor archives the pod log tail and the termination reason, secrets redacted"
+    stream: S36
+    sprint: 17
+    priority: 2
+    size: M
+    depends_on: []
+    acceptance:
+      - "Fake executor with a crashing pod: reason and last lines stored; a token in the logs is masked"
+  - id: S36-03
+    title: "GET /runs/{id}/logs with a live tail, and a logs tab on the run page"
+    stream: S36
+    sprint: 17
+    priority: 3
+    size: M
+    depends_on: [S36-02]
+    acceptance:
+      - "Playwright; another project's run answers 404"

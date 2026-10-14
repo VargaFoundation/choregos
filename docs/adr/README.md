@@ -32,7 +32,7 @@ nine records did not exist.
 | [0013](0013-densite-des-taches-d-agent.md) | Agent task density, and what we take from AX | accepted |
 | [0014](0014-un-catalogue-d-outils-tenu-par-la-plateforme.md) | A platform-held tool catalogue | accepted |
 | [0015](0015-attestation-de-paternite-ia.md) | A signed "AI authorship" attestation per merged change | proposed |
-| [0016](0016-executeur-agent-sandbox.md) | An `agent-sandbox` executor: warm pools, suspend across a human gate, snapshots | proposed |
+| [0016](0016-executeur-agent-sandbox.md) | An `agent-sandbox` executor: warm pools, suspend across a human gate, snapshots | accepted |
 | [0017](0017-conformite-mcp-2026-07-28.md) | MCP 2026-07-28: stateless tools, tasks, elicitation, resource-bound OAuth | proposed |
 | [0018](0018-otel-genai.md) | OpenTelemetry GenAI spans from the runner and the gateway; the ledger stays the truth for money | proposed |
 | [0019](0019-temporal-workflow-streams.md) | Temporal Workflow Streams as the transport of a run's live journal | proposed |
