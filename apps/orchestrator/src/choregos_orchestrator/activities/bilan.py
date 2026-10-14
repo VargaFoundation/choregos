@@ -13,6 +13,7 @@ from choregos_api.db.models import Finding as FindingRow
 from choregos_api.db.models import GatewayKeyRow, Project, Run
 from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_api.services.artifacts import record_inline_outputs
+from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_api.services.tickets import sorties_a_ranger
 from choregos_contracts import EventType, StageResult, StageStatus
 from choregos_core import Spend, elapsed_seconds, utcnow
@@ -34,7 +35,7 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         if run is None:
             return Spend().model_dump(mode="json")
         if run.spend_collected:
-            return dict(run.tokens)
+            return {**run.tokens, **await _ticket_view(session, bundle, run.work_item_id)}
         spend = Spend()
         if run.gateway_key_id:
             spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
@@ -95,7 +96,20 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
             if key_row is not None:
                 key_row.spend_usd = spend.cost_usd
                 key_row.revoked = True
-        return dict(run.tokens)
+        await session.flush()
+        # What the ticket has cost, read from the ledger — this run's line included, tool calls
+        # too (S27-03): the interpreter's counter is this, not a sum it keeps in memory.
+        return {**run.tokens, **await _ticket_view(session, bundle, item.id)}
+
+
+async def _ticket_view(session: Any, bundle: Any, work_item_id: str) -> dict[str, float]:
+    """What the ticket has cost, read from the ledger (models and tools), and its budget as it
+    stands now — its size may have changed since the interpreter started (S27-03)."""
+    item = await load_work_item(session, work_item_id)
+    return {
+        "ticket_cost_usd": await ticket_spent(session, work_item_id),
+        "ticket_budget_usd": ticket_budget(bundle.engine, item),
+    }
 
 
 @activity.defn(name="record_run_outcome")

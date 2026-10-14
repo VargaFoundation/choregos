@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, time
+from typing import Any
 
 from choregos_core import utcnow
 from sqlalchemy import func, or_, select
@@ -26,6 +27,11 @@ def start_of_day() -> datetime:
     """Midnight UTC today: a day budget counts from here."""
     now = utcnow()
     return datetime.combine(now.date(), time.min, tzinfo=now.tzinfo)
+
+
+def ticket_budget(engine: Any, item: Any) -> float:
+    """The work item's budget: the policy's, for its CURRENT size (a refinement may change it)."""
+    return float(engine.budget_ticket(item.size))
 
 
 async def ticket_spent(session: AsyncSession, work_item_id: str) -> float:
@@ -111,5 +117,6 @@ __all__ = [
     "project_spent_since",
     "reserve",
     "start_of_day",
+    "ticket_budget",
     "ticket_spent",
 ]

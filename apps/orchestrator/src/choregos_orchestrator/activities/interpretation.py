@@ -12,6 +12,7 @@ from typing import Any
 
 from choregos_api.db.models import Event, WorkflowDef
 from choregos_api.services import persist_event, workflow_du_ticket, workflow_model
+from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_contracts import EventType
 from choregos_core import utcnow
 from sqlalchemy import select
@@ -42,7 +43,9 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "workflow": workflow.model_dump(mode="json", by_alias=True, exclude_none=True),
             "workflow_def_id": item.workflow_def_id,
             "state": item.state,
-            "ticket_budget_usd": bundle.engine.budget_ticket(item.size),
+            "ticket_budget_usd": ticket_budget(bundle.engine, item),
+            # What the ticket has cost so far, models and tools (S27-03): a restart keeps it.
+            "ticket_cost_usd": await ticket_spent(session, item.id),
             "tracker_key": item.tracker_key,
             "project_slug": bundle.slug,
             # Ce que lit une date d'action (`not_before`, S20-05) ; un changement arrive ensuite

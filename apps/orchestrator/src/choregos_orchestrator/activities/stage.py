@@ -360,6 +360,7 @@ async def _reservation(
         project_spent_since,
         reserve,
         start_of_day,
+        ticket_budget,
         ticket_spent,
     )
 
@@ -371,7 +372,7 @@ async def _reservation(
             spent = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
             left["agent_day"] = agent.spec.budget.daily_usd - spent
     left["ticket"] = (
-        engine.budget_ticket(item.size)
+        ticket_budget(engine, item)
         - await ticket_spent(session, item.id)
         - await open_reservations(session, work_item_id=item.id, exclude_run=run_id)
     )

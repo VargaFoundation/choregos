@@ -109,6 +109,10 @@ IDENTICAL_FAILURE_ESCALATES = "identical-failure-escalates"
 #: (S27-02, ADR 0047): the stage is then sent to a person without a run. Before this marker,
 #: `prepare_stage` never refused on budget.
 BUDGET_RESERVATION = "budget-reservation"
+#: The ticket's spend is read from the cost ledger — models and tools — at start and after each
+#: stage (S27-03, ADR 0047). Before this marker it lived in workflow memory, summed from model
+#: spend only, and a restarted interpreter started again at zero.
+TICKET_SPEND_FROM_LEDGER = "ticket-spend-from-ledger"
 
 
 @dataclass
@@ -293,9 +297,7 @@ class WorkflowInterpreter:
             retry_policy=DEFAULT_RETRY,
         )
         engine = WorkflowEngine(Workflow.model_validate(context["workflow"]))
-        self.state = params.resume_from or context.get("state") or engine.initial_state
-        if self.version_des_champs == 0:  # un `fields_changed` arrivé avant la lecture est plus récent
-            self.champs = dict(context.get("fields") or {})
+        self._start_from(params, engine, context)
 
         await self._mirror(params, "started")
 
@@ -359,6 +361,15 @@ class WorkflowInterpreter:
             retry_policy=DEFAULT_RETRY,
         )
         return {"state": self.state, "cost_usd": self.cost_usd, "stopped": self.stopped}
+
+    def _start_from(self, params: InterpreterInput, engine: WorkflowEngine, context: dict[str, Any]) -> None:
+        """The state, spend and fields the interpreter starts from."""
+        if workflow.patched(TICKET_SPEND_FROM_LEDGER):
+            # A restarted interpreter starts from what the ticket has cost, not from zero.
+            self.cost_usd = max(self.cost_usd, float(context.get("ticket_cost_usd", 0.0)))
+        self.state = params.resume_from or context.get("state") or engine.initial_state
+        if self.version_des_champs == 0:  # a `fields_changed` that arrived before the read is newer
+            self.champs = dict(context.get("fields") or {})
 
     # ───────────────────────── étapes ─────────────────────────
 
@@ -447,7 +458,10 @@ class WorkflowInterpreter:
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=DEFAULT_RETRY,
         )
-        self.cost_usd += float(spend.get("cost_usd", 0.0))
+        if "ticket_cost_usd" in spend and workflow.patched(TICKET_SPEND_FROM_LEDGER):
+            self.cost_usd = float(spend["ticket_cost_usd"])  # the ledger: models AND tools
+        else:
+            self.cost_usd += float(spend.get("cost_usd", 0.0))
         await executer_activite(
             stage_activities.record_run_outcome,
             {"project_id": params.project_id, "run_id": run_id, "result": awaited["result"]},
@@ -471,7 +485,8 @@ class WorkflowInterpreter:
 
         outcomes = await self._gates(params, transition, run_id)
 
-        if self.cost_usd > float(context.get("ticket_budget_usd", 0.0)) > 0:
+        ticket_budget = float(spend.get("ticket_budget_usd") or context.get("ticket_budget_usd", 0.0))
+        if self.cost_usd > ticket_budget > 0:
             result = result.model_copy(
                 update={
                     "status": StageStatus.NEEDS_HUMAN,
