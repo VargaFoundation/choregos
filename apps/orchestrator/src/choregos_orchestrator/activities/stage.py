@@ -394,9 +394,9 @@ async def _reservation(
     trial: bool = False,
 ) -> Any:
     """What this run may spend (ADR 0047): the smallest of what is left under the stage budget, the
-    agent's run and day budgets, the ticket budget and the project's day budget. A trial has no
-    day budget: its runs belong to no agent, so no day spend is counted against one (S32-03)."""
-    from choregos_api.services.agents import depense_du_jour
+    agent's run, day and month budgets, the ticket budget and the project's day budget. A trial has
+    no day or month budget: its runs belong to no agent, so no spend is counted against one (S32-03)."""
+    from choregos_api.services.agents import depense_du_jour, depense_du_mois
     from choregos_api.services.budgets import (
         open_reservations,
         project_spent_since,
@@ -413,6 +413,10 @@ async def _reservation(
         if agent.spec.budget.daily_usd is not None and not trial:
             spent = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
             left["agent_day"] = agent.spec.budget.daily_usd - spent
+        if agent.spec.budget.monthly_usd is not None and not trial:
+            # The monthly cap is a reservation too (S27-09): a run cannot spend past it.
+            month = await depense_du_mois(session, bundle.project.org_id, agent.agent.slug)
+            left["agent_month"] = agent.spec.budget.monthly_usd - month
     left["ticket"] = (
         ticket_budget(engine, item)
         - await ticket_spent(session, item.id)

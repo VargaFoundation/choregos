@@ -32,6 +32,7 @@ export function resumeDeLaVersion(spec: AgentSpec | undefined | null): string {
   const outils = (spec.mcp_servers ?? []).reduce((total, serveur) => total + (serveur.tools?.length ?? 0), 0);
   if (outils) morceaux.push(`${outils} tool pattern${outils > 1 ? "s" : ""}`);
   if (spec.budget?.daily_usd != null) morceaux.push(`$${spec.budget.daily_usd}/day`);
+  if (spec.budget?.monthly_usd != null) morceaux.push(`$${spec.budget.monthly_usd}/month`);
   return morceaux.length > 0 ? morceaux.join(" · ") : "defaults of the platform";
 }
 

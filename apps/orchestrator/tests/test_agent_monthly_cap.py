@@ -12,7 +12,7 @@ from .conftest import Fixture
 from .test_agent_du_registre import _agent, _plan
 
 
-async def _with_cap(setup: Fixture, monthly: float) -> None:
+async def _with_cap(setup: Fixture, monthly: float, run_usd: float | None = 0.5) -> None:
     from choregos_api.db.models import AgentVersion
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
@@ -21,7 +21,7 @@ async def _with_cap(setup: Fixture, monthly: float) -> None:
     async with session_scope() as session:
         version = (await session.execute(select(AgentVersion))).scalars().one()
         spec = dict(version.spec)
-        spec["budget"] = {"run_usd": 0.5, "monthly_usd": monthly}
+        spec["budget"] = {"run_usd": run_usd, "monthly_usd": monthly}
         version.spec = spec
 
 
@@ -102,3 +102,13 @@ async def test_a_notifier_that_is_down_leaves_the_alert_to_the_next_try(setup: F
     notifier.panne = None
     await _tell(setup)
     assert len(notifier.sent) == 1
+
+
+async def test_the_key_is_minted_at_what_is_left_of_the_monthly_cap(setup: Fixture) -> None:
+    """A run cannot overshoot the cap: its key is at most what the month still allows."""
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _with_cap(setup, 10.0, run_usd=None)
+    await _spend_as_agent(setup, 9.7, 0)  # 97 %: not suspended yet
+    entry = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    assert entry["budget"]["usd"] == pytest.approx(0.3, abs=1e-6), entry["budget"]
