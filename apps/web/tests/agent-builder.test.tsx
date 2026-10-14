@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentBuilder, cleanSpec, reachedOperations, skillUsable, toolMatches } from "@/components/agents/builder";
+import { AgentBuilder, cleanSpec, reachedOperations, servedTo, skillUsable, toolMatches } from "@/components/agents/builder";
 import { api } from "@/lib/api";
-import type { OrgConnector, Skill } from "@/lib/types";
+import type { KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
 
 /** The agent builder (S32-01): every field of a version is editable, with what it costs and allows. */
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
@@ -25,6 +25,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ]),
       orgConnectors: vi.fn(),
       skills: vi.fn(),
+      knowledgeBases: vi.fn(),
     },
   };
 });
@@ -45,6 +46,11 @@ const SKILLS: Skill[] = [
   { slug: "unreviewed-script", status: "pending_review", latest_version: 1 },
 ];
 
+const BASES: KnowledgeBase[] = [
+  { slug: "network-runbooks", name: "Network runbooks", scope: "projects", projects: ["netops"], serving_mode: "index", status: "ready" },
+  { slug: "hr-policies", name: "HR policies", scope: "org", serving_mode: "files", status: "ready" },
+];
+
 describe("the builder's rules", () => {
   it("a tool pattern is a name or a prefix", () => {
     expect(toolMatches("track_*", "track_order")).toBe(true);
@@ -57,12 +63,19 @@ describe("the builder's rules", () => {
       mcp_servers: [],
     });
   });
+
+  it("a knowledge base says who it is served to", () => {
+    expect(servedTo(BASES[1]!)).toBe("every project of the organisation");
+    expect(servedTo({ ...BASES[0]!, scope: "groups", groups: ["network"] })).toBe("the projects of network");
+    expect(cleanSpec({}).memory).toBe("project");
+  });
 });
 
 describe("the builder", () => {
   beforeEach(() => {
     vi.mocked(api.orgConnectors).mockResolvedValue([CONNECTOR, { name: "entra", kind: "identity", type: "entra", status: "ok" }]);
     vi.mocked(api.skills).mockResolvedValue(SKILLS);
+    vi.mocked(api.knowledgeBases).mockResolvedValue(BASES);
   });
 
   it("creates an agent from the form alone, every field of its version filled", async () => {
@@ -100,6 +113,13 @@ describe("the builder", () => {
     fireEvent.change(server, { target: { value: "supplier" } });
     fireEvent.click(within(builder).getByRole("button", { name: "Add" }));
     fireEvent.change(within(builder).getByLabelText("Tool patterns of supplier"), { target: { value: "track_*" } });
+    // A knowledge base, and whose memory it keeps.
+    const base = within(builder).getByLabelText("Add a knowledge base");
+    await within(base).findByRole("option", { name: "Network runbooks (index)" });
+    fireEvent.change(base, { target: { value: "network-runbooks" } });
+    fireEvent.click(within(builder).getByRole("button", { name: "Read it" }));
+    expect(within(base).queryByRole("option", { name: "Network runbooks (index)" })).toBeNull();
+    fireEvent.change(within(builder).getByLabelText("Memory scope"), { target: { value: "agent" } });
     // What it costs and allows, next to the form.
     const summary = screen.getByTestId("ce-que-ca-permet");
     expect(summary).toHaveTextContent("platform/cheap");
@@ -107,6 +127,10 @@ describe("the builder", () => {
     expect(within(summary).getByTestId("outils-resolus")).toHaveTextContent("track_order — called freely");
     expect(within(summary).getByTestId("outils-resolus")).toHaveTextContent("track_parcel — each call asks a person, US$0.01 a call");
     expect(within(summary).getByTestId("outils-resolus")).not.toHaveTextContent("order_laptop");
+    expect(within(summary).getByTestId("connaissances-resolues")).toHaveTextContent(
+      "network-runbooks — searched with knowledge_search; served to projects netops.",
+    );
+    expect(within(summary).getByTestId("memoire-resolue")).toHaveTextContent("Its own memory within each project");
 
     fireEvent.click(within(builder).getByRole("button", { name: "Create the agent" }));
     await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
@@ -122,6 +146,8 @@ describe("the builder", () => {
         budget: { run_usd: 0.5, daily_usd: 4 },
         skills: [{ slug: "onboarding-procedure", version: 2 }],
         mcp_servers: [{ connector: "supplier", tools: ["track_*"] }],
+        knowledge: [{ slug: "network-runbooks" }],
+        memory: "agent",
         evals: [],
       },
     });
