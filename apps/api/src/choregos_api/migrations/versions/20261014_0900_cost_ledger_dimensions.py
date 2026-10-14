@@ -5,7 +5,7 @@ Backfilled from the run each line points at (its agent) and the work item's work
 A line without a run, or whose run was deleted, keeps NULL.
 
 Revision ID: f8b0d2e4a6c8
-Revises: 9e41c7a0d35b
+Revises: 4e6a8c0b2d3f
 Create Date: 2026-10-14 09:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f8b0d2e4a6c8"
-down_revision: str | None = "9e41c7a0d35b"
+down_revision: str | None = "4e6a8c0b2d3f"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
