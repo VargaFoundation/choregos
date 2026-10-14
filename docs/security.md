@@ -62,10 +62,22 @@ Context packs and tickets contain text written by third parties. Two rules:
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while
   the run waits for a slot. Minted by `start_run` for the run's Secret only: never stored in
   `runs.stage_input`, never carried by a Temporal payload (#519).
-- Gateway key: one per run, capped. It stays in `runs.stage_input` only while the run lives —
-  the runner reads it from `GET /internal/runs/{id}/input` — and `collect_spend` revokes it and
-  removes it from the row; a revocation that fails is logged and the key dies at its TTL
-  (`max_minutes + 30`). Migration `e7a9c1b3d5f7` scrubbed the rows written before.
+- Gateway key: one per run, capped. `prepare_stage` reserves its cap (a `gateway_keys` row named
+  `reserved:<run_id>`); `start_run` mints it and the executor puts it in the run's Secret next to
+  the run token (`k8s_job`, `tekton`: Secret key `gateway-key`; `agent_sandbox`: sealed in the
+  assignment, and given afresh on `resume`; `aca`: a job secret; `local_docker`: the container's
+  environment). The runner reads it from `CHOREGOS_RUN_GATEWAY_KEY`. It is never stored in
+  `runs.stage_input` and never carried by a Temporal payload (#519, #523).
+- The key is revoked however the run ends: `collect_spend` at the end of a stage; `cancel_run`;
+  and `record_workflow_failure` when the interpreter dies — cancelled, or `await_run` gave up —
+  which books the spend of the ticket's runs left uncollected first. A revocation that fails is
+  logged and the key dies at its TTL (`max_minutes + 30`). Migration `e7a9c1b3d5f7` scrubbed the
+  rows written before #519.
+- Compatibility, for one release: a runner without `CHOREGOS_RUN_GATEWAY_KEY` (started by an
+  orchestrator older than #523) uses the key its input carries, as before; `start_run` hands to
+  the Secret, and removes from the row, a key an older `prepare_stage` stored there. A runner
+  image older than #523 behind a newer orchestrator gets no key: the orchestrator and its
+  `runner_image` ship together.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
 - Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).

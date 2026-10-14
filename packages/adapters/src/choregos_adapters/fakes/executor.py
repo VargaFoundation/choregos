@@ -34,6 +34,8 @@ class FakeExecutor:
         #: `(run_id, until)` of each suspension; the run ids resumed, in order.
         self.suspended: list[tuple[str, Any]] = []
         self.resumed: list[str] = []
+        #: The gateway key each resumption was given, in order (#523).
+        self.resumed_keys: list[str | None] = []
         #: The resumed run's sandbox is gone (the bound passed): `resume` answers False.
         self.lost: set[str] = set()
         self.started: list[StageJobSpec] = []
@@ -92,7 +94,11 @@ class FakeExecutor:
         if self._queue:
             result = self._queue.pop(0)
         elif self.handler is not None and spec.stage_input is not None:
-            produced = self.handler(spec.stage_input)
+            # What a runner sees (#523): its input, with the key its Secret gave it.
+            stage_input = spec.stage_input
+            if spec.gateway_key and not stage_input.gateway_key:
+                stage_input = stage_input.model_copy(update={"gateway_key": spec.gateway_key})
+            produced = self.handler(stage_input)
             result = produced if isinstance(produced, StageResult) else StageResult.model_validate(produced)
         else:
             result = _nothing_to_do(spec.stage_input)
@@ -124,12 +130,15 @@ class FakeExecutor:
         self.suspended.append((run_id, until))
         return True
 
-    async def resume(self, ref: ExecRef, run_token: str, until: Any) -> bool:
+    async def resume(
+        self, ref: ExecRef, run_token: str, until: Any, *, gateway_key: str | None = None
+    ) -> bool:
         """The same run goes on: its next result is the next one scripted."""
         run_id = ref.run_id or ""
         if run_id in self.lost or not any(r == run_id for r, _ in self.suspended):
             return False
         self.resumed.append(run_id)
+        self.resumed_keys.append(gateway_key)
         result = (
             self._queue.pop(0) if self._queue else StageResult(status=StageStatus.DONE, summary="resumed")
         )

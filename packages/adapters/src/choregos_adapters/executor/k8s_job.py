@@ -24,10 +24,10 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, ExecStatus, StageJobSpec
 from choregos_core.sorties import explication
 
-from .tekton import CORE_API, KubernetesClient, _parse_time
+from .tekton import CORE_API, GATEWAY_KEY_FIELD, KubernetesClient, _parse_time, run_secret_data
 
 BATCH_API = "/apis/batch/v1"
 RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernetes.io/component": "runner"}
@@ -214,7 +214,7 @@ class KubernetesJobExecutor:
                 "labels": {"choregos/run-id": spec.run_id},
             },
             "type": "Opaque",
-            "data": {"token": base64.b64encode(spec.run_token.encode()).decode()},
+            "data": run_secret_data(spec),
         }
 
     def _job(self, spec: StageJobSpec, name: str) -> dict[str, Any]:
@@ -241,6 +241,14 @@ class KubernetesJobExecutor:
                         {
                             "name": "CHOREGOS_RUN_TOKEN",
                             "valueFrom": {"secretKeyRef": {"name": name, "key": "token"}},
+                        },
+                        # The run's gateway key, from the same Secret (#523). Optional: a run
+                        # without a key (none minted) still starts.
+                        {
+                            "name": RUN_GATEWAY_KEY_ENV,
+                            "valueFrom": {
+                                "secretKeyRef": {"name": name, "key": GATEWAY_KEY_FIELD, "optional": True}
+                            },
                         },
                         *[{"name": key, "value": value} for key, value in spec.env.items()],
                     ],
@@ -306,6 +314,8 @@ class KubernetesJobExecutor:
         No Secret (already collected): nothing to renew.
         """
         namespace = ref.namespace or ""
+        # A merge patch of the token alone: the gateway key next to it stays (#523). A `PUT` of a
+        # token-only Secret would have started the run without its key.
         await self.client.request(
             "PATCH",
             f"{CORE_API}/namespaces/{namespace}/secrets/{ref.name}",

@@ -16,6 +16,10 @@ class RunnerSettings(BaseSettings):
     run_id: str = ""
     api_url: str = "http://localhost:8000/api/v1/internal"
     run_token: str = ""
+    #: The run's gateway key, from the run's Secret, next to its token (#523). Empty when the
+    #: orchestrator is older than #523: the runner then uses the key of its input
+    #: (`GET /internal/runs/{id}/input`), as before — kept for one release.
+    gateway_key: str = Field(default="", validation_alias="CHOREGOS_RUN_GATEWAY_KEY")
     workspace: Path = Path("/workspace")
     tools_url: str = "http://localhost:7777/mcp"
     git_user_name: str = "choregos-bot"

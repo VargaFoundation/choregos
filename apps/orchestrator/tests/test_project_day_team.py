@@ -53,10 +53,18 @@ async def test_provisioning_creates_the_team_with_the_day_budget(setup: Fixture)
 async def test_a_run_key_joins_the_project_team_and_the_gateway_cuts_the_day(setup: Fixture) -> None:
     from choregos_adapters.fakes import BudgetExceededError
     from choregos_orchestrator.activities.provisioning import project_team_id
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from choregos_orchestrator.activities.stage import prepare_stage, start_run
 
     await _daily(setup, 1.0)
     prepared = await prepare_stage(_plan(setup))
+    # The key is minted when the run starts, for its Secret (#523).
+    await start_run(
+        {
+            "project_id": setup.project_id,
+            "work_item_id": setup.work_item_id,
+            "stage_input": prepared["stage_input"],
+        }
+    )
     gateway = setup.adapters.gateway
     [(key_id, key)] = gateway.keys.items()
     team = project_team_id(setup.project_id)

@@ -237,6 +237,10 @@ class Window(Model):
 # ───────────────────────────── exécution ─────────────────────────────
 
 
+#: The variable through which an executor gives the runner its run's gateway key (#523).
+RUN_GATEWAY_KEY_ENV = "CHOREGOS_RUN_GATEWAY_KEY"
+
+
 class StageJobSpec(Model):
     """Ce qu'un `Executor` doit lancer pour une étape."""
 
@@ -246,6 +250,10 @@ class StageJobSpec(Model):
     runner_image: str
     api_url: str
     run_token: str
+    #: The run's gateway key, for the run's Secret only, next to its token (#523): the executor
+    #: hands it to the runner as `CHOREGOS_RUN_GATEWAY_KEY`. Never stored on the `runs` row, never
+    #: in a Temporal payload; `stage_input.gateway_key` stays empty.
+    gateway_key: str | None = None
     stage_input: StageInput | None = None
     timeout_minutes: int = 120
     runtime_class: str | None = None

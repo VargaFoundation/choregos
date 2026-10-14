@@ -97,8 +97,10 @@ preparing a second one. An answered question costs one run, not two; the run's s
 sum of its two segments and the work item counts one run.
 
 - `suspend(ref, until)` and `resume(ref, run_token, until)`: 0016 wrote `resume(ref)`, but a
-  resumed run needs a new token, so the executor takes it. Neither is in the `Executor`
-  protocol: the interpreter calls them only when the executor announces both capabilities.
+  resumed run needs a new token, so the executor takes it — and, since #523, its new gateway key
+  (`resume(ref, run_token, until, gateway_key=…)`), which reaches the pod sealed with the token
+  instead of through the run's stored input. Neither is in the `Executor` protocol: the
+  interpreter calls them only when the executor announces both capabilities.
 - The bound, `sandbox.suspend_max_hours` (policy, default 24, 0 = never; a `contract-change`),
   is written into the claim's `shutdownTime` at suspension and its `ttlSecondsAfterFinished`
   is dropped: the controller deletes the sandbox at the bound even if no workflow is running.

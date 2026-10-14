@@ -111,6 +111,18 @@ class EventJournal:
 ARBRE_VIDE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
+def with_gateway_key(stage_input: StageInput, gateway_key: str) -> StageInput:
+    """The input with the run's gateway key from the run's Secret (#523).
+
+    The orchestrator no longer stores the key with the input: it travels in the run's Secret, as
+    `CHOREGOS_RUN_GATEWAY_KEY`. Without that variable (an orchestrator older than #523), the key
+    the input carries is used, as before; this fallback is kept for one release.
+    """
+    if not gateway_key:
+        return stage_input
+    return stage_input.model_copy(update={"gateway_key": gateway_key})
+
+
 class Runner:
     """Exécute une étape d'agent de bout en bout."""
 
@@ -139,7 +151,7 @@ class Runner:
                 if "409" in detail:  # résultat déjà posté : rejeu, on sort proprement
                     return RunOutcome(Exit.OK, detail="result already posted")
                 return RunOutcome(Exit.INPUT_NOT_FOUND, detail=detail)
-            return await self.execute(stage_input, client)
+            return await self.execute(with_gateway_key(stage_input, self.settings.gateway_key), client)
         finally:
             if owns_client:
                 await client.aclose()

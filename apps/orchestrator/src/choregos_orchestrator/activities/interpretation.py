@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_api.db.models import Event, WorkflowDef
+from choregos_api.db.models import Event, Run, WorkflowDef
 from choregos_api.services import persist_event, workflow_du_ticket, workflow_model
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_contracts import EventType
@@ -21,6 +21,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 
 from ..train_client import signal_release_train
 from .base import db, load_work_item, project_bundle
+from .bilan import close_run_spend
 
 
 @activity.defn(name="load_context")
@@ -83,7 +84,23 @@ async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
             subject=item.tracker_key,
             **failure,
         )
-        return failure
+        open_runs = await _runs_without_spend(session, item.id)
+    # The interpreter dies — `await_run` gave up, an activity failed for good: nothing will call
+    # `collect_spend` for its run. Its spend is booked and its key revoked here (#523).
+    for run_id in open_runs:
+        await close_run_spend(payload["project_id"], run_id)
+    return failure
+
+
+async def _runs_without_spend(session: Any, work_item_id: str) -> list[str]:
+    """The ticket's runs whose spend was never collected — at most the last few."""
+    rows = await session.execute(
+        select(Run.id)
+        .where(Run.work_item_id == work_item_id, Run.spend_collected.is_(False))
+        .order_by(Run.created_at.desc())
+        .limit(10)
+    )
+    return [str(run_id) for run_id in rows.scalars().all()]
 
 
 @activity.defn(name="record_migration")

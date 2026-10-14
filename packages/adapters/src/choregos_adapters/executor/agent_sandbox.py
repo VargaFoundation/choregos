@@ -6,12 +6,12 @@ sandbox is a pod made from the template that has NEVER run anything: no run toke
 identity, no backend key, no service account token. Its runner listens on one port for one
 assignment. A run goes like this:
 
-1. `start` writes the run's Secret (its token, by reference, and what the assignment needs) and
+1. `start` writes the run's Secret (its token and gateway key, and what the assignment needs) and
    creates a SandboxClaim on the warm pool. The controller binds a warm sandbox to it, or
    cold-starts one from the same template when the pool is empty: either way a clean sandbox,
    never one a previous run has touched (`snapshot`, in ADR 0016's sense).
 2. `status`, once the bound sandbox is Ready, pushes the assignment — run id, token,
-   environment — to THAT pod, SEALED to the key the pod printed at boot (read through the API
+   environment, gateway key — to THAT pod, SEALED to the key the pod printed at boot (read through the API
    server), and marks the claim assigned. Before this push the token exists only in the run's
    Secret, which no runner pod can read; after it, exactly one pod holds it, and the pod network
    only ever carried ciphertext.
@@ -48,12 +48,12 @@ from typing import Any
 
 import httpx
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
+from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, ExecStatus, StageJobSpec, utcnow
 from choregos_core.sorties import explication
 
 from ..errors import ConfigurationError, UpstreamError
 from ..sealing import key_from_log, seal
-from .tekton import CORE_API, KubernetesClient, _parse_time
+from .tekton import CORE_API, GATEWAY_KEY_FIELD, KubernetesClient, _parse_time, run_secret_data
 
 #: The operator release whose API this executor speaks. Upgrading it is a change here AND in
 #: `infra/operators/agent-sandbox/`, proved by `make test-cluster` on a cluster that has it.
@@ -174,7 +174,7 @@ class AgentSandboxExecutor:
             },
             "type": "Opaque",
             "data": {
-                "token": _b64(spec.run_token),
+                **run_secret_data(spec),
                 "assignment": _b64(json.dumps(assignment, sort_keys=True)),
             },
         }
@@ -346,6 +346,10 @@ class AgentSandboxExecutor:
         assignment = _assignment(secret)
         env = await self._shared_env(namespace)
         env.update({str(k): str(v) for k, v in (assignment.get("env") or {}).items()})
+        # The run's gateway key, sealed with its token (#523): the runner reads it from its env.
+        gateway_key = (secret.get("data") or {}).get(GATEWAY_KEY_FIELD)
+        if gateway_key:
+            env[RUN_GATEWAY_KEY_ENV] = base64.b64decode(gateway_key).decode()
         run_id = str(assignment.get("run_id") or ref.run_id)
         payload = {
             "run_id": run_id,
@@ -451,13 +455,16 @@ class AgentSandboxExecutor:
         )
         return True
 
-    async def resume(self, ref: ExecRef, run_token: str, until: datetime) -> bool:
+    async def resume(
+        self, ref: ExecRef, run_token: str, until: datetime, *, gateway_key: str | None = None
+    ) -> bool:
         """Brings the suspended sandbox back for the SAME run, with its workspace.
 
         A new pod comes up on the same volume and waits for an assignment, like a warm one: the
         next `status` pushes it the run again, with `run_token` — a fresh one, the first having
-        expired during the wait. `until` is the new stage deadline. False when the sandbox is
-        gone (the bound passed, someone deleted it): the caller then replays the stage.
+        expired during the wait — and `gateway_key`, the fresh key of the continuation (#523).
+        `until` is the new stage deadline. False when the sandbox is gone (the bound passed,
+        someone deleted it): the caller then replays the stage.
         """
         namespace = ref.namespace or ""
         claim = await self.client.request("GET", f"{self._claims(namespace)}/{ref.name}")
@@ -469,7 +476,7 @@ class AgentSandboxExecutor:
         )
         if sandbox is None:
             return False
-        await self.renew(ref, run_token)
+        await self.renew(ref, run_token, gateway_key=gateway_key)
         await self._patch_claim(
             namespace,
             ref.name,
@@ -501,14 +508,17 @@ class AgentSandboxExecutor:
 
     # ───────────────────────────── the rest ─────────────────────────────
 
-    async def renew(self, ref: ExecRef, run_token: str) -> None:
-        """Replaces the token of a run not yet assigned. Its Secret is the only copy until the
-        push; once pushed, the pod has its token and this changes nothing it reads."""
+    async def renew(self, ref: ExecRef, run_token: str, *, gateway_key: str | None = None) -> None:
+        """Replaces the token of a run not yet assigned — and its gateway key when one is given
+        (a resumed run, #523); the key already there stays otherwise. Its Secret is the only copy
+        until the push; once pushed, the pod has both and this changes nothing it reads."""
         namespace = ref.namespace or ""
         secret = await self.client.request("GET", f"{self._secrets(namespace)}/{ref.name}")
         if secret is None:
             return
         secret.setdefault("data", {})["token"] = _b64(run_token)
+        if gateway_key:
+            secret["data"][GATEWAY_KEY_FIELD] = _b64(gateway_key)
         await self.client.request("PUT", f"{self._secrets(namespace)}/{ref.name}", json=secret)
 
     async def logs(self, ref: ExecRef) -> AsyncIterator[str]:

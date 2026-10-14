@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_api.db.models import Finding as FindingRow
-from choregos_api.db.models import GatewayKeyRow, Project, Run
+from choregos_api.db.models import Project, Run
 from choregos_api.logging import get_logger
 from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_api.services.artifacts import record_inline_outputs
@@ -24,7 +24,8 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
-from .base import db, load_work_item, project_bundle, without_secrets
+from .base import db, load_work_item, project_bundle
+from .run_key import release_run_key
 
 logger = get_logger("choregos.bilan")
 
@@ -121,18 +122,8 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         )
         item.totals = totals
 
-        if run.gateway_key_id:
-            revoked = await _revoke(bundle, run.gateway_key_id)
-            key_row = (
-                await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.key_id == run.gateway_key_id))
-            ).scalar_one_or_none()
-            if key_row is not None:
-                key_row.spend_usd = spend.cost_usd
-                key_row.revoked = key_row.revoked or revoked
-        # The run is over: its key leaves the row (#519). The runner read it from
-        # `GET /internal/runs/{id}/input`, which answers 409 once a result is posted.
-        if run.stage_input:
-            run.stage_input = without_secrets(run.stage_input, keep_gateway_key=False)
+        # The run is over: its key is revoked and no copy of it stays on the row (#519, #523).
+        await release_run_key(session, bundle, run, spend_usd=spend.cost_usd)
         await session.flush()
         await _tell_slack_of_agent_alerts(session, bundle)
         # What the ticket has cost, read from the ledger — this run's line included, tool calls
@@ -140,19 +131,26 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         return {**run.tokens, **await _ticket_view(session, bundle, item.id)}
 
 
-async def _revoke(bundle: Any, key_id: str) -> bool:
-    """Revokes the run's gateway key; a failure is logged, not fatal (#519).
+async def close_run_spend(project_id: str, run_id: str) -> None:
+    """A run that ends without the interpreter's `collect_spend` (cancelled, its workflow dead):
+    its spend is booked and its key revoked all the same (#523). Never raises.
 
-    The spend is already read and about to be recorded: a gateway that cannot revoke must not undo
-    that nor kill the stage. The key still dies at its TTL (stage budget + 30 min), and its row
-    stays `revoked = false`, which says the truth.
+    `collect_spend` first, because a revoked key may no longer tell its spend; if the gateway
+    cannot answer, the key is still revoked and scrubbed, and its spend is not booked.
     """
     try:
-        await bundle.adapters.gateway.revoke(key_id)
-    except Exception as error:  # a cleanup, never a reason to fail the stage
-        logger.warning("gateway key not revoked", key_id=key_id, error=str(error)[:300])
-        return False
-    return True
+        await collect_spend({"project_id": project_id, "run_id": run_id})
+        return
+    except Exception as error:
+        logger.warning("spend of an abandoned run not collected", run_id=run_id, error=str(error)[:300])
+    try:
+        async with db() as session:
+            bundle = await project_bundle(session, project_id)
+            run = await session.get(Run, run_id)
+            if run is not None:
+                await release_run_key(session, bundle, run)
+    except Exception as error:  # a cleanup: the key still dies at its TTL
+        logger.warning("key of an abandoned run not released", run_id=run_id, error=str(error)[:300])
 
 
 async def _ticket_view(session: Any, bundle: Any, work_item_id: str) -> dict[str, float]:

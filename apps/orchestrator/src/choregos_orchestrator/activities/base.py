@@ -198,10 +198,9 @@ async def send_courtesy(notify: Any, channel: str, message: Message) -> bool:
 def without_secrets(stage_input: dict[str, Any] | None, *, keep_gateway_key: bool) -> dict[str, Any]:
     """A `StageInput` payload with no run token, and with no gateway key unless asked (#519).
 
-    The run token never needs to be stored: `start_run` mints it for the run's Secret, and a resumed
-    run gets a fresh one through the same Secret. The gateway key is still read by the runner from
-    `GET /internal/runs/{id}/input` while the run lives, so the row keeps it until `collect_spend`
-    revokes it — and drops it then. A Temporal payload never carries either.
+    Neither needs to be stored: `start_run` mints both for the run's Secret, and a resumed run gets
+    fresh ones through the same Secret (#523). A row written before #523 may still hold a key: it
+    is scrubbed when the run starts or ends. A Temporal payload never carries either.
     """
     from choregos_core.redaction import REDACTED
 

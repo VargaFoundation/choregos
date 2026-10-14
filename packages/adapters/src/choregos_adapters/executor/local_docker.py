@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from choregos_contracts import ExecutorKind, StageResult
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, ExecStatus, StageJobSpec
 
 from ..errors import UpstreamError
 
@@ -67,6 +67,8 @@ class LocalDockerExecutor:
             f"CHOREGOS_API_URL={spec.api_url}",
             "--env",
             f"CHOREGOS_RUN_TOKEN={spec.run_token}",
+            # The run's gateway key next to its token (#523), never read from the run's input.
+            *(["--env", f"{RUN_GATEWAY_KEY_ENV}={spec.gateway_key}"] if spec.gateway_key else []),
             "--label",
             f"choregos.run-id={spec.run_id}",
             "--label",
