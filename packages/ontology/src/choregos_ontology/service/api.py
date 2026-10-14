@@ -1,18 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les routes du greffon, montées par le cœur sous `/api/v1` (essai, éléments 1 et 2).
+"""The plugin's routes, mounted by the core under `/api/v1` (trial, items 1 and 2).
 
-- `PUT /projects/{id}/ontology` : un paquet (fichiers YAML) validé, compilé, puis actif ;
-- `GET /projects/{id}/ontology` : la version active ;
-- `POST /projects/{id}/observations` : un rapport au format observations NDJSON v1, synchronisé
-  vers les objets `finding` — tout ou rien : un rapport partiel n'écrit rien ;
-- `GET /projects/{id}/objects/{type}` : les objets d'un type, vus avec l'habilitation par défaut ;
-- `GET /projects/{id}/proposals[/{proposal_id}]` et `POST …/{proposal_id}/decision` : les
-  propositions d'action — des actions du cœur depuis S20-08 — et leur décision, prise par le cœur.
+- `PUT /projects/{id}/ontology`: a package (YAML files) validated, compiled, then active;
+- `GET /projects/{id}/ontology`: the active version;
+- `POST /projects/{id}/observations`: a report in the observations NDJSON v1 format, synchronised to
+  the `finding` objects — all or nothing: a partial report writes nothing;
+- `GET /projects/{id}/objects/{type}`: the objects of a type, seen with the default clearance;
+- `GET /projects/{id}/proposals[/{proposal_id}]` and `POST …/{proposal_id}/decision`: the action
+  proposals — core actions since S20-08 — and their decision, taken by the core.
 
-Raccourcis de l'essai, à reprendre dans le socle : la synchronisation est une route et non l'action
-système `connector.sync` (R-SOC-CON-04), et un paquet devient actif sans plan ni application en
-deux temps (SOC-010). Les droits sont ceux du cœur : `project:write` pour écrire, `project:read`
-pour lire.
+Trial shortcuts, to be taken up in the platform: synchronisation is a route and not the system action
+`connector.sync` (R-SOC-CON-04), and a package becomes active without a two-step plan and apply
+(SOC-010). The rights are the core's: `project:write` to write, `project:read` to read.
 """
 
 from __future__ import annotations
@@ -42,8 +41,8 @@ from choregos_ontology.service.store import ACTIVE, SUPERSEDED, ManagedObject, O
 from choregos_ontology.validator import CORE_EFFECTS, Registry
 
 router = APIRouter(tags=["ontology"])
-#: Ce que l'installation sait faire : les effets du socle, et `gitops.pull_request` (AGT-014), que le
-#: greffon exécute par l'adaptateur SCM du cœur.
+#: What the installation can do: the platform's effects, and `gitops.pull_request` (AGT-014), which the
+#: plugin executes through the core's SCM adapter.
 REGISTRY = Registry(effects=CORE_EFFECTS | {"gitops.pull_request"})
 
 FINDING = "finding"
@@ -66,17 +65,17 @@ class Decision(BaseModel):
 
 
 class OntologyPackage(BaseModel):
-    """Les fichiers d'un paquet : chemin relatif (`objects/host.yaml`) → contenu YAML."""
+    """A package's files: relative path (`objects/host.yaml`) → YAML content."""
 
     files: dict[str, str] = Field(min_length=1)
 
 
 async def _serialize(session: AsyncSession, what: str, project_id: str) -> None:
-    """Un seul écrivain à la fois par projet : deux synchronisations concurrentes calculeraient leur
-    plan sur le même état et la seconde écraserait la première (PostgreSQL ; SQLite sérialise)."""
+    """One writer at a time per project: two concurrent synchronisations would compute their plan on
+    the same state and the second would overwrite the first (PostgreSQL; SQLite serialises)."""
     if session.get_bind().dialect.name == "postgresql":
-        verrou = text("SELECT pg_advisory_xact_lock(hashtext(:k))")
-        await session.execute(verrou, {"k": f"{what}:{project_id}"})
+        lock = text("SELECT pg_advisory_xact_lock(hashtext(:k))")
+        await session.execute(lock, {"k": f"{what}:{project_id}"})
 
 
 def _write_package(root: Path, files: dict[str, str]) -> None:
@@ -99,21 +98,21 @@ def _check_package(files: dict[str, str]) -> None:
 @router.put("/projects/{id}/ontology", operation_id="putOntology")
 async def put_ontology(package: OntologyPackage, ctx: ProjectCtx, session: Db) -> dict[str, Any]:
     ctx.require(Permission.PROJECT_WRITE)
-    return await publier_l_ontologie(session, ctx.project.id, package.files, ctx.principal.email)
+    return await publish_ontology(session, ctx.project.id, package.files, ctx.principal.email)
 
 
-async def installer_depuis_un_gabarit(
-    session: AsyncSession, projet: Any, fichiers: dict[str, str], auteur: str
+async def install_from_template(
+    session: AsyncSession, project: Any, files: dict[str, str], author: str
 ) -> dict[str, Any]:
-    """L'installateur `ontology` des gabarits (S20-09) : le paquet livré devient l'ontologie active du
-    projet qui naît. Un paquet invalide fait échouer la naissance : c'est le gabarit qui est faux."""
-    return await publier_l_ontologie(session, projet.id, fichiers, auteur)
+    """The templates' `ontology` installer (S20-09): the shipped package becomes the active ontology of
+    the project being born. An invalid package fails the birth: the template is wrong."""
+    return await publish_ontology(session, project.id, files, author)
 
 
-async def publier_l_ontologie(
-    session: AsyncSession, project_id: str, files: dict[str, str], auteur: str | None
+async def publish_ontology(
+    session: AsyncSession, project_id: str, files: dict[str, str], author: str | None
 ) -> dict[str, Any]:
-    """Un paquet validé, compilé, puis actif ; la version active passe `superseded`."""
+    """A package validated, compiled, then active; the active version becomes `superseded`."""
     _check_package(files)
     with tempfile.TemporaryDirectory(prefix="ontology-") as directory:
         root = Path(directory)
@@ -137,7 +136,7 @@ async def publier_l_ontologie(
         checksum=compiled.checksum,
         status=ACTIVE,
         compiled_ir=compiled.to_dict(),
-        created_by=auteur,
+        created_by=author,
     )
     session.add(version)
     await session.flush()
@@ -170,7 +169,7 @@ async def get_ontology(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
 
 @router.post("/projects/{id}/observations", operation_id="postObservations")
 async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> Any:
-    """Synchronise un rapport complet vers les objets `finding` ; un rapport partiel n'écrit rien."""
+    """Synchronise a complete report to the `finding` objects; a partial report writes nothing."""
     ctx.require(Permission.PROJECT_WRITE)
     body = await request.body()
     if len(body) > MAX_REPORT_BYTES:
@@ -185,16 +184,16 @@ async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> A
     try:
         observations = parse_report(body.decode("utf-8"))
     except (UnicodeDecodeError, PartialReportError) as error:
-        # Aucun objet n'est écrit. Mais une preuve `collector.rerun` qui attendait CE rapport échoue :
-        # un rapport partiel la rend impossible à collecter. Elle s'écrit, donc pas d'exception ici.
+        # No object is written. But a `collector.rerun` evidence that waited for THIS report fails: a
+        # partial report makes it impossible to collect. It is written, hence no exception here.
         await _serialize(session, "observations", ctx.project.id)
-        tranchees = await actions.on_report(session, ctx.project, None, str(error))
-        refus = unprocessable(
+        settled = await actions.on_report(session, ctx.project, None, str(error))
+        refusal = unprocessable(
             f"observations_partial_read: {error}",
             errors=[{"code": "observations_partial_read", "message": str(error)}],
         )
-        probleme = {**refus.to_problem(str(request.url.path)), "proposals_decided": tranchees}
-        return JSONResponse(probleme, status_code=refus.status_code, media_type="application/problem+json")
+        problem = {**refusal.to_problem(str(request.url.path)), "proposals_decided": settled}
+        return JSONResponse(problem, status_code=refusal.status_code, media_type="application/problem+json")
     await _serialize(session, "observations", ctx.project.id)
     rows = {
         row.id: row
@@ -219,8 +218,8 @@ async def post_observations(request: Request, ctx: ProjectCtx, session: Db) -> A
         row.deleted_at = None
         row.row_version += 1
     await session.flush()
-    tranchees = await actions.on_report(session, ctx.project, observations, None)
-    return {"lines": len(observations), **plan.summary(), "proposals_decided": tranchees}
+    settled = await actions.on_report(session, ctx.project, observations, None)
+    return {"lines": len(observations), **plan.summary(), "proposals_decided": settled}
 
 
 @router.get("/projects/{id}/objects/{object_type}", operation_id="listObjects")
@@ -245,15 +244,15 @@ async def list_objects(
         raise ApiError(refusal.code, "Request refused", str(refusal)) from refusal
 
 
-# ───────────────────────────── propositions d'action ─────────────────────────────
+# ───────────────────────────── action proposals ─────────────────────────────
 
 
 async def _proposal(session: AsyncSession, project_id: str, proposal_id: str) -> Any:
-    """Une proposition : une action du cœur née de l'ontologie (S20-08)."""
+    """A proposal: a core action born from the ontology (S20-08)."""
     try:
-        return await actions.une_action(session, project_id, proposal_id)
-    except actions.Refusal as refus:
-        raise ApiError(404, "Proposal not found", f"proposal `{proposal_id}` does not exist") from refus
+        return await actions.get_action(session, project_id, proposal_id)
+    except actions.Refusal as refusal:
+        raise ApiError(404, "Proposal not found", f"proposal `{proposal_id}` does not exist") from refusal
 
 
 @router.get("/projects/{id}/proposals", operation_id="listProposals")
@@ -262,15 +261,13 @@ async def list_proposals(
     session: Db,
     status: Annotated[str | None, Query()] = None,
 ) -> list[dict[str, Any]]:
-    return [
-        actions.describe(p) for p in await actions.actions_de_l_ontologie(session, ctx.project.id, status)
-    ]
+    return [actions.describe(p) for p in await actions.ontology_actions(session, ctx.project.id, status)]
 
 
 @router.post("/projects/{id}/proposals", status_code=201, operation_id="createProposal")
 async def create_proposal(body: ProposalIn, ctx: ProjectCtx, session: Db) -> Any:
-    """Une proposition faite par un humain (ou un jeton d'API) : mêmes règles que celle d'un agent —
-    paramètres, préconditions, chemins permis, politique — et le droit vient de ses rôles."""
+    """A proposal made by a person (or an API token): the same rules as an agent's — parameters,
+    preconditions, allowed paths, policy — and the right comes from their roles."""
     version = await objects.active_version(session, ctx.project.id)
     if version is None:
         raise conflict("this project has no active ontology: PUT /projects/{id}/ontology first")
@@ -281,23 +278,23 @@ async def create_proposal(body: ProposalIn, ctx: ProjectCtx, session: Db) -> Any
         raise ApiError(404, "Action not found", f"action `{body.action_type}` does not exist")
     try:
         jsonschema.validate(body.params, action["parameters_schema"])
-    except jsonschema.ValidationError as erreur:
-        raise unprocessable(f"parameters refused: {erreur.message}") from erreur
-    acteur = actions.Actor(kind="user", id=ctx.principal.email, user_id=ctx.principal.user_id)
+    except jsonschema.ValidationError as error:
+        raise unprocessable(f"parameters refused: {error.message}") from error
+    actor = actions.Actor(kind="user", id=ctx.principal.email, user_id=ctx.principal.user_id)
     try:
-        code, resultat = await actions.propose(
+        code, result = await actions.propose(
             session,
             ctx.project,
             version,
             body.action_type,
             body.model_dump(),
-            acteur,
+            actor,
             ctx.principal,
             ctx.org_slug,
         )
-    except actions.Refusal as refus:
-        raise ApiError(refus.code, "Proposal refused", str(refus), errors=[refus.body]) from refus
-    return JSONResponse(resultat, status_code=code)
+    except actions.Refusal as refusal:
+        raise ApiError(refusal.code, "Proposal refused", str(refusal), errors=[refusal.body]) from refusal
+    return JSONResponse(result, status_code=code)
 
 
 @router.get("/projects/{id}/proposals/{proposal_id}", operation_id="getProposal")
@@ -307,8 +304,8 @@ async def get_proposal(proposal_id: str, ctx: ProjectCtx, session: Db) -> dict[s
 
 @router.post("/projects/{id}/proposals/{proposal_id}/decision", operation_id="decideProposal")
 async def decide_proposal(proposal_id: str, body: Decision, ctx: ProjectCtx, session: Db) -> Any:
-    """La décision humaine, prise par le cœur (`decider`) — la même que
-    `POST /projects/{id}/actions/{id}/decision`. `401` avec `reauth` : se ré-authentifier, recommencer."""
+    """The human decision, taken by the core (`decider`) — the same as
+    `POST /projects/{id}/actions/{id}/decision`. `401` with `reauth`: authenticate again, then retry."""
     proposal = await _proposal(session, ctx.project.id, proposal_id)
     return await actions.decide(
         session, ctx.project, ctx.org_slug, proposal, ctx.principal, body.decision, body.reason

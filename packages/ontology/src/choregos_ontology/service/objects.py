@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Lire les objets d'une datasource `table` : recherche, lecture par id, liens (contrat 03 §9).
+"""Read the objects of a `table` datasource: search, read by id, links (contract 03 §9).
 
-Les règles qui comptent pour un agent :
-- une propriété au-dessus de l'habilitation de l'appelant (défaut `internal`, R-SOC-AUT-03) est
-  retirée des résultats **et** traitée comme inexistante dans les filtres et le tri — sinon sa
-  valeur se déduirait d'un filtre ;
-- 100 objets au plus par page (R-SOC-MCP-05), curseur opaque ;
-- un type d'objet dont la datasource n'est pas `table` n'est pas servi par l'essai, et le dit.
+The rules that matter to an agent:
+- a property above the caller's clearance (default `internal`, R-SOC-AUT-03) is removed from the
+  results **and** treated as nonexistent in filters and sorting — otherwise its value could be
+  inferred from a filter;
+- 100 objects per page at most (R-SOC-MCP-05), opaque cursor;
+- an object type whose datasource is not `table` is not served by the trial, and it says so.
 
-Simplification de l'essai : les filtres s'évaluent en Python sur les objets du type, chargés pour
-le projet. La spec demande des index d'expression sur PostgreSQL (R-SOC-ONT-16) ; le volume de
-l'essai (quelques centaines d'objets) ne mesure rien de ce côté.
+Trial simplification: filters are evaluated in Python over the type's objects, loaded for the project.
+The spec asks for expression indexes on PostgreSQL (R-SOC-ONT-16); the trial's volume (a few hundred
+objects) measures nothing on that side.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ DEFAULT_CLEARANCE = "internal"
 DEFAULT_LIMIT = 20
 
 
-class ToolRefusal(Exception):  # noqa: N818 - une réponse pour l'agent, pas une panne
-    """L'appel est refusé ; `code` est le code HTTP rendu à l'agent avec le message."""
+class ToolRefusal(Exception):  # noqa: N818 - an answer for the agent, not a failure
+    """The call is refused; `code` is the HTTP status returned to the agent with the message."""
 
     def __init__(self, code: int, message: str) -> None:
         super().__init__(message)
@@ -55,7 +55,7 @@ def object_type(ir: dict[str, Any], name: str) -> dict[str, Any]:
 
 
 def visible_properties(obj_type: dict[str, Any], clearance: str = DEFAULT_CLEARANCE) -> dict[str, Any]:
-    """{nom: propriété IR} lisibles avec cette habilitation."""
+    """{name: IR property} readable with this clearance."""
     ceiling = SENSITIVITIES.index(clearance)
     return {
         p["name"]: p
@@ -170,7 +170,7 @@ async def search(
     filters = list(arguments.get("filters") or [])
     for condition in filters:
         if condition.get("property") not in filterable:
-            # Une propriété au-dessus de l'habilitation est « inexistante », comme une inconnue.
+            # A property above the clearance is "nonexistent", like an unknown one.
             raise ToolRefusal(400, f"unknown or non-filterable property {condition.get('property')!r}")
     sort = arguments.get("sort")
     if sort is not None and sort.get("property") not in sortable:
@@ -211,7 +211,7 @@ async def linked(
     arguments: dict[str, Any],
     clearance: str = DEFAULT_CLEARANCE,
 ) -> dict[str, Any]:
-    """Les objets liés à `arguments.id` par un lien à clé étrangère, vu depuis `owner_type`."""
+    """The objects linked to `arguments.id` by a foreign-key link, seen from `owner_type`."""
     link = next((lt for lt in ir.get("link_types", []) if lt["name"] == link_name), None)
     if link is None:
         raise ToolRefusal(404, f"unknown link {link_name!r}")
@@ -235,10 +235,10 @@ async def linked(
     visible = visible_properties(other, clearance)
     rows = await _rows(session, project_id, other["name"])
     if fk_side == other_side:
-        # La clé est portée par l'autre bout : ses objets dont `fk` vaut l'id de la source.
+        # The key is on the other end: its objects whose `fk` is the source's id.
         objects = [_view(r, visible) for r in rows if (r.properties or {}).get(fk) == source.id]
     else:
-        # La clé est portée par la source : l'objet qu'elle désigne.
+        # The key is on the source: the object it names.
         target = (source.properties or {}).get(fk)
         objects = [_view(r, visible) for r in rows if r.id == target]
     return _page(objects, arguments)

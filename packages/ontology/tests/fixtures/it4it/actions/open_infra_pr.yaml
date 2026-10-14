@@ -16,7 +16,7 @@ spec:
     propose: [agent:platform, role:contributor]
     approve: policy:infra_change
   risk: medium
-  reversibility: reversible  # une PR ouverte se ferme ; rien n'est appliqué avant la fusion
+  reversibility: reversible  # an open PR can be closed; nothing is applied before the merge
   effects:
     - type: gitops.pull_request
       with:

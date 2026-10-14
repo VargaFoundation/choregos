@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les propositions d'action : décisions, effets et preuves, sous RLS
+"""Action proposals: decisions, effects and evidence, under RLS
 
 Revision ID: onto0002
 Revises: onto0001

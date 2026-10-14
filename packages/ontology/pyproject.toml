@@ -1,22 +1,22 @@
 [project]
 name = "choregos-ontology"
 version = "0.17.12"
-description = "Essai du socle (TRV-001 à 003) : ontologie en YAML, compilation, outils MCP générés, greffon du cœur"
+description = "Platform trial (TRV-001 to 003): an ontology in YAML, compiled, its MCP tools generated, served as a core plugin"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = ["pydantic>=2.9", "PyYAML>=6.0", "cel-python>=0.5"]
 
 [project.optional-dependencies]
-# La partie « service » (`choregos_ontology.service`) : le greffon servi par l'API du cœur.
+# The "service" part (`choregos_ontology.service`): the plugin served by the core's API.
 service = ["choregos-api", "jsonschema>=4.23", "sqlalchemy>=2.0"]
 
 [project.scripts]
 choregos-ontology = "choregos_ontology.cli:main"
 
-# Le greffon de l'essai du socle, livré INACTIF : il ne s'active qu'avec CHOREGOS_ESSAI_ONTOLOGIE=1
-# (voir `choregos_ontology.service.plugin`).
+# The plugin of the platform trial, shipped INACTIVE: it turns on only with CHOREGOS_ESSAI_ONTOLOGIE=1
+# (see `choregos_ontology.service.plugin`).
 [project.entry-points."choregos.plugins"]
-choregos-ontology = "choregos_ontology.service.plugin:brancher"
+choregos-ontology = "choregos_ontology.service.plugin:register"
 
 [project.entry-points."choregos.migrations"]
 choregos-ontology = "choregos_ontology.service.plugin:MIGRATIONS"

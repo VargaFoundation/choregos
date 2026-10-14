@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les outils MCP générés, servis aux runs par la couture d'outils du cœur (essai, élément 3).
+"""The generated MCP tools, served to runs through the core's tool seam (trial, item 3).
 
-Le cœur annonce ces outils au serveur MCP `choregos-tools` de l'agent (`GET /internal/runs/{id}/
-tools`) et les appelle pour lui (`POST /internal/runs/{id}/tools/{nom}`), authentifié par le jeton
-du run, sous le plafond d'appels par run, avec une ligne au registre des coûts et un événement
-`tool.called`. Ce module ne voit ni le jeton ni l'agent : il reçoit le run et son projet, vérifiés.
+The core announces these tools to the agent's `choregos-tools` MCP server (`GET /internal/runs/{id}/
+tools`) and calls them for it (`POST /internal/runs/{id}/tools/{name}`), authenticated by the run's
+token, under the per-run call cap, with a line in the cost ledger and a `tool.called` event. This
+module sees neither the token nor the agent: it receives the run and its project, checked.
 
-Seuls les outils que l'essai sait servir sont annoncés — un outil annoncé qui répondrait « pas
-encore » serait une promesse fausse faite à l'agent :
-- `ontology_describe`, et `<type>_search`, `<type>_get` des types à datasource `table` ;
-- les liens à clé étrangère entre deux types `table` ;
-- `action_<nom>` des actions dont tous les effets sont servis (`actions.SERVED_EFFECTS`), qui ne
-  font que **proposer** (élément 4), et `action_status`, `action_list`.
+Only the tools the trial can serve are announced — an announced tool that answered "not yet" would be
+a false promise made to the agent:
+- `ontology_describe`, and `<type>_search`, `<type>_get` of the types with a `table` datasource;
+- foreign-key links between two `table` types;
+- `action_<name>` of the actions whose effects are all served (`actions.SERVED_EFFECTS`), which only
+  **propose** (item 4), and `action_status`, `action_list`.
 """
 
 from __future__ import annotations
@@ -27,6 +27,9 @@ from choregos_ontology.service.objects import ToolRefusal
 SERVED_KINDS = frozenset({"describe", "search", "get", "link", "action", "status", "list"})
 PAGE = 20
 CLEARANCE = objects.DEFAULT_CLEARANCE
+#: The key, in an announced tool, that tells the core's MCP gate the tool writes (read by
+#: `choregos_api.mcp`: a protocol key, not prose).
+WRITES_KEY = "ecriture"  # lang: fr-ok - read by the core's MCP gate
 
 
 def _is_table(ir: dict[str, Any], type_name: str) -> bool:
@@ -40,8 +43,8 @@ def _link_ends(ir: dict[str, Any], link_name: str) -> list[str]:
 
 
 def _action_served(ir: dict[str, Any], name: str) -> bool:
-    """Servie à l'agent : effets servis par l'essai, et l'agent a le droit de la proposer. Un outil
-    hors droits est absent de la liste et répond comme un outil inexistant (contrat 03 §9)."""
+    """Served to the agent: effects served by the trial, and the agent may propose it. A tool outside
+    its rights is absent from the list and answers like a tool that does not exist (contract 03 §9)."""
     action = next((a for a in ir.get("action_types", []) if a["name"] == name), None)
     if action is None or f"agent:{actions.AGENT_IDENTITY}" not in action["propose"]:
         return False
@@ -51,7 +54,7 @@ def _action_served(ir: dict[str, Any], name: str) -> bool:
 
 
 def served_tools(ir: dict[str, Any]) -> list[dict[str, Any]]:
-    """Les outils générés que l'essai sert, dans le format de l'IR (`input_schema`)."""
+    """The generated tools the trial serves, in the IR's format (`input_schema`)."""
     served = []
     for tool in ir.get("mcp_tools", []):
         kind, source = tool["kind"], tool.get("source")
@@ -68,7 +71,7 @@ def served_tools(ir: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def describe(ir: dict[str, Any]) -> dict[str, Any]:
-    """Ce que l'appelant peut voir : types, propriétés lisibles, liens et actions."""
+    """What the caller may see: types, readable properties, links and actions."""
     return {
         "ontology": {"name": ir.get("name"), "version": ir.get("version")},
         "object_types": [
@@ -96,7 +99,7 @@ def describe(ir: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def lister(session: AsyncSession, run: Any, project: Any) -> list[dict[str, Any]]:
+async def list_tools(session: AsyncSession, run: Any, project: Any) -> list[dict[str, Any]]:
     version = await objects.active_version(session, project.id)
     if version is None:
         return []
@@ -106,7 +109,7 @@ async def lister(session: AsyncSession, run: Any, project: Any) -> list[dict[str
     ]
 
 
-async def appeler(
+async def call_tool(
     session: AsyncSession, run: Any, project: Any, name: str, arguments: dict[str, Any]
 ) -> tuple[int, Any]:
     version = await objects.active_version(session, project.id)
@@ -137,16 +140,14 @@ async def appeler(
 async def _proposals(
     session: AsyncSession, project: Any, kind: str, arguments: dict[str, Any]
 ) -> dict[str, Any]:
-    """Le statut d'une proposition, ou leur liste : des actions du cœur nées de l'ontologie (S20-08)."""
+    """A proposal's status, or the list of them: core actions born from the ontology (S20-08)."""
     if kind == "status":
         try:
-            proposal = await actions.une_action(session, project.id, str(arguments["proposal"]))
-        except actions.Refusal as refus:
-            raise ToolRefusal(404, f"proposal {arguments['proposal']!r} not found") from refus
+            proposal = await actions.get_action(session, project.id, str(arguments["proposal"]))
+        except actions.Refusal as refusal:
+            raise ToolRefusal(404, f"proposal {arguments['proposal']!r} not found") from refusal
         return actions.describe(proposal)
-    rows = await actions.actions_de_l_ontologie(
-        session, project.id, str(arguments.get("status") or "") or None
-    )
+    rows = await actions.ontology_actions(session, project.id, str(arguments.get("status") or "") or None)
     if arguments.get("action_type"):
         rows = [r for r in rows if actions._meta(r).get("action_type") == str(arguments["action_type"])]
     start = int(arguments.get("cursor") or 0) if str(arguments.get("cursor") or "0").isdigit() else 0
@@ -182,7 +183,7 @@ async def _dispatch(
     if kind == "get":
         target = objects.object_type(ir, source)
         return await objects.get(session, project_id, target, arguments["id"], CLEARANCE)
-    # kind == "link" : le nom est `<type propriétaire>_<nom du bout>` (mcpgen.link_tool_name).
+    # kind == "link": the name is `<owner type>_<end name>` (mcpgen.link_tool_name).
     link = next(lt for lt in ir["link_types"] if lt["name"] == source)
     owner = next(
         end["object_type"]
@@ -192,28 +193,28 @@ async def _dispatch(
     return await objects.linked(session, project_id, ir, source, owner, arguments, CLEARANCE)
 
 
-# ───────────────────────────── servis aux humains, par la porte MCP (ADR 0030) ─────────────────────────────
+# ───────────────────────── served to people, through the MCP gate (ADR 0030) ─────────────────────────
 #
-# La même ontologie, servie au client MCP d'une PERSONNE — Claude Code, Cursor… — avec SES droits :
-# une action se propose si l'un de ses rôles figure dans `permissions.propose`, pas parce que la
-# plateforme le permet à son agent. Elle ne décide jamais : la porte n'a pas d'heure
-# d'authentification, et `decide` le refuse par construction.
+# The same ontology, served to a PERSON's MCP client — Claude Code, Cursor… — with THEIR rights: an
+# action can be proposed if one of their roles is in `permissions.propose`, not because the platform
+# lets its agent. It never decides: the gate has no authentication time, and `decide` refuses it by
+# construction.
 
 
-def _proposable_par(ir: dict[str, Any], name: str, rang: int) -> bool:
+def _proposable_by(ir: dict[str, Any], name: str, rank: int) -> bool:
     action = next((a for a in ir.get("action_types", []) if a["name"] == name), None)
     if action is None:
         return False
     roles = [p.removeprefix("role:") for p in action["propose"] if p.startswith("role:")]
-    if not any(rang >= actions.ONTOLOGY_ROLES.get(r, 3) for r in roles):
+    if not any(rank >= actions.ONTOLOGY_ROLES.get(r, 3) for r in roles):
         return False
     if action["cardinality"] != "none" and not _is_table(ir, action["target_type"]):
         return False
     return all(effect["type"] in actions.SERVED_EFFECTS for effect in action["effects"])
 
 
-def served_tools_for(ir: dict[str, Any], rang: int) -> list[dict[str, Any]]:
-    """Les outils servis à un humain de ce rang : les lectures, et les actions qu'IL peut proposer."""
+def served_tools_for(ir: dict[str, Any], rank: int) -> list[dict[str, Any]]:
+    """The tools served to a person of this rank: the reads, and the actions THEY may propose."""
     served = []
     for tool in ir.get("mcp_tools", []):
         kind, source = tool["kind"], tool.get("source")
@@ -223,40 +224,40 @@ def served_tools_for(ir: dict[str, Any], rang: int) -> list[dict[str, Any]]:
             continue
         if kind == "link" and not all(_is_table(ir, end) for end in _link_ends(ir, source) or [""]):
             continue
-        if kind == "action" and not _proposable_par(ir, str(source), rang):
+        if kind == "action" and not _proposable_by(ir, str(source), rank):
             continue
         served.append(tool)
     return served
 
 
-async def lister_pour_un_humain(
+async def list_tools_for_a_person(
     session: AsyncSession, principal: Any, project: Any, org_slug: str
 ) -> list[dict[str, Any]]:
     version = await objects.active_version(session, project.id)
     if version is None:
         return []
-    rang = actions._rank(principal, org_slug, project.slug)
+    rank = actions._rank(principal, org_slug, project.slug)
     return [
         {
             "name": t["name"],
             "description": t["description"],
             "inputSchema": t["input_schema"],
-            # Proposer une action est une écriture : seul un jeton `mcp:write` la voit.
-            "ecriture": t["kind"] == "action",
+            # Proposing an action is a write: only an `mcp:write` token sees it.
+            WRITES_KEY: t["kind"] == "action",
         }
-        for t in served_tools_for(version.compiled_ir, rang)
+        for t in served_tools_for(version.compiled_ir, rank)
     ]
 
 
-async def appeler_pour_un_humain(
+async def call_tool_for_a_person(
     session: AsyncSession, principal: Any, project: Any, org_slug: str, name: str, arguments: dict[str, Any]
 ) -> tuple[int, Any]:
     version = await objects.active_version(session, project.id)
     if version is None:
         return 404, {"error": "this project has no active ontology"}
     ir = version.compiled_ir
-    rang = actions._rank(principal, org_slug, project.slug)
-    tool = next((t for t in served_tools_for(ir, rang) if t["name"] == name), None)
+    rank = actions._rank(principal, org_slug, project.slug)
+    tool = next((t for t in served_tools_for(ir, rank) if t["name"] == name), None)
     if tool is None:
         return 404, {"error": f"unknown tool {name!r}"}
     try:
@@ -266,9 +267,9 @@ async def appeler_pour_un_humain(
         return 400, {"error": f"argument refused by the schema of {name} at {where}: {error.message}"}
     try:
         if tool["kind"] == "action":
-            acteur = actions.Actor(kind="user", id=principal.email, user_id=principal.user_id, via="mcp")
+            actor = actions.Actor(kind="user", id=principal.email, user_id=principal.user_id, via="mcp")
             return await actions.propose(
-                session, project, version, str(tool["source"]), arguments, acteur, principal, org_slug
+                session, project, version, str(tool["source"]), arguments, actor, principal, org_slug
             )
         if tool["kind"] in {"status", "list"}:
             return 200, await _proposals(session, project, tool["kind"], arguments)
@@ -279,30 +280,30 @@ async def appeler_pour_un_humain(
         return refusal.code, refusal.body
 
 
-async def en_attente_pour_un_humain(
+async def pending_for_a_person(
     session: AsyncSession, principal: Any, project: Any, org_slug: str
 ) -> list[dict[str, Any]]:
-    """Les propositions qui attendent une décision, avec la page de la console où elle se prend —
-    celle des actions du cœur, dont elles sont désormais (S20-08)."""
+    """The proposals waiting for a decision, with the console page where it is taken — the page of the
+    core's actions, which they now are (S20-08)."""
     from choregos_api.services.actions import RANGS, rang
 
-    attentes = []
-    for proposal in await actions.actions_de_l_ontologie(session, project.id, actions.PENDING):
+    pending = []
+    for proposal in await actions.ontology_actions(session, project.id, actions.PENDING):
         approvers = (proposal.approval or {}).get("approvers") or [{"role": "project_owner"}]
-        requis = min(RANGS.get(str(a.get("role")), 3) for a in approvers)
-        proposant = proposal.proposed_by or {}
-        meme_personne = proposant.get("kind") == "user" and proposant.get("id") == principal.email
+        required = min(RANGS.get(str(a.get("role")), 3) for a in approvers)
+        proposer = proposal.proposed_by or {}
+        same_person = proposer.get("kind") == "user" and proposer.get("id") == principal.email
         meta = actions._meta(proposal)
-        cibles = ", ".join(meta.get("target_ids") or []) or "nothing"
-        attentes.append(
+        targets = ", ".join(meta.get("target_ids") or []) or "nothing"
+        pending.append(
             {
                 "key": proposal.id,
-                "title": f"{meta.get('action_type')} on {cibles}",
+                "title": f"{meta.get('action_type')} on {targets}",
                 "kind": "action proposal",
                 "question": proposal.justification,
                 "requested_at": proposal.created_at.isoformat() if proposal.created_at else None,
-                "can_decide": rang(principal, org_slug, project.slug) >= requis and not meme_personne,
+                "can_decide": rang(principal, org_slug, project.slug) >= required and not same_person,
                 "decision_path": f"/p/{project.slug}/actions/{proposal.id}",
             }
         )
-    return attentes
+    return pending
