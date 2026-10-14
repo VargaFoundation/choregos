@@ -309,6 +309,38 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await expect(page.getByTestId("fichiers")).toContainText("Entra accounts ten days before the start date");
 });
 
+test("an agent is created from the builder alone, every field of its version set (S32-01)", async ({ page }) => {
+  await page.goto("/agents");
+  await page.getByRole("button", { name: "New agent" }).click();
+  const builder = page.getByRole("dialog", { name: "New agent" }).getByTestId("agent-builder");
+  await builder.getByLabel("Slug").fill("triage");
+  await builder.getByLabel("Name").fill("Triage");
+  await builder.getByLabel("Instructions").fill("Sort {{ ticket.title }} by urgency.");
+  await builder.getByLabel("Model").selectOption("platform/cheap");
+  await builder.getByLabel("Backend").selectOption("claude-code");
+  await builder.getByLabel("Max turns").fill("12");
+  await builder.getByLabel("Budget per run (USD)").fill("0.5");
+  await builder.getByLabel("Budget per day (USD)").fill("4");
+  await builder.getByLabel("Add a skill").selectOption("onboarding-procedure");
+  await builder.getByRole("button", { name: "Attach" }).click();
+  await builder.getByLabel("Add a server").selectOption("supplier-agent");
+  await builder.getByRole("button", { name: "Add", exact: true }).click();
+  await builder.getByLabel("Tool patterns of supplier-agent").fill("track_*");
+  const allows = page.getByTestId("ce-que-ca-permet");
+  await expect(allows).toContainText("A run stops at US$0.50");
+  await expect(allows.getByTestId("outils-resolus")).toContainText("track_order — called freely");
+  await expect(allows.getByTestId("outils-resolus")).not.toContainText("order_laptop");
+  await builder.getByRole("button", { name: "Create the agent" }).click();
+  await expect(page.getByRole("status")).toContainText("Triage registered as v1");
+  await page.getByRole("link", { name: "Triage" }).click();
+  await page.getByRole("link", { name: "Definition" }).click();
+  const version = page.getByTestId("version");
+  await expect(version).toContainText("platform/cheap");
+  await expect(version).toContainText("claude-code");
+  await expect(version).toContainText("supplier-agent: track_*");
+  await expect(version).toContainText("onboarding-procedure");
+});
+
 test("an agent's page is in tabs: overview, definition, versions, runs, access (S30-05)", async ({ page }) => {
   await page.goto("/agents/onboarding-coordinator");
   const onglets = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });

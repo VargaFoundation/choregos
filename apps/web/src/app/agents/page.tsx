@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
 import { AgentCatalogue } from "@/components/agents/catalogue";
@@ -16,7 +17,6 @@ import {
   Empty,
   ErrorNote,
   Heading,
-  Input,
   Lead,
   Table,
   TBody,
@@ -24,11 +24,15 @@ import {
   TH,
   THead,
   TR,
-  Textarea,
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
+
+// The builder is the heaviest form of the console, and most visits never open it (S32-01).
+const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {
+  loading: () => <p className="text-sm text-ink-muted">Loading the builder…</p>,
+});
 
 /**
  * The organisation's agents (ADR 0033): the registry, and nothing else (S30-04, plan item 7). A new
@@ -40,6 +44,7 @@ export default function AgentsPage() {
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   const metrics = useQuery({ queryKey: ["agent-metrics", org], queryFn: () => api.agentMetricsList(org) });
   const [drawer, setDrawer] = useState<"new" | "catalogue" | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
@@ -132,108 +137,20 @@ export default function AgentsPage() {
         <AgentCatalogue org={org} />
       </Drawer>
       <Drawer open={drawer === "new"} onClose={() => setDrawer(null)} title="New agent">
-        <NouvelAgent org={org} />
+        <AgentBuilder
+          org={org}
+          mode={{ kind: "create" }}
+          onDone={(message) => {
+            setDone(message);
+            setDrawer(null);
+          }}
+        />
       </Drawer>
-    </div>
-  );
-}
-
-/** Un agent interne : ses instructions et ses réglages font sa version 1. */
-function NouvelAgent({ org }: { org: string }) {
-  const client = useQueryClient();
-  const [slug, setSlug] = useState("");
-  const [nom, setNom] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [modele, setModele] = useState("");
-  const [budget, setBudget] = useState("");
-  const [erreur, setErreur] = useState<string | null>(null);
-  const [fait, setFait] = useState<string | null>(null);
-  async function creer() {
-    setErreur(null);
-    try {
-      const agent = await api.createAgent(org, {
-        slug,
-        kind: "internal",
-        display_name: nom || slug,
-        spec: {
-          instructions,
-          ...(modele ? { model: modele } : {}),
-          ...(budget ? { budget: { daily_usd: Number(budget) } } : {}),
-        },
-      });
-      setFait(`${agent.display_name} registered as v${agent.latest_version}`);
-      setSlug("");
-      setNom("");
-      setInstructions("");
-      await client.invalidateQueries({ queryKey: ["agents", org] });
-    } catch (cause) {
-      setErreur(cause instanceof Error ? cause.message : "registration refused");
-    }
-  }
-  return (
-    <div>
-      <form
-        className="grid gap-3 md:grid-cols-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void creer();
-        }}
-      >
-        <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Slug</span>
-          <Input
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            pattern="[a-z0-9][a-z0-9-]*"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Name</span>
-          <Input value={nom} onChange={(e) => setNom(e.target.value)} />
-        </label>
-        <label className="space-y-1 md:col-span-2">
-          <span className="text-xs text-ink-muted">Instructions (what the frame of the platform does not say)</span>
-          <Textarea
-            className="w-auto font-mono text-xs"
-            rows={6}
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Model (empty: the project&apos;s profile)</span>
-          <Input
-            value={modele}
-            onChange={(e) => setModele(e.target.value)}
-            placeholder="profile:standard"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Daily budget (USD, empty: none)</span>
-          <Input
-            type="number"
-            min={0}
-            step="0.5"
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-          />
-        </label>
-        <div className="flex items-center gap-3 md:col-span-2">
-          <Button type="submit" tone="accent" disabled={!slug}>
-            Register
-          </Button>
-          {fait && (
-            <span className="text-sm" role="status">
-              {fait}
-            </span>
-          )}
-        </div>
-        {erreur && (
-          <div className="md:col-span-2">
-            <ErrorNote>{erreur}</ErrorNote>
-          </div>
-        )}
-      </form>
+      {done && (
+        <p className="text-sm" role="status">
+          {done}
+        </p>
+      )}
     </div>
   );
 }
