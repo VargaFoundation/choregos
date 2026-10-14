@@ -60,7 +60,12 @@ Context packs and tickets contain text written by third parties. Two rules:
 - External Secrets Operator ↔ the provider's vault; one hand-made `ClusterSecretStore`.
 - Git token minted **per run**, repository scope, 1 h TTL, injected in memory.
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while
-  the run waits for a slot.
+  the run waits for a slot. Minted by `start_run` for the run's Secret only: never stored in
+  `runs.stage_input`, never carried by a Temporal payload (#519).
+- Gateway key: one per run, capped. It stays in `runs.stage_input` only while the run lives —
+  the runner reads it from `GET /internal/runs/{id}/input` — and `collect_spend` revokes it and
+  removes it from the row; a revocation that fails is logged and the key dies at its TTL
+  (`max_minutes + 30`). Migration `e7a9c1b3d5f7` scrubbed the rows written before.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
 - Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).

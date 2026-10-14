@@ -15,7 +15,6 @@ from typing import Any
 
 from choregos_api.db.models import GatewayKeyRow, Run
 from choregos_api.logging import bind, get_logger
-from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
 from choregos_contracts import (
@@ -40,12 +39,13 @@ from choregos_contracts import (
     WorkItemRef,
 )
 from choregos_core import KNOWN_BACKEND_NAMES, ModelResolutionError, ModelResolver, utcnow
+from choregos_core.redaction import REDACTED
 from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
 from ..context_reduction import resolve_context, stage_input_payload
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, without_secrets
 from .bilan import collect_spend, record_run_outcome
 from .execution import (
     FILE_MAX_MINUTES,
@@ -126,7 +126,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
 
         existing = await session.get(Run, run_id)
         if existing is not None and existing.stage_input:
-            return {"run_id": run_id, "stage_input": existing.stage_input, "reused": True}
+            # No secret in a Temporal payload (#519): `start_run` mints the run token itself.
+            return {
+                "run_id": run_id,
+                "stage_input": without_secrets(existing.stage_input, keep_gateway_key=False),
+                "reused": True,
+            }
 
         engine = bundle.engine
         if (refused := await _stage_cap(session, bundle, item, run_id, plan)) is not None:
@@ -226,12 +231,6 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         )
         playbook_ref = f"{source}@sha256:{digest}"
         allowed_paths = list(item.allowed_paths or []) or ["**"]
-        token = mint_run_token(
-            run_id,
-            project_slug=bundle.slug,
-            work_item_key=item.tracker_key,
-            ttl_minutes=budget.max_minutes + 15,
-        )
         documents = item.documents or {}
         depot = bundle.config.repo
         stage_input = StageInput(
@@ -304,7 +303,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 plan.role,
                 allowed_by_deployment=settings.context_reduction,
             ),
-            callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=token),
+            # The run token is minted by `start_run`, for the run's Secret only: neither this row
+            # nor a Temporal payload holds it (#519).
+            callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=REDACTED),
         )
 
         payload = stage_input_payload(stage_input)
@@ -316,6 +317,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         run.backend = backend
         run.model = resolved.litellm_model
         run.status = "queued"
+        # The gateway key stays on the row while the run lives — the runner reads it from
+        # `GET /internal/runs/{id}/input` — and `collect_spend` drops it when it revokes the key.
         run.stage_input = payload
         run.gateway_key_id = key.key_id
         run.context_pack = context_pack.model_dump(mode="json", by_alias=True)
@@ -352,7 +355,11 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             backend=backend,
             model=resolved.litellm_model,
         )
-        return {"run_id": run_id, "stage_input": payload, "reused": False}
+        return {
+            "run_id": run_id,
+            "stage_input": without_secrets(payload, keep_gateway_key=False),
+            "reused": False,
+        }
 
 
 async def _admettre(

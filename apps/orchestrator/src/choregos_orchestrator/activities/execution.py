@@ -20,6 +20,7 @@ from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import ExecRef, ExecStatus, StageJobSpec, utcnow
+from choregos_core.redaction import REDACTED
 from sqlalchemy import select
 from temporalio import activity
 
@@ -184,13 +185,27 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
                 "reused": True,
                 "capabilities": capabilities,
             }
+        # The run token lives in the run's Secret only (#519): minted here, never stored, never
+        # carried by a Temporal payload. A payload of an older history may still bring one.
+        run_token = stage_input.callbacks.run_token
+        if not run_token or run_token == REDACTED:
+            run_token = mint_run_token(
+                stage_input.run_id,
+                project_slug=bundle.slug,
+                work_item_key=stage_input.work_item.key,
+                ttl_minutes=stage_input.budget.max_minutes + 15,
+            )
+        # The executor sees the input its runner will read from `GET /internal/runs/{id}/input`:
+        # the row's, gateway key included — a key no Temporal payload carries (#519).
+        if run is not None and stage_input.gateway_key is None and run.stage_input:
+            stage_input = stage_input.model_copy(update={"gateway_key": run.stage_input.get("gateway_key")})
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
             namespace=_runner_namespace(settings, bundle.slug),
             runner_image=settings.runner_image,
             api_url=stage_input.callbacks.api_url,
-            run_token=stage_input.callbacks.run_token,
+            run_token=run_token,
             stage_input=stage_input,
             timeout_minutes=stage_input.budget.max_minutes + 10,
             runtime_class=classe_d_execution(settings, bundle.policy),

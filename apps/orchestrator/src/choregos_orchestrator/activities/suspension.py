@@ -25,7 +25,7 @@ from choregos_core import ExecRef, utcnow
 from temporalio import activity
 
 from ..config import get_settings
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, without_secrets
 
 #: What the agent reads first when its run goes on — the same heading as a replayed stage.
 ANSWER_HEADING = "## A person answered the question that stopped this work item"
@@ -146,9 +146,10 @@ async def resume_run(payload: dict[str, Any]) -> dict[str, Any]:
         if answer and playbook.get("prompt") is not None:
             playbook["prompt"] = f"{ANSWER_HEADING}\n\n{answer}\n\n---\n\n{playbook['prompt']}"
         stage_input["playbook"] = playbook
+        # The runner reads its input again, the new key included; `collect_spend` drops it at the
+        # end. The fresh run token went to the sandbox's Secret through `resume`, never here (#519).
         stage_input["gateway_key"] = key.key
-        stage_input["callbacks"] = {**dict(stage_input.get("callbacks") or {}), "run_token": token}
-        run.stage_input = stage_input
+        run.stage_input = without_secrets(stage_input, keep_gateway_key=True)
         run.gateway_key_id = key.key_id
         run.result = None
         run.spend_collected = False
