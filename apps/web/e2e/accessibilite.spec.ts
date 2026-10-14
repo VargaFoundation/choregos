@@ -36,6 +36,7 @@ const PAGES = [
   "/agents/onboarding-coordinator?tab=runs",
   "/agents/leas-claude-code",
   "/skills",
+  "/costs",
   "/skills/onboarding-procedure",
   "/p/billing-api/agents",
   "/p/billing-api/integrations/claude-desktop",
@@ -159,7 +160,7 @@ test("les barres d'onglets ne défilent pas en hauteur : Windows y dessinait ses
  */
 test("l'en-tête tient sur une ligne à 1280 px, sans défilement horizontal", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  for (const path of ["/", "/skills", "/integrations", "/admin"]) {
+  for (const path of ["/", "/skills", "/costs", "/integrations", "/admin"]) {
     await page.goto(path);
     await expect(page.getByRole("complementary", { name: "Sidebar" })).toBeVisible();
     // La session arrive après la page : l'en-tête ne porte son poids réel (organisation, personne,

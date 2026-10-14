@@ -554,18 +554,30 @@ export const api = {
       body: JSON.stringify({ id: memoryId, action }),
     }),
 
-  costs: (id: string, groupBy = "day") => request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy })}`),
+  costs: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
+    request<CostReport>(`/projects/${qualify(id)}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
+  /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD) and `kind` filter it. */
+  orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
+    request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
+  orgCostsCsvUrl: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
+    `${API_BASE}/orgs/${org}/costs.csv${query({ group_by: groupBy, ...compact(filtre) })}`,
   dora: (id: string, env = "prod") => request<DoraReport>(`/projects/${qualify(id)}/metrics/dora${query({ env })}`),
   /** Lien de téléchargement direct : le navigateur l'ouvre, le CSV arrive avec sa session. */
   /** Qualifié comme toute route de projet : deux organisations peuvent avoir un projet de même nom. */
-  costsCsvUrl: (id: string, groupBy = "day") =>
-    `${API_BASE}/projects/${qualify(id)}/costs.csv${query({ group_by: groupBy })}`,
+  costsCsvUrl: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
+    `${API_BASE}/projects/${qualify(id)}/costs.csv${query({ group_by: groupBy, ...compact(filtre) })}`,
   modelMatrix: (id: string) => request<ModelMatrix>(`/projects/${qualify(id)}/models/matrix`),
   audit: (params?: { actor?: string; target_type?: string; cursor?: string; limit?: number }) => {
     const filtres = Object.entries(params ?? {}).filter(([, valeur]) => valeur !== undefined && valeur !== "");
     return request<AuditPage>(`/audit${filtres.length ? `?${new URLSearchParams(filtres.map(([k, v]) => [k, String(v)]))}` : ""}`);
   },
 };
+
+export type CostFilter = { since?: string; until?: string; kind?: "model" | "tool" };
+
+function compact(filtre: CostFilter): Record<string, string> {
+  return Object.fromEntries(Object.entries(filtre).filter(([, v]) => v)) as Record<string, string>;
+}
 
 function query(params?: Record<string, string>): string {
   if (!params) return "";

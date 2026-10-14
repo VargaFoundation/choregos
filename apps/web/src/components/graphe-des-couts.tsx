@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import { usd } from "@/lib/format";
+import { usd as usdBrut } from "@/lib/format";
+import { amount, type Currency, money } from "@/lib/spend";
 import type { CostReport } from "@/lib/types";
 
 type CostRow = CostReport["rows"][number];
@@ -16,9 +17,12 @@ function jour(cle: string): string {
  * le plus cher) en haut, le premier et le dernier jour dessous, et le tableau des valeurs à déplier,
  * qui est aussi ce qu'un lecteur d'écran lit.
  */
-export function GrapheDesCouts({ rows }: { rows: CostRow[] }) {
-  const max = Math.max(0, ...rows.map((row) => row.cost_usd));
-  const pic = rows.find((row) => row.cost_usd === max);
+export function GrapheDesCouts({ rows, currency }: { rows: CostRow[]; currency?: Currency }) {
+  // Dollars unless the page says otherwise: the project overview still reads the ledger in USD.
+  const valeur = (row: CostRow) => (currency ? amount(row, currency) : row.cost_usd);
+  const usd = (value: number) => (currency ? money(value, currency) : usdBrut(value));
+  const max = Math.max(0, ...rows.map(valeur));
+  const pic = rows.find((row) => valeur(row) === max);
   const premier = rows[0];
   const dernier = rows.at(-1);
   return (
@@ -34,8 +38,8 @@ export function GrapheDesCouts({ rows }: { rows: CostRow[] }) {
         {rows.map((row) => (
           <div
             key={row.key}
-            title={`${jour(row.key)} — ${usd(row.cost_usd)} (${row.runs} runs)`}
-            style={{ height: `${max > 0 ? Math.max(3, (row.cost_usd / max) * 100) : 3}%` }}
+            title={`${jour(row.key)} — ${usd(valeur(row))} (${row.runs} runs)`}
+            style={{ height: `${max > 0 ? Math.max(3, (valeur(row) / max) * 100) : 3}%` }}
             className="flex-1 bg-agent transition-opacity hover:opacity-70"
           />
         ))}
@@ -61,7 +65,7 @@ export function GrapheDesCouts({ rows }: { rows: CostRow[] }) {
               {rows.map((row) => (
                 <tr key={row.key}>
                   <td>{jour(row.key)}</td>
-                  <td className="text-right tabular-nums">{usd(row.cost_usd)}</td>
+                  <td className="text-right tabular-nums">{usd(valeur(row))}</td>
                   <td className="text-right tabular-nums">{row.runs}</td>
                 </tr>
               ))}

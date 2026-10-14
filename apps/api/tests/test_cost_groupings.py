@@ -131,3 +131,16 @@ async def test_the_csv_follows_the_grouping(client: AsyncClient, seeded: dict[st
         assert any(line.startswith("total;7.000000;") for line in lines), lines
     detail = (await client.get("/api/v1/orgs/varga/costs.csv", params={"group_by": "agent"})).text
     assert "coordinator;5.000000;" in detail and "reviewer;2.000000;" in detail
+
+
+async def test_the_kind_filter_separates_models_from_tools(
+    client: AsyncClient, seeded: dict[str, Any]
+) -> None:
+    for url in (f"/api/v1/projects/{seeded['id']}/costs", "/api/v1/orgs/varga/costs"):
+        tools = (await client.get(url, params={"group_by": "model", "kind": "tool"})).json()
+        assert _by_key(tools) == {"crm_export": 1.0}, url
+        models = (await client.get(url, params={"group_by": "model", "kind": "model"})).json()
+        assert _by_key(models) == {"m-big": 4.0, "m-small": 2.0}, url
+    csv = await client.get("/api/v1/orgs/varga/costs.csv", params={"group_by": "model", "kind": "tool"})
+    assert "crm_export;1.000000;" in csv.text and "m-big" not in csv.text
+    assert (await client.get("/api/v1/orgs/varga/costs", params={"kind": "bogus"})).status_code == 422

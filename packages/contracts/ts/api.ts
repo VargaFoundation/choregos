@@ -1023,6 +1023,8 @@ export type Org = {
   slug: string;
   name: string;
   role?: Role | null;
+  /** the currency the console shows spend in (S29-03); an organisation setting */
+  currency?: "EUR" | "USD";
 };
 
 export type OrgCreate = {
@@ -1034,6 +1036,8 @@ export type OrgCreate = {
 export type OrgUpdate = {
   slug?: string | null;
   name?: string | null;
+  /** the currency spend is shown in; org_admin */
+  currency?: "EUR" | "USD" | null;
 };
 
 export type WorkItemCreate = {

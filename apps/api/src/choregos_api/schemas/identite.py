@@ -73,6 +73,9 @@ class OrgDto(Dto):
     slug: str
     name: str
     role: Role | None = None
+    #: The currency the console shows spend in (S29-03, decision D4): an organisation setting, EUR by
+    #: default. The ledger holds both USD and EUR.
+    currency: Literal["EUR", "USD"] = "EUR"
 
 
 class OrgCreate(Dto):
@@ -85,6 +88,7 @@ class OrgUpdate(Dto):
 
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    currency: Literal["EUR", "USD"] | None = None
 
 
 class OAuthClientDto(Dto):
