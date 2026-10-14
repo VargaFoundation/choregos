@@ -179,7 +179,7 @@ async def org_costs(
     report = await _report(session, where=where, group_by=group_by)
     report.currency = "USD" if (organization.settings or {}).get("currency") == "USD" else "EUR"
     # The organisation's daily budget: what its projects may spend a day, summed (S29-03).
-    daily = [policy_model(await active_policy(session, pid)).budgets.daily_project_usd for pid in project_ids]
+    daily = [(await effective_policy(session, pid)).budgets.daily_project_usd for pid in project_ids]
     budgets = [b for b in daily if b is not None]
     report.total.budget_usd = round(sum(budgets), 6) if budgets else None
     return await _readable_keys(session, report, organization.id)

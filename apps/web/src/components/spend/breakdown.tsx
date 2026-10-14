@@ -47,7 +47,7 @@ export function BreakdownCard({
       title={title}
       action={
         <a href={csvUrl(scope, group, filtre)} className="text-xs text-ink-muted hover:text-ink" download>
-          csv
+          CSV
         </a>
       }
     >
