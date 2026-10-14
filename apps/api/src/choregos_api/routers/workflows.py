@@ -5,17 +5,23 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core import parse_policy, parse_workflow, to_graph, to_process
+from choregos_contracts import Role
+from choregos_core import parse_policy, parse_workflow, to_graph, to_process, utcnow
 from choregos_core.dsl import TEMPLATE_NAMES, load_template, template_yaml
+from choregos_core.policy_ceiling import PolicyCeiling, widenings
 from fastapi import APIRouter, Response, status
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..db.models import PolicyDef, Project, WorkflowDef, WorkItem
-from ..deps import Db, ProjectCtx
-from ..errors import conflict, not_found, unprocessable
-from ..rbac import Permission
+from ..db.models import Organization, PolicyDef, Project, WorkflowDef, WorkItem
+from ..deps import Db, Me, ProjectCtx
+from ..errors import conflict, forbidden, not_found, unprocessable
+from ..rbac import Permission, Principal
 from ..schemas import (
+    PolicyCeilingDto,
+    PolicyCeilingPut,
     PolicyDto,
     PolicyPut,
     WorkflowDefDto,
@@ -32,11 +38,13 @@ from ..schemas import (
 from ..services import (
     active_policy,
     default_workflow,
+    effective_policy_and_clamps,
     ensure_defaults,
     publier_workflow,
     signaler_ce_que_la_politique_n_applique_pas,
     workflow_actif,
 )
+from ..services.definitions import CEILING_KEY, ceiling_of
 
 router = APIRouter(tags=["workflows"])
 
@@ -337,9 +345,11 @@ async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) ->
 
 @router.get("/projects/{id}/policy", response_model=PolicyDto, operation_id="getPolicy")
 async def get_policy(ctx: ProjectCtx, session: Db) -> PolicyDto:
+    """The project's policy as written, and what the organisation's ceiling brings down in it."""
     row = await active_policy(session, ctx.id)
     if row is None:
         _, row = await ensure_defaults(session, ctx.project)
+    _, clamps = await effective_policy_and_clamps(session, ctx.id)
     return PolicyDto(
         id=row.id,
         name=row.name,
@@ -347,6 +357,7 @@ async def get_policy(ctx: ProjectCtx, session: Db) -> PolicyDto:
         yaml=row.yaml,
         json_doc=row.json_doc,
         is_active=row.is_active,
+        clamps=clamps,
     )
 
 
@@ -354,6 +365,13 @@ async def get_policy(ctx: ProjectCtx, session: Db) -> PolicyDto:
 async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto:
     ctx.require(Permission.POLICY_WRITE)
     policy = parse_policy(body.yaml)
+    # Below the organisation's ceiling a project chooses; above it, it does not (S27-05).
+    widened = widenings(policy, ceiling_of(await session.get(Organization, ctx.project.org_id)))
+    if widened:
+        raise unprocessable(
+            "the policy is wider than the organisation's ceiling: " + "; ".join(widened),
+            [{"loc": ["policy", *w.split(":", 1)[0].split(".")], "msg": w} for w in widened],
+        )
     # Valide, mais `approvals.*` et `review.require_human_for_risk` n'y gardent rien (ADR 0044).
     signaler_ce_que_la_politique_n_applique_pas(policy, ctx.project.slug)
     current = await active_policy(session, ctx.id)
@@ -389,3 +407,68 @@ async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto
         json_doc=row.json_doc,
         is_active=row.is_active,
     )
+
+
+def _ceiling_dto(organisation: Organization) -> PolicyCeilingDto:
+    stored = (organisation.settings or {}).get(CEILING_KEY) or {}
+    return PolicyCeilingDto(
+        ceiling=stored.get("ceiling"),
+        updated_by=stored.get("updated_by"),
+        updated_at=stored.get("updated_at"),
+    )
+
+
+async def _organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
+    if principal.org_roles.get(org) is None:
+        raise forbidden(f"reading the policy ceiling of {org} requires being a member of it")
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        raise not_found("Organisation", org)
+    return organisation
+
+
+@router.get("/orgs/{org}/policy-ceiling", response_model=PolicyCeilingDto, operation_id="getPolicyCeiling")
+async def get_policy_ceiling(org: str, session: Db, principal: Me) -> PolicyCeilingDto:
+    """The caps every project policy of the organisation stays under (S27-05)."""
+    return _ceiling_dto(await _organisation(session, principal, org))
+
+
+@router.put("/orgs/{org}/policy-ceiling", response_model=PolicyCeilingDto, operation_id="putPolicyCeiling")
+async def put_policy_ceiling(
+    org: str, body: PolicyCeilingPut, session: Db, principal: Me
+) -> PolicyCeilingDto:
+    """Sets the ceiling (`org_admin`). A project policy already above it is not refused: the policy
+    that runs is clamped to it, and the project's policy page says what was clamped."""
+    organisation = await _organisation(session, principal, org)
+    if principal.org_roles.get(org) != Role.ORG_ADMIN:
+        raise forbidden("setting the policy ceiling needs the org_admin role")
+    settings = dict(organisation.settings or {})
+    if body.ceiling is None:
+        settings.pop(CEILING_KEY, None)
+    else:
+        try:
+            ceiling = PolicyCeiling.model_validate(body.ceiling)
+        except PydanticValidationError as exc:
+            raise unprocessable(
+                "not a policy ceiling",
+                [{"loc": ["ceiling", *map(str, e["loc"])], "msg": e["msg"]} for e in exc.errors()],
+            ) from exc
+        settings[CEILING_KEY] = {
+            "ceiling": ceiling.model_dump(mode="json", exclude_defaults=True),
+            "updated_by": principal.email,
+            "updated_at": utcnow().isoformat(),
+        }
+    organisation.settings = settings
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "policy.ceiling",
+        org_id=organisation.id,
+        target_type="organization",
+        target_id=organisation.id,
+        ceiling=(settings.get(CEILING_KEY) or {}).get("ceiling"),
+    )
+    return _ceiling_dto(organisation)

@@ -16,12 +16,14 @@ from choregos_core import (
     policy_warnings,
 )
 from choregos_core.dsl import dump_workflow
+from choregos_core.policy_ceiling import PolicyCeiling, clamp
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import (
+    Organization,
     PolicyDef,
     Project,
     WorkflowDef,
@@ -350,8 +352,33 @@ def policy_model(row: PolicyDef | None) -> Policy:
     return parse_policy(row.yaml)
 
 
+#: Where an organisation keeps its policy ceiling (S27-05), in `organizations.settings`.
+CEILING_KEY = "policy_ceiling"
+
+
+def ceiling_of(organisation: Organization | None) -> PolicyCeiling | None:
+    """The organisation's policy ceiling, if it set one."""
+    stored = ((organisation.settings or {}) if organisation is not None else {}).get(CEILING_KEY)
+    if not stored or not stored.get("ceiling"):
+        return None
+    return PolicyCeiling.model_validate(stored["ceiling"])
+
+
+async def effective_policy_and_clamps(session: AsyncSession, project_id: str) -> tuple[Policy, list[str]]:
+    """The policy that runs: the project's, brought down to its organisation's ceiling — and what
+    was brought down. A policy saved before the ceiling existed may be above it (S27-05)."""
+    policy = policy_model(await active_policy(session, project_id))
+    project = await session.get(Project, project_id)
+    organisation = await session.get(Organization, project.org_id) if project is not None else None
+    return clamp(policy, ceiling_of(organisation))
+
+
+async def effective_policy(session: AsyncSession, project_id: str) -> Policy:
+    return (await effective_policy_and_clamps(session, project_id))[0]
+
+
 async def policy_engine(session: AsyncSession, project_id: str) -> PolicyEngine:
-    return PolicyEngine(policy_model(await active_policy(session, project_id)))
+    return PolicyEngine(await effective_policy(session, project_id))
 
 
 def project_config(project: Project) -> ProjectConfig:

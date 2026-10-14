@@ -18,8 +18,10 @@ from choregos_api.db.models import Connector, Organization, PolicyDef, Project, 
 from choregos_api.db.session import TOUT, session_scope
 from choregos_api.services import default_workflow, policy_model, workflow_model
 from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
+from choregos_api.services.definitions import ceiling_of
 from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import PolicyEngine
+from choregos_core.policy_ceiling import clamp
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -94,7 +96,8 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         config=ProjectConfig.model_validate(project.config),
         workflow=workflow_model(workflow_row),
         workflow_def_id=workflow_row.id if workflow_row is not None else None,
-        policy=policy_model(policy_row),
+        # The policy that runs: the project's, brought down to its organisation's ceiling (S27-05).
+        policy=clamp(policy_model(policy_row), ceiling_of(org))[0],
         adapters=AdapterSet.from_connectors(
             {
                 # La mémoire `lexical` vit dans les tables de l'API : elle doit dire depuis

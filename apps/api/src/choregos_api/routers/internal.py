@@ -44,7 +44,7 @@ from ..schemas import (
     ScopeChangeDecision,
     ScopeChangeRequestIn,
 )
-from ..services import active_policy, persist_event, policy_model, ranger_les_sorties
+from ..services import effective_policy, persist_event, ranger_les_sorties
 from ..services.artifacts import (
     ArtifactCorruptedError,
     filename_of,
@@ -186,7 +186,7 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
 async def post_finding(id: str, body: Finding, session: Db, claims: RunAuth) -> FindingAck:
     """Dépôt d'un finding, plafonné par `policy.findings.max_per_run`."""
     run, item, project = await _run_and_item(session, id)
-    engine = PolicyEngine(policy_model(await active_policy(session, project.id)))
+    engine = PolicyEngine(await effective_policy(session, project.id))
     cap = engine.max_findings_per_run()
     existing = (
         (await session.execute(select(FindingRow).where(FindingRow.origin_run_id == run.id))).scalars().all()
@@ -247,7 +247,7 @@ async def post_scope_change(
 ) -> ScopeChangeDecision:
     """Élargissement de périmètre : accordé automatiquement sous seuil, sinon soumis à un humain."""
     run, item, project = await _run_and_item(session, id)
-    engine = PolicyEngine(policy_model(await active_policy(session, project.id)))
+    engine = PolicyEngine(await effective_policy(session, project.id))
     current = list(run.allowed_paths or item.allowed_paths or [])
     new_paths = [p for p in body.paths if not matches_any(p, current)]
     if not new_paths:
@@ -647,7 +647,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         # le catalogue du déploiement en essayant des noms.
         raise not_found("Tool", name)
 
-    engine = PolicyEngine(policy_model(await active_policy(session, project.id)))
+    engine = PolicyEngine(await effective_policy(session, project.id))
     plafond = engine.max_tool_calls_per_run()
     deja = (
         await session.execute(
@@ -772,9 +772,7 @@ async def _garde_contre_l_injection(
 
     from ..services.courtier import texte_du_resultat
 
-    mode = PolicyEngine(
-        policy_model(await active_policy(session, project.id))
-    ).policy.sandbox.prompt_injection
+    mode = PolicyEngine(await effective_policy(session, project.id)).policy.sandbox.prompt_injection
     trouvees = [] if mode == "ignore" else chercher(texte_du_resultat(corps), source=f"tool.{outil.nom}")
     if not trouvees:
         return code, corps, []

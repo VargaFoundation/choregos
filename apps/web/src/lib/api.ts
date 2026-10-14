@@ -65,6 +65,7 @@ import type {
   Memory,
   ModelMatrix,
   PolicyDef,
+  PolicyCeilingState,
   ProjectDto,
   ProjectPage,
   ProvisionStatus,
@@ -464,6 +465,10 @@ export const api = {
   validateWorkflow: (yaml: string, signal?: AbortSignal) =>
     request<WorkflowValidation>("/workflows/validate", { method: "POST", body: JSON.stringify({ yaml }), signal }),
   policy: (id: string) => request<PolicyDef>(`/projects/${qualify(id)}/policy`),
+  /** The organisation's policy ceiling (S27-05): a project policy may only tighten it. */
+  policyCeiling: (org: string) => request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`),
+  putPolicyCeiling: (org: string, ceiling: Record<string, unknown> | null) =>
+    request<PolicyCeilingState>(`/orgs/${org}/policy-ceiling`, { method: "PUT", body: JSON.stringify({ ceiling }) }),
 
   workItems: (id: string, params?: Record<string, string>) =>
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),

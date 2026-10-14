@@ -64,6 +64,16 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
       <OperationsDuProjet slug={slug} />
 
       <Card title="policy" className="lg:col-span-2">
+        {(policy.data?.clamps ?? []).length > 0 && (
+          <div className="mb-2 text-sm" data-testid="policy-clamps">
+            <p>The organisation&apos;s ceiling brings this policy down; what runs is clamped:</p>
+            <ul className="list-disc pl-5 text-xs">
+              {(policy.data?.clamps ?? []).map((clamp) => (
+                <li key={clamp}>{clamp}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <PolicyEditor
           yaml={policy.data?.yaml ?? ""}
           onSave={(yaml) => faire(() => api.putPolicy(slug, yaml), "policy saved", ["policy"])}

@@ -35,6 +35,7 @@ export type {
   Memory,
   ModelMatrix,
   PolicyDef,
+  PolicyCeilingState,
   Project as ProjectDto,
   ProjectPage,
   ProvisionStatus,

@@ -759,6 +759,55 @@ export type PolicyDef = {
   yaml: string;
   json?: S.Policy;
   is_active: boolean;
+  /** what the organisation's ceiling brings down in this policy; the policy that runs is the clamped one */
+  clamps?: Array<string>;
+};
+
+/** Caps a project policy may only tighten (S27-05). A per-role table's `default` caps every role it does not name; a cap left out leaves the project free. */
+export type PolicyCeiling = {
+  budgets?: {
+    ticket_usd?: {
+      [key: string]: number;
+    };
+    stage_usd?: {
+      [key: string]: {
+        [key: string]: number;
+      };
+    };
+    max_turns?: {
+      [key: string]: number;
+    };
+    max_minutes?: {
+      [key: string]: number;
+    };
+    tool_calls_per_run?: number | null;
+    daily_project_usd?: number | null;
+  };
+  attempts?: {
+    default_max?: number | null;
+    by_role?: {
+      [key: string]: number;
+    };
+    dod_iterations?: number | null;
+  };
+  scope?: {
+    auto_grant_max_files?: number | null;
+    max_diff_files?: number | null;
+    max_diff_lines?: number | null;
+  };
+  findings?: {
+    max_per_run?: number | null;
+  };
+};
+
+export type PolicyCeilingState = {
+  ceiling?: PolicyCeiling | null;
+  updated_by?: string | null;
+  updated_at?: string | null;
+};
+
+export type PolicyCeilingPut = {
+  ceiling: PolicyCeiling | null;
 };
 
 export type PolicyPut = {
@@ -1546,6 +1595,7 @@ export interface Operations {
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
+  getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
   getProjectCosts: { method: "GET"; path: "/projects/{id}/costs"; body: never; response: CostReport };
   getProjectCrossBackend: { method: "GET"; path: "/projects/{id}/metrics/cross-backend"; body: never; response: CrossBackendReport };
@@ -1696,6 +1746,7 @@ export interface Operations {
   putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
+  putPolicyCeiling: { method: "PUT"; path: "/orgs/{org}/policy-ceiling"; body: PolicyCeilingPut; response: PolicyCeilingState };
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
   putRunOutput: { method: "PUT"; path: "/internal/runs/{id}/outputs/{name}"; body: void; response: Artifact };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
