@@ -711,7 +711,7 @@ export interface BreadcrumbStep {
 export const BreadcrumbBase = createContext<BreadcrumbStep[]>([]);
 
 /**
- * Où l'on est, et le chemin pour remonter (S23-12, S30-03) : the tab rows are gone, the trail
+ * Where one is, and the way back up (S23-12, S30-03): the tab rows are gone, the trail
  * carries the hierarchy. The steps of the enclosing layout (`BreadcrumbBase`) come first.
  */
 export function Breadcrumbs({ steps }: { steps: BreadcrumbStep[] }) {

@@ -317,12 +317,12 @@ function ScopeHeader({ scope, compact, rail }: { scope: Scope; compact: boolean;
 }
 
 /**
- * La navigation rangée en groupes, la même partout : dans la barre latérale (dense, repliable en
- * rail) et dans le panneau du menu sous 1280 px (cibles de 44 px). Elle suit le périmètre : celui de
- * l'organisation, d'un projet ou de l'administration (S30-03).
+ * The navigation in groups, the same everywhere: in the sidebar (dense, folds into a rail) and in the
+ * menu panel below 1280 px (44 px targets). It follows the scope: the organisation's, a project's or
+ * the administration's (S30-03).
  *
- * Les deux peuvent être dans la page en même temps — la barre n'est que cachée sous 1280 px — : les
- * identifiants des légendes viennent de `useId`, sans quoi `aria-labelledby` viserait un doublon.
+ * Both can be in the page at once — the bar is only hidden below 1280 px —: the captions' ids come
+ * from `useId`, or `aria-labelledby` would point at a duplicate.
  */
 export function ListeDeNavigation({
   pathname,
@@ -350,7 +350,7 @@ export function ListeDeNavigation({
         const idTitre = `${id}-${groupe.title}`;
         return (
           <div key={groupe.title} className={barre ? "mb-3" : "mt-4"}>
-            {/* Une légende, pas un titre : la page porte son seul h1 et ses sections. */}
+            {/* A caption, not a heading: the page carries its only h1 and its sections. */}
             <p id={idTitre} className={cn("px-2 pb-1 text-xs font-medium text-ink-muted", barre && "rail:sr-only")}>
               {groupe.title}
             </p>

@@ -17,8 +17,8 @@ export default function ProjectLayout({
 }) {
   const { slug } = use(params);
   const pathname = usePathname();
-  // Le titre est le NOM du projet (« Billing API »), comme sur sa carte dans la liste (S23-04). Même
-  // clé que la vue d'ensemble et que la barre latérale : une seule lecture.
+  // The title is the project's NAME ("Billing API"), as on its card in the list (S23-04). Same key
+  // as the overview and the sidebar: a single read.
   const projet = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const nom = projet.data?.name ?? slug;
   // No tab row any more (S30-03): the sidebar lists the project's sections, the trail says where one is.

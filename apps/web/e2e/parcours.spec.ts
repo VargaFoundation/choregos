@@ -11,7 +11,7 @@ test("liste des projets et accès à un projet", async ({ page }) => {
   await page.getByRole("link", { name: "Billing API" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api$/);
   await expect(page.getByText("PRs merged on first pass")).toBeVisible();
-  // Le titre est le nom du projet (S23-04) ; le fil part de la liste des projets (S30-03).
+  // The title is the project's name (S23-04); the trail starts at the project list (S30-03).
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Billing API");
   const fil = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(fil.getByRole("link", { name: "Projects" })).toHaveAttribute("href", "/");
@@ -467,7 +467,7 @@ test("coûts : un écran, une devise, et un graphe qui se lit (S23-10)", async (
   await expect(graphe.getByRole("table", { name: "Cost per day" }).getByRole("row")).toHaveCount(15);
 });
 
-test("repérage : un ticket et un run ont leur fil d'Ariane, et l'entrée board reste active (S23-12, S30-03)", async ({ page }) => {
+test("wayfinding: a ticket and a run have their breadcrumb, and the board entry stays active (S23-12, S30-03)", async ({ page }) => {
   await page.goto("/p/billing-api/items/w1");
   const onglets = page.getByRole("complementary", { name: "Sidebar" });
   await expect(onglets.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");

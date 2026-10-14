@@ -9,8 +9,8 @@ import { BreadcrumbBase, Breadcrumbs, Heading, type BreadcrumbStep } from "@/com
 const BASE: BreadcrumbStep[] = [{ href: "/admin", label: "Administration" }];
 
 /**
- * L'administration, en sous-pages : les écrans du cœur, puis une page par section qu'un greffon
- * déclare (ADR 0032) — l'API ne rend que celles dont on a le droit. No tab row (S30-03): the sidebar
+ * The administration, in sub-pages: the core screens, then one page per section a plugin declares
+ * (ADR 0032) — the API only returns those one has the right to. No tab row (S30-03): the sidebar
  * lists the sections when one is inside the administration, the trail says which one.
  */
 export default function AdminLayout({ children }: { children: ReactNode }) {
