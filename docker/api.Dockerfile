@@ -58,6 +58,17 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 1000 --create-home --shell /usr/sbin/nologin choregos
+# The Hubble CLI, for the `cilium` connector's flows (ADR 0052): Relay speaks gRPC only, and
+# `hubble observe -o jsonpb` is the client the Cilium project maintains. Pinned, checked against
+# the release's checksum. The connector runs here (API and workers), never in the runner.
+ARG HUBBLE_VERSION=v1.17.0
+ARG TARGETARCH
+ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz /tmp/hubble.tar.gz
+ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz.sha256sum /tmp/hubble.sha256sum
+RUN cd /tmp && echo "$(cut -d' ' -f1 hubble.sha256sum)  hubble.tar.gz" | sha256sum -c - \
+ && tar -xzf hubble.tar.gz -C /usr/local/bin hubble \
+ && rm -f hubble.tar.gz hubble.sha256sum \
+ && hubble version
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
 USER 1000

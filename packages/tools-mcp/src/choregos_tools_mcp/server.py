@@ -182,6 +182,19 @@ class McpServer:
             'with `"status": "needs_human"` and your question in `questions`.'
         )
 
+    async def _tool_validate_nginx_config(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """`nginx -t` on the workspace's configuration — a check, run where the files are (ADR 0052)."""
+        from .nginx import OutsideWorkspaceError, nginx_test
+
+        path = str(arguments["path"])
+        try:
+            valid, report = await nginx_test(self.context.nginx_binary, self.context.workspace, path)
+        except (OutsideWorkspaceError, FileNotFoundError) as refused:
+            return text_result(str(refused), is_error=True)
+        if valid:
+            return text_result(f"ok: `nginx -t` accepts {path}.\n{report}".strip())
+        return text_result(f"`nginx -t` refuses {path}:\n{report}", is_error=True)
+
     async def _tool_get_ticket(self, arguments: dict[str, Any]) -> dict[str, Any]:
         ticket = await self.client.fetch_ticket()
         return text_result(json.dumps(ticket, ensure_ascii=False, indent=2))

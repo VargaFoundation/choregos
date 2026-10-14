@@ -27,7 +27,7 @@ ENV PYTHONUNBUFFERED=1 \
 # correctifs de sécurité de Debian d'abord : l'image de base peut porter un paquet déjà corrigé.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl git gnupg jq ripgrep make build-essential tini unzip \
+      ca-certificates curl git gnupg jq ripgrep make build-essential tini unzip nginx \
  && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && npm install -g npm@latest pnpm@latest \
@@ -83,6 +83,14 @@ RUN chmod +x /usr/local/bin/choregos-refuse \
 
 RUN useradd --uid 1000 --create-home --home-dir /workspace --shell /bin/bash choregos \
  && mkdir -p /workspace && chown -R 1000:1000 /workspace /etc/choregos
+
+# nginx, for `validate_nginx_config` only (ADR 0052): `nginx -t` parses a configuration of the
+# workspace and stops; nothing is started, nothing listens. It runs as uid 1000, so the paths a
+# configuration usually names for its logs and temporary files (Debian compiles in
+# `/var/log/nginx/access.log`) must be writable by it; the tool moves the pid file itself.
+RUN mkdir -p /var/log/nginx /var/lib/nginx \
+ && chown -R 1000:1000 /var/log/nginx /var/lib/nginx \
+ && nginx -v
 
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app

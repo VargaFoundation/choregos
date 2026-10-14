@@ -22,6 +22,7 @@ import yaml
 
 from .. import render_playbook
 from . import CASES_DIR
+from .agents import AgentCaseResult
 
 
 @dataclass
@@ -120,6 +121,11 @@ def main() -> int:
     parser.add_argument("--judge", action="store_true", help="ajouter la notation par un modèle")
     parser.add_argument("--judge-model", default="platform/strong")
     parser.add_argument("--json", type=Path, help="écrire le rapport JSON")
+    parser.add_argument(
+        "--live-agents",
+        action="store_true",
+        help="ask the model, through the gateway, the agent cases' questions (otherwise: not run)",
+    )
     args = parser.parse_args()
 
     paths = sorted(CASES_DIR.glob("*.yaml"))
@@ -143,18 +149,42 @@ def main() -> int:
             print(f" · interdit présent : {', '.join(result.forbidden)}", end="")
         print()
 
-    if args.json:
-        args.json.write_text(
-            json.dumps([result.to_dict() for result in results], indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+    agent_results = _agent_cases(args) if args.all else []
 
-    failed = [result for result in results if not result.passed]
+    if args.json:
+        report = [*(result.to_dict() for result in results), *(result.to_dict() for result in agent_results)]
+        args.json.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    failed = sum(not result.passed for result in results) + sum(not r.passed for r in agent_results)
     if failed:
-        print(f"\n{len(failed)} éval(s) en échec : le prompt a été dégradé.", file=sys.stderr)
+        print(f"\n{failed} eval(s) failed: the prompt was degraded.", file=sys.stderr)
         return 1
-    print(f"\n{len(results)} éval(s) vertes.")
+    print(f"\n{len(results) + len(agent_results)} eval(s) green.")
     return 0
+
+
+def _agent_cases(args: argparse.Namespace) -> list[AgentCaseResult]:
+    """The catalogue agents' cases (ADR 0020): instructions always, the answer when it is asked for."""
+    from .agents import agent_cases, evaluate_agent_case
+
+    results = []
+    for path in agent_cases():
+        result = evaluate_agent_case(path, live=args.live_agents, model=args.judge_model)
+        results.append(result)
+        status = "✓" if result.passed else "✗"
+        print(
+            f"{status} agent:{result.agent:<10} instructions {'ok' if result.instructions_passed else 'KO'}",
+            end="",
+        )
+        if result.instructions_missing:
+            print(f" (missing: {', '.join(result.instructions_missing)})", end="")
+        print(f" · answer {result.answer}", end="")
+        if result.answer_missing or result.answer_forbidden:
+            print(f" (missing: {result.answer_missing}, forbidden: {result.answer_forbidden})", end="")
+        if result.reason:
+            print(f" · {result.reason}", end="")
+        print()
+    return results
 
 
 if __name__ == "__main__":
