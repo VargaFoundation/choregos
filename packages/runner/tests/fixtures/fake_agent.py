@@ -297,6 +297,11 @@ def _grep(plan: dict[str, Any], workspace: Path) -> str:
             check=False,
         )
         found += completed.stdout
+    # `runs`: run for real in the workspace with the agent's own environment, as an agent's
+    # shell tool does (`git status`); their stdout and stderr go into `{grep}` too.
+    for command in plan.get("runs", []):
+        completed = subprocess.run(command, cwd=workspace, capture_output=True, text=True, check=False)
+        found += completed.stdout + completed.stderr
     return found
 
 

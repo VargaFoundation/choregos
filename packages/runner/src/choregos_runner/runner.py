@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,7 +44,7 @@ from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_output
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .skills import SkillInvalide, poser
-from .workspace import Workspace, agent_home, inline_outputs, workspace_env
+from .workspace import Workspace, agent_git_env, agent_home, inline_outputs, workspace_env
 
 MAX_RESULT_REPAIRS = 2
 MAX_SCOPE_REMINDERS = 1
@@ -228,6 +229,9 @@ class Runner:
             **backend.model_env(stage_input.model, stage_input.gateway_key),
             **workspace_env(stage_input),
         }
+        # The agent reads its repository with its own git: the same `safe.directory` as the
+        # runner, counted on the environment it will really receive (the runner's, then its own).
+        env.update(agent_git_env({**os.environ, **env}, workspace.path))
 
         async def on_update(params: dict[str, Any]) -> None:
             await journal.record("session/update", params)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
@@ -51,6 +52,36 @@ def _git_env(workspace: Path) -> dict[str, str]:
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "safe.directory",
         "GIT_CONFIG_VALUE_0": str(workspace),
+    }
+
+
+def agent_git_env(env: Mapping[str, str], workspace: Path) -> dict[str, str]:
+    """What the AGENT's environment needs so that its own git reads the repository.
+
+    `_git_env` only covers the runner's commands: the agent, started separately, got the
+    workspace without `safe.directory`, and its first `git status` died with "detected dubious
+    ownership" (dev tenant, 2026-10-09, choregos-sandbox-dev#13).
+
+    `env` is the full environment the agent will receive (the runner's, then its launch's): a
+    `GIT_CONFIG_*` entry it already carries is kept, and `safe.directory` goes at the next index.
+    Nothing else is added: no token, no identity, no `GIT_ASKPASS`. An unreadable
+    `GIT_CONFIG_COUNT` is left alone: git refuses it anyway, and rewriting it would overwrite
+    entries we cannot count.
+    """
+    raw = env.get("GIT_CONFIG_COUNT", "0").strip() or "0"
+    if not raw.isdigit():
+        return {}
+    count = int(raw)
+    target = str(workspace)
+    for index in range(count):
+        if env.get(f"GIT_CONFIG_KEY_{index}", "").lower() == "safe.directory" and env.get(
+            f"GIT_CONFIG_VALUE_{index}"
+        ) in (target, "*"):
+            return {}
+    return {
+        "GIT_CONFIG_COUNT": str(count + 1),
+        f"GIT_CONFIG_KEY_{count}": "safe.directory",
+        f"GIT_CONFIG_VALUE_{count}": target,
     }
 
 
