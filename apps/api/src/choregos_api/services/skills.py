@@ -7,8 +7,8 @@ Ce qui entre est vérifié ICI, une fois, avant d'être une version :
   la bibliothèque se contrediraient — et une `description` ;
 - **aucune permission déclarée** : un champ `allowed-tools` est refusé. Ce qu'un agent peut appeler
   se décide par sa version et son projet, jamais par un fichier qu'il lit ;
-- une archive ne sort pas de son dossier (zip-slip), ne porte pas de lien symbolique, tient en 256
-  fichiers et 5 Mio (S32-06), et ne contient que du texte.
+- an archive does not leave its folder (zip-slip), carries no symbolic link, fits in 256 files and
+  5 MiB (S32-06), and holds only text.
 """
 
 from __future__ import annotations

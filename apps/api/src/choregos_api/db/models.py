@@ -735,8 +735,8 @@ class Skill(Base, PkMixin, TimestampMixin):
 
 
 class SkillVersion(Base, PkMixin, TimestampMixin):
-    """Les fichiers d'une version de skill — 256 au plus, 5 Mio en tout — et leur empreinte, que le
-    runner vérifie avant de les poser."""
+    """The files of a skill version (at most 256, 5 MiB in all) and their digest, which the runner
+    checks before laying them down."""
 
     __tablename__ = "skill_versions"
     __table_args__ = (UniqueConstraint("skill_id", "version", name="uq_skill_versions_skill_version"),)

@@ -154,8 +154,8 @@ async def _publier(
     executables: list[str] | None = None,
     repo_licences: dict[str, str] | None = None,
 ) -> tuple[Skill, SkillVersion]:
-    """Crée la skill (version 1) ou publie sa version suivante — jamais de réécriture. La version
-    passe la porte (S32-06) : son risque, ce que le scan trouve ; `high` attend un second regard."""
+    """Creates the skill (version 1) or publishes its next version, never a rewrite. The version
+    goes through the gate (S32-06): its risk, what the scan finds; `high` waits for a second reviewer."""
     try:
         tete = valider(fichiers, slug)
     except SkillRefusee as refus:
