@@ -50,6 +50,7 @@ from ..services.artifacts import (
     revision,
     to_contract,
 )
+from ..services.human_groups import decider_group_verdict, group_of_the_step
 from ..services.recus import passages_du_ticket
 from ..services.routage import valider_les_champs
 from ..temporal import deliver_control, deliver_decision, get_temporal, interpreter_id
@@ -308,6 +309,26 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
         raise conflict("no human request is pending on this work item")
     if request_row.decided_at is not None:
         raise conflict("this request has already been decided")
+    # A step addressed to a group is answered by a member of it (ADR 0044, ADR 0052): the rank above is
+    # necessary, not sufficient. An organisation administrator may override — audited, never silent.
+    group = await group_of_the_step(session, item, request_row.transition_id)
+    verdict = decider_group_verdict(principal, org_slug, group)
+    if verdict == "refused":
+        raise forbidden(
+            f"this step is addressed to the group `{group}`: only its members answer it "
+            "(identity-provider groups, as of your last sign-in)"
+        )
+    if verdict == "override":
+        await record(
+            session,
+            principal,
+            "workitem.decision.group_override",
+            org_id=project.org_id,
+            target_type="work_item",
+            target_id=item.id,
+            group=group,
+            transition=request_row.transition_id,
+        )
     await controler(
         session,
         DemandeDeGeste(

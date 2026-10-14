@@ -492,6 +492,20 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidateRequest" } } }
       responses:
         "200": { description: Validation report, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidation" } } } }
+  /projects/{id}/workflows/validate:
+    post:
+      tags: [workflows]
+      operationId: validateProjectWorkflow
+      description: >-
+        The same validation, in the context of a project: it also warns (`actor.group_unknown`) about a
+        human actor whose group nobody in the project's organisation carries.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidateRequest" } } }
+      responses:
+        "200": { description: Validation report, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowValidation" } } } }
   /workflows/edit:
     post:
       tags: [workflows]

@@ -99,8 +99,19 @@ and nothing must let an agent write to it directly.
    kept on the user (`users.groups`), replaced at each sign-in, and carried by the principal. Until
    then they were turned into roles and dropped. A group withdrawn at the IdP therefore holds until
    the person's next sign-in. A development sign-in sets none. A sign-in protocol brought by a
-   plugin (`terminer_la_connexion`) passes its groups the same way. Human actors' `group` in a
-   workflow is still informative: enforcing it at a human step is outside this ADR.
+   plugin (`terminer_la_connexion`) passes its groups the same way.
+8. **A human actor's `group` is enforced** (ADR 0044 left it informative). `POST /work-items/{id}/decisions`
+   reads the work item's workflow at the request's transition: when its actor is a human with a
+   group, the decider must carry that group (`403` otherwise), on top of the rank. An
+   **organisation administrator may override**, and the override is audited
+   (`workitem.decision.group_override`, with the group and the transition): without a way out, a
+   group the identity provider never sends would leave the ticket waiting forever. Steps of agent
+   actors (questions, scope changes) have no group and are unchanged. Validation warns about the two
+   ways to get there: `actor.group_empty` (stateless, `POST /workflows/validate`) and
+   `actor.group_unknown` — nobody in the organisation has ever carried the group — from the
+   project-scoped `POST /projects/{id}/workflows/validate`. Both are warnings, not errors: an
+   organisation may declare a group before its first member signs in. A dev sign-in carries no
+   groups, so on a dev stack only administrators answer such steps.
 
 ## Consequences
 
