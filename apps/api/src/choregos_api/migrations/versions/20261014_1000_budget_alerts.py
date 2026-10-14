@@ -5,7 +5,7 @@ One row per budget, period and threshold (the unique key makes the alert idempot
 row-level security, like the other tables that carry an organisation.
 
 Revision ID: a9c1e3f5b7d9
-Revises: 3d5f7b9c1e2a
+Revises: 1b3d5f7a9c0e
 Create Date: 2026-10-14 10:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a9c1e3f5b7d9"
-down_revision: str | None = "3d5f7b9c1e2a"
+down_revision: str | None = "1b3d5f7a9c0e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
