@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.."
 CLUSTER=${CLUSTER:-choregos}
 
 require() {
-  command -v "$1" >/dev/null 2>&1 || { echo "✗ $1 est requis (voir docs/dev.md)"; exit 1; }
+  command -v "$1" >/dev/null 2>&1 || { echo "✗ $1 est requis (voir docs/development.md)"; exit 1; }
 }
 require kind
 require kubectl

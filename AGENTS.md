@@ -35,7 +35,8 @@ kept for running workflows) carries `lang: fr-ok` in a comment.
   give a false verdict, and `tests/charts/` renders the chart and checks it in Python.
 - Generated files to commit: `make contracts` (types from the schemas), `make docs-cli`
   (`docs/cli.md` from the CLI). A test refuses any divergence.
-- Beyond CI: `make demo` (end to end, in memory), `make dev-up` / `make dev-down`,
+- Beyond CI: `docker compose up` (local install, S28; proven by the `local-install` job),
+  `make demo` (end to end, in memory), `make dev-up` / `make dev-down`,
   `make e2e`, `make test-cluster` (real cluster), `make test-live` (real services),
   `make conformance`, `make evals`, `make replay-record`.
 

@@ -221,7 +221,7 @@ e2e:  ## Scénarios bout en bout (kind requis)
 
 .PHONY: cluster-up
 cluster-up:  ## Cluster kind dédié aux tests (Calico : les NetworkPolicy sont appliquées)
-	@command -v kind >/dev/null || { echo "✗ kind est requis (voir docs/dev.md)"; exit 1; }
+	@command -v kind >/dev/null || { echo "✗ kind est requis (voir docs/development.md)"; exit 1; }
 	kind create cluster --config dev/kind.yaml --wait 180s || true
 	kubectl --context kind-choregos apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
 	@echo "· attente du CNI…"

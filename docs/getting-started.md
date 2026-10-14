@@ -3,48 +3,102 @@
 This page answers one question: **I have work to run — a repository to develop, or a
 business process to instruct — how do I get the platform to do it?**
 
-Three paths, from the least committing to the most real. Take the first if you want to see
-what it looks like before installing anything.
+Start on your own machine: one command, Docker only, a demo project with a work item that
+runs. Then onboard a real project.
 
 ---
 
-## 1. See the whole journey without installing anything
+## 1. Run it on your machine — Docker only
+
+```bash
+git clone https://github.com/VargaFoundation/choregos.git
+cd choregos
+cp .env.example .env      # optional: every line has a default
+docker compose up
+```
+
+When the console is ready, open **http://localhost:3000**. Development sign-in is filled in
+with the demo administrator (`admin@choregos.local`): click *enter* and you land on the
+**demo project**, with one work item, `DEMO-1`, already waiting for your approval. Approve
+it, or send it back, from its page. A work item you create in the demo project runs the same way.
+
+| Measured on 2026-10-12 (WSL2, 16 cores, images already built) | |
+| :-- | :-- |
+| `docker compose up` to every service healthy, empty volumes | 147 to 216 seconds |
+| Memory at rest, the whole install | about 1.85 GB, LiteLLM alone 1.2 GB |
+| A work item through its agent stage, fakes mode | 2 seconds |
+
+The first start also builds the platform's images from source and pulls the others: count
+several more minutes, depending on your machine and your connection (not measured on a cold
+cache).
+
+What runs: PostgreSQL (the platform connects through a non-superuser role, so row-level
+security applies), Temporal, the migrations, the API, the workers, the console, LiteLLM, and a
+one-shot seed of the demo organisation and project. Everything listens on `127.0.0.1` only.
+
+### Fakes mode, and a real model
+
+With no model key in `.env`, agents are **simulated**: each agent stage hands back the outputs
+its transition declares, says in its summary that no model ran, and costs nothing. Everything
+else is the real path — Temporal, the database, the gates, the human decision.
+
+To run **real agents**, put a key in `.env` and start again:
+
+```bash
+# .env
+ANTHROPIC_API_KEY=…       # or OPENAI_API_KEY=…
+```
+
+```bash
+docker compose up -d
+```
+
+LiteLLM then routes the platform's model aliases to that provider; it is the only container
+that sees the key, and each agent run gets its own virtual key, capped by the run's budget. Each
+agent runs in the runner image (`ghcr.io/vargafoundation/choregos-runner`, more than a gigabyte,
+pulled on the first run), started by the workers. With a key, the seeded work item waits for you
+to start it: an install spends nothing before you open it. `LITELLM_REAL=0` keeps fakes even with
+a key; `LITELLM_REAL=1` refuses to start without one.
+
+To check it end to end, from the repository:
+
+```bash
+python3 tools/local_install_check.py      # fakes: sign-in, a work item, an approval
+make test-live-local                      # with a key: fails unless the model was called
+```
+
+> **Security.** With a key, the workers start agent containers through the Docker socket,
+> mounted into the `worker` container. Whoever controls that socket controls Docker on your
+> machine, which amounts to root on it. That is acceptable on a laptop; never expose this
+> install beyond one. Development sign-in has no password: the API refuses it outside the
+> `dev` and `test` environments.
+
+### Options
+
+```bash
+docker compose --profile memory up        # adds Ecphoria, the memory service (embeddings need a key)
+docker compose --profile temporal-ui up   # adds the Temporal UI on http://localhost:8233
+docker compose down -v                    # stops everything and deletes the data
+```
+
+Ports taken on your machine? `CHOREGOS_PORT_WEB`, `CHOREGOS_PORT_API` and
+`CHOREGOS_PORT_TEMPORAL_UI` in `.env`. PostgreSQL runs without `fsync` here, for start-up time:
+keep nothing in this install that you cannot recreate.
+
+## 2. Other ways to look
 
 ```bash
 make setup
-make demo
+make demo        # one ticket end to end, in memory, nothing installed but Python
 ```
 
-`make demo` plays one ticket end to end on simulated connectors: specification, human
-approval, implementation, verification, PR, merge, deployment. You will see the status
-comment as it would be written in the ticket — stages, backend and model per stage, tokens,
-cost, duration — and the summary:
+`make demo` plays a software ticket on simulated connectors: specification, human approval,
+implementation, verification, PR, merge, deployment. It is the shape of the journey, printed
+in the terminal.
 
-```
-· runs executed        : 3
-· total cost           : 1.00 USD
-· PR opened            : https://fake.scm/varga/billing-api/pull/1
-· findings filed       : 1
-· final ticket state   : deployed_prod
-```
-
-Nothing is called outside. It is the shape of the journey, not a proof that it works against
-your tools.
-
-## 2. On a development cluster
-
-```bash
-make dev-up      # kind + Tilt: the whole platform on your machine
-make dev-seed    # an organisation, a demo project, ten tickets, one train
-```
-
-The front is on `http://localhost:3000`, the API on `:8000`. Or, closer to what a real agent
-does, the single-node bench of [`demo/`](../demo/README.md): real agents, real Temporal,
-real gates — `make demo-up`, `make demo-images`, `make demo-seed`.
-
-Without Kubernetes, `docker compose -f dev/compose.yaml up -d` brings the dependencies
-(Postgres, Temporal, LiteLLM, Keycloak, RustFS for S3) and the three processes start by hand — see
-[development](development.md).
+Closer to production, the single-node bench of [`demo/`](../demo/README.md) runs the chart on
+kind with real agents: `make demo-up`, `make demo-images`, `make demo-seed`. To work on the
+platform itself (hot reload, a development cluster), see [development](development.md).
 
 ---
 
@@ -186,7 +240,10 @@ workaround chosen for each. At the time of writing: the platform's high-availabi
 need a staging-sized environment, Azure DevOps (Boards, Pipelines) has no reachable
 organisation, and the single-node bench measures no cost unless a provider key is given to
 the embedded gateway. The default backend is `claude-code`; OpenHands was removed
-([ADR 0011](adr/0011-retrait-d-openhands.md)).
+([ADR 0011](adr/0011-retrait-d-openhands.md)). The local install's real-model path was run
+end to end up to the provider (which refused the test key): no work item has yet gone through it
+with a valid key. It uses the `opencode` backend for both providers, because `claude-code` in the
+published runner asks the gateway for a model of its own choosing.
 
 ## Where to go next
 

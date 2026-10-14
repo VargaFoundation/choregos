@@ -47,6 +47,15 @@ tracker ──webhooks──▶ apps/api ──signaux──▶ apps/orchestrato
 
 ## Démarrage rapide
 
+On one machine with Docker only (see [getting started](docs/getting-started.md)):
+
+```bash
+cp .env.example .env    # optional: ANTHROPIC_API_KEY or OPENAI_API_KEY for real agents
+docker compose up       # console on http://localhost:3000, a demo project, a work item
+```
+
+To develop the platform:
+
 ```bash
 make setup          # uv sync + pnpm install
 make ci             # lint + typage + tests unitaires

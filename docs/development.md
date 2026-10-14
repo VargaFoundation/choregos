@@ -5,6 +5,7 @@
 | Level | Command | What you get | What you need |
 | :-- | :-- | :-- | :-- |
 | demonstration | `make demo` | the whole chain in memory, one ticket to production | nothing |
+| local install | `docker compose up` | the whole platform from the images of your working copy, a demo project, real agents with a key in `.env` — see [getting started](getting-started.md) | Docker |
 | local services | `make compose-up` then `make api` / `make worker` | the real API and workers, simulated connectors | Docker |
 | cluster | `make dev-up` | kind + Tekton + Argo + Tilt, hot reload | kind, kubectl, helm, tilt |
 | bench | `make demo-up`, `make demo-images`, `make demo-seed` | real agents on a one-node kind, all dependencies embedded | Docker, kind, helm, an agent credential |
