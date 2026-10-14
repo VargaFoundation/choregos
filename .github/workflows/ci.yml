@@ -30,6 +30,7 @@ jobs:
       charts: ${{ steps.filter.outputs.charts }}
       contracts: ${{ steps.filter.outputs.contracts }}
       docker: ${{ steps.filter.outputs.docker }}
+      local-install: ${{ steps.filter.outputs.local-install }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -54,6 +55,24 @@ jobs:
               - 'packages/contracts/**'
             docker:
               - 'docker/**'
+            # What `docker compose up` at the root is made of (S28-04). The platform's code is
+            # proven by the other jobs; this job proves the install, and runs on `main` and in
+            # the merge queue whatever changed, so that nothing merges past a broken compose.
+            local-install:
+              - 'compose.yaml'
+              - '.env.example'
+              - '.dockerignore'
+              - 'dev/local/**'
+              - 'docker/**'
+              - 'tools/local_install_check.py'
+              - '.github/workflows/ci.yml'
+              - 'apps/api/src/choregos_api/local_demo.py'
+              - 'apps/api/src/choregos_api/migrations/**'
+              - 'apps/web/src/app/login/**'
+              - 'apps/web/package.json'
+              - 'apps/web/next.config.mjs'
+              - 'pyproject.toml'
+              - 'uv.lock'
 
   python:
     needs: changes
@@ -247,6 +266,35 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: cosign sign --yes ghcr.io/vargafoundation/choregos-${{ matrix.image }}@${{ steps.build.outputs.digest }}
 
+  local-install:
+    # `docker compose up` on a clean runner, then one work item through it in fakes mode (S28-04):
+    # console 200, development sign-in, the seeded demo work item, a new one through its agent
+    # stage, an approval, the terminal state. "It works locally" is this job, not a claim.
+    needs: changes
+    if: >-
+      needs.changes.outputs.local-install == 'true'
+      || github.ref == 'refs/heads/main'
+      || github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: build the images
+        run: docker compose build
+      - name: docker compose up
+        run: |
+          start=$(date +%s)
+          docker compose up -d --wait --wait-timeout 600
+          echo "healthy after $(( $(date +%s) - start )) s (images already built)"
+      - name: one work item through the install, in fakes mode
+        run: python3 tools/local_install_check.py --console-timeout 120 --stage-timeout 180
+      - name: logs of the install
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+      - name: tear down
+        if: always()
+        run: docker compose down -v --remove-orphans
+
   secrets:
     # Un secret commité ne se rattrape pas : il est déjà dans l'historique. Deux fichiers
     # avaient un `noqa S105` et deux bases SQLite étaient suivies par git — sans qu'un scan
@@ -324,7 +372,7 @@ jobs:
     # 2026-10-05, les runners hébergés n'acquéraient plus les jobs, `python` est revenu
     # `abandoned`, et la porte d'une PR était verte sans qu'un seul test Python ait tourné. Ce que
     # GitHub inventera demain fermera la porte aussi : on énumère ce qui passe, pas ce qui casse.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:
