@@ -1,21 +1,21 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * L'écran des dépenses (S29-03), sur le mode démo : les chiffres affichés sont ceux que le registre
- * de démonstration additionne, rangement par rangement — le même registre sert chaque regroupement.
+ * The spend screen (S29-03), in demo mode: the figures shown are the ones the demo ledger adds up,
+ * grouping by grouping — the same ledger serves every grouping.
  */
 
-test("la dépense du mois, sa prévision et son budget se lisent", async ({ page }) => {
+test("the month's spend, its forecast and its budget read", async ({ page }) => {
   await page.goto("/costs");
   await expect(page.getByRole("heading", { name: "Spend", level: 1 })).toBeVisible();
   const mois = page.getByTestId("mois");
   await expect(mois).toContainText("Forecast at month end (linear)");
   await expect(mois).toContainText("Budget: daily budget × days in the month");
-  await expect(mois).toContainText("€"); // la monnaie de l'organisation : l'euro par défaut
+  await expect(mois).toContainText("€"); // the organisation's currency: the euro by default
   await expect(page.getByTestId("budget-etat")).toBeVisible();
 });
 
-test("les plus coûteux : agents, workflows, tickets ; les modèles et les outils à part ; un CSV par rangement", async ({
+test("the most expensive: agents, workflows, tickets; models and tools apart; a CSV per grouping", async ({
   page,
 }) => {
   await page.goto("/costs");
@@ -32,7 +32,7 @@ test("les plus coûteux : agents, workflows, tickets ; les modèles et les outil
   expect(hrefs.some((h) => h.includes("group_by=model") && h.includes("kind=tool"))).toBe(true);
 });
 
-test("un projet : la même page, resserrée, et le lien depuis sa vue d'ensemble", async ({ page }) => {
+test("a project: the same page, narrowed, and the link from its overview", async ({ page }) => {
   await page.goto("/p/billing-api");
   await page.getByRole("link", { name: "Spend by agent, workflow, work item" }).click();
   await expect(page).toHaveURL(/\/costs\?project=billing-api/);
@@ -41,7 +41,7 @@ test("un projet : la même page, resserrée, et le lien depuis sa vue d'ensemble
   await expect(page.getByRole("table", { name: "Projects" })).toHaveCount(0);
 });
 
-test("changer de période change le total", async ({ page }) => {
+test("changing the period changes the total", async ({ page }) => {
   await page.goto("/costs");
   const total = page.getByTestId("total-periode");
   await expect(total).toContainText("Total €");
@@ -50,7 +50,7 @@ test("changer de période change le total", async ({ page }) => {
   await expect(total).not.toHaveText(avant ?? "");
 });
 
-test("l'entrée « spend » est dans la navigation", async ({ page }) => {
+test("the Spend entry is in the navigation", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   await page.getByRole("complementary", { name: "Sidebar" }).getByRole("link", { name: "Spend" }).click();
