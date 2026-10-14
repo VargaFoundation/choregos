@@ -125,3 +125,8 @@ Every model call is minted against a per-run virtual key with a hard cap, and la
 ledger with its project, ticket, stage and model. Tool calls from the catalogue land in the
 same ledger under `kind: tool`. Budgets are declared in the policy: per ticket, per stage, in
 turns, in minutes, in tool calls.
+
+A budget is a reservation ([ADR 0047](adr/0047-a-budget-is-a-reservation.md)). When the gateway
+refuses a run's key because it is spent, the runner ends the run with `reason: budget`, and the
+work item goes to `on_budget_exceeded` (else `on_question`, else the retry policy's `escalate_to`):
+a person decides. A stage stopped on budget is **never retried** — a retry would mint a fresh key.

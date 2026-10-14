@@ -186,6 +186,22 @@ class WorkflowEngine:
             return Decision(transition.from_, reason=f"pending gates: {names}")
         return Decision(transition.to, reason=result.summary[:200])
 
+    def after_budget_exceeded(self, transition: Transition, detail: str = "") -> Decision:
+        """A stage stopped on budget goes to a person, **never** to a retry (ADR 0047).
+
+        `on_budget_exceeded` when the workflow declares it, else `on_question`, else the retry
+        policy's `escalate_to`, else the state the stage started from. A retry would mint a fresh
+        key at the full stage budget: the very overspend the budget was there to stop.
+        """
+        retry = transition.on_fail or transition.on_changes_requested
+        target = (
+            self._default_state("on_budget_exceeded")
+            or self._default_state("on_question")
+            or (retry.escalate_to if retry else None)
+            or transition.from_
+        )
+        return Decision(target, escalated=True, reason=f"budget: {detail}" if detail else "budget")
+
     def after_human(self, transition: Transition, approved: bool, reason: str = "") -> Decision:
         if approved:
             return Decision(transition.to, reason=reason or "human decision: approved")

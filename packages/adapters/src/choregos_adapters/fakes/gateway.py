@@ -89,8 +89,10 @@ class FakeGateway:
         current = self.spends.get(key_id, Spend())
         key = self.keys[key_id]
         if current.cost_usd + cost > key.budget_usd:
+            # LiteLLM's own words: the runner recognises the refusal by them (S27-01).
             raise BudgetExceededError(
-                f"budget dépassé pour {key_id} : {current.cost_usd + cost:.2f} > {key.budget_usd:.2f}"
+                f"Budget has been exceeded! Current cost: {current.cost_usd + cost:.4f}, "
+                f"Max budget: {key.budget_usd:.4f} (key {key_id})"
             )
         self.spends[key_id] = current + Spend(
             tokens_in=tokens_in,

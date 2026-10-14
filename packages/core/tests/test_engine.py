@@ -107,6 +107,33 @@ def test_budget_exceeded_routes_to_default_state(simple: WorkflowEngine) -> None
     assert simple.after_stage(t, result, attempts=0).next_state == "needs_human"
 
 
+def _without_defaults(engine: WorkflowEngine, *attrs: str) -> WorkflowEngine:
+    wf = engine.wf.model_copy(deep=True)
+    assert wf.defaults is not None and wf.defaults.from_any_agent_state is not None
+    for attr in attrs:
+        setattr(wf.defaults.from_any_agent_state, attr, None)
+    return WorkflowEngine(wf)
+
+
+def test_budget_exceeded_never_retries(simple: WorkflowEngine) -> None:
+    """S27-01: without `on_budget_exceeded`, a budget stop goes to `on_question` — never to a retry,
+    which would mint a fresh key at the full stage budget."""
+    engine = _without_defaults(simple, "on_budget_exceeded")
+    t = engine.select_transition("ready")
+    decision = engine.after_budget_exceeded(t, "key spent")
+    assert decision.next_state == "needs_human"
+    assert decision.escalated and not decision.retried
+    assert decision.reason == "budget: key spent"
+
+
+def test_budget_exceeded_without_any_default_escalates(simple: WorkflowEngine) -> None:
+    engine = _without_defaults(simple, "on_budget_exceeded", "on_question")
+    t = engine.select_transition("ready")
+    assert engine.after_budget_exceeded(t).next_state == "needs_human"  # `escalate_to` of t-implement
+    sans_retry = t.model_copy(update={"on_fail": None})
+    assert engine.after_budget_exceeded(sans_retry).next_state == "ready"  # its own `from`
+
+
 def test_after_human_approval_and_rejection(simple: WorkflowEngine) -> None:
     t = simple.select_transition("awaiting_spec_approval")
     assert simple.after_human(t, approved=True).next_state == "ready"

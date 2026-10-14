@@ -31,6 +31,9 @@ from .protocol import (
     error_response,
 )
 
+#: How many of the agent's last text chunks a `PromptOutcome` keeps.
+SAID_KEPT = 20
+
 PermissionHandler = Callable[[dict[str, Any]], Awaitable[tuple[bool, str]]]
 UpdateHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -54,6 +57,9 @@ class PromptOutcome:
     permission_denials: int = 0
     cancelled: bool = False
     errors: list[str] = field(default_factory=list)
+    #: The last text chunks the agent said (bounded): a gateway refusal relayed as text is read
+    #: there (S27-01).
+    said: list[str] = field(default_factory=list)
 
 
 def _option_id(params: dict[str, Any], allowed: bool) -> str:
@@ -396,6 +402,11 @@ class AcpClient:
             self.outcome.tool_calls += 1
         if kind in {"agent_message_chunk", "agent_thought_chunk"}:
             self.outcome.messages += 1
+            content = update.get("content")
+            text = content.get("text") if isinstance(content, dict) else None
+            if isinstance(text, str) and text:
+                self.outcome.said.append(text[:500])
+                del self.outcome.said[:-SAID_KEPT]
         if self.on_update is not None:
             await self.on_update(params)
 

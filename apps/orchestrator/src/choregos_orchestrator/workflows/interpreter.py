@@ -97,6 +97,10 @@ DECLARED_OUTPUTS_REQUIRED = "declared-outputs-required"
 #: one run, not two. Histories before this marker, and every executor without the two
 #: capabilities, replay the stage as before.
 SUSPEND_AROUND_HUMAN = "suspend-around-human"
+#: A stage stopped on budget — the gateway refused its key, or the work item is over its budget —
+#: goes to a person and is never retried (S27-01, ADR 0047). Before this marker, a `FAILED` result
+#: with `reason="budget"` and no `on_budget_exceeded` was retried with a fresh key.
+BUDGET_NEVER_RETRIES = "budget-never-retries"
 
 
 @dataclass
@@ -464,13 +468,22 @@ class WorkflowInterpreter:
         for request in result.scope_changes_requested:
             await self._request_scope_change(params, transition, request)
 
-        decision = engine.after_stage(
-            transition,
-            result,
-            self._essais(key),
-            outcomes,
-            require_outputs=workflow.patched(DECLARED_OUTPUTS_REQUIRED),
-        )
+        if (
+            result.reason == "budget"
+            and result.status is not StageStatus.DONE
+            and workflow.patched(BUDGET_NEVER_RETRIES)
+        ):
+            # A person decides; the ticket is parked, and a request tells them why.
+            result = result.model_copy(update={"status": StageStatus.NEEDS_HUMAN})
+            decision = engine.after_budget_exceeded(transition, result.summary[:200])
+        else:
+            decision = engine.after_stage(
+                transition,
+                result,
+                self._essais(key),
+                outcomes,
+                require_outputs=workflow.patched(DECLARED_OUTPUTS_REQUIRED),
+            )
         if decision.next_state == engine.question_state() and result.status is StageStatus.NEEDS_HUMAN:
             await self._create_request(
                 params,

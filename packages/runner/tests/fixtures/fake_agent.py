@@ -204,13 +204,7 @@ def main() -> int:
 
             _write_result(plan, workspace)
 
-            send(
-                {
-                    "jsonrpc": "2.0",
-                    "id": message_id,
-                    "result": {"stopReason": plan.get("stop_reason", "end_turn")},
-                }
-            )
+            _end_turn(plan, message_id)
             continue
 
         if method == "session/cancel":
@@ -283,6 +277,24 @@ def _grep(plan: dict[str, Any], workspace: Path) -> str:
         )
         found += completed.stdout
     return found
+
+
+def _end_turn(plan: dict[str, Any], message_id: Any) -> None:
+    """Ends the prompt turn: its stop reason — or an error, as an agent does when its provider
+    refuses the call (`error`). `stderr` lines are written first, as a provider's message would be."""
+    for line in plan.get("stderr", []):
+        sys.stderr.write(line + "\n")
+        sys.stderr.flush()
+    if "error" in plan:
+        send({"jsonrpc": "2.0", "id": message_id, "error": {"code": -32603, "message": plan["error"]}})
+        return
+    send(
+        {
+            "jsonrpc": "2.0",
+            "id": message_id,
+            "result": {"stopReason": plan.get("stop_reason", "end_turn")},
+        }
+    )
 
 
 def _plan_for(script: dict[str, Any], prompt_index: int) -> dict[str, Any]:
