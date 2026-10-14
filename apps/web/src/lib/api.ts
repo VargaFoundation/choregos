@@ -30,6 +30,11 @@ import type {
   ProjectAgent,
   ProjectAgentPut,
   Skill,
+  SkillGitImport,
+  SkillGitPreview,
+  SkillGitPreviewRequest,
+  SkillSources,
+  SkillUpdate,
   SkillVersion,
   KnowledgeBase,
   KnowledgeBaseCreate,
@@ -348,6 +353,15 @@ export const api = {
     request<void>(`/orgs/${org}/knowledge/${slug}/documents/${id}`, { method: "DELETE" }),
   convertKnowledgeDocument: (org: string, slug: string, id: string) =>
     request<KnowledgeDocument>(`/orgs/${org}/knowledge/${slug}/documents/${id}/convert`, { method: "POST" }),
+  /** From a repository at a pinned commit (ADR 0050): the preview resolves the branch, the import pins the SHA. */
+  previewSkillsFromGit: (org: string, body: SkillGitPreviewRequest) =>
+    request<SkillGitPreview>(`/orgs/${org}/skills/import-git/preview`, { method: "POST", body: JSON.stringify(body) }),
+  importSkillsFromGit: (org: string, body: SkillGitImport) =>
+    request<Skill[]>(`/orgs/${org}/skills/import-git`, { method: "POST", body: JSON.stringify(body) }),
+  skillSources: (org: string) => request<SkillSources>(`/orgs/${org}/skill-sources`),
+  checkSkillUpdate: (org: string, slug: string) => request<SkillUpdate>(`/orgs/${org}/skills/${slug}/update`),
+  approveSkillVersion: (org: string, slug: string, version: number) =>
+    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, { method: "POST" }),
   myTokens: () => request<ApiToken[]>("/me/tokens"),
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),

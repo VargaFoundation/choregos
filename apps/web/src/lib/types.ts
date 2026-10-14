@@ -96,6 +96,14 @@ export type {
   ProjectAgent,
   ProjectAgentPut,
   Skill,
+  SkillCandidate,
+  SkillFinding,
+  SkillGitImport,
+  SkillGitPreview,
+  SkillGitPreviewRequest,
+  SkillSource,
+  SkillSources,
+  SkillUpdate,
   SkillVersion,
 } from "@choregos/contracts/api";
 

@@ -1,7 +1,7 @@
-# 0050 — Skills come from a pinned commit of an allowlisted repository; updates are proposed, never applied
+# 0050 — Skills come from a pinned commit of an allowlisted repository and pass a supply-chain gate; a high-risk one waits for a second person
 
 - **Status**: accepted, 2026-10-12
-- **Concerns**: `skill_versions.source`, the skills routes (`import-git`, `skill-sources`,
+- **Concerns**: `skill_versions` (`source`, `risk`, `findings`, `review_status`), the skills routes (`import-git`, `skill-sources`, `…/approve`,
   `…/update`), the `skill:import` permission, the console's skills page; amends
   [ADR 0033](0033-registre-d-agents-et-bibliotheque-de-skills.md) (skills are a library)
 
@@ -36,6 +36,26 @@ update applied by itself, hands the agents to whoever controls that branch.
 5. **An update is a proposal.** `GET /orgs/{org}/skills/{slug}/update?ref=` resolves the
    repository's reference and returns the SHA and the files added, removed and modified against the
    latest version. It writes nothing; a person applies it by importing that SHA.
+6. **Every version passes a gate, whatever its door** — a zip, the console, git (S32-06):
+   - a **risk tier**: `low` (a `SKILL.md` alone), `medium` (references, assets — other text
+     files), `high` (a script, an executable bit, an outbound URL, a credential-like string, an MCP
+     reference, or any critical finding of the scan);
+   - a **static scan**: prompt-injection phrases (*ignore previous instructions*, *without telling
+     the user*…), hidden or bidirectional Unicode, base64 or hex blobs and code that decodes then
+     runs them, a download piped into a shell; each finding names its file and line;
+   - a **licence check**: the skill's licence file, else the repository's, else an
+     `SPDX-License-Identifier`. A missing or non-open licence is **flagged**, not refused — several
+     skills of `anthropics/skills` (docx, pptx, xlsx, pdf) are source-available, and the reviewer
+     decides.
+7. **A high-risk version waits for a second person.** It is born `pending_review`; until an
+   administrator who is **not its importer** approves it
+   (`POST …/skills/{slug}/versions/{n}/approve`, audited as `skill.approve`), an agent version may
+   not pin it (`422`), an agent carrying the skill unpinned reads its latest *approved* version,
+   `prepare_stage` refuses a pin on it, and the runner's internal read refuses it (`409`).
+   A version the platform ships itself (its agent catalogue, a template) is assessed and recorded
+   like the others, and approved by `platform`.
+8. **Limits raised to 256 files and 5 MiB** (ADR 0033 said 64 and 512 KiB): real skills carry
+   `references/`, and the risk tier, not the size, now does the work.
 
 ## Consequences
 
@@ -43,5 +63,9 @@ update applied by itself, hands the agents to whoever controls that branch.
   person takes with the diff in front of them.
 - Private repositories are not fetched yet (no token is sent); a skill with a binary file (a font,
   an image) is refused, as for a zip.
-- What a skill *contains* is not judged here: a risk tier, a static scan and a second reviewer for
-  high-risk skills are the gate that follows (S32-06).
+- A version is judged by what it contains before any agent reads it; a high-risk one costs a second
+  person's attention, which is the point. The scan is a set of patterns, not a sandbox: it finds
+  the documented tricks, not every one — the runner's closed network and the digest check stay the
+  last lines (ADR 0033).
+- Outbound URLs make a skill `high`: many honest skills link to documentation and will need a
+  second reviewer. Accepted: an URL in a skill is an instruction an agent may follow.

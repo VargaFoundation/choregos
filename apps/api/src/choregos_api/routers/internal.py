@@ -356,6 +356,9 @@ async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, An
         ).scalar_one_or_none()
         if ligne is None:
             raise not_found("Skill of the run", f"{ref['slug']}@{ref['version']}")
+        if ligne.review_status != "approved":
+            # Defence in depth (S32-06): prepare_stage never names a version waiting for review.
+            raise conflict(f"skill `{ref['slug']}` v{ligne.version} waits for its second reviewer")
         rendues.append(
             {"slug": ref["slug"], "version": ligne.version, "digest": ligne.digest, "files": ligne.files}
         )

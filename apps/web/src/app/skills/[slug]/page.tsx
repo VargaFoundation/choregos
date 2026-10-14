@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
+import { UpdateCheck, VersionGate } from "@/components/skills/gate";
 import { Card, Empty, ErrorNote, Heading, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
@@ -12,7 +13,8 @@ import { useSession } from "@/lib/session";
 /** Un skill : ses versions, les fichiers de chacune, et les agents qui le portent. */
 export default function SkillPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const { org } = useSession();
+  const { org, me } = useSession();
+  const client = useQueryClient();
   const skill = useQuery({ queryKey: ["skill", org, slug], queryFn: () => api.skill(org, slug) });
   const [choisie, setChoisie] = useState<number | null>(null);
   const numero = choisie ?? skill.data?.latest_version ?? null;
@@ -41,6 +43,25 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
         <span className="text-sm text-ink-muted">v{skill.data.latest_version}</span>
       </div>
       {skill.data.description && <p className="max-w-3xl text-sm text-ink-muted">{skill.data.description}</p>}
+      {version.data && (
+        <Card title={`Gate of v${version.data.version}`}>
+          <VersionGate
+            org={org}
+            slug={slug}
+            version={version.data}
+            me={me?.email}
+            onChanged={() => {
+              void client.invalidateQueries({ queryKey: ["skill", org, slug] });
+              void client.invalidateQueries({ queryKey: ["skill-version", org, slug] });
+            }}
+          />
+          {version.data.source && (
+            <div className="mt-3 border-t border-line pt-3">
+              <UpdateCheck org={org} slug={slug} />
+            </div>
+          )}
+        </Card>
+      )}
       <Card
         title="Files"
         action={

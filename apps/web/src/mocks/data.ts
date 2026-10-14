@@ -26,6 +26,7 @@ import type {
   ProjectAgentPut,
   KnowledgeBase,
   Skill,
+  SkillGitPreview,
   SkillVersion,
   CostReport,
   DoraReport,
@@ -1315,6 +1316,8 @@ export const skills: Skill[] = [
     status: "active",
     latest_version: 1,
     used_by: ["onboarding-coordinator@2"],
+    risk: "medium",
+    review_status: "approved",
     versions: [{ version: 1, digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c", created_by: "lea@acme.dev", created_at: iso(60 * 24 * 3) }],
   },
 ];
@@ -1371,6 +1374,34 @@ export const skillVersion: SkillVersion = {
     "SKILL.md": "---\nname: onboarding-procedure\ndescription: The onboarding procedure.\n---\n\n# Onboarding\n\n1. Entra accounts ten days before the start date.\n2. Groups according to the access profile.\n",
     "profiles.md": "| role | groups |\n|---|---|\n| developer | devs, vpn |\n",
   },
+  risk: "medium",
+  review_status: "approved",
+  findings: [{ code: "licence_missing", severity: "warning", detail: "no licence found: the right to use it is unknown" }],
+};
+
+/** A repository at a commit, as the preview of a git import shows it (ADR 0050). */
+export const skillGitPreview: SkillGitPreview = {
+  repo: "https://github.com/anthropics/skills",
+  ref: "main",
+  sha: "0123456789abcdef0123456789abcdef01234567",
+  path: "skills",
+  allowed: true,
+  skills: [
+    { path: "skills/brand-guidelines", name: "brand-guidelines", description: "Apply the brand colours and type.", files: 2, bytes: 4200, licence: "Apache-2.0", risk: "medium", findings: [] },
+    {
+      path: "skills/pdf",
+      name: "pdf",
+      description: "Read, fill and merge PDF files.",
+      files: 12,
+      bytes: 61000,
+      licence: "LicenseRef-proprietary",
+      risk: "high",
+      findings: [
+        { code: "script", severity: "warning", detail: "an executable script ships with the skill", file: "scripts/fill_form.py" },
+        { code: "licence_not_open", severity: "warning", detail: "`LicenseRef-proprietary` is not an open-source licence" },
+      ],
+    },
+  ],
 };
 
 /** Des types tirés du registre (ADR 0034) : jira est disponible, ses secrets se nomment. */
@@ -1651,6 +1682,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { agent: chemin?.split("/").at(-1), version: corps.version, overrides: corps.overrides ?? {}, effective: {} } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import$/.test(chemin ?? "")) return skills[0] as T;
+  if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git\/preview$/.test(chemin ?? "")) return skillGitPreview as T;
+  if (method === "POST" && /^\/orgs\/[^/]+\/skills\/import-git$/.test(chemin ?? "")) return [skills[0]] as T;
+  if (method === "POST" && /^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+\/approve$/.test(chemin ?? "")) return skillVersion as T;
   const decision = /^\/projects\/[^/]+\/actions\/([^/]+)\/decision$/.exec(chemin ?? "");
   if (method === "POST" && decision) {
     const corps = JSON.parse(String(init.body ?? "{}")) as { decision: string; reason?: string };

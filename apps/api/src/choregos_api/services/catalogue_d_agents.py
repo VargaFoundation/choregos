@@ -25,6 +25,7 @@ from ..rbac import SYSTEM
 from ..schemas import AgentSpec
 from .agents import empreinte, erreurs_d_une_version
 from .installation import installer_skills_et_agents
+from .skill_gate import platform_columns
 from .skills import empreinte as empreinte_de_skill
 
 #: Préfixe de l'auteur d'une version venue du catalogue : `catalogue:<slug>@<version>`.
@@ -156,6 +157,7 @@ async def _mettre_a_jour_la_skill(session: AsyncSession, org_id: Any, nom: str, 
             files=dict(fichiers),
             digest=empreinte_de_skill(fichiers),
             created_by=qui,
+            **platform_columns(fichiers),
         )
     )
     await session.flush()

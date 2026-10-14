@@ -64,6 +64,7 @@ from ..services.agent_lifecycle import (
     unused,
 )
 from ..services.agents import depense_du_jour, effective, elargissements, empreinte, erreurs_d_une_version
+from ..services.skill_review import unusable_skills
 
 router = APIRouter(tags=["agents"])
 
@@ -128,6 +129,13 @@ async def _dto(session: AsyncSession, agent: Agent, *, avec_versions: bool = Fal
     )
 
 
+async def _skills_usable(session: AsyncSession, organisation: Organization, spec: AgentSpec) -> None:
+    """A version may not carry a skill version that waits for its second reviewer (S32-06)."""
+    problemes = await unusable_skills(session, organisation.id, list(spec.skills))
+    if problemes:
+        raise unprocessable("; ".join(problemes))
+
+
 def _lire(principal: Me, org: str) -> None:
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"reading the agents of {org} requires being a member of it")
@@ -158,6 +166,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     _gerer(principal, org)
     erreurs_d_une_version(body.spec)
     organisation = await _organisation(session, org)
+    await _skills_usable(session, organisation, body.spec)
     existant = (
         await session.execute(
             select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
@@ -215,6 +224,7 @@ async def publish_version(
     _gerer(principal, org)
     erreurs_d_une_version(body)
     organisation = await _organisation(session, org)
+    await _skills_usable(session, organisation, body)
     agent = await _agent(session, organisation, slug)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")

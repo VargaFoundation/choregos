@@ -8,6 +8,7 @@ la skill, une `description`, aucune permission déclarée, aucune sortie du doss
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Request, status
@@ -23,6 +24,7 @@ from ..schemas import (
     SkillCandidate,
     SkillDto,
     SkillFiles,
+    SkillFinding,
     SkillGitImport,
     SkillGitPreview,
     SkillGitPreviewRequest,
@@ -31,6 +33,8 @@ from ..schemas import (
     SkillUpdate,
     SkillVersionDto,
 )
+from ..services.skill_gate import assess
+from ..services.skill_gate import columns as gate_columns
 from ..services.skill_sources import (
     DEFAULT_SOURCES,
     SHA,
@@ -48,13 +52,13 @@ from ..services.skill_sources import (
     parse_repo_url,
     read_tarball,
 )
-from ..services.skills import SkillRefusee, empreinte, lire_le_zip, valider
+from ..services.skills import SkillRefusee, empreinte, read_zip, valider
 
 router = APIRouter(tags=["agents"])
 
 Slug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
 #: Une archive plus grosse que ça n'a pas besoin d'être ouverte pour être refusée.
-ARCHIVE_MAX = 2 * 1024 * 1024
+ARCHIVE_MAX = 8 * 1024 * 1024
 
 
 async def _organisation(session: AsyncSession, slug: str) -> Organization:
@@ -107,6 +111,11 @@ def _version_dto(version: SkillVersion, *, files: bool = False) -> SkillVersionD
         created_at=version.created_at,
         files=version.files if files else None,
         source=SkillSourceDto.model_validate(version.source) if version.source else None,
+        risk=version.risk,
+        review_status=version.review_status or "approved",
+        findings=[SkillFinding.model_validate(f) for f in version.findings or []],
+        reviewed_by=version.reviewed_by,
+        reviewed_at=version.reviewed_at,
     )
 
 
@@ -129,6 +138,8 @@ async def _dto(
         latest_version=versions[0].version if versions else 0,
         used_by=await _utilisee_par(session, organisation, skill.slug),
         versions=[_version_dto(v) for v in versions] if avec_versions else None,
+        risk=versions[0].risk if versions else None,
+        review_status=(versions[0].review_status if versions else None) or "approved",
     )
 
 
@@ -139,8 +150,12 @@ async def _publier(
     fichiers: dict[str, str],
     slug: str | None,
     source: dict[str, object] | None = None,
+    *,
+    executables: list[str] | None = None,
+    repo_licences: dict[str, str] | None = None,
 ) -> tuple[Skill, SkillVersion]:
-    """Crée la skill (version 1) ou publie sa version suivante — jamais de réécriture."""
+    """Creates the skill (version 1) or publishes its next version, never a rewrite. The version
+    goes through the gate (S32-06): its risk, what the scan finds; `high` waits for a second reviewer."""
     try:
         tete = valider(fichiers, slug)
     except SkillRefusee as refus:
@@ -164,6 +179,7 @@ async def _publier(
         digest=empreinte(fichiers),
         created_by=principal.email,
         source=source,
+        **gate_columns(assess(fichiers, executables=executables or [], repo_licences=repo_licences)),
     )
     session.add(version)
     await session.flush()
@@ -175,6 +191,8 @@ async def _publier(
         target_type="skill",
         target_id=skill.id,
         version=version.version,
+        risk=version.risk,
+        review_status=version.review_status,
         **({"source": source} if source else {}),
     )
     return skill, version
@@ -226,10 +244,10 @@ async def import_skill(org: str, request: Request, session: Db, principal: Me) -
     if len(contenu) > ARCHIVE_MAX:
         raise unprocessable(f"archive larger than {ARCHIVE_MAX // (1024 * 1024)} MiB")
     try:
-        fichiers = lire_le_zip(contenu)
+        fichiers, executables = read_zip(contenu)
     except SkillRefusee as refus:
         raise unprocessable(str(refus)) from refus
-    skill, _ = await _publier(session, principal, organisation, fichiers, None)
+    skill, _ = await _publier(session, principal, organisation, fichiers, None, executables=executables)
     return await _dto(session, organisation, skill, avec_versions=True)
 
 
@@ -407,6 +425,10 @@ async def preview_skills_from_git(
     existantes = await _latest_versions(
         session, organisation, [skill.name for skill in snapshot.skills if skill.name]
     )
+    portes = {
+        s.path: assess(s.files, executables=s.executables, repo_licences=snapshot.licences)
+        for s in snapshot.skills
+    }
     return SkillGitPreview(
         repo=source.url,
         ref=body.ref,
@@ -423,6 +445,10 @@ async def preview_skills_from_git(
                 licence=_licence(skill, snapshot),
                 problem=skill.problem,
                 existing_version=existantes.get(skill.name or ""),
+                risk=None if skill.problem else portes[skill.path].risk,
+                findings=[]
+                if skill.problem
+                else [SkillFinding.model_validate(f.as_dict()) for f in portes[skill.path].findings],
             )
             for skill in snapshot.skills
         ],
@@ -471,7 +497,16 @@ async def import_skills_from_git(
             "path": skill.path,
             "licence": _licence(skill, snapshot),
         }
-        publiee, _ = await _publier(session, principal, organisation, skill.files, None, provenance)
+        publiee, _ = await _publier(
+            session,
+            principal,
+            organisation,
+            skill.files,
+            None,
+            provenance,
+            executables=skill.executables,
+            repo_licences=snapshot.licences,
+        )
         publiees.append(publiee)
     return [await _dto(session, organisation, skill, avec_versions=True) for skill in publiees]
 
@@ -529,3 +564,50 @@ async def check_skill_update(
         reponse.removed = sorted(set(avant) - set(apres))
         reponse.modified = sorted(c for c in set(avant) & set(apres) if avant[c] != apres[c])
     return reponse
+
+
+# ───────────────────────────── the second reviewer (S32-06, ADR 0050) ─────────────────────────────
+
+
+@router.post(
+    "/orgs/{org}/skills/{slug}/versions/{version}/approve",
+    response_model=SkillVersionDto,
+    operation_id="approveSkillVersion",
+)
+async def approve_skill_version(
+    org: str, slug: Slug, version: int, session: Db, principal: Me
+) -> SkillVersionDto:
+    """A high-risk version becomes usable: an administrator who is NOT its importer read it."""
+    if not principal.can(Permission.AGENT_MANAGE, org):
+        raise forbidden("approving a skill version needs the org_admin role")
+    organisation = await _organisation(session, org)
+    skill = await _skill(session, organisation, slug)
+    ligne = (
+        await session.execute(
+            select(SkillVersion).where(SkillVersion.skill_id == skill.id, SkillVersion.version == version)
+        )
+    ).scalar_one_or_none()
+    if ligne is None:
+        raise not_found("Skill version", f"{slug}@{version}")
+    if ligne.review_status != "pending_review":
+        raise conflict(f"`{slug}` v{version} is not waiting for a review")
+    if ligne.created_by and ligne.created_by.lower() == principal.email.lower():
+        raise forbidden(
+            f"`{slug}` v{version} was imported by you: a second person approves a high-risk version"
+        )
+    ligne.review_status = "approved"
+    ligne.reviewed_by = principal.email
+    ligne.reviewed_at = datetime.now(UTC)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "skill.approve",
+        org_id=organisation.id,
+        target_type="skill",
+        target_id=skill.id,
+        version=version,
+        risk=ligne.risk,
+        imported_by=ligne.created_by,
+    )
+    return _version_dto(ligne, files=True)

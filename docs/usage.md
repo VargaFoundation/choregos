@@ -472,8 +472,20 @@ curl -X POST $API/orgs/acme/skills/import -H 'Content-Type: application/zip' --d
 
 A skill **declares no permission**: an `allowed-tools` field is refused, because what an agent may
 call is decided by its version and its project, never by a file it reads. An archive that leaves
-its folder (`../`), holds a symbolic link, more than 64 files or 512 KiB, or a file that is not
+its folder (`../`), holds a symbolic link, more than 256 files or 5 MiB, or a file that is not
 UTF-8 text is refused. Versions never change; a skill says which agents carry it.
+
+Every version passes a **supply-chain gate** ([ADR 0050](adr/0050-skill-supply-chain-gate.md)): a
+risk tier — `low` (a `SKILL.md` alone), `medium` (references, assets), `high` (a script, an
+executable file, an outbound URL, a credential-like string, an MCP reference) —, a static scan
+(prompt-injection phrases, hidden or bidirectional Unicode, encoded blobs, `curl … | sh`) whose
+findings name their file and line, and a licence check (a missing or non-open licence is flagged,
+not refused). A **high-risk version waits for a second person**: until an administrator who did not
+import it approves it, no agent may pin it and no run receives it:
+
+```bash
+curl -X POST $API/orgs/acme/skills/fill-forms/versions/1/approve   # 403 for its importer
+```
 
 A skill can also come from a **git repository, at a pinned commit**
 ([ADR 0050](adr/0050-skill-supply-chain-gate.md)). The preview resolves a branch or a tag to its
@@ -529,7 +541,7 @@ or read-only ones) and attaches the token, and its calls then carry the agent. A
 its last 30 days (runs, success rate, cost, today against its daily budget), its versions, a new
 version started from the latest — where skills are attached or removed, each either at its latest
 version (read at every run) or pinned to one — and, for an external agent, the clients acting as it. **skills**
-is the library: import a zip, read each version's files, see which agents carry it. A project's
+is the library: import a zip or a repository (preview, pick, import at the resolved commit), each version's risk badge, scan findings and files, the approve button for a version waiting for review, an update check for a skill from git, and which agents carry it. A project's
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).
 

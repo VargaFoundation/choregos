@@ -82,8 +82,8 @@ async def test_une_archive_avec_son_dossier_racine_s_importe(client: AsyncClient
             _zip({"SKILL.md": SKILL_MD.replace("name: procedure-onboarding\n", "")}), "name", id="sans-nom"
         ),
         pytest.param(_zip({"lisez-moi.md": "x"}), "SKILL.md is missing", id="sans-skill-md"),
-        pytest.param(_zip({**FICHIERS, **{f"f{i}.md": "x" for i in range(64)}}), "64", id="trop-de-fichiers"),
-        pytest.param(_zip({**FICHIERS, "gros.md": "x" * (600 * 1024)}), "KiB", id="trop-gros"),
+        pytest.param(_zip({**FICHIERS, **{f"{i}": "x" for i in range(256)}}), "256", id="trop-de-fichiers"),
+        pytest.param(_zip({**FICHIERS, "gros.md": "x" * (5 * 1024 * 1024 + 1)}), "KiB", id="trop-gros"),
         pytest.param(b"pas une archive", "zip", id="pas-un-zip"),
     ],
 )
