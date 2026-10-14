@@ -22,6 +22,8 @@ import type {
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentMetrics,
+  AgentTrial,
+  AgentTrialCreate,
   AgentMetricsSummary,
   ImplicitAgent,
   AgentPatch,
@@ -308,6 +310,9 @@ export const api = {
   agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
   /** A project's implicit agents, computed by the API (S30-04). */
   implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
+  /** Try a draft version once, under a capped budget (S32-03). */
+  startAgentTrial: (org: string, body: AgentTrialCreate) =>
+    request<AgentTrial>(`/orgs/${org}/agent-trials`, { method: "POST", body: JSON.stringify(body) }),
   /** An agent's latest runs (S30-05). */
   agentRuns: (org: string, slug: string, limit = 50) => request<Run[]>(`/orgs/${org}/agents/${slug}/runs?limit=${limit}`),
   agentCredentials: (org: string, slug: string) =>

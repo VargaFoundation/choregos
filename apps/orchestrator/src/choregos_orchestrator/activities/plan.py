@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -30,3 +31,7 @@ class StagePlan:
     output_types: dict[str, str] | None = None
     #: Un agent du registre (ADR 0033) : `slug` ou `slug@version`.
     agent: str | None = None
+    #: A trial (S32-03): the draft version to run, unpublished — it stands in for a registry agent —
+    #: and the budget cap of the trial, which only tightens the run's.
+    trial_spec: dict[str, Any] | None = None
+    trial_budget_usd: float | None = None

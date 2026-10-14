@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import type { OrgConnector, Skill } from "@/lib/types";
 
 /** The agent builder (S32-01): every field of a version is editable, with what it costs and allows. */
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -14,6 +15,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       createAgent: vi.fn().mockResolvedValue({ slug: "triage", display_name: "Triage", latest_version: 1 }),
       publishAgentVersion: vi.fn(),
+      projects: vi.fn().mockResolvedValue({ items: [{ slug: "billing-api", name: "Billing API" }], meta: { has_more: false } }),
       platformModels: vi.fn().mockResolvedValue([
         { model_name: "platform/cheap", litellm_model: "x", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004 },
       ]),
@@ -120,6 +122,7 @@ describe("the builder", () => {
         budget: { run_usd: 0.5, daily_usd: 4 },
         skills: [{ slug: "onboarding-procedure", version: 2 }],
         mcp_servers: [{ connector: "supplier", tools: ["track_*"] }],
+        evals: [],
       },
     });
     await waitFor(() => expect(done).toHaveBeenCalledWith("Triage registered as v1"));

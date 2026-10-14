@@ -341,6 +341,44 @@ test("an agent is created from the builder alone, every field of its version set
   await expect(version).toContainText("onboarding-procedure");
 });
 
+test("an agent made from the form runs on a sample under a capped budget, and a failing eval blocks its next version (S32-03)", async ({ page }) => {
+  await page.goto("/agents");
+  await page.getByRole("button", { name: "New agent" }).click();
+  const dialogue = page.getByRole("dialog", { name: "New agent" });
+  const builder = dialogue.getByTestId("agent-builder");
+  await builder.getByLabel("Slug").fill("escalation");
+  await builder.getByLabel("Name").fill("Escalation");
+  await builder.getByLabel("Instructions").fill("Escalate {{ ticket.title }} to the on-call engineer.");
+  await builder.getByLabel("Budget per run (USD)").fill("1");
+  // Its eval suite: the instructions rendered on a VIP sample must escalate it.
+  await builder.getByRole("button", { name: "Add a case" }).click();
+  await builder.getByLabel("Case name").fill("vip");
+  await builder.getByLabel("Case sample title").fill("VIP outage");
+  await builder.getByLabel("Must contain (one per line)").fill("Escalate VIP outage");
+  // Try it before creating: a project, a sample, a budget of 0.50 $ at most.
+  const banc = dialogue.getByTestId("banc-d-essai");
+  await banc.getByLabel("Sample title").fill("Checkout down for every customer");
+  await banc.getByLabel("Trial budget (USD, 0.50 at most)").fill("2");
+  await banc.getByRole("button", { name: "Try it" }).click();
+  const resultat = banc.getByTestId("resultat-d-essai");
+  await expect(resultat).toContainText("capped at US$0.50");
+  await expect(resultat).toContainText("succeeded");
+  await expect(resultat).toContainText("Sorted: urgent");
+  await expect(resultat.getByRole("list", { name: "Eval results" })).toContainText("Passed");
+  await builder.getByRole("button", { name: "Create the agent" }).click();
+  await expect(page.getByRole("status").first()).toContainText("Escalation registered as v1");
+
+  // Its next version breaks the case: the publication is refused, the case named.
+  await page.getByRole("link", { name: "Escalation" }).click();
+  await page.getByRole("link", { name: "Definition" }).click();
+  const suivante = page.getByTestId("agent-builder");
+  await suivante.getByLabel("Instructions").fill("Handle {{ ticket.title }} calmly.");
+  await suivante.getByRole("button", { name: "Publish v2" }).click();
+  await expect(suivante.getByTestId("evals-en-echec")).toContainText("vip: missing “Escalate VIP outage”");
+  await page.getByRole("link", { name: "Versions" }).click();
+  await expect(page.getByRole("table", { name: "Versions" }).getByRole("row")).toHaveCount(2);
+});
+
 test("an agent's page is in tabs: overview, definition, versions, runs, access (S30-05)", async ({ page }) => {
   await page.goto("/agents/onboarding-coordinator");
   const onglets = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });

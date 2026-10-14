@@ -16,7 +16,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
 import { Button, ErrorNote, Input, Select, Textarea } from "@/components/ui";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
+import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usd } from "@/lib/format";
 import type { Agent, AgentSpec, GatewayModel, OrgConnector, Skill } from "@/lib/types";
 
@@ -66,6 +67,7 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     budget: { ...spec.budget, run_usd: spec.budget?.run_usd ?? null, daily_usd: spec.budget?.daily_usd ?? null },
     skills: spec.skills ?? [],
     mcp_servers: (spec.mcp_servers ?? []).filter((s) => s.connector),
+    evals: (spec.evals ?? []).filter((c) => c.name.trim()),
   };
 }
 
@@ -95,8 +97,10 @@ export function AgentBuilder({
     budget: { ...start.budget },
     skills: [...(start.skills ?? [])],
     mcp_servers: (start.mcp_servers ?? []).map((s) => ({ ...s, tools: [...(s.tools ?? [])] })),
+    evals: (start.evals ?? []).map((c) => ({ ...c })),
   }));
   const [error, setError] = useState<string | null>(null);
+  const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const models = useQuery({ queryKey: ["platform-models"], queryFn: () => api.platformModels(), retry: false });
@@ -110,6 +114,7 @@ export function AgentBuilder({
 
   async function submit() {
     setError(null);
+    setFailing([]);
     setBusy(true);
     try {
       if (mode.kind === "create") {
@@ -128,6 +133,13 @@ export function AgentBuilder({
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Refused");
+      // A failing eval names its case (S32-03): the publication is refused, the case said.
+      const errors = cause instanceof ApiError ? ((cause.problem.errors ?? []) as { loc?: unknown[]; msg?: string }[]) : [];
+      setFailing(
+        errors
+          .filter((e) => Array.isArray(e.loc) && e.loc[0] === "evals")
+          .map((e) => `${String(e.loc![1])}: ${e.msg ?? ""}`),
+      );
     } finally {
       setBusy(false);
     }
@@ -285,14 +297,27 @@ export function AgentBuilder({
 
         <McpSection connectors={mcpConnectors} spec={spec} set={set} />
 
+        <Section title="Eval suite">
+          <EvalSuiteEditor cases={spec.evals ?? []} onChange={(evals) => set({ evals })} />
+        </Section>
+
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" tone="primary" disabled={busy || (creating && !slug)}>
             {creating ? "Create the agent" : `Publish v${mode.agent.latest_version + 1}`}
           </Button>
         </div>
         {error && <ErrorNote>{error}</ErrorNote>}
-        {extra?.(cleanSpec(spec))}
+        {failing.length > 0 && (
+          <ul className="space-y-1 text-sm text-failed-ink" aria-label="Failing eval cases" data-testid="evals-en-echec">
+            {failing.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        )}
       </form>
+      <div className="lg:col-start-1">
+        {extra ? extra(cleanSpec(spec)) : <TrialBench spec={cleanSpec(spec)} agent={mode.kind === "version" ? mode.agent.slug : undefined} />}
+      </div>
       <BuilderSummary spec={spec} models={models.data ?? []} connectors={mcpConnectors} library={library.data ?? []} />
     </div>
   );

@@ -13,6 +13,10 @@ import type {
   GatewayModel,
   AgentCatalogueEntry,
   AgentCreate,
+  AgentEvalCase,
+  AgentEvalResult,
+  AgentSpec,
+  AgentTrialCreate,
   ConnectorType,
   OrgConnector,
   ProjectOperation,
@@ -1285,6 +1289,41 @@ export const agentMetrics: AgentMetrics = {
   daily_budget_usd: 5,
 };
 
+/** The eval suite as the API plays it (S32-03), on a naive rendering: enough for the demo. */
+function evalsOf(spec: AgentSpec, cases: AgentEvalCase[]): AgentEvalResult[] {
+  return cases.map((c) => {
+    const text = (spec.instructions ?? "")
+      .replace(/\{\{\s*ticket\.title\s*\}\}/g, c.input?.title ?? "")
+      .replace(/\{\{\s*ticket\.body\s*\}\}/g, c.input?.body ?? "");
+    const missing = (c.must_contain ?? []).filter((m) => !text.includes(m));
+    const forbidden = (c.must_not_contain ?? []).filter((f) => text.includes(f));
+    return { name: c.name, passed: !missing.length && !forbidden.length, missing, forbidden, error: null };
+  });
+}
+
+/** Refuse (409) a version that fails its suite: the published version's cases and its own. */
+function evalGate(spec: AgentSpec, published?: AgentSpec): void {
+  const failing = evalsOf(spec, [...(published?.evals ?? []), ...(spec.evals ?? [])]).filter((r) => !r.passed);
+  if (failing.length) {
+    throw new ApiError(409, {
+      title: "Eval suite failed",
+      detail: `${failing.length} case(s) of the agent's eval suite fail: the version is not published`,
+      errors: failing.map((r) => ({ loc: ["evals", r.name], msg: (r.missing ?? []).map((m) => `missing “${m}”`).join("; ") })),
+    });
+  }
+}
+
+/** The trial run of the demo: it succeeds, for a few cents (S32-03). */
+export const trialRun: Run = {
+  ...runs[0]!,
+  id: "trial-run-1",
+  status: "succeeded",
+  stage_role: "implement",
+  transition_id: "trial",
+  cost_usd: 0.04,
+  result: { status: "done", summary: "Sorted: urgent — the checkout is down for every customer." } as Run["result"],
+};
+
 /** The gateway's models and the agent backends, for the builder's pickers (S32-01). */
 export const platformModels: GatewayModel[] = [
   { model_name: "platform/strong", litellm_model: "anthropic/claude-opus-5", provider: "anthropic", input_cost_per_1k: 0.015, output_cost_per_1k: 0.075 },
@@ -1689,6 +1728,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const agentEcrit = /^\/orgs\/[^/]+\/agents\/([^/]+)(\/[a-z]+)?$/.exec(chemin ?? "");
   if (method === "POST" && /^\/orgs\/[^/]+\/agents$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentCreate;
+    evalGate(corps.spec ?? {});
     const cree = {
       slug: corps.slug,
       kind: corps.kind ?? "internal",
@@ -1702,6 +1742,19 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     // The agent joins the registry for the time of the page (S32-01): its page reads it back.
     if (!agents.some((a) => a.slug === cree.slug)) agents.push(cree);
     return structuredClone(cree) as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/agent-trials$/.test(chemin ?? "")) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as AgentTrialCreate;
+    const publiee = agents.find((a) => a.slug === corps.agent);
+    const budget = Math.min(0.5, corps.budget_usd ?? 0.25, corps.spec.budget?.run_usd ?? 0.5);
+    return {
+      run_id: trialRun.id,
+      work_item_id: "trial-wi-1",
+      project: corps.project,
+      budget_usd: budget,
+      status: "queued",
+      evals: evalsOf(corps.spec, [...(publiee?.versions?.[0]?.spec.evals ?? []), ...(corps.spec.evals ?? [])]),
+    } as T;
   }
   const duCatalogue = /^\/orgs\/[^/]+\/agent-catalogue\/([^/]+)\/(install|connect)$/.exec(chemin ?? "");
   if (method === "POST" && duCatalogue) {
@@ -1721,7 +1774,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
     // La version publiée s'ajoute à l'agent, le temps de la page : sa fiche la relit (S23-13).
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
-    const version = { version: agent.latest_version + 1, spec: JSON.parse(String(init.body ?? "{}")), checksum: "sha256:suivante", created_by: me.email };
+    const spec = JSON.parse(String(init.body ?? "{}")) as AgentSpec;
+    evalGate(spec, agent.versions?.find((v) => v.version === agent.latest_version)?.spec);
+    const version = { version: agent.latest_version + 1, spec, checksum: "sha256:suivante", created_by: me.email };
     agent.latest_version = version.version;
     agent.versions = [version, ...(agent.versions ?? [])];
     return version as T;
@@ -1882,6 +1937,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/runs\/[^/]+\/logs$/, runLogsLive],
     [/^\/runs\/[^/]+\/access$/, runAccess],
     [/^\/runs\/[^/]+\/diff$/, runDiff],
+    [/^\/runs\/trial-run-1$/, trialRun],
     [/^\/runs\/[^/]+$/, runs[2]],
     [/^\/audit$/, { items: [], meta: { has_more: false } }],
   ];

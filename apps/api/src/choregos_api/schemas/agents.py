@@ -44,6 +44,30 @@ class AgentKnowledgeRef(Dto):
     slug: str = Field(pattern=SLUG)
 
 
+class AgentSampleInput(Dto):
+    """A sample work item an agent is tried or evaluated on (S32-03)."""
+
+    title: str = Field(default="", max_length=500)
+    body: str = Field(default="", max_length=20_000)
+
+
+class AgentEvalCase(Dto):
+    """A deterministic case of an agent's eval suite (S32-03, ADR 0020 level 1)."""
+
+    name: str = Field(min_length=1, max_length=120)
+    input: AgentSampleInput = Field(default_factory=AgentSampleInput)
+    must_contain: list[str] = Field(default_factory=list)
+    must_not_contain: list[str] = Field(default_factory=list)
+
+
+class AgentEvalResult(Dto):
+    name: str
+    passed: bool
+    missing: list[str] = Field(default_factory=list)
+    forbidden: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
 class AgentSpec(Dto):
     """Ce qu'une version d'agent EST. Elle ne se modifie jamais : un changement publie la suivante."""
 
@@ -56,6 +80,28 @@ class AgentSpec(Dto):
     mcp_servers: list[AgentMcpServer] = Field(default_factory=list)
     #: The knowledge bases the agent reads (ADR 0051), each served to the run's project or the run fails.
     knowledge: list[AgentKnowledgeRef] = Field(default_factory=list)
+    #: The agent's eval suite (S32-03): it gates the publication of the next version.
+    evals: list[AgentEvalCase] = Field(default_factory=list)
+
+
+class AgentTrialCreate(Dto):
+    """Try a draft version on a sample input, in one project, under a capped budget (S32-03)."""
+
+    project: str = Field(min_length=1)
+    spec: AgentSpec
+    input: AgentSampleInput
+    budget_usd: float | None = Field(default=None, gt=0)
+    #: The agent the draft would become a version of: its published suite runs too.
+    agent: str | None = None
+
+
+class AgentTrial(Dto):
+    run_id: str
+    work_item_id: str
+    project: str
+    budget_usd: float
+    status: str
+    evals: list[AgentEvalResult] = Field(default_factory=list)
 
 
 class AgentCreate(Dto):
