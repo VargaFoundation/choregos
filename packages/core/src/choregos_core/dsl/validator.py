@@ -79,6 +79,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
     _check_tasks(wf, report, source)
+    _check_spawns(wf, report, source)
     _check_effets(wf, report, source)
     _check_output_types(wf, report, source)
     _check_warnings(wf, report, source)
@@ -203,6 +204,54 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 "action.date_field_not_date",
                 f"`fields.{nom}` is not declared as a date (`format: date` or `date-time`)",
                 [*chemin, "action", "not_before"],
+                source,
+            )
+
+
+def _check_spawns(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A fan-out (S38-12, ADR 0057) is the platform's: a `system` transition that does nothing else.
+    Its list is a declared field when it walks `fields.`, and a join that can fail says where the
+    work item goes."""
+    champs = dict((wf.metadata.inputs or {}).get("properties") or {})
+    for index, t in enumerate(wf.transitions):
+        if t.spawn is None:
+            continue
+        chemin: list[str | int] = ["transitions", index, "spawn"]
+        if not isinstance(wf.actors.get(t.by) if t.by else None, SystemActor):
+            report.error(
+                "spawn.not_system",
+                "only a platform transition (`by:` a `system` actor) opens child work items",
+                chemin,
+                source,
+            )
+        if t.action is not None or t.does is not None:
+            report.error(
+                "spawn.not_alone",
+                "a transition that opens children does nothing else: no `action:`, no `does:`",
+                chemin,
+                source,
+            )
+        root, _, rest = t.spawn.for_each.partition(".")
+        nom = rest.split(".", 1)[0]
+        if root == "fields" and champs and nom not in champs:
+            report.error(
+                "spawn.field_unknown",
+                f"`for_each` reads `fields.{nom}`, which `metadata.inputs` does not declare",
+                [*chemin, "for_each"],
+                source,
+            )
+        if t.spawn.min_succeeded and not t.spawn.succeeded:
+            report.error(
+                "spawn.succeeded_missing",
+                "`min_succeeded` counts the children ending in a `succeeded` state: list those states",
+                [*chemin, "min_succeeded"],
+                source,
+            )
+        if t.on_fail is None:  # a list refused, a child workflow absent, too few successes
+            report.error(
+                "spawn.on_fail_missing",
+                "a fan-out can fail: `on_fail: {to, max_attempts, escalate_to}` says where the item goes",
+                chemin,
                 source,
             )
 

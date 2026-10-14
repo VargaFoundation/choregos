@@ -221,6 +221,30 @@ class TaskSpec(Strict):
     attest: str | None = Field(default=None, max_length=500)
 
 
+#: The list a fan-out walks: a field of the work item, or one of its outputs, then keys into it.
+FOR_EACH = r"^(fields|outputs)(\.[A-Za-z0-9_-]{1,64}){1,8}$"
+
+
+class SpawnSpec(Strict):
+    """A fan-out and its join (S38-12, ADR 0057): one CHILD work item per element of a list the
+    parent holds, in the workflow `workflow` names; the transition passes once every child is
+    settled — closed, in a terminal state or stopped.
+
+    `title` and `fields` are rendered in sandboxed Jinja with `item` (the element), `rank` (from
+    1), the parent's `fields` and `outputs`, and `parent` (`key`, `title`); a string that is a
+    single `{{ … }}` keeps its type. The join writes `documents.children` on the parent. A child
+    ending in a state listed in `succeeded` counts as a success; fewer than `min_succeeded` fails
+    the transition, which then follows `on_fail`."""
+
+    workflow: Slug
+    for_each: str = Field(pattern=FOR_EACH)
+    title: str = Field(min_length=1, max_length=300)
+    fields: dict[str, Any] = Field(default_factory=dict)
+    max_children: int = Field(default=20, ge=1, le=100)
+    succeeded: list[Identifier] = Field(default_factory=list, max_length=20)
+    min_succeeded: int = Field(default=0, ge=0, le=100)
+
+
 class Transition(Strict):
     id: Identifier | None = None
     from_: str = Field(alias="from")
@@ -247,6 +271,9 @@ class Transition(Strict):
     #: la fusionner. Avant, c'était le préfixe du nom de l'état visé (`pr_`, `merged`) : un renommage
     #: depuis la console changeait le comportement sans le dire (#175).
     does: Literal["open_pr", "merge_pr"] | None = None
+    #: A system transition can open one child work item per element of a list and wait for them
+    #: all (S38-12, ADR 0057).
+    spawn: SpawnSpec | None = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

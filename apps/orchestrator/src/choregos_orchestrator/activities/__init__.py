@@ -9,6 +9,7 @@ from __future__ import annotations
 from . import (
     actions,
     bilan,
+    children,
     evals,
     execution,
     findings,
@@ -59,6 +60,8 @@ ALL_ACTIVITIES = [
     tracker.close_out,
     tracker.reconcile_tracker,
     schedules.fire_schedules,
+    children.spawn_children,
+    children.children_state,
     gates.evaluate_gates,
     gates.check_scope_violations,
     scm.open_pull_request,
