@@ -536,6 +536,42 @@
           }
         }
       }
+    },
+    "job": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false,
+      "description": "Set for a job step (ADR 0056): the runner runs `command` and starts no agent; `agent`, `model` and `playbook` are placeholders.",
+      "properties": {
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "image": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tools": {
+          "type": "object",
+          "description": "The connector operations the job may call through the internal API, by connector: the job's only access to the outside.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   }
 }

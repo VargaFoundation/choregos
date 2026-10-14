@@ -37,6 +37,8 @@ class ActorType(StrEnum):
     AGENT = "agent"
     HUMAN = "human"
     SYSTEM = "system"
+    #: A deterministic step: a command run in the runner's sandbox, no model (ADR 0056).
+    JOB = "job"
 
 
 class StateKind(StrEnum):

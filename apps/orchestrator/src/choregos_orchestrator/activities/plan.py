@@ -35,3 +35,5 @@ class StagePlan:
     #: and the budget cap of the trial, which only tightens the run's.
     trial_spec: dict[str, Any] | None = None
     trial_budget_usd: float | None = None
+    #: A job step (ADR 0056): `{"command": [...], "image": name | None}`; no model, no key.
+    job: dict[str, Any] | None = None

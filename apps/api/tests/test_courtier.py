@@ -271,3 +271,40 @@ async def test_une_ecriture_permise_devient_une_action_et_n_atteint_pas_le_serve
     async with session_scope() as session:
         lignes = (await session.execute(select(Action.id).where(Action.origin == "tool"))).scalars().all()
     assert sorted(lignes) == sorted({action_id, autre["result"]["action"]})
+
+
+async def test_a_job_run_sees_the_operations_its_workflow_names(
+    client: AsyncClient, project: dict[str, Any], fournisseur: Any
+) -> None:
+    """A job (ADR 0056) has no registry agent: its selection is the `tools:` of its actor, copied by
+    the orchestrator into the run's StageInput. Without it a snapshot job could reach no connector."""
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import mint_run_token
+
+    _base, _ = await _preparer(client, project, ["suivi_*"])
+    async with session_scope() as session:
+        modele = await session.get(Run, "run-courtier-1")
+        assert modele is not None
+        session.add(
+            Run(
+                id="run-job-1",
+                work_item_id=modele.work_item_id,
+                project_id=project["id"],
+                stage_role="snapshot",
+                transition_id="t-snapshot",
+                status="running",
+                backend="job",
+                stage_input={"job": {"command": ["x"], "tools": {"fournisseur": ["stock"]}}},
+            )
+        )
+    jeton = mint_run_token("run-job-1", project_slug="billing-api", work_item_key="varga/x#1", ttl_minutes=30)
+    entetes = {"Authorization": f"Bearer {jeton}"}
+    job = "/api/v1/internal/runs/run-job-1/tools"
+    noms = [o["name"] for o in (await client.get(job, headers=entetes)).json()["tools"]]
+    assert "fournisseur__stock" in noms
+    assert "fournisseur__suivi_commande" not in noms, "only what the job's actor names"
+    appel = await client.post(f"{job}/fournisseur__stock", headers=entetes, json={})
+    assert appel.status_code == 200, appel.text
+    refuse = await client.post(f"{job}/fournisseur__suivi_commande", headers=entetes, json={"numero": "1"})
+    assert refuse.status_code == 404

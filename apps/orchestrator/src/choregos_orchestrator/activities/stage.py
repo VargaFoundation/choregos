@@ -56,6 +56,7 @@ from .execution import (
     start_run,
 )
 from .garde import garde_contre_l_injection
+from .job import prepare_job
 from .plan import StagePlan
 from .run_key import reserve_key
 
@@ -133,6 +134,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 "stage_input": without_secrets(existing.stage_input, keep_gateway_key=False),
                 "reused": True,
             }
+
+        if plan.job is not None:  # a deterministic step (ADR 0056): no model, no key, no prompt
+            return await prepare_job(session, bundle, item, plan, run_id, existing, settings, _admettre)
 
         engine = bundle.engine
         if (refused := await _stage_cap(session, bundle, item, run_id, plan)) is not None:

@@ -16,6 +16,7 @@ from choregos_contracts.workflow import (
     AGENT_WILDCARD,
     AgentActor,
     HumanActor,
+    JobActor,
     Transition,
     effet_de_la_transition,
 )
@@ -60,6 +61,8 @@ def _qui(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     acteur = wf.actors.get(nom)
     if isinstance(acteur, AgentActor):
         return "agent", nom, f"the agent `{nom}` (role {acteur.role}, model {acteur.model})"
+    if isinstance(acteur, JobActor):
+        return "job", nom, f"the job `{nom}` (role {acteur.role}): `{' '.join(acteur.command)}`, no model"
     if isinstance(acteur, HumanActor):
         delai = f", within {acteur.sla_hours} h" if acteur.sla_hours else ""
         return "human", nom, f"a person of group `{acteur.group}`{delai}"

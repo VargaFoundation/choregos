@@ -105,6 +105,9 @@
         },
         {
           "$ref": "#/$defs/systemActor"
+        },
+        {
+          "$ref": "#/$defs/jobActor"
         }
       ]
     },
@@ -190,6 +193,46 @@
       "properties": {
         "type": {
           "const": "system"
+        }
+      }
+    },
+    "jobActor": {
+      "type": "object",
+      "required": [
+        "type",
+        "role",
+        "command"
+      ],
+      "additionalProperties": false,
+      "description": "A deterministic step (ADR 0056): a command run by the runner in the step's sandbox — no model, no gateway key. The facts it writes in `.choregos/facts.json` are measured.",
+      "properties": {
+        "type": {
+          "const": "job"
+        },
+        "role": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$"
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "description": "argv, never a shell line."
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "description": "A job image's name, as the platform maps it (CHOREGOS_JOB_IMAGES); absent: the runner image."
+        },
+        "max_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 480
         }
       }
     },
@@ -300,7 +343,30 @@
         "output_types": {
           "type": "object",
           "description": "The type of each declared output (ADR 0049); an output not listed is inline markdown or JSON.",
-          "additionalProperties": { "type": "string", "enum": ["markdown", "json", "mermaid", "sarif", "text", "csv", "html", "pdf", "docx", "xlsx", "pptx", "png", "jpeg", "gif", "webp", "svg", "mp4", "webm", "file"] }
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "json",
+              "mermaid",
+              "sarif",
+              "text",
+              "csv",
+              "html",
+              "pdf",
+              "docx",
+              "xlsx",
+              "pptx",
+              "png",
+              "jpeg",
+              "gif",
+              "webp",
+              "svg",
+              "mp4",
+              "webm",
+              "file"
+            ]
+          }
         },
         "on_fail": {
           "$ref": "#/$defs/retry"
