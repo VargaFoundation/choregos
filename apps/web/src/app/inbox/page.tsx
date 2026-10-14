@@ -5,8 +5,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Statut, propose } from "@/components/actions/statut";
 import { DecisionBar } from "@/components/decision-bar";
-import { Badge, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
-import { libelleDeDemande, resumeDeDemande, useADecider } from "@/lib/a-decider";
+import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
+import { libelleDeDemande, phraseDeBudget, resumeDeDemande, useADecider } from "@/lib/a-decider";
+import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
@@ -110,6 +111,39 @@ export default function InboxPage() {
                   <span data-donnee>{action.project_slug}</span> · proposed by {propose(action.proposed_by)}
                   {action.created_at ? ` · ${relative(action.created_at)}` : ""}
                 </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{boite.budgets.length} open</span>}>
+        <p className="mb-3 max-w-3xl text-sm text-ink-muted">
+          A project&apos;s or an agent&apos;s daily budget that reached the policy&apos;s alert share (80 % by default)
+          or the whole budget. One item per budget, threshold and day.
+        </p>
+        {!boite.pret ? (
+          <p className="text-sm text-ink-muted">Reading…</p>
+        ) : boite.budgets.length === 0 ? (
+          <Empty title="No budget crossed">Nothing has reached its alert threshold today.</Empty>
+        ) : (
+          <ul className="space-y-2" data-testid="budgets-franchis">
+            {boite.budgets.map((alerte) => (
+              <li key={alerte.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm">
+                <Badge tone={alerte.threshold >= 100 ? "danger" : "warn"}>{alerte.threshold} %</Badge>
+                <span>{phraseDeBudget(alerte)}</span>
+                <Link href={alerte.scope === "agent" ? `/agents/${alerte.subject}` : `/costs?project=${alerte.subject}`} className="text-xs">
+                  {alerte.scope === "agent" ? "The agent" : "Its spend"}
+                </Link>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    await api.acknowledgeBudgetAlert(org, alerte.id);
+                    await queryClient.invalidateQueries({ queryKey: ["budget-alerts", org] });
+                  }}
+                >
+                  Acknowledge
+                </Button>
               </li>
             ))}
           </ul>

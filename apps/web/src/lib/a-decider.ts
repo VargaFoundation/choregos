@@ -14,7 +14,7 @@
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { api } from "./api";
-import type { HumanRequest, WorkItemDto } from "./types";
+import type { BudgetAlert, HumanRequest, WorkItemDto } from "./types";
 
 export interface Attente {
   item: WorkItemDto;
@@ -81,15 +81,29 @@ export function useADecider(org: string) {
     queryFn: () => api.orgActions(org, "pending_approval"),
     staleTime: 30_000,
   });
+  // A budget that crossed a threshold waits for a person to have seen it (S29-04).
+  const budgets = useQuery({
+    queryKey: ["budget-alerts", org],
+    queryFn: () => api.budgetAlerts(org),
+    staleTime: 30_000,
+  });
   const lus = tickets.flatMap((lecture) => lecture.data?.items ?? []);
   const enAttente = ticketsEnAttente(lus);
   return {
     tickets: enAttente,
     actions: actions.data ?? [],
+    budgets: budgets.data ?? [],
     /** Les projets dont les tickets n'ont pas pu se lire : ils ne sont pas comptés, et on le dit. */
     projetsIllisibles: slugs.filter((_, index) => tickets[index]?.error),
-    erreur: projets.error ?? actions.error ?? null,
-    pret: !!projets.data && tickets.every((lecture) => !lecture.isPending) && !!actions.data,
-    total: enAttente.length + (actions.data?.length ?? 0),
+    erreur: projets.error ?? actions.error ?? budgets.error ?? null,
+    pret: !!projets.data && tickets.every((lecture) => !lecture.isPending) && !!actions.data && !!budgets.data,
+    total: enAttente.length + (actions.data?.length ?? 0) + (budgets.data?.length ?? 0),
   };
+}
+
+/** What a budget alert says, in a sentence: whose budget, how far, how much of how much. */
+export function phraseDeBudget(alerte: Pick<BudgetAlert, "scope" | "subject" | "threshold" | "spent_usd" | "budget_usd">): string {
+  const de = alerte.scope === "agent" ? `Agent ${alerte.subject}` : `Project ${alerte.subject}`;
+  const franchi = alerte.threshold >= 100 ? "has spent its whole daily budget" : `has spent ${alerte.threshold} % of its daily budget`;
+  return `${de} ${franchi}: $${alerte.spent_usd.toFixed(2)} of $${alerte.budget_usd.toFixed(2)} today.`;
 }

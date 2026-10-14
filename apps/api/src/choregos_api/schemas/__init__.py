@@ -100,6 +100,7 @@ from .livraison import (
     TrainStatusDto,
 )
 from .mesures import (
+    BudgetAlertDto,
     CostReport,
     CostRow,
     CostTotal,
@@ -219,6 +220,7 @@ __all__ = [
     "ArtifactRef",
     "AuditEntry",
     "AuditPage",
+    "BudgetAlertDto",
     "CiLogs",
     "ConformanceReport",
     "ConnectorCheck",

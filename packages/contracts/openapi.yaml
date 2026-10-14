@@ -1043,6 +1043,30 @@ paths:
         - { name: kind, in: query, schema: { type: string, enum: [model, tool] }, description: "only what models cost, or only what tools cost (S29-03)" }
       responses:
         "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
+  /orgs/{org}/budget-alerts:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [costs]
+      operationId: listBudgetAlerts
+      description: The budgets that crossed a threshold — a project's or an agent's daily budget at 80 % (the policy's `alert_at_ratio`) or 100 % — newest first. One alert per budget, day and threshold; the open ones are the inbox's.
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, acknowledged, all], default: open } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/BudgetAlert" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/budget-alerts/{alert_id}/acknowledge:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: alert_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [costs]
+      operationId: acknowledgeBudgetAlert
+      description: Someone has seen it; it leaves the inbox. `item:decide` (developer and above). Audited.
+      responses:
+        "200": { description: Acknowledged, content: { application/json: { schema: { $ref: "#/components/schemas/BudgetAlert" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /templates:
     get:
       tags: [templates]
@@ -3651,6 +3675,22 @@ components:
         id: { type: string }
         action: { type: string, enum: [accept, reject] }
         reason: { type: [string, "null"] }
+    BudgetAlert:
+      type: object
+      required: [id, scope, subject, period, period_key, threshold, spent_usd, budget_usd, status]
+      properties:
+        id: { type: string }
+        scope: { type: string, enum: [project, agent] }
+        subject: { type: string, description: the project's or the agent's slug }
+        period: { type: string, description: day }
+        period_key: { type: string, description: the day, YYYY-MM-DD }
+        threshold: { type: integer, description: "the share of the budget crossed, in percent" }
+        spent_usd: { type: number }
+        budget_usd: { type: number }
+        status: { type: string, enum: [open, acknowledged] }
+        created_at: { type: [string, "null"], format: date-time }
+        acknowledged_by: { type: [string, "null"] }
+        acknowledged_at: { type: [string, "null"], format: date-time }
     CostReport:
       type: object
       required: [group_by, rows, total]

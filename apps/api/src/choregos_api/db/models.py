@@ -692,6 +692,45 @@ class ArtifactRecord(Base, PkMixin, TimestampMixin):
     agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class BudgetAlert(Base, PkMixin, TimestampMixin):
+    """A budget crossed 80 % (or whatever the policy says) or 100 % (S29-04), shown in the inbox.
+
+    One row per budget, period and threshold: the unique key is what makes the alert idempotent — a
+    day's spend that stays above 80 % does not raise it again, and the day after is another period.
+    """
+
+    __tablename__ = "budget_alerts"
+    __table_args__ = (
+        UniqueConstraint(
+            "org_id",
+            "scope",
+            "subject",
+            "period",
+            "period_key",
+            "threshold",
+            name="uq_budget_alerts_threshold",
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    #: `project` (its daily budget) or `agent` (its daily budget)
+    scope: Mapped[str] = mapped_column(String(16))
+    #: the project's or the agent's slug
+    subject: Mapped[str] = mapped_column(String(64))
+    #: `day`; the policy has no monthly budget yet
+    period: Mapped[str] = mapped_column(String(8), default="day")
+    #: `2026-10-13` for a day
+    period_key: Mapped[str] = mapped_column(String(16))
+    #: the percentage of the budget crossed: 80, 100
+    threshold: Mapped[int] = mapped_column(Integer)
+    spent_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    budget_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    #: `open` until a person acknowledges it
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)
+    acknowledged_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Agent(Base, PkMixin, TimestampMixin):
     """Un agent de l'organisation : interne (la plateforme le fait tourner) ou externe (un client
     de la porte MCP). Ce qu'il EST vit dans ses versions, immuables ; ici, son identité et son

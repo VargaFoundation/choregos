@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { GrapheDesCouts } from "@/components/graphe-des-couts";
 import { mockCostReport } from "@/mocks/data";
+import { phraseDeBudget } from "@/lib/a-decider";
 import { amount, daysInMonth, money, monthForecast, monthStart, top, usdToCurrency } from "@/lib/spend";
 
 const jour = (key: string, usd: number, eur = usd * 0.9) => ({ key, cost_usd: usd, cost_eur: eur });
@@ -71,5 +72,16 @@ describe("the chart reads in the organisation's currency", () => {
     expect(screen.getByRole("table", { name: "Cost per day" })).toHaveTextContent("€9.00");
     rerender(<GrapheDesCouts rows={rows} />);
     expect(screen.getByRole("table", { name: "Cost per day" })).toHaveTextContent("US$10.00");
+  });
+});
+
+describe("a budget alert, in a sentence (S29-04)", () => {
+  it("names whose budget, how far, and how much of how much", () => {
+    expect(
+      phraseDeBudget({ scope: "project", subject: "billing-api", threshold: 80, spent_usd: 121.4, budget_usd: 150 }),
+    ).toBe("Project billing-api has spent 80 % of its daily budget: $121.40 of $150.00 today.");
+    expect(
+      phraseDeBudget({ scope: "agent", subject: "coordinator", threshold: 100, spent_usd: 20.3, budget_usd: 20 }),
+    ).toBe("Agent coordinator has spent its whole daily budget: $20.30 of $20.00 today.");
   });
 });

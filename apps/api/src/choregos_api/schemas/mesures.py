@@ -98,6 +98,24 @@ class CostReport(Dto):
     total: CostTotal = Field(default_factory=CostTotal)
 
 
+class BudgetAlertDto(Dto):
+    """A budget that crossed a threshold (S29-04): what waits in the inbox until someone has seen it."""
+
+    id: str
+    scope: str
+    subject: str
+    period: str
+    period_key: str
+    #: The share of the budget crossed, in percent: 80, 100.
+    threshold: int
+    spent_usd: float
+    budget_usd: float
+    status: str
+    created_at: datetime | None = None
+    acknowledged_by: str | None = None
+    acknowledged_at: datetime | None = None
+
+
 class DoraMetric(Dto):
     """Une des quatre mesures DORA, avec le palier (`elite`…`low`) et son échantillon."""
 
