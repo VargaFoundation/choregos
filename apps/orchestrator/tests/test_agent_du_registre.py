@@ -379,6 +379,7 @@ async def test_a_run_carries_the_latest_approved_skill_version_never_one_pending
     with pytest.raises(ApplicationError, match="second reviewer"):
         await prepare_stage(_plan(setup, agent="coordinateur", attempt=2))
 
+
 async def _memory_of_the_run(
     setup: Fixture, scope: str | None, attempt: int
 ) -> tuple[dict[str, Any], list[str]]:
