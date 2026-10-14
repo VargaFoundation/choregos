@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from choregos_contracts import ChoregosEvent, EventType
 from choregos_core import (
@@ -51,6 +52,23 @@ async def estimate_cost(session: AsyncSession, project_id: str, item: WorkItem) 
     return CostEstimate(median_usd=median, p80_usd=p80, sample_size=len(costs), over_p80=spent > p80)
 
 
+async def dimensions_of(session: AsyncSession, run_id: str | None) -> dict[str, Any]:
+    """The agent and workflow a run belongs to, for a ledger line (S29-01). Empty without a run."""
+    from ..db.models import Run, WorkflowDef, WorkItem
+
+    run = await session.get(Run, run_id) if run_id else None
+    if run is None:
+        return {}
+    dims: dict[str, Any] = {"agent_slug": run.agent_slug, "agent_version": run.agent_version}
+    item = await session.get(WorkItem, run.work_item_id) if run.work_item_id else None
+    definition = (
+        await session.get(WorkflowDef, item.workflow_def_id) if item and item.workflow_def_id else None
+    )
+    if definition is not None:
+        dims |= {"workflow_name": definition.name, "workflow_version": definition.version}
+    return dims
+
+
 async def record_cost(  # noqa: PLR0913 — une ligne du registre, champ par champ, en mots-clés
     session: AsyncSession,
     *,
@@ -69,6 +87,7 @@ async def record_cost(  # noqa: PLR0913 — une ligne du registre, champ par cha
     fx_rate: float,
 ) -> CostLedger:
     entry = CostLedger(
+        **await dimensions_of(session, run_id),
         project_id=project_id,
         work_item_id=work_item_id,
         run_id=run_id,
