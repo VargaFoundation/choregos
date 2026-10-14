@@ -141,6 +141,29 @@ demonstration environment for a `cd: demo` connector (`/cd/mcp`): the release tr
 project promotes, checks and rolls back there, with no Argo CD — refused in staging and prod too. A supplier's agent needs no family: it is an MCP
 server like any other, its tools discovered and born closed.
 
+**Market data: `marketdata`.** Daily prices for stocks and ETFs, read **through the platform**: the
+run's sandbox keeps its egress closed, provider keys stay on the API side (`secret_refs`, never in
+the pod), and every call is a row of the cost ledger. Read-only, so both operations are `allowed`:
+`get_bars` (`symbol`, `start`, `end` as `YYYY-MM-DD` — bars sorted, one per date, `adj_close` null
+when the source has none) and `get_instrument` (`symbol` — name, `stock`/`etf`/`unknown`, currency,
+exchange). A run sees them as `<connector>__get_bars` and `<connector>__get_instrument`. A symbol
+must match `^[A-Za-z0-9.^=_-]{1,20}$` and can never change the URL; an unknown symbol or a quota
+is a named error (`422`).
+
+| Type | Source | Config | Secret | Mind |
+| --- | --- | --- | --- | --- |
+| `stooq` | daily CSV | `suffix_map` (ticker suffix to Stooq market: `""` is `.us`, `.L` is `.uk`, `.DE`, `.HK`, `.T`, `.WA`, `.PA` are mapped) | `api_key` (optional, appended as `&apikey=` when Stooq asks for it) | not dividend-adjusted; only `.us` is a known quantity, the other markets are unverified, hence the map; on 2026-10-14 Stooq answered scripts with a JavaScript browser check, reported as a source failure |
+| `yahoo` | unofficial chart endpoint | — | — | **personal use only, may break** without notice; has `adj_close` |
+| `alphavantage` | `TIME_SERIES_DAILY` | — | `api_key` | free tier about 25 requests a day, unadjusted, recent history only |
+| `composite` | the three above | `sources` (types, in order), `source_configs`, `cross_check` (default true), `tolerance` (default 0.02) | `stooq_api_key`, `alphavantage_api_key` | falls back on an error or an empty answer; with `cross_check` the next source that answers is compared on common closes: `cross_check: {source, common_days, max_rel_diff, diverging_days}` — it reports a divergence, it does not pick a winner |
+
+The composite lists provider **types**, not other connectors (an adapter is built from one
+connector's configuration and secrets), hence the flat `<type>_api_key` secret fields. With
+`CHOREGOS_FAKES=1` a `fake` serves deterministic synthetic bars (a random walk seeded by the symbol,
+business days only). Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
+the canonical JSON) in its `tool.called` event, so a result can later be matched to what the run was
+served.
+
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still

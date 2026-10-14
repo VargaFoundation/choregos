@@ -8,6 +8,7 @@ const LIBELLES: Record<string, string> = {
   mdm: "device fleet (MDM)",
   shipping: "carrier (shipping)",
   access_control: "physical access (badges)",
+  marketdata: "market data (prices)",
   mcp: "MCP server",
   tracker: "work tracker",
   scm: "source code",

@@ -126,6 +126,7 @@ _TEXTE: dict[str, Any] = {"type": "string"}
 _ENTIER: dict[str, Any] = {"type": "integer"}
 
 from .familles import FAMILLES as _FAMILLES  # noqa: E402 - après le registre
+from .familles import OPERATIONS_MARKETDATA as _OPERATIONS_MARKETDATA  # noqa: E402 - after the registry
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA  # noqa: E402 - après le registre
 from .netops.cilium import CiliumNetwork as _CiliumNetwork  # noqa: E402 - after the registry
 from .netops.nginx import NginxConfig as _NginxConfig  # noqa: E402 - after the registry
@@ -362,6 +363,61 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _CONFIGURATION_DE_DEMO,
         secret_fields=("api_key",),
         operations=_FAMILLES["access_control"],
+    ),
+    # The `marketdata` family (S38-03): prices from free sources, read by the platform for a run whose
+    # sandbox has no egress. Keys stay API-side (`secret_refs`).
+    ("marketdata", "stooq"): ConnectorTypeSpec(
+        "Stooq (daily CSV, free)",
+        ("marketdata",),
+        _objet(
+            {
+                "suffix_map": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": 'ticker suffix -> Stooq market suffix, e.g. {"": ".us", ".L": ".uk"}',
+                },
+                "timeout_s": {"type": "number", "default": 20},
+            }
+        ),
+        ("api_key",),
+        operations=_OPERATIONS_MARKETDATA,
+    ),
+    ("marketdata", "yahoo"): ConnectorTypeSpec(
+        "Yahoo Finance chart (unofficial: personal use only, may break)",
+        ("marketdata",),
+        _objet({"timeout_s": {"type": "number", "default": 20}}),
+        operations=_OPERATIONS_MARKETDATA,
+    ),
+    ("marketdata", "alphavantage"): ConnectorTypeSpec(
+        "Alpha Vantage (free key: about 25 requests a day, unadjusted daily bars)",
+        ("marketdata",),
+        _objet({"timeout_s": {"type": "number", "default": 20}}),
+        ("api_key",),
+        operations=_OPERATIONS_MARKETDATA,
+    ),
+    ("marketdata", "composite"): ConnectorTypeSpec(
+        "market data from several sources, with fallback and a cross-check of the closes",
+        ("marketdata",),
+        _objet(
+            {
+                "sources": {
+                    "type": "array",
+                    "items": {"enum": ["stooq", "yahoo", "alphavantage"]},
+                    "minItems": 1,
+                    "description": "provider types, in the order they are tried",
+                },
+                "source_configs": {
+                    "type": "object",
+                    "additionalProperties": {"type": "object"},
+                    "description": 'sub-configuration by provider type, e.g. {"stooq": {"suffix_map": {}}}',
+                },
+                "cross_check": {"type": "boolean", "default": True},
+                "tolerance": {"type": "number", "default": 0.02, "minimum": 0},
+            },
+            ("sources",),
+        ),
+        ("stooq_api_key", "alphavantage_api_key"),
+        operations=_OPERATIONS_MARKETDATA,
     ),
     # Le train d'un locataire de démonstration (S21-24) : un environnement en mémoire, ou servi par le
     # processus des faux. Aucune opération exposée : c'est le train qui l'appelle, jamais un agent.
@@ -615,6 +671,19 @@ def _cilium(cfg: dict[str, Any]) -> Any:
     return CiliumNetwork.from_config(cfg, scm=scm)
 
 
+#: The fake of the `marketdata` family, shared in the process (scriptable by tests).
+FAUX_MARKETDATA: Any = None
+
+
+def _faux_marketdata(cfg: dict[str, Any]) -> Any:
+    global FAUX_MARKETDATA  # noqa: PLW0603 - a shared fake, like the platform's other fakes
+    if FAUX_MARKETDATA is None:
+        from .fakes.marketdata import FakeMarketData
+
+        FAUX_MARKETDATA = FakeMarketData()
+    return FAUX_MARKETDATA
+
+
 def _cd_de_demo(cfg: dict[str, Any]) -> Any:
     """La fabrique de `cd: demo` : refusée en staging et en prod ; servie quand elle porte une `url`."""
     from .fakes.cd_de_demo import CdDeDemo, FakeCdDeDemo
@@ -633,6 +702,45 @@ def _cd_de_demo(cfg: dict[str, Any]) -> Any:
     if "cd" not in FAUX_METIER:
         FAUX_METIER["cd"] = FakeCdDeDemo()
     return CdDeDemo(Guichet(FAUX_METIER["cd"], str(cfg.get("api_key", ""))))
+
+
+def _register_marketdata() -> None:
+    """The `marketdata` family (S38-03): its free providers, their composite and its fake."""
+    from .marketdata import PROVIDERS, CompositeProvider, MarketDataProvider
+
+    def _fournisseur(type_name: str, cfg: dict[str, Any], cle: str = "") -> MarketDataProvider:
+        options: dict[str, Any] = {"timeout_s": float(cfg.get("timeout_s", 20))}
+        if type_name == "stooq" and cfg.get("suffix_map"):
+            options["suffix_map"] = dict(cfg["suffix_map"])
+        if type_name != "yahoo":
+            options["api_key"] = str(cle or cfg.get("api_key", ""))
+        return PROVIDERS[type_name](**options)
+
+    def _composite(cfg: dict[str, Any]) -> CompositeProvider:
+        noms = [str(n) for n in cfg.get("sources") or []]
+        inconnus = [n for n in noms if n not in PROVIDERS]
+        if not noms or inconnus:
+            raise ConfigurationError(
+                f"marketdata composite: `sources` must list provider types among {sorted(PROVIDERS)}"
+                + (f" (unknown: {inconnus})" if inconnus else "")
+            )
+        configs = cfg.get("source_configs") or {}
+        return CompositeProvider(
+            [
+                (n, _fournisseur(n, dict(configs.get(n) or {}), str(cfg.get(f"{n}_api_key", ""))))
+                for n in noms
+            ],
+            cross_check=bool(cfg.get("cross_check", True)),
+            tolerance=float(cfg.get("tolerance", 0.02)),
+        )
+
+    def _constructeur(nom: str) -> Callable[[dict[str, Any]], MarketDataProvider]:
+        return lambda cfg: _fournisseur(nom, cfg)
+
+    for nom in PROVIDERS:
+        register("marketdata", nom, _SPECS_LIVREES[("marketdata", nom)])(_constructeur(nom))
+    register("marketdata", "composite", _SPECS_LIVREES[("marketdata", "composite")])(_composite)
+    register("marketdata", "fake")(_faux_marketdata)
 
 
 def _register_builtins() -> None:
@@ -853,6 +961,8 @@ def _register_builtins() -> None:
     register("firewall", "pfsense", _SPECS_LIVREES[("firewall", "pfsense")])(PfSenseFirewall.from_config)
     register("network_policy", "cilium", _SPECS_LIVREES[("network_policy", "cilium")])(_cilium)
     register("web_server", "nginx", _SPECS_LIVREES[("web_server", "nginx")])(_nginx)
+
+    _register_marketdata()
     # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
     from .mcp import ClientMcp
 
