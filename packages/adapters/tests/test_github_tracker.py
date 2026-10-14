@@ -170,7 +170,7 @@ async def test_le_board_recoit_la_colonne_et_cree_l_option_manquante() -> None:
                         "projectV2Field": {
                             "options": [
                                 {"id": "O_inbox", "name": "Inbox"},
-                                {"id": "O_new", "name": "En cours"},
+                                {"id": "O_new", "name": "In progress"},
                             ]
                         }
                     }
@@ -179,13 +179,98 @@ async def test_le_board_recoit_la_colonne_et_cree_l_option_manquante() -> None:
         ),
         (200, {"data": {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "I_1"}}}}),
     ]
+    graphql.insert(
+        2, (200, {"data": {"node": {"id": "F_status", "options": [{"id": "O_inbox", "name": "Inbox"}]}}})
+    )
     fil = Fil({("POST", "/graphql"): graphql})
-    await tracker(fil, project_number=3).set_state(f"{REPO}#12", TrackerStateMapping(status="En cours"))
+    await tracker(fil, project_number=3).set_state(f"{REPO}#12", TrackerStateMapping(status="In progress"))
     corps = [json.loads(r.content) for r in fil.requetes]
     assert corps[0]["variables"] == {"org": "varga", "number": 3}
-    assert corps[2]["variables"]["name"] == "En cours", "l'option est créée"
-    assert corps[3]["variables"]["value"] == {"singleSelectOptionId": "O_new"}
-    assert corps[3]["variables"]["itemId"] == "I_1"
+    assert corps[3]["variables"]["options"][-1]["name"] == "In progress", "the option is created"
+    assert corps[4]["variables"]["value"] == {"singleSelectOptionId": "O_new"}
+    assert corps[4]["variables"]["itemId"] == "I_1"
+
+
+def _board_items() -> tuple[int, Any]:
+    return (
+        200,
+        {
+            "data": {
+                "node": {
+                    "items": {
+                        "pageInfo": {"hasNextPage": False},
+                        "nodes": [{"id": "I_1", "content": {"number": 12}}],
+                    }
+                }
+            }
+        },
+    )
+
+
+async def test_creating_an_option_keeps_all_the_others_with_their_id() -> None:
+    """#350: `singleSelectOptions` REPLACES the list, so the mutation carries every option."""
+    existing = [
+        {"id": "O_inbox", "name": "Inbox", "color": "BLUE", "description": "to triage"},
+        {"id": "O_done", "name": "Done", "color": "GREEN", "description": ""},
+    ]
+    # The board cache is stale: *Done* was added since, the fresh read sees it.
+    graphql = [
+        (200, {"data": _projet([existing[0]])}),
+        _board_items(),
+        (200, {"data": {"node": {"id": "F_status", "options": existing}}}),
+        (
+            200,
+            {
+                "data": {
+                    "updateProjectV2Field": {
+                        "projectV2Field": {"options": [*existing, {"id": "O_new", "name": "In progress"}]}
+                    }
+                }
+            },
+        ),
+        (200, {"data": {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "I_1"}}}}),
+    ]
+    fil = Fil({("POST", "/graphql"): graphql})
+    await tracker(fil, project_number=3).set_state(f"{REPO}#12", TrackerStateMapping(status="In progress"))
+    mutation = next(
+        json.loads(r.content)
+        for r in fil.requetes
+        if "updateProjectV2Field(" in json.loads(r.content)["query"]
+    )
+    assert mutation["variables"]["options"] == [
+        {"id": "O_inbox", "name": "Inbox", "color": "BLUE", "description": "to triage"},
+        {"id": "O_done", "name": "Done", "color": "GREEN", "description": ""},
+        {"name": "In progress", "color": "GRAY", "description": ""},
+    ], "existing options are sent with their id, colour and description"
+    assert fil.corps(-1)["variables"]["value"] == {"singleSelectOptionId": "O_new"}
+
+
+async def test_an_option_added_since_the_cache_is_not_created_again() -> None:
+    """Idempotent: the option already exists when the field is read again, no field mutation."""
+    graphql = [
+        (200, {"data": _projet([{"id": "O_inbox", "name": "Inbox"}])}),
+        _board_items(),
+        (
+            200,
+            {
+                "data": {
+                    "node": {
+                        "id": "F_status",
+                        "options": [
+                            {"id": "O_inbox", "name": "Inbox"},
+                            {"id": "O_run", "name": "In progress"},
+                        ],
+                    }
+                }
+            },
+        ),
+        (200, {"data": {"updateProjectV2ItemFieldValue": {"projectV2Item": {"id": "I_1"}}}}),
+    ]
+    fil = Fil({("POST", "/graphql"): graphql})
+    await tracker(fil, project_number=3).set_state(f"{REPO}#12", TrackerStateMapping(status="In progress"))
+    queries = [json.loads(r.content)["query"] for r in fil.requetes]
+    assert not any("updateProjectV2Field(" in q for q in queries), "the option exists: nothing to create"
+    assert fil.corps(-1)["variables"]["value"] == {"singleSelectOptionId": "O_run"}
 
 
 async def test_un_ticket_absent_du_board_y_est_ajoute_et_un_nombre_part_en_nombre() -> None:

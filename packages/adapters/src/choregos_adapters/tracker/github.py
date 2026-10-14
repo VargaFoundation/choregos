@@ -30,7 +30,7 @@ query($org: String!, $number: Int!) {
       fields(first: 50) {
         nodes {
           ... on ProjectV2FieldCommon { id name dataType }
-          ... on ProjectV2SingleSelectField { id name options { id name } }
+          ... on ProjectV2SingleSelectField { id name options { id name color description } }
         }
       }
     }
@@ -67,13 +67,23 @@ mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldVal
 }
 """
 
+#: The options of a single-select field, read again right before adding one: the board cache may be stale.
+FIELD_OPTIONS_QUERY = """
+query($fieldId: ID!) {
+  node(id: $fieldId) {
+    ... on ProjectV2SingleSelectField { id options { id name color description } }
+  }
+}
+"""
+
+#: `singleSelectOptions` REPLACES the field's option list ("If values are present, they will
+#: overwrite the existing options"): the mutation therefore carries every existing option, each with
+#: its `id` so it keeps its identity and the cards' values, plus the new one (#350).
 CREATE_OPTION_MUTATION = """
-mutation($fieldId: ID!, $name: String!, $color: ProjectV2SingleSelectFieldOptionColor!) {
-  updateProjectV2Field(
-    input: {fieldId: $fieldId, singleSelectOptions: [{name: $name, color: $color, description: ""}]}
-  ) {
+mutation($fieldId: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]!) {
+  updateProjectV2Field(input: {fieldId: $fieldId, singleSelectOptions: $options}) {
     projectV2Field {
-      ... on ProjectV2SingleSelectField { id options { id name } }
+      ... on ProjectV2SingleSelectField { id options { id name color description } }
     }
   }
 }
@@ -362,9 +372,33 @@ class GitHubTracker:
         )
 
     async def _create_option(self, field: dict[str, Any], name: str) -> dict[str, Any]:
-        """Crée l'option *Status* manquante : les états du DSL pilotent le board, pas l'inverse."""
+        """Creates the missing *Status* option: the DSL states drive the board, not the reverse.
+
+        `singleSelectOptions` replaces the list: sending only the new option would erase every other
+        column, and the value of every card that carried one (#350). So the field's options are read
+        again (the board cache may be stale), an option that already exists is returned as is
+        (idempotent), otherwise the full list is sent: the existing options with their `id`, colour
+        and description, plus the new one.
+        """
+        data = await self.client.graphql(FIELD_OPTIONS_QUERY, {"fieldId": field["id"]}, repo=self.repo)
+        current = data.get("node") or {}
+        existing: list[dict[str, Any]] = list(current.get("options", field.get("options", [])))
+        field["options"] = existing
+        option = next((o for o in existing if o.get("name") == name), None)
+        if option is not None:
+            return option
+        options = [
+            {
+                "id": o["id"],
+                "name": o["name"],
+                "color": o.get("color") or "GRAY",
+                "description": o.get("description") or "",
+            }
+            for o in existing
+        ]
+        options.append({"name": name, "color": "GRAY", "description": ""})
         data = await self.client.graphql(
-            CREATE_OPTION_MUTATION, {"fieldId": field["id"], "name": name, "color": "GRAY"}, repo=self.repo
+            CREATE_OPTION_MUTATION, {"fieldId": field["id"], "options": options}, repo=self.repo
         )
         updated = data["updateProjectV2Field"]["projectV2Field"]
         field["options"] = updated.get("options", [])
