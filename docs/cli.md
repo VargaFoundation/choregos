@@ -11,14 +11,14 @@ French, like the rest of the code.
 
 ## `choregos dev`
 
-Environnement de développement
+Development environment
 
 ### `choregos dev demo`
 
 ```text
 Usage: choregos dev demo [OPTIONS]
 
-  Joue la démonstration hors ligne (aucun service requis).
+  Play the offline demonstration (no service needed).
 
 Options:
   --help  Show this message and exit.
@@ -38,8 +38,7 @@ Options:
 ```text
 Usage: choregos dev seed [OPTIONS]
 
-  Peuple l'environnement local : organisation, projet de démonstration,
-  tickets.
+  Seed the local environment: organisation, demo project, work items.
 
 Options:
   --help  Show this message and exit.
@@ -50,7 +49,7 @@ Options:
 ```text
 Usage: choregos dev up [OPTIONS]
 
-  Monte l'environnement de développement (kind + Tilt).
+  Bring the development environment up (kind + Tilt).
 
 Options:
   --help  Show this message and exit.
@@ -88,7 +87,7 @@ Options:
 
 ## `choregos items`
 
-Tickets
+Work items
 
 ### `choregos items action`
 
@@ -134,8 +133,8 @@ Options:
 ```text
 Usage: choregos items create [OPTIONS] {project}
 
-  Pose une demande dans Choregos (projet à tracker interne) et démarre son
-  interpréteur.
+  File a request in Choregos (a project with the internal tracker) and start
+  its interpreter.
 
 Arguments:
   project  [required]
@@ -143,13 +142,13 @@ Arguments:
 Options:
   --title <str>     [required]
   --body <str>
-  --size <str>      S, M, L ou XL
-  --no-start        poser sans démarrer l'interpréteur
-  --workflow <str>  le workflow où la demande naît ; sinon le routage du
-                    projet, sinon son défaut
-  --label <str>     une étiquette (répétable), lue par le routage
-  --field <str>     `cle=valeur` (répétable), validé par les `inputs` du
-                    workflow
+  --size <str>      S, M, L or XL
+  --no-start        file it without starting the interpreter
+  --workflow <str>  the workflow the request is born in; otherwise the
+                    project's routing, then its default
+  --label <str>     a label (repeatable), read by the routing
+  --field <str>     `key=value` (repeatable), validated by the workflow's
+                    `inputs`
   --help            Show this message and exit.
 ```
 
@@ -184,7 +183,7 @@ Options:
 ```text
 Usage: choregos items show [OPTIONS] {item_id}
 
-  Détail d'un ticket : état, coûts, timeline.
+  A work item in detail: state, costs, timeline.
 
 Arguments:
   item_id  [required]
@@ -198,7 +197,7 @@ Options:
 ```text
 Usage: choregos login [OPTIONS]
 
-  Enregistre le profil de connexion (`~/.config/choregos/config.json`).
+  Save the connection profile (`~/.config/choregos/config.json`).
 
 Options:
   --api-url <str>  [default: http://localhost:8000]
@@ -216,7 +215,7 @@ Organisations
 ```text
 Usage: choregos orgs create [OPTIONS] {slug}
 
-  Crée une organisation (demande d'être déjà admin d'une organisation).
+  Create an organisation (requires being an admin of an organisation already).
 
 Arguments:
   slug  [required]
@@ -237,31 +236,30 @@ Options:
 
 ## `choregos projects`
 
-Projets
+Projects
 
 ### `choregos projects create`
 
 ```text
 Usage: choregos projects create [OPTIONS] {slug}
 
-  Crée un projet ; `--template` déclenche ensuite le provisioning.
+  Create a project; `--template` then starts the provisioning.
 
-  Sans `--repo`, le projet n'a pas de dépôt (ADR 0012) : l'agent travaille
-  dans un répertoire vide, et les demandes se posent avec `choregos items
-  create`.
+  Without `--repo`, the project has no repository (ADR 0012): the agent works
+  in an empty directory, and requests are filed with `choregos items create`.
 
 Arguments:
   slug  [required]
 
 Options:
-  --repo <str>      URL du dépôt applicatif (facultatif : un métier sans code
-                    n'en a pas)
+  --repo <str>      URL of the application repository (optional: work without
+                    code has none)
   --name <str>
   --template <str>
   --org <str>
   --language <str>  [default: python]
-  --tracker <str>   `internal` : les demandes se posent dans Choregos
-                    [default: internal]
+  --tracker <str>   `internal`: requests are filed in Choregos  [default:
+                    internal]
   --help            Show this message and exit.
 ```
 
@@ -280,7 +278,7 @@ Options:
 ```text
 Usage: choregos projects provision [OPTIONS] {project}
 
-  Lance (ou relance) le provisioning, et le suit en direct avec `--follow`.
+  Start (or restart) the provisioning, and follow it live with `--follow`.
 
 Arguments:
   project  [required]
@@ -323,7 +321,7 @@ Options:
 ```text
 Usage: choregos runs tail [OPTIONS] {run_id}
 
-  Suit le journal ACP d'un run en direct (SSE).
+  Follow a run's ACP journal live (SSE).
 
 Arguments:
   run_id  [required]
@@ -334,22 +332,21 @@ Options:
 
 ## `choregos tokens`
 
-Jetons d'API
+API tokens
 
 ### `choregos tokens create`
 
 ```text
 Usage: choregos tokens create [OPTIONS]
 
-  Émet un jeton d'API pour l'appelant. Le clair n'est affiché qu'ICI, une
-  fois.
+  Issue an API token for the caller. The secret is shown HERE, once.
 
 Options:
   --name <str>             [required]
   --expires-in-days <int>  [default: 90]
-  --scope <str>            `*` (API REST et CLI, par défaut), ou `mcp:read` /
-                           `mcp:write` (porte MCP)
-  --project <str>          `org:slug` : borne un jeton MCP à un projet
+  --scope <str>            `*` (REST API and CLI, the default), or `mcp:read`
+                           / `mcp:write` (MCP gate)
+  --project <str>          `org:slug`: limits an MCP token to one project
   --help                   Show this message and exit.
 ```
 
@@ -449,7 +446,7 @@ Options:
 ```text
 Usage: choregos whoami [OPTIONS]
 
-  Affiche l'utilisateur courant et ses rôles.
+  Show the current user and their roles.
 
 Options:
   --help  Show this message and exit.
@@ -464,8 +461,8 @@ Workflows
 ```text
 Usage: choregos workflow list [OPTIONS] {project}
 
-  Les workflows d'un projet : la version active de chacun, le défaut, les
-  tickets ouverts.
+  A project's workflows: the active version of each, the default, the open
+  work items.
 
 Arguments:
   project  [required]
@@ -479,19 +476,19 @@ Options:
 ```text
 Usage: choregos workflow push [OPTIONS] {project} [path]
 
-  Publie la version suivante d'un workflow, sous le nom que dit son
-  `metadata.name`.
+  Publish the next version of a workflow, under the name its `metadata.name`
+  gives.
 
-  Les autres workflows du projet ne bougent pas, et un ticket en cours finit
-  sur sa version.
+  The project's other workflows do not move, and a work item in progress
+  finishes on its version.
 
 Arguments:
   project  [required]
   path     [default: .choregos/workflow.yaml]
 
 Options:
-  --base-version <int>  la version active que vous avez lue : 409 si une autre
-                        l'a remplacée
+  --base-version <int>  the active version you read: 409 if another one
+                        replaced it
   --help                Show this message and exit.
 ```
 
@@ -500,15 +497,15 @@ Options:
 ```text
 Usage: choregos workflow show [OPTIONS] [path]
 
-  Affiche le workflow : états, transitions, diagramme Mermaid, ou processus en
-  clair.
+  Show the workflow: states, transitions, a Mermaid diagram, or the process in
+  plain words.
 
 Arguments:
   path  [default: .choregos/workflow.yaml]
 
 Options:
   --mermaid
-  --process  chaque transition dite en clair
+  --process  each transition in plain words
   --help     Show this message and exit.
 ```
 
@@ -526,12 +523,13 @@ Options:
 ```text
 Usage: choregos workflow validate [OPTIONS] [path]
 
-  Valide un workflow. Sans `--remote`, la validation est locale et hors ligne.
+  Validate a workflow. Without `--remote`, the validation is local and
+  offline.
 
 Arguments:
   path  [default: .choregos/workflow.yaml]
 
 Options:
-  --remote  valider via l'API plutôt qu'en local
+  --remote  validate through the API rather than locally
   --help    Show this message and exit.
 ```

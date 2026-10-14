@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Client HTTP de la CLI : jeton d'API ou cookie de session, erreurs lisibles."""
+"""The CLI's HTTP client: an API token or a session cookie, readable errors."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ CONFIG_PATH = Path(os.environ.get("CHOREGOS_CONFIG", Path.home() / ".config" / "
 
 @dataclass
 class Profile:
-    """Profil de connexion, stocké dans `~/.config/choregos/config.json`."""
+    """The connection profile, stored in `~/.config/choregos/config.json`."""
 
     api_url: str = "http://localhost:8000"
     token: str = ""
@@ -50,7 +50,7 @@ class ApiError(RuntimeError):
             errors = problem.get("errors") or []
             if errors:
                 detail += "\n" + "\n".join(
-                    f"  - {'.'.join(str(p) for p in e.get('loc', []))} : {e.get('msg', '')}" for e in errors
+                    f"  - {'.'.join(str(p) for p in e.get('loc', []))}: {e.get('msg', '')}" for e in errors
                 )
         else:
             detail = str(problem)[:500]
@@ -59,7 +59,7 @@ class ApiError(RuntimeError):
 
 
 class Client:
-    """Appels à l'API Choregos. Toutes les commandes de la CLI passent par ici."""
+    """Calls to the Choregos API. Every CLI command goes through here."""
 
     def __init__(self, profile: Profile | None = None) -> None:
         self.profile = profile or Profile.load()
@@ -95,7 +95,7 @@ class Client:
         return self.request("PUT", path, **kwargs)
 
     def stream_sse(self, path: str, **kwargs: Any) -> Any:
-        """Suit un flux SSE (journal d'un run, provisioning)."""
+        """Follow an SSE stream (a run's journal, provisioning)."""
         with self._client.stream(
             "GET", path, headers={"Accept": "text/event-stream"}, timeout=None, **kwargs
         ) as response:
