@@ -41,7 +41,7 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
         const sent = await api.uploadKnowledgeDocument(org, slug, one);
         setNotice(`${sent.filename}: ${sent.status}`);
       } catch (cause) {
-        setError(`${one.name}: ${cause instanceof Error ? cause.message : "refused"}`);
+        setError(`${one.name}: ${cause instanceof Error ? cause.message : "Refused"}`);
       }
     }
     if (file.current) file.current.value = "";
@@ -52,18 +52,18 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
     try {
       await gesture();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "refused");
+      setError(cause instanceof Error ? cause.message : "Refused");
     }
     await refresh();
   }
   if (base.error) return <ErrorNote>{String(base.error)}</ErrorNote>;
-  if (!base.data) return <Empty>reading the knowledge base…</Empty>;
+  if (!base.data) return <Empty>Reading the knowledge base…</Empty>;
   const documents = base.data.documents ?? [];
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-3">
         <Link href="/knowledge" className="text-sm text-ink-muted hover:underline">
-          knowledge
+          Knowledge
         </Link>
         <span aria-hidden className="text-ink-muted">
           /
@@ -78,17 +78,17 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
         {base.data.status !== "active" && ` · ${base.data.status}`}
       </p>
       {base.data.description && <p className="max-w-3xl text-sm">{base.data.description}</p>}
-      <Card title="documents">
+      <Card title="Documents">
         {documents.length === 0 ? (
-          <Empty title="no document yet">Upload the corpus below.</Empty>
+          <Empty title="No document yet">Upload the corpus below.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="knowledge-documents">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
-                  <th className="py-1 font-normal">document</th>
-                  <th className="py-1 font-normal">status</th>
-                  <th className="py-1 font-normal">uploaded</th>
+                  <th className="py-1 font-normal">Document</th>
+                  <th className="py-1 font-normal">Status</th>
+                  <th className="py-1 font-normal">Uploaded</th>
                   <th className="py-1 font-normal" />
                 </tr>
               </thead>
@@ -111,11 +111,11 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
                     <td className="space-x-2 text-right text-xs">
                       {doc.status === "failed" && (
                         <button type="button" className="underline" onClick={() => void act(() => api.convertKnowledgeDocument(org, slug, doc.id))}>
-                          convert again
+                          Convert again
                         </button>
                       )}
                       <button type="button" className="underline" onClick={() => void act(() => api.deleteKnowledgeDocument(org, slug, doc.id))}>
-                        delete
+                        Delete
                       </button>
                     </td>
                   </tr>
@@ -125,7 +125,7 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
           </div>
         )}
       </Card>
-      <Card title="upload documents">
+      <Card title="Upload documents">
         <div className="space-y-2 text-sm">
           <p className="text-ink-muted">
             Word, PowerPoint, Excel, PDF, HTML, markdown or text. Each file is converted to markdown in the background: headings,
@@ -135,7 +135,7 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
             ref={file}
             type="file"
             multiple
-            aria-label="documents to upload"
+            aria-label="Documents to upload"
             className="min-w-0 max-w-full"
             accept=".docx,.pptx,.xlsx,.pdf,.md,.markdown,.html,.htm,.txt"
             onChange={(event) => {
@@ -148,10 +148,10 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
       </Card>
       {shown && (
         <Card
-          title={document.data?.title ?? "document"}
+          title={document.data?.title ?? "Document"}
           action={
             <button type="button" className={buttonClasses("ghost", "sm")} onClick={() => setShown(null)}>
-              close
+              Close
             </button>
           }
         >

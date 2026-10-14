@@ -71,7 +71,7 @@ describe("the knowledge page (S33-01)", () => {
     expect(table).toHaveTextContent("1 ready · 1 failed");
 
     fireEvent.change(screen.getByPlaceholderText("architecture-framework"), { target: { value: "security" } });
-    fireEvent.click(screen.getByRole("button", { name: "create" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(api.createKnowledgeBase).toHaveBeenCalled());
     expect(vi.mocked(api.createKnowledgeBase).mock.calls[0]).toEqual([
       "varga",
@@ -88,7 +88,7 @@ describe("the knowledge page (S33-01)", () => {
     const documents = await screen.findByTestId("knowledge-documents");
     expect(documents).toHaveTextContent("ready");
     expect(documents).toHaveTextContent("the document holds no text");
-    expect(screen.getAllByRole("button", { name: "convert again" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Convert again" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Network zoning principles" }));
     expect(await screen.findByTestId("knowledge-markdown")).toHaveTextContent("# Network zoning principles");
   });
@@ -99,7 +99,7 @@ describe("the knowledge page (S33-01)", () => {
     await act(async () => {
       wrap(<KnowledgeBasePage params={Promise.resolve({ slug: "architecture" })} />);
     });
-    const input = await screen.findByLabelText("documents to upload");
+    const input = await screen.findByLabelText("Documents to upload");
     const deck = new File(["x"], "zoning.pptx");
     fireEvent.change(input, { target: { files: [deck] } });
     await waitFor(() => expect(api.uploadKnowledgeDocument).toHaveBeenCalledWith("varga", "architecture", deck));
