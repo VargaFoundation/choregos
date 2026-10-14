@@ -9,6 +9,7 @@ en mémoire enregistre les appels pour que les tests et la démo fonctionnent sa
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -43,10 +44,19 @@ def provisioning_id(project_slug: str) -> str:
     return f"prov-{project_slug}"
 
 
+#: How long a read waits for a workflow query before answering "unknown" (S26-01). A train whose
+#: history is long to replay can hold a query for tens of seconds, then fail with "query task not
+#: found, or already expired"; a status page must not wait for that.
+QUERY_TIMEOUT_S = 3.0
+
+
 class TemporalGateway(Protocol):
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def signal(self, workflow_id: str, name: str, payload: Any) -> None: ...
-    async def query(self, workflow_id: str, name: str) -> Any: ...
+    async def query(self, workflow_id: str, name: str) -> Any:
+        """The query's answer, or None when the workflow does not exist or does not answer in time."""
+        ...
+
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_provisioning(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
@@ -87,6 +97,17 @@ class FakeTemporal:
         self.signals.append((workflow_id, name, payload))
 
     async def query(self, workflow_id: str, name: str) -> Any:
+        return await answer_or_none(workflow_id, name, self._query(workflow_id, name))
+
+    async def _query(self, workflow_id: str, name: str) -> Any:
+        """Like the real client: a workflow nobody started is NOT_FOUND, not an empty answer."""
+        from temporalio.service import RPCError, RPCStatusCode
+
+        known = workflow_id in self.started or any(
+            key.rsplit(":", 1)[0] == workflow_id for key in self.queries
+        )
+        if not known:
+            raise RPCError(f"workflow not found for ID: {workflow_id}", RPCStatusCode.NOT_FOUND, b"")
         return self.queries.get(f"{workflow_id}:{name}")
 
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str:
@@ -161,9 +182,11 @@ class RealTemporal:
         await handle.signal(name, payload)
 
     async def query(self, workflow_id: str, name: str) -> Any:
+        return await answer_or_none(workflow_id, name, self._query(workflow_id, name))
+
+    async def _query(self, workflow_id: str, name: str) -> Any:
         client = await self.client()
-        handle = client.get_workflow_handle(workflow_id)
-        return await handle.query(name)
+        return await client.get_workflow_handle(workflow_id).query(name)
 
     async def cancel(self, workflow_id: str) -> None:
         client = await self.client()
@@ -191,6 +214,31 @@ class RealTemporal:
             except Exception as exc:  # c'est le message qu'on veut, pas l'exception
                 failure = _cause_lisible(exc)
         return WorkflowState(status=status, failure=failure)
+
+
+async def answer_or_none(workflow_id: str, name: str, call: Awaitable[Any]) -> Any:
+    """A workflow query's answer, or None when there is nothing to ask or no answer in time (S26-01).
+
+    None covers: a workflow never started (a train is started lazily, on the first merge), one whose
+    query fails, and one that does not answer within `QUERY_TIMEOUT_S`. The caller then answers from
+    the database. Any other failure (Temporal unreachable, a bad request) still raises.
+    """
+    from temporalio.client import WorkflowQueryFailedError
+    from temporalio.service import RPCError, RPCStatusCode
+
+    try:
+        return await asyncio.wait_for(call, QUERY_TIMEOUT_S)
+    except TimeoutError:
+        logger.warning("workflow query timed out", workflow_id=workflow_id, query=name)
+        return None
+    except WorkflowQueryFailedError as exc:
+        logger.warning("workflow query failed", workflow_id=workflow_id, query=name, error=str(exc))
+        return None
+    except RPCError as exc:
+        if exc.status not in {RPCStatusCode.NOT_FOUND, RPCStatusCode.DEADLINE_EXCEEDED}:
+            raise
+        logger.info("workflow query unanswered", workflow_id=workflow_id, query=name, error=str(exc))
+        return None
 
 
 def _cause_lisible(exc: BaseException) -> str:
