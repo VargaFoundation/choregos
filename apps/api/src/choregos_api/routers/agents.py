@@ -53,6 +53,7 @@ from ..schemas import (
     ImplicitAgent,
     ProjectAgentDto,
     ProjectAgentPut,
+    RunDto,
 )
 from ..services.agent_lifecycle import (
     TransitionRefused,
@@ -388,6 +389,32 @@ async def list_agent_metrics(
             cost_usd=round(cout.get(slug, 0.0), 6),
         )
         for slug in slugs
+    ]
+
+
+@router.get("/orgs/{org}/agents/{slug}/runs", response_model=list[RunDto], operation_id="listAgentRuns")
+async def list_agent_runs(
+    org: str, slug: Slug, session: Db, principal: Me, limit: Annotated[int, Query(ge=1, le=200)] = 50
+) -> list[RunDto]:
+    """The agent's latest runs (S30-05): its page lists them in a tab, newest first, from the
+    projects the caller may read only."""
+    from ..db.models import Project, Run
+    from ..services.tickets import run_dto
+
+    _lire(principal, org)
+    organisation = await _organisation(session, org)
+    await _agent(session, organisation, slug)
+    lignes = (
+        await session.execute(
+            select(Run, Project.slug)
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug == slug, Project.org_id == organisation.id)
+            .order_by(Run.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    return [
+        run_dto(run, projet) for run, projet in lignes if principal.can(Permission.PROJECT_READ, org, projet)
     ]
 
 

@@ -303,13 +303,37 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await page.goto("/agents");
   await page.getByRole("link", { name: "Onboarding coordinator" }).click();
   await expect(page.getByTestId("mesures")).toContainText("14 (12 succeeded, 2 failed)");
+  await page.getByRole("link", { name: "Definition" }).click();
   await expect(page.getByTestId("version")).toContainText("onboarding-procedure@1");
   await page.getByRole("link", { name: "onboarding-procedure@1" }).click();
   await expect(page.getByTestId("fichiers")).toContainText("Entra accounts ten days before the start date");
 });
 
+test("an agent's page is in tabs: overview, definition, versions, runs, access (S30-05)", async ({ page }) => {
+  await page.goto("/agents/onboarding-coordinator");
+  const onglets = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
+  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "Versions", "Runs", "Access"]);
+  await expect(onglets.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("mesures")).toBeVisible();
+  await expect(page.getByTestId("version")).toHaveCount(0);
+
+  await onglets.getByRole("link", { name: "Versions" }).click();
+  await expect(page).toHaveURL(/tab=versions/);
+  await expect(page.getByRole("table", { name: "Versions" }).getByRole("row")).not.toHaveCount(1);
+  await expect(page.getByTestId("mesures")).toHaveCount(0);
+
+  await onglets.getByRole("link", { name: "Runs" }).click();
+  const runs = page.getByTestId("runs-de-l-agent");
+  await expect(runs).toContainText("billing-api");
+  await runs.getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/p\/billing-api\/runs\//);
+
+  await page.goto("/agents/onboarding-coordinator?tab=access");
+  await expect(page.getByRole("heading", { name: "Tools and servers" })).toBeVisible();
+});
+
 test("agents : un agent externe montre son client, et un projet ses agents implicites", async ({ page }) => {
-  await page.goto("/agents/leas-claude-code");
+  await page.goto("/agents/leas-claude-code?tab=access");
   await expect(page.getByTestId("clients-de-l-agent")).toContainText("claude-code/2.1.0");
   await page.goto("/p/billing-api/agents");
   await expect(page.getByTestId("epingles")).toContainText("onboarding-coordinator");
