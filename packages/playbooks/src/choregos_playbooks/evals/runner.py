@@ -157,9 +157,9 @@ def main() -> int:
 
     failed = sum(not result.passed for result in results) + sum(not r.passed for r in agent_results)
     if failed:
-        print(f"\n{failed} éval(s) en échec : le prompt a été dégradé.", file=sys.stderr)
+        print(f"\n{failed} eval(s) failed: the prompt was degraded.", file=sys.stderr)
         return 1
-    print(f"\n{len(results) + len(agent_results)} éval(s) vertes.")
+    print(f"\n{len(results) + len(agent_results)} eval(s) green.")
     return 0
 
 
