@@ -3,15 +3,12 @@
 
 /**
  * The agent builder (S32-01, plan item 0): every field of an agent's version is editable here —
- * instructions, model, backend, limits, budget, skills, MCP servers and their tool patterns — with,
- * on the side, what each choice costs and allows. The definition stays data (`AgentSpec`); this is
+ * instructions, model, backend, limits, budget, skills, MCP servers and their tool patterns, knowledge
+ * bases and memory scope — with, on the side, what each choice costs and allows. The definition stays data (`AgentSpec`); this is
  * a form on top of it, not a canvas.
  *
  * Loaded lazily (`next/dynamic`) by the pages that open it: it is the heaviest form of the console
  * and most visits never open it.
- *
- * Follow-up (not on this base): knowledge bases (`AgentSpec.knowledge`, #418) and the memory scope
- * (S32-02) get their sections once those fields exist in the generated contract types.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
@@ -19,13 +16,27 @@ import { Button, ErrorNote, Input, Select, Textarea } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usd } from "@/lib/format";
-import type { Agent, AgentSpec, GatewayModel, OrgConnector, Skill } from "@/lib/types";
+import type { Agent, AgentSpec, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
 
 /** The model profiles a project maps to models (its settings, `models.yaml`). */
 export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as const;
 
 /** Statuses of a skill that cannot be carried: archived, or not yet approved (S32-06). */
 const SKILL_UNUSABLE = new Set(["archived", "pending_review", "rejected", "quarantined"]);
+
+/** Whose memory a run reads and writes (S32-02); the API's default is the project's. */
+export const MEMORY_SCOPES = {
+  project: "The project's shared memory",
+  agent: "Its own, within the project",
+  none: "None",
+} as const;
+
+/** Who a knowledge base is served to: an agent reading it runs only in those projects. */
+export function servedTo(base: KnowledgeBase): string {
+  if (base.scope === "org") return "every project of the organisation";
+  if (base.scope === "projects") return (base.projects ?? []).length ? `projects ${(base.projects ?? []).join(", ")}` : "no project yet";
+  return (base.groups ?? []).length ? `the projects of ${(base.groups ?? []).join(", ")}` : "no group yet";
+}
 
 export function skillUsable(skill: Skill): boolean {
   return !SKILL_UNUSABLE.has(skill.status);
@@ -67,6 +78,8 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     budget: { ...spec.budget, run_usd: spec.budget?.run_usd ?? null, daily_usd: spec.budget?.daily_usd ?? null },
     skills: spec.skills ?? [],
     mcp_servers: (spec.mcp_servers ?? []).filter((s) => s.connector),
+    knowledge: spec.knowledge ?? [],
+    memory: spec.memory ?? "project",
     evals: (spec.evals ?? []).filter((c) => c.name.trim()),
   };
 }
@@ -97,6 +110,7 @@ export function AgentBuilder({
     budget: { ...start.budget },
     skills: [...(start.skills ?? [])],
     mcp_servers: (start.mcp_servers ?? []).map((s) => ({ ...s, tools: [...(s.tools ?? [])] })),
+    knowledge: (start.knowledge ?? []).map((k) => ({ ...k })),
     evals: (start.evals ?? []).map((c) => ({ ...c })),
   }));
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +121,7 @@ export function AgentBuilder({
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
   const library = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
+  const bases = useQuery({ queryKey: ["knowledge", org], queryFn: () => api.knowledgeBases(org), retry: false });
 
   const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
   const set = (patch: Partial<AgentSpec>) => setSpec((s) => ({ ...s, ...patch }));
@@ -297,6 +312,29 @@ export function AgentBuilder({
 
         <McpSection connectors={mcpConnectors} spec={spec} set={set} />
 
+        <KnowledgeSection bases={bases.data ?? []} spec={spec} set={set} />
+
+        <Section title="Memory">
+          <Field
+            label="Memory scope"
+            hint="What a run remembers from earlier runs, and where it writes what it learns. Memory is data in the context, never instructions."
+          >
+            {(id) => (
+              <Select
+                id={id}
+                value={spec.memory ?? "project"}
+                onChange={(e) => set({ memory: e.target.value as keyof typeof MEMORY_SCOPES })}
+              >
+                {Object.entries(MEMORY_SCOPES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </Section>
+
         <Section title="Eval suite">
           <EvalSuiteEditor cases={spec.evals ?? []} onChange={(evals) => set({ evals })} />
         </Section>
@@ -318,7 +356,13 @@ export function AgentBuilder({
       <div className="lg:col-start-1">
         {extra ? extra(cleanSpec(spec)) : <TrialBench spec={cleanSpec(spec)} agent={mode.kind === "version" ? mode.agent.slug : undefined} />}
       </div>
-      <BuilderSummary spec={spec} models={models.data ?? []} connectors={mcpConnectors} library={library.data ?? []} />
+      <BuilderSummary
+        spec={spec}
+        models={models.data ?? []}
+        connectors={mcpConnectors}
+        library={library.data ?? []}
+        bases={bases.data ?? []}
+      />
     </div>
   );
 }
@@ -506,17 +550,82 @@ function McpSection({
   );
 }
 
+function KnowledgeSection({
+  bases,
+  spec,
+  set,
+}: {
+  bases: KnowledgeBase[];
+  spec: AgentSpec;
+  set: (patch: Partial<AgentSpec>) => void;
+}) {
+  const [adding, setAdding] = useState("");
+  const read = spec.knowledge ?? [];
+  return (
+    <Section title="Knowledge">
+      <div data-testid="bases-de-la-version" className="space-y-2">
+        {read.length === 0 ? (
+          <p className="text-xs text-ink-muted">None — it reads no knowledge base.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {read.map((k) => (
+              <li key={k.slug} className="inline-flex items-center gap-1 rounded border border-line px-2 py-0.5 text-xs">
+                <span className="font-mono">{k.slug}</span>
+                <button
+                  type="button"
+                  className="ml-1 text-ink-muted hover:text-ink"
+                  onClick={() => set({ knowledge: read.filter((c) => c.slug !== k.slug) })}
+                >
+                  Remove<span className="sr-only"> {k.slug}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-xs text-ink-muted">Add a knowledge base</span>
+            <Select value={adding} onChange={(e) => setAdding(e.target.value)}>
+              <option value="">—</option>
+              {bases
+                .filter((b) => !read.some((k) => k.slug === b.slug))
+                .map((b) => (
+                  <option key={b.slug} value={b.slug}>
+                    {b.name} ({b.serving_mode})
+                  </option>
+                ))}
+            </Select>
+          </label>
+          <Button
+            size="sm"
+            disabled={!adding}
+            onClick={() => {
+              set({ knowledge: [...read, { slug: adding }] });
+              setAdding("");
+            }}
+          >
+            Read it
+          </Button>
+        </div>
+        {bases.length === 0 && <p className="text-xs text-ink-muted">No knowledge base in the organisation yet.</p>}
+      </div>
+    </Section>
+  );
+}
+
 /** What the draft costs and allows, said next to the form (plan item 0). */
 export function BuilderSummary({
   spec,
   models,
   connectors,
   library,
+  bases = [],
 }: {
   spec: AgentSpec;
   models: GatewayModel[];
   connectors: OrgConnector[];
   library: Skill[];
+  bases?: KnowledgeBase[];
 }) {
   const model = models.find((m) => m.model_name === spec.model);
   const servers = spec.mcp_servers ?? [];
@@ -600,6 +709,39 @@ export function BuilderSummary({
         <p className="text-xs text-ink-muted">
           At run time the broker intersects these with the project&apos;s grants (a project only tightens) and, for an
           external agent, with its human&apos;s rights.
+        </p>
+      </div>
+      <div className="space-y-1" data-testid="connaissances-resolues">
+        <h4 className="text-xs font-medium text-ink-muted">Knowledge</h4>
+        {(spec.knowledge ?? []).length === 0 ? (
+          <p>None.</p>
+        ) : (
+          <ul className="text-xs">
+            {(spec.knowledge ?? []).map((k) => {
+              const base = bases.find((b) => b.slug === k.slug);
+              return (
+                <li key={k.slug}>
+                  <span className="font-mono">{k.slug}</span> —{" "}
+                  {!base
+                    ? "not a base of the organisation: a run would stop."
+                    : `${base.serving_mode === "index" ? "searched with knowledge_search" : "laid read-only in the workspace"}; served to ${servedTo(base)}.`}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {(spec.knowledge ?? []).length > 0 && (
+          <p className="text-xs text-ink-muted">A run in a project a base is not served to stops before it starts.</p>
+        )}
+      </div>
+      <div className="space-y-1">
+        <h4 className="text-xs font-medium text-ink-muted">Memory</h4>
+        <p data-testid="memoire-resolue">
+          {spec.memory === "none"
+            ? "No memory: a run neither reads nor writes what earlier runs learnt."
+            : spec.memory === "agent"
+              ? "Its own memory within each project: what it learns stays with it."
+              : "The project's shared memory: it reads and adds to what every agent of the project learnt."}
         </p>
       </div>
     </aside>

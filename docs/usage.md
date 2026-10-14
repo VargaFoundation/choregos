@@ -463,6 +463,12 @@ curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
   -d '{"version": 2, "overrides": {"budget": {"run_usd": 1}}}'
 ```
 
+In the console, **Agents → New agent** (or **New version** on an agent's page) is the same thing as
+a form: every field of the version — instructions, model, backend, limits, budget, skills, MCP
+servers and their tool patterns, knowledge bases, memory scope, eval suite — with, beside it, what
+each choice costs and allows: the model's price, the operations a tool pattern reaches and their
+policy, and the projects a knowledge base is served to (a run elsewhere stops before it starts).
+
 An agent carries **skills** — a folder with a `SKILL.md` whose header gives its `name` and
 `description` — from the organisation's library:
 
