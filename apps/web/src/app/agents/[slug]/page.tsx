@@ -45,7 +45,7 @@ const AGENT_TABS = [
 type AgentTab = (typeof AGENT_TABS)[number]["id"];
 
 /**
- * Un agent du registre, in tabs (S30-05): what it did and cost (overview), what it is (its current
+ * An agent of the registry, in tabs (S30-05): what it did and cost (overview), what it is (its current
  * version, and publishing the next), its versions, its runs, and what it may reach (access — and,
  * for an external agent, the clients that act as it). The tab is in the address: a link names it.
  */
@@ -234,8 +234,8 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
 function Definition({ org, agent }: { org: string; agent: Agent }) {
   const versions = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version);
   const courante = versions[0];
-  // Le message de publication vit ICI : le formulaire se remonte quand la version publiée arrive
-  // (clé `latest_version`), et l'emportait avec lui (S23-13, vu en CI).
+  // The publication message lives HERE: the form remounts when the published version arrives
+  // (key `latest_version`), and used to take the message with it (S23-13, seen in CI).
   const [publiee, setPubliee] = useState<string | null>(null);
   return (
     <>
