@@ -1215,6 +1215,39 @@ paths:
       responses:
         "204": { description: Detached }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/lifecycle:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: changeAgentLifecycle
+      description: "draft → active → deprecated → retired (S32-04); a deprecated agent may be reactivated, `retired` is final. Retiring revokes the agent's credentials, removes its project pins and refuses new runs; refused (409) while one of its runs is in flight unless `force`. Audited (`agent.lifecycle`, `agent.retire`). `agent:manage`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentLifecycleChange" } } }
+      responses:
+        "200": { description: The new state and the checklist executed, content: { application/json: { schema: { $ref: "#/components/schemas/AgentLifecycleResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/owner:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: transferAgentOwnership
+      description: A new owner, member of the organisation; the agent keeps its credentials. Audited (`agent.transfer`). `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentOwnerChange" } } }
+      responses:
+        "200": { description: Transferred, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/versions:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2440,6 +2473,7 @@ components:
         display_name: { type: string }
         description: { type: [string, "null"] }
         spec: { $ref: "#/components/schemas/AgentSpec" }
+        lifecycle: { type: string, enum: [draft, active], default: active, description: a draft is neither pinned nor run until it is activated }
     AgentCatalogueEntry:
       type: object
       description: An agent the platform's catalogue offers (ADR 0040), and its state in the organisation.
@@ -2508,6 +2542,31 @@ components:
         latest_version: { type: integer }
         created_at: { type: [string, "null"], format: date-time }
         versions: { type: [array, "null"], items: { $ref: "#/components/schemas/AgentVersion" } }
+        lifecycle: { type: string, enum: [draft, active, deprecated, retired], default: active, description: "where the agent is in its life (S32-04); apart from the operational status" }
+        retired_at: { type: [string, "null"], format: date-time }
+        last_run_at: { type: [string, "null"], format: date-time }
+        unused: { type: boolean, description: no run for 60 days (since its creation if it never ran) }
+    AgentLifecycleChange:
+      type: object
+      required: [to]
+      properties:
+        to: { type: string, enum: [active, deprecated, retired] }
+        force: { type: boolean, default: false, description: retire although runs of the agent are in flight }
+        reason: { type: [string, "null"], maxLength: 500 }
+    AgentLifecycleResult:
+      type: object
+      required: [agent]
+      properties:
+        agent: { $ref: "#/components/schemas/Agent" }
+        revoked_credentials: { type: integer }
+        unpinned_projects: { type: array, items: { type: string } }
+        running_work_items: { type: array, items: { type: string } }
+        forced: { type: boolean }
+    AgentOwnerChange:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
     AgentMetrics:
       type: object
       required: [agent, days, runs, succeeded, failed]
@@ -2565,6 +2624,7 @@ components:
         version: { type: integer }
         overrides: { $ref: "#/components/schemas/AgentOverrides" }
         effective: { $ref: "#/components/schemas/AgentSpec" }
+        warning: { type: [string, "null"], description: said when the agent is deprecated }
     SkillFiles:
       type: object
       required: [files]

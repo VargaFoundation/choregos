@@ -16,7 +16,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
-from ..db.models import Agent, AgentCredential, AgentVersion, ApiToken, Organization, ProjectAgent, User
+from ..db.models import (
+    Agent,
+    AgentCredential,
+    AgentVersion,
+    ApiToken,
+    Membership,
+    Organization,
+    ProjectAgent,
+    User,
+)
 from ..deps import Config, Db, Me, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
@@ -29,8 +38,11 @@ from ..schemas import (
     AgentCredentialCreate,
     AgentCredentialDto,
     AgentDto,
+    AgentLifecycleChange,
+    AgentLifecycleResult,
     AgentMetrics,
     AgentOverrides,
+    AgentOwnerChange,
     AgentPatch,
     AgentProjectMetrics,
     AgentSpec,
@@ -38,6 +50,14 @@ from ..schemas import (
     ApiTokenCreated,
     ProjectAgentDto,
     ProjectAgentPut,
+)
+from ..services.agent_lifecycle import (
+    TransitionRefused,
+    check_transition,
+    last_run_at,
+    retire,
+    running_work_items,
+    unused,
 )
 from ..services.agents import depense_du_jour, effective, elargissements, empreinte, erreurs_d_une_version
 
@@ -84,6 +104,7 @@ def _version_dto(ligne: AgentVersion) -> AgentVersionDto:
 async def _dto(session: AsyncSession, agent: Agent, *, avec_versions: bool = False) -> AgentDto:
     versions = await _versions(session, agent)
     proprietaire = await session.get(User, agent.owner_id) if agent.owner_id else None
+    dernier = await last_run_at(session, agent.org_id, agent.slug)
     return AgentDto(
         slug=agent.slug,
         kind=agent.kind,
@@ -96,6 +117,10 @@ async def _dto(session: AsyncSession, agent: Agent, *, avec_versions: bool = Fal
         latest_version=versions[0].version if versions else 0,
         created_at=agent.created_at,
         versions=[_version_dto(v) for v in versions] if avec_versions else None,
+        lifecycle=agent.lifecycle or "active",
+        retired_at=agent.retired_at,
+        last_run_at=dernier,
+        unused=unused(agent, dernier),
     )
 
 
@@ -144,6 +169,7 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         description=body.description,
         owner_id=principal.user_id,
         status="active",
+        lifecycle=body.lifecycle,
     )
     session.add(agent)
     await session.flush()
@@ -188,6 +214,8 @@ async def publish_version(
     agent = await _agent(session, organisation, slug)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
+    if agent.lifecycle == "retired":
+        raise conflict(f"agent `{slug}` is retired: it can no longer publish")
     derniere = (
         await session.execute(select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == agent.id))
     ).scalar() or 0
@@ -325,6 +353,115 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
     return await _dto(session, agent)
 
 
+# ───────────────────────────── its life (S32-04) ─────────────────────────────
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/lifecycle",
+    response_model=AgentLifecycleResult,
+    operation_id="changeAgentLifecycle",
+)
+async def change_agent_lifecycle(
+    org: str, slug: Slug, body: AgentLifecycleChange, session: Db, principal: Me
+) -> AgentLifecycleResult:
+    """Activate a draft, deprecate, reactivate, or retire. Retiring runs its checklist — credentials
+    revoked, project pins removed, new runs refused — and is refused while a run of the agent is in
+    flight, unless `force` (audited)."""
+    _gerer(principal, org)
+    organisation = await _organisation(session, org)
+    agent = await _agent(session, organisation, slug)
+    avant = agent.lifecycle or "active"
+    try:
+        check_transition(avant, body.to)
+    except TransitionRefused as refus:
+        raise conflict(str(refus)) from refus
+    resultat = AgentLifecycleResult(agent=await _dto(session, agent), forced=body.force)
+    if body.to == "retired":
+        en_vol = await running_work_items(session, organisation.id, slug)
+        if en_vol and not body.force:
+            raise conflict(
+                f"agent `{slug}` has runs in flight on {', '.join(en_vol)}: let them finish, or force "
+                "the retirement"
+            )
+        fait = await retire(session, agent)
+        resultat.revoked_credentials = fait["revoked_credentials"]
+        resultat.unpinned_projects = fait["unpinned_projects"]
+        resultat.running_work_items = en_vol
+    else:
+        agent.lifecycle = body.to
+        await session.flush()
+    await record(
+        session,
+        principal,
+        f"agent.{'retire' if body.to == 'retired' else 'lifecycle'}",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=agent.id,
+        before=avant,
+        after=agent.lifecycle,
+        reason=body.reason,
+        forced=body.force if body.to == "retired" else None,
+        revoked_credentials=resultat.revoked_credentials,
+        unpinned_projects=resultat.unpinned_projects,
+        running_work_items=resultat.running_work_items,
+    )
+    resultat.agent = await _dto(session, agent)
+    return resultat
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/owner", response_model=AgentDto, operation_id="transferAgentOwnership"
+)
+async def transfer_agent_ownership(
+    org: str, slug: Slug, body: AgentOwnerChange, session: Db, principal: Me
+) -> AgentDto:
+    """A new owner, a member of the organisation. The agent keeps its credentials: they belong to
+    the agent, not to the person who owned it."""
+    _gerer(principal, org)
+    organisation = await _organisation(session, org)
+    agent = await _agent(session, organisation, slug)
+    if agent.lifecycle == "retired":
+        raise conflict(f"agent `{slug}` is retired: it has no owner to change")
+    nouveau = (
+        await session.execute(select(User).where(func.lower(User.email) == body.email.strip().lower()))
+    ).scalar_one_or_none()
+    membre = (
+        nouveau is not None
+        and (
+            await session.execute(
+                select(Membership.id).where(
+                    Membership.user_id == nouveau.id, Membership.org_id == organisation.id
+                )
+            )
+        ).first()
+        is not None
+    )
+    if nouveau is None or not membre:
+        raise unprocessable(f"`{body.email}` is not a member of {org}: the owner must be one")
+    ancien = await session.get(User, agent.owner_id) if agent.owner_id else None
+    agent.owner_id = nouveau.id
+    await session.flush()
+    accreditations = (
+        await session.execute(
+            select(func.count(AgentCredential.id)).where(
+                AgentCredential.agent_id == agent.id, AgentCredential.revoked_at.is_(None)
+            )
+        )
+    ).scalar_one()
+    await record(
+        session,
+        principal,
+        "agent.transfer",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=agent.id,
+        before=ancien.email if ancien else None,
+        after=nouveau.email,
+        credentials_kept=int(accreditations),
+    )
+    return await _dto(session, agent)
+
+
 # ───────────────────────────── l'épingle d'un projet ─────────────────────────────
 
 
@@ -343,7 +480,15 @@ async def _projet_dto(session: AsyncSession, epingle: ProjectAgent, agent: Agent
     spec = AgentSpec.model_validate((await _version_de(session, agent, epingle.version)).spec)
     surcharges = AgentOverrides.model_validate(epingle.overrides or {})
     return ProjectAgentDto(
-        agent=agent.slug, version=epingle.version, overrides=surcharges, effective=effective(spec, surcharges)
+        agent=agent.slug,
+        version=epingle.version,
+        overrides=surcharges,
+        effective=effective(spec, surcharges),
+        warning=(
+            f"agent `{agent.slug}` is deprecated: it still runs, but plan to replace it"
+            if agent.lifecycle == "deprecated"
+            else None
+        ),
     )
 
 
@@ -367,6 +512,8 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
     agent = await _agent(session, organisation, slug)
     if agent.status != "active":
         raise conflict(f"agent `{slug}` is {agent.status}: it cannot be pinned")
+    if agent.lifecycle in {"draft", "retired"}:
+        raise conflict(f"agent `{slug}` is {agent.lifecycle}: it cannot be pinned")
     spec = AgentSpec.model_validate((await _version_de(session, agent, body.version)).spec)
     ecarts = elargissements(spec, body.overrides)
     if ecarts:

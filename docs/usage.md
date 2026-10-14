@@ -509,7 +509,17 @@ their success rate, their cost by kind and by project, and what it spent today.
 
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). Creating, publishing and revoking need
-`agent:manage` (organisation administrators); a revocation is final. Agents are under the same
+`agent:manage` (organisation administrators); a revocation is final.
+
+An agent also has a **lifecycle**, apart from that operational status: `draft` (no project pins
+it, no run starts with it) → `active` → `deprecated` (it still runs; a pin of it answers with a
+warning) → `retired`, which is final.
+`POST /orgs/{org}/agents/{slug}/lifecycle {"to": "retired"}` executes the retirement checklist —
+its credentials are revoked, its project pins removed, new runs refused — and is refused (`409`)
+while one of its runs is in flight, unless `"force": true`; the audit log records each step.
+An agent with no run for 60 days says so (`unused`, `last_run_at`), and
+`POST …/agents/{slug}/owner {"email": …}` hands it to another member, credentials included.
+Agents are under the same
 row-level security as everything else: an agent of another organisation does not exist for you.
 
 In the console, **agents** (top bar) lists the registry and **your AI clients** — your `mcp:*`

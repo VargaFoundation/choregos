@@ -155,8 +155,13 @@ async def incarner_l_agent(
     agent = await session.get(Agent, rattachement.agent_id)
     if agent is None:
         return
-    if agent.status != "active" or (agent.expires_at is not None and _aware(agent.expires_at) <= utcnow()):
-        etat = agent.status if agent.status != "active" else "expired"
+    retired = agent.lifecycle == "retired"
+    if (
+        retired
+        or agent.status != "active"
+        or (agent.expires_at is not None and _aware(agent.expires_at) <= utcnow())
+    ):
+        etat = "retired" if retired else agent.status if agent.status != "active" else "expired"
         raise Refus(
             401,
             f"agent `{agent.slug}` is {etat}: this client is no longer allowed in",

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { estUnClientMcp, resumeDeLaVersion } from "@/components/agents/registre";
 import { CatalogueDAgents } from "@/components/agents/catalogue";
 import { ClientsMcp } from "@/components/agents/clients-mcp";
+import { LifecycleBadges } from "@/components/agents/lifecycle";
 import { Glossaire } from "@/components/glossaire";
 import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading, Input, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -70,6 +71,7 @@ export default function AgentsPage() {
                     </td>
                     <td>
                       <Badge tone={agent.status === "active" ? "ok" : "danger"}>{agent.status}</Badge>
+                      <LifecycleBadges agent={agent} />
                     </td>
                     <td>
                       v{agent.latest_version}

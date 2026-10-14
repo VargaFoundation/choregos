@@ -85,6 +85,8 @@ export type {
   AgentCatalogueEntry,
   AgentCreate,
   AgentCredential,
+  AgentLifecycleChange,
+  AgentLifecycleResult,
   AgentMetrics,
   AgentPatch,
   AgentSpec,
