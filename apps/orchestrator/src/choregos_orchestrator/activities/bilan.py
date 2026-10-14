@@ -13,16 +13,46 @@ from choregos_api.db.models import Finding as FindingRow
 from choregos_api.db.models import GatewayKeyRow, Project, Run
 from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_api.services.artifacts import record_inline_outputs
+from choregos_api.services.budget_alerts import unsent_month_alerts
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_api.services.tickets import sorties_a_ranger
 from choregos_contracts import EventType, StageResult, StageStatus
-from choregos_core import Spend, elapsed_seconds, utcnow
+from choregos_core import Message, Spend, elapsed_seconds, utcnow
 from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
 from .base import db, load_work_item, project_bundle
+
+
+async def _tell_slack_of_agent_alerts(session: Any, bundle: Any) -> None:
+    """The monthly alerts of the organisation's agents (50, 80, 100 %) that Slack has not heard yet.
+    One message each; `notified_at` is what makes it once. A notifier that is absent or down leaves
+    the alert unsent: the next stage end tries again, and the inbox has it meanwhile."""
+    for alert in await unsent_month_alerts(session, bundle.project.org_id):
+        full = alert.threshold >= 100
+        try:
+            await bundle.adapters.notify.send(
+                bundle.config.notify.slack_channel or "#choregos",
+                Message(
+                    title=(
+                        f"Agent {alert.subject}: monthly budget {alert.threshold} % "
+                        f"({alert.spent_usd:.2f} / {alert.budget_usd:.2f} $)"
+                    ),
+                    body=(
+                        "The agent is suspended: its new runs are refused until it is resumed."
+                        if full
+                        else "Nothing is stopped yet."
+                    ),
+                    severity="error" if full else "warning",
+                    context={"agent": alert.subject, "month": alert.period_key},
+                ),
+            )
+        except Exception as error:
+            activity.logger.warning("agent budget alert not sent: %s", error)
+            return
+        alert.notified_at = utcnow()
 
 
 @activity.defn(name="collect_spend")
@@ -97,6 +127,7 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
                 key_row.spend_usd = spend.cost_usd
                 key_row.revoked = True
         await session.flush()
+        await _tell_slack_of_agent_alerts(session, bundle)
         # What the ticket has cost, read from the ledger — this run's line included, tool calls
         # too (S27-03): the interpreter's counter is this, not a sum it keeps in memory.
         return {**run.tokens, **await _ticket_view(session, bundle, item.id)}

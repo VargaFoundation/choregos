@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime, time
 
 from choregos_core import utcnow
 from choregos_core.instructions import erreurs_des_instructions
@@ -145,30 +146,41 @@ async def resoudre_l_agent(
     return AgentResolu(agent=agent, version=version, spec=effective(spec, surcharges))
 
 
-async def depense_du_jour(session: AsyncSession, org_id: str, agent_slug: str) -> float:
-    """Ce que les runs de l'agent ont coûté depuis minuit (UTC), modèles ET outils."""
-    from datetime import datetime, time
-
+async def depense_depuis(session: AsyncSession, org_id: str, agent_slug: str, since: datetime) -> float:
+    """What the agent's runs cost since `since`, models AND tools."""
     from sqlalchemy import func
 
     from ..db.models import CostLedger, Project, Run
 
-    minuit = datetime.combine(utcnow().date(), time.min, tzinfo=utcnow().tzinfo)
     total = (
         await session.execute(
             select(func.coalesce(func.sum(CostLedger.cost_usd), 0.0))
             .join(Run, Run.id == CostLedger.run_id)
             .join(Project, Project.id == Run.project_id)
-            .where(Run.agent_slug == agent_slug, Project.org_id == org_id, CostLedger.ts >= minuit)
+            .where(Run.agent_slug == agent_slug, Project.org_id == org_id, CostLedger.ts >= since)
         )
     ).scalar_one()
     return float(total)
 
 
+async def depense_du_jour(session: AsyncSession, org_id: str, agent_slug: str) -> float:
+    """Ce que les runs de l'agent ont coûté depuis minuit (UTC), modèles ET outils."""
+    minuit = datetime.combine(utcnow().date(), time.min, tzinfo=utcnow().tzinfo)
+    return await depense_depuis(session, org_id, agent_slug, minuit)
+
+
+async def depense_du_mois(session: AsyncSession, org_id: str, agent_slug: str) -> float:
+    """What the agent's runs have cost since the first of the month (UTC), models AND tools."""
+    first = datetime.combine(utcnow().date().replace(day=1), time.min, tzinfo=utcnow().tzinfo)
+    return await depense_depuis(session, org_id, agent_slug, first)
+
+
 __all__ = [
     "AgentIndisponible",
     "AgentResolu",
+    "depense_depuis",
     "depense_du_jour",
+    "depense_du_mois",
     "effective",
     "elargissements",
     "erreurs_d_une_version",

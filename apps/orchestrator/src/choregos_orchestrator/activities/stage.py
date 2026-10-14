@@ -594,20 +594,35 @@ async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:
 async def _budget_du_jour(session: Any, bundle: Any, agent: Any) -> None:
     """Un agent qui a dépensé son budget du jour — modèles et outils — ne lance plus de run avant
     minuit (UTC). Le refus ne se réessaie pas : retenter ne rendrait pas le budget."""
-    plafond = agent.spec.budget.daily_usd
-    if plafond is None:
-        return
-    from choregos_api.services.agents import depense_du_jour
+    from choregos_api.services.agents import depense_du_jour, depense_du_mois
+    from choregos_api.services.budget_alerts import suspend_for_budget
     from temporalio.exceptions import ApplicationError
 
-    depense = await depense_du_jour(session, bundle.project.org_id, agent.agent.slug)
-    if depense >= plafond:
-        raise ApplicationError(
-            f"run refused before it started — the agent `{agent.agent.slug}` spent {depense:.2f} $ "
-            f"today, for a daily budget of {plafond:.2f} $",
-            type="admission_refused",
-            non_retryable=True,
-        )
+    slug = agent.agent.slug
+    org_id = bundle.project.org_id
+    plafond = agent.spec.budget.daily_usd
+    if plafond is not None:
+        depense = await depense_du_jour(session, org_id, slug)
+        if depense >= plafond:
+            raise ApplicationError(
+                f"run refused before it started — the agent `{slug}` spent {depense:.2f} $ "
+                f"today, for a daily budget of {plafond:.2f} $",
+                type="admission_refused",
+                non_retryable=True,
+            )
+    monthly = agent.spec.budget.monthly_usd
+    if monthly is not None:
+        spent = await depense_du_mois(session, org_id, slug)
+        if spent >= monthly:
+            # The hard stop of the monthly cap (S27-09); normally the spend that crossed it has
+            # already suspended the agent, this covers a cap set below what was already spent.
+            await suspend_for_budget(session, org_id, slug, spent=spent, cap=monthly)
+            raise ApplicationError(
+                f"run refused before it started — the agent `{slug}` spent {spent:.2f} $ "
+                f"this month, for a monthly budget of {monthly:.2f} $",
+                type="admission_refused",
+                non_retryable=True,
+            )
 
 
 async def _skills_de_l_agent(session: Any, bundle: Any, agent: Any) -> list[SkillRef]:

@@ -471,6 +471,7 @@ export type AgentLimits = {
 export type AgentBudget = {
   run_usd?: number | null;
   daily_usd?: number | null;
+  monthly_usd?: number | null;
 };
 
 /** What an agent version is; it never changes (ADR 0033). */

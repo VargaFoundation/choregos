@@ -717,7 +717,7 @@ class BudgetAlert(Base, PkMixin, TimestampMixin):
     scope: Mapped[str] = mapped_column(String(16))
     #: the project's or the agent's slug
     subject: Mapped[str] = mapped_column(String(64))
-    #: `day`; the policy has no monthly budget yet
+    #: `day`, or `month` (an agent's monthly cap, S27-09)
     period: Mapped[str] = mapped_column(String(8), default="day")
     #: `2026-10-13` for a day
     period_key: Mapped[str] = mapped_column(String(16))
@@ -725,6 +725,8 @@ class BudgetAlert(Base, PkMixin, TimestampMixin):
     threshold: Mapped[int] = mapped_column(Integer)
     spent_usd: Mapped[float] = mapped_column(Float, default=0.0)
     budget_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    #: when the alert reached Slack (monthly agent alerts only, S27-09); `None` = still to send
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: `open` until a person acknowledges it
     status: Mapped[str] = mapped_column(String(16), default="open", index=True)
     acknowledged_by: Mapped[str | None] = mapped_column(String(200), nullable=True)

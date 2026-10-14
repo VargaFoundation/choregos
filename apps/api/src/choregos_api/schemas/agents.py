@@ -23,6 +23,8 @@ class AgentBudget(Dto):
     #: Plafond d'un run, et de toute une journée de l'agent, en dollars.
     run_usd: float | None = Field(default=None, gt=0)
     daily_usd: float | None = Field(default=None, gt=0)
+    #: A calendar month (UTC). At 100 % the agent is suspended (S27-09).
+    monthly_usd: float | None = Field(default=None, gt=0)
 
 
 class AgentSkillRef(Dto):

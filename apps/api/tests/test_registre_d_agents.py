@@ -17,7 +17,7 @@ SPEC: dict[str, Any] = {
     "instructions": "Prépare le plan d'accès d'une arrivée : comptes, groupes, matériel.",
     "model": "profile:standard",
     "limits": {"max_turns": 40, "max_minutes": 30},
-    "budget": {"run_usd": 2.0, "daily_usd": 20.0},
+    "budget": {"run_usd": 2.0, "daily_usd": 20.0, "monthly_usd": None},
     "skills": [{"slug": "procedure-onboarding"}],
     "mcp_servers": [{"connector": "entra", "tools": ["entra_lire_*", "entra_creer_compte"]}],
 }
@@ -40,7 +40,7 @@ async def test_un_agent_nait_avec_sa_version_1(client: AsyncClient, admin: str) 
         1,
         admin,
     )
-    assert agent["versions"][0]["spec"]["budget"] == {"run_usd": 2.0, "daily_usd": 20.0}
+    assert agent["versions"][0]["spec"]["budget"] == {"run_usd": 2.0, "daily_usd": 20.0, "monthly_usd": None}
     assert [a["slug"] for a in (await client.get("/api/v1/orgs/varga/agents")).json()] == [
         "coordinateur-onboarding"
     ]
@@ -98,7 +98,7 @@ async def test_un_projet_resserre_et_ne_peut_pas_elargir(
     )
     assert resserre.status_code == 200, resserre.text
     effectif = resserre.json()["effective"]
-    assert effectif["budget"] == {"run_usd": 1.5, "daily_usd": 20.0}
+    assert effectif["budget"] == {"run_usd": 1.5, "daily_usd": 20.0, "monthly_usd": None}
     assert effectif["mcp_servers"] == [{"connector": "entra", "tools": ["entra_lire_*"]}]
 
     for elargit in (
