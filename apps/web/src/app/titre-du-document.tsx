@@ -27,9 +27,9 @@ export function titreDuChemin(pathname: string): string {
 }
 
 /**
- * Chaque page a son titre (S23-05) : tous les onglets portaient le même titre,
- * l'historique du navigateur ne distinguait aucune page, et un lecteur d'écran annonçait le même
- * titre à chaque navigation (WCAG 2.4.2). React 19 remonte ce `<title>` dans le `<head>`.
+ * Every page has its own title (S23-05): every tab carried the same title, the browser's history
+ * told no page apart, and a screen reader announced the same title on every navigation
+ * (WCAG 2.4.2). React 19 hoists this `<title>` into the `<head>`.
  */
 export function TitreDuDocument() {
   return <title>{titreDuChemin(usePathname())}</title>;

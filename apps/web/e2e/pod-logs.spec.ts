@@ -10,8 +10,8 @@ test("a running run shows its live pod log tail, secrets masked", async ({ page 
   await expect(tabs.getByRole("tab", { name: "ACP journal" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("live-log")).toBeVisible();
 
-  await tabs.getByRole("tab", { name: "pod logs" }).click();
-  await expect(tabs.getByRole("tab", { name: "pod logs" })).toHaveAttribute("aria-selected", "true");
+  await tabs.getByRole("tab", { name: "Pod logs" }).click();
+  await expect(tabs.getByRole("tab", { name: "Pod logs" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("pod-logs")).toHaveAttribute("data-source", "live");
   await expect(page.getByTestId("pod-logs-source")).toHaveText("live");
   const lines = page.getByTestId("pod-log-lines");
@@ -22,7 +22,7 @@ test("a running run shows its live pod log tail, secrets masked", async ({ page 
 
 test("a pod killed before the agent spoke says why: exit code, reason, last lines", async ({ page }) => {
   await page.goto("/p/billing-api/runs/r-oom");
-  await page.getByRole("tab", { name: "pod logs" }).click();
+  await page.getByRole("tab", { name: "Pod logs" }).click();
   await expect(page.getByTestId("pod-logs")).toHaveAttribute("data-source", "archive");
   await expect(page.getByTestId("pod-logs-source")).toHaveText("archived");
   await expect(page.getByTestId("pod-exit-code")).toHaveText("exit 137");

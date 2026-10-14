@@ -27,11 +27,11 @@ describe("décider d'une action gouvernée (ADR 0035, S20-02)", () => {
     rendre();
     const rejeter = screen.getByRole("button", { name: "Reject" });
     expect(rejeter).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Reason to reject"), { target: { value: "pas encore embauchée" } });
+    fireEvent.change(screen.getByLabelText("Reason to reject"), { target: { value: "not hired yet" } });
     expect(rejeter).toBeEnabled();
     fireEvent.click(rejeter);
     await waitFor(() =>
-      expect(api.decideAction).toHaveBeenCalledWith("rh", "act-1", { decision: "reject", reason: "pas encore embauchée" }),
+      expect(api.decideAction).toHaveBeenCalledWith("rh", "act-1", { decision: "reject", reason: "not hired yet" }),
     );
   });
 

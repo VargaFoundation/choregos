@@ -17,9 +17,9 @@ export function declarationsDe(chemin: string, selecteur: string): Declarations 
   const racine = postcss.parse(readFileSync(chemin, "utf-8"));
   const trouvees: Declarations = new Map();
   racine.walkRules((regle) => {
-    // Un sélecteur de la liste suffit.
+    // One selector of the list is enough.
     if (!regle.selectors.some((s) => s.trim() === selecteur)) return;
-    // Seulement au premier niveau (pas dans un @media).
+    // Top level only (not inside an @media).
     if (regle.parent?.type !== "root") return;
     regle.walkDecls((declaration) => {
       if (declaration.prop.startsWith("--")) trouvees.set(declaration.prop, declaration.value.trim());

@@ -261,9 +261,8 @@ const TAILLES: Record<ButtonSize, string> = {
 };
 
 /**
- * Les classes d'un bouton, pour habiller autre chose qu'un `<button>` — un `Link` de Next,
- * typiquement. In sans, with 4 px corners (ADR 0048). Au doigt, 44 px de haut au moins (WCAG
- * 2.5.8, S23-11).
+ * A button's classes, to dress something other than a `<button>` — a Next `Link`, typically. In
+ * sans, with 4 px corners (ADR 0048). For a finger, 44 px high at least (WCAG 2.5.8, S23-11).
  */
 export function buttonClasses(variant: ButtonVariant = "secondary", size: ButtonSize = "md", className?: string) {
   return cn(
@@ -287,7 +286,7 @@ export function tabClasses(active: boolean, className?: string) {
 
 // ───────────────────────────── champs ─────────────────────────────
 
-/** L'allure d'un champ : 32 px, une bordure de contrôle (3:1), 4 px corners, l'accent au focus. */
+/** A field's look: 32 px, a control border (3:1), 4 px corners, the accent on focus. */
 export const CHAMP =
   "w-full rounded border border-line-strong bg-surface px-2.5 text-[13px] text-ink transition-colors duration-200 ease-standard " +
   "hover:border-ink-subtle focus:border-accent focus:outline-none pointer-coarse:min-h-11 " +
@@ -470,7 +469,7 @@ export function ActorIcon({ kind, name, point = true }: { kind: string; name?: s
 
 export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title?: ReactNode;
-  /** Le titre est une donnée (le nom d'un projet) : il garde sa casse (ADR 0048 §3). */
+  /** The title is data (a project's name): it keeps its case (ADR 0048 §3). */
   titreDonnee?: boolean;
   /** A short line above the title. */
   eyebrow?: ReactNode;
@@ -780,10 +779,10 @@ export function EtatDeLecture({
  * A row of tabs: links to the sections of a page, the current one with `aria-current="page"` and
  * the accent's underline (`tabClasses`). It is navigation, not an ARIA `tablist`: each tab is a page.
  *
- * L'onglet actif descend d'un pixel (`-mb-px`) pour poser son trait sur le filet de la barre ; dans
- * une barre qui défile en largeur (`overflow-x-auto`), ce pixel de trop était un débordement
- * vertical, et Windows dessinait ses flèches ▲ ● ▼ au bout de chaque barre d'onglets (relevé le
- * 06/10). Un pixel de marge basse (`pb-px`) le reçoit.
+ * The active tab drops one pixel (`-mb-px`) to lay its underline on the bar's rule; in a bar that
+ * scrolls sideways (`overflow-x-auto`), that extra pixel was a vertical overflow, and Windows drew
+ * its ▲ ● ▼ arrows at the end of every tab bar (seen on 06/10). One pixel of bottom padding
+ * (`pb-px`) takes it.
  */
 export function Tabs({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return <nav className={cn("flex gap-6 overflow-x-auto border-b border-line pb-px", className)} {...props} />;

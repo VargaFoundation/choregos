@@ -77,7 +77,7 @@ export default function ProjectsPage() {
                 />
               }
             >
-              {/* Pas un <dl> : `Stat` ne rend ni <dt> Ni <dd>, et axe le refuse à raison (definition-list). */}
+              {/* Not a <dl>: `Stat` renders neither <dt> nor <dd>, and axe rightly refuses it (definition-list). */}
               <div className="grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-5">
                 <Stat value={project.stats?.active_work_items ?? 0} label="Active tickets" />
                 <Stat

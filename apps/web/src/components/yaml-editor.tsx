@@ -148,7 +148,7 @@ export function diagnostic(doc: Text, issue: Issue, severity: "error" | "warning
   };
 }
 
-/** Les couleurs viennent des jetons de la console (`--choregos-*`) : clair et sombre suivent sans code. */
+/** The colours come from the console's tokens (`--choregos-*`): light and dark follow with no code. */
 const THEME = EditorView.theme({
   "&": { height: "100%", fontSize: "12px", color: "var(--choregos-ink)", backgroundColor: "var(--choregos-surface)" },
   ".cm-scroller": { fontFamily: "var(--choregos-font-mono)", lineHeight: "1.6" },

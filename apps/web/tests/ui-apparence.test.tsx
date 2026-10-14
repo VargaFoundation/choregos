@@ -26,7 +26,7 @@ import {
 } from "@/components/ui";
 
 /**
- * L'allure des primitives de la console (ADR 0043, S24-02, then ADR 0048): the console owns them, and
+ * The look of the console's primitives (ADR 0043, S24-02, then ADR 0048): the console owns them, and
  * they look like an operations console in the manner of Temporal's UI — sans for what is read, mono
  * for what is compared, 4–6 px corners, round pills. Each case falls if a primitive takes back the
  * foundation's look: 48 px bold Space Mono, the square dot, the inverted slab, the ink rule, mono

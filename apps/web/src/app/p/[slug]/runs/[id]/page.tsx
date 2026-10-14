@@ -175,7 +175,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
             {(
               [
                 ["journal", "ACP journal"],
-                ["logs", "pod logs"],
+                ["logs", "Pod logs"],
               ] as const
             ).map(([key, label]) => (
               <button
