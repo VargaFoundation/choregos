@@ -63,6 +63,25 @@ def test_snapshot_ok(workdir: Path) -> None:
     assert read_bars(workdir / "snap" / "bars.csv")["AAA"].dates == ["2020-01-02", "2020-01-03"]
 
 
+def test_the_cross_check_of_each_symbol_is_kept_and_counted(workdir: Path) -> None:
+    """A `composite` source compares two sources: what it found stays in the snapshot, and the facts
+    say how many symbols a second source confirmed and how many diverge."""
+    agree = {"source": "b", "common_days": 2, "max_rel_diff": 0.001, "diverging_days": 0}
+    differ = {**agree, "max_rel_diff": 0.2, "diverging_days": 1}
+    checks = {"AAA": agree, "BBB": differ, "CCC": None}
+    api = {"result": {"structuredContent": {"provider": "a", "bars": [BAR], "cross_check": differ}}}
+    assert parse_response(api, "X").cross_check == differ
+
+    def composite(symbol: str, start: str, end: str) -> Fetched:
+        return Fetched("a", [BAR], checks[symbol])
+
+    assert main(args(workdir), fetcher=composite) == 0
+    snap = json.loads((workdir / "snap" / "snapshot.json").read_text())
+    assert snap["cross_check"] == checks
+    facts = json.loads((workdir / "snap" / "result.json").read_text())["facts"]
+    assert (facts["cross_checked"], facts["diverging"]) == (2, 1)
+
+
 def test_snapshot_missing_symbols_exit_3(workdir: Path) -> None:
     assert main(args(workdir), fetcher=fake({"BBB"})) == 3
     assert json.loads((workdir / "snap" / "snapshot.json").read_text())["missing"] == ["BBB"]

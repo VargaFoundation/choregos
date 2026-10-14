@@ -48,7 +48,12 @@ forbids.
   later out-of-sample period is a new work item.
 - **Free sources.** Data from free providers: unofficial endpoints, survivorship bias (today's
   listings), adjustments the provider chose. The snapshot is hashed so a result can be replayed, not
-  so that it is right.
+  so that it is right. A re-run of the step reuses the stored snapshot for the same request, byte
+  for byte, and fetches nothing (`reused: 1` in its facts); a new window is a new request. With a
+  `composite` connector, each symbol's cross-check stays in `snapshot.json` and the facts count the
+  symbols a second source confirmed (`cross_checked`) and those that diverge (`diverging`) —
+  recorded, not gated. On 2026-10-14 Stooq answered scripts with a browser check: a composite of
+  Yahoo and Alpha Vantage (free key) is the one that cross-checks (`essai/investissement/`).
 - **Assumed costs.** `cost_bps` per change of position; no spread model, no tax, no currency hedge.
 - **Internal use.** The memo is a research note, not investment advice, not an offer, not an order.
   Adopting a campaign means following its products on paper.

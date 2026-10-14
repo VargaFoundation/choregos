@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from choregos_quant.cli import main
+from choregos_quant.snapshot import Fetched
 
 from .test_snapshot import fake
 
@@ -67,3 +68,50 @@ def test_outside_a_job_the_paths_are_required(monkeypatch: pytest.MonkeyPatch, w
     monkeypatch.delenv("CHOREGOS_WORKSPACE", raising=False)
     assert main(["backtest"]) == 2
     assert main(["backtest", "--campaign", str(workdir / "campaign.json")]) == 2
+
+
+def test_a_re_run_reads_the_stored_snapshot_byte_for_byte_and_fetches_nothing(ws: Path) -> None:
+    """S38-04: the platform mounts what the last run of the step stored; the same request reuses it."""
+    assert main(["snapshot"], fetcher=fake(set())) == 0
+    inputs, outputs = ws / ".choregos" / "inputs", ws / ".choregos" / "outputs"
+    first_bars = (outputs / "bars.csv").read_bytes()
+    first_snapshot = _job(ws)["outputs"]["snapshot"]  # type: ignore[index]
+    shutil.copyfile(outputs / "bars.csv", inputs / "bars.csv")
+    (inputs / "snapshot.json").write_text(json.dumps(first_snapshot, indent=2))  # stored, not canonical
+
+    def offline(symbol: str, start: str, end: str) -> Fetched:
+        raise AssertionError(f"{symbol} fetched again")
+
+    assert main(["snapshot"], fetcher=offline) == 0
+    job = _job(ws)
+    assert (outputs / "bars.csv").read_bytes() == first_bars
+    assert job["outputs"]["snapshot"] == first_snapshot, "the same snapshot, its first fetch date included"  # type: ignore[index]
+    assert job["facts"]["reused"] == 1  # type: ignore[index]
+
+
+def test_a_stored_snapshot_is_not_reused_for_another_request_altered_bars_or_a_refresh(ws: Path) -> None:
+    assert main(["snapshot"], fetcher=fake(set())) == 0
+    inputs, outputs = ws / ".choregos" / "inputs", ws / ".choregos" / "outputs"
+    stored = _job(ws)["outputs"]["snapshot"]  # type: ignore[index]
+    calls: list[str] = []
+
+    def counting(symbol: str, start: str, end: str) -> Fetched:
+        calls.append(symbol)
+        return fake(set())(symbol, start, end)
+
+    def run(*extra: str) -> int:
+        shutil.copyfile(outputs / "bars.csv", inputs / "bars.csv")
+        (inputs / "snapshot.json").write_text(json.dumps(stored))
+        return main(["snapshot", *extra], fetcher=counting)
+
+    assert run("--refresh") == 0 and len(calls) == 3, "--refresh fetches"
+    fields = ws / ".choregos" / "fields.json"
+    campaign = json.loads(fields.read_text())
+    fields.write_text(json.dumps({**campaign, "end": "2024-06-28"}))
+    assert run() == 0 and len(calls) == 6, "another window: fetched"
+    fields.write_text(json.dumps(campaign))
+    shutil.copyfile(outputs / "bars.csv", inputs / "bars.csv")
+    (inputs / "snapshot.json").write_text(json.dumps(stored))
+    with (inputs / "bars.csv").open("a") as bars:
+        bars.write("AAA,2020-01-04,1,1,1,1,,1\n")
+    assert main(["snapshot"], fetcher=counting) == 0 and len(calls) == 9, "bars that changed: fetched"
