@@ -105,6 +105,11 @@ BUDGET_NEVER_RETRIES = "budget-never-retries"
 #: a third identical attempt would cost the same and fail the same.
 IDENTICAL_FAILURE_ESCALATES = "identical-failure-escalates"
 
+#: `prepare_stage` mints a run's key at what is left, and refuses to start a stage below the floor
+#: (S27-02, ADR 0047): the stage is then sent to a person without a run. Before this marker,
+#: `prepare_stage` never refused on budget.
+BUDGET_RESERVATION = "budget-reservation"
+
 
 @dataclass
 class InterpreterInput:
@@ -401,6 +406,10 @@ class WorkflowInterpreter:
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=DEFAULT_RETRY,
             )
+            if prepared.get("refused") and workflow.patched(BUDGET_RESERVATION):
+                return await self._refused_on_budget(
+                    params, engine, transition, str(prepared["refused"]["detail"])
+                )
             run_id = prepared["run_id"]
             self.current_run = run_id
             budget = prepared["stage_input"]["budget"]
@@ -583,6 +592,20 @@ class WorkflowInterpreter:
                 transition, f"the same failure twice in a row, not retried again: {signature[:200]}"
             )
         self.failure_signatures[transition.key] = signature
+        return decision
+
+    async def _refused_on_budget(
+        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, detail: str
+    ) -> Any:
+        """Too little left to start the stage (ADR 0047): no key, no run — a person decides."""
+        decision = engine.after_budget_exceeded(transition, detail[:200])
+        if decision.next_state == engine.question_state():
+            await self._create_request(
+                params,
+                transition,
+                kind="approval",
+                payload={"question": detail, "options": [], "summary": detail, "reason": "budget"},
+            )
         return decision
 
     async def _gates(self, params: InterpreterInput, transition: Any, run_id: str) -> list[Any]:
