@@ -42,7 +42,7 @@ from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_output
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .skills import SkillInvalide, poser
-from .workspace import Workspace, inline_outputs, workspace_env
+from .workspace import Workspace, agent_home, inline_outputs, workspace_env
 
 MAX_RESULT_REPAIRS = 2
 MAX_SCOPE_REMINDERS = 1
@@ -198,6 +198,7 @@ class Runner:
         plan = backend.launch_plan(stage_input, workspace.path)
         written = plan.materialize(workspace.path)
         workspace.exclude(written)
+        plan.materialize_home(agent_home(stage_input))
         # Skills, then knowledge bases: the first refusal stops the run before the agent starts.
         if (
             refus := await self._poser_les_skills(client, journal, stage_input, backend, workspace)

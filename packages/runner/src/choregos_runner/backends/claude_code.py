@@ -5,11 +5,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from choregos_contracts import ModelRef, StageInput
 
 from .base import Backend, LaunchPlan
+
+#: The hook rtk answers as (rtk 0.50: `rtk hook claude` reads a `PreToolUse` payload).
+RTK_HOOK = "rtk hook claude"
+#: Where rtk reads its configuration, relative to `$HOME` (`dirs::config_dir()` on Linux).
+RTK_CONFIG = ".config/rtk/config.toml"
 
 
 class ClaudeCodeBackend(Backend):
@@ -24,7 +29,7 @@ class ClaudeCodeBackend(Backend):
         # pas un exécutable : sans `agent.launch.command` explicite, le lancement échouait
         # sur « command not found ».
         command = list(stage_input.agent.launch.command) or ["claude-code-acp"]
-        settings = {
+        settings: dict[str, Any] = {
             # The ACP adapter (0.16.2, `getAvailableModels`) calls `setModel()` with the first model
             # of the SDK's list unless the settings name one: without this, the run's model was
             # replaced by Claude Code's built-in default (see `model_env`).
@@ -46,6 +51,18 @@ class ClaudeCodeBackend(Backend):
                 ]
             },
         }
+        env = {"CLAUDE_PROJECT_DIR": str(workspace)}
+        home_files: dict[str, str] = {}
+        if stage_input.context.shell_filter == "rtk":
+            # ADR 0055: rtk rewrites a Bash command into its filtered form before Claude Code runs
+            # it. No `permissions.allow` rule is written: rtk would then answer `allow` itself
+            # and skip the runner's guardrails. Its configuration goes under `$HOME`, outside
+            # the repository, so it never lands in the diff.
+            settings["hooks"]["PreToolUse"].append(
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": RTK_HOOK}]}
+            )
+            home_files[RTK_CONFIG] = _rtk_config(stage_input)
+            env["RTK_TELEMETRY_DISABLED"] = "1"
         files = {
             ".mcp.json": self.mcp_config_json(stage_input),
             ".claude/settings.json": json.dumps(settings, indent=2, ensure_ascii=False),
@@ -55,9 +72,10 @@ class ClaudeCodeBackend(Backend):
         files.update(stage_input.agent.launch.files)
         return LaunchPlan(
             command=command,
-            env={"CLAUDE_PROJECT_DIR": str(workspace), **stage_input.agent.launch.env},
+            env={**env, **stage_input.agent.launch.env},
             files=files,
             mcp_servers=self.mcp_servers(stage_input),
+            home_files=home_files,
         )
 
     def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
@@ -81,6 +99,29 @@ class ClaudeCodeBackend(Backend):
             "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "16000",
             "DISABLE_TELEMETRY": "1",
         }
+
+
+def _rtk_config(stage_input: StageInput) -> str:
+    """rtk's configuration for the run: the commands it must leave alone.
+
+    A command the policy forbids is never rewritten. rtk renames some commands (`cat` becomes
+    `rtk read`), and a renamed command would no longer match the policy's `deny_commands` when
+    the guardrails judge it. rtk also leaves alone what `.claude/settings.json` denies, but a
+    repository's own settings win over ours (`materialize` never overwrites), so the list is
+    written here too. Each entry matches a command segment that starts with it.
+    """
+    excluded = list(
+        dict.fromkeys([*stage_input.context.rtk_exclude_commands, *stage_input.permissions.deny_commands])
+    )
+    entries = ", ".join(json.dumps(command) for command in excluded)
+    return "\n".join(
+        [
+            "# Written by Choregos for this run (ADR 0055).",
+            "[hooks]",
+            f"exclude_commands = [{entries}]",
+            "",
+        ]
+    )
 
 
 def _scope_hook() -> str:

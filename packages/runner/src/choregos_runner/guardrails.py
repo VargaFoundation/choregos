@@ -27,6 +27,18 @@ DANGEROUS_PATTERNS: tuple[tuple[str, str], ...] = (
     (r">\s*/dev/sd[a-z]", "raw disk write"),
 )
 
+#: What rtk renames when it rewrites a command (rtk 0.50, `src/discover/rules.rs`): `rtk read`
+#: stands for `cat`, `head` or `tail`. Its other rewrites keep the name after `rtk` (`rtk git
+#: push`, `rtk kubectl get`), which the rules below still see.
+RTK_RENAMES: dict[str, tuple[str, ...]] = {
+    "read": ("cat", "head", "tail"),
+    "pip": ("pip3",),
+    "lint": ("eslint", "biome"),
+}
+#: `rtk` where a command starts: the start of the line, or after a separator. `rtk proxy X` needs
+#: nothing more: the policy's rules find `X` among its words.
+_RTK = re.compile(r"(^|[\s;&|(])(?:\S*/)?rtk\s+(\S+)")
+
 SECRET_FILE_PATTERNS = (".env", ".git-credentials", "id_rsa", ".npmrc", ".pypirc", ".netrc")
 
 
@@ -201,15 +213,18 @@ class GuardRails:
         return path.removeprefix("./").lstrip("/")  # `lstrip(".")` mangerait `.choregos`
 
     def check_command(self, command: str) -> Decision:
-        lowered = command.lower()
-        for pattern, why in DANGEROUS_PATTERNS:
-            if re.search(pattern, lowered):
-                return Decision(False, f"command refused ({why})", "execute", command[:200])
-        for denied in self.permissions.deny_commands:
-            if _command_matches(lowered, denied.lower()):
-                return Decision(
-                    False, f"command forbidden by the policy: `{denied}`", "execute", command[:200]
-                )
+        """Judges the command, and every form the agent may have written before rtk rewrote it
+        (ADR 0055): a command refused as written stays refused once rewritten."""
+        for form in _before_rtk(command):
+            lowered = form.lower()
+            for pattern, why in DANGEROUS_PATTERNS:
+                if re.search(pattern, lowered):
+                    return Decision(False, f"command refused ({why})", "execute", command[:200])
+            for denied in self.permissions.deny_commands:
+                if _command_matches(lowered, denied.lower()):
+                    return Decision(
+                        False, f"command forbidden by the policy: `{denied}`", "execute", command[:200]
+                    )
         return Decision(True, "command allowed", "execute", command[:200])
 
     def check_network(self, url: str) -> Decision:
@@ -246,6 +261,23 @@ def _first_str(payload: Any, keys: tuple[str, ...]) -> str:
         if isinstance(value, list) and value and isinstance(value[0], str):
             return " ".join(value)
     return ""
+
+
+def _before_rtk(command: str) -> list[str]:
+    """The command, then what it was before rtk's rewrite: `rtk` removed, and each renamed
+    command under every name it stands for. A policy that forbids `head` thus also refuses
+    `rtk read` written from `cat`: refusing too much here is the safe side."""
+    if not _RTK.search(command):
+        return [command]
+
+    def unwrapped(renamed: str, original: str) -> str:
+        return _RTK.sub(lambda m: m.group(1) + (original if m.group(2) == renamed else m.group(2)), command)
+
+    forms = [command, unwrapped("", "")]
+    forms += [
+        unwrapped(renamed, original) for renamed, originals in RTK_RENAMES.items() for original in originals
+    ]
+    return list(dict.fromkeys(forms))
 
 
 def _command_matches(command: str, denied: str) -> bool:
