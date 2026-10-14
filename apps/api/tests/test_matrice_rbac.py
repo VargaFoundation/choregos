@@ -44,6 +44,7 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("train:operate", "POST", f"/api/v1/projects/{project_id}/trains/prod/freeze", {"reason": "test"}),
         ("memory:write", "POST", f"/api/v1/projects/{project_id}/memory/reimport", {}),
         ("member:manage", "POST", "/api/v1/orgs/varga/members", {"email": "x@varga.dev", "role": "viewer"}),
+        ("member:read", "GET", "/api/v1/orgs/varga/members", None),
         ("audit:read", "GET", "/api/v1/audit", None),
         ("platform:admin", "PUT", "/api/v1/platform/backends", {"name": "claude-code", "enabled": True}),
         ("project:delete", "DELETE", f"/api/v1/projects/{project_id}", None),

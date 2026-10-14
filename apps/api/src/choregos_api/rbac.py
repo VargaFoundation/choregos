@@ -26,6 +26,8 @@ class Permission(StrEnum):
     FINDING_TRIAGE = "finding:triage"
     MEMORY_WRITE = "memory:write"
     MEMBER_MANAGE = "member:manage"
+    #: List who belongs to the organisation (S26-04): every role, but only where it holds.
+    MEMBER_READ = "member:read"
     #: Changer les groupes d'un projet, donc ce que le catalogue lui ouvre (ADR 0014, second
     #: verrou). L'administrateur de l'organisation seul : un projet choisit ce dont il se sert,
     #: il ne choisit pas ce à quoi il a droit.
@@ -38,10 +40,11 @@ class Permission(StrEnum):
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
-    Role.VIEWER: frozenset({Permission.PROJECT_READ}),
+    Role.VIEWER: frozenset({Permission.PROJECT_READ, Permission.MEMBER_READ}),
     Role.DEVELOPER: frozenset(
         {
             Permission.PROJECT_READ,
+            Permission.MEMBER_READ,
             Permission.ITEM_DECIDE,
             Permission.ITEM_CONTROL,
             Permission.RUN_REPLAY,
@@ -51,6 +54,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     Role.RELEASE_CAPTAIN: frozenset(
         {
             Permission.PROJECT_READ,
+            Permission.MEMBER_READ,
             Permission.ITEM_DECIDE,
             Permission.ITEM_CONTROL,
             Permission.RUN_REPLAY,
@@ -62,6 +66,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     Role.PROJECT_OWNER: frozenset(
         {
             Permission.PROJECT_READ,
+            Permission.MEMBER_READ,
             Permission.PROJECT_WRITE,
             Permission.CONNECTOR_WRITE,
             Permission.WORKFLOW_WRITE,
