@@ -26,6 +26,7 @@ from choregos_contracts import (
 
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome
+from .acp.guard import TurnGuard
 from .backends import get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
@@ -188,11 +189,7 @@ class Runner:
         depart = await workspace.head_sha() if stage_input.repo else ARBRE_VIDE
 
         # 3. contexte
-        context = None
-        try:
-            context = await client.fetch_context()
-        except Exception:
-            context = None
+        context = await self._context(client)
         if (refus := await self._write_context(client, journal, stage_input, workspace, context)) is not None:
             return refus
 
@@ -237,6 +234,11 @@ class Runner:
                 env=env,
                 on_update=on_update,
                 on_permission=on_permission,
+                # Enforced, not only prompted (S27-07): past max_turns tool calls, or one call
+                # repeated `loop_threshold` times in a row, the session is cancelled.
+                guard=TurnGuard(
+                    max_turns=stage_input.budget.max_turns, loop_threshold=self.settings.loop_threshold
+                ),
             ) as agent:
                 await agent.initialize()
                 await _open_session(agent, journal, workspace.path, backend.name, plan.mcp_servers)
@@ -251,7 +253,12 @@ class Runner:
                 # 8. boucle DoD
                 max_iterations = max(0, stage_input.permissions.dod_iterations)
                 report = await run_checks(stage_input, workspace.path)
-                while not report.ok and dod_iterations < max_iterations and not refused:
+                while (
+                    not report.ok
+                    and dod_iterations < max_iterations
+                    and not refused
+                    and agent.outcome.guard is None
+                ):
                     dod_iterations += 1
                     await journal.record(
                         "dod.retry",
@@ -262,12 +269,16 @@ class Runner:
 
                 # 9. périmètre
                 scope_result = await check_scope(workspace, depart, guards.allowed_paths)
-                if scope_result.reverted and not refused:
+                if scope_result.reverted and not refused and agent.outcome.guard is None:
                     await journal.record("scope.reverted", {"paths": scope_result.reverted})
                     refused = await _turn(agent, scope_result.prompt(), self._remaining(budget_seconds))
                     scope_result = await check_scope(workspace, depart, guards.allowed_paths)
 
-                # 10. résultat
+                # 10. result — or the runner's own, when it stopped the agent (S27-07)
+                if agent.outcome.guard is not None:
+                    return await self._stopped_by_the_guard(
+                        client, journal, workspace, stage_input, agent, report, (base, depart)
+                    )
                 load = load_result(workspace.result_path(), inline_outputs(stage_input), _files(stage_input))
                 while not load.ok and repairs < MAX_RESULT_REPAIRS and not refused:
                     repairs += 1
@@ -399,6 +410,43 @@ class Runner:
             return RunOutcome(Exit.KNOWLEDGE_INVALID, detail=str(exc))
         workspace.exclude(written)
         return None
+
+    async def _stopped_by_the_guard(
+        self,
+        client: Any,
+        journal: Any,
+        workspace: Any,
+        stage_input: StageInput,
+        agent: Any,
+        report: Any,
+        shas: tuple[str, str],
+    ) -> RunOutcome:
+        """The result of an agent the runner stopped (`max_turns`, `loop`): failed with that reason,
+        whatever the agent wrote. Its work is published like any failed stage's."""
+        outcome = agent.outcome
+        await journal.record("run.stopped", {"reason": outcome.guard, "detail": outcome.guard_detail[:500]})
+        final = complete_result(
+            fallback_result(str(outcome.guard), f"stopped by the runner: {outcome.guard_detail}"),
+            measured=report.evidence(),
+            artifacts=Artifacts(branch=stage_input.repo.work_branch if stage_input.repo else None),
+            diagnostics=Diagnostics(
+                turns=outcome.turns,
+                tool_calls=outcome.tool_calls,
+                duration_s=round(time.monotonic() - self.started, 2),
+                agent_exit="limit",
+            ),
+        )
+        base, depart = shas
+        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    @staticmethod
+    async def _context(client: Any) -> Any:
+        """The context pack, or nothing: memory is optional (ADR 0007)."""
+        try:
+            return await client.fetch_context()
+        except Exception:
+            return None
 
     def _prompt(self, stage_input: StageInput, workspace: Path) -> str:
         """Playbook rendu + tâche. Le playbook vient de l'orchestrateur, jamais du dépôt."""
@@ -574,6 +622,8 @@ def _agent_muet(outcome: PromptOutcome) -> bool:
 
 
 def _agent_exit(stop_reason: str, cancelled: bool) -> str:
+    if stop_reason in {"max_turns", "loop"}:
+        return "limit"
     if cancelled:
         return "cancelled"
     return {

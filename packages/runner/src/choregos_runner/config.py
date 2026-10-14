@@ -24,6 +24,9 @@ class RunnerSettings(BaseSettings):
     event_flush_seconds: float = 5.0
     dry_run: bool = Field(default=False, validation_alias="CHOREGOS_RUNNER_DRY_RUN")
     offline: bool = Field(default=False, validation_alias="CHOREGOS_RUNNER_OFFLINE")
+    #: The same tool with the same arguments this many times in a row stops the agent (`reason=loop`,
+    #: S27-07). 0 or 1 disables the check.
+    loop_threshold: int = Field(default=5, ge=0, validation_alias="CHOREGOS_RUNNER_LOOP_THRESHOLD")
 
 
 @lru_cache(maxsize=1)

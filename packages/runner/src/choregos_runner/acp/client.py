@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .guard import TurnGuard
 from .protocol import (
     ACP_VERSION,
     FS_READ_TEXT_FILE,
@@ -60,6 +61,9 @@ class PromptOutcome:
     #: The last text chunks the agent said (bounded): a gateway refusal relayed as text is read
     #: there (S27-01).
     said: list[str] = field(default_factory=list)
+    #: Why the runner stopped the agent itself (S27-07): `max_turns` or `loop`; `None` otherwise.
+    guard: str | None = None
+    guard_detail: str = ""
 
 
 def _option_id(params: dict[str, Any], allowed: bool) -> str:
@@ -99,6 +103,7 @@ class AcpClient:
         on_update: UpdateHandler | None = None,
         on_permission: PermissionHandler | None = None,
         read_timeout: float = 120.0,
+        guard: TurnGuard | None = None,
     ) -> None:
         self.command = command
         self.cwd = cwd
@@ -115,6 +120,11 @@ class AcpClient:
         self._stderr_task: asyncio.Task[None] | None = None
         self.stderr_tail: list[str] = []
         self.outcome = PromptOutcome()
+        self.guard = guard or TurnGuard()
+        #: Set when the guard trips: the prompt in flight stops waiting for the agent.
+        self._tripped = asyncio.Event()
+        #: How long an agent stopped by the guard gets to end its turn before it is left behind.
+        self.cancel_grace_s = 10.0
 
     # ───────────────────────── cycle de vie ─────────────────────────
 
@@ -214,13 +224,14 @@ class AcpClient:
         """Envoie un tour de prompt et laisse l'agent travailler jusqu'à `stopReason`."""
         if self.session_id is None:
             raise AgentProtocolError("no open session")
+        if self.outcome.guard is not None:
+            # Stopped by the guard: no further prompt (a repair, a DoD round) reopens the session.
+            return self.outcome
         self.outcome.turns += 1
         try:
-            response = await self.request(
-                SESSION_PROMPT,
-                {"sessionId": self.session_id, "prompt": [{"type": "text", "text": text}]},
-                timeout=timeout,
-            )
+            response = await self._prompt_until_tripped(text, timeout)
+            if response is None:
+                return self.outcome
         except TimeoutError:
             await self.cancel()
             self.outcome.stop_reason = "timeout"
@@ -232,6 +243,42 @@ class AcpClient:
             return self.outcome
         self.outcome.stop_reason = str((response.result or {}).get("stopReason", "end_turn"))
         return self.outcome
+
+    async def _prompt_until_tripped(self, text: str, timeout: float) -> Response | None:
+        """The prompt's response — or `None` when the guard stopped the agent first."""
+        envoi = asyncio.create_task(
+            self.request(
+                SESSION_PROMPT,
+                {"sessionId": self.session_id, "prompt": [{"type": "text", "text": text}]},
+                timeout=timeout,
+            )
+        )
+        alarme = asyncio.create_task(self._tripped.wait())
+        done, _ = await asyncio.wait({envoi, alarme}, return_when=asyncio.FIRST_COMPLETED)
+        if envoi in done:
+            alarme.cancel()
+            return envoi.result()
+        # The guard tripped: the session was cancelled; the agent gets a moment to end its turn.
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(asyncio.shield(envoi), timeout=self.cancel_grace_s)
+        if not envoi.done():
+            envoi.cancel()
+            with contextlib.suppress(BaseException):
+                await envoi
+        self.outcome.stop_reason = str(self.outcome.guard)
+        self.outcome.cancelled = True
+        return None
+
+    async def _watch(self, tool_call: Any) -> bool:
+        """Counts a tool call against the guard; `True` when the agent must stop."""
+        if not isinstance(tool_call, dict):
+            return self.outcome.guard is not None
+        reason = self.guard.observe(tool_call)
+        if reason is not None and self.outcome.guard is None:
+            self.outcome.guard, self.outcome.guard_detail = reason, self.guard.detail
+            self._tripped.set()
+            await self.cancel()
+        return reason is not None
 
     async def cancel(self) -> None:
         if self.session_id is None or self.process is None:
@@ -322,6 +369,19 @@ class AcpClient:
 
     async def _handle_request(self, request: Request) -> None:
         if request.method == SESSION_REQUEST_PERMISSION:
+            if await self._watch((request.params or {}).get("toolCall")):
+                # Stopped by the guard: nothing more is allowed, whatever the policy says.
+                await self.respond(
+                    Response(
+                        id=request.id,
+                        result={
+                            "outcome": {"outcome": "selected", "optionId": _option_id(request.params, False)},
+                            "reason": f"stopped by the runner: {self.outcome.guard}",
+                        },
+                    )
+                )
+                self.outcome.permission_denials += 1
+                return
             allowed, reason = await self._decide(request.params)
             choix = _option_id(request.params, allowed)
             if not allowed:
@@ -407,6 +467,8 @@ class AcpClient:
             if isinstance(text, str) and text:
                 self.outcome.said.append(text[:500])
                 del self.outcome.said[:-SAID_KEPT]
+        if kind == "tool_call":
+            await self._watch(update)
         if self.on_update is not None:
             await self.on_update(params)
 

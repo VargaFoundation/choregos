@@ -7,6 +7,7 @@ permet de tester tout le comportement d'un workflow sans serveur Temporal ni bas
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -133,6 +134,13 @@ class WorkflowEngine:
             escalated=True,
             reason=reason or f"{retry.max_attempts} attempts exhausted",
         )
+
+    def escalate(self, transition: Transition, reason: str) -> Decision:
+        """Escalates now, as `retry_or_escalate` does once its attempts are spent (S27-07)."""
+        retry = transition.on_fail or transition.on_changes_requested
+        target = retry.escalate_to if retry is not None else None
+        target = target or self._default_state("on_question") or transition.from_
+        return Decision(target, escalated=True, reason=reason)
 
     def after_stage(
         self,
@@ -284,3 +292,15 @@ class WorkflowEngine:
             "initial": self.initial_state,
             "terminals": self.wf.terminal_states(),
         }
+
+
+_NUMBERS = re.compile(r"\d+")
+
+
+def failure_signature(result: StageResult) -> str | None:
+    """What makes two failed attempts the same failure (S27-07): their reason and the first line of
+    their summary, numbers blanked (a line number, a duration, a count). `None` for a success."""
+    if result.status is StageStatus.DONE:
+        return None
+    first = (result.summary or "").strip().splitlines()[0] if (result.summary or "").strip() else ""
+    return f"{result.reason or result.status}:{_NUMBERS.sub('#', first)[:300]}"

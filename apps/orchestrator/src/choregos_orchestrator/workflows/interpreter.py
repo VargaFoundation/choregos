@@ -101,6 +101,9 @@ SUSPEND_AROUND_HUMAN = "suspend-around-human"
 #: goes to a person and is never retried (S27-01, ADR 0047). Before this marker, a `FAILED` result
 #: with `reason="budget"` and no `on_budget_exceeded` was retried with a fresh key.
 BUDGET_NEVER_RETRIES = "budget-never-retries"
+#: The same failure on two consecutive attempts of a stage escalates instead of retrying (S27-07):
+#: a third identical attempt would cost the same and fail the same.
+IDENTICAL_FAILURE_ESCALATES = "identical-failure-escalates"
 
 
 @dataclass
@@ -165,6 +168,8 @@ class WorkflowInterpreter:
         #: Ce que le ticket attend : la date d'une action, l'action elle-même.
         self.attente: str | None = None
         self.action_en_cours: str | None = None
+        #: The failure signature of each stage's last attempt (S27-07).
+        self.failure_signatures: dict[str, str] = {}
         #: Le ticket garé (question, escalade) et d'où il reprendra : `(garé, origine, transition)`.
         self.reprise: tuple[str, str, str] | None = None
         #: Les tentatives d'avant la dernière reprise : un numéro de run ne se réutilise pas (il
@@ -484,6 +489,7 @@ class WorkflowInterpreter:
                 outcomes,
                 require_outputs=workflow.patched(DECLARED_OUTPUTS_REQUIRED),
             )
+            decision = self._identical_failure(engine, transition, result, decision)
         if decision.next_state == engine.question_state() and result.status is StageStatus.NEEDS_HUMAN:
             await self._create_request(
                 params,
@@ -561,6 +567,23 @@ class WorkflowInterpreter:
         if not resumed.get("resumed"):
             return None
         return str(suspended["run_id"]), resumed["budget"]
+
+    def _identical_failure(self, engine: WorkflowEngine, transition: Any, result: Any, decision: Any) -> Any:
+        """A retry of a stage that failed exactly like its previous attempt escalates (S27-07)."""
+        from choregos_core.dsl.engine import failure_signature
+
+        signature = failure_signature(result)
+        previous = self.failure_signatures.pop(transition.key, None)
+        # A success, or an escalation (a person takes over; a replay of the stage starts afresh):
+        # nothing to compare the next attempt with.
+        if signature is None or decision.escalated:
+            return decision
+        if decision.retried and signature == previous and workflow.patched(IDENTICAL_FAILURE_ESCALATES):
+            return engine.escalate(
+                transition, f"the same failure twice in a row, not retried again: {signature[:200]}"
+            )
+        self.failure_signatures[transition.key] = signature
+        return decision
 
     async def _gates(self, params: InterpreterInput, transition: Any, run_id: str) -> list[Any]:
         if not transition.gates:
