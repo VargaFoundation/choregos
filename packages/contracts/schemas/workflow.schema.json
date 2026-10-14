@@ -78,6 +78,9 @@
     "defaults": {
       "$ref": "#/$defs/defaults"
     },
+    "budget": {
+      "$ref": "#/$defs/budget"
+    },
     "initial": {
       "type": "string",
       "description": "Where the workflow starts. Optional: the parser writes the first declared state there (§1.4). The field exists because the order of an object's keys does not survive jsonb storage, and a workflow that believes it starts at its terminal state closes the work item without doing anything."
@@ -598,6 +601,22 @@
           "type": "string",
           "maxLength": 500,
           "description": "what the person attests, word for word"
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What a work item of this workflow may spend; it only tightens the policy's ticket budget (ADR 0047).",
+      "properties": {
+        "ticket_usd": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "The work item budget, in USD. Wider than the policy's: refused at launch."
+        },
+        "on_exceeded": {
+          "$ref": "#/$defs/identifier",
+          "description": "Where a work item goes when its budget is spent; before defaults.from_any_agent_state.on_budget_exceeded."
         }
       }
     }

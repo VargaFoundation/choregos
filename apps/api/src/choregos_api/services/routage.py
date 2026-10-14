@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Project, WorkflowDef, WorkItem
 from ..errors import unprocessable
-from .definitions import default_workflow, workflow_actif, workflow_model
+from .definitions import default_workflow, policy_engine, workflow_actif, workflow_model
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +41,8 @@ class Naissance:
     allowed_paths: tuple[str, ...] = field(default_factory=tuple)
     #: Les champs du ticket, validés par `metadata.inputs` du workflow choisi.
     fields: dict[str, Any] = field(default_factory=dict)
+    #: The budget given at launch (S27-06): only tightens the workflow's and the policy's.
+    budget_usd: float | None = None
 
 
 def _correspond(condition: dict[str, Any], etiquettes: set[str], type_: str | None) -> bool:
@@ -101,6 +103,27 @@ def noter_les_etiquettes(item: WorkItem, etiquettes: Iterable[str]) -> None:
     }
 
 
+async def _budget_at_launch(
+    session: AsyncSession, project: Project, workflow: Any, naissance: Naissance
+) -> float | None:
+    """The work item's own budget (S27-06, ADR 0047): the one given at launch, else the workflow's
+    `budget.ticket_usd`. A budget given at launch may only tighten: wider than the workflow's or the
+    policy's ticket budget for its size is refused (422), not silently clamped."""
+    from_workflow = workflow.budget.ticket_usd if workflow.budget is not None else None
+    if naissance.budget_usd is None:
+        return from_workflow
+    caps = {"policy": (await policy_engine(session, project.id)).budget_ticket(naissance.size)}
+    if from_workflow is not None:
+        caps[f"workflow `{workflow.metadata.name}`"] = from_workflow
+    for source, cap in caps.items():
+        if naissance.budget_usd > cap:
+            raise unprocessable(
+                f"budget_usd {naissance.budget_usd:.2f} $ is wider than the {source}'s ticket budget "
+                f"({cap:.2f} $): a budget given at launch may only tighten it"
+            )
+    return naissance.budget_usd
+
+
 async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Naissance) -> WorkItem:
     """Le seul constructeur : l'état initial DU workflow choisi, et l'épingle de sa version."""
     ligne = await choisir_workflow(session, project, naissance)
@@ -119,6 +142,7 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         created_by=naissance.created_by,
         allowed_paths=list(naissance.allowed_paths),
         fields=dict(naissance.fields),
+        budget_usd=await _budget_at_launch(session, project, workflow, naissance),
     )
     if naissance.labels:
         noter_les_etiquettes(item, naissance.labels)

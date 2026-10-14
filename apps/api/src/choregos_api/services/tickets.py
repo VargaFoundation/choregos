@@ -162,6 +162,7 @@ async def work_item_dto(
         pending_request=human_request_dto(pending) if pending else None,
         pr_url=item.pr_url,
         totals=totals_from(item.totals),
+        budget_usd=item.budget_usd,
         estimate=await estimate_cost(session, project.id, item),
         created_at=item.created_at,
         closed_at=item.closed_at,
@@ -308,6 +309,7 @@ async def creer_un_ticket(
             workflow=demande.workflow,
             labels=tuple(demande.labels),
             fields=dict(demande.fields),
+            budget_usd=demande.budget_usd,
         ),
     )
     await persist_event(

@@ -27,6 +27,9 @@ class WorkItemCreate(Dto):
     labels: list[str] = Field(default_factory=list)
     #: Les champs du ticket, validés par `metadata.inputs` de son workflow.
     fields: dict[str, Any] = Field(default_factory=dict)
+    #: The most this work item may spend, in USD (S27-06, ADR 0047). It may only tighten the
+    #: workflow's `budget.ticket_usd` and the policy's ticket budget: wider is refused (422).
+    budget_usd: float | None = Field(default=None, gt=0)
 
 
 class WorkItemUpdate(Dto):
@@ -113,6 +116,8 @@ class WorkItemDto(Dto):
     pending_request: HumanRequestDto | None = None
     pr_url: str | None = None
     totals: Totals = Field(default_factory=Totals)
+    #: The budget given at launch (or by the workflow), if any; the policy's applies otherwise.
+    budget_usd: float | None = None
     estimate: CostEstimate | None = None
     created_at: datetime
     closed_at: datetime | None = None

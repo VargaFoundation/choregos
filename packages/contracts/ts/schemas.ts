@@ -822,6 +822,14 @@ export type WorkflowTask = {
   attest?: string;
 };
 
+/** What a work item of this workflow may spend; it only tightens the policy's ticket budget (ADR 0047). */
+export type WorkflowBudget = {
+  /** The work item budget, in USD. Wider than the policy's: refused at launch. */
+  ticket_usd?: number;
+  /** Where a work item goes when its budget is spent; before defaults.from_any_agent_state.on_budget_exceeded. */
+  on_exceeded?: WorkflowIdentifier;
+};
+
 /** Choregos workflow DSL: a declarative state machine per project (docs/plan/01 §1.4). */
 export type Workflow = {
   apiVersion: "choregos/v1";
@@ -844,6 +852,7 @@ export type Workflow = {
   };
   transitions: Array<WorkflowTransition>;
   defaults?: WorkflowDefaults;
+  budget?: WorkflowBudget;
   /** Where the workflow starts. Optional: the parser writes the first declared state there (§1.4). The field exists because the order of an object's keys does not survive jsonb storage, and a workflow that believes it starts at its terminal state closes the work item without doing anything. */
   initial?: string;
 };

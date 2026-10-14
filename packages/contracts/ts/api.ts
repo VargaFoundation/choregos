@@ -1101,6 +1101,8 @@ export type WorkItemCreate = {
   fields?: {
     [key: string]: unknown;
   };
+  /** The most this work item may spend, in USD. Only tightens the workflow's `budget.ticket_usd` and the policy's ticket budget; wider is 422 (ADR 0047). */
+  budget_usd?: number | null;
 };
 
 export type WorkItemUpdate = {
@@ -1193,6 +1195,8 @@ export type WorkItem = {
   pending_request?: HumanRequest | null;
   pr_url?: string | null;
   totals: Totals;
+  /** The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise. */
+  budget_usd?: number | null;
   estimate?: CostEstimate | null;
   created_at?: string;
   closed_at?: string | null;

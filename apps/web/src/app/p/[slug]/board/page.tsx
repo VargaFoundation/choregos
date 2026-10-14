@@ -223,6 +223,7 @@ function NouvelleDemande({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [size, setSize] = useState<"S" | "M" | "L" | "XL" | "">("");
+  const [budget, setBudget] = useState("");
   const [saisies, setSaisies] = useState<Record<string, string | boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -240,6 +241,7 @@ function NouvelleDemande({
         start: true,
         workflow: workflow || null,
         fields: valeursPourLApi(champs, saisies),
+        budget_usd: budget ? Number(budget) : null,
       });
       onDone();
     } catch (cause) {
@@ -316,6 +318,16 @@ function NouvelleDemande({
               </option>
             ))}
           </Select>
+          <Input
+            aria-label="budget in USD"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={budget}
+            onChange={(event) => setBudget(event.target.value)}
+            placeholder="max budget, $"
+            className="w-36"
+          />
           <Button tone="primary" size="sm" type="submit" disabled={busy || !title}>
             File and start
           </Button>
