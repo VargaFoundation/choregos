@@ -79,7 +79,7 @@ describe("les clients MCP", () => {
     ).toBe("profile:standard · 2 skills · 1 tool pattern · $5/day");
   });
 
-  it("le plafond du mois part avec la version, et un champ vide n'est pas un plafond", () => {
+  it("a version's summary names its monthly cap", () => {
     expect(resumeDeLaVersion({ budget: { monthly_usd: 100 } })).toBe("$100/month");
   });
 

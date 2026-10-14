@@ -164,7 +164,7 @@ async def depense_depuis(session: AsyncSession, org_id: str, agent_slug: str, si
 
 
 async def depense_du_jour(session: AsyncSession, org_id: str, agent_slug: str) -> float:
-    """Ce que les runs de l'agent ont coûté depuis minuit (UTC), modèles ET outils."""
+    """What the agent's runs have cost since midnight (UTC), models AND tools."""
     minuit = datetime.combine(utcnow().date(), time.min, tzinfo=utcnow().tzinfo)
     return await depense_depuis(session, org_id, agent_slug, minuit)
 
