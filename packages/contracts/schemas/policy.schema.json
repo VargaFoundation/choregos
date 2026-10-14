@@ -113,6 +113,12 @@
           "enum": ["ignore", "warn", "block"],
           "default": "warn",
           "description": "A prompt injection spotted in what the agent will read: log it (warn), stop the step (block), do not look (ignore)"
+        },
+        "suspend_max_hours": {
+          "type": "number",
+          "minimum": 0,
+          "default": 24,
+          "description": "How long a sandbox may stay suspended while a person answers its agent's question, with an executor that can suspend (agent_sandbox). Beyond it the sandbox is destroyed and the stage replays. 0: never suspend"
         }
       }
     },

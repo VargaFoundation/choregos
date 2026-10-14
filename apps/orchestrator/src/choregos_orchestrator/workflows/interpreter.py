@@ -12,7 +12,7 @@ import asyncio
 import contextlib
 from collections import Counter, deque
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from temporalio import workflow
@@ -40,6 +40,7 @@ with workflow.unsafe.imports_passed_through():
     from ..activities import gates as gate_activities
     from ..activities import scm as scm_activities
     from ..activities import stage as stage_activities
+    from ..activities import suspension as suspension_activities
     from ..activities import tracker as tracker_activities
     from ..activities.interpretation import (
         activite_de,
@@ -91,6 +92,11 @@ REPRISE_APRES_ESCALADE = "resume-after-escalation"
 #: A `done` result that lacks a declared output fails the stage, whatever the output's type (S31-02,
 #: ADR 0049). Histories recorded before this marker advanced on such a result unless a gate refused.
 DECLARED_OUTPUTS_REQUIRED = "declared-outputs-required"
+#: With an executor that announces `suspend` and `resume` (S35-03, ADR 0016), a question
+#: SUSPENDS the run's sandbox, and the answer resumes THAT run instead of replaying the stage:
+#: one run, not two. Histories before this marker, and every executor without the two
+#: capabilities, replay the stage as before.
+SUSPEND_AROUND_HUMAN = "suspend-around-human"
 
 
 @dataclass
@@ -109,6 +115,9 @@ class InterpreterInput:
     attempts_reset: dict[str, int] = field(default_factory=dict)
     #: D'où reprendre un ticket garé : `[état garé, état d'origine, transition]`.
     parked: list[str] | None = None
+    #: The run whose sandbox is suspended while a person answers (S35-03), across a
+    #: `continue_as_new`: `{run_id, key, until, answered}`.
+    suspended: dict[str, Any] | None = None
 
 
 @dataclass
@@ -159,6 +168,11 @@ class WorkflowInterpreter:
         self.remises: Counter[str] = Counter()
         #: « Replay the stage » demandé (`rerun_stage`), pas encore joué.
         self.relance: bool = False
+        #: The run suspended across a person's answer (S35-03): `{run_id, key, until, answered}`.
+        self.suspension: dict[str, Any] | None = None
+        #: How many suspended runs were resumed: names each resumption, for idempotence.
+        self.resumptions: int = 0
+        self.project_id: str = ""
 
     # ───────────────────────── signaux et requêtes ─────────────────────────
 
@@ -254,6 +268,8 @@ class WorkflowInterpreter:
         self.remises.update(params.attempts_reset)
         if params.parked:
             self.reprise = (params.parked[0], params.parked[1], params.parked[2])
+        self.suspension = dict(params.suspended) if params.suspended else None
+        self.project_id = params.project_id
         self.cost_usd = params.cost_usd
 
         context = await executer_activite(
@@ -317,9 +333,11 @@ class WorkflowInterpreter:
                         "cost_usd": self.cost_usd,
                         "attempts_reset": dict(self.remises),
                         "parked": list(self.reprise) if self.reprise else None,
+                        "suspended": self.suspension,
                     }
                 )
 
+        await self._release_suspension()  # the work item ends: no sandbox left waiting
         await executer_activite(
             tracker_activities.close_out,
             {"project_id": params.project_id, "work_item_id": params.work_item_id},
@@ -339,48 +357,56 @@ class WorkflowInterpreter:
                 transition, self._essais(transition.key), "acteur agent introuvable"
             )
         key = transition.key
-        attempt = self.attempts[key]
-        self.attempts[key] = attempt + 1
+        resumed = await self._resume_suspension(params, key)
+        if resumed is not None:
+            run_id, budget = resumed
+            self.current_run = run_id
+            # It was suspended because its executor can: asked again, it is suspended again.
+            capabilities = ["resume", "suspend"]
+        else:
+            attempt = self.attempts[key]
+            self.attempts[key] = attempt + 1
 
-        prepared = await executer_activite(
-            stage_activities.prepare_stage,
-            {
-                "project_id": params.project_id,
-                "work_item_id": params.work_item_id,
-                "transition_id": key,
-                "role": str(actor.role),
-                "from_state": transition.from_,
-                "to_state": transition.to,
-                "actor": transition.by or "",
-                "attempt": attempt + 1,
-                "backend": actor.backend,
-                "model_request": actor.model,
-                "fresh_context": actor.fresh_context,
-                "max_turns": actor.max_turns,
-                "max_minutes": actor.max_minutes,
-                "playbook": actor.playbook,
-                "agent": actor.agent,
-                "outputs": list(transition.outputs),
-                "inputs": list(transition.inputs),
-                "output_types": dict(transition.output_types),
-            },
-            start_to_close_timeout=timedelta(minutes=5),
-            retry_policy=DEFAULT_RETRY,
-        )
-        run_id = prepared["run_id"]
-        self.current_run = run_id
-        budget = prepared["stage_input"]["budget"]
+            prepared = await executer_activite(
+                stage_activities.prepare_stage,
+                {
+                    "project_id": params.project_id,
+                    "work_item_id": params.work_item_id,
+                    "transition_id": key,
+                    "role": str(actor.role),
+                    "from_state": transition.from_,
+                    "to_state": transition.to,
+                    "actor": transition.by or "",
+                    "attempt": attempt + 1,
+                    "backend": actor.backend,
+                    "model_request": actor.model,
+                    "fresh_context": actor.fresh_context,
+                    "max_turns": actor.max_turns,
+                    "max_minutes": actor.max_minutes,
+                    "playbook": actor.playbook,
+                    "agent": actor.agent,
+                    "outputs": list(transition.outputs),
+                    "inputs": list(transition.inputs),
+                    "output_types": dict(transition.output_types),
+                },
+                start_to_close_timeout=timedelta(minutes=5),
+                retry_policy=DEFAULT_RETRY,
+            )
+            run_id = prepared["run_id"]
+            self.current_run = run_id
+            budget = prepared["stage_input"]["budget"]
 
-        await executer_activite(
-            stage_activities.start_run,
-            {
-                "project_id": params.project_id,
-                "work_item_id": params.work_item_id,
-                "stage_input": prepared["stage_input"],
-            },
-            start_to_close_timeout=timedelta(minutes=5),
-            retry_policy=DEFAULT_RETRY,
-        )
+            started = await executer_activite(
+                stage_activities.start_run,
+                {
+                    "project_id": params.project_id,
+                    "work_item_id": params.work_item_id,
+                    "stage_input": prepared["stage_input"],
+                },
+                start_to_close_timeout=timedelta(minutes=5),
+                retry_policy=DEFAULT_RETRY,
+            )
+            capabilities = list((started or {}).get("capabilities") or [])
         awaited = await executer_activite(
             stage_activities.await_run,
             {
@@ -457,7 +483,71 @@ class WorkflowInterpreter:
                     "run_id": run_id,
                 },
             )
+            if (
+                result.questions
+                and {"suspend", "resume"} <= set(capabilities)
+                and workflow.patched(SUSPEND_AROUND_HUMAN)
+            ):
+                await self._suspend(params, run_id, key)
         return decision
+
+    # ──────────────────── a sandbox kept across an answer (S35-03) ────────────────────
+
+    async def _suspend(self, params: InterpreterInput, run_id: str, key: str) -> None:
+        """The agent asked a question: its sandbox waits, suspended, for the answer."""
+        done = await executer_activite(
+            suspension_activities.suspend_run,
+            {"project_id": params.project_id, "run_id": run_id},
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=DEFAULT_RETRY,
+        )
+        if done.get("suspended"):
+            self.suspension = {"run_id": run_id, "key": key, "until": done["until"], "answered": False}
+
+    def _suspension_left(self) -> timedelta | None:
+        """How long the suspended sandbox may still wait; None when nothing is suspended."""
+        if self.suspension is None:
+            return None
+        until = datetime.fromisoformat(str(self.suspension["until"]))
+        return max(until - workflow.now(), timedelta(0))
+
+    async def _release_suspension(self) -> None:
+        """The sandbox will not be resumed: destroyed now rather than at its bound."""
+        suspended, self.suspension = self.suspension, None
+        if suspended is None:
+            return
+        await executer_activite(
+            suspension_activities.release_suspended_run,
+            {"project_id": self.project_id, "run_id": suspended["run_id"]},
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=DEFAULT_RETRY,
+        )
+
+    async def _resume_suspension(self, params: InterpreterInput, key: str) -> tuple[str, Any] | None:
+        """The answered question's run goes on, if its sandbox still waits: `(run_id, budget)`.
+        None — and the stage replays as before — when nothing was suspended for this transition,
+        the ticket came back another way (a replay asked for), or the sandbox is gone."""
+        suspended = self.suspension
+        if suspended is None:
+            return None
+        if suspended["key"] != key or not suspended.get("answered"):
+            await self._release_suspension()
+            return None
+        self.suspension = None
+        self.resumptions += 1
+        resumed = await executer_activite(
+            suspension_activities.resume_run,
+            {
+                "project_id": params.project_id,
+                "run_id": suspended["run_id"],
+                "answer_id": f"{suspended['run_id']}/{self.resumptions}",
+            },
+            start_to_close_timeout=timedelta(minutes=5),
+            retry_policy=DEFAULT_RETRY,
+        )
+        if not resumed.get("resumed"):
+            return None
+        return str(suspended["run_id"]), resumed["budget"]
 
     async def _gates(self, params: InterpreterInput, transition: Any, run_id: str) -> list[Any]:
         if not transition.gates:
@@ -587,11 +677,17 @@ class WorkflowInterpreter:
             )
             if self.stopped:
                 return None
+            if self._suspension_left() == timedelta(0):
+                # `sandbox.suspend_max_hours` passed: the sandbox goes (the executor's platform
+                # deletes it at that instant anyway), and the answer will replay the stage.
+                await self._release_suspension()
             if self._relance_acceptee():
                 return await self._reprendre("replay requested", self.pending_request)
             if self.decisions:
                 decision = self.decisions.popleft()
                 if self._reponse_qui_reprend(decision):
+                    if self.suspension is not None:
+                        self.suspension["answered"] = True
                     return await self._reprendre(
                         "answered", decision.get("request_id"), decision, self.pending_request
                     )
@@ -963,15 +1059,23 @@ class WorkflowInterpreter:
         l'événement suivant, comme alors.
         """
         while not self.stopped:
-            await workflow.wait_condition(
-                lambda: (
-                    bool(self.inbox)
-                    or bool(self.decisions)
-                    or self.stopped
-                    or bool(self.migration)
-                    or self._relance_jouable()
+            left = self._suspension_left()
+            try:
+                await workflow.wait_condition(
+                    lambda: (
+                        bool(self.inbox)
+                        or bool(self.decisions)
+                        or self.stopped
+                        or bool(self.migration)
+                        or self._relance_jouable()
+                    ),
+                    timeout=left,
                 )
-            )
+            except TimeoutError:
+                # `sandbox.suspend_max_hours` passed without an answer: the sandbox goes, and
+                # the answer, when it comes, replays the stage.
+                await self._release_suspension()
+                continue
             if self._relance_acceptee():
                 return (await self._reprendre("replay requested", self.pending_request)).next_state
             if self.migration and not (self.inbox or self.decisions or self.stopped):
@@ -991,6 +1095,8 @@ class WorkflowInterpreter:
             while self.decisions:
                 decision = self.decisions.popleft()
                 if self._reponse_qui_reprend(decision):
+                    if self.suspension is not None:
+                        self.suspension["answered"] = True
                     reprise = await self._reprendre("answered", decision.get("request_id"), decision)
                     return reprise.next_state
                 if decision.get("approved"):

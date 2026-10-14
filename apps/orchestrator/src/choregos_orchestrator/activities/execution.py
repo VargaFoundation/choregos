@@ -174,8 +174,16 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         run = await session.get(Run, stage_input.run_id)
+        # What the executor can do, for the workflow to decide without assuming (ADR 0013):
+        # `suspend` and `resume` make it keep a sandbox across a person's answer (S35-03).
+        capabilities = sorted(getattr(bundle.adapters.executor, "capabilities", frozenset()))
         if run is not None and run.executor_ref:
-            return {"executor_ref": run.executor_ref, "kind": run.executor_kind, "reused": True}
+            return {
+                "executor_ref": run.executor_ref,
+                "kind": run.executor_kind,
+                "reused": True,
+                "capabilities": capabilities,
+            }
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
@@ -225,6 +233,7 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             "namespace": ref.namespace,
             "reused": False,
             "queued": en_file,
+            "capabilities": capabilities,
         }
 
 

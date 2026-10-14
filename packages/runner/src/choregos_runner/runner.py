@@ -142,7 +142,10 @@ class Runner:
             self.settings.workspace, self.settings.git_user_name, self.settings.git_user_email
         )
         journal = EventJournal(
-            client, workspace.path / ".choregos" / "transcript.jsonl", self.settings.event_batch_size
+            client,
+            workspace.path / ".choregos" / "transcript.jsonl",
+            self.settings.event_batch_size,
+            seq=_events_already_journaled(workspace.path / ".choregos" / "transcript.jsonl"),
         )
         await journal.record(
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
@@ -230,8 +233,7 @@ class Runner:
                 on_permission=on_permission,
             ) as agent:
                 await agent.initialize()
-                await agent.new_session(str(workspace.path), plan.mcp_servers)
-                await journal.record("session/new", {"backend": backend.name})
+                await _open_session(agent, journal, workspace.path, backend.name, plan.mcp_servers)
 
                 # 7. premier tour
                 prompt = self._prompt(stage_input, workspace.path)
@@ -527,6 +529,68 @@ def _agent_exit(stop_reason: str, cancelled: bool) -> str:
         "timeout": "timeout",
         "error": "crashed",
     }.get(stop_reason, "normal")
+
+
+#: Where a run keeps its agent's conversation id, on the workspace (S35-03).
+SAVED_SESSION = Path(".choregos") / "acp-session.json"
+
+
+async def _open_session(
+    agent: Any, journal: EventJournal, workspace: Path, backend: str, mcp_servers: list[dict[str, Any]]
+) -> None:
+    """A new conversation — or, for a run resumed in its own sandbox after a person's answer
+    (S35-03), the SAME one, when the agent can reload it (ACP `session/load`).
+
+    The conversation id is saved on the workspace volume when it is opened; the agent keeps the
+    conversation itself in its home, which is the workspace (`HOME=/workspace` in the runner
+    image), so both survive a suspended sandbox. An agent that cannot reload says so in the
+    journal, and the run goes on in a new conversation, in the kept workspace, with the answer.
+    """
+    saved = _saved_session(workspace)
+    if saved is not None and saved.get("backend") == backend:
+        if agent.can_load_session:
+            try:
+                await agent.load_session(str(saved["session_id"]), str(workspace), mcp_servers)
+            except Exception as exc:
+                await journal.record("session/load.failed", {"backend": backend, "error": str(exc)[:300]})
+            else:
+                await journal.record("session/load", {"backend": backend, "session_id": saved["session_id"]})
+                return
+        else:
+            await journal.record(
+                "session/load.unsupported",
+                {
+                    "backend": backend,
+                    "detail": "the agent does not announce `loadSession`: its conversation is not "
+                    "reloaded; a new one starts in the kept workspace, with the answer",
+                },
+            )
+    session_id = await agent.new_session(str(workspace), mcp_servers)
+    await journal.record("session/new", {"backend": backend})
+    path = workspace / SAVED_SESSION
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"backend": backend, "session_id": session_id}), encoding="utf-8")
+
+
+def _saved_session(workspace: Path) -> dict[str, Any] | None:
+    path = workspace / SAVED_SESSION
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) and data.get("session_id") else None
+
+
+def _events_already_journaled(path: Path) -> int:
+    """A run resumed in its own sandbox after a person's answer (S35-03) finds its journal on the
+    workspace volume: it goes on from there, or the API, idempotent by `seq`, would drop every
+    event of the continuation as already received. A fresh workspace has none."""
+    if not path.exists():
+        return 0
+    with path.open(encoding="utf-8") as lines:
+        return sum(1 for _ in lines)
 
 
 async def run_stage(settings: RunnerSettings | None = None) -> RunOutcome:

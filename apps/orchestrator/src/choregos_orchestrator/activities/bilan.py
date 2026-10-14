@@ -39,15 +39,25 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         if run.gateway_key_id:
             spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
         item = await load_work_item(session, run.work_item_id)
-        run.cost_usd = spend.cost_usd
-        run.tokens = {
+        segment = {
             "tokens_in": spend.tokens_in,
             "tokens_out": spend.tokens_out,
             "tokens_cached": spend.tokens_cached,
             "cost_usd": spend.cost_usd,
             "cost_eur": round(spend.cost_usd * settings.fx_usd_eur, 6),
-            "runs": 1,
         }
+        # A run resumed after a person's answer (S35-03) is ONE run in two segments: what it
+        # spent before the question stays on it, the continuation is added, and the work item
+        # does not count a second run.
+        resumed = dict(run.tokens or {}) if (run.tokens or {}).get("resumed") else {}
+        of_the_run: dict[str, Any] = dict(resumed)
+        for name in ("tokens_in", "tokens_out", "tokens_cached"):
+            of_the_run[name] = int(resumed.get(name, 0)) + int(segment[name])
+        for name in ("cost_usd", "cost_eur"):
+            of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
+        of_the_run["runs"] = 1
+        run.tokens = of_the_run
+        run.cost_usd = float(of_the_run["cost_usd"])
         run.spend_collected = True
         run.ended_at = run.ended_at or utcnow()
         await record_cost(
@@ -68,10 +78,10 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         )
         totals = dict(item.totals or {})
         for field in ("tokens_in", "tokens_out", "tokens_cached"):
-            totals[field] = int(totals.get(field, 0)) + int(run.tokens[field])
+            totals[field] = int(totals.get(field, 0)) + int(segment[field])
         totals["cost_usd"] = round(float(totals.get("cost_usd", 0.0)) + spend.cost_usd, 6)
-        totals["cost_eur"] = round(float(totals.get("cost_eur", 0.0)) + run.tokens["cost_eur"], 6)
-        totals["runs"] = int(totals.get("runs", 0)) + 1
+        totals["cost_eur"] = round(float(totals.get("cost_eur", 0.0)) + segment["cost_eur"], 6)
+        totals["runs"] = int(totals.get("runs", 0)) + (0 if resumed else 1)
         totals["duration_s"] = float(totals.get("duration_s", 0.0)) + elapsed_seconds(
             run.started_at, run.ended_at
         )

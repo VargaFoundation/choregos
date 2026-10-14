@@ -249,6 +249,8 @@ export type Policy = {
     unknown_requests?: "allow" | "reject";
     /** A prompt injection spotted in what the agent will read: log it (warn), stop the step (block), do not look (ignore) */
     prompt_injection?: "ignore" | "warn" | "block";
+    /** How long a sandbox may stay suspended while a person answers its agent's question, with an executor that can suspend (agent_sandbox). Beyond it the sandbox is destroyed and the stage replays. 0: never suspend */
+    suspend_max_hours?: number;
   };
   findings?: {
     max_per_run?: number;

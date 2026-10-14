@@ -19,6 +19,7 @@ from .protocol import (
     PERMISSION_DENIED,
     PROTOCOL_VERSION,
     SESSION_CANCEL,
+    SESSION_LOAD,
     SESSION_NEW,
     SESSION_PROMPT,
     SESSION_REQUEST_PERMISSION,
@@ -182,6 +183,26 @@ class AcpClient:
             raise AgentProtocolError("session/new returned no sessionId")
         self.session_id = str(session_id)
         return self.session_id
+
+    @property
+    def can_load_session(self) -> bool:
+        """The agent announced `loadSession` at `initialize`: it can resume a conversation."""
+        return bool(self.capabilities.get("loadSession"))
+
+    async def load_session(
+        self, session_id: str, cwd: str, mcp_servers: list[dict[str, Any]] | None = None
+    ) -> str:
+        """Reopens a conversation the agent kept (ACP `session/load`): it replays it as
+        `session/update` notifications, then the next prompt continues it."""
+        response = await self.request(
+            SESSION_LOAD,
+            {"sessionId": session_id, "cwd": cwd, "mcpServers": mcp_servers or []},
+            timeout=120.0,
+        )
+        if response.failed:
+            raise AgentProtocolError(f"session/load refused: {response.error}")
+        self.session_id = session_id
+        return session_id
 
     async def prompt(self, text: str, *, timeout: float) -> PromptOutcome:
         """Envoie un tour de prompt et laisse l'agent travailler jusqu'à `stopReason`."""

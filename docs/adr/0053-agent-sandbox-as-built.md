@@ -86,6 +86,33 @@ what is built — a sandbox is claimed once and deleted with its claim — and i
 conformance rule follow 0016; freezing a running sandbox is not offered by the operator and is
 not claimed.
 
+## Decision 4 — Suspend and resume: the same run, its workspace, a fresh token
+
+When a stage ends on `needs_human` with a question and the executor announces `suspend` and
+`resume`, the interpreter (marker `suspend-around-human`) suspends the run's sandbox: the pod
+goes, the sandbox and its workspace volume stay. The answer resumes **that** run — the
+answer at the head of its prompt, a fresh run token and gateway key (the first ones expired
+or were revoked during the wait), the same workspace, the journal continued — instead of
+preparing a second one. An answered question costs one run, not two; the run's spend is the
+sum of its two segments and the work item counts one run.
+
+- `suspend(ref, until)` and `resume(ref, run_token, until)`: 0016 wrote `resume(ref)`, but a
+  resumed run needs a new token, so the executor takes it. Neither is in the `Executor`
+  protocol: the interpreter calls them only when the executor announces both capabilities.
+- The bound, `sandbox.suspend_max_hours` (policy, default 24, 0 = never; a `contract-change`),
+  is written into the claim's `shutdownTime` at suspension and its `ttlSecondsAfterFinished`
+  is dropped: the controller deletes the sandbox at the bound even if no workflow is running.
+  The interpreter releases it too (hourly, while it waits), and an answer after the bound
+  replays the stage as with any other executor.
+- "Its context" is the workspace — the files, the branch, `.choregos/`, the journal — and the
+  agent's conversation when the agent can reload it. The runner saves the ACP session id on the
+  workspace (`.choregos/acp-session.json`, never committed); the agent keeps the conversation
+  in its home, which is the workspace in the runner image (`HOME=/workspace`), so both survive
+  the suspension. On the resumed run, an agent that announces `loadSession` gets `session/load`
+  with that id and continues the conversation with the answer; one that does not is journaled
+  (`session/load.unsupported`) and starts a new conversation in the kept workspace; a refused
+  load is journaled too (`session/load.failed`) and the run goes on the same way.
+
 ## Conditions
 
 - The template and the pool live in the release namespace; a per-project `namespacePattern` is

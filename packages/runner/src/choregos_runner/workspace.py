@@ -23,6 +23,8 @@ RUNNER_FILES = (
     ".choregos/allowed_paths.txt",
     ".choregos/transcript.jsonl",
     ".choregos/result.json",
+    # The agent's conversation id, kept for a resumed run (S35-03): never part of a commit.
+    ".choregos/acp-session.json",
 )
 
 GIT_ENV = {

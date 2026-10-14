@@ -167,6 +167,14 @@ drops its key, and serves that one run for its whole life. Beyond `maxActive`, a
 is admitted in arrival order. A policy that asks for a RuntimeClass the pool was not made with
 is refused, never run without it.
 
+When an agent asks a question, its sandbox is **suspended** (pod gone, workspace volume kept)
+and the answer resumes the same run in it: one run, not two. The policy bounds the wait:
+`sandbox.suspend_max_hours` (default 24, `0` = never suspend); past it the sandbox is deleted
+and the answer replays the stage. The workspace survives, and so does the agent's
+conversation when the agent can reload it (ACP `loadSession`); otherwise the run journal says so
+(`session/load.unsupported`) and the agent starts a new conversation in that workspace, with the
+answer at the head of its prompt.
+
 The chart then renders a `SandboxTemplate` and a `SandboxWarmPool`, both named
 `choregos-runner`. A warm sandbox's pod mounts no service account token and no secret: its
 runner waits for one assignment, pushed by the executor after a claim has bound the sandbox to a

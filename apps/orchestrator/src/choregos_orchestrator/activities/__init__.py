@@ -17,6 +17,7 @@ from . import (
     provisioning,
     scm,
     stage,
+    suspension,
     tracker,
     train,
 )
@@ -42,6 +43,9 @@ ALL_ACTIVITIES = [
     execution.start_run,
     execution.await_run,
     execution.cancel_run,
+    suspension.suspend_run,
+    suspension.release_suspended_run,
+    suspension.resume_run,
     bilan.collect_spend,
     bilan.record_run_outcome,
     tracker.mirror_state,
