@@ -222,3 +222,76 @@ async def test_un_agent_qui_meurt_le_dit_aussi(tmp_path: Path) -> None:
     message = str(refus.value)
     assert "code 3" in message, message
     assert "config illisible" in message, message
+
+
+# ──────── an ACP message longer than 64 KiB (#498) ────────
+
+_CHATTY = (
+    "import json, os, sys\n"
+    "size = int(os.environ['SIZE'])\n"
+    "for line in sys.stdin:\n"
+    "    message = json.loads(line)\n"
+    "    if 'id' not in message:\n"
+    "        continue\n"
+    "    update = {'sessionUpdate': 'tool_call_update', 'status': 'completed',\n"
+    "              'rawOutput': {'output': 'x' * size}}\n"
+    "    sys.stdout.write(json.dumps({'jsonrpc': '2.0', 'method': 'session/update',\n"
+    "                                 'params': {'sessionId': 's', 'update': update}}) + '\\n')\n"
+    "    sys.stdout.write(json.dumps({'jsonrpc': '2.0', 'id': message['id'], 'result': {}}) + '\\n')\n"
+    "    sys.stdout.flush()\n"
+)
+
+
+def _chatty(tmp_path: Path, size: int, **kwargs: Any) -> AcpClient:
+    script = tmp_path / "chatty.py"
+    script.write_text(_CHATTY, encoding="utf-8")
+    return AcpClient([sys.executable, str(script)], cwd=str(tmp_path), env={"SIZE": str(size)}, **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_a_tool_output_longer_than_64_kib_is_read_and_the_reply_after_it_too(tmp_path: Path) -> None:
+    """The prod verifier on the dev tenant (#498): a `tool_call_update` carrying a file it read was
+    longer than asyncio's 64 KiB line limit; the read loop died on it, the answer to
+    `session/prompt` was never read, and the run waited 900 s before exiting 1."""
+    sizes: list[int] = []
+
+    async def on_update(params: dict[str, Any]) -> None:
+        sizes.append(len(params["update"]["rawOutput"]["output"]))
+
+    client = _chatty(tmp_path, 300_000, on_update=on_update)
+    async with client:
+        response = await client.request(INITIALIZE, {"protocolVersion": 1}, timeout=10.0)
+    assert not response.failed
+    assert sizes == [300_000]
+
+
+@pytest.mark.asyncio
+async def test_a_message_past_the_limit_is_dropped_and_the_runner_keeps_reading(tmp_path: Path) -> None:
+    """Past `max_message_bytes`, one update is lost — never the agent: the next reply still arrives."""
+    client = _chatty(tmp_path, 20_000, max_message_bytes=4096)
+    async with client:
+        response = await client.request(INITIALIZE, {"protocolVersion": 1}, timeout=10.0)
+    assert not response.failed
+    assert client.dropped_messages == 1
+
+
+@pytest.mark.asyncio
+async def test_a_dead_read_loop_fails_the_request_at_once_and_stop_does_not_hide_it(tmp_path: Path) -> None:
+    """A read loop that dies leaves nobody to deliver the reply: the request fails NOW with the
+    reason, instead of waiting out its timeout; and `stop()` does not raise the loop's error
+    again over the run's own (#498: a bare traceback, exit 1)."""
+    import time
+
+    from choregos_runner.acp.client import AgentUnreachableError
+
+    async def explode(params: dict[str, Any]) -> None:
+        raise RuntimeError("handler broken")
+
+    client = _chatty(tmp_path, 10, on_update=explode)
+    start = time.monotonic()
+    async with client:
+        with pytest.raises(AgentUnreachableError) as refusal:
+            await client.request(INITIALIZE, {"protocolVersion": 1}, timeout=30.0)
+    assert time.monotonic() - start < 15, "the request waited out its timeout"
+    assert "handler broken" in str(refusal.value)
+    assert "chatty.py" in str(refusal.value)
