@@ -45,8 +45,8 @@ describe("distillation (S33-05)", () => {
     });
     const line = await screen.findByTestId("knowledge-distillation");
     expect(line).toHaveTextContent("waiting for review");
-    expect(screen.getByRole("link", { name: "review" })).toHaveAttribute("href", "/skills/architecture-principles");
-    fireEvent.click(screen.getByRole("button", { name: "distill" }));
+    expect(screen.getByRole("link", { name: "Review" })).toHaveAttribute("href", "/skills/architecture-principles");
+    fireEvent.click(screen.getByRole("button", { name: "Distill" }));
     await waitFor(() => expect(api.distillKnowledgeBase).toHaveBeenCalledWith("varga", "architecture"));
   });
 });
