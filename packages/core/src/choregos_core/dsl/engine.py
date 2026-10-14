@@ -122,7 +122,7 @@ class WorkflowEngine:
     def retry_or_escalate(
         self, transition: Transition, attempts: int, reason: str = "", ceiling: int | None = None
     ) -> Decision:
-        """Rejoue la transition tant que `max_attempts` n'est pas atteint, puis escalade.
+        """Replays the transition until `max_attempts` is reached, then escalates.
 
         `ceiling` is the policy's (`attempts.by_role`, S27-08): it only lowers the
         workflow's `max_attempts`."""
