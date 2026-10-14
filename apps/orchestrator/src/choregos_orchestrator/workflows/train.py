@@ -39,6 +39,16 @@ LE_SIGNAL_DU_DEMARRAGE_EMBARQUE = "start-signal-boards"
 #: Un départ express prend l'approbation de SA voie (`express_lane.approval`, #279, S22-17). Avant ce
 #: marqueur, il prenait l'approbation ordinaire : la voie express n'était jamais lue.
 EXPRESS_LANE_APPROVAL = "express-lane-approval"
+#: The express lane is recognised by ITS label (`express_lane.label`, #351, S22-30), and a ticket already
+#: on board that comes back carrying it triggers the express lane. Before this marker, `merged` compared
+#: against a hard-coded `hotfix` (a project that named its lane `urgent` never took it, and a `hotfix`
+#: still did) and the duplicate branch merged the approval then returned without reading the labels.
+#: `patched` is only called where the old reading and the new one diverge (a label other than `hotfix`,
+#: or a duplicate carrying the label): a pre-change run replaying a history where nothing diverges never
+#: meets it, and takes the fix if it is updated before then.
+EXPRESS_LANE_READS_ITS_LABEL = "express-lane-reads-its-label"
+#: The express lane label when the policy names none (the default of the `ExpressLane` contract).
+DEFAULT_EXPRESS_LABEL = "hotfix"
 #: Le train au repos se relaie (continue-as-new) avant que Temporal ne le tue (S22-24). Avant ce
 #: marqueur, seul un départ menait au relais : un train sans lot bouclait dans `_collect` — une
 #: activité `check_window` et un timer par tour, ~11 événements par minute. Sur le locataire dev, le
@@ -149,6 +159,11 @@ class ReleaseTrain:
         self.next_departure: str | None = None
         self.window_open: bool = True
         self.ecoute_cd: bool = False
+        #: `None` until the configuration is loaded: boardings received before it (the signal that
+        #: starts the train, those delivered during `load_train_config`) wait in `pending_labels`, and
+        #: the express lane examines them once its label is known.
+        self.express_label: str | None = None
+        self.pending_labels: list[tuple[list[str], bool]] = []
 
     # ───────────────────────── signaux ─────────────────────────
 
@@ -156,13 +171,32 @@ class ReleaseTrain:
     def merged(self, payload: dict[str, Any]) -> None:
         """Un ticket fusionné monte dans le train. Un doublon ne compte qu'une fois — mais l'approbation
         qu'il apporte s'ajoute : le webhook embarque le ticket sans elle, l'interpréteur avec."""
+        labels = [str(label) for label in payload.get("labels") or []]
+        duplicate = False
         for item in self.batch:
             if item.get("work_item_key") == payload.get("work_item_key"):
                 item["approval"] = _cumul(item.get("approval"), payload.get("approval"))
-                return
-        self.batch.append(payload)
-        labels = payload.get("labels") or []
-        if "hotfix" in labels:
+                duplicate = True
+                break
+        if not duplicate:
+            self.batch.append(payload)
+        if self.express_label is None:
+            self.pending_labels.append((labels, duplicate))
+        else:
+            self._check_express_lane(labels, duplicate=duplicate)
+
+    def _check_express_lane(self, labels: list[str], *, duplicate: bool) -> None:
+        """A boarding that carries the express lane label requests an express departure.
+
+        Before `EXPRESS_LANE_READS_ITS_LABEL`, only a first boarding labelled `hotfix` counted. The
+        condition first, `patched` second: the marker is only read when the decision changes."""
+        configured = self.express_label or DEFAULT_EXPRESS_LABEL
+        before = not duplicate and DEFAULT_EXPRESS_LABEL in labels
+        after = configured in labels
+        express = before
+        if after != before:
+            express = after if workflow.patched(EXPRESS_LANE_READS_ITS_LABEL) else before
+        if express:
             self.express = True
             self.depart_requested = True
 
@@ -232,6 +266,10 @@ class ReleaseTrain:
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=DEFAULT_RETRY,
         )
+        self.express_label = str((config.get("express_lane") or {}).get("label") or DEFAULT_EXPRESS_LABEL)
+        pending, self.pending_labels = self.pending_labels, []
+        for labels, duplicate in pending:
+            self._check_express_lane(labels, duplicate=duplicate)
         if config.get("mode") == "auto_sync":
             # Pas de train : Argo suit `main`. Le workflow reste vivant pour les requêtes.
             self.status = "auto_sync"
