@@ -468,12 +468,14 @@ def _register_builtins() -> None:
         FakeScm,
         FakeTracker,
     )
+    from .fakes.executor import simulated_executor
 
     register("tracker", "fake")(lambda cfg: FakeTracker(cfg.get("project_slug", "demo")))
     register("scm", "fake")(lambda cfg: FakeScm())
     register("ci", "fake")(lambda cfg: FakeCi())
     register("cd", "fake")(lambda cfg: FakeCd())
-    register("runtime", "fake")(lambda cfg: FakeExecutor())
+    # `{"simulate": true}`: the process-wide simulated agent of the local install (`compose.yaml`).
+    register("runtime", "fake")(lambda cfg: simulated_executor() if cfg.get("simulate") else FakeExecutor())
     register("memory", "fake")(lambda cfg: FakeMemory())
     register("gateway", "fake")(lambda cfg: FakeGateway())
     register("notify", "fake")(lambda cfg: FakeNotifier())

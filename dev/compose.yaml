@@ -11,7 +11,9 @@
 # (CHOREGOS_PORT_MINIO et CHOREGOS_PORT_MINIO_CONSOLE restent lus, pour les postes déjà réglés).
 
 # Tout ce dont la plateforme a besoin, sans Kubernetes : `docker compose -f dev/compose.yaml up -d`.
-name: choregos
+# Not `choregos`: that is the local install at the root (`compose.yaml`); the same project name
+# would make each file see the other's containers as orphans and share its volumes.
+name: choregos-deps
 
 services:
   postgres:

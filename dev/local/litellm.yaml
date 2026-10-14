@@ -1,0 +1,27 @@
+# LiteLLM of the local install (`compose.yaml`): the model aliases the platform asks for.
+#
+# Without a provider key every alias answers a canned response (`mock_response`): nothing leaves
+# the machine, nothing is billed.
+model_list:
+  - model_name: platform/standard
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: no-key-in-fakes-mode
+      mock_response: "simulated answer: the local install has no model key"
+  - model_name: platform/strong
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: no-key-in-fakes-mode
+      mock_response: "simulated answer: the local install has no model key"
+  - model_name: platform/cheap
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: no-key-in-fakes-mode
+      mock_response: "simulated answer: the local install has no model key"
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL

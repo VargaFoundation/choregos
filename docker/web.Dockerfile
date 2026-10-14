@@ -8,6 +8,11 @@ COPY packages/contracts/ts ./packages/contracts/ts
 WORKDIR /app/apps/web
 RUN pnpm install --frozen-lockfile || pnpm install
 COPY apps/web ./
+# Read by `next build`, not by `next start`: the `/api/v1` rewrite and `NEXT_PUBLIC_*` are baked into
+# the build. The defaults are what the code assumes when they are unset; the local install
+# (`compose.yaml`) passes the API's address on its network and turns development sign-in on.
+ARG CHOREGOS_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_DEV_LOGIN=false
 RUN pnpm build
 
 # Un `node_modules` de production, reconstruit à part.
