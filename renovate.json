@@ -28,6 +28,11 @@
       "at any time"
     ]
   },
+  "pip-compile": {
+    "managerFilePatterns": [
+      "/^docker/headroom/requirements\\.txt$/"
+    ]
+  },
   "packageRules": [
     {
       "description": "Les montées de patch sûres sont groupées et fusionnées seules si la CI passe.",
@@ -91,6 +96,28 @@
       "prBodyNotes": [
         "⚠️ Le job `conformance-backends` de la CI doit être vert : un backend qui ne passe pas les 7 vérifications ACP ne part pas en production."
       ]
+    },
+    {
+      "description": "headroom (ADR 0055): recompiled with its hashes by `uv pip compile` (the command in the file's header), never edited line by line, and never automerged: a bump changes what an agent reads.",
+      "matchFileNames": [
+        "docker/headroom/**"
+      ],
+      "matchManagers": [
+        "pip-compile"
+      ],
+      "groupName": "headroom",
+      "minimumReleaseAge": "14 days",
+      "automerge": false
+    },
+    {
+      "description": "The hashed headroom lock belongs to `pip-compile`, not to `pip_requirements`.",
+      "matchFileNames": [
+        "docker/headroom/**"
+      ],
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "enabled": false
     }
   ],
   "customManagers": [
