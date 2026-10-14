@@ -25,6 +25,7 @@ from ..db.models import (
     Organization,
     ProjectAgent,
     User,
+    WorkflowDef,
 )
 from ..deps import Config, Db, Me, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
@@ -41,6 +42,7 @@ from ..schemas import (
     AgentLifecycleChange,
     AgentLifecycleResult,
     AgentMetrics,
+    AgentMetricsSummary,
     AgentOverrides,
     AgentOwnerChange,
     AgentPatch,
@@ -48,6 +50,7 @@ from ..schemas import (
     AgentSpec,
     AgentVersionDto,
     ApiTokenCreated,
+    ImplicitAgent,
     ProjectAgentDto,
     ProjectAgentPut,
 )
@@ -326,6 +329,68 @@ async def agent_metrics(
     )
 
 
+@router.get(
+    "/orgs/{org}/agent-metrics", response_model=list[AgentMetricsSummary], operation_id="listAgentMetrics"
+)
+async def list_agent_metrics(
+    org: str, session: Db, principal: Me, days: Annotated[int, Query(ge=1, le=365)] = 30
+) -> list[AgentMetricsSummary]:
+    """The registry's columns for every agent at once (S30-04): runs, success rate, cost — two
+    grouped queries instead of one call per agent."""
+    from datetime import timedelta
+
+    from ..db.models import CostLedger, Project, Run
+
+    _lire(principal, org)
+    organisation = await _organisation(session, org)
+    depuis = utcnow() - timedelta(days=days)
+    slugs = list(
+        (
+            await session.execute(
+                select(Agent.slug).where(Agent.org_id == organisation.id).order_by(Agent.slug)
+            )
+        ).scalars()
+    )
+    runs = (
+        await session.execute(
+            select(Run.agent_slug, Run.status, func.count())
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug.in_(slugs), Project.org_id == organisation.id, Run.created_at >= depuis)
+            .group_by(Run.agent_slug, Run.status)
+        )
+    ).all()
+    couts = (
+        await session.execute(
+            select(Run.agent_slug, func.sum(CostLedger.cost_usd))
+            .join(Run, Run.id == CostLedger.run_id)
+            .join(Project, Project.id == Run.project_id)
+            .where(Run.agent_slug.in_(slugs), Project.org_id == organisation.id, CostLedger.ts >= depuis)
+            .group_by(Run.agent_slug)
+        )
+    ).all()
+    total: dict[str, int] = {}
+    reussis: dict[str, int] = {}
+    termines: dict[str, int] = {}
+    for slug_lu, statut, nombre in runs:
+        cle = str(slug_lu)
+        total[cle] = total.get(cle, 0) + int(nombre)
+        if statut in FINIS:
+            termines[cle] = termines.get(cle, 0) + int(nombre)
+        if statut == "succeeded":
+            reussis[cle] = reussis.get(cle, 0) + int(nombre)
+    cout = {str(slug_lu): float(montant or 0.0) for slug_lu, montant in couts}
+    return [
+        AgentMetricsSummary(
+            agent=slug,
+            days=days,
+            runs=total.get(slug, 0),
+            success_rate=round(reussis.get(slug, 0) / termines[slug], 4) if termines.get(slug) else None,
+            cost_usd=round(cout.get(slug, 0.0), 6),
+        )
+        for slug in slugs
+    ]
+
+
 @router.patch("/orgs/{org}/agents/{slug}", response_model=AgentDto, operation_id="updateAgent")
 async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, principal: Me) -> AgentDto:
     """Son nom, sa description, son expiration, son état. `revoked` est définitif."""
@@ -503,6 +568,45 @@ async def list_project_agents(ctx: ProjectCtx, session: Db) -> list[ProjectAgent
     return [await _projet_dto(session, epingle, agent) for epingle, agent in lignes.tuples()]
 
 
+@router.get(
+    "/projects/{id}/implicit-agents", response_model=list[ImplicitAgent], operation_id="listImplicitAgents"
+)
+async def list_implicit_agents(ctx: ProjectCtx, session: Db) -> list[ImplicitAgent]:
+    """The `agent` actors of the project's active workflows that name no agent of the registry
+    (S30-04): the console used to read every workflow, one request each, to find them."""
+    registre = set(
+        (await session.execute(select(Agent.slug).where(Agent.org_id == ctx.project.org_id))).scalars()
+    )
+    workflows = (
+        await session.execute(
+            select(WorkflowDef.name, WorkflowDef.json_doc)
+            .where(WorkflowDef.project_id == ctx.project.id, WorkflowDef.is_active.is_(True))
+            .order_by(WorkflowDef.name)
+        )
+    ).all()
+    trouves: list[ImplicitAgent] = []
+    for nom, document in workflows:
+        acteurs = (document or {}).get("actors") or {}
+        for acteur, definition in acteurs.items():
+            if not isinstance(definition, dict) or definition.get("type") != "agent":
+                continue
+            nomme = str(definition.get("agent") or "").split("@")[0]
+            if nomme and nomme in registre:
+                continue
+            trouves.append(
+                ImplicitAgent(
+                    workflow=nom,
+                    actor=acteur,
+                    role=definition.get("role"),
+                    model=definition.get("model"),
+                    backend=definition.get("backend"),
+                    max_turns=definition.get("max_turns"),
+                    max_minutes=definition.get("max_minutes"),
+                )
+            )
+    return trouves
+
+
 @router.put("/projects/{id}/agents/{slug}", response_model=ProjectAgentDto, operation_id="pinProjectAgent")
 async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session: Db) -> ProjectAgentDto:
     """Épingle une version de l'agent sur le projet ; une surcharge qui élargit reçoit 422."""
@@ -595,6 +699,38 @@ def _credential_dto(ligne: AgentCredential, jeton: ApiToken | None = None) -> Ag
         last_used_at=jeton.last_used_at if jeton else None,
         last_client=jeton.last_client if jeton else None,
     )
+
+
+@router.get(
+    "/orgs/{org}/agent-credentials",
+    response_model=list[AgentCredentialDto],
+    operation_id="listOrgAgentCredentials",
+)
+async def list_org_credentials(org: str, session: Db, principal: Me) -> list[AgentCredentialDto]:
+    """Every client attached to an agent of the organisation, with its agent (S30-04): the AI
+    clients' page read one list per external agent."""
+    from ..db.session import en_portee_de_plateforme
+
+    _gerer(principal, org)
+    organisation = await _organisation(session, org)
+    lignes = (
+        await session.execute(
+            select(AgentCredential, Agent.slug)
+            .join(Agent, Agent.id == AgentCredential.agent_id)
+            .where(AgentCredential.org_id == organisation.id)
+            .order_by(Agent.slug)
+        )
+    ).all()
+    ids = [ligne.api_token_id for ligne, _ in lignes if ligne.api_token_id]
+    jetons: dict[str, ApiToken] = {}
+    if ids:
+        async with en_portee_de_plateforme(session):
+            trouves = await session.execute(select(ApiToken).where(ApiToken.id.in_(ids)))
+            jetons = {jeton.id: jeton for jeton in trouves.scalars()}
+    return [
+        _credential_dto(ligne, jetons.get(ligne.api_token_id or "")).model_copy(update={"agent": slug})
+        for ligne, slug in lignes
+    ]
 
 
 @router.get(

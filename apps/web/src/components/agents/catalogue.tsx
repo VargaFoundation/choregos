@@ -23,15 +23,12 @@ export function etatDeLEntree(entree: AgentCatalogueEntry): { libelle: string; a
  * coordinateurs RH. Les agents prêts à installer, un par rôle ; puis les assistants qui se connectent
  * en un clic, et ceux qui ne le peuvent pas encore ici, avec la raison.
  */
-export function CatalogueDAgents({ org }: { org: string }) {
+export function AgentCatalogue({ org }: { org: string }) {
   const catalogue = useQuery({ queryKey: ["agent-catalogue", org], queryFn: () => api.agentCatalogue(org) });
   if (catalogue.error) return <ErrorNote>{String(catalogue.error)}</ErrorNote>;
-  const entrees = catalogue.data ?? [];
-  const internes = entrees.filter((e) => e.kind === "internal");
-  const clients = entrees.filter((e) => e.kind === "external");
+  const internes = (catalogue.data ?? []).filter((e) => e.kind === "internal");
   return (
-    <>
-      <Card title="Catalogue — ready-made agents">
+      <div>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           Agents the platform ships, one per role. Installing makes one an agent of your organisation, version 1: it
           uses your project&apos;s model and runtime, and you can tune it by publishing your own versions. A workflow
@@ -63,16 +60,24 @@ export function CatalogueDAgents({ org }: { org: string }) {
             </table>
           </div>
         )}
-      </Card>
+      </div>
+  );
+}
+
+/**
+ * The assistants that connect in one click (ADR 0040): on the AI clients' page since S30-04 — the
+ * agents' page is the registry, and everything about clients and tokens lives in one place.
+ */
+export function AiClientCatalogue({ org }: { org: string }) {
+  const catalogue = useQuery({ queryKey: ["agent-catalogue", org], queryFn: () => api.agentCatalogue(org) });
+  if (catalogue.error) return <ErrorNote>{String(catalogue.error)}</ErrorNote>;
+  const clients = (catalogue.data ?? []).filter((e) => e.kind === "external");
+  return (
       <Card title="Connect an AI client">
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           Assistants that reach in through the MCP door — they never decide. Connecting one here registers it as an
           external agent: its calls carry the agent&apos;s name and limits, within your rights, and you get its
-          configuration once. To connect one simply as yourself, see{" "}
-          <Link href="/integrations" className="underline">
-            AI clients
-          </Link>
-          .
+          configuration once. To connect one simply as yourself, use the steps above.
         </p>
         <ul className="space-y-2" data-testid="clients-du-catalogue">
           {clients.map((entree) => (
@@ -80,7 +85,6 @@ export function CatalogueDAgents({ org }: { org: string }) {
           ))}
         </ul>
       </Card>
-    </>
   );
 }
 

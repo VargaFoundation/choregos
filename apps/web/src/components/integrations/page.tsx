@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { AiClientCatalogue } from "@/components/agents/catalogue";
+import { ClientsMcp } from "@/components/agents/clients-mcp";
+import { estUnClientMcp } from "@/components/agents/registre";
 import { Glossaire } from "@/components/glossaire";
-import { Empty, Eyebrow, Heading } from "@/components/ui";
+import { Empty, Heading } from "@/components/ui";
+import { api } from "@/lib/api";
 import { estClient } from "@/lib/integrations";
+import { useSession } from "@/lib/session";
 import { IntegrationsPanel } from "./panel";
 
 /**
@@ -19,9 +25,8 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
     <div className="space-y-6">
       {!projet && (
         <div className="space-y-2">
-          <Eyebrow>Integrations · MCP</Eyebrow>
           <Heading as="h1" size="xl">
-            Connect a client
+            AI clients
           </Heading>
           <p className="max-w-3xl text-sm text-ink-muted">
             Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work
@@ -36,6 +41,24 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
       ) : (
         <Empty title="Unknown client">No client called {client}</Empty>
       )}
+      {!projet && <ClientsDeLOrganisation />}
     </div>
+  );
+}
+
+/**
+ * Everything about AI clients lives here (S30-04, plan item 7): the caller's clients — and the
+ * external agent each acts as — and the assistants that connect in one click. The agents' page is
+ * the registry only.
+ */
+function ClientsDeLOrganisation() {
+  const { org } = useSession();
+  const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
+  const jetons = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
+  return (
+    <>
+      <ClientsMcp org={org} clients={(jetons.data ?? []).filter(estUnClientMcp)} agents={agents.data ?? []} />
+      <AiClientCatalogue org={org} />
+    </>
   );
 }

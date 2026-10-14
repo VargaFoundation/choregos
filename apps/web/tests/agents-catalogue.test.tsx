@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CatalogueDAgents, etatDeLEntree } from "@/components/agents/catalogue";
+import { AgentCatalogue, AiClientCatalogue, etatDeLEntree } from "@/components/agents/catalogue";
 import { api } from "@/lib/api";
 import type { AgentCatalogueEntry } from "@/lib/types";
 
@@ -27,7 +27,8 @@ const entree = (slug: string, extra: Partial<AgentCatalogueEntry> = {}): AgentCa
 function rendre() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <CatalogueDAgents org="acme" />
+      <AgentCatalogue org="acme" />
+      <AiClientCatalogue org="acme" />
     </QueryClientProvider>,
   );
 }

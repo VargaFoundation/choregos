@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import {
-  agentsImplicites,
+  implicitFromApi,
   resumeDeLaVersion,
   slugDeLActeur,
   versionDeLActeur,
@@ -168,15 +168,9 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
 
 /** Les acteurs `agent` des workflows du projet qui ne nomment aucun agent du registre. */
 function Implicites({ projet, org, registre }: { projet: string; org: string; registre: Agent[] }) {
-  const resumes = useQuery({ queryKey: ["workflows", projet], queryFn: () => api.workflows(projet) });
-  const definitions = useQueries({
-    queries: (resumes.data ?? []).map((w) => ({
-      queryKey: ["workflow", projet, w.name],
-      queryFn: () => api.workflowNamed(projet, w.name),
-    })),
-  });
-  const workflows = definitions.flatMap((d) => (d.data ? [{ name: d.data.name, json: d.data.json }] : []));
-  const implicites = agentsImplicites(workflows, new Set(registre.map((a) => a.slug)));
+  // One request: the API reads the active workflows (S30-04) — it was one request per workflow.
+  const lecture = useQuery({ queryKey: ["implicit-agents", projet], queryFn: () => api.implicitAgents(projet) });
+  const implicites = implicitFromApi(lecture.data ?? []);
   return (
     <Card title="Implicit agents">
       <div className="space-y-3">

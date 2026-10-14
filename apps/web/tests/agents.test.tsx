@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientsMcp, OUTILS_EN_LECTURE, versionDuClient } from "@/components/agents/clients-mcp";
 import {
-  agentsImplicites,
+  implicitFromApi,
   estUnClientMcp,
   etatDuClient,
   resumeDeLaVersion,
@@ -17,33 +17,29 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...reel,
-    api: { ...reel.api, createAgent: vi.fn(), attachAgentToken: vi.fn(), agentCredentials: vi.fn() },
+    api: {
+      ...reel.api,
+      createAgent: vi.fn(),
+      attachAgentToken: vi.fn(),
+      agentCredentials: vi.fn(),
+      orgAgentCredentials: vi.fn().mockResolvedValue([]),
+    },
   };
 });
 
-describe("les agents implicites d'un projet (S18-07)", () => {
-  const workflows = [
-    {
-      name: "onboarding",
-      json: {
-        actors: {
-          coordinateur: { type: "agent", role: "plan", agent: "coordinateur-onboarding@2" },
-          redacteur: { type: "agent", role: "refine", model: "profile:standard", max_turns: 30 },
-          oublie: { type: "agent", role: "verify", agent: "absent" },
-          rh: { type: "human", group: "rh" },
-        },
-      },
-    },
+describe("a project's implicit agents (S18-07, computed by the API since S30-04)", () => {
+  const fromApi = [
+    { workflow: "onboarding", actor: "redacteur", role: "refine", model: "profile:standard", backend: null, max_turns: 30, max_minutes: null },
   ];
 
-  it("un acteur agent qui ne nomme aucun agent du registre — ou un agent absent — est implicite", () => {
-    const implicites = agentsImplicites(workflows, new Set(["coordinateur-onboarding"]));
-    expect(implicites.map((i) => i.acteur)).toEqual(["redacteur", "oublie"]);
-    expect(implicites[0]).toMatchObject({ workflow: "onboarding", role: "refine", model: "profile:standard" });
+  it("the API's list takes the console's shape", () => {
+    expect(implicitFromApi(fromApi)).toEqual([
+      { workflow: "onboarding", acteur: "redacteur", role: "refine", model: "profile:standard", backend: undefined, max_turns: 30, max_minutes: undefined },
+    ]);
   });
 
   it("enregistré, il garde ce que le workflow disait de lui, et rien de plus", () => {
-    const redacteur = agentsImplicites(workflows, new Set()).find((i) => i.acteur === "redacteur");
+    const redacteur = implicitFromApi(fromApi).find((i) => i.acteur === "redacteur");
     expect(versionDeLActeur(redacteur!)).toEqual({ model: "profile:standard", limits: { max_turns: 30, max_minutes: null } });
     expect(slugDeLActeur("Rédacteur RH_2")).toBe("r-dacteur-rh-2");
   });

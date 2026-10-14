@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import type { AgentCredential, AgentSpec, ApiToken } from "@/lib/types";
+import type { AgentCredential, AgentSpec, ApiToken, ImplicitAgent } from "@/lib/types";
 
 /** Les portées qui ouvrent la porte MCP (ADR 0030) : un jeton qui en porte une est un client MCP. */
 const PORTEES_MCP = new Set(["mcp:read", "mcp:write"]);
@@ -45,44 +45,22 @@ export type AgentImplicite = {
   max_minutes?: number;
 };
 
-type Acteur = {
-  type?: string;
-  role?: string;
-  agent?: string;
-  model?: string;
-  backend?: string;
-  max_turns?: number;
-  max_minutes?: number;
-};
-
 /**
  * Les « agents implicites » d'un projet : les acteurs `agent` d'un workflow qui ne nomment aucun
- * agent du registre (`agent: slug[@version]`). Ils tournent, sans instructions éditables ni versions
- * ni coûts à leur nom : la console propose de les enregistrer.
+ * agent du registre. The API computes them (S30-04, `GET /projects/{id}/implicit-agents`): the
+ * console used to read every workflow of the project, one request each. Here they take the
+ * console's shape.
  */
-export function agentsImplicites(
-  workflows: Array<{ name: string; json?: unknown }>,
-  registre: ReadonlySet<string>,
-): AgentImplicite[] {
-  const implicites: AgentImplicite[] = [];
-  for (const workflow of workflows) {
-    const acteurs = ((workflow.json ?? {}) as { actors?: Record<string, Acteur> }).actors ?? {};
-    for (const [nom, acteur] of Object.entries(acteurs)) {
-      if (acteur?.type !== "agent") continue;
-      const nomme = acteur.agent?.split("@")[0];
-      if (nomme && registre.has(nomme)) continue;
-      implicites.push({
-        workflow: workflow.name,
-        acteur: nom,
-        role: acteur.role,
-        model: acteur.model,
-        backend: acteur.backend,
-        max_turns: acteur.max_turns,
-        max_minutes: acteur.max_minutes,
-      });
-    }
-  }
-  return implicites;
+export function implicitFromApi(list: ImplicitAgent[]): AgentImplicite[] {
+  return list.map((a) => ({
+    workflow: a.workflow,
+    acteur: a.actor,
+    role: a.role ?? undefined,
+    model: a.model ?? undefined,
+    backend: a.backend ?? undefined,
+    max_turns: a.max_turns ?? undefined,
+    max_minutes: a.max_minutes ?? undefined,
+  }));
 }
 
 /** Un nom d'acteur fait un slug d'agent : minuscules, chiffres et tirets. */
