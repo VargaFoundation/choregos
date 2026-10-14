@@ -2036,7 +2036,7 @@
     },
     {
      "name": "evidence_facts",
-     "summary": "the facts the agent counted meet the declared minimums"
+     "summary": "the facts the step counted meet the declared minimums"
     }
    ],
    "on_fail": "On failure it retries up to 1 time(s) from “In production”, then goes to “Needs a human”.",
@@ -2044,7 +2044,7 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “In production”, the agent `prod_verifier` (role verify_prod, model profile:standard) moves the item to “Verified in production” once it produced `verdict`; the outputs take an allowed value (a review's verdict, a size); the facts the agent counted meet the declared minimums. On failure it retries up to 1 time(s) from “In production”, then goes to “Needs a human”.",
+   "sentence": "From “In production”, the agent `prod_verifier` (role verify_prod, model profile:standard) moves the item to “Verified in production” once it produced `verdict`; the outputs take an allowed value (a review's verdict, a size); the facts the step counted meet the declared minimums. On failure it retries up to 1 time(s) from “In production”, then goes to “Needs a human”.",
    "agent": "prod-verifier",
    "role": "verify_prod",
    "model": "profile:standard",

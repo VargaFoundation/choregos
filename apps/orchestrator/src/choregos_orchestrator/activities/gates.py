@@ -115,6 +115,8 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             diff_available=(diff is not None) if needs_diff else True,
             required_flag=payload.get("required_flag"),
             added_text=ajoute,
+            documents=dict(item.documents or {}),
+            fields=dict(item.fields or {}),
         )
         outcomes = [await _juger(gate, context, bundle, diff is not None, perimetre_du_run) for gate in gates]
 
