@@ -97,6 +97,9 @@ ALL_ACTIVITIES = [
     evals.list_fixtures,
     evals.run_eval_cell,
     evals.publish_matrix,
+    evals.seed_eval_ticket,
+    evals.judge_eval_run,
+    evals.summarize_eval_cell,
 ]
 
 __all__ = [
