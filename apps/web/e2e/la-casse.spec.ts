@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * La casse de la console (ADR 0042, S23-15) : ce qu'elle NOMME est en minuscules — le design
- * system —, ce qu'elle DIT est une phrase, avec sa majuscule — la revue du 07/10. Les données
- * (un nom de projet, d'état, d'acteur, un titre de ticket) gardent la leur : `data-donnee`.
+ * The console's case (ADR 0048, which supersedes ADR 0042): everything the console writes — a
+ * heading, a button, a tab, a link of the navigation, a table header, a field's label, a sentence —
+ * is in sentence case: it starts with a capital. Data keeps its own case (a project's name, a
+ * state's label, an actor, a ticket's title): it is marked `data-donnee`. An identifier or a code
+ * (`supplier-agent.order_laptop`, `mcp:write`, `owner/repo`) keeps its case too.
  */
 const PAGES = [
   "/",
@@ -30,6 +32,7 @@ const PAGES = [
   "/agents/onboarding-coordinator",
   "/skills",
   "/skills/onboarding-procedure",
+  "/knowledge",
   "/integrations",
   "/integrations/claude-code",
   "/admin",
@@ -42,37 +45,41 @@ const PAGES = [
   "/login",
 ];
 
-/** Des noms propres et des sigles : ils commencent par une capitale, où qu'ils soient. */
-const NOMS_PROPRES = /^(Claude|Cursor|ChatGPT|GitHub|GitLab|Jira|Slack|Okta|Entra|Argo|Choregos|Varga|YAML|API|MCP|CSV|SCIM|CLI|OAuth|DORA|CI|PR|SSO|SAML|HTTP|REST|URL)\b/;
+/** Names written in lowercase by their owners: they keep it, wherever they stand. */
+const NOMS_EN_MINUSCULES = /^(claude\.ai|kubectl|git|npm|pnpm|uv|curl|helm|e\.g\.|i\.e\.|vs\b)/;
 
-test("ce que la console nomme est en minuscules, ce qu'elle dit commence par une capitale", async ({ page }) => {
-  test.setTimeout(120_000);
+test("everything the console writes is in sentence case; data and codes keep theirs", async ({ page }) => {
+  test.setTimeout(180_000);
   const ecarts: string[] = [];
   for (const chemin of PAGES) {
     await page.goto(chemin);
     await page.waitForLoadState("networkidle");
-    const trouves = await page.evaluate((nomsPropres) => {
-      const propres = new RegExp(nomsPropres);
+    const trouves = await page.evaluate((minuscules) => {
+      const noms = new RegExp(minuscules);
       const visible = (e: Element) => (e as HTMLElement).offsetParent !== null || e.getClientRects().length > 0;
       const donnee = (e: Element) => e.closest("[data-donnee]") !== null;
       const premiereLigne = (e: Element) => ((e as HTMLElement).innerText ?? "").trim().split("\n")[0]!.trim();
+      // A code or an identifier: `mcp:write`, `owner/repo`, `supplier-agent.order_laptop`, `#124`, a mail.
+      const code = (e: Element, texte: string) =>
+        /^[a-z0-9_-]+[._:/@#][a-z0-9]/i.test(texte) ||
+        /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(texte) ||
+        e.firstElementChild?.tagName === "CODE" ||
+        (e.firstElementChild !== null && e.firstElementChild.closest("[data-donnee]") !== null && premiereLigne(e.firstElementChild) !== "" && texte.startsWith(premiereLigne(e.firstElementChild)));
       const sortie: string[] = [];
-      const libelles = "button, [role=tab], nav a, th, summary, legend, label > span:first-child, h1, h2, h3";
+      const libelles =
+        "button, [role=tab], [role=menuitem], nav a, th, summary, legend, label > span:first-child, h1, h2, h3, h4, dt, caption";
       for (const e of document.querySelectorAll(libelles)) {
         if (!visible(e) || donnee(e)) continue;
         const texte = premiereLigne(e);
-        if (/^[A-Z][a-z]/.test(texte) && !propres.test(texte)) sortie.push(`libellé « ${texte} »`);
+        if (/^[a-z]/.test(texte) && !noms.test(texte) && !code(e, texte)) sortie.push(`label « ${texte.slice(0, 70)} »`);
       }
-      for (const e of document.querySelectorAll("p")) {
+      for (const e of document.querySelectorAll("p, li > span:first-child, [role=status], [role=alert]")) {
         if (!visible(e) || donnee(e)) continue;
         const texte = premiereLigne(e);
-        const phrase = /[a-z)]\.$/.test(texte) || /[a-z)]\. [A-Za-z]/.test(texte);
-        // Une phrase qui s'ouvre sur un code ou un identifiant (`supplier-agent.order_laptop`, `mcp:write`) le garde.
-        const code = /^[a-z0-9_-]+[._:/@][a-z0-9]/i.test(texte) || e.firstElementChild?.tagName === "CODE";
-        if (phrase && /^[a-z]/.test(texte) && !code) sortie.push(`phrase « ${texte.slice(0, 70)} »`);
+        if (/^[a-z]/.test(texte) && !noms.test(texte) && !code(e, texte)) sortie.push(`text « ${texte.slice(0, 70)} »`);
       }
       return sortie;
-    }, NOMS_PROPRES.source);
+    }, NOMS_EN_MINUSCULES.source);
     for (const ecart of new Set(trouves)) ecarts.push(`${chemin} : ${ecart}`);
   }
   expect(ecarts).toEqual([]);

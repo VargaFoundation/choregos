@@ -36,20 +36,20 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
 
   return (
     <Card
-      title="findings"
+      title="Findings"
       action={
         <label className="flex items-center gap-2">
-          <span className="text-xs text-ink-muted">filter by status</span>
+          <span className="text-xs text-ink-muted">Filter by status</span>
           <Select
             value={status}
             onChange={(event) => setStatus(event.target.value)}
             className="w-auto"
           >
-            <option value="">all</option>
-            <option value="pending">to triage</option>
-            <option value="created">ticket created</option>
-            <option value="duplicate">duplicates</option>
-            <option value="dismissed">dismissed</option>
+            <option value="">All</option>
+            <option value="pending">To triage</option>
+            <option value="created">Ticket created</option>
+            <option value="duplicate">Duplicates</option>
+            <option value="dismissed">Dismissed</option>
           </Select>
         </label>
       }
@@ -58,13 +58,13 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
       <Table>
         <THead>
           <TR>
-            <TH>severity</TH>
-            <TH>type</TH>
-            <TH>title</TH>
-            <TH>evidence</TH>
-            <TH>origin</TH>
-            <TH>status</TH>
-            <TH>actions</TH>
+            <TH>Severity</TH>
+            <TH>Type</TH>
+            <TH>Title</TH>
+            <TH>Evidence</TH>
+            <TH>Origin</TH>
+            <TH>Status</TH>
+            <TH>Actions</TH>
           </TR>
         </THead>
         <TBody>
@@ -93,19 +93,19 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
                 <div className="flex gap-1">
                   {finding.status === "pending" && (
                     <Button size="sm" onClick={() => act(finding.id, "create_ticket")}>
-                      create the ticket
+                      Create the ticket
                     </Button>
                   )}
                   {finding.status === "created" && (
                     <Button size="sm" onClick={() => act(finding.id, "agent_ready")}>
-                      make agent-ready
+                      Make agent-ready
                     </Button>
                   )}
                   <Button size="sm" onClick={() => act(finding.id, "mark_duplicate")}>
-                    duplicate
+                    Duplicate
                   </Button>
                   <Button size="sm" tone="danger" onClick={() => act(finding.id, "dismiss")}>
-                    dismiss
+                    Dismiss
                   </Button>
                 </div>
               </TD>
@@ -114,7 +114,7 @@ export default function FindingsPage({ params }: { params: Promise<{ slug: strin
         </TBody>
       </Table>
       <EtatDeLecture lecture={findings} quoi="the findings" />
-      {findings.data?.items.length === 0 && <Empty>no finding</Empty>}
+      {findings.data?.items.length === 0 && <Empty>No finding</Empty>}
     </Card>
   );
 }

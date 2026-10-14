@@ -22,10 +22,9 @@ const CLE = "choregos.org";
 /**
  * La session et l'organisation courante, pour tout le front.
  *
- * Avant : aucune page ne savait qui était connecté (`/me` n'était appelé que sur
- * l'administration), un 401 se rendait en message d'erreur brut, et l'organisation était
- * `varga`, codée en dur. Ici : `/me` une fois, les organisations de la personne, un choix
- * mémorisé dans le navigateur, et le client de l'API qui en tient compte.
+ * Before: no page knew who was signed in (`/me` was only called on the administration), a 401
+ * rendered as a raw error message, and the organisation was hard-coded. Here: `/me` once, the
+ * person's organisations, a choice remembered in the browser, and the API client that follows it.
  */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();

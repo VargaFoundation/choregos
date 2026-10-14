@@ -46,8 +46,8 @@ describe("the trains page lists the environments of the policy (S26-05)", () => 
   it("a policy with prod only shows one train", async () => {
     vi.mocked(api.policy).mockResolvedValue(policyWith({ prod: { mode: "train" } }) as never);
     await renderPage();
-    expect(await screen.findByText("environment prod")).toBeInTheDocument();
-    expect(screen.queryByText("environment staging")).toBeNull();
+    expect(await screen.findByText("Environment prod")).toBeInTheDocument();
+    expect(screen.queryByText("Environment staging")).toBeNull();
     expect(vi.mocked(api.train).mock.calls.map((call) => call[1])).toEqual(["prod"]);
   });
 
@@ -56,15 +56,15 @@ describe("the trains page lists the environments of the policy (S26-05)", () => 
       policyWith({ dev: { mode: "auto_sync" }, qa: { mode: "train" }, prod: { mode: "train" } }) as never,
     );
     await renderPage();
-    await screen.findByText("environment prod");
-    const titles = screen.getAllByText(/^environment /).map((node) => node.textContent);
-    expect(titles).toEqual(["environment dev", "environment qa", "environment prod"]);
+    await screen.findByText("Environment prod");
+    const titles = screen.getAllByText(/^Environment /).map((node) => node.textContent);
+    expect(titles).toEqual(["Environment dev", "Environment qa", "Environment prod"]);
   });
 
   it("a policy without release_train says so, and asks for no train", async () => {
     vi.mocked(api.policy).mockResolvedValue(policyWith(undefined) as never);
     await renderPage();
-    expect(await screen.findByText("no release train")).toBeInTheDocument();
+    expect(await screen.findByText("No release train")).toBeInTheDocument();
     expect(api.train).not.toHaveBeenCalled();
   });
 });

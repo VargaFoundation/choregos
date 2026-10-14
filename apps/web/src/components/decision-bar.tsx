@@ -50,34 +50,34 @@ export function DecisionBar({
       {kind === "question" ? (
         <>
           <label className="flex min-w-0 flex-1 basis-64 flex-col gap-1">
-            <span className="text-xs text-ink-muted">answer</span>
+            <span className="text-xs text-ink-muted">Answer</span>
             <Input
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
-              placeholder="your answer…"
+              placeholder="Your answer…"
               className="w-auto"
             />
           </label>
           <Button tone="primary" disabled={busy || !answer} onClick={() => send("answer")}>
-            answer
+            Answer
           </Button>
         </>
       ) : (
         <>
           <Button tone="primary" disabled={busy} onClick={() => send("approve")}>
-            approve
+            Approve
           </Button>
           <label className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs text-ink-muted">reason for sending back</span>
+            <span className="text-xs text-ink-muted">Reason for sending back</span>
             <Input
               value={answer}
               onChange={(event) => setAnswer(event.target.value)}
-              placeholder="reason (if sent back)"
+              placeholder="Reason (if sent back)"
               className="w-auto min-w-48"
             />
           </label>
           <Button tone="danger" disabled={busy} onClick={() => send("reject")}>
-            send back
+            Send back
           </Button>
         </>
       )}
@@ -146,20 +146,20 @@ function TaskForm({
           disabled={busy || manquants.length > 0 || (attest !== null && !atteste)}
           onClick={() => send({ kind: "complete", values: valeurs, attested: atteste })}
         >
-          done
+          Done
         </Button>
         <Input
-          aria-label="why it cannot be done"
+          aria-label="Why it cannot be done"
           value={motif}
           onChange={(event) => setMotif(event.target.value)}
-          placeholder="why it cannot be done"
+          placeholder="Why it cannot be done"
           className="w-auto min-w-48"
         />
         <Button tone="danger" disabled={busy || !motif} onClick={() => send({ kind: "reject", reason: motif })}>
-          cannot do it
+          Cannot do it
         </Button>
       </div>
-      {manquants.length > 0 && <p className="text-xs text-ink-muted">to fill: {manquants.join(", ")}</p>}
+      {manquants.length > 0 && <p className="text-xs text-ink-muted">To fill: {manquants.join(", ")}</p>}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );

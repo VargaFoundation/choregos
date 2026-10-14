@@ -39,15 +39,15 @@ export default function KnowledgePage() {
       setForm({ slug: "", name: "", scope: "org", members: "", serving_mode: "files" });
       await client.invalidateQueries({ queryKey: ["knowledge", org] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "creation refused");
+      setError(cause instanceof Error ? cause.message : "Creation refused");
     }
   }
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>what agents read</Eyebrow>
+        <Eyebrow>What agents read</Eyebrow>
         <Heading as="h1" size="xl">
-          knowledge
+          Knowledge
         </Heading>
         <p className="max-w-3xl text-sm text-ink-muted">
           A knowledge base is a corpus you choose — a framework, a policy, runbooks — uploaded as Word, PowerPoint, Excel,
@@ -56,22 +56,22 @@ export default function KnowledgePage() {
           used.
         </p>
       </div>
-      <Card title="knowledge bases">
+      <Card title="Knowledge bases">
         {bases.error ? (
           <ErrorNote>{String(bases.error)}</ErrorNote>
         ) : !bases.data ? (
           <p className="text-sm text-ink-muted">reading the knowledge bases…</p>
         ) : bases.data.length === 0 ? (
-          <Empty title="no knowledge base yet">Create one below, then upload its documents.</Empty>
+          <Empty title="No knowledge base yet">Create one below, then upload its documents.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="knowledge-bases">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
-                  <th className="py-1 font-normal">base</th>
-                  <th className="py-1 font-normal">scope</th>
-                  <th className="py-1 font-normal">served as</th>
-                  <th className="py-1 font-normal">documents</th>
+                  <th className="py-1 font-normal">Base</th>
+                  <th className="py-1 font-normal">Scope</th>
+                  <th className="py-1 font-normal">Served as</th>
+                  <th className="py-1 font-normal">Documents</th>
                 </tr>
               </thead>
               <tbody>
@@ -96,7 +96,7 @@ export default function KnowledgePage() {
           </div>
         )}
       </Card>
-      <Card title="create a knowledge base">
+      <Card title="Create a knowledge base">
         <form
           className="grid gap-3 text-sm sm:grid-cols-2"
           onSubmit={(event) => {
@@ -105,19 +105,19 @@ export default function KnowledgePage() {
           }}
         >
           <label className="space-y-1">
-            <span className="text-xs text-ink-muted">slug</span>
+            <span className="text-xs text-ink-muted">Slug</span>
             <Input required pattern="^[a-z][a-z0-9-]{1,62}$" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="architecture-framework" />
           </label>
           <label className="space-y-1">
-            <span className="text-xs text-ink-muted">name</span>
+            <span className="text-xs text-ink-muted">Name</span>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Architecture framework" />
           </label>
           <label className="space-y-1">
-            <span className="text-xs text-ink-muted">scope</span>
+            <span className="text-xs text-ink-muted">Scope</span>
             <Select value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value as typeof form.scope })}>
-              <option value="org">whole organisation</option>
-              <option value="projects">some projects</option>
-              <option value="groups">some groups (people only, never a run)</option>
+              <option value="org">Whole organisation</option>
+              <option value="projects">Some projects</option>
+              <option value="groups">Some groups (people only, never a run)</option>
             </Select>
           </label>
           {form.scope !== "org" && (
@@ -127,15 +127,15 @@ export default function KnowledgePage() {
             </label>
           )}
           <label className="space-y-1">
-            <span className="text-xs text-ink-muted">served as</span>
+            <span className="text-xs text-ink-muted">Served as</span>
             <Select value={form.serving_mode} onChange={(e) => setForm({ ...form, serving_mode: e.target.value as typeof form.serving_mode })}>
-              <option value="files">files — mounted in the workspace</option>
-              <option value="index">index — searched, with citations</option>
+              <option value="files">Files — mounted in the workspace</option>
+              <option value="index">Index — searched, with citations</option>
             </Select>
           </label>
           <div className="flex items-end">
             <button type="submit" className={buttonClasses("primary")}>
-              create
+              Create
             </button>
           </div>
           {error && (

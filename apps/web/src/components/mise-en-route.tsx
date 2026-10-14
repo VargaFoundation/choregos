@@ -3,8 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { CheckSquare } from "@varga/design-system";
-import { Card, Dot } from "@/components/ui";
+import { Card, Checkbox, Dot } from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ProjectDto, ProjectRequirement, WorkflowSummary, WorkItemDto } from "@/lib/types";
@@ -44,15 +43,15 @@ export function etapesDeMiseEnRoute({
   workflows: WorkflowSummary[];
   tickets: WorkItemDto[];
 }): Etape[] {
-  const reglages = { href: `/p/${slug}/settings`, label: "settings" };
+  const reglages = { href: `/p/${slug}/settings`, label: "Settings" };
   const etapes: Etape[] = [];
 
   etapes.push(
     projet.status === "active"
-      ? { id: "provisioning", titre: "project provisioned", etat: "fait", detail: "its repository, tracker and pipelines are in place." }
+      ? { id: "provisioning", titre: "Project provisioned", etat: "fait", detail: "its repository, tracker and pipelines are in place." }
       : {
           id: "provisioning",
-          titre: "project provisioned",
+          titre: "Project provisioned",
           etat: "a_faire",
           detail:
             projet.status === "provisioning"
@@ -66,16 +65,16 @@ export function etapesDeMiseEnRoute({
     workflows.length > 0
       ? {
           id: "workflow",
-          titre: "a workflow published",
+          titre: "A workflow published",
           etat: "fait",
           detail: `${workflows.length} workflow${workflows.length > 1 ? "s" : ""}${parDefaut ? `, ${parDefaut.name} by default` : ""}.`,
         }
       : {
           id: "workflow",
-          titre: "a workflow published",
+          titre: "A workflow published",
           etat: "a_faire",
           detail: "a request has nowhere to go until a workflow says who does what.",
-          lien: { href: `/p/${slug}/workflows/new`, label: "write one" },
+          lien: { href: `/p/${slug}/workflows/new`, label: "Write one" },
         },
   );
 
@@ -109,13 +108,13 @@ export function etapesDeMiseEnRoute({
 
   etapes.push(
     tickets.length > 0
-      ? { id: "premier-ticket", titre: "a first request", etat: "fait", detail: "the project has tickets." }
+      ? { id: "premier-ticket", titre: "A first request", etat: "fait", detail: "the project has tickets." }
       : {
           id: "premier-ticket",
-          titre: "a first request",
+          titre: "A first request",
           etat: "a_faire",
           detail: "file one to see the workflow run end to end.",
-          lien: { href: `/p/${slug}/board`, label: "board" },
+          lien: { href: `/p/${slug}/board`, label: "Board" },
         },
   );
   return etapes;
@@ -162,7 +161,7 @@ export function MiseEnRoute({ slug, projet }: { slug: string; projet: ProjectDto
   if (faites === etapes.length) return null;
   return (
     <Card
-      title="getting started"
+      title="Getting started"
       action={
         <span className="text-xs text-ink-muted">
           {faites} of {etapes.length} done
@@ -173,7 +172,7 @@ export function MiseEnRoute({ slug, projet }: { slug: string; projet: ProjectDto
         {etapes.map((etape) => (
           <li key={etape.id} className="flex items-start gap-3 py-2.5 text-sm" data-testid={`etape-${etape.id}`}>
             <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center">
-              {etape.etat === "a_verifier" ? <Dot tone="warn" size={8} /> : <CheckSquare checked={etape.etat === "fait"} />}
+              {etape.etat === "a_verifier" ? <Dot tone="warn" size={8} /> : <Checkbox checked={etape.etat === "fait"} />}
             </span>
             <span className="min-w-0 flex-1">
               <span className={etape.etat === "fait" ? "text-ink-muted" : "font-medium"}>{etape.titre}</span>

@@ -1,12 +1,12 @@
 // @vitest-environment node
 /**
- * Une classe de couleur qui ne nomme aucune couleur du thème ne fait rien : Tailwind n'en génère pas
- * de règle, et le filet retombe sur la couleur du texte, le fond sur rien. `border-l-waiting-solid` en
- * était une (S24-04) — les tons pleins s'écrivent `waiting`, `failed`… — : le filet d'une attente était
- * gris, celui d'un refus aussi. Les tests d'apparence vérifiaient le NOM de la classe, pas qu'elle
- * existe. Celui-ci lit les couleurs du thème (`--color-*` de `globals.css` et du design system) et
- * refuse, dans le code de la console, toute classe de couleur d'une de leurs familles qui n'en nomme
- * aucune. Les couleurs de Tailwind (`red-500`…), les tailles et les largeurs ne le regardent pas.
+ * A colour class that names no theme colour does nothing: Tailwind generates no rule for it, and the
+ * border falls back to the text colour, the background to nothing. `border-l-waiting-solid` was one
+ * (S24-04) — the solid tones are spelt `waiting`, `failed`… —: a wait's border was grey, and so was a
+ * refusal's. The appearance tests checked the class's NAME, not that it exists. This one reads the
+ * theme's colours (`--color-*` in `globals.css`) and refuses, in the console's code, any colour class
+ * of one of their families that names none of them. Tailwind's colours (`red-500`…), sizes and widths
+ * are none of its business.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -14,7 +14,8 @@ import { describe, expect, it } from "vitest";
 
 const WEB = join(import.meta.dirname, "..");
 const RACINE = join(WEB, "src");
-const FEUILLES = [join(RACINE, "app/globals.css"), join(WEB, "node_modules/@varga/design-system/css/theme.css")];
+// The console's colours are declared in its own stylesheet only (ADR 0048).
+const FEUILLES = [join(RACINE, "app/globals.css")];
 
 function fichiers(dossier: string): string[] {
   return readdirSync(dossier).flatMap((nom) => {

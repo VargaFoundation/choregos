@@ -62,6 +62,15 @@ export function libelleDeCode(code: string): string {
   return code.replace(/_/g, " ").toLowerCase();
 }
 
+/**
+ * Sentence case for a label built from a code or a lowercase phrase (ADR 0048): the first letter
+ * only, the rest as it is — `release train` → « Release train », `ci_green` stays `ci_green` where
+ * it is shown as code.
+ */
+export function toSentenceCase(texte: string): string {
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+}
+
 /** Les segments entre backticks d'une phrase du moteur (`refiner`, `spec_markdown`) : du code. */
 export function segmentsDeCode(texte: string): { code: boolean; texte: string }[] {
   return texte

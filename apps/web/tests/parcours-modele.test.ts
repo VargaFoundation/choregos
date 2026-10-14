@@ -122,7 +122,7 @@ describe("le modèle d'un parcours (S22-02)", () => {
     expect([...fin.etapes.values()].filter((e) => e.statut !== "fait").length).toBe(0);
     expect(fin.arcs.get("pr_approved->fixing_ci")!.fois).toBe(1);
     expect(fin.etapes.get("t-approve-pr")!.tours).toBe(2);
-    expect(fin.etapes.get("t-release")!.tentatives[0]!.decided_by).toBe("leo@varga.dev");
+    expect(fin.etapes.get("t-release")!.tentatives[0]!.decided_by).toBe("leo@acme.dev");
   });
 
   it("sauter à une phase : le premier instant où l'une de ses étapes a bougé", () => {

@@ -190,9 +190,6 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.104.1
         version: 5.104.1(react@19.3.0)
-      '@varga/design-system':
-        specifier: github:VargaFoundation/design-system#v0.1.1
-        version: https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d(react@19.3.0)(tailwindcss@4.3.3)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1244,13 +1241,6 @@ packages:
     resolution: {integrity: sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA==}
     cpu: [x64]
     os: [win32]
-
-  '@varga/design-system@https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d':
-    resolution: {gitHosted: true, integrity: sha512-3hW24MR6Obl82RpbQGWFXx/0xkn2/IRJhIm9vCLU0copsSjbeN8Ja7yKgfbykorduqGfh3a/E6M9hULR5CT7OA==, tarball: https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d}
-    version: 0.1.1
-    peerDependencies:
-      react: '>=18'
-      tailwindcss: '>=4'
 
   '@vitejs/plugin-react@6.1.1':
     resolution: {integrity: sha512-yxLaQV9gkhS8ezJqCM6+ndU7mDY6gqAg75NQ+0IjwEI8IYOmQCgkRwHKVSfWXW076DsqMo0Dk+0FK1U+M5RgFw==}
@@ -3793,12 +3783,6 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.12.2':
     optional: true
-
-  '@varga/design-system@https://codeload.github.com/VargaFoundation/design-system/tar.gz/cf22e61f7a4513fb66cc89cea11e9762eeefb32d(react@19.3.0)(tailwindcss@4.3.3)':
-    dependencies:
-      react: 19.3.0
-      tailwind-merge: 3.7.0
-      tailwindcss: 4.3.3
 
   '@vitejs/plugin-react@6.1.1(vite@8.3.1(@types/node@26.6.4)(jiti@2.7.0))':
     dependencies:

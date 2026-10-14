@@ -11,13 +11,13 @@ export default function PlatformPage() {
   const executors = useQuery({ queryKey: ["executors"], queryFn: () => api.executors() });
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="agent backends">
+      <Card title="Agent backends">
         <ul className="space-y-1 text-xs">
           {(backends.data ?? []).map((backend) => (
             <li key={backend.name} className="flex items-center gap-2">
               <StateBadge
                 state={backend.enabled ? "ok" : "disabled"}
-                display={backend.enabled ? "enabled" : "disabled"}
+                display={backend.enabled ? "Enabled" : "Disabled"}
                 kind={backend.enabled ? "terminal" : "blocked"}
               />
               <span className="font-mono">{backend.name}</span>
@@ -26,19 +26,19 @@ export default function PlatformPage() {
           ))}
         </ul>
         <EtatDeLecture lecture={backends} quoi="the agent backends" />
-        {backends.data?.length === 0 && <Empty>no backend registered</Empty>}
+        {backends.data?.length === 0 && <Empty>No backend registered</Empty>}
       </Card>
-      <Card title="executors">
+      <Card title="Executors">
         <ul className="space-y-1 text-xs">
           {(executors.data ?? []).map((executor) => (
             <li key={executor.kind} className="flex items-center gap-2">
               <span className="font-mono">{executor.kind}</span>
-              <span className="text-ink-muted">{executor.enabled === false ? "disabled" : "enabled"}</span>
+              <span className="text-ink-muted">{executor.enabled === false ? "Disabled" : "Enabled"}</span>
             </li>
           ))}
         </ul>
         <EtatDeLecture lecture={executors} quoi="the executors" />
-        {executors.data?.length === 0 && <Empty>no executor registered</Empty>}
+        {executors.data?.length === 0 && <Empty>No executor registered</Empty>}
       </Card>
     </div>
   );

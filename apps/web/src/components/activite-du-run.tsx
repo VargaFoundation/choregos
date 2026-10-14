@@ -32,7 +32,7 @@ const ICONES: Record<string, LucideIcon> = {
 };
 
 const TONS: Record<StatutDAppel, Tone> = { pending: "neutral", in_progress: "running", completed: "succeeded", failed: "failed" };
-const LIBELLES: Record<StatutDAppel, string> = { pending: "pending", in_progress: "running", completed: "done", failed: "failed" };
+const LIBELLES: Record<StatutDAppel, string> = { pending: "Pending", in_progress: "Running", completed: "Done", failed: "Failed" };
 
 const HEURE = new Intl.DateTimeFormat("en-GB", { timeStyle: "medium" });
 
@@ -57,13 +57,13 @@ export function ActiviteDuRunVue({ activite }: { activite: ActiviteDuRun }) {
       </p>
       {appels.length > 0 && (
         <div className="max-h-96 overflow-auto">
-          <Table aria-label="tool calls">
+          <Table aria-label="Tool calls">
             <THead>
               <TR>
-                <TH>started</TH>
-                <TH>tool</TH>
-                <TH>status</TH>
-                <TH align="right">duration</TH>
+                <TH>Started</TH>
+                <TH>Tool</TH>
+                <TH>Status</TH>
+                <TH align="right">Duration</TH>
               </TR>
             </THead>
             <TBody>
@@ -75,10 +75,10 @@ export function ActiviteDuRunVue({ activite }: { activite: ActiviteDuRun }) {
         </div>
       )}
       {orphelins.length > 0 && (
-        <ul aria-label="refusals outside a tool call" className="space-y-1 text-xs">
+        <ul aria-label="Refusals outside a tool call" className="space-y-1 text-xs">
           {orphelins.map((r, i) => (
             <li key={`${r.cible}-${i}`} className="flex flex-wrap items-baseline gap-2">
-              <Badge tone="failed">denied</Badge>
+              <Badge tone="failed">Denied</Badge>
               <span className="font-mono">{r.cible}</span>
               <span className="text-ink-muted">{r.raison}</span>
             </li>
@@ -101,10 +101,10 @@ function Ligne({ appel }: { appel: AppelDOutil }) {
             {appel.titre}
           </span>
           <span className="sr-only">, {appel.sousAgent ? "sub-agent" : appel.genre} </span>
-          {appel.sousAgent && <Badge tone="agent">sub-agent</Badge>}{" "}
+          {appel.sousAgent && <Badge tone="agent">Sub-agent</Badge>}{" "}
           {appel.refus && (
             <span title={appel.refus}>
-              <Badge tone="failed">denied</Badge>
+              <Badge tone="failed">Denied</Badge>
             </span>
           )}
         </span>

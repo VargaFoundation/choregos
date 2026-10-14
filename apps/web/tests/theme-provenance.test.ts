@@ -5,12 +5,23 @@
  * `#fff` / `#000`. Aucune autre valeur n'entre : une teinte « au jugé » ne peut pas se glisser, et
  * l'allure se reconstruit depuis une source publique, sans rien emprunter d'ailleurs.
  *
- * Et chaque rôle de couleur que le design system déclare en sombre est redéclaré ici : une version
- * du design system qui en ajouterait un ne fuirait pas avec ses propres valeurs.
+ * And every token the console reads (`var(--choregos-…)`, in its code and its stylesheets) is declared
+ * by its theme: the console owns its tokens (ADR 0048), no other stylesheet supplies one, and a role
+ * read but never declared would silently fall back to nothing.
  */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import * as radix from "@radix-ui/colors";
 import { describe, expect, it } from "vitest";
-import { declarationsDe, FEUILLE_DU_THEME, JETONS_DU_DS } from "./jetons";
+import { declarationsDe, FEUILLE_DU_THEME } from "./jetons";
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((nom) => {
+    const chemin = join(dir, nom);
+    if (statSync(chemin).isDirectory()) return sourceFiles(chemin);
+    return /\.(tsx?|css)$/.test(nom) ? [chemin] : [];
+  });
+}
 
 const ECHELLES = radix as unknown as Record<string, Record<string, string>>;
 const AUTORISES = new Set(["#fff", "#000"]);
@@ -40,12 +51,21 @@ describe("la provenance des couleurs de la console", () => {
     }
   });
 
-  it("chaque rôle de couleur du design system est redéclaré par la console", () => {
-    const roles = [...declarationsDe(JETONS_DU_DS, ':root[data-theme="dark"]').keys()];
-    expect(roles.length).toBeGreaterThan(15);
-    const console = declarationsDe(FEUILLE_DU_THEME, ":root");
-    // La marque et le cadre du logo restent ceux de la fondation : c'est son nom qu'ils portent.
-    const manquants = roles.filter((role) => !["--varga-brand", "--varga-mark-frame"].includes(role) && !console.has(role));
-    expect(manquants).toEqual([]);
+  it("every token the console reads is declared by its theme", () => {
+    const declared = new Set(declarationsDe(FEUILLE_DU_THEME, ":root").keys());
+    // A card or the sidebar redefines the surface for what it holds: still a declared token.
+    const read = new Set<string>();
+    for (const chemin of sourceFiles(join(import.meta.dirname, "../src"))) {
+      for (const m of readFileSync(chemin, "utf8").matchAll(/var\((--choregos-[a-z0-9-]+)/g)) read.add(m[1]!);
+    }
+    expect(read.size, "no token read: the test checks nothing").toBeGreaterThan(20);
+    expect([...read].filter((nom) => !declared.has(nom)).sort()).toEqual([]);
+  });
+
+  it("no stylesheet of the console declares a colour role outside its theme", () => {
+    const elsewhere = sourceFiles(join(import.meta.dirname, "../src"))
+      .filter((chemin) => chemin.endsWith(".css") && chemin !== FEUILLE_DU_THEME)
+      .flatMap((chemin) => [...readFileSync(chemin, "utf8").matchAll(/^\s*(--(?:choregos|varga)-[a-z0-9-]+)\s*:/gm)].map((m) => m[1]!));
+    expect(elsewhere).toEqual([]);
   });
 });

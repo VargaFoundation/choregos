@@ -35,13 +35,13 @@ describe("créer un workflow (#336)", () => {
         </QueryClientProvider>,
       );
     });
-    fireEvent.change(await screen.findByLabelText("name"), { target: { value: "offboarding" } });
-    const publier = await screen.findByRole("button", { name: "publish offboarding" });
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "offboarding" } });
+    const publier = await screen.findByRole("button", { name: "Publish offboarding" });
     await waitFor(() => expect(publier).toBeEnabled());
     fireEvent.click(publier);
     await waitFor(() => expect(api.createWorkflow).toHaveBeenCalledWith("rh", "offboarding", expect.any(String)));
     expect(api.putWorkflowNamed).not.toHaveBeenCalled();
-    expect(await screen.findByText(/a workflow named offboarding already exists/)).toBeInTheDocument();
+    expect(await screen.findByText(/A workflow named offboarding already exists/)).toBeInTheDocument();
     expect(pousser).not.toHaveBeenCalled();
   });
 });

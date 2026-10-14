@@ -38,7 +38,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
 
   return (
     <Card
-      title="access"
+      title="Access"
       action={
         <span className="flex items-center gap-3 text-xs text-ink-muted">
           <Provenance de="observed" />
@@ -54,7 +54,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
         <>
           {refuses.length > 0 && (
             <div className="mb-4 border-l-2 border-failed pl-3">
-              <p className={cn(LEGENDE, "mb-1 text-failed-ink")}>refused</p>
+              <p className={cn(LEGENDE, "mb-1 text-failed-ink")}>Refused</p>
               <ul className="space-y-1 text-sm">
                 {refuses.map((ligne) => (
                   <li key={`${ligne.nature}:${ligne.cible}`}>
@@ -69,9 +69,9 @@ export function Acces({ acces }: { acces?: AccesRun }) {
             <table>
               <thead>
                 <tr>
-                  <th>kind</th>
-                  <th>target</th>
-                  <th>requests</th>
+                  <th>Kind</th>
+                  <th>Target</th>
+                  <th>Requests</th>
                 </tr>
               </thead>
               <tbody>
@@ -91,7 +91,7 @@ export function Acces({ acces }: { acces?: AccesRun }) {
             </table>
           </div>
           {acces?.cout_outils_eur ? (
-            <p className="mt-2 text-xs text-ink-muted">catalogue tools: {acces.cout_outils_eur.toFixed(4)} €</p>
+            <p className="mt-2 text-xs text-ink-muted">Catalogue tools: {acces.cout_outils_eur.toFixed(4)} €</p>
           ) : null}
         </>
       )}

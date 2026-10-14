@@ -15,8 +15,6 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: false,
-  // Le design system est livré en TypeScript source : Next le transpile comme le reste.
-  transpilePackages: ["@varga/design-system"],
   experimental: {
     optimizePackageImports: ["@tanstack/react-query"],
     // Turbopack merged every module under 200 kB into the chunk of each route that used it: the

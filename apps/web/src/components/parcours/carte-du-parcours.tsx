@@ -5,7 +5,7 @@ import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "rea
 import { buttonClasses } from "@/components/ui";
 import { COULEUR_DU_GENRE as COULEURS_DES_GENRES } from "@/components/workflows/carte/disposition";
 import { cn } from "@/lib/cn";
-import { relative, shortDate, usd } from "@/lib/format";
+import { toSentenceCase, relative, shortDate, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
 import { placer, RAYON, tronquer, type Placement, type Point } from "./disposition";
 import { useLecteur, type Vitesse } from "./lecteur";
@@ -82,7 +82,7 @@ export function CarteDuParcours({
   const recit = lecteur.mode === "relecture" ? raconter(modele, instant.dernier) : "";
 
   return (
-    <section className="space-y-3" data-testid="parcours" aria-label={`journey of ${journey.tracker_key ?? "the work item"}`}>
+    <section className="space-y-3" data-testid="parcours" aria-label={`Journey of ${journey.tracker_key ?? "the work item"}`}>
       <EnTete journey={journey} modele={modele} instant={instant} />
       <BarreDuLecteur lecteur={lecteur} images={images} recit={recit} />
       <div className={cn("grid gap-4", etapeChoisie && "xl:grid-cols-[minmax(0,1fr)_26rem]")}>
@@ -115,10 +115,10 @@ export function CarteDuParcours({
 }
 
 const LEGENDE_DES_GENRES: [Etape["genre"], string][] = [
-  ["agent", "agent"],
-  ["human", "person"],
-  ["platform", "platform"],
-  ["train", "release train"],
+  ["agent", "Agent"],
+  ["human", "Person"],
+  ["platform", "Platform"],
+  ["train", "Release train"],
 ];
 
 /**
@@ -147,8 +147,8 @@ export function CarteEnSerpentin({
   const [cadre, largeur] = useLargeur(largeurInitiale);
   const placement = useMemo(() => placer(modele, largeur), [modele, largeur]);
   return (
-    <section className="space-y-3" data-testid="carte-en-serpentin" aria-label="workflow diagram">
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" aria-label="who carries each step">
+    <section className="space-y-3" data-testid="carte-en-serpentin" aria-label="Workflow diagram">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" aria-label="Who carries each step">
         {LEGENDE_DES_GENRES.map(([genre, libelle]) => (
           <li key={genre} className="inline-flex items-center gap-1.5">
             <span
@@ -205,11 +205,11 @@ function EnTete({ journey, modele, instant }: { journey: WorkItemJourney; modele
   });
   return (
     <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm" data-testid="parcours-maintenant">
-      <span className="text-ink-muted">
+      <span className="text-ink-muted" data-donnee>
         {journey.workflow_name} v{journey.workflow_version}
       </span>
       <span>
-        now in <strong>{modele.nom(instant.etat)}</strong>
+        Now in <strong>{modele.nom(instant.etat)}</strong>
         {actives.length > 0 && (
           <span className="text-ink-muted">
             {" "}
@@ -230,15 +230,15 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
   const bouton = buttonClasses("secondary", "sm", "gap-1.5");
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="replay the journey">
+      <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Replay the journey">
         {lecteur.enLecture ? (
           <button
             type="button"
-            aria-label="pause the replay"
+            aria-label="Pause the replay"
             className={buttonClasses("primary", "sm", "gap-1.5")}
             onClick={lecteur.pause}
           >
-            <span aria-hidden>❚❚</span> pause
+            <span aria-hidden>❚❚</span> Pause
           </button>
         ) : (
           <button
@@ -246,9 +246,9 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
             className={buttonClasses("primary", "sm", "gap-1.5")}
             onClick={lecteur.lire}
             disabled={images.length === 0}
-            aria-label={direct ? "replay the journey" : "play the replay"}
+            aria-label={direct ? "Replay the journey" : "Play the replay"}
           >
-            <span aria-hidden>▶</span> {direct ? "replay" : "play"}
+            <span aria-hidden>▶</span> {direct ? "Replay" : "Play"}
           </button>
         )}
         <button
@@ -256,11 +256,11 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
           className={bouton}
           onClick={lecteur.recommencer}
           disabled={images.length === 0}
-          aria-label="restart the replay"
+          aria-label="Restart the replay"
         >
           <span aria-hidden>↺</span> restart
         </button>
-        <span className="inline-flex overflow-hidden border border-line-strong" role="group" aria-label="speed">
+        <span className="inline-flex overflow-hidden border border-line-strong" role="group" aria-label="Speed">
           {VITESSES.map((v) => (
             <button
               key={v}
@@ -281,10 +281,10 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
           aria-pressed={direct}
           className={cn(bouton, direct && "border-running-line bg-running-soft text-running-ink hover:bg-running-soft")}
           onClick={lecteur.direct}
-          aria-label="live: follow the work item"
+          aria-label="Live: follow the work item"
         >
           <span aria-hidden className={cn("inline-block size-1.5 rounded-full bg-current", direct && "parcours-pouls-point")} />
-          live
+          Live
         </button>
         {!direct && images.length > 0 && (
           <label className="ml-1 inline-flex min-w-48 flex-1 items-center gap-2 text-xs text-ink-muted">
@@ -294,15 +294,15 @@ function BarreDuLecteur({ lecteur, images, recit }: { lecteur: ReturnType<typeof
               max={images.length - 1}
               value={lecteur.index}
               onChange={(event) => lecteur.allerA(Number(event.target.value))}
-              className="flex-1 accent-[var(--varga-accent)]"
-              aria-label="moment of the journey"
+              className="flex-1 accent-[var(--choregos-accent)]"
+              aria-label="Moment of the journey"
             />
             <span className="whitespace-nowrap font-mono" data-testid="parcours-moment">
               {lecteur.index + 1} / {images.length} · {shortDate(new Date(images[lecteur.index]!).toISOString())}
             </span>
           </label>
         )}
-        <ul className="ml-auto flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted" aria-label="legend">
+        <ul className="ml-auto flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted" aria-label="Legend">
           {LEGENDE.map(([statut, libelle]) => (
             <li key={statut} className="inline-flex items-center gap-1.5">
               <Pastille statut={statut} />
@@ -371,14 +371,14 @@ function Carte({
         className="relative"
         style={{ height: placement.hauteur, width: placement.largeur }}
         role="group"
-        aria-label="the work item's path"
+        aria-label="The work item's path"
       >
         <svg aria-hidden className="absolute inset-0 overflow-visible" width={placement.largeur} height={placement.hauteur}>
           <defs>
             {(
               [
                 ["pris", COULEUR_DU_RENVOI],
-                ["structure", "var(--varga-line-strong)"],
+                ["structure", "var(--choregos-line-strong)"],
               ] as const
             ).map(([nom, couleur]) => (
               <marker
@@ -408,7 +408,7 @@ function Carte({
                 <path
                   d={segment.d}
                   fill="none"
-                  stroke={actif ? COULEUR.en_cours : parcouru ? "var(--varga-ink-muted)" : "var(--varga-line-strong)"}
+                  stroke={actif ? COULEUR.en_cours : parcouru ? "var(--choregos-ink-muted)" : "var(--choregos-line-strong)"}
                   strokeWidth={actif || parcouru ? 3 : 2}
                   strokeLinecap="round"
                   // Franchi, le tronçon se trace : `pathLength` ramène sa longueur à 1, l'animation fait le reste.
@@ -422,7 +422,7 @@ function Carte({
                   </circle>
                 )}
                 <text
-                  stroke="var(--varga-surface)"
+                  stroke="var(--choregos-surface)"
                   strokeWidth={4}
                   paintOrder="stroke"
                   x={etiquette.x}
@@ -430,7 +430,7 @@ function Carte({
                   textAnchor={etiquette.ancre}
                   fontSize={11}
                   fontWeight={actif ? 600 : 400}
-                  fill={actif ? COULEUR.en_cours : "var(--varga-ink-muted)"}
+                  fill={actif ? COULEUR.en_cours : "var(--choregos-ink-muted)"}
                 >
                   <title>{modele.nom(segment.etat)}</title>
                   {tronquer(actif ? `now · ${modele.nom(segment.etat)}` : modele.nom(segment.etat), etiquette.largeurMax)}
@@ -450,7 +450,7 @@ function Carte({
                 <path
                   d={trace.d}
                   fill="none"
-                  stroke={pris.fois > 0 ? COULEUR_DU_RENVOI : "var(--varga-line-strong)"}
+                  stroke={pris.fois > 0 ? COULEUR_DU_RENVOI : "var(--choregos-line-strong)"}
                   strokeWidth={pris.fois > 0 ? 2.5 : 1.5}
                   strokeDasharray={pris.fois > 0 ? undefined : "4 5"}
                   opacity={pris.fois > 0 ? 1 : 0.55}
@@ -464,7 +464,7 @@ function Carte({
                 )}
                 {pris.fois > 0 && arc.genre === "renvoi" && (
                   <text
-                    stroke="var(--varga-surface)"
+                    stroke="var(--choregos-surface)"
                     strokeWidth={4}
                     paintOrder="stroke"
                     x={trace.etiquette.x}
@@ -503,7 +503,7 @@ function Carte({
           point={placement.fin}
           largeur={placement.largeur / placement.colonnes}
           titre={fini ? `${modele.nom(modele.chemin.at(-1) ?? "")} ✓` : modele.nom(modele.chemin.at(-1) ?? "")}
-          sous="the end of the path"
+          sous="The end of the path"
           decalage={30}
         />
         {toutes.map((etape) => {
@@ -536,7 +536,7 @@ function Borne({ point, atteinte = false }: { point: Point; atteinte?: boolean }
       width={6}
       height={40}
       rx={3}
-      fill={atteinte ? COULEUR.fait : "var(--varga-ink-muted)"}
+      fill={atteinte ? COULEUR.fait : "var(--choregos-ink-muted)"}
     />
   );
 }
@@ -569,7 +569,7 @@ function Case({
   const couleur = statique ? COULEUR_DU_GENRE[etape.genre] : COULEUR[etat.statut];
   const vivante = etat.statut === "en_cours" || etat.statut === "attend";
   const plein = statique || etat.statut !== "a_venir";
-  const fond = statique ? "var(--varga-surface)" : fondDuStatut(etat.statut);
+  const fond = statique ? "var(--choregos-surface)" : fondDuStatut(etat.statut);
   const { x, y } = point;
   return (
     <g data-etape={etape.id} data-statut={etat.statut}>
@@ -584,7 +584,7 @@ function Case({
           className={etat.statut === "attend" ? "parcours-pouls-lent" : "parcours-pouls"}
         />
       )}
-      {choisie && <circle cx={x} cy={y} r={RAYON + 7} fill="none" stroke="var(--varga-focus)" strokeWidth={2} />}
+      {choisie && <circle cx={x} cy={y} r={RAYON + 7} fill="none" stroke="var(--choregos-focus)" strokeWidth={2} />}
       {etape.genre === "platform" ? (
         <rect
           x={x - RAYON + 1}
@@ -613,12 +613,12 @@ function Case({
         <circle cx={x} cy={y} r={RAYON} fill={fond} stroke={couleur} strokeWidth={3} className="parcours-forme" />
       )}
       {etape.genre === "human" ? (
-        <g fill={plein ? couleur : "var(--varga-ink-muted)"}>
+        <g fill={plein ? couleur : "var(--choregos-ink-muted)"}>
           <circle cx={x} cy={y - 3.5} r={3.4} />
           <path d={`M ${x - 6.5} ${y + 7} Q ${x} ${y - 1.5} ${x + 6.5} ${y + 7} Z`} />
         </g>
       ) : etape.genre === "train" ? (
-        <g fill={plein ? couleur : "var(--varga-ink-muted)"}>
+        <g fill={plein ? couleur : "var(--choregos-ink-muted)"}>
           {[-7, 0, 7].map((dx) => (
             <circle key={dx} cx={x + dx} cy={y} r={2.2} />
           ))}
@@ -756,7 +756,7 @@ function BoutonDEtape({
                   : "border-retrying-line bg-retrying-soft text-retrying-ink",
               )}
             >
-              {tour}
+              {toSentenceCase(tour)}
             </span>
           )}
           {detail && (
@@ -785,7 +785,7 @@ function Exceptions({ modele, instant }: { modele: Modele; instant: Instant }) {
   if (modele.exceptions.length === 0) return null;
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-muted" data-testid="parcours-exceptions">
-      <span>when something goes wrong:</span>
+      <span>When something goes wrong:</span>
       {modele.exceptions.map((exception) => {
         const ici = instant.etat === exception.id;
         const passe = instant.visites.has(exception.id);
@@ -826,7 +826,7 @@ function Phases({
   onAller: (index: number) => void;
 }) {
   return (
-    <nav aria-label="stages of the journey" className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+    <nav aria-label="Stages of the journey" className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
       <ol className="flex flex-wrap gap-2">
         {modele.phases.map((phase, i) => {
           const statuts = phase.etapes.map((id) => instant.etapes.get(id)?.statut);
@@ -867,7 +867,7 @@ function Phases({
           );
         })}
       </ol>
-      <span className="font-mono text-xs text-ink-muted">click a stage to jump to it</span>
+      <span className="text-xs text-ink-muted">Click a stage to jump to it</span>
     </nav>
   );
 }

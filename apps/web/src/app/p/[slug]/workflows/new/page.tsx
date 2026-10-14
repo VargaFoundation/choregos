@@ -64,20 +64,20 @@ export default function NewWorkflowPage({
   }
 
   return (
-    <Card title="new workflow">
+    <Card title="New workflow">
       <div className="max-w-xl space-y-4">
         <Field
-          label="name"
+          label="Name"
           hint={
             nom && (!nomValide || pris)
               ? undefined
-              : "lowercase letters, digits and dashes — e.g. offboarding"
+              : "Lowercase letters, digits and dashes — e.g. offboarding"
           }
           error={
             nom && !nomValide
-              ? "lowercase letters, digits and dashes only"
+              ? "Lowercase letters, digits and dashes only"
               : pris
-                ? `a workflow named ${nom} already exists — publishing would replace its active version`
+                ? `A workflow named ${nom} already exists — publishing would replace its active version`
                 : undefined
           }
         >
@@ -89,7 +89,7 @@ export default function NewWorkflowPage({
             />
           )}
         </Field>
-        <Field label="start from">
+        <Field label="Start from">
           {(props) => (
             <Select
               {...props}
@@ -110,7 +110,7 @@ export default function NewWorkflowPage({
             <Link
               href={`/p/${slug}/workflows/${encodeURIComponent(nom)}`}
             >
-              open {nom}
+              Open {nom}
             </Link>{" "}
             to change it, or choose another name.
           </p>
@@ -121,7 +121,7 @@ export default function NewWorkflowPage({
           onClick={publier}
           disabled={!nomValide || !choisi || envoi || pris || !existants.data}
         >
-          publish {nom || "the workflow"}
+          Publish {nom || "the workflow"}
         </Button>
       </div>
     </Card>

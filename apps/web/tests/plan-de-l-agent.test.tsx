@@ -83,8 +83,8 @@ describe("la liste du plan", () => {
     ])!;
     render(<PlanDeLAgent plan={relu} />);
     expect(screen.getByTestId("plan-progression")).toHaveTextContent("1 of 2 done");
-    expect(screen.getByRole("progressbar", { name: "tasks done" })).toHaveAttribute("aria-valuenow", "1");
-    const liste = screen.getByRole("list", { name: "agent plan" });
+    expect(screen.getByRole("progressbar", { name: "Tasks done" })).toHaveAttribute("aria-valuenow", "1");
+    const liste = screen.getByRole("list", { name: "Agent plan" });
     const lignes = within(liste).getAllByRole("listitem");
     expect(lignes.map((l) => l.getAttribute("data-statut"))).toEqual(["completed", "in_progress", "removed"]);
     expect(lignes[0]).toHaveTextContent("lire — done");
@@ -97,7 +97,7 @@ describe("le journal brut d'un run", () => {
   it("dit l'état d'un plan et le texte d'un message, plutôt que leur JSON", () => {
     render(<LiveLog events={[plan(1, [t("lire", "completed"), t("corriger", "pending")]), message(2, "je lis le code")]} />);
     const journal = screen.getByTestId("live-log");
-    expect(journal).toHaveTextContent("plan · 1 of 2 done");
+    expect(journal).toHaveTextContent("Plan · 1 of 2 done");
     expect(journal).toHaveTextContent("je lis le code");
     expect(journal).not.toHaveTextContent("sessionUpdate");
   });

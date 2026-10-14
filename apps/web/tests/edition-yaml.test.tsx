@@ -49,7 +49,7 @@ function Sonde() {
 }
 
 /** Un onglet qu'on quitte et où l'on revient : le fournisseur du brouillon, lui, reste (il vit dans la mise en page). */
-function Onglets({ children }: { children: ReactNode }) {
+function Tabs({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(true);
   return (
     <>
@@ -68,7 +68,7 @@ async function rendre(contenu: ReactNode = <Sonde />) {
     <QueryClientProvider client={client}>
       <BrouillonProvider slug="rh" name="onboarding">
         <BarreDuBrouillon />
-        <Onglets>{contenu}</Onglets>
+        <Tabs>{contenu}</Tabs>
       </BrouillonProvider>
     </QueryClientProvider>,
   );
@@ -94,7 +94,7 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     taper(`${LU}# typed\n`);
     expect(await screen.findByText("1 change not published yet")).toBeInTheDocument();
     await valideAuBout();
-    fireEvent.click(screen.getByRole("button", { name: "publish v4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish v4" }));
     await waitFor(() => expect(api.putWorkflowNamed).toHaveBeenCalledWith("rh", "onboarding", `${LU}# typed\n`, 3));
   });
 
@@ -122,8 +122,8 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     // La première réponse arrive APRÈS la seconde : elle ne doit rien écrire.
     act(() => lente(invalide));
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByText(/would be invalid/)).toBeNull();
-    expect(screen.getByRole("button", { name: "publish v4" })).toBeEnabled();
+    expect(screen.queryByText(/Would be invalid/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Publish v4" })).toBeEnabled();
   });
 
   it("une réponse périmée qui arrive pendant la validation suivante ne débloque pas la publication", async () => {
@@ -139,10 +139,10 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     // A répond alors que B est encore en vol : le verdict de A ne vaut pas pour B.
     await act(async () => enAttente.get(`${LU}# A\n`)!(valide));
     expect(screen.getByTestId("validation")).toHaveTextContent("en_cours");
-    expect(screen.getByRole("button", { name: "publish v4" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Publish v4" })).toBeDisabled();
     await act(async () => enAttente.get(`${LU}# B\n`)!(valide));
     await valideAuBout();
-    expect(screen.getByRole("button", { name: "publish v4" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Publish v4" })).toBeEnabled();
   });
 
   it("une validation injoignable le dit et interdit de publier ; réessayer la relance", async () => {
@@ -155,11 +155,11 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     });
     await rendre();
     taper(`${LU}# offline\n`);
-    expect(await screen.findByText(/could not validate the text: network down/, {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "publish v4" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    expect(await screen.findByText(/Could not validate the text: network down/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish v4" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await valideAuBout();
-    expect(screen.getByRole("button", { name: "publish v4" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Publish v4" })).toBeEnabled();
   });
 
   it("un texte invalide interdit de publier", async () => {
@@ -168,7 +168,7 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     taper("kind: Workflow\n");
     await valideAuBout();
     expect(screen.getByText(/the workflow would be invalid/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "publish v4" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Publish v4" })).toBeDisabled();
   });
 
   it("une version publiée pendant l'édition ne remplace pas le texte et ouvre le conflit", async () => {
@@ -179,7 +179,7 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     await act(() => client.invalidateQueries({ queryKey: ["workflow", "rh", "onboarding"] }));
     expect(await screen.findByTestId("conflit")).toHaveTextContent("you started from v3, the workflow is now v4");
     expect((screen.getByLabelText("texte") as HTMLTextAreaElement).value).toBe(`${LU}# mine\n`);
-    expect(screen.getByRole("button", { name: "publish v5" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Publish v5" })).toBeDisabled();
   });
 
   it("un 409 garde le texte et propose de recharger ou d'écraser", async () => {
@@ -190,10 +190,10 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     taper(`${LU}# mine\n`);
     await valideAuBout();
     version.courante = 4;
-    fireEvent.click(screen.getByRole("button", { name: "publish v4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish v4" }));
     expect(await screen.findByTestId("conflit")).toBeInTheDocument();
     expect((screen.getByLabelText("texte") as HTMLTextAreaElement).value).toBe(`${LU}# mine\n`);
-    fireEvent.click(screen.getByRole("button", { name: "publish over v4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish over v4" }));
     await waitFor(() => expect(api.putWorkflowNamed).toHaveBeenLastCalledWith("rh", "onboarding", `${LU}# mine\n`, 4));
   });
 
@@ -213,8 +213,8 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
     taper(`${LU}# a`);
     taper(`${LU}# ab`);
     expect(await screen.findByText("1 change not published yet")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "undo" }));
-    await waitFor(() => expect(screen.queryByText(/not published yet/)).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(screen.queryByText(/Not published yet/)).toBeNull());
     expect((screen.getByLabelText("texte") as HTMLTextAreaElement).value).toBe(LU);
   });
 
@@ -241,9 +241,9 @@ describe("le brouillon unique des trois vues (S21-06)", () => {
       </QueryClientProvider>,
     );
     const champ = (await screen.findByLabelText("YAML of onboarding")) as HTMLTextAreaElement;
-    expect(screen.queryByRole("button", { name: /publish/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
     fireEvent.change(champ, { target: { value: `${LU}# from the YAML tab\n` } });
     await waitFor(() => expect(screen.getByTestId("validation-yaml")).toHaveTextContent("✓ valid workflow"), { timeout: 2000 });
-    expect(screen.getAllByRole("button", { name: /publish/ })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Publish/ })).toHaveLength(1);
   });
 });

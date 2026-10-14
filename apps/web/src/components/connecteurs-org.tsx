@@ -5,6 +5,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Badge, Card, ErrorNote } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
+import { toSentenceCase } from "@/lib/format";
 import { estUneSorteDuProjet, libelleDeSorte, SORTES_DU_PROJET } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, OrgConnector, ProjectDto } from "@/lib/types";
 
@@ -37,7 +38,7 @@ export function lignesDeLivraison(
     const lecture = lectures[index] ?? {};
     if (lecture.error) {
       const interdit = lecture.error instanceof ApiError && lecture.error.status === 403;
-      return { slug: projet.slug, nom: projet.name, outils: null, refus: interdit ? "no access" : "could not read" };
+      return { slug: projet.slug, nom: projet.name, outils: null, refus: interdit ? "No access" : "Could not read" };
     }
     if (!lecture.data) return { slug: projet.slug, nom: projet.name, outils: null, refus: null };
     const outils = lecture.data
@@ -61,7 +62,7 @@ export function OutilsDeLivraison({ org }: { org: string }) {
   });
   const lignes = lignesDeLivraison(liste, lectures);
   return (
-    <Card title="project delivery tools">
+    <Card title="Project delivery tools">
       <div className="space-y-3 text-sm" id="delivery">
         <p className="max-w-3xl text-ink-muted">
           Each project&apos;s tracker, repository, CI and deployment — set in the project&apos;s settings, never here. A
@@ -70,7 +71,7 @@ export function OutilsDeLivraison({ org }: { org: string }) {
         {projets.error ? (
           <ErrorNote>{String(projets.error)}</ErrorNote>
         ) : !projets.data ? (
-          <p className="text-ink-muted">reading the projects…</p>
+          <p className="text-ink-muted">Reading the projects…</p>
         ) : lignes.length === 0 ? (
           <p className="text-ink-muted">No project yet.</p>
         ) : (
@@ -78,10 +79,10 @@ export function OutilsDeLivraison({ org }: { org: string }) {
             <table className="w-full" data-testid="outils-de-livraison">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
-                  <th className="py-1 font-normal">project</th>
-                  <th className="py-1 font-normal">configured tools</th>
+                  <th className="py-1 font-normal">Project</th>
+                  <th className="py-1 font-normal">Configured tools</th>
                   <th className="py-1 font-normal">
-                    <span className="sr-only">actions</span>
+                    <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
@@ -93,15 +94,15 @@ export function OutilsDeLivraison({ org }: { org: string }) {
                       {ligne.refus ? (
                         <span className="text-xs text-ink-muted">{ligne.refus}</span>
                       ) : !ligne.outils ? (
-                        <span className="text-xs text-ink-muted">reading…</span>
+                        <span className="text-xs text-ink-muted">Reading…</span>
                       ) : ligne.outils.length === 0 ? (
-                        <span className="text-xs text-ink-muted">platform defaults only</span>
+                        <span className="text-xs text-ink-muted">Platform defaults only</span>
                       ) : (
                         <span className="flex flex-wrap gap-2">
                           {ligne.outils.map((outil) => (
-                            <span key={outil.kind} title={`status: ${outil.status}`}>
+                            <span key={outil.kind} title={`Status: ${outil.status}`}>
                               <Badge tone={outil.status === "error" ? "danger" : "neutral"}>
-                                {libelleDeSorte(outil.kind)}: {outil.type}
+                                {toSentenceCase(libelleDeSorte(outil.kind))}: {outil.type}
                               </Badge>
                             </span>
                           ))}
@@ -110,7 +111,7 @@ export function OutilsDeLivraison({ org }: { org: string }) {
                     </td>
                     <td className="py-2 text-right">
                       <Link href={`/p/${ligne.slug}/settings`} className="text-xs underline">
-                        settings
+                        Settings
                       </Link>
                     </td>
                   </tr>

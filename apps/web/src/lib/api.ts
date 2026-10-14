@@ -86,14 +86,21 @@ import type {
 
 export const API_BASE = "/api/v1";
 export const IS_MOCK = process.env.NEXT_PUBLIC_API_MODE === "mock";
-/** L'organisation de départ, avant que la session n'en dise plus (mode démo, premier rendu). */
-export const DEFAULT_ORG = process.env.NEXT_PUBLIC_DEFAULT_ORG ?? "varga";
+/**
+ * The starting organisation, before the session says more (demo mode, first render). It is
+ * no longer the foundation's (`varga`, ADR 0048): the demo's sample organisation is `acme`, and a
+ * live console without `NEXT_PUBLIC_DEFAULT_ORG` starts on `default` until `/me` names the person's.
+ */
+export const DEFAULT_ORG = defaultOrg(process.env.NEXT_PUBLIC_DEFAULT_ORG, IS_MOCK);
 
-// ─── l'organisation courante ───
-// Le front n'avait qu'une organisation, codée en dur (`varga`). Les projets sont adressés à
-// l'API par `org:slug` — un slug seul est ambigu dès que deux organisations partagent un
-// nom de projet, et l'API le refuse. La session pose l'organisation ici ; les pages passent
-// des slugs, `qualify` fait le reste.
+export function defaultOrg(configured: string | undefined, mock: boolean): string {
+  return configured?.trim() || (mock ? "acme" : "default");
+}
+
+// ─── the current organisation ───
+// The front had one organisation, hard-coded. Projects are addressed to the API as `org:slug` —
+// a slug alone is ambiguous as soon as two organisations share a project name, and the API
+// refuses it. The session sets the organisation here; pages pass slugs, `qualify` does the rest.
 let currentOrg = DEFAULT_ORG;
 export function setCurrentOrg(org: string): void {
   currentOrg = org || DEFAULT_ORG;

@@ -4,16 +4,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
-import { Badge, Onglets, tabClasses } from "@/components/ui";
+import { Badge, Tabs, tabClasses } from "@/components/ui";
 import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
 import { BrouillonProvider } from "@/components/workflows/brouillon";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 
 const VUES = [
-  { suffix: "", label: "process" },
-  { suffix: "/map", label: "map" },
+  { suffix: "", label: "Process" },
+  { suffix: "/map", label: "Map" },
   { suffix: "/yaml", label: "YAML" },
-  { suffix: "/history", label: "history" },
+  { suffix: "/history", label: "History" },
 ];
 
 /** Un workflow du projet, par son nom : son processus, sa carte, son YAML, son historique. */
@@ -36,7 +36,7 @@ export default function WorkflowLayout({
           href={`/p/${slug}/workflows`}
           className="text-sm text-ink-muted hover:underline"
         >
-          workflows
+          Workflows
         </Link>
         <span aria-hidden className="text-ink-muted">
           /
@@ -47,9 +47,9 @@ export default function WorkflowLayout({
             v{definition.data.version}
           </span>
         )}
-        {definition.data?.is_default && <Badge tone="accent">default</Badge>}
+        {definition.data?.is_default && <Badge tone="accent">Default</Badge>}
       </div>
-      <Onglets aria-label={`views of ${name}`}>
+      <Tabs aria-label={`Views of ${name}`}>
         {VUES.map((vue) => {
           const href = `${base}${vue.suffix}`;
           const active = pathname === href;
@@ -64,7 +64,7 @@ export default function WorkflowLayout({
             </Link>
           );
         })}
-      </Onglets>
+      </Tabs>
       {/* Le brouillon est commun à la carte et à la vue processus : un geste sur l'une se voit sur
           l'autre, et rien n'est publié avant « publish ». */}
       <BrouillonProvider slug={slug} name={name}>

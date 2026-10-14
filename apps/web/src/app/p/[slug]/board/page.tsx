@@ -49,13 +49,13 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         <Heading as="h2" size="md">
-          board
+          Board
         </Heading>
         {(workflows.data?.length ?? 0) > 1 ? (
           <label className="flex items-center gap-2 text-sm text-ink-muted">
-            workflow
+            Workflow
             <Select
-              aria-label="board workflow"
+              aria-label="Board workflow"
               value={choisi}
               onChange={(event) => router.replace(`${pathname}?workflow=${encodeURIComponent(event.target.value)}`)}
               className="w-auto"
@@ -75,7 +75,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         {trackerInterne && (
           <span className="ml-auto">
             <Button tone="accent" size="sm" onClick={() => setNouvelle((n) => !n)}>
-              new request
+              New request
             </Button>
           </span>
         )}
@@ -91,7 +91,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
           }}
         />
       )}
-      {items.isLoading && <Empty>loading…</Empty>}
+      {items.isLoading && <Empty>Loading…</Empty>}
       {enAttente.length > 0 && (
         <div
           className="raised border border-line border-l-2 border-l-waiting p-3 text-sm"
@@ -113,7 +113,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
       )}
       {columns.length > 0 && (
         // Le sommaire des colonnes : chacune y est, même hors champ, avec ce qu'elle tient.
-        <nav aria-label="columns of the board" data-donnee className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <nav aria-label="Columns of the board" data-donnee className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {columns.map((column) => {
             const attentes = column.items.filter((item) => item.pending_request).length;
             return (
@@ -143,7 +143,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             {column.horsWorkflow && (
               // Sans ce mot, une colonne « In progress » après « Done » ne se comprenait pas (audit du 08/10).
               <p className="text-xs text-ink-muted">
-                not a state of this workflow — tickets left here by an older version
+                Not a state of this workflow — tickets left here by an older version
               </p>
             )}
             {column.items.map((item) => (
@@ -171,7 +171,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                   )}
                   {item.failure && (
                     <p className="mt-1 text-xs font-medium text-failed-ink" title={item.failure.message}>
-                      dead · {item.failure.activity ?? "interpreter"}
+                      Dead · {item.failure.activity ?? "interpreter"}
                     </p>
                   )}
                   {item.pending_request && (
@@ -183,7 +183,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
                       {item.pending_request.kind === "task" ? (
                         // Un formulaire et une attestation ne tiennent pas dans une carte : la page du ticket.
                         <Link href={`/p/${slug}/items/${item.id}`} className="text-xs">
-                          do the task
+                          Do the task
                         </Link>
                       ) : (
                         <DecisionBar
@@ -259,7 +259,7 @@ function NouvelleDemande({
       >
         {workflows.length > 1 && (
           <Select
-            aria-label="workflow of the request"
+            aria-label="Workflow of the request"
             value={workflow}
             onChange={(event) => {
               setWorkflow(event.target.value);
@@ -276,7 +276,7 @@ function NouvelleDemande({
         )}
         {champs.length > 0 && (
           <fieldset className="grid gap-2 md:grid-cols-2" data-testid="request-fields">
-            <legend className="sr-only">fields of the request</legend>
+            <legend className="sr-only">Fields of the request</legend>
             {champs.map((champ) => (
               <ChampDeDemande
                 key={champ.name}
@@ -288,14 +288,14 @@ function NouvelleDemande({
           </fieldset>
         )}
         <Input
-          aria-label="request title"
+          aria-label="Request title"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Data project manager for a 6-month assignment"
           className="w-full"
         />
         <Textarea
-          aria-label="request details"
+          aria-label="Request details"
           value={body}
           onChange={(event) => setBody(event.target.value)}
           rows={4}
@@ -304,12 +304,12 @@ function NouvelleDemande({
         />
         <div className="flex items-center gap-2">
           <Select
-            aria-label="size"
+            aria-label="Size"
             value={size}
             onChange={(event) => setSize(event.target.value as typeof size)}
             className="w-auto"
           >
-            <option value="">size?</option>
+            <option value="">Size?</option>
             {["S", "M", "L", "XL"].map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -317,7 +317,7 @@ function NouvelleDemande({
             ))}
           </Select>
           <Button tone="primary" size="sm" type="submit" disabled={busy || !title}>
-            file and start
+            File and start
           </Button>
         </div>
         {error && <ErrorNote>{error}</ErrorNote>}

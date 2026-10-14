@@ -10,13 +10,13 @@ import { cn } from "@/lib/cn";
 // « AI clients » plutôt qu'« integrations » : la page sert aux assistants qui entrent DANS Choregos,
 // quand les connecteurs (administration) sont ce vers quoi Choregos sort.
 export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
-  { href: "/", label: "projects", icone: FolderKanban },
-  { href: "/agents", label: "agents", icone: Bot },
-  { href: "/skills", label: "skills", icone: BookOpen },
-  { href: "/knowledge", label: "knowledge", icone: Library },
-  { href: "/inbox", label: "inbox", icone: Inbox },
+  { href: "/", label: "Projects", icone: FolderKanban },
+  { href: "/agents", label: "Agents", icone: Bot },
+  { href: "/skills", label: "Skills", icone: BookOpen },
+  { href: "/knowledge", label: "Knowledge", icone: Library },
+  { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "AI clients", icone: Plug },
-  { href: "/admin", label: "admin", icone: Settings },
+  { href: "/admin", label: "Admin", icone: Settings },
 ];
 
 export function entreeActive(href: string, pathname: string): boolean {
@@ -25,9 +25,9 @@ export function entreeActive(href: string, pathname: string): boolean {
 
 /** Les entrées, rangées : le travail, ce qu'on y branche, l'organisation. */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
-  { titre: "work", entrees: ["/", "/inbox"] },
-  { titre: "catalogue", entrees: ["/agents", "/skills", "/knowledge", "/integrations"] },
-  { titre: "organisation", entrees: ["/admin"] },
+  { titre: "Work", entrees: ["/", "/inbox"] },
+  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/integrations"] },
+  { titre: "Organisation", entrees: ["/admin"] },
 ];
 
 /** Le nombre de choses qui attendent quelqu'un : lu à voix haute comme tel, pas comme un chiffre nu. */
@@ -75,7 +75,7 @@ export function ListeDeNavigation({
         <p
           id={idTitre}
           className={cn(
-            "px-2 pb-1 font-mono text-[11px] tracking-[0.06em] text-ink-muted uppercase",
+            "px-2 pb-1 text-xs font-medium text-ink-muted",
             barre && "rail:sr-only",
           )}
         >
@@ -94,13 +94,13 @@ export function ListeDeNavigation({
                   aria-current={active ? "page" : undefined}
                   title={barre && rail ? entree.label : undefined}
                   className={cn(
-                    "relative flex items-center border-l-2 font-mono no-underline",
+                    "relative flex items-center rounded no-underline",
                     barre
                       ? "h-7 gap-2.5 px-2 text-[13px] pointer-coarse:min-h-11 rail:justify-center rail:px-0"
                       : "min-h-11 gap-3 px-3 text-sm",
                     active
-                      ? "border-accent bg-accent-soft text-ink"
-                      : "border-transparent text-ink-muted hover:bg-surface-muted hover:text-ink",
+                      ? "bg-accent-soft font-medium text-ink"
+                      : "text-ink-muted hover:bg-surface-muted hover:text-ink",
                   )}
                 >
                   <Icone aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />

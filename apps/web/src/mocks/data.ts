@@ -57,16 +57,16 @@ const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000
 
 const projectConfig = (slug: string) => ({
   slug,
-  org: "varga",
-  repo: { url: `https://github.com/varga/${slug}.git`, default_branch: "main", language: "python" as const },
+  org: "acme",
+  repo: { url: `https://github.com/acme/${slug}.git`, default_branch: "main", language: "python" as const },
 });
 
 export const me: MeDto = {
   id: "u1",
-  email: "augustin@varga.dev",
+  email: "augustin@acme.dev",
   display_name: "Augustin",
   memberships: [
-    { org: "varga", role: "org_admin", user_id: "u1", email: "augustin@varga.dev" },
+    { org: "acme", role: "org_admin", user_id: "u1", email: "augustin@acme.dev" },
   ],
 };
 
@@ -75,7 +75,7 @@ export const projects: ProjectPage = {
     {
       id: "p1",
       slug: "billing-api",
-      org: "varga",
+      org: "acme",
       name: "Billing API",
       status: "active",
       template_ref: "github-tekton-argo-k8s@1.0.0",
@@ -98,7 +98,7 @@ export const projects: ProjectPage = {
     {
       id: "p2",
       slug: "checkout-web",
-      org: "varga",
+      org: "acme",
       name: "Checkout Web",
       status: "provisioning",
       config: projectConfig("checkout-web"),
@@ -116,22 +116,22 @@ export const projects: ProjectPage = {
 
 export const workItems: WorkItemPage = {
   items: [
-    item("w1", "varga/billing-api#123", "Credit notes are not deducted from the total", "in_progress", "In progress", {
+    item("w1", "acme/billing-api#123", "Credit notes are not deducted from the total", "in_progress", "In progress", {
       size: "M" as const,
       cost: 6.77,
       run: { id: "r3", status: "running", stage_role: "implement", attempt: 1, cost_usd: 2.74, backend: "claude-code" },
     }),
-    item("w2", "varga/billing-api#124", "Export invoices as PDF", "awaiting_spec_approval", "Spec to approve", {
+    item("w2", "acme/billing-api#124", "Export invoices as PDF", "awaiting_spec_approval", "Spec to approve", {
       size: "L",
       cost: 1.12,
       pending: true,
     }),
-    item("w3", "varga/billing-api#125", "Fix the rounding of discounts", "pr_open", "PR open", {
+    item("w3", "acme/billing-api#125", "Fix the rounding of discounts", "pr_open", "PR open", {
       size: "S",
       cost: 3.4,
-      pr: "https://github.com/varga/billing-api/pull/456",
+      pr: "https://github.com/acme/billing-api/pull/456",
     }),
-    item("w4", "varga/billing-api#120", "Migrate to pydantic v2", "deployed_prod", "In production", {
+    item("w4", "acme/billing-api#120", "Migrate to pydantic v2", "deployed_prod", "In production", {
       size: "L",
       cost: 24.9,
       closed: true,
@@ -696,7 +696,7 @@ export const trains: Record<string, TrainStatus> = {
     env: "prod",
     status: "collecting",
     batch_size: 2,
-    pending_items: ["varga/billing-api#125", "varga/billing-api#126"],
+    pending_items: ["acme/billing-api#125", "acme/billing-api#126"],
     next_departure: new Date(now.getTime() + 45 * 60_000).toISOString(),
     frozen: false,
     window_open: true,
@@ -719,10 +719,10 @@ export const releases: ReleasePage = {
       env: "prod",
       batch_no: 42,
       status: "done",
-      items: [{ work_item_key: "varga/billing-api#120", sha: "a1b2c3", title: "Migrate to pydantic v2" }],
+      items: [{ work_item_key: "acme/billing-api#120", sha: "a1b2c3", title: "Migrate to pydantic v2" }],
       started_at: iso(60 * 26),
       ended_at: iso(60 * 25),
-      approved_by: "marie@varga.dev",
+      approved_by: "marie@acme.dev",
       verdict: { go: true },
     },
     {
@@ -731,7 +731,7 @@ export const releases: ReleasePage = {
       env: "prod",
       batch_no: 41,
       status: "rolled_back",
-      items: [{ work_item_key: "varga/billing-api#118", sha: "d4e5f6" }],
+      items: [{ work_item_key: "acme/billing-api#118", sha: "d4e5f6" }],
       started_at: iso(60 * 50),
       ended_at: iso(60 * 49),
       verdict: { go: false, reason: "canary analysis failed: 5xx > 1%" },
@@ -742,7 +742,7 @@ export const releases: ReleasePage = {
       env: "prod",
       batch_no: 43,
       status: "awaiting_approval",
-      items: [{ work_item_key: "varga/billing-api#124", sha: "b7c8d9", title: "Idempotent refund endpoint" }],
+      items: [{ work_item_key: "acme/billing-api#124", sha: "b7c8d9", title: "Idempotent refund endpoint" }],
       started_at: iso(30),
     },
   ],
@@ -761,7 +761,7 @@ export const findings: FindingPage = {
       suggested_fix: "selectinload(Order.lines)",
       estimate: "S",
       status: "pending",
-      origin_work_item_key: "varga/billing-api#123",
+      origin_work_item_key: "acme/billing-api#123",
       occurrences: 2,
       created_at: iso(80),
     },
@@ -773,7 +773,7 @@ export const findings: FindingPage = {
       severity: "low",
       evidence: "fails once in 12 CI runs",
       status: "created",
-      created_work_item_key: "varga/billing-api#127",
+      created_work_item_key: "acme/billing-api#127",
       occurrences: 1,
       created_at: iso(300),
     },
@@ -932,8 +932,8 @@ export const workflowValidation: WorkflowValidation = {
 
 /** Les workflows du projet de démonstration : le défaut, et un flux d'incident routé par étiquette. */
 export const workflowSummaries: WorkflowSummary[] = [
-  { name: "default-simple", version: 1, is_default: true, open_items: 2, created_by: "lea@varga.dev", updated_at: iso(60 * 24 * 3) },
-  { name: "hotfix", version: 2, is_default: false, open_items: 0, created_by: "marc@varga.dev", updated_at: iso(60 * 5) },
+  { name: "default-simple", version: 1, is_default: true, open_items: 2, created_by: "lea@acme.dev", updated_at: iso(60 * 24 * 3) },
+  { name: "hotfix", version: 2, is_default: false, open_items: 0, created_by: "marc@acme.dev", updated_at: iso(60 * 5) },
 ];
 
 export const workflowRouting: WorkflowRouting = {
@@ -1044,11 +1044,11 @@ export const workflowVersions: WorkflowDef[] = [
     version: 2,
     is_active: true,
     checksum: "sha256:v2demo",
-    created_by: "marc@varga.dev",
+    created_by: "marc@acme.dev",
     created_at: iso(60 * 5),
     yaml: workflow.yaml.replace("gates: [scope_respected]", "gates: [scope_respected, ci_green]"),
   },
-  { ...workflow, version: 1, is_active: false, created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) },
+  { ...workflow, version: 1, is_active: false, created_by: "lea@acme.dev", created_at: iso(60 * 24 * 3) },
 ];
 
 /** Une section qu'un greffon déclarerait (ADR 0032) : l'exemple SCIM du contrat. */
@@ -1145,7 +1145,7 @@ export const agents: Agent[] = [
     display_name: "Onboarding coordinator",
     description: "Prepares a joiner's access plan and follows each step up to the badge.",
     status: "active",
-    owner: "lea@varga.dev",
+    owner: "lea@acme.dev",
     latest_version: 2,
     created_at: iso(60 * 24 * 9),
     versions: [
@@ -1160,14 +1160,14 @@ export const agents: Agent[] = [
           mcp_servers: [],
         },
         checksum: "sha256:9c1d0f4e2b7a6c3d5e8f1a2b3c4d5e6f",
-        created_by: "lea@varga.dev",
+        created_by: "lea@acme.dev",
         created_at: iso(60 * 24 * 2),
       },
       {
         version: 1,
         spec: { instructions: "You prepare a joiner's access plan.", model: "profile:standard" },
         checksum: "sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
-        created_by: "lea@varga.dev",
+        created_by: "lea@acme.dev",
         created_at: iso(60 * 24 * 9),
       },
     ],
@@ -1177,7 +1177,7 @@ export const agents: Agent[] = [
     kind: "external",
     display_name: "Léa's Claude Code",
     status: "active",
-    owner: "lea@varga.dev",
+    owner: "lea@acme.dev",
     latest_version: 1,
     created_at: iso(60 * 24),
     versions: [
@@ -1185,7 +1185,7 @@ export const agents: Agent[] = [
         version: 1,
         spec: { mcp_servers: [{ connector: "choregos", tools: ["list_*", "search_*", "get_*", "create_work_item"] }] },
         checksum: "sha256:5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
-        created_by: "lea@varga.dev",
+        created_by: "lea@acme.dev",
         created_at: iso(60 * 24),
       },
     ],
@@ -1229,7 +1229,7 @@ export const agentCredentials: AgentCredential[] = [
     kind: "token",
     token_id: "tok-claude",
     token_name: "claude-code",
-    created_by: "lea@varga.dev",
+    created_by: "lea@acme.dev",
     created_at: iso(60 * 24),
     last_used_at: iso(3),
     last_client: "claude-code/2.1.0",
@@ -1266,7 +1266,7 @@ export const skills: Skill[] = [
     status: "active",
     latest_version: 1,
     used_by: ["onboarding-coordinator@2"],
-    versions: [{ version: 1, digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c", created_by: "lea@varga.dev", created_at: iso(60 * 24 * 3) }],
+    versions: [{ version: 1, digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c", created_by: "lea@acme.dev", created_at: iso(60 * 24 * 3) }],
   },
 ];
 
@@ -1316,7 +1316,7 @@ export const knowledgeBase: KnowledgeBase = {
 export const skillVersion: SkillVersion = {
   version: 1,
   digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c",
-  created_by: "lea@varga.dev",
+  created_by: "lea@acme.dev",
   created_at: iso(60 * 24 * 3),
   files: {
     "SKILL.md": "---\nname: onboarding-procedure\ndescription: The onboarding procedure.\n---\n\n# Onboarding\n\n1. Entra accounts ten days before the start date.\n2. Groups according to the access profile.\n",
@@ -1354,7 +1354,7 @@ export const orgConnectors: OrgConnector[] = [
     config: { tenant: "acme.onmicrosoft.com" },
     secret_refs: { client_secret: "env:ENTRA_CLIENT_SECRET" },
     status: "ok",
-    created_by: "lea@varga.dev",
+    created_by: "lea@acme.dev",
     operations: [
       { name: "read_user", access: "read", policy: "allowed", groups: [] },
       { name: "create_account", access: "write", policy: "approval", groups: ["hr"], description: "creates an account" },
@@ -1411,7 +1411,7 @@ export const actions: Action[] = [
     ],
     proposed_by: { kind: "system", id: "system" },
     approval: { step_up_minutes: 10 },
-    decisions: [{ by: "lea@varga.dev", decision: "approve", at: iso(90), auth_age_seconds: 120 }],
+    decisions: [{ by: "lea@acme.dev", decision: "approve", at: iso(90), auth_age_seconds: 120 }],
     status: "succeeded",
     project_slug: "billing-api",
     created_at: iso(95),
@@ -1443,7 +1443,7 @@ actions.push({
     { effect: "ontology.effet", with: { index: 0 } },
     { effect: "ontology.preuve", with: { index: 0, position: 1 } },
   ],
-  proposed_by: { kind: "user", id: "lea@varga.dev", via: "mcp" },
+  proposed_by: { kind: "user", id: "lea@acme.dev", via: "mcp" },
   approval: { approvers: [{ role: "project_owner", min: 1 }], step_up_minutes: 10, separation_of_duties: true },
   decisions: [],
   status: "pending_approval",
@@ -1653,7 +1653,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/ui\/admin-sections$/, [sectionScim]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
-    [/^\/orgs$/, [{ slug: "varga", name: "Varga Foundation", role: "org_admin" }]],
+    [/^\/orgs$/, [{ slug: "acme", name: "Varga Foundation", role: "org_admin" }]],
     [/^\/orgs\/[^/]+\/members$/, me.memberships],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],

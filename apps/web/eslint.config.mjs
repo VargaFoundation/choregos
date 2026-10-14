@@ -12,30 +12,13 @@ const MOCKS = {
   message: "fixtures du mode démo : les charger par import() derrière IS_MOCK, jamais statiquement (#179)",
 };
 
-const PRIMITIVES_DE_LA_CONSOLE = [
-  "Badge",
-  "Button",
-  "buttonClasses",
-  "Card",
-  "Dot",
-  "Empty",
-  "Eyebrow",
-  "Field",
-  "Heading",
-  "Input",
-  "Label",
-  "Lead",
-  "Select",
-  "Stat",
-  "tabClasses",
-  "Table",
-  "TBody",
-  "TD",
-  "Textarea",
-  "TH",
-  "THead",
-  "TR",
-];
+// The console owns its primitives (ADR 0048): nothing comes from the Varga Foundation design system
+// any more — not a component, not a stylesheet. Its look (square corners, mono buttons, lowercase,
+// the foundation's mark) would come back with it.
+export const FOUNDATION_DESIGN_SYSTEM = {
+  group: ["@varga/*", "@varga/design-system", "@varga/design-system/*"],
+  message: "ADR 0048: the console owns its primitives — import them from @/components/ui",
+};
 
 const config = [
   // `next-env.d.ts` est écrit par Next à chaque build et porte l'avertissement
@@ -66,26 +49,15 @@ const config = [
       "no-restricted-imports": [
         "error",
         {
-          paths: [
-            {
-              // Les primitives du design system dont l'allure est codée en dur ont leur version de
-              // console, sous les mêmes noms (ADR 0043) : les importer du design system ramènerait
-              // le Space Mono gras, la puce carrée, l'aplat inversé ou le trait d'encre.
-              name: "@varga/design-system",
-              importNames: PRIMITIVES_DE_LA_CONSOLE,
-              message: "ADR 0043 : importer depuis @/components/ui, qui en donne la version de console",
-            },
-          ],
-          patterns: [MOCKS],
+          patterns: [MOCKS, FOUNDATION_DESIGN_SYSTEM],
         },
       ],
     },
   },
   {
-    // `components/ui.tsx` est l'endroit où la console habille le design system : il en importe la
-    // carte. La règle des fixtures y vaut toujours.
-    files: ["src/components/ui.tsx"],
-    rules: { "no-restricted-imports": ["error", { patterns: [MOCKS] }] },
+    // The fixtures themselves may import each other; the foundation's design system stays refused.
+    files: ["src/mocks/**", "tests/**", "e2e/**"],
+    rules: { "no-restricted-imports": ["error", { patterns: [FOUNDATION_DESIGN_SYSTEM] }] },
   },
 ];
 

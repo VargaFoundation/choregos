@@ -3,6 +3,7 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { LEGENDE } from "@/components/ui";
+import { toSentenceCase } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { ProcessStep } from "@/lib/types";
 import {
@@ -99,7 +100,7 @@ export function CarteDuWorkflow({
         style={{
           borderLeftColor: couleur.bord,
           borderLeftStyle: "solid",
-          outline: eclaires.has(id) ? "2px solid var(--varga-focus)" : undefined,
+          outline: eclaires.has(id) ? "2px solid var(--choregos-focus)" : undefined,
         }}
         onMouseEnter={() => setSurvol(id)}
         onMouseLeave={() => setSurvol(null)}
@@ -117,7 +118,7 @@ export function CarteDuWorkflow({
         >
           <span className="flex items-baseline justify-between gap-2 text-xs">
             <span className={cn(LEGENDE, "font-medium")} style={{ color: couleur.texte }}>
-              {LIBELLE_DU_GENRE[genre]}
+              {toSentenceCase(LIBELLE_DU_GENRE[genre])}
               {principale?.actor ? ` · ${principale.actor}` : ""}
             </span>
             {acteur?.group && (
@@ -134,14 +135,14 @@ export function CarteDuWorkflow({
         </button>
         {(etape?.outputs?.length || garanties.length || principale?.timeout_hours || rejet) && (
           <ul className="mt-1.5 space-y-0.5 text-xs text-ink-muted">
-            {etape?.outputs && etape.outputs.length > 0 && <li>produces {etape.outputs.join(", ")}</li>}
+            {etape?.outputs && etape.outputs.length > 0 && <li>Produces {etape.outputs.join(", ")}</li>}
             {garanties.length > 0 && (
               <li title={garanties.join(", ")}>
-                only if {garanties.length > GARANTIES_NOMMEES ? `${garanties.length} gates hold` : garanties.join(", ")}
+                Only if {garanties.length > GARANTIES_NOMMEES ? `${garanties.length} gates hold` : garanties.join(", ")}
               </li>
             )}
-            {principale?.timeout_hours ? <li>times out after {principale.timeout_hours} h</li> : null}
-            {rejet && <li>if rejected → {nom(rejet.to)}</li>}
+            {principale?.timeout_hours ? <li>Times out after {principale.timeout_hours} h</li> : null}
+            {rejet && <li>If rejected → {nom(rejet.to)}</li>}
           </ul>
         )}
         {autres.length > 0 && (
@@ -154,7 +155,7 @@ export function CarteDuWorkflow({
                 className="border border-line bg-surface px-1.5 py-0.5 font-mono text-[11px] hover:border-line-strong pointer-coarse:min-h-11"
                 onClick={() => a.id && onSelect?.("edge", a.id)}
               >
-                also → {nom(a.to)}
+                Also → {nom(a.to)}
                 {a.actor ? ` (by ${a.actor})` : ""}
               </button>
             ))}
@@ -164,14 +165,14 @@ export function CarteDuWorkflow({
           <ul className="mt-1.5 space-y-0.5 border-t border-line pt-1.5 text-xs text-retrying-ink" data-testid={`secondaires-${id}`}>
             {issues.map((a) => (
               <li key={a.id ?? `${a.to}-${a.kind}`}>
-                {commentOnYTombe(a)} → {nom(a.to)}
+                {toSentenceCase(commentOnYTombe(a))} → {nom(a.to)}
               </li>
             ))}
           </ul>
         )}
         {deCote && deCote.length > 0 && (
           <p className="mt-1.5 text-xs text-ink-muted">
-            reached from {deCote.map((d) => `${nom(d.id)} (${d.comment})`).join("; ")}
+            Reached from {deCote.map((d) => `${nom(d.id)} (${d.comment})`).join("; ")}
           </p>
         )}
       </div>
@@ -193,11 +194,11 @@ export function CarteDuWorkflow({
         type="button"
         data-testid={`transition-${principale.id}`}
         className="group mx-auto flex flex-col items-center py-1 text-xs text-ink-muted hover:text-ink"
-        aria-label={`transition ${principale.id}: ${nom(de)} to ${nom(vers)}${qui ? `, ${qui}` : ""}`}
+        aria-label={`Transition ${principale.id}: ${nom(de)} to ${nom(vers)}${qui ? `, ${qui}` : ""}`}
         onClick={() => principale.id && onSelect?.("edge", principale.id)}
       >
         <span aria-hidden className="h-3 w-px bg-line-strong group-hover:bg-ink" />
-        <span className="px-1.5 font-mono text-[11px]">{[qui, garanties, effet].filter(Boolean).join(" · ") || principale.id}</span>
+        <span className="px-1.5 font-mono text-[11px]">{toSentenceCase([qui, garanties, effet].filter(Boolean).join(" · ")) || principale.id}</span>
         <span aria-hidden className="leading-none">
           ▼
         </span>
@@ -214,10 +215,10 @@ export function CarteDuWorkflow({
       <div
         ref={conteneur}
         role="group"
-        aria-label="workflow map"
+        aria-label="Workflow map"
         className="grid gap-x-6 gap-y-3 md:grid-cols-[minmax(0,1fr)_17rem]"
       >
-        <ol aria-label="nominal path" className="space-y-0">
+        <ol aria-label="Nominal path" className="space-y-0">
           {disposition.chemin.map((id, i) => (
             <li key={id}>
               {carte(id, disposition.chemin[i + 1])}
@@ -226,8 +227,8 @@ export function CarteDuWorkflow({
           ))}
         </ol>
         <div className="space-y-2">
-          {disposition.cotes.length > 0 && <p className={LEGENDE}>off the main path</p>}
-          <ul aria-label="off the main path" className="space-y-2">
+          {disposition.cotes.length > 0 && <p className={LEGENDE}>Off the main path</p>}
+          <ul aria-label="Off the main path" className="space-y-2">
             {disposition.cotes.map((cote) => (
               <li key={cote.id}>{carte(cote.id, undefined, cote.depuis)}</li>
             ))}
@@ -267,19 +268,19 @@ function LegendeDeLaCarte({
   const replis = defaults(graph);
   return (
     <div className="space-y-2 text-xs text-ink-muted" data-testid="workflow-legend">
-      <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label="who moves the work item">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label="Who moves the work item">
         {(Object.keys(COULEUR_DU_GENRE) as (keyof typeof COULEUR_DU_GENRE)[])
           .filter((genre) => comptes.has(genre))
           .map((genre) => (
             <li key={genre} className="inline-flex items-center gap-1.5">
               <span aria-hidden className="inline-block h-3 w-[3px]" style={{ background: COULEUR_DU_GENRE[genre].bord }} />
-              {LIBELLE_DU_GENRE[genre]} · {comptes.get(genre)}
+              {toSentenceCase(LIBELLE_DU_GENRE[genre])} · {comptes.get(genre)}
             </li>
           ))}
       </ul>
       {replis.length > 0 && (
         <div>
-          <p className="text-ink">from any agent state</p>
+          <p className="text-ink">From any agent state</p>
           <ul className="mt-1 space-y-0.5" data-testid="workflow-defaults">
             {replis.map((repli) => (
               <li key={`${repli.label}->${repli.to}`}>
@@ -300,7 +301,7 @@ function LegendeDeLaCarte({
               className="border border-line bg-surface px-1.5 py-0.5 font-mono text-[11px] hover:border-line-strong pointer-coarse:min-h-11"
               onClick={() => onSelect?.("edge", joker.cle)}
             >
-              from any agent step → {nom(joker.to)}
+              From any agent step → {nom(joker.to)}
               {joker.actor ? ` (by ${joker.actor})` : ""}
             </button>
           ))}
@@ -309,7 +310,7 @@ function LegendeDeLaCarte({
       {secondaires > 0 && (
         <label className="inline-flex items-center gap-2">
           <input type="checkbox" checked={toutes} onChange={(event) => onToutes(event.target.checked)} />
-          show every retry, rejection and escalation ({secondaires}) — or hover a state for its own
+          Show every retry, rejection and escalation ({secondaires}) — or hover a state for its own
         </label>
       )}
     </div>

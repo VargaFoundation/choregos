@@ -5,21 +5,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Eyebrow, Heading, Onglets, tabClasses } from "@/components/ui";
+import { Eyebrow, Heading, Tabs, tabClasses } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useHasReleaseTrain } from "@/lib/release-train";
 
 const TABS = [
-  { suffix: "", label: "overview" },
-  { suffix: "/board", label: "board" },
-  { suffix: "/trains", label: "trains" },
-  { suffix: "/findings", label: "findings" },
-  { suffix: "/memory", label: "memory" },
-  { suffix: "/workflows", label: "workflows" },
-  { suffix: "/agents", label: "agents" },
-  { suffix: "/actions", label: "actions" },
-  { suffix: "/integrations", label: "integrations" },
-  { suffix: "/settings", label: "settings" },
+  { suffix: "", label: "Overview" },
+  { suffix: "/board", label: "Board" },
+  { suffix: "/trains", label: "Trains" },
+  { suffix: "/findings", label: "Findings" },
+  { suffix: "/memory", label: "Memory" },
+  { suffix: "/workflows", label: "Workflows" },
+  { suffix: "/agents", label: "Agents" },
+  { suffix: "/actions", label: "Actions" },
+  { suffix: "/integrations", label: "Integrations" },
+  { suffix: "/settings", label: "Settings" },
 ];
 
 export default function ProjectLayout({
@@ -39,12 +39,12 @@ export default function ProjectLayout({
   return (
     <div className="space-y-8">
       <div className="space-y-4">
-        <Eyebrow>project · {slug}</Eyebrow>
+        <Eyebrow>Project · {slug}</Eyebrow>
         <Heading as="h1" size="xl" data-donnee>
           {projet.data?.name ?? slug}
         </Heading>
       </div>
-      <Onglets aria-label="project sections">
+      <Tabs aria-label="Project sections">
         {TABS.filter((tab) => tab.suffix !== "/trains" || trains).map((tab) => {
           const href = `/p/${slug}${tab.suffix}`;
           // Les intégrations (un sous-onglet par client), les actions (une page par action) et les
@@ -66,7 +66,7 @@ export default function ProjectLayout({
             </Link>
           );
         })}
-      </Onglets>
+      </Tabs>
       {children}
     </div>
   );

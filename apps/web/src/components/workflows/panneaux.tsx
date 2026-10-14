@@ -29,7 +29,7 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
   const [libelle, setLibelle] = useState(noeud.display);
   const [nom, setNom] = useState(noeud.id);
   return (
-    <Card title={`state ${noeud.id}`}>
+    <Card title={`State ${noeud.id}`}>
       <div className="space-y-3 text-sm" data-testid="panneau-etat">
         <form
           className="flex items-end gap-2"
@@ -39,11 +39,11 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
           }}
         >
           <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">label</span>
+            <span className="text-xs text-ink-muted">Label</span>
             <Input value={libelle} onChange={(event) => setLibelle(event.target.value)} />
           </label>
           <Button size="sm" type="submit" disabled={!libelle || libelle === noeud.display}>
-            set label
+            Set label
           </Button>
         </form>
         <form
@@ -54,16 +54,16 @@ export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: N
           }}
         >
           <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">name (every reference follows)</span>
+            <span className="text-xs text-ink-muted">Name (every reference follows)</span>
             <Input value={nom} onChange={(event) => setNom(event.target.value)} />
           </label>
           <Button size="sm" type="submit" disabled={!nom || nom === noeud.id}>
-            rename
+            Rename
           </Button>
         </form>
         {!noeud.terminal && <FormulaireDEtape depart={noeud.id} etats={etats} acteurs={acteurs} />}
         <Button size="sm" tone="danger" onClick={() => void brouillon.appliquer(operations.retirerLEtat(noeud.id))}>
-          remove this state
+          Remove this state
         </Button>
       </div>
     </Card>
@@ -85,7 +85,7 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
   return (
     <form
       className="flex flex-wrap items-end gap-2"
-      aria-label={depart ? `new transition from ${depart}` : "new step"}
+      aria-label={depart ? `New transition from ${depart}` : "New step"}
       onSubmit={(event) => {
         event.preventDefault();
         const transition = operations.ajouterUneTransition(origine, cible, par);
@@ -99,7 +99,7 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
     >
       {!depart && (
         <label className="flex-1 space-y-1">
-          <span className="text-xs text-ink-muted">from</span>
+          <span className="text-xs text-ink-muted">From</span>
           <Select value={de} onChange={(event) => setDe(event.target.value)}>
             <option value="">—</option>
             {etats
@@ -113,7 +113,7 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
         </label>
       )}
       <label className="flex-1 space-y-1">
-        <span className="text-xs text-ink-muted">{depart ? "new transition to" : "to"}</span>
+        <span className="text-xs text-ink-muted">{depart ? "New transition to" : "To"}</span>
         <Select value={vers} onChange={(event) => setVers(event.target.value)}>
           <option value="">—</option>
           {etats
@@ -123,17 +123,17 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
                 {etat.display}
               </option>
             ))}
-          <option value={NOUVEL_ETAT}>a new state…</option>
+          <option value={NOUVEL_ETAT}>A new state…</option>
         </Select>
       </label>
       {vers === NOUVEL_ETAT && (
         <label className="flex-1 space-y-1">
-          <span className="text-xs text-ink-muted">name of the new state</span>
+          <span className="text-xs text-ink-muted">Name of the new state</span>
           <Input value={nouveau} onChange={(event) => setNouveau(event.target.value)} />
         </label>
       )}
       <label className="flex-1 space-y-1">
-        <span className="text-xs text-ink-muted">by</span>
+        <span className="text-xs text-ink-muted">By</span>
         <Select value={par} onChange={(event) => setPar(event.target.value)}>
           {acteurs.map((acteur) => (
             <option key={acteur} value={acteur}>
@@ -143,7 +143,7 @@ export function FormulaireDEtape({ depart, etats, acteurs }: { depart?: string; 
         </Select>
       </label>
       <Button size="sm" type="submit" disabled={!origine || !cible || !par || brouillon.occupe}>
-        add
+        Add
       </Button>
     </form>
   );
@@ -157,14 +157,14 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
   const [heures, setHeures] = useState(arete.timeout_hours ? String(arete.timeout_hours) : "");
   if (!arete.id || (arete.kind && arete.kind !== "nominal")) {
     return (
-      <Card title="transition">
-        <p className="text-sm text-ink-muted">this arrow is not a transition with an id: edit it in the YAML.</p>
+      <Card title="Transition">
+        <p className="text-sm text-ink-muted">This arrow is not a transition with an id: edit it in the YAML.</p>
       </Card>
     );
   }
   const id = arete.id;
   return (
-    <Card title={`transition ${id}`}>
+    <Card title={`Transition ${id}`}>
       <div className="space-y-3 text-sm" data-testid="panneau-transition">
         <form
           className="flex items-end gap-2"
@@ -174,7 +174,7 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
           }}
         >
           <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">who moves it</span>
+            <span className="text-xs text-ink-muted">Who moves it</span>
             <Select value={par} onChange={(event) => setPar(event.target.value)}>
               {acteurs.map((acteur) => (
                 <option key={acteur} value={acteur}>
@@ -184,18 +184,18 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
             </Select>
           </label>
           <Button size="sm" type="submit" disabled={!par || par === arete.actor}>
-            set
+            Set
           </Button>
         </form>
         <div className="space-y-1">
-          <p className="text-xs text-ink-muted">only if</p>
+          <p className="text-xs text-ink-muted">Only if</p>
           <ul className="flex flex-wrap gap-2">
             {(arete.gates ?? []).map((nom) => (
               <li key={nom} className="inline-flex items-center gap-1 rounded border border-line px-2 py-0.5 text-xs">
                 <code>{nom}</code>
                 <button
                   type="button"
-                  aria-label={`remove the guarantee ${nom}`}
+                  aria-label={`Remove the guarantee ${nom}`}
                   className="text-ink-muted hover:text-danger"
                   onClick={() => void brouillon.appliquer(operations.retirerUneGarantie(id, nom))}
                 >
@@ -212,7 +212,7 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
             }}
           >
             <Input
-              aria-label="guarantee to add"
+              aria-label="Guarantee to add"
               list="garanties-courantes"
               value={garantie}
               onChange={(event) => setGarantie(event.target.value)}
@@ -223,7 +223,7 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
               ))}
             </datalist>
             <Button size="sm" type="submit" disabled={!garantie}>
-              add
+              Add
             </Button>
           </form>
         </div>
@@ -235,15 +235,15 @@ export function PanneauDeTransition({ arete, acteurs }: { arete: Arete; acteurs:
           }}
         >
           <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">at most (hours, empty: no limit)</span>
+            <span className="text-xs text-ink-muted">At most (hours, empty: no limit)</span>
             <Input type="number" min={1} value={heures} onChange={(event) => setHeures(event.target.value)} />
           </label>
           <Button size="sm" type="submit">
-            set
+            Set
           </Button>
         </form>
         <Button size="sm" tone="danger" onClick={() => void brouillon.appliquer(operations.retirerLaTransition(id))}>
-          remove this transition
+          Remove this transition
         </Button>
       </div>
     </Card>

@@ -36,9 +36,9 @@ export default function SkillsPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>what agents know how to do</Eyebrow>
+        <Eyebrow>What agents know how to do</Eyebrow>
         <Heading as="h1" size="xl">
-          skills
+          Skills
         </Heading>
         <p className="max-w-3xl text-sm text-ink-muted">
           A skill is a folder: a <code>SKILL.md</code> that says when to use it, and the files it brings. An
@@ -47,21 +47,21 @@ export default function SkillsPage() {
         </p>
         <Glossaire ici="skills" />
       </div>
-      <Card title="library">
+      <Card title="Library">
         {skills.error ? (
           <ErrorNote>{String(skills.error)}</ErrorNote>
         ) : !skills.data ? (
-          <p className="text-sm text-ink-muted">reading the library…</p>
+          <p className="text-sm text-ink-muted">Reading the library…</p>
         ) : skills.data.length === 0 ? (
-          <Empty title="no skill yet">Import a zip below.</Empty>
+          <Empty title="No skill yet">Import a zip below.</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="bibliotheque">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
-                  <th className="py-1 font-normal">skill</th>
-                  <th className="py-1 font-normal">version</th>
-                  <th className="py-1 font-normal">used by</th>
+                  <th className="py-1 font-normal">Skill</th>
+                  <th className="py-1 font-normal">Version</th>
+                  <th className="py-1 font-normal">Used by</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,13 +90,13 @@ export default function SkillsPage() {
           </div>
         )}
       </Card>
-      <Card title="import a skill">
+      <Card title="Import a skill">
         <div className="space-y-2 text-sm">
           <p className="text-ink-muted">
             A zip of the folder (at most 64 files, 512 KiB). The same name publishes its next version.
           </p>
           <label className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-ink-muted">archive</span>
+            <span className="text-xs text-ink-muted">Archive</span>
             <input
               className="min-w-0 max-w-full"
               ref={fichier}

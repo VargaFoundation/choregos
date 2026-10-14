@@ -97,7 +97,7 @@ export function Confirmation({ question, confirmer, ton = "danger", raison, acti
           {occupe ? `${confirmer}…` : confirmer}
         </Button>
         <Button size="sm" onClick={onAnnuler} disabled={occupe}>
-          cancel
+          Cancel
         </Button>
       </span>
       {erreur && (

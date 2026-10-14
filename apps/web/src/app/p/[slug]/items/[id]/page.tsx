@@ -42,7 +42,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   });
 
   if (item.error) return <ErrorNote>{(item.error as Error).message}</ErrorNote>;
-  if (!item.data) return <Empty>loading…</Empty>;
+  if (!item.data) return <Empty>Loading…</Empty>;
   const data = item.data;
 
   async function control(action: string) {
@@ -52,14 +52,14 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
 
   return (
     <div className="space-y-4">
-      <FilDAriane etapes={[{ href: `/p/${slug}/board`, label: "board" }, { label: data.tracker_key }]} />
+      <FilDAriane etapes={[{ href: `/p/${slug}/board`, label: "Board" }, { label: data.tracker_key }]} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Heading as="h2" size="lg" data-donnee>
             {data.title}
           </Heading>
           <p className="font-mono text-xs text-ink-muted">
-            {data.tracker_key} · workflow {data.workflow_name} v{data.workflow_version}
+            <span data-donnee>{data.tracker_key}</span> · workflow {data.workflow_name} v{data.workflow_version}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -68,11 +68,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           {gare(journey.data) && (
             <GesteConfirme
               ton="accent"
-              question="replay the stage that escalated? an agent runs it again from the start — a new run, billed."
-              confirmer="replay the stage"
+              question="Replay the stage that escalated? An agent runs it again from the start — a new run, billed."
+              confirmer="Replay the stage"
               action={() => control("rerun_stage")}
             >
-              replay the stage
+              Replay the stage
             </GesteConfirme>
           )}
           <Button
@@ -82,15 +82,15 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               )
             }
           >
-            {data.paused ? "resume" : "pause"}
+            {data.paused ? "Resume" : "Pause"}
           </Button>
           <GesteConfirme
             tonDuBouton="danger"
-            question="stop this ticket? its run is cancelled and it leaves the workflow — it does not resume, it has to be filed again."
-            confirmer="stop the ticket"
+            question="Stop this ticket? Its run is cancelled and it leaves the workflow — it does not resume, it has to be filed again."
+            confirmer="Stop the ticket"
             action={() => control("stop")}
           >
-            stop
+            Stop
           </GesteConfirme>
         </div>
       </div>
@@ -108,7 +108,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       )}
 
       {data.pending_request && (
-        <Card title="decision awaited">
+        <Card title="Decision awaited">
           <p className="mb-2 text-sm">
             {String(data.pending_request.payload?.question ?? data.pending_request.payload?.summary ?? "")}
           </p>
@@ -121,7 +121,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </Card>
       )}
 
-      <Card title="journey">
+      <Card title="Journey">
         {journey.data ? (
           <CarteDuParcours
             journey={journey.data}
@@ -133,23 +133,23 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
             }}
           />
         ) : journey.error ? (
-          <p className="text-sm text-ink-muted">the journey cannot be read: {(journey.error as Error).message}</p>
+          <p className="text-sm text-ink-muted">The journey cannot be read: {(journey.error as Error).message}</p>
         ) : (
-          <Empty>loading the journey…</Empty>
+          <Empty>Loading the journey…</Empty>
         )}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="cost per stage" className="lg:col-span-2" action={<Provenance de="observed" />}>
+        <Card title="Cost per stage" className="lg:col-span-2" action={<Provenance de="observed" />}>
           <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
-                  <th>stage</th>
-                  <th>backend · model</th>
-                  <th className="text-right">tokens</th>
-                  <th className="text-right">cost</th>
-                  <th>result</th>
+                  <th>Stage</th>
+                  <th>Backend · model</th>
+                  <th className="text-right">Tokens</th>
+                  <th className="text-right">Cost</th>
+                  <th>Result</th>
                 </tr>
               </thead>
               <tbody>
@@ -173,7 +173,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               </tbody>
             </table>
           </div>
-          {runs.data?.length === 0 && <Empty>no run yet</Empty>}
+          {runs.data?.length === 0 && <Empty>No run yet</Empty>}
           <p className="mt-3 text-sm">
             Total {usd(data.totals?.cost_usd)}
             {data.estimate?.median_usd ? (
@@ -186,7 +186,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           </p>
         </Card>
 
-        <Card title="timeline">
+        <Card title="Timeline">
           {/* Un rail, et sur lui un point par moment, à la couleur de qui a agi (S24-04). */}
           <ol className="relative space-y-3 before:absolute before:top-2 before:bottom-2 before:left-[3.5px] before:w-px before:bg-line">
             {(timeline.data ?? []).map((entry, index) => (
@@ -196,7 +196,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                   <ActorIcon kind={entry.actor_kind ?? "system"} name={entry.actor ?? undefined} point={false} />
                   <span>{entry.title}</span>
                 </p>
-                {entry.detail && <p className="text-xs text-ink-muted">{entry.detail}</p>}
+                {entry.detail && (
+                  <p className="text-xs text-ink-muted" data-donnee>
+                    {entry.detail}
+                  </p>
+                )}
                 <p className="font-mono text-xs text-ink-muted" title={shortDate(entry.ts)}>
                   {relative(entry.ts)}
                   {entry.cost_usd ? ` · ${usd(entry.cost_usd)}` : ""}
@@ -204,11 +208,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               </li>
             ))}
           </ol>
-          {timeline.data?.length === 0 && <Empty>nothing to show</Empty>}
+          {timeline.data?.length === 0 && <Empty>Nothing to show</Empty>}
         </Card>
       </div>
 
-      <Card title="artifacts" action={<Provenance de="observed" />}>
+      <Card title="Artifacts" action={<Provenance de="observed" />}>
         {artifacts.error ? (
           <p className="text-sm text-ink-muted">the artifacts cannot be read: {(artifacts.error as Error).message}</p>
         ) : artifacts.data ? (
@@ -219,13 +223,13 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       </Card>
 
       {(passages.data ?? []).length > 0 && (
-        <Card title="hand-offs" action={<Provenance de="observed" />}>
+        <Card title="Hand-offs" action={<Provenance de="observed" />}>
           <Passages passages={passages.data ?? []} />
         </Card>
       )}
 
       {data.pr_url && (
-        <Card title="pull request">
+        <Card title="Pull request">
           <a href={data.pr_url} target="_blank" rel="noreferrer" className="text-sm">
             {data.pr_url}
           </a>

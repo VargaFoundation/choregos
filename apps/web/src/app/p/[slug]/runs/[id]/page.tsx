@@ -59,7 +59,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   });
 
   if (run.error) return <ErrorNote>{(run.error as Error).message}</ErrorNote>;
-  if (!run.data) return <Empty>loading…</Empty>;
+  if (!run.data) return <Empty>Loading…</Empty>;
 
   const events = dedupe([...(stored.data ?? []), ...live.events]);
   const evidence = run.data.result?.evidence;
@@ -74,25 +74,25 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
     <div className="space-y-4">
       <FilDAriane
         etapes={[
-          { href: `/p/${slug}/board`, label: "board" },
+          { href: `/p/${slug}/board`, label: "Board" },
           ...(idDuTicket
             ? [{ href: `/p/${slug}/items/${idDuTicket}`, label: ticket.data?.tracker_key ?? "ticket" }]
             : []),
-          { label: `run ${run.data.stage_role} · attempt ${run.data.attempt}` },
+          { label: `Run ${run.data.stage_role} · attempt ${run.data.attempt}` },
         ]}
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Heading as="h2" size="lg">
-            run {run.data.stage_role} · attempt {run.data.attempt}
+            Run {run.data.stage_role} · attempt {run.data.attempt}
           </Heading>
-          <p className="font-mono text-xs text-ink-muted">
+          <p className="font-mono text-xs text-ink-muted" data-donnee>
             {run.data.backend} · {run.data.model} · executor {run.data.executor_kind ?? "—"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {fin && (
-            <Badge tone="waiting" data-testid="fin-declaree" title="the agent says it is done; the platform has not observed it">
+            <Badge tone="waiting" data-testid="fin-declaree" title="The agent says it is done; the platform has not observed it">
               {fin}
             </Badge>
           )}
@@ -108,42 +108,42 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
               target="_blank"
               rel="noreferrer"
             >
-              full transcript
+              Full transcript
             </a>
           )}
           {run.data.work_item_id && (
             <GesteConfirme
               ton="accent"
-              question={`replay this stage? an agent runs it again from the start — a new run, billed like this one (${usd(run.data.cost_usd)}).`}
-              confirmer="replay the stage"
+              question={`Replay this stage? An agent runs it again from the start — a new run, billed like this one (${usd(run.data.cost_usd)}).`}
+              confirmer="Replay the stage"
               action={() => api.action(run.data!.work_item_id!, "rerun_stage")}
               onFait={() => setRelance(true)}
             >
-              replay the stage
+              Replay the stage
             </GesteConfirme>
           )}
           {relance && (
             <span className="text-xs" role="status">
-              replay asked — the new run appears on the ticket
+              Replay asked — the new run appears on the ticket
             </span>
           )}
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-4">
-        <Card title="cost" action={<Provenance de="observed" />}>
+        <Card title="Cost" action={<Provenance de="observed" />}>
           <p className="text-2xl">{usd(run.data.cost_usd)}</p>
           <p className="text-xs text-ink-muted">
             {tokens(run.data.tokens?.tokens_in)} in · {tokens(run.data.tokens?.tokens_out)} out ·{" "}
             {tokens(run.data.tokens?.tokens_cached)} cached
           </p>
         </Card>
-        <Card title="duration" action={<Provenance de="observed" />}>
+        <Card title="Duration" action={<Provenance de="observed" />}>
           <p className="text-2xl">{duration(run.data.tokens?.duration_s)}</p>
           <p className="text-xs text-ink-muted">{run.data.result?.diagnostics?.turns ?? 0} agent turns</p>
         </Card>
         <Preuves evidence={evidence} />
-        <Card title="scope" action={<Provenance de="observed" />}>
+        <Card title="Scope" action={<Provenance de="observed" />}>
           <ul className="space-y-1 font-mono text-xs text-ink-muted">
             {(run.data.allowed_paths ?? []).map((path) => (
               <li key={path}>{path}</li>
@@ -154,7 +154,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       </div>
 
       {plan && (
-        <Card title="agent plan" action={<Provenance de="declared" />}>
+        <Card title="Agent plan" action={<Provenance de="declared" />}>
           <PlanDeLAgent plan={plan} />
         </Card>
       )}
@@ -164,7 +164,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       <Acces acces={acces.data} />
 
       {(activite.appels.length > 0 || activite.refus.length > 0) && (
-        <Card title="activity" action={<Provenance de="declared" />}>
+        <Card title="Activity" action={<Provenance de="declared" />}>
           <ActiviteDuRunVue activite={activite} />
         </Card>
       )}
@@ -175,7 +175,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
             {(
               [
                 ["journal", "ACP journal"],
-                ["logs", "pod logs"],
+                ["logs", "Pod logs"],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -196,7 +196,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
         action={
           output === "journal" ? (
             <span className="text-xs text-ink-muted">
-              {live.connected ? "● live" : live.error ? live.error : "stream closed"}
+              {live.connected ? "● Live" : live.error ? live.error : "Stream closed"}
             </span>
           ) : undefined
         }
@@ -212,18 +212,18 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
         </div>
       </Card>
 
-      <Card title="diff" action={<Provenance de="observed" />}>
+      <Card title="Diff" action={<Provenance de="observed" />}>
         {(diff.data?.files ?? []).length === 0 ? (
-          <Empty>no file changed</Empty>
+          <Empty>No file changed</Empty>
         ) : (
           <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
-                  <th>file</th>
+                  <th>File</th>
                   <th className="text-right">+</th>
                   <th className="text-right">-</th>
-                  <th>scope</th>
+                  <th>Scope</th>
                 </tr>
               </thead>
               <tbody>
@@ -232,7 +232,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
                     <td className="font-mono text-xs">{file.path}</td>
                     <td className="text-right text-ok">+{file.additions}</td>
                     <td className="text-right text-danger">−{file.deletions}</td>
-                    <td>{file.in_scope === false ? <span className="text-danger">out of scope</span> : "✓"}</td>
+                    <td>{file.in_scope === false ? <span className="text-danger">Out of scope</span> : "✓"}</td>
                   </tr>
                 ))}
               </tbody>

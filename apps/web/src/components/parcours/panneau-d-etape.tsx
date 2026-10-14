@@ -63,13 +63,13 @@ export function PanneauDEtape({
           <h3 className="text-lg font-semibold text-ink">
             {etape.libelle} <span className="font-normal text-ink-muted">{etape.action}</span>
           </h3>
-          <p className="font-mono text-xs text-ink-muted">transition {etape.id}</p>
+          <p className="font-mono text-xs text-ink-muted">Transition {etape.id}</p>
         </div>
         <button
           type="button"
           onClick={onClose}
           className="px-2 py-1 text-sm text-ink-muted hover:text-ink pointer-coarse:min-h-11"
-          aria-label="close the panel"
+          aria-label="Close the panel"
         >
           ✕
         </button>
@@ -77,7 +77,7 @@ export function PanneauDEtape({
 
       {(etape.phrase || (process?.gates ?? []).length > 0) && (
         <details className="mt-3 text-sm">
-          <summary className="cursor-pointer text-ink-muted">what this step does</summary>
+          <summary className="cursor-pointer text-ink-muted">What this step does</summary>
           {etape.phrase && (
             <p className="mt-1 text-ink-muted">
               <PhraseDuMoteur texte={etape.phrase} />
@@ -105,7 +105,7 @@ export function PanneauDEtape({
         </p>
       ) : (
         <>
-          <div className="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="attempts">
+          <div className="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Attempts">
             {tentatives.map((t) => (
               <button
                 key={t.id}
@@ -146,39 +146,39 @@ function Faits({ pas }: { pas: JourneyStep }) {
   const duree = pas.started_at && pas.ended_at ? (Date.parse(pas.ended_at) - Date.parse(pas.started_at)) / 1000 : null;
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
-      <dt className="text-ink-muted">status</dt>
+      <dt className="text-ink-muted">Status</dt>
       <dd className={cn(pas.status === "failed" || pas.status === "rejected" ? "text-failed-ink" : "text-ink")}>
         {pas.status.replace(/_/g, " ")}
       </dd>
-      <dt className="text-ink-muted">started</dt>
+      <dt className="text-ink-muted">Started</dt>
       <dd title={shortDate(pas.started_at)}>{relative(pas.started_at)}</dd>
       {pas.ended_at && (
         <>
-          <dt className="text-ink-muted">took</dt>
+          <dt className="text-ink-muted">Took</dt>
           <dd>{duration(duree)}</dd>
         </>
       )}
       {pas.model && (
         <>
-          <dt className="text-ink-muted">model</dt>
+          <dt className="text-ink-muted">Model</dt>
           <dd className="font-mono">{pas.model}</dd>
         </>
       )}
       {pas.kind === "agent" && (
         <>
-          <dt className="text-ink-muted">cost</dt>
+          <dt className="text-ink-muted">Cost</dt>
           <dd>{usd(pas.cost_usd)}</dd>
         </>
       )}
       {pas.decided_by && (
         <>
-          <dt className="text-ink-muted">decided by</dt>
+          <dt className="text-ink-muted">Decided by</dt>
           <dd>{pas.decided_by}</dd>
         </>
       )}
       {pas.due_at && !pas.ended_at && (
         <>
-          <dt className="text-ink-muted">due</dt>
+          <dt className="text-ink-muted">Due</dt>
           <dd title={shortDate(pas.due_at)}>{relative(pas.due_at)}</dd>
         </>
       )}
@@ -217,7 +217,7 @@ function Preuves({ evidence }: { evidence: Record<string, unknown> }) {
   if (lignes.length === 0) return null;
   const mesures = Array.isArray(evidence.measured) ? { measured: evidence.measured.map(String) } : undefined;
   return (
-    <ul className="flex flex-wrap gap-1.5 text-xs" aria-label="evidence">
+    <ul className="flex flex-wrap gap-1.5 text-xs" aria-label="Evidence">
       {lignes.map(([nom, valeur, cle]) => (
         <li key={nom} className="flex items-baseline gap-1.5 border border-line px-1.5 py-0.5">
           <span className="text-ink-muted">{nom}</span> {valeur}
@@ -248,11 +248,11 @@ function PasDAgent({ pas, slug }: { pas: JourneyStep; slug: string }) {
       )}
       {pas.verdict && (
         <p className={cn("text-sm font-medium", pas.verdict === "approve" ? "text-succeeded-ink" : "text-retrying-ink")}>
-          verdict: {pas.verdict.replace(/_/g, " ")} <Provenance de="declared" />
+          Verdict: {pas.verdict.replace(/_/g, " ")} <Provenance de="declared" />
         </p>
       )}
       <Preuves evidence={(pas.evidence ?? {}) as Record<string, unknown>} />
-      <div className="flex gap-4 border-b border-line text-sm" role="tablist" aria-label="what the agent did">
+      <div className="flex gap-4 border-b border-line text-sm" role="tablist" aria-label="What the agent did">
         {(
           [
             ["actions", "What it did"],
@@ -276,7 +276,7 @@ function PasDAgent({ pas, slug }: { pas: JourneyStep; slug: string }) {
       </div>
       {vue === "actions" ? <CeQuIlAFait runId={pas.id} evenements={evenements} /> : <LiveLog events={evenements} height={320} />}
       <Link href={`/p/${slug}/runs/${pas.id}`} className="inline-block text-sm">
-        open the full run →
+        Open the full run →
       </Link>
     </div>
   );
@@ -294,12 +294,12 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
     <div className="space-y-3 text-sm" data-testid="ce-qu-il-a-fait">
       {plan && (
         <section>
-          <h4 className={cn(LEGENDE, "mb-1")}>agent plan</h4>
+          <h4 className={cn(LEGENDE, "mb-1")}>Agent plan</h4>
           <PlanDeLAgent plan={plan} />
         </section>
       )}
       <section>
-        <h4 className={LEGENDE}>gates</h4>
+        <h4 className={LEGENDE}>Gates</h4>
         {garanties.length === 0 ? (
           <p className="text-xs text-ink-muted">No gate evaluated on this run.</p>
         ) : (
@@ -308,7 +308,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
               <li key={`${g.name}-${i}`} className="flex gap-2 text-xs">
                 <span
                   className={g.pending ? "text-waiting-ink" : g.passed ? "text-succeeded-ink" : "text-failed-ink"}
-                  aria-label={g.pending ? "pending" : g.passed ? "passed" : "refused"}
+                  aria-label={g.pending ? "Pending" : g.passed ? "Passed" : "Refused"}
                 >
                   {g.pending ? "…" : g.passed ? "✓" : "✗"}
                 </span>
@@ -323,7 +323,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
       </section>
       <section>
         <h4 className={LEGENDE}>
-          access {acces.data ? `· ${acces.data.evenements} events, ${acces.data.refus} refused` : ""}
+          Access {acces.data ? `· ${acces.data.evenements} events, ${acces.data.refus} refused` : ""}
         </h4>
         {lignes.length === 0 ? (
           <p className="text-xs text-ink-muted">No access recorded.</p>
@@ -336,7 +336,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
                   <span className="w-14 shrink-0 text-ink-muted">{l.nature}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block break-all font-mono">{l.cible}</span>
-                    {l.refus > 0 && <span className="block">refused{l.motifs?.length ? `: ${l.motifs.join(" · ")}` : ""}</span>}
+                    {l.refus > 0 && <span className="block">Refused{l.motifs?.length ? `: ${l.motifs.join(" · ")}` : ""}</span>}
                   </span>
                 </li>
               ))}
@@ -345,10 +345,10 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
       </section>
       <section>
         <h4 className={LEGENDE}>
-          files changed {diff.data ? `· +${diff.data.additions} −${diff.data.deletions}` : ""}
+          Files changed {diff.data ? `· +${diff.data.additions} −${diff.data.deletions}` : ""}
         </h4>
         {fichiers.length === 0 ? (
-          <Empty>no file changed</Empty>
+          <Empty>No file changed</Empty>
         ) : (
           <ul className="space-y-0.5 text-xs">
             {fichiers.map((f) => (
@@ -356,7 +356,7 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
                 <span className="min-w-0 flex-1 break-all font-mono">{f.path}</span>
                 <span className="text-succeeded-ink">+{f.additions}</span>
                 <span className="text-failed-ink">−{f.deletions}</span>
-                {f.in_scope === false && <span className="text-failed-ink">out of scope</span>}
+                {f.in_scope === false && <span className="text-failed-ink">Out of scope</span>}
               </li>
             ))}
           </ul>
@@ -374,7 +374,7 @@ function PasHumain({ pas, itemId, onDecided }: { pas: JourneyStep; itemId: strin
       {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
       {attendu ? (
         <div className="border border-line border-l-2 border-l-waiting p-3">
-          <p className={cn(LEGENDE, "mb-2")}>decide here</p>
+          <p className={cn(LEGENDE, "mb-2")}>Decide here</p>
           <DecisionBar itemId={itemId} kind={pas.role ?? "approval"} onDone={onDecided} />
         </div>
       ) : (
@@ -395,7 +395,7 @@ function PasDAction({ pas, slug }: { pas: JourneyStep; slug: string }) {
       <Faits pas={pas} />
       {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
       <Link href={train ? `/p/${slug}/trains` : `/p/${slug}/actions/${pas.id}`} className="inline-block text-sm">
-        {train ? "open the release trains →" : "open the governed action →"}
+        {train ? "Open the release trains →" : "Open the governed action →"}
       </Link>
     </div>
   );

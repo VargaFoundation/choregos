@@ -41,7 +41,11 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
       <MiseEnRoute slug={slug} projet={project.data} />
       {enCours && !provisioning.data && <EtatDeLecture lecture={provisioning} quoi="the provisioning" />}
       {enCours && provisioning.data && (
-        <Card eyebrow="provisioning" title={`${provisioning.data.status} · ${provisioning.data.current_step ?? "—"}`}>
+        <Card
+          eyebrow="Provisioning"
+          title={`${provisioning.data.status} · ${provisioning.data.current_step ?? "—"}`}
+          titreDonnee
+        >
           <ol className="space-y-1 text-sm">
             {provisioning.data.steps.map((step) => (
               <li key={step.name} className="flex items-start gap-2">
@@ -58,17 +62,17 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
               </li>
             ))}
           </ol>
-          {provisioning.data.steps.length === 0 && <Empty>waiting for the first step…</Empty>}
+          {provisioning.data.steps.length === 0 && <Empty>Waiting for the first step…</Empty>}
         </Card>
       )}
       <div
         className={`grid grid-cols-2 border border-line ${hasReleaseTrain(project.data) ? "md:grid-cols-4" : "md:grid-cols-3"}`}
       >
         <div className="p-6">
-          <Stat value={actifs} label="active tickets" tone={actifs > 0 ? "accent" : "ink"} />
+          <Stat value={actifs} label="Active tickets" tone={actifs > 0 ? "accent" : "ink"} />
         </div>
         <div className="border-l border-line p-6">
-          <Stat value={percent(stats?.first_pass_merge_rate)} label="prs merged on first pass" />
+          <Stat value={percent(stats?.first_pass_merge_rate)} label="PRs merged on first pass" />
         </div>
         <div className="border-t border-line p-6 md:border-t-0 md:border-l">
           <Stat
@@ -77,22 +81,22 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                 ? `${stats.cycle_time_p50_hours.toLocaleString("en-GB", { maximumFractionDigits: 1 })} h`
                 : "—"
             }
-            label="median cycle time"
+            label="Median cycle time"
           />
         </div>
         {hasReleaseTrain(project.data) && (
           <div className="border-t border-l border-line p-6 md:border-t-0">
-            <Stat value={stats?.trains_pending ?? 0} label="trains in flight" />
+            <Stat value={stats?.trains_pending ?? 0} label="Trains in flight" />
           </div>
         )}
       </div>
 
       <Card
-        eyebrow="cost"
-        title="the last 14 days"
+        eyebrow="Cost"
+        title="The last 14 days"
         action={
           <a href={api.costsCsvUrl(slug, "day")} className="text-xs text-ink-muted hover:text-ink" download>
-            export as csv
+            Export as csv
           </a>
         }
       >
@@ -104,11 +108,11 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
           <>
             <GrapheDesCouts rows={rows} />
             <div className="mt-4 flex flex-wrap gap-x-10 gap-y-3">
-              <Stat value={usd(costs.data?.total.cost_usd)} label="total" />
+              <Stat value={usd(costs.data?.total.cost_usd)} label="Total" />
               <Stat
                 // En dollars, comme il est déclaré : le taux 0,92 codé ici ne suivait pas celui de l'API.
                 value={costs.data?.total.budget_usd ? usd(costs.data.total.budget_usd) : "—"}
-                label="daily budget"
+                label="Daily budget"
               />
               {(parNature.data?.rows ?? [])
                 .filter((row) => row.key === "tool")
@@ -118,7 +122,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                     <Stat
                       key={row.key}
                       value={usd(row.cost_usd)}
-                      label={`catalogue tools · ${appels} call${appels > 1 ? "s" : ""}`}
+                      label={`Catalogue tools · ${appels} call${appels > 1 ? "s" : ""}`}
                     />
                   );
                 })}
@@ -127,22 +131,22 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         )}
       </Card>
 
-      <Card eyebrow="delivery" title="dora">
+      <Card eyebrow="Delivery" title="DORA">
         {dora.data === undefined ? (
           <EtatDeLecture lecture={dora} quoi="the delivery measures" />
         ) : dora.data.deployments === 0 ? (
           <Empty>No production deployment recorded in the window.</Empty>
         ) : (
           <div className="grid border-t border-line sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="deployment frequency" metric={dora.data.deployment_frequency} />
-            <Metric label="lead time" metric={dora.data.lead_time} />
-            <Metric label="change failure rate" metric={dora.data.change_failure_rate} ratio />
-            <Metric label="time to restore" metric={dora.data.time_to_restore} />
+            <Metric label="Deployment frequency" metric={dora.data.deployment_frequency} />
+            <Metric label="Lead time" metric={dora.data.lead_time} />
+            <Metric label="Change failure rate" metric={dora.data.change_failure_rate} ratio />
+            <Metric label="Time to restore" metric={dora.data.time_to_restore} />
           </div>
         )}
       </Card>
 
-      <Card eyebrow="tickets" title="most recent" padding="none" className="overflow-hidden">
+      <Card eyebrow="Tickets" title="Most recent" padding="none" className="overflow-hidden">
         <div className="px-6 pb-2">
           {!items.data ? (
             <div className="pb-4">
@@ -157,11 +161,11 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
               <table>
                 <thead>
                   <tr>
-                    <th>ticket</th>
-                    <th>title</th>
-                    <th>state</th>
-                    <th>size</th>
-                    <th className="text-right">cost</th>
+                    <th>Ticket</th>
+                    <th>Title</th>
+                    <th>State</th>
+                    <th>Size</th>
+                    <th className="text-right">Cost</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -193,14 +197,14 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 }
 
 const LEVELS: Record<string, { label: string; tone: "ok" | "warn" | "danger" | "ink" }> = {
-  elite: { label: "elite", tone: "ok" },
-  high: { label: "high", tone: "ok" },
-  medium: { label: "medium", tone: "warn" },
-  low: { label: "low", tone: "danger" },
+  elite: { label: "Elite", tone: "ok" },
+  high: { label: "High", tone: "ok" },
+  medium: { label: "Medium", tone: "warn" },
+  low: { label: "Low", tone: "danger" },
 };
 
 function Metric({ label, metric, ratio }: { label: string; metric: DoraMetric; ratio?: boolean }) {
-  const level = LEVELS[metric.level ?? ""] ?? { label: "no verdict", tone: "ink" as const };
+  const level = LEVELS[metric.level ?? ""] ?? { label: "No verdict", tone: "ink" as const };
   const value =
     metric.value === null || metric.value === undefined
       ? "—"

@@ -25,20 +25,20 @@ describe("décider d'une action gouvernée (ADR 0035, S20-02)", () => {
   it("un rejet dit pourquoi : le bouton reste fermé sans raison", async () => {
     vi.mocked(api.decideAction).mockResolvedValue(action);
     rendre();
-    const rejeter = screen.getByRole("button", { name: "reject" });
+    const rejeter = screen.getByRole("button", { name: "Reject" });
     expect(rejeter).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("reason to reject"), { target: { value: "pas encore embauchée" } });
+    fireEvent.change(screen.getByLabelText("Reason to reject"), { target: { value: "not hired yet" } });
     expect(rejeter).toBeEnabled();
     fireEvent.click(rejeter);
     await waitFor(() =>
-      expect(api.decideAction).toHaveBeenCalledWith("rh", "act-1", { decision: "reject", reason: "pas encore embauchée" }),
+      expect(api.decideAction).toHaveBeenCalledWith("rh", "act-1", { decision: "reject", reason: "not hired yet" }),
     );
   });
 
   it("approuver n'envoie pas de raison, et une action décidée ne se redécide pas", async () => {
     vi.mocked(api.decideAction).mockResolvedValue(action);
     const { unmount } = rendre();
-    fireEvent.click(screen.getByRole("button", { name: "approve" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(api.decideAction).toHaveBeenLastCalledWith("rh", "act-1", { decision: "approve" }));
     unmount();
     rendre({ ...action, status: "approved" });
@@ -47,6 +47,6 @@ describe("décider d'une action gouvernée (ADR 0035, S20-02)", () => {
 
   it("un agent qui propose se nomme comme tel", () => {
     expect(propose({ kind: "agent", id: "agent:coordinateur" })).toBe("the agent coordinateur");
-    expect(propose({ kind: "user", id: "lea@varga.dev" })).toBe("lea@varga.dev");
+    expect(propose({ kind: "user", id: "lea@acme.dev" })).toBe("lea@acme.dev");
   });
 });

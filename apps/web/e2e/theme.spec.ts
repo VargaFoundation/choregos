@@ -11,7 +11,7 @@ const fond = (page: import("@playwright/test").Page) =>
 test("sombre par défaut, en Geist, le monospace gardé pour le code", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  // slateDark 1 : un quasi-noir froid, plus le #0A0A0A du design system.
+  // slateDark 1: a cold near-black, no longer the former design system's #0A0A0A.
   expect(await fond(page)).toBe("rgb(17, 17, 19)");
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toMatch(/Geist/);
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).not.toMatch(/JetBrains/);
@@ -21,7 +21,7 @@ test("le clair choisi survit au rechargement, et s'applique sans le JavaScript d
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("radio", { name: "light" }).check({ force: true });
+  await page.getByRole("radio", { name: "Light" }).check({ force: true });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   expect(await fond(page)).toBe("rgb(252, 252, 253)");
 
@@ -38,7 +38,7 @@ test("le clair choisi survit au rechargement, et s'applique sans le JavaScript d
 test("« system » suit le mode du système", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
-  await page.getByRole("radio", { name: "system" }).check({ force: true });
+  await page.getByRole("radio", { name: "System" }).check({ force: true });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

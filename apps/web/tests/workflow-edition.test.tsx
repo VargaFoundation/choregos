@@ -120,10 +120,10 @@ describe("le brouillon d'un workflow", () => {
     expect(api.editWorkflow).toHaveBeenNthCalledWith(2, "apres-A", [geste]);
     expect(screen.getByTestId("yaml")).toHaveTextContent("apres-B");
 
-    fireEvent.click(screen.getByRole("button", { name: "undo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     await screen.findByText("1 change not published yet");
     expect(api.editWorkflow).toHaveBeenNthCalledWith(3, "apres-B", inverseB);
-    fireEvent.click(screen.getByRole("button", { name: "undo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(screen.queryByTestId("brouillon")).toBeNull());
     expect(api.editWorkflow).toHaveBeenNthCalledWith(4, "apres-A", inverseA);
   });
@@ -149,8 +149,8 @@ describe("le brouillon d'un workflow", () => {
     await rendre(<Sonde geste={operations.genre("ready", "wait")} />);
     fireEvent.click(screen.getByRole("button", { name: "geste" }));
 
-    fireEvent.click(await screen.findByRole("button", { name: "publish v4" }));
-    await screen.findByText(/someone published a newer version meanwhile/);
+    fireEvent.click(await screen.findByRole("button", { name: "Publish v4" }));
+    await screen.findByText(/Someone published a newer version meanwhile/);
     expect(api.putWorkflowNamed).toHaveBeenCalledWith("rh", "onboarding", "editee", 3);
     // Le brouillon reste : rien n'est perdu, l'auteur choisit d'abandonner.
     expect(screen.getByText("1 change not published yet")).toBeInTheDocument();
@@ -178,27 +178,27 @@ describe("les panneaux de la carte et de la vue processus", () => {
     );
     const panneau = screen.getByTestId("panneau-etat");
 
-    fireEvent.change(screen.getByLabelText("label"), { target: { value: "Nouvelles demandes" } });
-    fireEvent.click(screen.getByRole("button", { name: "set label" }));
+    fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Nouvelles demandes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set label" }));
     await waitFor(() =>
       expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.libelle("inbox", "Nouvelles demandes")]),
     );
 
-    fireEvent.change(screen.getByLabelText("name (every reference follows)"), { target: { value: "triage" } });
-    fireEvent.click(screen.getByRole("button", { name: "rename" }));
+    fireEvent.change(screen.getByLabelText("Name (every reference follows)"), { target: { value: "triage" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
     await waitFor(() => expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.renommer("inbox", "triage")]));
 
-    fireEvent.change(screen.getByLabelText("new transition to"), { target: { value: "ready" } });
-    fireEvent.change(screen.getByLabelText("by"), { target: { value: "owner" } });
-    fireEvent.click(screen.getByRole("button", { name: "add" }));
+    fireEvent.change(screen.getByLabelText("New transition to"), { target: { value: "ready" } });
+    fireEvent.change(screen.getByLabelText("By"), { target: { value: "owner" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.ajouterUneTransition("inbox", "ready", "owner")]),
     );
 
     // Un nouvel état et la transition qui y mène partent en un geste : un seul « undo » les défait.
-    fireEvent.change(screen.getByLabelText("new transition to"), { target: { value: "(new)" } });
-    fireEvent.change(screen.getByLabelText("name of the new state"), { target: { value: "verification" } });
-    fireEvent.click(screen.getByRole("button", { name: "add" }));
+    fireEvent.change(screen.getByLabelText("New transition to"), { target: { value: "(new)" } });
+    fireEvent.change(screen.getByLabelText("Name of the new state"), { target: { value: "verification" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [
         operations.ajouterUnEtat("verification", "verification"),
@@ -216,11 +216,11 @@ describe("les panneaux de la carte et de la vue processus", () => {
         <FormulaireDEtape etats={etats} acteurs={["refiner", "owner"]} />
       </>,
     );
-    const ajouter = screen.getByRole("button", { name: "add" });
+    const ajouter = screen.getByRole("button", { name: "Add" });
     expect(ajouter).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("from"), { target: { value: "inbox" } });
-    fireEvent.change(screen.getByLabelText("to"), { target: { value: "(new)" } });
-    fireEvent.change(screen.getByLabelText("name of the new state"), { target: { value: "in_review" } });
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "inbox" } });
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "(new)" } });
+    fireEvent.change(screen.getByLabelText("Name of the new state"), { target: { value: "in_review" } });
     fireEvent.click(ajouter);
     await waitFor(() =>
       expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [
@@ -239,26 +239,26 @@ describe("les panneaux de la carte et de la vue processus", () => {
       </>,
     );
 
-    fireEvent.change(screen.getByLabelText("who moves it"), { target: { value: "owner" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "set" })[0]!);
+    fireEvent.change(screen.getByLabelText("Who moves it"), { target: { value: "owner" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Set" })[0]!);
     await waitFor(() => expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.acteur("t-implement", "owner")]));
 
-    fireEvent.click(screen.getByRole("button", { name: "remove the guarantee scope_respected" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the guarantee scope_respected" }));
     await waitFor(() =>
       expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.retirerUneGarantie("t-implement", "scope_respected")]),
     );
 
-    fireEvent.change(screen.getByLabelText("guarantee to add"), { target: { value: "ci_green" } });
-    fireEvent.click(screen.getByRole("button", { name: "add" }));
+    fireEvent.change(screen.getByLabelText("Guarantee to add"), { target: { value: "ci_green" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.ajouterUneGarantie("t-implement", "ci_green")]),
     );
 
     // Le délai lu est prérempli ; vidé, il retire la limite.
-    const delai = screen.getByLabelText("at most (hours, empty: no limit)");
+    const delai = screen.getByLabelText("At most (hours, empty: no limit)");
     expect(delai).toHaveValue(72);
     fireEvent.change(delai, { target: { value: "" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "set" })[1]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Set" })[1]!);
     await waitFor(() => expect(api.editWorkflow).toHaveBeenLastCalledWith(YAML, [operations.delai("t-implement", null)]));
   });
 

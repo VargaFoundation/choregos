@@ -29,7 +29,7 @@ export function GrapheDesCouts({ rows }: { rows: CostRow[] }) {
       <div
         className="flex h-40 items-end gap-1.5 border-t border-dashed border-t-line border-b border-b-ink"
         role="img"
-        aria-label={`cost per day, ${rows.length} days${pic ? `: highest ${usd(max)} on ${jour(pic.key)}` : ""}`}
+        aria-label={`Cost per day, ${rows.length} days${pic ? `: highest ${usd(max)} on ${jour(pic.key)}` : ""}`}
       >
         {rows.map((row) => (
           <div
@@ -47,14 +47,14 @@ export function GrapheDesCouts({ rows }: { rows: CostRow[] }) {
         </p>
       )}
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs text-ink-muted">as a table</summary>
+        <summary className="cursor-pointer text-xs text-ink-muted">As a table</summary>
         <div className="overflow-x-auto">
-          <table aria-label="cost per day">
+          <table aria-label="Cost per day">
             <thead>
               <tr>
-                <th>day</th>
-                <th className="text-right">cost</th>
-                <th className="text-right">runs</th>
+                <th>Day</th>
+                <th className="text-right">Cost</th>
+                <th className="text-right">Runs</th>
               </tr>
             </thead>
             <tbody>

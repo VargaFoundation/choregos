@@ -67,6 +67,9 @@ export function YamlEditor({
           yaml(),
           syntaxHighlighting(SURLIGNAGE),
           THEME,
+          // In mono (ADR 0048) a long line no longer fits: it wraps, so the scroller never scrolls
+          // sideways — a sideways region that holds no focusable element fails axe (read-only view).
+          EditorView.lineWrapping,
           // Pas d'`indentWithTab` : Tab doit sortir de l'éditeur, sinon le clavier y reste piégé.
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorState.tabSize.of(2),
@@ -145,24 +148,24 @@ export function diagnostic(doc: Text, issue: Issue, severity: "error" | "warning
   };
 }
 
-/** Les couleurs viennent des jetons du design system : clair et sombre suivent sans code. */
+/** The colours come from the console's tokens (`--choregos-*`): light and dark follow with no code. */
 const THEME = EditorView.theme({
-  "&": { height: "100%", fontSize: "12px", color: "var(--varga-ink)", backgroundColor: "var(--varga-surface)" },
-  ".cm-scroller": { fontFamily: "var(--varga-font-text)", lineHeight: "1.6" },
-  ".cm-content": { caretColor: "var(--varga-ink)" },
+  "&": { height: "100%", fontSize: "12px", color: "var(--choregos-ink)", backgroundColor: "var(--choregos-surface)" },
+  ".cm-scroller": { fontFamily: "var(--choregos-font-mono)", lineHeight: "1.6" },
+  ".cm-content": { caretColor: "var(--choregos-ink)" },
   // `ink-muted`, pas `ink-subtle` : les numéros de ligne doivent passer le contraste AA (axe le mesure).
-  ".cm-gutters": { backgroundColor: "var(--varga-surface-muted)", color: "var(--varga-ink-muted)", borderRight: "1px solid var(--varga-line)" },
-  ".cm-activeLine": { backgroundColor: "var(--varga-surface-muted)" },
-  ".cm-activeLineGutter": { backgroundColor: "var(--varga-surface-sunken)", color: "var(--varga-ink)" },
-  "&.cm-focused": { outline: "2px solid var(--varga-focus)", outlineOffset: "-2px" },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": { backgroundColor: "var(--varga-accent-soft)" },
-  ".cm-tooltip": { backgroundColor: "var(--varga-surface)", border: "1px solid var(--varga-line-strong)", color: "var(--varga-ink)" },
+  ".cm-gutters": { backgroundColor: "var(--choregos-surface-muted)", color: "var(--choregos-ink-muted)", borderRight: "1px solid var(--choregos-line)" },
+  ".cm-activeLine": { backgroundColor: "var(--choregos-surface-muted)" },
+  ".cm-activeLineGutter": { backgroundColor: "var(--choregos-surface-sunken)", color: "var(--choregos-ink)" },
+  "&.cm-focused": { outline: "2px solid var(--choregos-focus)", outlineOffset: "-2px" },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": { backgroundColor: "var(--choregos-accent-soft)" },
+  ".cm-tooltip": { backgroundColor: "var(--choregos-surface)", border: "1px solid var(--choregos-line-strong)", color: "var(--choregos-ink)" },
 });
 
 const SURLIGNAGE = HighlightStyle.define([
-  { tag: [tags.propertyName, tags.definition(tags.propertyName)], color: "var(--varga-accent-strong)" },
-  { tag: [tags.string, tags.special(tags.string)], color: "var(--varga-ink)" },
-  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: "var(--varga-warn)" },
-  { tag: [tags.comment, tags.lineComment], color: "var(--varga-ink-muted)", fontStyle: "italic" },
-  { tag: [tags.meta, tags.punctuation, tags.separator, tags.squareBracket, tags.brace], color: "var(--varga-ink-muted)" },
+  { tag: [tags.propertyName, tags.definition(tags.propertyName)], color: "var(--choregos-accent-strong)" },
+  { tag: [tags.string, tags.special(tags.string)], color: "var(--choregos-ink)" },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: "var(--choregos-warn)" },
+  { tag: [tags.comment, tags.lineComment], color: "var(--choregos-ink-muted)", fontStyle: "italic" },
+  { tag: [tags.meta, tags.punctuation, tags.separator, tags.squareBracket, tags.brace], color: "var(--choregos-ink-muted)" },
 ]);

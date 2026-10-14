@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Composants transverses de Choregos, posés sur le design system de la Varga Foundation.
- *
- * Les composants du design system restent la bibliothèque ; ceux dont l'allure est codée en dur
- * — un titre en Space Mono gras de 48 px, une puce carrée, un aplat inversé, un trait d'encre sous
- * un en-tête de tableau — sont redonnés ICI, sous les MÊMES noms et les MÊMES props, à l'allure
- * d'une console d'opérations (ADR 0043) : une page change sa ligne d'import, pas son code. Une
- * règle eslint interdit de les importer directement du design system.
+ * The console's primitives (ADR 0048): the console owns them, on plain accessible HTML and its own
+ * tokens; it no longer depends on the Varga Foundation design system, and an eslint rule refuses an
+ * import from it. The look is an operations console in the manner of Temporal's UI: sentence case,
+ * sans for what is read and mono only for what is compared, 4–6 px radii, round pills.
  *
  * Ce qui est propre à Choregos — l'état d'un ticket, le coût d'un run, l'acteur d'une étape — se
  * dit en pastilles teintées, la prune pour ce qui agit seul, et toujours en toutes lettres.
@@ -17,7 +14,6 @@ import Link from "next/link";
 import {
   forwardRef,
   useId,
-  type ComponentProps,
   type ElementType,
   type HTMLAttributes,
   type InputHTMLAttributes,
@@ -27,9 +23,8 @@ import {
   type TextareaHTMLAttributes,
   type ThHTMLAttributes,
 } from "react";
-import { Alert, Card as VargaCard, TabList } from "@varga/design-system";
 import { cn } from "@/lib/cn";
-import { libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
+import { toSentenceCase, libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
 
 // ───────────────────────────── tons ─────────────────────────────
 
@@ -132,12 +127,12 @@ export function Badge({ tone = "neutral", variant = "outline", dot = true, class
 }
 
 /**
- * Les classes d'une légende : petites capitales Geist Mono, sans cadre (ADR 0043). Pour ce qui
- * n'est pas un `Eyebrow` — l'intitulé d'un groupe, un `h4` de panneau, l'en-tête d'une colonne.
+ * The classes of a caption: small, sans, medium weight, muted — in sentence case, never uppercased
+ * (ADR 0048). For what is not an `Eyebrow`: a group's name, a panel's `h4`, a column's header.
  */
-export const LEGENDE = "font-mono text-[11px] tracking-[0.06em] text-ink-muted uppercase";
+export const LEGENDE = "text-xs font-medium text-ink-muted";
 
-/** Une légende au-dessus d'un titre : petite, en capitales d'affichage, sans cadre. */
+/** A caption above a title: small, muted, no frame. */
 export function Eyebrow({ children, tone, className }: { children: ReactNode; tone?: Tone; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1.5", LEGENDE, className)}>
@@ -150,9 +145,9 @@ export function Eyebrow({ children, tone, className }: { children: ReactNode; to
 // ───────────────────────────── titres ─────────────────────────────
 
 const TITRE = {
-  hero: "text-3xl md:text-4xl leading-tight font-light",
-  // Le titre d'une page : 24 px, léger — il était en Space Mono gras de 36 à 48 px.
-  xl: "text-2xl leading-tight font-light",
+  hero: "text-3xl md:text-4xl leading-tight font-semibold",
+  // A page's title: 24 px, semibold, sans — it was 36 to 48 px of bold Space Mono.
+  xl: "text-2xl leading-tight font-semibold",
   lg: "text-xl leading-snug font-normal",
   md: "text-base leading-snug font-semibold",
   sm: "text-sm leading-snug font-semibold",
@@ -164,7 +159,7 @@ export function Heading({
   className,
   ...props
 }: HTMLAttributes<HTMLHeadingElement> & { as?: ElementType; size?: keyof typeof TITRE }) {
-  return <Tag className={cn("font-display tracking-tight text-ink", TITRE[size], className)} {...props} />;
+  return <Tag className={cn("tracking-tight text-ink", TITRE[size], className)} {...props} />;
 }
 
 /** Ce qui suit un titre de page : une phrase, discrète. */
@@ -174,7 +169,7 @@ export function Lead({ className, ...props }: HTMLAttributes<HTMLParagraphElemen
 
 // ───────────────────────────── tableaux ─────────────────────────────
 
-/** Un tableau dense : 13 px, des lignes de 32 px environ, des en-têtes en petites capitales. */
+/** A dense table: 13 px, rows of about 32 px, headers in a small sans caption. */
 export function Table({ className, ...props }: HTMLAttributes<HTMLTableElement>) {
   return (
     <div className="w-full overflow-x-auto">
@@ -199,7 +194,7 @@ export function TH({ className, align = "left", ...props }: ThHTMLAttributes<HTM
   return (
     <th
       className={cn(
-        "h-8 px-3 font-mono text-[11px] font-medium tracking-[0.06em] whitespace-nowrap text-ink-muted uppercase",
+        "h-8 px-3 text-xs font-medium whitespace-nowrap text-ink-muted",
         align === "right" && "text-right",
         className,
       )}
@@ -219,7 +214,7 @@ export function Label({ className, ...props }: HTMLAttributes<HTMLSpanElement>) 
   return <span className={cn("block text-xs text-ink-muted", className)} {...props} />;
 }
 
-/** Un chiffre mis en avant : en Geist Mono léger, aligné ; le libellé dessous. */
+/** A number put forward: in Geist Mono (a number is compared), aligned; its label below. */
 export function Stat({
   value,
   label,
@@ -266,13 +261,12 @@ const TAILLES: Record<ButtonSize, string> = {
 };
 
 /**
- * Les classes d'un bouton, pour habiller autre chose qu'un `<button>` — un `Link` de Next,
- * typiquement. En Geist Mono : un bouton se commande, il se lit comme une commande. Au doigt,
- * 44 px de haut au moins (WCAG 2.5.8, S23-11).
+ * A button's classes, to dress something other than a `<button>` — a Next `Link`, typically. In
+ * sans, with 4 px corners (ADR 0048). For a finger, 44 px high at least (WCAG 2.5.8, S23-11).
  */
 export function buttonClasses(variant: ButtonVariant = "secondary", size: ButtonSize = "md", className?: string) {
   return cn(
-    "inline-flex shrink-0 items-center justify-center border font-mono font-medium no-underline whitespace-nowrap",
+    "inline-flex shrink-0 items-center justify-center rounded border font-medium no-underline whitespace-nowrap",
     "transition-colors duration-200 ease-standard pointer-coarse:min-h-11",
     "disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:pointer-events-none aria-disabled:opacity-40",
     VARIANTES[variant],
@@ -292,9 +286,9 @@ export function tabClasses(active: boolean, className?: string) {
 
 // ───────────────────────────── champs ─────────────────────────────
 
-/** L'allure d'un champ : 32 px, une bordure de contrôle (3:1), l'accent au focus. */
+/** A field's look: 32 px, a control border (3:1), 4 px corners, the accent on focus. */
 export const CHAMP =
-  "w-full border border-line-strong bg-surface px-2.5 text-[13px] text-ink transition-colors duration-200 ease-standard " +
+  "w-full rounded border border-line-strong bg-surface px-2.5 text-[13px] text-ink transition-colors duration-200 ease-standard " +
   "hover:border-ink-subtle focus:border-accent focus:outline-none pointer-coarse:min-h-11 " +
   "disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-ink-subtle aria-invalid:border-danger";
 
@@ -400,7 +394,7 @@ export function StateBadge({
   const tone = tonDEtat(state, kind);
   return (
     <Badge tone={tone} title={state}>
-      {display && display !== state ? display : libelleDeCode(state)}
+      {display && display !== state ? display : toSentenceCase(libelleDeCode(state))}
     </Badge>
   );
 }
@@ -438,11 +432,11 @@ export function CostChip({
 // Les couleurs des cartes (S24-04) : prune l'agent, bleu la personne, ardoise la plateforme, vert le
 // train. La personne était un point d'encre — blanc pur en sombre.
 const ACTORS: Record<string, { tone: Tone; label: string }> = {
-  agent: { tone: "agent", label: "agent" },
-  user: { tone: "running", label: "human" },
-  human: { tone: "running", label: "human" },
-  system: { tone: "neutral", label: "system" },
-  train: { tone: "succeeded", label: "release train" },
+  agent: { tone: "agent", label: "Agent" },
+  user: { tone: "running", label: "Human" },
+  human: { tone: "running", label: "Human" },
+  system: { tone: "neutral", label: "System" },
+  train: { tone: "succeeded", label: "Release train" },
 };
 
 /** Le ton d'un acteur : celui de son point, dans la chronologie d'un ticket comme à côté de son nom. */
@@ -456,7 +450,7 @@ export function tonDActeur(kind: string): Tone {
  * est toujours énoncé en toutes lettres.
  */
 export function ActorIcon({ kind, name, point = true }: { kind: string; name?: string | null; point?: boolean }) {
-  const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "system" };
+  const actor = ACTORS[kind] ?? { tone: "neutral" as Tone, label: "System" };
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted" title={actor.label}>
       {/* Sans point quand un autre le porte déjà : le rail de la chronologie d'un ticket. */}
@@ -473,35 +467,167 @@ export function ActorIcon({ kind, name, point = true }: { kind: string; name?: s
   );
 }
 
+export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+  title?: ReactNode;
+  /** The title is data (a project's name): it keeps its case (ADR 0048 §3). */
+  titreDonnee?: boolean;
+  /** A short line above the title. */
+  eyebrow?: ReactNode;
+  /** A button or a link, on the right of the header. */
+  action?: ReactNode;
+  /** A card that is a link: its border strengthens on hover. */
+  interactive?: boolean;
+  padding?: "none" | "sm" | "md" | "lg";
+}
+
+const CARD_PADDINGS = { none: "", sm: "p-4", md: "p-5", lg: "p-8" } as const;
+
 /**
- * La carte du design system, titrée au niveau 2 (S23-05). Elle titrait en `h3` : sous le `h1` d'une
- * page, axe relevait un saut de niveau (`heading-order`) sur 23 pages sur 36, et un lecteur d'écran
- * qui parcourt la page par titres cherchait des sections qui n'existaient pas.
+ * A card: a raised surface, a 1 px hairline, 6 px corners (ADR 0048). Its title is a level-2 heading
+ * (S23-05): under a page's `h1`, an `h3` was a skipped level for axe (`heading-order`) on 23 pages
+ * out of 36. It is raised above the page (ADR 0043): its surface, and whatever "takes the colour of
+ * the background" inside it, is a card's.
  */
 export function Card({
   title,
   titreDonnee,
+  eyebrow,
+  action,
+  interactive,
+  padding = "md",
+  className,
+  children,
   ...props
-}: ComponentProps<typeof VargaCard> & {
-  /** Le titre est une donnée (le nom d'un projet) : il garde sa casse (ADR 0042). */
-  titreDonnee?: boolean;
+}: CardProps) {
+  const hasHeader = title != null || eyebrow != null || action != null;
+  return (
+    <section
+      className={cn(
+        "raised rounded-md border border-line",
+        interactive && "transition-colors duration-200 ease-standard hover:border-line-strong",
+        CARD_PADDINGS[padding],
+        className,
+      )}
+      {...props}
+    >
+      {hasHeader && (
+        <header className={cn("mb-4 flex items-start justify-between gap-4", padding === "none" && "px-5 pt-5")}>
+          <div className="min-w-0 space-y-1">
+            {eyebrow != null && <Label>{eyebrow}</Label>}
+            {typeof title === "string" ? (
+              <h2 className="text-sm font-semibold text-ink" data-donnee={titreDonnee || undefined}>
+                {title}
+              </h2>
+            ) : (
+              title
+            )}
+          </div>
+          {action}
+        </header>
+      )}
+      {children}
+    </section>
+  );
+}
+
+/** The width of a page: centred, 1400 px at most (`wide`), with its side gutter. */
+const PAGE_WIDTHS = { text: "max-w-3xl", page: "max-w-6xl", wide: "max-w-[1400px]" } as const;
+
+export function Container({
+  size = "page",
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { size?: keyof typeof PAGE_WIDTHS }) {
+  return <div className={cn("mx-auto w-full px-4 sm:px-6", PAGE_WIDTHS[size], className)} {...props} />;
+}
+
+/** Inline code: an identifier, a path, a command — in mono, on a sunken chip. */
+export function Code({ className, ...props }: HTMLAttributes<HTMLElement>) {
+  return <code className={cn("rounded-sm bg-surface-sunken px-1 py-0.5 font-mono text-[0.85em] text-ink", className)} {...props} />;
+}
+
+/**
+ * A message in the page: a tinted panel and its point; the tone is said by the title, never by the
+ * colour alone. `danger` is an `alert` (announced at once), anything else a `status`.
+ */
+export function Alert({
+  tone = "neutral",
+  title,
+  children,
+  className,
+}: {
+  tone?: Tone;
+  title?: ReactNode;
+  children?: ReactNode;
+  className?: string;
 }) {
   return (
-    <VargaCard
-      title={
-        typeof title === "string" ? (
-          <h2 className="font-display text-sm font-semibold tracking-tight text-ink" data-donnee={titreDonnee || undefined}>
-            {title}
-          </h2>
-        ) : (
-          title
-        )
-      }
-      {...props}
-      // Une carte s'élève au-dessus de la page (ADR 0043) : sa surface, et tout ce qui « prend la
-      // couleur du fond » dedans, est celle d'une carte.
-      className={cn("raised", props.className)}
-    />
+    <div
+      role={tone === "danger" || tone === "failed" ? "alert" : "status"}
+      className={cn("rounded-md border px-3 py-2.5 text-sm", PASTILLE[tone], className)}
+    >
+      {title && (
+        <p className="mb-0.5 flex items-center gap-2 font-medium">
+          <Dot tone={tone} size={6} />
+          {title}
+        </p>
+      )}
+      {children && <div className={title ? "text-ink-muted" : undefined}>{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * A box that is ticked or not — a step done, a criterion met. It shows a state; it is not a control
+ * (a form's checkbox is a native `<input type="checkbox">`).
+ */
+export function Checkbox({ checked = true, className }: { checked?: boolean; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "inline-flex size-4 shrink-0 items-center justify-center rounded-sm border",
+        checked ? "border-accent bg-accent text-accent-ink" : "border-line-strong bg-surface",
+        className,
+      )}
+    >
+      {checked && (
+        <svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M1.5 5.2L4 7.5L8.5 2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+/** The number of a step in a sequence (1, 2, 3): a round chip, mono digits. */
+export function StepNumber({ value, className }: { value: number | string; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong font-mono text-xs tabular-nums text-ink",
+        className,
+      )}
+    >
+      {value}
+    </span>
+  );
+}
+
+/**
+ * The console's wordmark: the product's name, in its own letters — not the foundation's mark (ADR
+ * 0048). The glyph is a plain geometric figure (a stage and its next step), drawn here.
+ */
+export function Wordmark({ className, compact = false }: { className?: string; compact?: boolean }) {
+  return (
+    <span className={cn("inline-flex items-center gap-2 text-ink", className)}>
+      <svg aria-hidden viewBox="0 0 20 20" className="size-5 shrink-0" fill="none">
+        <rect x="1.5" y="1.5" width="17" height="17" rx="4" stroke="currentColor" strokeOpacity="0.35" />
+        <circle cx="7" cy="10" r="2.5" fill="var(--choregos-accent)" />
+        <path d="M10.5 10h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      <span className={cn("text-[15px] font-semibold tracking-tight", compact && "sr-only")}>Choregos</span>
+    </span>
   );
 }
 
@@ -577,7 +703,7 @@ export function PhraseDuMoteur({ texte }: { texte: string }) {
  */
 export function FilDAriane({ etapes }: { etapes: { href?: string; label: ReactNode }[] }) {
   return (
-    <nav aria-label="breadcrumb" className="text-sm">
+    <nav aria-label="Breadcrumb" className="text-sm">
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-muted">
         {etapes.map((etape, index) => (
           <li key={index} className="flex min-w-0 items-center gap-2">
@@ -601,7 +727,7 @@ export function FilDAriane({ etapes }: { etapes: { href?: string; label: ReactNo
 /** Une zone vide qui dit quoi faire : un filet pointillé discret, un titre, une phrase, une action. */
 export function Empty({ children, title, action }: { children: ReactNode; title?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="border border-dashed border-line px-6 py-10 text-center">
+    <div className="rounded-md border border-dashed border-line px-6 py-10 text-center">
       {title && <p className="text-sm font-medium text-ink">{title}</p>}
       {children && <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">{children}</p>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
@@ -632,9 +758,9 @@ export function EtatDeLecture({
     const message = lecture.error instanceof Error ? lecture.error.message : String(lecture.error);
     return (
       <ErrorNote>
-        could not {lecture.data === undefined ? "read" : "refresh"} {quoi}: {message}.{" "}
+        Could not {lecture.data === undefined ? "read" : "refresh"} {quoi}: {message}.{" "}
         <button type="button" className="underline" onClick={() => void lecture.refetch()} disabled={lecture.isRefetching}>
-          {lecture.isRefetching ? "retrying…" : "retry"}
+          {lecture.isRefetching ? "Retrying…" : "Retry"}
         </button>
       </ErrorNote>
     );
@@ -642,7 +768,7 @@ export function EtatDeLecture({
   if (lecture.data === undefined && lecture.fetchStatus !== "idle") {
     return (
       <p className="text-sm text-ink-muted" role="status">
-        reading {quoi}…
+        Reading {quoi}…
       </p>
     );
   }
@@ -650,14 +776,14 @@ export function EtatDeLecture({
 }
 
 /**
- * La barre d'onglets du design system, sans la barre de défilement VERTICALE qu'elle portait.
+ * A row of tabs: links to the sections of a page, the current one with `aria-current="page"` and
+ * the accent's underline (`tabClasses`). It is navigation, not an ARIA `tablist`: each tab is a page.
  *
- * L'onglet actif descend d'un pixel (`-mb-px`) pour poser son trait sur le filet de la barre ; dans
- * une barre qui défile en largeur (`overflow-x-auto`), ce pixel de trop est un débordement vertical,
- * et Windows dessinait ses flèches ▲ ● ▼ au bout de chaque barre d'onglets de la console (relevé le
- * 06/10 sur la page d'un workflow). Un pixel de marge basse le reçoit : rien ne déborde, et le trait
- * de l'onglet actif garde ses deux pixels.
+ * The active tab drops one pixel (`-mb-px`) to lay its underline on the bar's rule; in a bar that
+ * scrolls sideways (`overflow-x-auto`), that extra pixel was a vertical overflow, and Windows drew
+ * its ▲ ● ▼ arrows at the end of every tab bar (seen on 06/10). One pixel of bottom padding
+ * (`pb-px`) takes it.
  */
-export function Onglets({ className, ...props }: ComponentProps<typeof TabList>) {
-  return <TabList className={cn("pb-px", className)} {...props} />;
+export function Tabs({ className, ...props }: HTMLAttributes<HTMLElement>) {
+  return <nav className={cn("flex gap-6 overflow-x-auto border-b border-line pb-px", className)} {...props} />;
 }

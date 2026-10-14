@@ -42,13 +42,13 @@ export function PolicyCeilingCard({ org, canEdit }: { org: string; canEdit: bool
     }
   }
   return (
-    <Card title="policy ceiling">
+    <Card title="Policy ceiling">
       <div className="space-y-2 text-sm">
         <p className="text-ink-muted">
           Caps every project policy of {org} stays under. Example:{" "}
           <code>{'{"budgets": {"ticket_usd": {"M": 20}, "max_turns": {"default": 60}}, "attempts": {"default_max": 2}}'}</code>
         </p>
-        <Textarea aria-label="policy ceiling" rows={8} value={shown} readOnly={!canEdit} onChange={(e) => setText(e.target.value)} />
+        <Textarea aria-label="Policy ceiling" rows={8} value={shown} readOnly={!canEdit} onChange={(e) => setText(e.target.value)} />
         {ceiling.data?.updated_by && (
           <p className="text-xs text-ink-muted">
             set by {ceiling.data.updated_by} {ceiling.data.updated_at ? `on ${ceiling.data.updated_at.slice(0, 10)}` : ""}
@@ -56,7 +56,7 @@ export function PolicyCeilingCard({ org, canEdit }: { org: string; canEdit: bool
         )}
         {canEdit && (
           <button type="button" className={buttonClasses("secondary", "sm")} onClick={() => void save()}>
-            save the ceiling
+            Save the ceiling
           </button>
         )}
         {error && <ErrorNote>{error}</ErrorNote>}

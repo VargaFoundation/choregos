@@ -39,14 +39,14 @@ export function ClientsMcp({ org, clients, agents }: { org: string; clients: Api
     }
   });
   return (
-    <Card title="your AI clients">
+    <Card title="Your AI clients">
       <p className="mb-3 text-xs text-ink-muted">
         Your access tokens for the MCP door, and the AI client behind each once it has called. Every token is listed,
-        and revoked, in <Link href="/admin">admin › my access tokens</Link>.
+        and revoked, in <Link href="/admin">Admin › My access tokens</Link>.
       </p>
       {clients.length === 0 ? (
-        <Empty title="no AI client">
-          connect Claude Code or another client from{" "}
+        <Empty title="No AI client">
+          Connect Claude Code or another client from{" "}
           <Link href="/integrations" className="underline">
             AI clients
           </Link>
@@ -87,12 +87,12 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="font-medium">{jeton.name}</span>
         {jeton.last_used_at ? (
-          <Badge tone="ok">connected</Badge>
+          <Badge tone="ok">Connected</Badge>
         ) : (
-          <Badge tone="neutral">never called</Badge>
+          <Badge tone="neutral">Never called</Badge>
         )}
         <span className="text-xs text-ink-muted">
-          {jeton.last_used_at ? `last call ${relative(jeton.last_used_at)}` : "no call yet"}
+          {jeton.last_used_at ? `Last call ${relative(jeton.last_used_at)}` : "No call yet"}
           {jeton.last_client ? ` · ${jeton.last_client}` : ""}
           {` · ${jeton.scopes.join(", ")}`}
           {jeton.project ? ` · ${jeton.project}` : ""}
@@ -100,11 +100,11 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
         <span className="ml-auto">
           {agent ? (
             <Link href={`/agents/${agent.slug}`} className="text-sm hover:underline">
-              acts as {agent.display_name}
+              Acts as {agent.display_name}
             </Link>
           ) : (
             <Button size="sm" onClick={() => setOuvert(!ouvert)}>
-              {ouvert ? "cancel" : "register as an external agent"}
+              {ouvert ? "Cancel" : "Register as an external agent"}
             </Button>
           )}
         </span>
@@ -118,7 +118,7 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
           }}
         >
           <label className="space-y-1">
-            <span className="text-xs text-ink-muted">agent slug</span>
+            <span className="text-xs text-ink-muted">Agent slug</span>
             <Input
               className="w-auto"
               value={slug}
@@ -126,7 +126,7 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
             />
           </label>
           <label className="space-y-1">
-            <span className="text-xs text-ink-muted">name</span>
+            <span className="text-xs text-ink-muted">Name</span>
             <Input
               className="w-auto"
               value={nom}
@@ -134,18 +134,18 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
             />
           </label>
           <label className="space-y-1">
-            <span className="text-xs text-ink-muted">tools</span>
+            <span className="text-xs text-ink-muted">Tools</span>
             <Select
               className="w-auto"
               value={lecture ? "lecture" : "humain"}
               onChange={(e) => setLecture(e.target.value === "lecture")}
             >
-              <option value="humain">what its human may use</option>
-              <option value="lecture">read only</option>
+              <option value="humain">What its human may use</option>
+              <option value="lecture">Read only</option>
             </Select>
           </label>
           <Button size="sm" type="submit" tone="accent" disabled={!slug}>
-            register
+            Register
           </Button>
         </form>
       )}

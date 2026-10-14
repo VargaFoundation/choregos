@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import { Code } from "@varga/design-system";
 import { Statut } from "@/components/actions/statut";
-import { Card } from "@/components/ui";
+import { Card, Code } from "@/components/ui";
 import type { Action } from "@/lib/types";
 
 interface Ontologie {
@@ -36,15 +35,15 @@ export function DetailOntologie({ action }: { action: Action }) {
   const preuves = resultat.evidence ?? [];
   const cibles = meta.target_ids ?? [];
   return (
-    <Card title="ontology">
+    <Card title="Ontology">
       <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1 text-sm" data-testid="ontologie">
-        <dt className="text-ink-muted">action type</dt>
+        <dt className="text-ink-muted">Action type</dt>
         <dd>
           <Code>{meta.action_type ?? "—"}</Code>
         </dd>
-        <dt className="text-ink-muted">target</dt>
+        <dt className="text-ink-muted">Target</dt>
         <dd className="flex flex-wrap gap-1">{cibles.length ? cibles.map((c) => <Code key={c}>{c}</Code>) : "—"}</dd>
-        <dt className="text-ink-muted">parameters</dt>
+        <dt className="text-ink-muted">Parameters</dt>
         <dd>
           <pre className="whitespace-pre-wrap break-all text-xs">{JSON.stringify(meta.params ?? {}, null, 2)}</pre>
         </dd>
@@ -53,7 +52,7 @@ export function DetailOntologie({ action }: { action: Action }) {
         <ul className="mt-3 space-y-1 text-xs" data-testid="ontologie-dossier">
           {effets.map((effet, position) => (
             <li key={`e${position}`} className="flex flex-wrap items-center gap-2">
-              <span>effect</span>
+              <span>Effect</span>
               <code>{effet.type ?? String(effet.index ?? position)}</code>
               {effet.status && <Statut statut={effet.status} />}
               {effet.url && <span className="text-ink-muted">{effet.url}</span>}
@@ -62,10 +61,10 @@ export function DetailOntologie({ action }: { action: Action }) {
           ))}
           {preuves.map((preuve, position) => (
             <li key={`p${position}`} className="flex flex-wrap items-center gap-2">
-              <span>evidence</span>
+              <span>Evidence</span>
               <code>{preuve.name ?? String(preuve.index ?? position)}</code>
               {preuve.status && <Statut statut={preuve.status} />}
-              {preuve.expect && <span className="text-ink-muted">expects {preuve.expect}</span>}
+              {preuve.expect && <span className="text-ink-muted">Expects {preuve.expect}</span>}
               {preuve.error && <span className="text-danger">{preuve.error}</span>}
             </li>
           ))}

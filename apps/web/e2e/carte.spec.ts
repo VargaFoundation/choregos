@@ -13,7 +13,7 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
   await expect(carte.locator("[data-etat]")).toHaveCount(18);
   await page.evaluate(() => document.fonts.ready);
   const mesure = await page.evaluate(() => {
-    const cases = [...document.querySelectorAll<HTMLElement>('[aria-label="nominal path"] > li [data-etat]')].map((el) =>
+    const cases = [...document.querySelectorAll<HTMLElement>('[aria-label="Nominal path"] > li [data-etat]')].map((el) =>
       el.closest("div")!.getBoundingClientRect(),
     );
     const titres = [...document.querySelectorAll<HTMLElement>("[data-etat] [data-titre]")].map((el) =>
@@ -34,7 +34,7 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
   // Un titre par état : sans eux, Math.min() rendrait Infinity et l'assertion suivante passerait à vide.
   expect(mesure.titres).toBe(18);
   expect(mesure.plusPetitTitre).toBeGreaterThanOrEqual(13);
-  await expect(carte.getByRole("list", { name: "off the main path" }).locator(":scope > li")).toHaveCount(5);
+  await expect(carte.getByRole("list", { name: "Off the main path" }).locator(":scope > li")).toHaveCount(5);
 });
 
 test("le panneau reste à portée quand on descend la carte", async ({ page }) => {
@@ -53,7 +53,7 @@ test("Tab atteint une flèche, Entrée ouvre le panneau de sa transition", async
   await expect(page.getByTestId("transition-t-implement")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("panneau-transition")).toBeVisible();
-  await expect(page.getByText("transition t-implement", { exact: true })).toBeVisible();
+  await expect(page.getByText("Transition t-implement", { exact: true })).toBeVisible();
 });
 
 test("la carte s'ouvre en serpentin, sans déborder, et une étape cliquée ouvre sa transition (S22-05)", async ({ page }) => {
@@ -65,7 +65,7 @@ test("la carte s'ouvre en serpentin, sans déborder, et une étape cliquée ouvr
   expect(debord).toBeLessThanOrEqual(0);
   await carte.getByTestId("etape-t-implement").click();
   await expect(page.getByTestId("panneau-transition")).toBeVisible();
-  await page.getByRole("button", { name: "list" }).click();
+  await page.getByRole("button", { name: "List" }).click();
   await expect(page).toHaveURL(/vue=list/);
   await expect(page.getByTestId("workflow-graph")).toBeVisible();
 });

@@ -23,9 +23,9 @@ export default function InboxPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>what waits for a person</Eyebrow>
+        <Eyebrow>What waits for a person</Eyebrow>
         <Heading as="h1" size="xl">
-          inbox
+          Inbox
         </Heading>
         <p className="max-w-3xl text-sm text-ink-muted">
           Everything in organisation {org} that cannot move until someone decides: a ticket that asks for an
@@ -36,15 +36,15 @@ export default function InboxPage() {
       {boite.erreur && <ErrorNote>{String(boite.erreur)}</ErrorNote>}
       {boite.projetsIllisibles.length > 0 && (
         <ErrorNote>
-          the tickets of {boite.projetsIllisibles.join(", ")} could not be read: what waits there is not listed.
+          The tickets of {boite.projetsIllisibles.join(", ")} could not be read: what waits there is not listed.
         </ErrorNote>
       )}
 
-      <Card title="tickets" action={<span className="text-xs text-ink-muted">{boite.tickets.length} waiting</span>}>
+      <Card title="Tickets" action={<span className="text-xs text-ink-muted">{boite.tickets.length} waiting</span>}>
         {!boite.pret ? (
-          <p className="text-sm text-ink-muted">reading…</p>
+          <p className="text-sm text-ink-muted">Reading…</p>
         ) : boite.tickets.length === 0 ? (
-          <Empty title="no ticket waits">Every ticket in flight is in the hands of an agent or the platform.</Empty>
+          <Empty title="No ticket waits">Every ticket in flight is in the hands of an agent or the platform.</Empty>
         ) : (
           <ul className="divide-y divide-line" data-testid="tickets-en-attente">
             {boite.tickets.map(({ item, demande, enRetard }) => (
@@ -57,7 +57,7 @@ export default function InboxPage() {
                 </div>
                 <p className="text-sm">{resumeDeDemande(demande)}</p>
                 <p className="text-xs text-ink-muted">
-                  {item.project_slug} · {item.tracker_key} · {item.state_display ?? item.state} · asked{" "}
+                  <span data-donnee>{item.project_slug}</span> · {item.tracker_key} · {item.state_display ?? item.state} · asked{" "}
                   {relative(demande.requested_at)}
                   {demande.due_at && (
                     <span className={enRetard ? "font-medium text-danger" : undefined}>
@@ -69,7 +69,7 @@ export default function InboxPage() {
                 {demande.kind === "task" ? (
                   // Un formulaire et une attestation ne tiennent pas dans une ligne : la page du ticket.
                   <Link href={`/p/${item.project_slug}/items/${item.id}`} className="text-sm">
-                    do the task
+                    Do the task
                   </Link>
                 ) : (
                   <DecisionBar
@@ -85,16 +85,16 @@ export default function InboxPage() {
         )}
       </Card>
 
-      <Card title="actions to approve" action={<span className="text-xs text-ink-muted">{boite.actions.length} waiting</span>}>
+      <Card title="Actions to approve" action={<span className="text-xs text-ink-muted">{boite.actions.length} waiting</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           Writes into systems that are not ours — an account, a laptop order, a badge — run only once a person approves
           them, with a recent sign-in. The platform runs them afterwards, effect by effect, and undoes what it did if a
           later effect is refused.
         </p>
         {!boite.pret ? (
-          <p className="text-sm text-ink-muted">reading…</p>
+          <p className="text-sm text-ink-muted">Reading…</p>
         ) : boite.actions.length === 0 ? (
-          <Empty title="nothing waits">No action needs a decision.</Empty>
+          <Empty title="Nothing waits">No action needs a decision.</Empty>
         ) : (
           <ul className="space-y-2" data-testid="boite">
             {boite.actions.map((action) => (
@@ -107,7 +107,7 @@ export default function InboxPage() {
                 </Link>
                 <Statut statut={action.status} />
                 <span className="text-xs text-ink-muted">
-                  {action.project_slug} · proposed by {propose(action.proposed_by)}
+                  <span data-donnee>{action.project_slug}</span> · proposed by {propose(action.proposed_by)}
                   {action.created_at ? ` · ${relative(action.created_at)}` : ""}
                 </span>
               </li>

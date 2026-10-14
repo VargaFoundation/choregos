@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 
 const pousser = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pousser }) }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -36,26 +36,26 @@ function ouvrir() {
 /** Jusqu'au récapitulatif, sans dépôt. */
 function remplir() {
   fireEvent.click(screen.getByLabelText(/no code repository/));
-  fireEvent.click(screen.getByRole("button", { name: "next" }));
-  fireEvent.change(screen.getByLabelText("identifier (slug)"), { target: { value: "people-ops" } });
-  fireEvent.click(screen.getByRole("button", { name: "next" }));
-  fireEvent.click(screen.getByRole("button", { name: "next" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  fireEvent.change(screen.getByLabelText("Identifier (slug)"), { target: { value: "people-ops" } });
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
 }
 
 describe("l'assistant de création d'un projet (S23-06)", () => {
   it("dit pourquoi « next » attend, et récapitule en mots, pas en clés", () => {
     ouvrir();
     fireEvent.click(screen.getByLabelText(/no code repository/));
-    fireEvent.click(screen.getByRole("button", { name: "next" }));
-    expect(screen.getByRole("button", { name: "next" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "next" })).toHaveAccessibleDescription("an identifier is needed to go on");
-    fireEvent.change(screen.getByLabelText("identifier (slug)"), { target: { value: "people-ops" } });
-    expect(screen.queryByText("an identifier is needed to go on")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "next" }));
-    fireEvent.click(screen.getByRole("button", { name: "next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next" })).toHaveAccessibleDescription("an identifier is needed to go on");
+    fireEvent.change(screen.getByLabelText("Identifier (slug)"), { target: { value: "people-ops" } });
+    expect(screen.queryByText("An identifier is needed to go on")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     const recap = screen.getByTestId("recapitulatif");
-    expect(recap).toHaveTextContent("identifier");
+    expect(recap).toHaveTextContent("Identifier");
     expect(recap).not.toHaveTextContent("sansDepot");
   });
 
@@ -64,11 +64,11 @@ describe("l'assistant de création d'un projet (S23-06)", () => {
     remplir();
 
     // Le projet se crée, le tracker est refusé : l'erreur le dit, et « retry » ne recrée pas le projet.
-    fireEvent.click(screen.getByRole("button", { name: "create" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByText(/people-ops was created, but connecting its tracker failed/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "open the project" })).toHaveAttribute("href", "/p/people-ops");
-    expect(screen.getByRole("button", { name: "previous" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(pousser).toHaveBeenCalledWith("/p/people-ops"));
     expect(api.createProject).toHaveBeenCalledTimes(1);
     expect(api.putConnector).toHaveBeenCalledTimes(2);

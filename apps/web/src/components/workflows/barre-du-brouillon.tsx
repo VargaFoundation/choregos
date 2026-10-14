@@ -30,16 +30,16 @@ export function BarreDuBrouillon() {
           </p>
           <span className="ml-auto inline-flex gap-2">
             <Button size="sm" onClick={() => void brouillon.annuler()} disabled={brouillon.occupe}>
-              undo
+              Undo
             </Button>
             <GesteConfirme
               tonDuBouton="default"
-              question={`discard ${brouillon.enAttente} unpublished change${brouillon.enAttente > 1 ? "s" : ""}? the workflow goes back to v${brouillon.definition.data?.version ?? "?"} — undo cannot bring them back.`}
-              confirmer="discard my changes"
+              question={`Discard ${brouillon.enAttente} unpublished change${brouillon.enAttente > 1 ? "s" : ""}? The workflow goes back to v${brouillon.definition.data?.version ?? "?"} — undo cannot bring them back.`}
+              confirmer="Discard my changes"
               action={brouillon.recharger}
               disabled={brouillon.occupe}
             >
-              discard
+              Discard
             </GesteConfirme>
             <Button
               size="sm"
@@ -47,28 +47,28 @@ export function BarreDuBrouillon() {
               onClick={() => void brouillon.publier().then(setMessage)}
               disabled={!brouillon.publiable || Boolean(conflit)}
             >
-              publish v{(brouillon.definition.data?.version ?? 0) + 1}
+              Publish v{(brouillon.definition.data?.version ?? 0) + 1}
             </Button>
           </span>
         </div>
       )}
       {validation.etat === "injoignable" && (
         <ErrorNote>
-          could not validate the text: {validation.message} — publishing waits for a verdict.{" "}
+          Could not validate the text: {validation.message} — publishing waits for a verdict.{" "}
           <button type="button" className="underline" onClick={brouillon.revalider}>
-            retry
+            Retry
           </button>
         </ErrorNote>
       )}
       {conflit && (
         <div className="space-y-2 rounded border border-warn p-2 text-sm" role="alert" data-testid="conflit">
           <p>
-            someone published a newer version meanwhile: you started from v{conflit.versionLue}, the workflow is now
+            Someone published a newer version meanwhile: you started from v{conflit.versionLue}, the workflow is now
             v{conflit.versionPubliee}.
           </p>
           <span className="inline-flex gap-2">
             <Button size="sm" onClick={() => void brouillon.recharger()} disabled={brouillon.occupe}>
-              reload v{conflit.versionPubliee} (discard my changes)
+              Reload v{conflit.versionPubliee} (discard my changes)
             </Button>
             <Button
               size="sm"
@@ -76,7 +76,7 @@ export function BarreDuBrouillon() {
               onClick={() => void brouillon.ecraser().then(setMessage)}
               disabled={brouillon.occupe || !brouillon.valide}
             >
-              publish over v{conflit.versionPubliee}
+              Publish over v{conflit.versionPubliee}
             </Button>
           </span>
         </div>
@@ -91,7 +91,7 @@ export function BarreDuBrouillon() {
       ))}
       {brouillon.dernierDiff && (
         <details>
-          <summary className="cursor-pointer text-xs text-ink-muted">last change</summary>
+          <summary className="cursor-pointer text-xs text-ink-muted">Last change</summary>
           <pre className="mt-1 whitespace-pre-wrap break-all text-xs" data-testid="dernier-diff">
             {brouillon.dernierDiff}
           </pre>
