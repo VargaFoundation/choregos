@@ -4,7 +4,7 @@ the last sign-in through it, and `connector_operations.approver_group`, the grou
 approve the actions an operation proposes.
 
 Revision ID: 3d5f7b9c1e2a
-Revises: 9e41c7a0d35b
+Revises: d6f8b0c2e4a6
 Create Date: 2026-10-13 10:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "3d5f7b9c1e2a"
-down_revision: str | None = "9e41c7a0d35b"
+down_revision: str | None = "d6f8b0c2e4a6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
