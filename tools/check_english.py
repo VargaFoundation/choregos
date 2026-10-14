@@ -306,7 +306,10 @@ def _ends(diff_range: str) -> tuple[str, str]:
 
 
 def scan_range(base: str, head: str) -> list[Finding]:
-    diff = _git("diff", "--unified=0", "--no-color", "--no-ext-diff", "-M", "--diff-filter=AMR", base, head)
+    # `-C`: a file renamed with a redirect left at its old name is a copy, not new lines (S34-05).
+    diff = _git(
+        "diff", "--unified=0", "--no-color", "--no-ext-diff", "-M", "-C", "--diff-filter=ACMR", base, head
+    )
     found = []
     for path, added in sorted(added_lines(diff).items()):
         if is_scanned(path):
