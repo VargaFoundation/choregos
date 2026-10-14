@@ -3430,6 +3430,12 @@ components:
         state_mapping: { type: object, additionalProperties: { type: string } }
         run_id: { type: [string, "null"] }
         reason: { type: [string, "null"] }
+        top_up_usd:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: >-
+            `rerun_stage`: USD granted on top of the work item's budget, recorded in the audit log.
+            Required when the budget is spent — otherwise 409 (ADR 0047).
     RunSummary:
       type: object
       required: [id, status, stage_role]

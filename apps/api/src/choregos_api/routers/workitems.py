@@ -437,6 +437,36 @@ async def _cible_de_migration(
     return cible.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
+async def _grant_top_up(
+    session: Any, principal: Any, project: Project, item: WorkItem, top_up_usd: float | None
+) -> None:
+    """ "Replay the stage" on a work item whose budget is spent needs a stated top-up (S27-04, ADR
+    0047): the click no longer re-opens money nobody granted. A top-up adds to the ticket budget and
+    is recorded in the audit log, with who granted it."""
+    from ..services import policy_engine
+    from ..services.budgets import DEFAULT_FLOOR_USD, ticket_left
+
+    if top_up_usd is None:
+        left = await ticket_left(session, await policy_engine(session, project.id), item)
+        if left < DEFAULT_FLOOR_USD:
+            raise conflict(
+                f"the work item's budget is spent ({left:.2f} $ left): replaying the stage needs a "
+                "top-up — send `top_up_usd`"
+            )
+        return
+    item.budget_top_up_usd = round(float(item.budget_top_up_usd or 0.0) + top_up_usd, 6)
+    await record(
+        session,
+        principal,
+        "workitem.budget_top_up",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        top_up_usd=top_up_usd,
+        total_top_up_usd=item.budget_top_up_usd,
+    )
+
+
 @router.post(
     "/work-items/{id}/actions", status_code=status.HTTP_202_ACCEPTED, operation_id="postWorkItemAction"
 )
@@ -458,6 +488,8 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
         await get_temporal().start_interpreter(workflow_id, payload)
         item.temporal_wf_id = workflow_id
     else:
+        if body.action == "rerun_stage":
+            await _grant_top_up(session, principal, project, item, body.top_up_usd)
         cible = await _cible_de_migration(session, item, project, body) if body.action == "migrate" else None
         control = Control(
             action=body.action,

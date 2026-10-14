@@ -30,8 +30,18 @@ def start_of_day() -> datetime:
 
 
 def ticket_budget(engine: Any, item: Any) -> float:
-    """The work item's budget: the policy's, for its CURRENT size (a refinement may change it)."""
-    return float(engine.budget_ticket(item.size))
+    """The work item's budget: the policy's, for its CURRENT size (a refinement may change it), plus
+    what people granted on top (S27-04)."""
+    return float(engine.budget_ticket(item.size)) + float(item.budget_top_up_usd or 0.0)
+
+
+async def ticket_left(session: AsyncSession, engine: Any, item: Any, exclude_run: str | None = None) -> float:
+    """What the work item may still spend: its budget, minus the ledger, minus its open keys."""
+    return (
+        ticket_budget(engine, item)
+        - await ticket_spent(session, item.id)
+        - await open_reservations(session, work_item_id=item.id, exclude_run=exclude_run)
+    )
 
 
 async def ticket_spent(session: AsyncSession, work_item_id: str) -> float:
@@ -118,5 +128,6 @@ __all__ = [
     "reserve",
     "start_of_day",
     "ticket_budget",
+    "ticket_left",
     "ticket_spent",
 ]

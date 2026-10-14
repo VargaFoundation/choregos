@@ -99,7 +99,9 @@ Arguments:
   action   pause|resume|stop|rerun_stage|mark_agent_ready  [required]
 
 Options:
-  --help  Show this message and exit.
+  --top-up <float>  rerun_stage: USD granted on top of a spent budget
+                    (audited)
+  --help            Show this message and exit.
 ```
 
 ### `choregos items answer`

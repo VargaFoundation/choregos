@@ -1349,6 +1349,8 @@ export type WorkItemAction = {
   };
   run_id?: string | null;
   reason?: string | null;
+  /** `rerun_stage`: USD granted on top of the work item's budget, recorded in the audit log. Required when the budget is spent — otherwise 409 (ADR 0047). */
+  top_up_usd?: number | null;
 };
 
 export type RunSummary = {
