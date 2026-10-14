@@ -47,7 +47,7 @@ def crossed(spent: float, budget: float | None, ratios: tuple[float, ...]) -> li
     return [round(ratio * 100) for ratio in ratios if spent >= ratio * budget]
 
 
-async def _raise(
+async def _raise(  # noqa: PLR0913 - one alert is these nine facts
     session: AsyncSession,
     *,
     org_id: str,
