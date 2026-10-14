@@ -135,6 +135,18 @@ class Settings(BaseSettings):
     object_store_secret_key: str = ""
     #: The largest file artifact the internal API accepts from a runner, in bytes (ADR 0049).
     artifact_max_bytes: int = 200 * 1024 * 1024
+
+    # Knowledge bases (ADR 0051)
+    #: The largest file an upload accepts; a bigger one is refused before it is read in full.
+    knowledge_max_upload_mib: int = 20
+    #: How many documents one knowledge base holds.
+    knowledge_max_documents: int = 500
+    #: The largest markdown a conversion may produce; past it the document fails, it is not cut.
+    knowledge_max_markdown_mib: int = 8
+    #: A conversion runs in a child process, killed past this delay.
+    knowledge_conversion_timeout_s: float = 120.0
+    #: How many conversions run at once in one API replica.
+    knowledge_conversion_concurrency: int = 2
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
 

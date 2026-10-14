@@ -23,6 +23,7 @@ from .config import get_settings
 from .db.session import create_all, dispose_engine
 from .errors import install_error_handlers, internal_error
 from .events import RelaisPostgres
+from .knowledge.conversion import conversions
 from .logging import bind, clear, configure_logging, get_logger
 from .metriques import boucle_de_rafraichissement, exposer, requetes_http
 from .routers import (
@@ -35,6 +36,7 @@ from .routers import (
     findings,
     integrations,
     internal,
+    knowledge,
     memory,
     models,
     org_connectors,
@@ -74,7 +76,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # en accusant les migrations, alors que c'est l'API qui avait pris leur place.
         await create_all()
         await amorcer(settings)
+    # Conversions a stopped replica left behind (ADR 0051): pending ones, and stale `converting`.
+    await conversions.recover()
     yield
+    # A conversion cut here stays `converting`; the next start-up takes it back once stale.
+    await conversions.stop()
     if relais is not None:
         await relais.arreter()
     rafraichissement.cancel()
@@ -270,6 +276,7 @@ def create_app() -> FastAPI:
         admin.router,
         agents.router,
         skills.router,
+        knowledge.router,
         webhooks.router,
         internal.router,
     )

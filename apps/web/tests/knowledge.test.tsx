@@ -1,0 +1,108 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Suspense } from "react";
+import { describe, expect, it, vi } from "vitest";
+import KnowledgeBasePage from "@/app/knowledge/[slug]/page";
+import KnowledgePage from "@/app/knowledge/page";
+import { api } from "@/lib/api";
+import { scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
+import type { KnowledgeBase } from "@/lib/types";
+
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
+vi.mock("@/lib/api", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/api")>();
+  return {
+    ...real,
+    api: {
+      ...real.api,
+      knowledgeBases: vi.fn(),
+      knowledgeBase: vi.fn(),
+      createKnowledgeBase: vi.fn(),
+      uploadKnowledgeDocument: vi.fn(),
+      knowledgeDocument: vi.fn(),
+      convertKnowledgeDocument: vi.fn(),
+    },
+  };
+});
+
+const base: KnowledgeBase = {
+  slug: "architecture",
+  name: "Architecture framework",
+  scope: "projects",
+  projects: ["billing-api"],
+  groups: [],
+  serving_mode: "files",
+  status: "active",
+  document_count: 2,
+  documents_by_status: { ready: 1, failed: 1 },
+  documents: [
+    { id: "d1", filename: "zoning.pptx", title: "Network zoning principles", mime: "x", size_bytes: 29000, digest: "sha256:a", source: "upload", status: "ready" },
+    { id: "d2", filename: "scan.pdf", title: "scan.pdf", mime: "application/pdf", size_bytes: 4000, digest: "sha256:b", source: "upload", status: "failed", error: "the document holds no text" },
+  ],
+};
+
+function wrap(node: React.ReactNode) {
+  return render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <Suspense fallback="…">{node}</Suspense>
+    </QueryClientProvider>,
+  );
+}
+
+describe("what the knowledge pages say", () => {
+  it("a scope in words, documents by status, and whether a conversion still runs", () => {
+    expect(scopeLabel({ scope: "org", projects: [], groups: [] })).toBe("whole organisation");
+    expect(scopeLabel({ scope: "groups", projects: [], groups: ["auditors"] })).toBe("groups: auditors");
+    expect(statusSummary({ failed: 1, ready: 3 })).toBe("3 ready · 1 failed");
+    expect(statusSummary({})).toBe("no document");
+    expect(stillConverting({ documents_by_status: { ready: 2 } })).toBe(false);
+    expect(stillConverting({ documents_by_status: { converting: 1 } })).toBe(true);
+  });
+});
+
+describe("the knowledge page (S33-01)", () => {
+  it("lists the bases with their scope and documents, and creates one", async () => {
+    vi.mocked(api.knowledgeBases).mockResolvedValue([{ ...base, documents: null }]);
+    vi.mocked(api.createKnowledgeBase).mockResolvedValue(base);
+    wrap(<KnowledgePage />);
+    const table = await screen.findByTestId("knowledge-bases");
+    expect(table).toHaveTextContent("Architecture framework");
+    expect(table).toHaveTextContent("projects: billing-api");
+    expect(table).toHaveTextContent("1 ready · 1 failed");
+
+    fireEvent.change(screen.getByPlaceholderText("architecture-framework"), { target: { value: "security" } });
+    fireEvent.click(screen.getByRole("button", { name: "create" }));
+    await waitFor(() => expect(api.createKnowledgeBase).toHaveBeenCalled());
+    expect(vi.mocked(api.createKnowledgeBase).mock.calls[0]).toEqual([
+      "varga",
+      { slug: "security", name: "security", scope: "org", serving_mode: "files", projects: [], groups: [] },
+    ]);
+  });
+
+  it("a base shows each document's status, the reason of a failure, and its markdown", async () => {
+    vi.mocked(api.knowledgeBase).mockResolvedValue(base);
+    vi.mocked(api.knowledgeDocument).mockResolvedValue({ ...base.documents![0]!, markdown: "# Network zoning principles\n" });
+    await act(async () => {
+      wrap(<KnowledgeBasePage params={Promise.resolve({ slug: "architecture" })} />);
+    });
+    const documents = await screen.findByTestId("knowledge-documents");
+    expect(documents).toHaveTextContent("ready");
+    expect(documents).toHaveTextContent("the document holds no text");
+    expect(screen.getAllByRole("button", { name: "convert again" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Network zoning principles" }));
+    expect(await screen.findByTestId("knowledge-markdown")).toHaveTextContent("# Network zoning principles");
+  });
+
+  it("uploads each chosen file", async () => {
+    vi.mocked(api.knowledgeBase).mockResolvedValue({ ...base, documents: [] });
+    vi.mocked(api.uploadKnowledgeDocument).mockResolvedValue({ ...base.documents![0]!, status: "pending" });
+    await act(async () => {
+      wrap(<KnowledgeBasePage params={Promise.resolve({ slug: "architecture" })} />);
+    });
+    const input = await screen.findByLabelText("documents to upload");
+    const deck = new File(["x"], "zoning.pptx");
+    fireEvent.change(input, { target: { files: [deck] } });
+    await waitFor(() => expect(api.uploadKnowledgeDocument).toHaveBeenCalledWith("varga", "architecture", deck));
+    expect(await screen.findByRole("status")).toHaveTextContent("zoning.pptx: pending");
+  });
+});

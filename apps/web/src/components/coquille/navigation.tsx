@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { BookOpen, Bot, FolderKanban, Inbox, Plug, Settings, type LucideIcon } from "lucide-react";
+import { BookOpen, Bot, FolderKanban, Inbox, Library, Plug, Settings, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useId } from "react";
 import { cn } from "@/lib/cn";
@@ -13,6 +13,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/", label: "projects", icone: FolderKanban },
   { href: "/agents", label: "agents", icone: Bot },
   { href: "/skills", label: "skills", icone: BookOpen },
+  { href: "/knowledge", label: "knowledge", icone: Library },
   { href: "/inbox", label: "inbox", icone: Inbox },
   { href: "/integrations", label: "AI clients", icone: Plug },
   { href: "/admin", label: "admin", icone: Settings },
@@ -25,7 +26,7 @@ export function entreeActive(href: string, pathname: string): boolean {
 /** Les entrées, rangées : le travail, ce qu'on y branche, l'organisation. */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
   { titre: "work", entrees: ["/", "/inbox"] },
-  { titre: "catalogue", entrees: ["/agents", "/skills", "/integrations"] },
+  { titre: "catalogue", entrees: ["/agents", "/skills", "/knowledge", "/integrations"] },
   { titre: "organisation", entrees: ["/admin"] },
 ];
 

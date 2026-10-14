@@ -648,6 +648,67 @@ export type Skill = {
   versions?: Array<SkillVersion> | null;
 };
 
+export type KnowledgeBaseCreate = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  /** `org`: every project; `projects`: the listed ones; `groups`: humans of the listed IdP groups (never a run) */
+  scope?: "org" | "projects" | "groups";
+  projects?: Array<string>;
+  groups?: Array<string>;
+  /** `files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search */
+  serving_mode?: "files" | "index";
+};
+
+export type KnowledgeBasePatch = {
+  name?: string | null;
+  description?: string | null;
+  scope?: "org" | "projects" | "groups" | null;
+  projects?: Array<string> | null;
+  groups?: Array<string> | null;
+  serving_mode?: "files" | "index" | null;
+  status?: "active" | "archived" | null;
+};
+
+export type KnowledgeDocument = {
+  id: string;
+  filename: string;
+  /** the format's own title, else the first heading, else the file name */
+  title: string;
+  mime: string;
+  size_bytes: number;
+  /** sha256 of the uploaded bytes */
+  digest: string;
+  /** `upload` */
+  source: string;
+  status: "pending" | "converting" | "ready" | "failed";
+  error?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  converted_at?: string | null;
+  /** returned by the reading of one document */
+  markdown?: string | null;
+};
+
+export type KnowledgeBase = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  scope: "org" | "projects" | "groups";
+  projects?: Array<string>;
+  groups?: Array<string>;
+  serving_mode: "files" | "index";
+  status: string;
+  document_count?: number;
+  documents_by_status?: {
+    [key: string]: number;
+  };
+  created_by?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  documents?: Array<KnowledgeDocument> | null;
+};
+
 export type WorkflowIssue = {
   code: string;
   message: string;
@@ -1442,7 +1503,9 @@ export interface Operations {
   remaining?: number;
 } };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
+  convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
+  createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
@@ -1453,6 +1516,7 @@ export interface Operations {
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
+  deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
@@ -1473,6 +1537,8 @@ export interface Operations {
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
+  getKnowledgeBase: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}"; body: never; response: KnowledgeBase };
+  getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
@@ -1582,6 +1648,7 @@ export interface Operations {
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
+  listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -1652,10 +1719,12 @@ export interface Operations {
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
+  updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };
+  uploadKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents"; body: void; response: KnowledgeDocument };
   validateWorkflow: { method: "POST"; path: "/workflows/validate"; body: WorkflowValidateRequest; response: WorkflowValidation };
 }
 
