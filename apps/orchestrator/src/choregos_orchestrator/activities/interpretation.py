@@ -46,6 +46,8 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "ticket_budget_usd": ticket_budget(bundle.engine, item),
             # What the ticket has cost so far, models and tools (S27-03): a restart keeps it.
             "ticket_cost_usd": await ticket_spent(session, item.id),
+            # The policy's ceiling on a transition's attempts, by role (S27-08).
+            "attempts_ceilings": bundle.engine.attempts_ceilings(),
             "tracker_key": item.tracker_key,
             "project_slug": bundle.slug,
             # Ce que lit une date d'action (`not_before`, S20-05) ; un changement arrive ensuite

@@ -119,20 +119,24 @@ class WorkflowEngine:
         retry = transition.on_fail or transition.on_changes_requested
         return retry.max_attempts if retry else 1
 
-    def retry_or_escalate(self, transition: Transition, attempts: int, reason: str = "") -> Decision:
-        """Rejoue la transition tant que `max_attempts` n'est pas atteint, puis escalade."""
+    def retry_or_escalate(
+        self, transition: Transition, attempts: int, reason: str = "", ceiling: int | None = None
+    ) -> Decision:
+        """Replays the transition until `max_attempts` is reached, then escalates.
+
+        `ceiling` is the policy's (`attempts.by_role`, S27-08): it only lowers the
+        workflow's `max_attempts`."""
         retry = transition.on_fail or transition.on_changes_requested
         if retry is None:
             fallback = self._default_state("on_question") or transition.from_
             return Decision(fallback, escalated=True, reason=reason or "failed, with no retry policy")
-        if attempts < retry.max_attempts:
-            return Decision(
-                retry.to, retried=True, reason=reason or f"tentative {attempts + 1}/{retry.max_attempts}"
-            )
+        allowed = min(retry.max_attempts, ceiling) if ceiling is not None else retry.max_attempts
+        if attempts < allowed:
+            return Decision(retry.to, retried=True, reason=reason or f"tentative {attempts + 1}/{allowed}")
         return Decision(
             retry.escalate_to,
             escalated=True,
-            reason=reason or f"{retry.max_attempts} attempts exhausted",
+            reason=reason or f"{allowed} attempts exhausted",
         )
 
     def escalate(self, transition: Transition, reason: str) -> Decision:
@@ -149,6 +153,7 @@ class WorkflowEngine:
         attempts: int,
         gate_outcomes: list[GateOutcome] | None = None,
         *,
+        ceiling: int | None = None,
         require_outputs: bool = True,
     ) -> Decision:
         """Décide de l'état suivant après un run d'agent (docs/plan/02 §2.1).
@@ -161,7 +166,9 @@ class WorkflowEngine:
             target = self._default_state("on_question")
             if target:
                 return Decision(target, reason=result.reason or "the agent asks a person to arbitrate")
-            return self.retry_or_escalate(transition, attempts, "the agent asks a person to arbitrate")
+            return self.retry_or_escalate(
+                transition, attempts, "the agent asks a person to arbitrate", ceiling
+            )
         if result.status is not StageStatus.DONE:
             if result.reason == "budget":
                 target = self._default_state("on_budget_exceeded")
@@ -171,7 +178,7 @@ class WorkflowEngine:
                 target = self._default_state("on_timeout")
                 if target:
                     return Decision(target, reason=f"limite atteinte ({result.reason})")
-            return self.retry_or_escalate(transition, attempts, result.reason or str(result.status))
+            return self.retry_or_escalate(transition, attempts, result.reason or str(result.status), ceiling)
 
         if require_outputs:
             # An output an old core template declared and nothing produces is not required: a
@@ -181,13 +188,13 @@ class WorkflowEngine:
             missing = missing_outputs(required, dict(transition.output_types), result)
             if missing:
                 return self.retry_or_escalate(
-                    transition, attempts, f"missing declared outputs: {', '.join(missing)}"
+                    transition, attempts, f"missing declared outputs: {', '.join(missing)}", ceiling
                 )
 
         blocking = [g for g in gate_outcomes if g.blocking]
         if blocking:
             names = ", ".join(f"{g.name} ({g.detail})" for g in blocking)
-            return self.retry_or_escalate(transition, attempts, f"failing gates: {names}")
+            return self.retry_or_escalate(transition, attempts, f"failing gates: {names}", ceiling)
         pending = [g for g in gate_outcomes if g.pending]
         if pending:
             names = ", ".join(g.name for g in pending)
@@ -211,6 +218,15 @@ class WorkflowEngine:
             or transition.from_
         )
         return Decision(target, escalated=True, reason=f"budget: {detail}" if detail else "budget")
+
+    def after_stage_cap(self, transition: Transition, detail: str = "") -> Decision:
+        """The work item ran all the agent stages the policy allows (`max_stages_per_ticket`,
+        S27-08): a person decides — `on_question`, else `escalate_to`, else where it started."""
+        retry = transition.on_fail or transition.on_changes_requested
+        target = (
+            self._default_state("on_question") or (retry.escalate_to if retry else None) or transition.from_
+        )
+        return Decision(target, escalated=True, reason=f"stage cap: {detail}" if detail else "stage cap")
 
     def after_human(self, transition: Transition, approved: bool, reason: str = "") -> Decision:
         if approved:

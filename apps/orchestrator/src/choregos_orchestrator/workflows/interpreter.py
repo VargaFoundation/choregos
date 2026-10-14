@@ -109,6 +109,9 @@ IDENTICAL_FAILURE_ESCALATES = "identical-failure-escalates"
 #: (S27-02, ADR 0047): the stage is then sent to a person without a run. Before this marker,
 #: `prepare_stage` never refused on budget.
 BUDGET_RESERVATION = "budget-reservation"
+#: The policy's `attempts.by_role` caps an agent transition's `max_attempts` (S27-08). Before
+#: this marker it was read by no one.
+POLICY_ATTEMPTS_CEILING = "policy-attempts-ceiling"
 #: The ticket's spend is read from the cost ledger — models and tools — at start and after each
 #: stage (S27-03, ADR 0047). Before this marker it lived in workflow memory, summed from model
 #: spend only, and a restarted interpreter started again at zero.
@@ -418,8 +421,9 @@ class WorkflowInterpreter:
                 retry_policy=DEFAULT_RETRY,
             )
             if prepared.get("refused") and workflow.patched(BUDGET_RESERVATION):
-                return await self._refused_on_budget(
-                    params, engine, transition, str(prepared["refused"]["detail"])
+                refused = prepared["refused"]
+                return await self._refused(
+                    params, engine, transition, str(refused["reason"]), str(refused["detail"])
                 )
             run_id = prepared["run_id"]
             self.current_run = run_id
@@ -512,6 +516,7 @@ class WorkflowInterpreter:
                 self._essais(key),
                 outcomes,
                 require_outputs=workflow.patched(DECLARED_OUTPUTS_REQUIRED),
+                ceiling=_attempts_ceiling(context, actor),
             )
             decision = self._identical_failure(engine, transition, result, decision)
         if decision.next_state == engine.question_state() and result.status is StageStatus.NEEDS_HUMAN:
@@ -609,17 +614,21 @@ class WorkflowInterpreter:
         self.failure_signatures[transition.key] = signature
         return decision
 
-    async def _refused_on_budget(
-        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, detail: str
+    async def _refused(
+        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, reason: str, detail: str
     ) -> Any:
-        """Too little left to start the stage (ADR 0047): no key, no run — a person decides."""
-        decision = engine.after_budget_exceeded(transition, detail[:200])
+        """The stage did not start (ADR 0047) — too little budget left, or the work item ran every
+        stage the policy allows: no key, no run, a person decides."""
+        if reason == "max_stages":
+            decision = engine.after_stage_cap(transition, detail[:200])
+        else:
+            decision = engine.after_budget_exceeded(transition, detail[:200])
         if decision.next_state == engine.question_state():
             await self._create_request(
                 params,
                 transition,
                 kind="approval",
-                payload={"question": detail, "options": [], "summary": detail, "reason": "budget"},
+                payload={"question": detail, "options": [], "summary": detail, "reason": reason},
             )
         return decision
 
@@ -1226,3 +1235,14 @@ def _de_cet_environnement(event: dict[str, Any], env: str) -> bool:
     Sans environnement dit — un événement porté à la main, d'avant ADR 0041 —, il compte."""
     vise = (event.get("payload") or {}).get("env")
     return vise is None or str(vise) == env
+
+
+def _attempts_ceiling(context: dict[str, Any], actor: Any) -> int | None:
+    """The policy's ceiling on this transition's attempts (`attempts.by_role`, S27-08); `None`
+    when the policy names none for the role, or for a history recorded before
+    `POLICY_ATTEMPTS_CEILING`."""
+    ceilings = context.get("attempts_ceilings")
+    if not ceilings or not workflow.patched(POLICY_ATTEMPTS_CEILING):
+        return None
+    ceiling = ceilings.get(str(actor.role))
+    return int(ceiling) if ceiling else None

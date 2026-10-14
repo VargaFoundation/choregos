@@ -20,7 +20,6 @@ budgets:
 # dans le WORKFLOW (acteur humain sur une transition, `train.approval`) ; staging et prod restent
 # approuvés par `release_train.<env>.approval`, que le train applique.
 attempts:
-  default_max: 2
   by_role: { implement: 2, fix_ci: 2 }
   dod_iterations: 2
 scope:

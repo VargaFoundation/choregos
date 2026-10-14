@@ -129,6 +129,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             return {"run_id": run_id, "stage_input": existing.stage_input, "reused": True}
 
         engine = bundle.engine
+        if (refused := await _stage_cap(session, bundle, item, run_id, plan)) is not None:
+            return refused
         # Un agent du registre (ADR 0033) : sa version effective — l'épinglée du projet, surcharges
         # appliquées — fixe modèle, backend, limites et budget, et ses instructions remplacent le
         # playbook. Un agent révoqué, suspendu ou expiré ne part pas.
@@ -415,6 +417,30 @@ async def _reservation(
             - await open_reservations(session, project_id=bundle.project.id, exclude_run=run_id)
         )
     return reserve(left)
+
+
+async def _stage_cap(
+    session: Any, bundle: Any, item: Any, run_id: str, plan: StagePlan
+) -> dict[str, Any] | None:
+    """The work item ran every agent stage the policy allows (`attempts.max_stages_per_ticket`,
+    S27-08): no key, no run, a person decides. Counted from the runs table, so a restart, a replay or
+    a resume does not reset it."""
+    from sqlalchemy import func
+
+    cap = bundle.engine.max_stages_per_ticket()
+    ran = (
+        await session.execute(
+            select(func.count()).select_from(Run).where(Run.work_item_id == item.id, Run.id != run_id)
+        )
+    ).scalar_one()
+    if ran < cap:
+        return None
+    logger.info("stage refused: stage cap", run_id=run_id, ran=ran, cap=cap)
+    detail = (
+        f"the stage `{plan.role}` did not start: the work item already ran {ran} agent stages, "
+        f"the policy's max_stages_per_ticket is {cap}"
+    )
+    return {"run_id": run_id, "refused": {"reason": "max_stages", "detail": detail}}
 
 
 async def _refuse_on_budget(
