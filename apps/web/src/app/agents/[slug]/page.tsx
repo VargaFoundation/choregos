@@ -41,7 +41,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       </div>
       {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
       <Statut org={org} agent={a} />
-      <Card title="lifecycle">
+      <Card title="Lifecycle">
         <LifecyclePanel org={org} agent={a} />
       </Card>
       <Mesures org={org} slug={slug} />

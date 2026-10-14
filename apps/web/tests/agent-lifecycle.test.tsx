@@ -64,10 +64,10 @@ describe("the lifecycle of an agent, in the console (S32-04)", () => {
         forced: true,
       });
     render(wrap(<LifecyclePanel org="varga" agent={agent()} />));
-    fireEvent.click(screen.getByRole("button", { name: "retire…" }));
-    fireEvent.click(screen.getByRole("button", { name: "retire" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retire…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retire" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("HR-3"));
-    fireEvent.click(screen.getByRole("button", { name: "retire anyway" }));
+    fireEvent.click(screen.getByRole("button", { name: "Retire anyway" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("forced past the runs of HR-3"));
     expect(api.changeAgentLifecycle).toHaveBeenLastCalledWith("varga", "onboarding-coordinator", { to: "retired", force: true });
   });

@@ -33,9 +33,9 @@ export function nextMoves(lifecycle: Lifecycle): Array<"active" | "deprecated" |
 }
 
 const LIBELLE: Record<"active" | "deprecated" | "retired", (from: Lifecycle) => string> = {
-  active: (from) => (from === "draft" ? "activate" : "reactivate"),
-  deprecated: () => "deprecate",
-  retired: () => "retire…",
+  active: (from) => (from === "draft" ? "Activate" : "Reactivate"),
+  deprecated: () => "Deprecate",
+  retired: () => "Retire…",
 };
 
 export function LifecycleBadges({ agent }: { agent: Pick<Agent, "lifecycle" | "unused" | "last_run_at"> }) {
@@ -142,10 +142,10 @@ export function LifecyclePanel({ org, agent }: { org: string; agent: Agent }) {
             <span className="inline-flex flex-wrap items-center gap-2">
               its credentials are revoked, its pins removed, no new run starts — for good.
               <Button size="sm" tone="danger" onClick={() => void move("retired")}>
-                retire
+                Retire
               </Button>
               <Button size="sm" onClick={() => setConfirming(false)}>
-                cancel
+                Cancel
               </Button>
             </span>
           ) : (
@@ -159,19 +159,19 @@ export function LifecyclePanel({ org, agent }: { org: string; agent: Agent }) {
         <div className="space-y-1" role="alert">
           <p className="text-xs">{inFlight}</p>
           <Button size="sm" tone="danger" onClick={() => void move("retired", true)}>
-            retire anyway
+            Retire anyway
           </Button>
         </div>
       )}
       {lifecycle !== "retired" && (
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="transfer ownership to" className="min-w-0 flex-1">
+          <Field label="Transfer ownership to" className="min-w-0 flex-1">
             {(props) => (
               <Input {...props} type="email" placeholder="member@org" value={owner} onChange={(e) => setOwner(e.target.value)} />
             )}
           </Field>
           <Button size="sm" onClick={() => void transfer()} disabled={!owner.includes("@")}>
-            transfer
+            Transfer
           </Button>
         </div>
       )}
