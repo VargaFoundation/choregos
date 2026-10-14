@@ -7,7 +7,7 @@ a trusted extension: a superuser, or the cluster's bootstrap, must have created 
 when it exists is `embedding_vec` added. Without it, the index serves full-text only, and says so.
 
 Revision ID: e6a8b0c2d4f5
-Revises: 3d5f7b9c1e2a
+Revises: 1b3d5f7a9c0e
 Create Date: 2026-10-12 13:00:00+00:00
 """
 
@@ -22,7 +22,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "e6a8b0c2d4f5"
-down_revision: str | None = "3d5f7b9c1e2a"
+down_revision: str | None = "1b3d5f7a9c0e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
