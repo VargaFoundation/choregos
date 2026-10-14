@@ -77,3 +77,47 @@ describe("décision qui demande une authentification récente", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("unhandled API errors (S26-02)", () => {
+  it("shows the problem detail and the correlation id of a problem+json 500", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              title: "Internal server error",
+              status: 500,
+              detail: "an unexpected error occurred; quote the correlation id abc123 to the operators",
+              correlation_id: "abc123",
+            }),
+            { status: 500, headers: { "Content-Type": "application/problem+json", "X-Request-Id": "abc123" } },
+          ),
+      ),
+    );
+    const { api, ApiError } = await import("@/lib/api");
+    const error = await api.orgs().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    const apiError = error as InstanceType<typeof ApiError>;
+    expect(apiError.message).toBe("an unexpected error occurred; quote the correlation id abc123 to the operators");
+    expect(apiError.correlationId).toBe("abc123");
+    vi.unstubAllGlobals();
+  });
+
+  it("a plain-text 500 still carries the request id the API answered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("Internal Server Error", {
+            status: 500,
+            statusText: "Internal Server Error",
+            headers: { "Content-Type": "text/plain", "X-Request-Id": "req-9" },
+          }),
+      ),
+    );
+    const { api } = await import("@/lib/api");
+    await expect(api.orgs()).rejects.toThrow("Internal Server Error (correlation id req-9)");
+    vi.unstubAllGlobals();
+  });
+});

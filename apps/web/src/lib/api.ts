@@ -102,14 +102,46 @@ export function qualify(id: string): string {
   return `${currentOrg}:${id}`;
 }
 
+/** An RFC 9457 problem as the API answers it; `correlation_id` ties a 500 to the API's logs (S26-02). */
+export type Problem = { title?: string; detail?: string; errors?: unknown[]; correlation_id?: string };
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
-    readonly problem: { title?: string; detail?: string; errors?: unknown[] },
+    readonly problem: Problem,
   ) {
     super(problem.detail ?? problem.title ?? `request failed (HTTP ${status})`);
     this.name = "ApiError";
   }
+
+  /** The id to quote to the operators: the problem's, else the `X-Request-Id` the API answered. */
+  get correlationId(): string | undefined {
+    return this.problem.correlation_id;
+  }
+}
+
+/**
+ * The problem an error response carries. A problem+json body is read as is; any other body (a proxy's
+ * HTML page, a plain-text 500) becomes a problem titled with the HTTP status text. On a 5xx the
+ * correlation id is appended to the detail, so the console never shows a bare "Internal Server Error"
+ * without the id to look for in the logs.
+ */
+export async function problemOf(response: Response): Promise<Problem> {
+  const requestId = response.headers.get("x-request-id") ?? undefined;
+  let problem: Problem;
+  try {
+    const body: unknown = await response.json();
+    problem = typeof body === "object" && body !== null ? (body as Problem) : { title: response.statusText };
+  } catch {
+    problem = { title: response.statusText || `HTTP ${response.status}` };
+  }
+  if (!problem.correlation_id && requestId) problem = { ...problem, correlation_id: requestId };
+  const id = problem.correlation_id;
+  if (response.status >= 500 && id && !problem.detail?.includes(id)) {
+    const base = problem.detail ?? problem.title ?? `request failed (HTTP ${response.status})`;
+    problem = { ...problem, detail: `${base} (correlation id ${id})` };
+  }
+  return problem;
 }
 
 /** Sur 401 hors de la page de connexion : on y va, en gardant d'où l'on vient. */
@@ -150,14 +182,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     cache: "no-store",
   });
   if (!response.ok) {
-    let problem: { title?: string; detail?: string; errors?: unknown[] } = {};
-    try {
-      problem = await response.json();
-    } catch {
-      problem = { title: response.statusText };
-    }
+    const problem = await problemOf(response);
     if (response.status === 401) {
-      if (demandeUneReauthentification(problem as { errors?: unknown[] })) versLaReauthentification();
+      if (demandeUneReauthentification(problem)) versLaReauthentification();
       else versLaConnexion();
     }
     throw new ApiError(response.status, problem);
