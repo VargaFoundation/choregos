@@ -45,10 +45,29 @@ class OperationSpec:
     description: str = ""
     #: ce que l'opération attend : le courtier l'annonce à l'agent et le vérifie avant l'appel
     input_schema: dict[str, Any] | None = None
+    #: A write that a PERSON approves, always (ADR 0052): its policy never goes below `approval`,
+    #: neither by the organisation nor by any other path — a firewall rule is not approved by policy.
+    human_approval: bool = False
+    #: What undoes it, declared by the type: `{"operation": …, "arguments": {…}}`, rendered with the
+    #: operation's own `result` (ADR 0035). The broker attaches it to the action it proposes.
+    compensation: dict[str, Any] | None = None
+    #: Arguments the PLATFORM fills, never the agent: `action_key` (stable for one action and one
+    #: call — an idempotency key) and `work_item_key` (the work item the action belongs to).
+    platform_arguments: tuple[str, ...] = ()
 
     @property
     def default_policy(self) -> str:
         return "allowed" if self.access == "read" else "approval"
+
+
+#: The arguments the platform knows how to fill (`OperationSpec.platform_arguments`).
+PLATFORM_ARGUMENTS = frozenset({"action_key", "work_item_key"})
+
+
+def operation_spec(kind: str, type_name: str, operation: str) -> OperationSpec | None:
+    """What a type declares of one of its operations — `None` for a discovered MCP tool."""
+    spec = _SPECS.get((kind, type_name))
+    return next((o for o in spec.operations if o.name == operation), None) if spec else None
 
 
 def schema_d_entree(*requis: str, **autres: dict[str, Any]) -> dict[str, Any]:

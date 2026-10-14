@@ -9,8 +9,9 @@ Read-only BY CONSTRUCTION, twice:
   manifest). The connector never falls back to the pod's own service account: a platform pod's
   token is wider than what this connector reads.
 
-A policy change is never applied here: it is proposed as a pull request to the GitOps repository
-(S33-09), and Argo CD applies what the release train merged (ADR 0006, ADR 0009).
+A policy change is never applied here: `propose_network_policy` (S33-09) offers it as a pull
+request to the GitOps repository — a governed action a person approves —, and Argo CD applies what
+the release train merged (ADR 0006, ADR 0009).
 """
 
 from __future__ import annotations
@@ -18,9 +19,11 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
+import yaml
 
 from ..errors import AdapterError, UpstreamError
 from ..registry import OperationSpec
+from .gitops import GitOpsTarget, propose_change
 from .hubble import FlowFilter, FlowSource, HubbleCli
 from .tls import tls_verification
 
@@ -59,6 +62,49 @@ CILIUM_READ_OPERATIONS: tuple[OperationSpec, ...] = (
         ),
     ),
 )
+
+
+POLICY_KINDS = frozenset({"CiliumNetworkPolicy", "CiliumClusterwideNetworkPolicy"})
+
+CILIUM_WRITE_OPERATIONS: tuple[OperationSpec, ...] = (
+    OperationSpec(
+        "propose_network_policy",
+        "write",
+        "proposes a CiliumNetworkPolicy (or clusterwide) as a pull request to the GitOps repository; the "
+        "release train applies it once merged — nothing is applied to the cluster",
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "the file, under the connector's GitOps root"},
+                "manifest": {"type": "string", "description": "the policy's YAML, whole"},
+                "title": {"type": "string", "maxLength": 200},
+                "rationale": {"type": "string", "description": "why: the findings and the risk"},
+            },
+            "required": ["path", "manifest", "title", "rationale"],
+            "additionalProperties": False,
+        },
+        human_approval=True,
+        platform_arguments=("action_key", "work_item_key"),
+    ),
+)
+
+
+def checked_policy(manifest: str) -> dict[str, Any]:
+    """A manifest that is ONE Cilium policy, named — anything else never reaches a pull request."""
+    try:
+        documents = [d for d in yaml.safe_load_all(manifest) if d is not None]
+    except yaml.YAMLError as error:
+        raise AdapterError(f"cilium: the manifest is not YAML: {error}") from error
+    if len(documents) != 1 or not isinstance(documents[0], dict):
+        raise AdapterError("cilium: the manifest must hold exactly one policy")
+    policy = documents[0]
+    if policy.get("apiVersion") != "cilium.io/v2" or policy.get("kind") not in POLICY_KINDS:
+        raise AdapterError(
+            f"cilium: only {', '.join(sorted(POLICY_KINDS))} of cilium.io/v2 are proposed here"
+        )
+    if not (policy.get("metadata") or {}).get("name"):
+        raise AdapterError("cilium: the policy has no metadata.name")
+    return policy
 
 
 class ReadOnlyKubernetes:
@@ -111,14 +157,23 @@ def _summary(item: dict[str, Any]) -> dict[str, Any]:
 
 class CiliumNetwork:
     service = "cilium"
-    operations: tuple[OperationSpec, ...] = CILIUM_READ_OPERATIONS
+    operations: tuple[OperationSpec, ...] = CILIUM_READ_OPERATIONS + CILIUM_WRITE_OPERATIONS
 
-    def __init__(self, kubernetes: ReadOnlyKubernetes, flows: FlowSource) -> None:
+    def __init__(
+        self, kubernetes: ReadOnlyKubernetes, flows: FlowSource, gitops: GitOpsTarget | None = None
+    ) -> None:
         self.kubernetes = kubernetes
         self.flow_source = flows
+        self.gitops = gitops
 
     @classmethod
-    def from_config(cls, config: dict[str, Any], *, transport: httpx.AsyncBaseTransport | None = None) -> Any:
+    def from_config(
+        cls,
+        config: dict[str, Any],
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        scm: Any = None,
+    ) -> Any:
         kubernetes = ReadOnlyKubernetes(
             str(config["kubernetes_url"]),
             str(config.get("token") or ""),
@@ -134,7 +189,17 @@ class CiliumNetwork:
             client_cert=str(config.get("hubble_client_cert") or ""),
             client_key=str(config.get("hubble_client_key") or ""),
         )
-        return cls(kubernetes, hubble)
+        gitops = (
+            GitOpsTarget(
+                scm,
+                str(config["gitops_repo"]),
+                str(config.get("gitops_base") or "main"),
+                str(config.get("gitops_path") or "cilium"),
+            )
+            if scm is not None and config.get("gitops_repo")
+            else None
+        )
+        return cls(kubernetes, hubble, gitops)
 
     async def list_network_policies(self, namespace: str | None = None) -> dict[str, Any]:
         path = (
@@ -165,6 +230,36 @@ class CiliumNetwork:
         flows = await self.flow_source.flows(selection)
         dropped = sum(1 for flow in flows if flow["verdict"] == "DROPPED")
         return {"flows": flows, "count": len(flows), "dropped": dropped}
+
+    async def propose_network_policy(
+        self,
+        path: str,
+        manifest: str,
+        title: str,
+        rationale: str,
+        action_key: str,
+        work_item_key: str | None = None,
+    ) -> dict[str, Any]:
+        """A pull request with the policy, under the GitOps root; the cluster is not touched."""
+        from .nginx import confined
+
+        if self.gitops is None:
+            raise AdapterError(
+                "cilium: no GitOps repository configured (`gitops_repo`): nothing to propose to"
+            )
+        target = confined(self.gitops.root, path, service="cilium")
+        if not target.endswith((".yaml", ".yml")):
+            raise AdapterError("cilium: a policy file ends in .yaml or .yml")
+        policy = checked_policy(manifest)
+        result = await propose_change(
+            self.gitops,
+            files={target: manifest if manifest.endswith("\n") else manifest + "\n"},
+            title=title,
+            rationale=rationale,
+            action_key=action_key,
+            work_item_key=work_item_key,
+        )
+        return {**result, "policy": f"{policy['kind']}/{policy['metadata']['name']}"}
 
     async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         if operation not in {o.name for o in self.operations}:

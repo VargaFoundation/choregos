@@ -33,6 +33,7 @@ from .registry import (
     configuration_resolue,
     connector_types,
     fakes_enabled,
+    operation_spec,
     register,
     spec_of,
     type_par_defaut,
@@ -67,6 +68,7 @@ __all__ = [
     "configuration_resolue",
     "connector_types",
     "fakes_enabled",
+    "operation_spec",
     "register",
     "spec_of",
     "type_par_defaut",
@@ -125,9 +127,9 @@ _ENTIER: dict[str, Any] = {"type": "integer"}
 
 from .familles import FAMILLES as _FAMILLES  # noqa: E402 - après le registre
 from .identity.entra import OPERATIONS_ENTRA as _OPERATIONS_ENTRA  # noqa: E402 - après le registre
-from .netops.cilium import CILIUM_READ_OPERATIONS as _OPERATIONS_CILIUM  # noqa: E402 - after the registry
-from .netops.nginx import NGINX_READ_OPERATIONS as _OPERATIONS_NGINX  # noqa: E402 - after the registry
-from .netops.pfsense import PFSENSE_READ_OPERATIONS as _OPERATIONS_PFSENSE  # noqa: E402 - after the registry
+from .netops.cilium import CiliumNetwork as _CiliumNetwork  # noqa: E402 - after the registry
+from .netops.nginx import NginxConfig as _NginxConfig  # noqa: E402 - after the registry
+from .netops.pfsense import PfSenseFirewall as _PfSenseFirewall  # noqa: E402 - after the registry
 
 #: La configuration d'un type `demo` : rien, ou l'adresse du processus qui sert les faux.
 _CONFIGURATION_DE_DEMO = _objet(
@@ -373,7 +375,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("base_url",),
         ),
         ("api_key",),
-        operations=_OPERATIONS_PFSENSE,
+        operations=_PfSenseFirewall.operations,
     ),
     ("network_policy", "cilium"): ConnectorTypeSpec(
         "Cilium (network policies, Hubble flows)",
@@ -388,11 +390,21 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "hubble_ca_cert": {"type": "string", "description": "PEM of Hubble Relay's CA"},
                 "hubble_tls_server_name": _TEXTE,
                 "hubble_client_cert": {"type": "string", "description": "PEM, when Relay requires mTLS"},
+                "gitops_repo": {
+                    "type": "string",
+                    "description": "owner/repo where policy changes are proposed",
+                },
+                "gitops_base": {"type": "string", "default": "main"},
+                "gitops_path": {
+                    "type": "string",
+                    "default": "cilium",
+                    "description": "the policies' directory",
+                },
             },
             ("kubernetes_url",),
         ),
-        ("token", "hubble_client_key"),
-        operations=_OPERATIONS_CILIUM,
+        ("token", "hubble_client_key", "gitops_token"),
+        operations=_CiliumNetwork.operations,
     ),
     ("web_server", "nginx"): ConnectorTypeSpec(
         "nginx (configuration from the GitOps repository)",
@@ -411,7 +423,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("repo",),
         ),
         ("token",),
-        operations=_OPERATIONS_NGINX,
+        operations=_NginxConfig.operations,
     ),
     ("mcp", "mcp"): ConnectorTypeSpec(
         "MCP server (Streamable HTTP)",
@@ -537,20 +549,54 @@ def _fake_cilium(cfg: dict[str, Any]) -> Any:
         str(cfg.get("token") or "fake-reader-token"),
         transport=_fake_netops("kubernetes").transport(),
     )
-    return CiliumNetwork(kubernetes, _fake_netops("flows"))
+    gitops = _fake_gitops(
+        str(cfg.get("gitops_repo") or "acme/gitops"),
+        str(cfg.get("gitops_base") or "main"),
+        str(cfg.get("gitops_path") or "cilium"),
+    )
+    return CiliumNetwork(kubernetes, _fake_netops("flows"), gitops)
 
 
 def _fake_nginx(cfg: dict[str, Any]) -> Any:
     from .netops import NginxConfig
 
-    return NginxConfig(_fake_netops("repo"), root=str(cfg.get("root") or "nginx"))
+    root = str(cfg.get("root") or "nginx")
+    gitops = _fake_gitops(str(cfg.get("repo") or "acme/gitops"), str(cfg.get("ref") or "main"), root)
+    return NginxConfig(_fake_netops("repo"), root=root, gitops=gitops)
+
+
+def _fake_gitops(repo: str, base: str, root: str) -> Any:
+    from .netops.gitops import GitOpsTarget
+
+    if "scm" not in FAKE_NETOPS:
+        from .fakes import FakeScm
+
+        FAKE_NETOPS["scm"] = FakeScm()
+    return GitOpsTarget(FAKE_NETOPS["scm"], repo, base, root)
 
 
 def _nginx(cfg: dict[str, Any]) -> Any:
     from .netops import GitHubRepoReader, NginxConfig
+    from .netops.gitops import GitOpsTarget
+    from .scm.github import GitHubScm
 
-    reader = GitHubRepoReader(_github_client(cfg), str(cfg["repo"]), str(cfg.get("ref") or "main"))
-    return NginxConfig(reader, root=str(cfg.get("root") or "nginx"))
+    client = _github_client(cfg)
+    repo, ref, root = str(cfg["repo"]), str(cfg.get("ref") or "main"), str(cfg.get("root") or "nginx")
+    gitops = GitOpsTarget(GitHubScm(client, default_repo=repo), repo, ref, root)
+    return NginxConfig(GitHubRepoReader(client, repo, ref), root=root, gitops=gitops)
+
+
+def _cilium(cfg: dict[str, Any]) -> Any:
+    """The policies' pull requests go through the forge with `gitops_token` (or the GitHub App of
+    the deployment) — `token` is the cluster reader's, and never reaches the forge."""
+    from .netops import CiliumNetwork
+    from .scm.github import GitHubScm
+
+    scm = None
+    if cfg.get("gitops_repo"):
+        client = _github_client({**cfg, "token": cfg.get("gitops_token", "")})
+        scm = GitHubScm(client, default_repo=str(cfg["gitops_repo"]))
+    return CiliumNetwork.from_config(cfg, scm=scm)
 
 
 def _cd_de_demo(cfg: dict[str, Any]) -> Any:
@@ -780,12 +826,10 @@ def _register_builtins() -> None:
             _guichet_de_demo(famille, en_production=True)
         )
     register("cd", "demo", _SPECS_LIVREES[("cd", "demo")])(_cd_de_demo)
-    from .netops import CiliumNetwork, PfSenseFirewall
+    from .netops import PfSenseFirewall
 
     register("firewall", "pfsense", _SPECS_LIVREES[("firewall", "pfsense")])(PfSenseFirewall.from_config)
-    register("network_policy", "cilium", _SPECS_LIVREES[("network_policy", "cilium")])(
-        CiliumNetwork.from_config
-    )
+    register("network_policy", "cilium", _SPECS_LIVREES[("network_policy", "cilium")])(_cilium)
     register("web_server", "nginx", _SPECS_LIVREES[("web_server", "nginx")])(_nginx)
     # Un vrai serveur MCP (ADR 0034) : ses opérations se DÉCOUVRENT, et naissent fermées.
     from .mcp import ClientMcp

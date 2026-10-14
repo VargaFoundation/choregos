@@ -16,6 +16,7 @@ and is dropped, because the policy `api-ingress` selects `api` and admits only `
 from __future__ import annotations
 
 import copy
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -135,6 +136,8 @@ class FakePfSense:
     )  # fmt: skip
     #: (method, path) of every request, in order.
     received: list[tuple[str, str]] = field(default_factory=list)
+    #: how many writes reached it — the proof that an unapproved one did not
+    writes: int = 0
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.answer)
@@ -180,8 +183,32 @@ class FakePfSense:
         return _envelope(items)
 
     def _write(self, method: str, path: str, request: httpx.Request) -> httpx.Response:
-        """Writes arrive with S33-09 (governed actions); until then the fake refuses them, named."""
-        return _envelope(None, 405, "METHOD_NOT_ALLOWED", f"{method} {path} is not served by this fake")
+        """The singular endpoint `/firewall/rule`: POST (with `placement`), PATCH (by `id`), DELETE
+        (`?id=`). Every write counts in `writes`; `apply` is recorded as pfSense would apply it."""
+        if path != "/firewall/rule":
+            return _envelope(None, 405, "METHOD_NOT_ALLOWED", f"{method} {path} is not served by this fake")
+        self.writes += 1
+        if method == "DELETE":
+            index = int(request.url.params.get("id", "-1"))
+            if not 0 <= index < len(self.rules):
+                return _envelope(None, 404, "MODEL_OBJECT_NOT_FOUND", f"no rule {index}")
+            removed = self.rules.pop(index)
+            self._renumber()
+            return _envelope(removed)
+        body = json.loads(request.content or b"{}")
+        body.pop("apply", None)
+        if method == "PATCH":
+            index = int(body.pop("id", -1))
+            if not 0 <= index < len(self.rules):
+                return _envelope(None, 404, "MODEL_OBJECT_NOT_FOUND", f"no rule {index}")
+            self.rules[index].update(body)
+            return _envelope(copy.deepcopy(self.rules[index]))
+        placement = body.pop("placement", None)
+        tracker = max((int(r["tracker"]) for r in self.rules), default=1700000100) + 1
+        rule = {**body, "tracker": tracker}
+        self.rules.insert(len(self.rules) if placement is None else int(placement), rule)
+        self._renumber()
+        return _envelope(copy.deepcopy(rule))
 
 
 CILIUM_POLICIES: list[dict[str, Any]] = [

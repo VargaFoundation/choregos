@@ -36,7 +36,7 @@ from ..db.models import (
     ProjectOperationPolicy,
     Run,
 )
-from .connecteurs import plus_stricte
+from .connecteurs import human_floor, plus_stricte
 
 SEPARATEUR = "__"
 #: L'espace des identifiants d'une écriture appelée par un run : le même appel (run, outil,
@@ -115,7 +115,9 @@ async def outils_du_courtier(session: AsyncSession, run: Run, project: Project) 
     }
     outils: dict[str, OutilDuCourtier] = {}
     for operation, connecteur in lignes:
-        effective = plus_stricte(operation.policy, resserres.get(operation.id))
+        effective = human_floor(
+            connecteur, operation.name, plus_stricte(operation.policy, resserres.get(operation.id))
+        )
         if effective == "forbidden":
             continue
         if operation.groups and not groupes & set(operation.groups):
@@ -151,29 +153,35 @@ async def _proposer_l_action_de_l_outil(
     action_id: str | None = None,
 ) -> Any:
     """L'action d'un appel d'outil : un effet `connector.call`, au nom de l'agent du run."""
+    from choregos_adapters import operation_spec
     from choregos_contracts import ActionOrigin
 
     from ..rbac import SYSTEM
     from ..schemas.actions import ActionCreate, ActionEffectSpec
     from .actions import proposer
 
+    effet: dict[str, Any] = {
+        "effect": "connector.call",
+        "with": {
+            "connector": outil.connecteur.name,
+            "operation": outil.operation.name,
+            "arguments": arguments,
+        },
+    }
+    # What undoes it, as its type declares it (ADR 0052): a firewall rule changed by an action that
+    # fails later is put back as it was.
+    declaree = operation_spec(outil.connecteur.kind, outil.connecteur.type, outil.operation.name)
+    if declaree is not None and declaree.compensation:
+        effet["compensate"] = {
+            "effect": "connector.call",
+            "with": {"connector": outil.connecteur.name, **declaree.compensation},
+        }
     corps = ActionCreate(
         kind=f"{outil.connecteur.name}.{outil.operation.name}",
         title=f"{outil.operation.description or outil.operation.name} ({outil.connecteur.name})",
         justification=f"proposed by the agent {run.agent_slug} in run {run.id}",
         params={"arguments": arguments},
-        effects=[
-            ActionEffectSpec.model_validate(
-                {
-                    "effect": "connector.call",
-                    "with": {
-                        "connector": outil.connecteur.name,
-                        "operation": outil.operation.name,
-                        "arguments": arguments,
-                    },
-                }
-            )
-        ],
+        effects=[ActionEffectSpec.model_validate(effet)],
         work_item_id=run.work_item_id,
     )
     return await proposer(

@@ -6,6 +6,9 @@ reads files under one root of one repository, at one ref, through the forge's AP
 platform's credentials — an agent never receives them. Validation (`nginx -t`) is not here: it
 needs the nginx binary and the whole configuration tree, which the runner has in its workspace;
 it is the runner-side tool `validate_nginx_config` (`choregos_tools_mcp`).
+
+A change is `propose_nginx_config` (S33-09): a pull request to the same repository — a governed
+action a person approves —, carried to the servers by the release train once merged.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from typing import Any, Protocol
 
 from ..errors import AdapterError, UpstreamError
 from ..registry import OperationSpec
+from .gitops import GitOpsTarget, propose_change
 
 _TEXT: dict[str, Any] = {"type": "string"}
 #: A file larger than this is not configuration an agent should read whole.
@@ -38,6 +42,29 @@ NGINX_READ_OPERATIONS: tuple[OperationSpec, ...] = (
             "required": ["path"],
             "additionalProperties": False,
         },
+    ),
+)
+
+
+NGINX_WRITE_OPERATIONS: tuple[OperationSpec, ...] = (
+    OperationSpec(
+        "propose_nginx_config",
+        "write",
+        "proposes an nginx configuration file as a pull request to the GitOps repository (validate it with "
+        "`validate_nginx_config` first); nothing is applied to a server",
+        {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "the file, under the connector's root"},
+                "content": {"type": "string", "description": "the file's new content, whole"},
+                "title": {"type": "string", "maxLength": 200},
+                "rationale": {"type": "string", "description": "why: the findings and the risk"},
+            },
+            "required": ["path", "content", "title", "rationale"],
+            "additionalProperties": False,
+        },
+        human_approval=True,
+        platform_arguments=("action_key", "work_item_key"),
     ),
 )
 
@@ -77,7 +104,7 @@ class GitHubRepoReader:
         return base64.b64decode(content.get("content", "")).decode("utf-8", errors="replace")
 
 
-def confined(root: str, path: str) -> str:
+def confined(root: str, path: str, service: str = "nginx") -> str:
     """`path`, normalised, inside `root` — or a refusal: no `..`, no absolute path out of it."""
     root = root.strip("/")
     relative = path.strip().lstrip("/")
@@ -91,16 +118,19 @@ def confined(root: str, path: str) -> str:
     for candidate in (posixpath.normpath(relative), posixpath.normpath(posixpath.join(root, relative))):
         if inside(candidate):
             return candidate
-    raise AdapterError(f"nginx: {path} is outside the configuration root `{root}/`")
+    raise AdapterError(f"{service}: {path} is outside the configuration root `{root}/`")
 
 
 class NginxConfig:
     service = "nginx"
-    operations: tuple[OperationSpec, ...] = NGINX_READ_OPERATIONS
+    operations: tuple[OperationSpec, ...] = NGINX_READ_OPERATIONS + NGINX_WRITE_OPERATIONS
 
-    def __init__(self, reader: RepoReader, *, root: str = "nginx") -> None:
+    def __init__(
+        self, reader: RepoReader, *, root: str = "nginx", gitops: GitOpsTarget | None = None
+    ) -> None:
         self.reader = reader
         self.root = root.strip("/")
+        self.gitops = gitops
 
     async def list_nginx_files(self, path: str | None = None) -> dict[str, Any]:
         prefix = confined(self.root, path) if path else self.root
@@ -113,6 +143,29 @@ class NginxConfig:
         if len(content.encode()) > MAX_FILE_BYTES:
             raise AdapterError(f"nginx: {target} is larger than {MAX_FILE_BYTES // 1024} KiB")
         return {"path": target, "content": content}
+
+    async def propose_nginx_config(
+        self,
+        path: str,
+        content: str,
+        title: str,
+        rationale: str,
+        action_key: str,
+        work_item_key: str | None = None,
+    ) -> dict[str, Any]:
+        if self.gitops is None:
+            raise AdapterError("nginx: no repository to propose to")
+        if not content.strip():
+            raise AdapterError("nginx: an empty configuration is not proposed")
+        target = confined(self.root, path)
+        return await propose_change(
+            self.gitops,
+            files={target: content if content.endswith("\n") else content + "\n"},
+            title=title,
+            rationale=rationale,
+            action_key=action_key,
+            work_item_key=work_item_key,
+        )
 
     async def executer(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         if operation not in {o.name for o in self.operations}:
