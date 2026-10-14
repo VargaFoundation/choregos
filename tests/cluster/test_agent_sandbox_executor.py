@@ -88,9 +88,27 @@ ORCHESTRATOR = {"app.kubernetes.io/name": "choregos-orchestrator", "choregos/que
 def _push(ns: str, ip: str, run_id: str, public_key: str, *, labels: dict[str, str] | None = None) -> str:
     """POSTs an assignment SEALED to `public_key` from a pod of the namespace carrying `labels`
     (the orchestrator's by default); returns the HTTP status, `000` when the push never got in."""
-    secret = {"api_url": "http://nowhere.invalid", "run_token": "t", "env": {}}
-    body = json.dumps({"run_id": run_id, "sealed": seal(public_key, run_id, secret)})
-    name = f"push-{run_id}"
+    return _pushes(ns, ip, [run_id], public_key, labels=labels)[0]
+
+
+def _pushes(
+    ns: str, ip: str, run_ids: list[str], public_key: str, *, labels: dict[str, str] | None = None
+) -> list[str]:
+    """The pushes of `run_ids`, back to back from ONE pod: one HTTP status per run.
+
+    Back to back, because the runner closes its port when its run ends; a second probe pod
+    takes seconds to start, by which time a run with no reachable API has long ended and the
+    second push meets a closed port (`000`), not the refusal it is there to prove. The API URL is
+    a TEST-NET address (RFC 5737) for the same reason: nothing answers it, so the run waits on
+    it instead of failing at once on a name that does not resolve."""
+    secret = {"api_url": "http://192.0.2.1", "run_token": "t", "env": {}}
+    curls = [
+        f"curl -s -m 10 -o /dev/null -w '%{{http_code}}\\n' -H 'Content-Type: application/json' "
+        f"-d '{json.dumps({'run_id': run_id, 'sealed': seal(public_key, run_id, secret)})}' "
+        f"http://{ip}:8765/assign"
+        for run_id in run_ids
+    ]
+    name = "push-" + "-".join(run_ids)
     pod = {
         "apiVersion": "v1",
         "kind": "Pod",
@@ -106,11 +124,7 @@ def _push(ns: str, ip: str, run_id: str, public_key: str, *, labels: dict[str, s
                 {
                     "name": "push",
                     "image": "curlimages/curl:8.11.1",
-                    "command": [
-                        "sh", "-c",
-                        f"curl -s -m 10 -o /dev/null -w '%{{http_code}}' -H 'Content-Type: application/json' "
-                        f"-d '{body}' http://{ip}:8765/assign",
-                    ],
+                    "command": ["sh", "-c", "; ".join(curls)],
                     "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
                 }
             ],
@@ -119,9 +133,9 @@ def _push(ns: str, ip: str, run_id: str, public_key: str, *, labels: dict[str, s
     kubectl_shared("apply", "-f", "-", input_text=json.dumps(pod))
     _wait(
         lambda: (_get(ns, "pod", name) or {}).get("status", {}).get("phase") in {"Succeeded", "Failed"},
-        f"the push of {run_id}",
+        f"the push of {', '.join(run_ids)}",
     )
-    return kubectl_shared("-n", ns, "logs", name).strip()
+    return kubectl_shared("-n", ns, "logs", name).split()
 
 
 @pytest.mark.capability("agent_sandbox", "snapshot")
@@ -163,8 +177,9 @@ def test_a_claim_adopts_a_warm_sandbox_that_holds_nothing_and_serves_one_run(ns:
     # Another pod of the namespace cannot even reach the port: `choregos-runner-assignment`.
     assert _push(ns, ip, "run-z", public_key, labels={"app": "intruder"}) == "000", "the push got in"
     assert _push(ns, ip, "run-x", other_key) == "400", "sealed to another key: refused"
-    assert _push(ns, ip, "run-a", public_key) == "200"
-    assert _push(ns, ip, "run-b", public_key) == "409", "a sandbox serves one run, never two"
+    first, second = _pushes(ns, ip, ["run-a", "run-b"], public_key)
+    assert first == "200"
+    assert second == "409", "a sandbox serves one run, never two"
 
     kubectl_shared("-n", ns, "delete", "sandboxclaim", "run-probe")
     _wait(lambda: _get(ns, "sandbox", bound) is None, "the claimed sandbox to be deleted")
