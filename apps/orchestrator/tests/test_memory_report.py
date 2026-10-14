@@ -81,3 +81,16 @@ async def test_le_rapport_ne_part_qu_une_fois_par_semaine(
     assert outcome["cycles"] == 3
     rapports = [m.title for _, m in setup.adapters.notify.sent if "A/B report" in m.title]
     assert len(rapports) == 1, rapports
+
+
+async def test_the_report_without_a_notifier_is_still_returned(setup: Fixture) -> None:
+    """#497: a notifier failure (no Slack on the tenant) never fails the report that notifies."""
+    await _closed_tickets(setup.project_id, count=3, attempts=1, cost=1.0)
+    setup.adapters.notify.panne = (
+        "[slack] ni `bot_token` ni `webhook_url` configurés"  # lang: fr-ok (the verbatim upstream error)
+    )
+
+    report = await memory_activities.memory_ab_report({"org": "varga", "weeks": 4, "notify": True})
+
+    assert report["org"] == "varga"
+    assert report["notified"] is False, report

@@ -11,7 +11,7 @@ from choregos_core import Fact, Message, Provenance, memory_namespace, utcnow
 from sqlalchemy import select
 from temporalio import activity
 
-from .base import db, project_bundle
+from .base import db, project_bundle, send_courtesy
 
 
 def _namespace_of(project: str, run: Any) -> str | None:
@@ -232,7 +232,8 @@ async def memory_ab_report(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("notify") and projects:
         async with db() as session:
             bundle = await project_bundle(session, projects[0])
-            await bundle.adapters.notify.send(
+            report["notified"] = await send_courtesy(
+                bundle.adapters.notify,
                 bundle.config.notify.slack_channel or "#choregos",
                 Message(
                     title=f"Memory: A/B report over {report['weeks']} weeks — {report['verdict']}",

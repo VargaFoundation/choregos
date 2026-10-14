@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from temporalio import activity
 
 from ..config import get_settings
-from .base import db, project_bundle
+from .base import db, project_bundle, send_courtesy
 
 logger = get_logger("choregos.train")
 
@@ -34,13 +34,8 @@ async def _courtoisie(bundle: Any, message: Message) -> bool:
 
 
 async def _envoyer(notify: Any, canal: str, message: Message) -> bool:
-    try:
-        await notify.send(canal, message)
-    # Volontairement large : aucune panne de notificateur ne doit tuer un train.
-    except Exception as exc:
-        logger.warning("train : notification NON envoyée", channel=canal, title=message.title, error=str(exc))
-        return False
-    return True
+    # The shared best-effort send (#497): no notifier failure may kill a train.
+    return await send_courtesy(notify, canal, message)
 
 
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
