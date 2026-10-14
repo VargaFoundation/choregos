@@ -1,0 +1,224 @@
+# A research campaign: is any product of this universe worth trading, with a strategy a model
+# proposed, judged on data it has not seen? Every number the verdict rests on is computed by a job
+# (ADR 0056) — the platform ran the code — and the memo may only quote those numbers.
+#
+# Why a failed verdict does NOT go back to the strategist: the out-of-sample period has then been
+# looked at. Asking for new strategies until one passes is data snooping — the Deflated Sharpe Ratio
+# counts the trials of ONE round, not of the rounds before. A campaign that finds nothing ends in
+# `not_relevant`; a new campaign, on a new out-of-sample period, is a new work item.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: campaign
+  version: 1
+  description: A research campaign over a universe of listed products — snapshot, profile, strategies, backtest, memo, decision.
+  inputs:
+    type: object
+    required: [symbols, start, end, oos_start]
+    properties:
+      symbols: { type: array, items: { type: string }, minItems: 1, maxItems: 50, uniqueItems: true, title: Symbols (e.g. SPY.US) }
+      start: { type: string, format: date, title: First day of data }
+      oos_start: { type: string, format: date, title: First out-of-sample day (after the models' training cut-off) }
+      end: { type: string, format: date, title: Last day of data }
+      cost_bps: { type: number, minimum: 0, default: 10, title: Cost per change of position (basis points) }
+      min_dsr: { type: number, minimum: 0, maximum: 1, default: 0.95, title: Minimum Deflated Sharpe Ratio }
+      max_drawdown: { type: number, minimum: 0, maximum: 1, default: 0.35, title: Maximum drawdown (fraction) }
+      min_trades: { type: integer, minimum: 1, default: 10, title: Minimum out-of-sample trades }
+      max_strategies: { type: integer, minimum: 1, maximum: 8, default: 8, title: Maximum strategies }
+      seed: { type: string, default: choregos, title: Anonymisation seed }
+      decision_note: { type: string, title: Why the owner adopted or rejected the campaign }
+initial: campaign
+actors:
+  market:
+    type: job
+    role: snapshot
+    command: [choregos-quant, snapshot]
+    max_minutes: 15
+    tools: [{ connector: marketdata, tools: [get_bars] }]
+  profiler: { type: job, role: profile, command: [choregos-quant, profile], max_minutes: 10 }
+  strategist: { type: agent, role: strategize, agent: quant-strategist, max_turns: 20, max_minutes: 15 }
+  engine: { type: job, role: backtest, command: [choregos-quant, backtest], max_minutes: 60 }
+  analyst: { type: agent, role: memo, agent: quant-analyst, max_turns: 20, max_minutes: 15 }
+  platform: { type: system }
+  owner: { type: human, group: owner, sla_hours: 72 }
+states:
+  campaign: { display: Campaign opened }
+  snapshotted: { display: Data snapshot taken }
+  profiled: { display: Universe profiled }
+  strategized: { display: Strategies proposed }
+  backtested: { display: Backtest computed }
+  relevant: { display: A product passed }
+  memo_written: { display: Memo to decide, kind: wait }
+  to_review: { display: To review, kind: wait }
+  adopted: { display: Adopted for follow-up, terminal: true }
+  rejected: { display: Rejected, terminal: true }
+  not_relevant: { display: Nothing relevant, terminal: true }
+transitions:
+  # The only network access of the campaign: the connector, through the platform, with the run's
+  # token. The bars are stored and hashed; every later step reads that file, never the provider.
+  - id: t-snapshot
+    from: campaign
+    to: snapshotted
+    by: market
+    outputs: [snapshot, bars]
+    output_types: { bars: csv }
+    gates: [outputs_present]
+    on_fail: { to: campaign, max_attempts: 2, escalate_to: to_review }
+
+  - id: t-profile
+    from: snapshotted
+    to: profiled
+    by: profiler
+    inputs: [bars]
+    outputs: [universe_profile, anonymisation]
+    gates: [outputs_present]
+    on_fail: { to: snapshotted, max_attempts: 1, escalate_to: to_review }
+
+  # The strategist reads the anonymised in-sample profile only: no ticker, no price, no OOS date.
+  - id: t-strategize
+    from: profiled
+    to: strategized
+    by: strategist
+    inputs: [universe_profile]
+    outputs: [strategies]
+    gates:
+      - name: output_schema
+        params:
+          schemas:
+            strategies:
+              type: object
+              required: [strategies]
+              additionalProperties: false
+              properties:
+                strategies:
+                  type: array
+                  minItems: 1
+                  items:
+                    oneOf:
+                    - type: object
+                      required: [id, hypothesis, family, params]
+                      additionalProperties: false
+                      properties:
+                        id: {type: string, pattern: '^[A-Za-z0-9_-]{1,32}$'}
+                        hypothesis: {type: string, minLength: 1, maxLength: 1000}
+                        family: {const: sma_cross}
+                        params:
+                          type: object
+                          required: [fast, slow]
+                          additionalProperties: false
+                          properties:
+                            fast: {type: integer, minimum: 5, maximum: 100}
+                            slow: {type: integer, minimum: 20, maximum: 300}
+                    - type: object
+                      required: [id, hypothesis, family, params]
+                      additionalProperties: false
+                      properties:
+                        id: {type: string, pattern: '^[A-Za-z0-9_-]{1,32}$'}
+                        hypothesis: {type: string, minLength: 1, maxLength: 1000}
+                        family: {const: ema_trend}
+                        params:
+                          type: object
+                          required: [span]
+                          additionalProperties: false
+                          properties:
+                            span: {type: integer, minimum: 10, maximum: 300}
+                    - type: object
+                      required: [id, hypothesis, family, params]
+                      additionalProperties: false
+                      properties:
+                        id: {type: string, pattern: '^[A-Za-z0-9_-]{1,32}$'}
+                        hypothesis: {type: string, minLength: 1, maxLength: 1000}
+                        family: {const: momentum}
+                        params:
+                          type: object
+                          required: [lookback, skip]
+                          additionalProperties: false
+                          properties:
+                            lookback: {type: integer, minimum: 20, maximum: 252}
+                            skip: {type: integer, minimum: 0, maximum: 21}
+                    - type: object
+                      required: [id, hypothesis, family, params]
+                      additionalProperties: false
+                      properties:
+                        id: {type: string, pattern: '^[A-Za-z0-9_-]{1,32}$'}
+                        hypothesis: {type: string, minLength: 1, maxLength: 1000}
+                        family: {const: rsi_reversion}
+                        params:
+                          type: object
+                          required: [period, entry, exit]
+                          additionalProperties: false
+                          properties:
+                            period: {type: integer, minimum: 2, maximum: 30}
+                            entry: {type: integer, minimum: 5, maximum: 40}
+                            exit: {type: integer, minimum: 50, maximum: 80}
+                    - type: object
+                      required: [id, hypothesis, family, params]
+                      additionalProperties: false
+                      properties:
+                        id: {type: string, pattern: '^[A-Za-z0-9_-]{1,32}$'}
+                        hypothesis: {type: string, minLength: 1, maxLength: 1000}
+                        family: {const: donchian_breakout}
+                        params:
+                          type: object
+                          required: [entry, exit]
+                          additionalProperties: false
+                          properties:
+                            entry: {type: integer, minimum: 10, maximum: 120}
+                            exit: {type: integer, minimum: 5, maximum: 60}
+                  maxItems: 8
+    on_fail: { to: profiled, max_attempts: 2, escalate_to: to_review }
+
+  # A crash of the engine is not a verdict: it goes to a person, not to `not_relevant`.
+  - id: t-backtest
+    from: strategized
+    to: backtested
+    by: engine
+    inputs: [bars, strategies]
+    outputs: [metrics, results, report]
+    output_types: { results: csv, report: html }
+    gates: [outputs_present]
+    on_fail: { to: strategized, max_attempts: 1, escalate_to: to_review }
+
+  # The verdict, on the backtest run's MEASURED facts: a number the engine did not compute is refused.
+  - id: t-verdict
+    from: backtested
+    to: relevant
+    by: platform
+    gates:
+      - name: evidence_facts
+        params: { keys: [relevant_count, trials], min: { relevant_count: 1 }, measured_only: true }
+    on_fail: { to: backtested, max_attempts: 1, escalate_to: not_relevant }
+
+  - id: t-memo
+    from: relevant
+    to: memo_written
+    by: analyst
+    inputs: [metrics]
+    outputs: [memo_markdown]
+    gates:
+      - name: numbers_measured
+        params: { sources: [metrics, fields], outputs: [memo_markdown] }
+    on_fail: { to: relevant, max_attempts: 2, escalate_to: to_review }
+
+  - id: t-decide
+    from: memo_written
+    to: adopted
+    by: owner
+    task:
+      title: Decide on the campaign
+      instructions: Read the memo and the report. Adopting means following the products on paper, not trading them.
+      form:
+        type: object
+        required: [decision_note]
+        properties:
+          decision_note: { type: string, title: Why }
+      attest: I read the memo and the backtest report; this is an internal research decision, not advice
+    on_reject: rejected
+
+  - id: t-relaunch
+    from: to_review
+    to: campaign
+    by: owner
+    on_reject: rejected
+defaults:
+  from_any_agent_state: { on_question: to_review }
