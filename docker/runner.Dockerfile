@@ -5,7 +5,7 @@
 #   2. **versions épinglées** — les agents ACP viennent de `versions.lock`, Renovate propose
 #      les montées, la suite de conformité les valide ;
 #   3. **non-root, sans capacité** — le sandbox du cluster fait le reste.
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.14-slim-bookworm AS builder
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
 WORKDIR /app
@@ -16,7 +16,7 @@ COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 RUN mkdir -p apps/api/src apps/orchestrator/src \
  && uv sync --frozen --no-dev --package choregos-runner
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 ARG NODE_VERSION=22
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:/usr/local/bin:$PATH" \
