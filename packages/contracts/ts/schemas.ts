@@ -349,6 +349,19 @@ export type Project = {
   };
   /** Catalogue tools this project may call, by name. Empty = none. ['*'] opens the whole catalogue. */
   tools?: Array<string>;
+  /** Work items the platform opens by itself, on a cron (S38-11). One per window: two firings of the same window open one work item. Needs the internal tracker. */
+  schedules?: Array<{
+    name: string;
+    /** Five fields, UTC, minute resolution. */
+    cron: string;
+    title: string;
+    /** The work item's fields; `{window}` in a text value becomes the window's date. */
+    fields?: {
+      [key: string]: unknown;
+    };
+    /** The workflow of the work item; the project's routing when absent. */
+    workflow?: string | null;
+  }>;
   /** The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue. */
   groups?: Array<string>;
   labels?: {

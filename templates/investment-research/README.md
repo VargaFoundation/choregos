@@ -28,6 +28,14 @@ run's own token — never a provider key:
 
 The sandbox is closed (`preset:regulated`): no agent and no job reaches the internet.
 
+## A campaign every week
+
+A project schedule opens one campaign per window (`schedules:` in the project's configuration,
+see `docs/usage.md`); `end: "{window}"` moves the end of the data with each window. The weekly
+verdicts are **not independent**: their out-of-sample periods overlap, so ten weekly passes are not
+ten confirmations. A schedule with fixed fields repeats the same test, the second round the verdict
+forbids.
+
 ## What the verdict is worth — read before adopting anything
 
 - **The model knows the past.** The strategist reads an anonymised in-sample profile, writes in a

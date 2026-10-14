@@ -20,6 +20,7 @@ from temporalio.exceptions import ActivityError
 from .planification import executer_activite
 
 with workflow.unsafe.imports_passed_through():
+    from ..activities import schedules as schedule_activities
     from ..activities import tracker as tracker_activities
 
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=5))
@@ -41,12 +42,13 @@ class TrackerReconciliation:
     def __init__(self) -> None:
         self.passes = 0
         self.last: dict[str, Any] = {}
+        self.fired: dict[str, Any] = {}
         self.stopped = False
         self.wake = False
 
     @workflow.query
     def status(self) -> dict[str, Any]:
-        return {"passes": self.passes, "last": self.last, "stopped": self.stopped}
+        return {"passes": self.passes, "last": self.last, "fired": self.fired, "stopped": self.stopped}
 
     @workflow.signal
     def stop(self, payload: dict[str, Any] | None = None) -> None:
@@ -67,6 +69,18 @@ class TrackerReconciliation:
             # boucle : elle le dit dans son statut et repasse à l'intervalle suivant. Sur le locataire
             # dev, le 08/10, trois échecs sans App avaient laissé `reconcile-dev` mort pour de bon,
             # et les issues `agent-ready` n'étaient plus jamais lues (S22-06).
+            # The project's schedules open their work items first, so that this same pass starts
+            # them (S38-11). Patched: a history recorded before it replays without the call.
+            if workflow.patched("fire-schedules"):
+                try:
+                    self.fired = await executer_activite(
+                        schedule_activities.fire_schedules,
+                        {"project_slug": params.project_slug},
+                        start_to_close_timeout=timedelta(minutes=2),
+                        retry_policy=RETRY,
+                    )
+                except ActivityError as erreur:
+                    self.fired = {"error": str(erreur.cause or erreur)}
             try:
                 self.last = await executer_activite(
                     tracker_activities.reconcile_tracker,

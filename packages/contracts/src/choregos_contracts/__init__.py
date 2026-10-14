@@ -68,7 +68,15 @@ from .policy import (
     ScopePolicy,
     TrainEnvPolicy,
 )
-from .project import AgentConfig, DodConfig, ModelProfile, ModelsConfig, ProjectConfig, RepoConfig
+from .project import (
+    AgentConfig,
+    DodConfig,
+    ModelProfile,
+    ModelsConfig,
+    ProjectConfig,
+    RepoConfig,
+    ScheduleConfig,
+)
 from .stage import (
     STAGE_INPUT_SCHEMA,
     STAGE_RESULT_SCHEMA,
@@ -261,6 +269,7 @@ __all__ = [
     "Role",
     "RunStatus",
     "SandboxPolicy",
+    "ScheduleConfig",
     "ScopeChangeRequest",
     "ScopePolicy",
     "Severity",

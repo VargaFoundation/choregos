@@ -52,6 +52,7 @@ ACTIVITES_PAR_FILE: dict[str, tuple[str, ...]] = {
         "check_scope_violations",
         "triage_finding",
         "reconcile_tracker",
+        "fire_schedules",
     ),
     "memory": (
         "ingest_sources",
