@@ -56,6 +56,18 @@ describe("journal ACP", () => {
     expect(refus).toHaveClass("rounded-full", "text-failed-ink");
     expect(refus.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed");
   });
+
+  it("reads a journaled result as its status and summary, not as the whole result (#410)", () => {
+    const result: RunEventDto = {
+      seq: 1,
+      type: "run.result",
+      ts: new Date().toISOString(),
+      payload: { status: "done", summary: "credit notes deducted", stage_result: { reports: { diff_files: "[...]" } } },
+    };
+    render(<LiveLog events={[result]} />);
+    expect(screen.getByText("done · credit notes deducted")).toBeInTheDocument();
+    expect(screen.queryByText(/diff_files/)).toBeNull();
+  });
 });
 
 describe("preuves d'une étape", () => {

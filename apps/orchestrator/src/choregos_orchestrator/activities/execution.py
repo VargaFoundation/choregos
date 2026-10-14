@@ -15,11 +15,12 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from choregos_adapters.executor.log_archive import archive_run_logs
-from choregos_api.db.models import Run, WorkItem
+from choregos_api.db.models import Run, RunEvent, WorkItem
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import ExecRef, ExecStatus, StageJobSpec, utcnow
+from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
@@ -119,6 +120,31 @@ async def archive_once(
     with contextlib.suppress(Exception):
         archive = await archive_run_logs(executor, ref, status)
         run.log_archive = archive.model_dump(mode="json")
+
+
+async def result_from_journal(session: Any, run_id: str) -> StageResult | None:
+    """The `StageResult` the runner journaled before posting it (#410), when the post failed.
+
+    The last `run.result` event carrying a `stage_result` wins; one that does not validate is
+    ignored rather than trusted. `None` when the runner never got that far.
+    """
+    rows = (
+        (
+            await session.execute(
+                select(RunEvent)
+                .where(RunEvent.run_id == run_id, RunEvent.type == "run.result")
+                .order_by(RunEvent.seq.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in rows:
+        payload = (row.payload or {}).get("stage_result")
+        if isinstance(payload, dict):
+            with contextlib.suppress(ValueError):
+                return StageResult.model_validate(payload)
+    return None
 
 
 @activity.defn(name="start_run")
@@ -270,8 +296,12 @@ async def await_run(payload: dict[str, Any]) -> dict[str, Any]:
                     return {"status": "finished", "result": run.result}
                 # Le runner n'a pas pu poster : on lit le résultat publié par l'exécuteur
                 # (`result-url` côté Tekton), et on l'enregistre nous-mêmes.
+                # First from the run's journal, which the API already holds (#410): the runner
+                # journals the whole result before posting it, on every executor.
+                fetched = await result_from_journal(session, run_id)
                 fetcher = getattr(bundle.adapters.executor, "fetch_result", None)
-                fetched = await fetcher(ref) if fetcher is not None else None
+                if fetched is None and fetcher is not None:
+                    fetched = await fetcher(ref)
                 if fetched is not None:
                     payload_result = fetched.model_dump(mode="json", by_alias=True)
                     if run is not None:

@@ -438,19 +438,30 @@ class Runner:
                 # « fait », et l'étape suivante ne trouve rien.
                 result.summary = f"{result.summary} (push refused: {push.output[-200:]})"
 
-        await journal.record("run.result", {"status": str(result.status), "summary": result.summary})
+        result.artifacts.context_pack_url = stage_input.context_pack_url
+        # The whole result goes into the journal BEFORE it is posted (#410): the journal is what
+        # the API already holds, so when the post fails the orchestrator still finds the result
+        # there. The Tekton `result-url` pointed at a `result.json` nothing uploaded.
+        await journal.record(
+            "run.result",
+            {
+                "status": str(result.status),
+                "summary": result.summary,
+                "stage_result": result.model_dump(mode="json", by_alias=True),
+            },
+        )
         await journal.flush()
         # No transcript URL is announced: nothing uploads `transcript.jsonl`, and a link that
         # leads nowhere is worse than none. The API serves the transcript from the journal it
         # already holds (S36-01).
         result.artifacts.transcript_url = None
-        result.artifacts.context_pack_url = stage_input.context_pack_url
         write_result(workspace.result_path(), result)
 
         try:
             await client.post_result(result)
-        except Exception as exc:  # l'orchestrateur lira le résultat via l'exécuteur
+        except Exception as exc:  # the orchestrator reads the result from the journal instead
             await journal.record("result.post_failed", {"error": str(exc)[:300]})
+            await journal.flush()
         return result
 
 
