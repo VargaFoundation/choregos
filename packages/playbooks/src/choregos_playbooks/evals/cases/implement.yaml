@@ -1,7 +1,7 @@
 role: implement
 description: >-
-  Le playbook d'implémentation doit interdire l'élargissement de périmètre, imposer les
-  preuves réelles, et rappeler que la plateforme revérifie.
+  The implementation playbook must forbid widening the scope, require real evidence,
+  and remind the agent that the platform checks it again.
 must_contain:
   - "within the allowed paths"
   - "report_finding"
@@ -11,10 +11,10 @@ must_contain:
 must_not_contain:
   - "ignore the tests"
 rubric:
-  - critere: "interdit d'écrire hors du périmètre"
-    poids: 3
-  - critere: "impose des preuves vérifiables"
-    poids: 3
-  - critere: "distingue correction dans le périmètre et signalement hors périmètre"
-    poids: 2
+  - criterion: "forbids writing outside the scope"
+    weight: 3
+  - criterion: "requires verifiable evidence"
+    weight: 3
+  - criterion: "distinguishes fixing within the scope from reporting out of scope"
+    weight: 2
 min_score: 0.85

@@ -1,7 +1,7 @@
 role: refine
 description: >-
-  Le playbook de cadrage doit demander une spécification vérifiable, un périmètre minimal
-  et l'arrêt en cas de doute produit.
+  The refinement playbook must ask for a verifiable specification, a minimal scope
+  and a stop when a product decision is in doubt.
 must_contain:
   - "Given / When / Then"
   - "allowed_paths"
@@ -11,10 +11,10 @@ must_contain:
 must_not_contain:
   - "write code"
 rubric:
-  - critere: "demande des critères d'acceptation testables"
-    poids: 2
-  - critere: "exige un périmètre minimal et justifié"
-    poids: 2
-  - critere: "prévoit le cas où une décision produit manque"
-    poids: 1
+  - criterion: "asks for testable acceptance criteria"
+    weight: 2
+  - criterion: "demands a minimal, justified scope"
+    weight: 2
+  - criterion: "covers the case where a product decision is missing"
+    weight: 1
 min_score: 0.8

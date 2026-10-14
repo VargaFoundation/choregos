@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Playbooks Choregos : un prompt par rôle, rendu en Jinja2, versionné et évalué.
+"""Choregos playbooks: one prompt per role, rendered with Jinja2, versioned and evaluated.
 
-Invariants communs à tous les rôles (docs/plan/02 §2.5) : écrire `.choregos/result.json`,
-ne jamais élargir le périmètre sans `request_scope_change`, signaler par `report_finding`,
-s'arrêter et `ask_human` plutôt que deviner.
+Invariants shared by every role (docs/plan/02 §2.5): write `.choregos/result.json`,
+never widen the scope without `request_scope_change`, report with `report_finding`,
+stop and `ask_human` rather than guess.
 """
 
 from __future__ import annotations
@@ -18,15 +18,15 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 ROLES_DIR = Path(__file__).parent / "roles"
 
 
-# Playbooks apportés par le DÉPLOIEMENT, en plus de ceux du paquet : répertoires séparés par
-# `:` dans `CHOREGOS_PLAYBOOKS_DIR`. C'est ce qui rend le moteur utilisable hors logiciel —
-# un rôle `sourcing` ou `instruction_dossier` n'a rien à faire dans ce paquet, mais le reste
-# de la machine (états, transitions, budgets, garanties, mémoire) ne change pas d'un domaine
-# à l'autre. Deux formes acceptées, parce qu'un ConfigMap monte mal une arborescence :
-#   <dir>/<role>.md          (fichier plat, une clé de ConfigMap)
-#   <dir>/<role>/prompt.md   (même forme que les rôles du paquet)
-# Un rôle du déploiement l'emporte sur celui du paquet : c'est ainsi qu'on adapte `implement`
-# à une maison sans réécrire la plateforme.
+# Playbooks supplied by the DEPLOYMENT, in addition to the package's own: directories separated
+# by `:` in `CHOREGOS_PLAYBOOKS_DIR`. This is what makes the engine usable outside software: a
+# `sourcing` or `case_review` role has no business in this package, but the rest of the machine
+# (states, transitions, budgets, guarantees, memory) does not change from one domain to another.
+# Two forms are accepted, because a ConfigMap mounts a tree badly:
+#   <dir>/<role>.md          (flat file, one ConfigMap key)
+#   <dir>/<role>/prompt.md   (same shape as the package's roles)
+# A deployment role wins over the package's: that is how `implement` is adapted to a house
+# without rewriting the platform.
 def extra_roles_dirs() -> list[Path]:
     raw = os.environ.get("CHOREGOS_PLAYBOOKS_DIR", "")
     return [Path(p) for p in raw.split(":") if p.strip()]
@@ -49,7 +49,7 @@ __version__ = "0.1.0"
 
 
 def _search_dirs() -> list[str]:
-    # Les répertoires du déploiement D'ABORD : le premier trouvé gagne.
+    # The deployment's directories FIRST: the first one found wins.
     return [str(d) for d in extra_roles_dirs()] + [str(ROLES_DIR), str(ROLES_DIR.parent)]
 
 
@@ -85,14 +85,14 @@ def playbook_source(role: str) -> str:
 
 
 def render_playbook(role: str, **variables: Any) -> str:
-    """Rend le prompt d'un rôle, du déploiement s'il en fournit un, du paquet sinon."""
-    path = playbook_path(role)  # lève si le rôle est inconnu
+    """Render a role's prompt: the deployment's if it supplies one, the package's otherwise."""
+    path = playbook_path(role)  # raises if the role is unknown
     template = _env().get_template(_template_name(path, role))
     defaults: dict[str, Any] = {
         "ticket": {},
         "spec": "",
         "plan_markdown": "",
-        #: Les entrées déclarées par la transition, par nom (`{{ inputs.profils }}`).
+        #: The inputs declared by the transition, by name (`{{ inputs.profiles }}`).
         "inputs": {},
         "allowed_paths": [],
         "context": None,
@@ -103,11 +103,11 @@ def render_playbook(role: str, **variables: Any) -> str:
     return template.render({**defaults, **variables})
 
 
-def cadrer(instructions: str) -> str:
-    """Les instructions d'un agent du registre, suivies du cadre qu'il ne peut pas modifier (ADR 0033).
+def frame(instructions: str) -> str:
+    """A registry agent's instructions, followed by the frame it cannot change (ADR 0033).
 
-    L'auteur d'un agent écrit ce qu'il faut FAIRE ; comment répondre à la plateforme — le contrat
-    de sortie, les invariants — n'est pas à lui.
+    An agent's author writes what to DO; how to answer the platform — the output contract, the
+    invariants — is not theirs to decide.
     """
     return (
         f"{instructions.rstrip()}\n\n---\n\n"
@@ -117,7 +117,7 @@ def cadrer(instructions: str) -> str:
 
 
 def _template_name(path: Path, role: str) -> str:
-    """Le nom que le chargeur Jinja attend, relatif à l'un des répertoires de recherche."""
+    """The name the Jinja loader expects, relative to one of the search directories."""
     for directory in _search_dirs():
         try:
             return str(path.relative_to(directory))
@@ -167,8 +167,8 @@ __all__ = [
     "INVARIANTS",
     "KNOWN_ROLES",
     "OUTPUT_CONTRACT",
-    "cadrer",
     "extra_roles_dirs",
+    "frame",
     "playbook_path",
     "playbook_source",
     "render_playbook",

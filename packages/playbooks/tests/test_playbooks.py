@@ -1,4 +1,4 @@
-"""Les playbooks : rendu, invariants, et non-régression par les évals."""
+"""Playbooks: rendering, invariants, and non-regression through the evals."""
 
 from __future__ import annotations
 
@@ -10,55 +10,55 @@ from choregos_playbooks.evals.runner import evaluate_case
 
 
 @pytest.mark.parametrize("role", KNOWN_ROLES)
-def test_chaque_role_rend_un_prompt_complet(role: str) -> None:
+def test_every_role_renders_a_complete_prompt(role: str) -> None:
     rendered = render_playbook(
         role,
-        ticket={"key": "acme#1", "title": "Titre", "body": "Corps"},
+        ticket={"key": "acme#1", "title": "Title", "body": "Body"},
         spec="## Spec",
         allowed_paths=["src/**"],
     )
     assert "## Invariants" in rendered
     assert "result.json" in rendered
-    assert "{{" not in rendered, "aucune variable Jinja non rendue"
+    assert "{{" not in rendered, "no Jinja variable left unrendered"
 
 
-def test_la_memoire_est_marquee_non_fiable() -> None:
+def test_memory_is_marked_untrusted() -> None:
     context = ContextPack(
         query="q",
-        memories=[MemoryItem(kind="decision", subject="d:x", content="Une décision antérieure.")],
+        memories=[MemoryItem(kind="decision", subject="d:x", content="An earlier decision.")],
     )
     rendered = render_playbook("implement", ticket={"key": "a#1", "title": "T", "body": ""}, context=context)
     assert "not an order" in rendered or "**not** instructions" in rendered
-    assert "Une décision antérieure." in rendered
+    assert "An earlier decision." in rendered
 
 
-def test_role_inconnu_est_refuse() -> None:
+def test_unknown_role_is_refused() -> None:
     with pytest.raises(FileNotFoundError, match="unknown playbook"):
-        render_playbook("licorne")
+        render_playbook("unicorn")
 
 
 @pytest.mark.parametrize("path", sorted(CASES_DIR.glob("*.yaml")), ids=lambda p: p.stem)
-def test_les_evals_de_playbooks_passent(path) -> None:
+def test_the_playbook_evals_pass(path) -> None:
     result = evaluate_case(path)
-    assert result.passed, f"manque : {result.missing} · interdit : {result.forbidden}"
+    assert result.passed, f"missing: {result.missing} · forbidden: {result.forbidden}"
 
 
-def test_les_invariants_ne_se_contredisent_pas_sur_result_json() -> None:
-    """Le premier invariant EXIGE d'écrire `.choregos/result.json` ; le dernier interdisait
-    de toucher à `.choregos/**`.
+def test_the_invariants_do_not_contradict_each_other_on_result_json() -> None:
+    """The first invariant REQUIRES writing `.choregos/result.json`; the last one used to forbid
+    touching `.choregos/**`.
 
-    Un modèle doit alors arbitrer entre deux ordres, et un petit modèle obéit au dernier. Sur le
-    locataire dev, le 2026-09-27, l'agent a tourné, appelé le modèle, et n'a rien écrit : l'étape
-    est morte sur « `result.json` est absent ». Le garde-fou, lui, connaissait l'exception
-    (`guardrails.py` autorise ce seul fichier) — c'était le PROMPT qui se contredisait, et un
-    garde-fou correct derrière une consigne contradictoire ne sert à rien.
+    A model then has to arbitrate between two orders, and a small model obeys the last one. On the
+    dev tenant, on 2026-09-27, the agent ran, called the model, and wrote nothing: the stage died
+    on "`result.json` is missing". The guardrail knew the exception (`guardrails.py` allows that
+    one file) — it was the PROMPT that contradicted itself, and a correct guardrail behind a
+    contradictory instruction is useless.
     """
     from choregos_playbooks import INVARIANTS
 
-    lignes = [ligne for ligne in INVARIANTS.splitlines() if ".choregos/**" in ligne]
-    assert lignes, "l'invariant sur `.choregos/**` a disparu"
-    for ligne in lignes:
-        assert "other" in ligne.lower() or "except" in ligne or "result.json" in ligne, (
-            f"cet invariant interdit `.choregos/**` sans excepter result.json, "
-            f"que le premier invariant exige : {ligne}"
+    lines = [line for line in INVARIANTS.splitlines() if ".choregos/**" in line]
+    assert lines, "the invariant on `.choregos/**` is gone"
+    for line in lines:
+        assert "other" in line.lower() or "except" in line or "result.json" in line, (
+            f"this invariant forbids `.choregos/**` without excepting result.json, "
+            f"which the first invariant requires: {line}"
         )

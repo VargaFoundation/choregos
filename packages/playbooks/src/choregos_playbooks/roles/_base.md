@@ -1,4 +1,4 @@
-{# Fragment commun : contexte du ticket, mémoire, invariants #}
+{# Shared fragment: work item context, memory, invariants #}
 ## Work item
 **{{ ticket.get('key', '') }}** — {{ ticket.get('title', '') }}
 
