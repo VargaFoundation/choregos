@@ -1,64 +1,69 @@
-# Choregos — instructions pour les agents
+# Choregos — instructions for agents
 
-> Ce fichier a été **vidé par accident** le 2026-09-24 (commit `98c2a492`) : la bascule de la
-> documentation en anglais devait faire de `CLAUDE.md` un pointeur vers `AGENTS.md`, et a remplacé
-> le contenu d'`AGENTS.md` par un import de lui-même. `CLAUDE.md` est un lien symbolique vers ce
-> fichier ; les deux sont donc la même page, et `tests/docs/test_instructions_des_agents.py` refuse
-> qu'elle se re-vide.
+> This file was **emptied by accident** on 2026-09-24 (commit `98c2a492`): switching the
+> documentation to English was meant to turn `CLAUDE.md` into a pointer to `AGENTS.md`, and
+> replaced the content of `AGENTS.md` with an import of itself. `CLAUDE.md` is a symbolic link to
+> this file; both are therefore the same page, and `tests/docs/test_instructions_des_agents.py`
+> refuses to let it be emptied again.
 
-## Contexte
-Plateforme d'agents gouvernés, à usage général (Varga Foundation, Apache 2.0 ; ADR 0029) : des
-workflows de tout métier, portés par des agents et des humains, sous des garanties mesurées. Plan et état des lieux :
-`docs/plan/`. Documentation de référence : `docs/`. Décisions structurantes : `docs/adr/`.
-Contrats : `packages/contracts` — **ne pas modifier sans PR `contract-change`** (ADR 0001).
+## Context
+A general-purpose platform of governed agents (Varga Foundation, Apache 2.0; ADR 0029): workflows
+from any trade, carried by agents and humans, under measured guarantees. Plan and status:
+`docs/plan/`. Reference documentation: `docs/`. Structural decisions: `docs/adr/`.
+Contracts: `packages/contracts` — **do not modify without a `contract-change` PR** (ADR 0001).
 
-## Langues
-La documentation de référence est en **anglais** (`docs/`) ; `docs/fr/` est une archive non
-maintenue. Le **français** reste la langue du code, des commentaires, des docstrings, de
-`docs/plan/` (STATUS, BLOCKERS) et des messages de commit.
+## Languages
+**Everything is in English** (ADR 0046, superseding ADR 0039 §2-3): code, identifiers, comments,
+docstrings, tests, file names, the reference documentation (`docs/`), `docs/plan/` (STATUS,
+BLOCKERS), ADRs, commit messages and PR descriptions. `docs/fr/` is an unmaintained archive.
+Existing French code is renamed package by package (S34-04); do not mass-translate code your story
+does not otherwise touch. `make lint` and CI refuse French in new or modified lines
+(`tools/check_english.py`); a line that must stay French (a `workflow.patched` id, a French alias
+kept for running workflows) carries `lang: fr-ok` in a comment.
 
-## Commandes (celles de la CI, pas d'autres)
-- Tout ce qui bloque une PR : `make ci` = `lint` + `typecheck` + `test` + `contracts-check` + `charts-lint`.
-- Python : `uv run ruff check packages apps/api apps/orchestrator tools tests` puis
-  `ruff format --check` sur les mêmes chemins — **`tests/` en fait partie**, un E501 y casse la CI.
-- Typage : `uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools` (strict).
-- Tests : `uv run pytest -q` ; `-m "not slow"` écarte les lents (construction de l'espace de
-  travail). Couverture : `make test-cov`, seuil 80 %.
-- Front : `make web-ci` = lint + typecheck + test + build.
-- Charts : `make charts-lint` (helm lint + kubeconform). `make charts-test` exige le greffon
-  helm-unittest **1.1.2** et Helm ≥ 3.18 ; sans eux il **refuse de jouer** plutôt que de rendre un
-  verdict faux, et `tests/charts/` rend le chart et l'éprouve en Python.
-- Générés à committer : `make contracts` (types depuis les schémas), `make docs-cli`
-  (`docs/cli.md` depuis la CLI). Un test refuse la divergence.
-- Au-delà de la CI : `make demo` (bout en bout en mémoire), `make dev-up` / `make dev-down`,
-  `make e2e`, `make test-cluster` (vrai cluster), `make test-live` (vrais services),
+## Commands (the CI's, no others)
+- Everything that blocks a PR: `make ci` = `lint` + `typecheck` + `test` + `contracts-check` + `charts-lint`.
+- Python: `uv run ruff check packages apps/api apps/orchestrator tools tests` then
+  `ruff format --check` on the same paths — **`tests/` is one of them**, an E501 there breaks CI.
+  `make lint` also runs `tools/check_english.py` (lines added since `origin/main`).
+- Typing: `uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools` (strict).
+- Tests: `uv run pytest -q`; `-m "not slow"` leaves out the slow ones (building the
+  workspace). Coverage: `make test-cov`, threshold 80 %.
+- Front end: `make web-ci` = lint + typecheck + test + build.
+- Charts: `make charts-lint` (helm lint + kubeconform). `make charts-test` requires the
+  helm-unittest plugin **1.1.2** and Helm ≥ 3.18; without them it **refuses to run** rather than
+  give a false verdict, and `tests/charts/` renders the chart and checks it in Python.
+- Generated files to commit: `make contracts` (types from the schemas), `make docs-cli`
+  (`docs/cli.md` from the CLI). A test refuses any divergence.
+- Beyond CI: `make demo` (end to end, in memory), `make dev-up` / `make dev-down`,
+  `make e2e`, `make test-cluster` (real cluster), `make test-live` (real services),
   `make conformance`, `make evals`, `make replay-record`.
 
 ## Conventions
-- Python 3.12, typage strict, pydantic v2, async sur toute I/O, structlog. TypeScript strict,
+- Python 3.12, strict typing, pydantic v2, async on all I/O, structlog. Strict TypeScript,
   ESLint, Prettier.
-- Commits conventionnels : `feat(orchestrator): …`, `fix(runner): …`, `contract(schemas): …`.
-  Une story = une PR = un squash.
-- Fakes obligatoires : chaque intégration a son `Fake*` scriptable ; `CHOREGOS_FAKES=1` bascule
-  toute la plateforme (ADR 0005).
-- Idempotence : toute activité Temporal et tout pas de provisioning est rejouable sans double effet
-  (ADR 0008). Pas de PR sur `workflows/` sans historique rejoué (`tests/replay/`).
-- Sécurité : aucun secret en dur ; jamais de token large dans un runner ; toute écriture tracker via
-  l'API interne.
-- Journaux : JSON, clés `project`, `work_item`, `run_id`, `stage` quand elles existent.
+- Conventional commits: `feat(orchestrator): …`, `fix(runner): …`, `contract(schemas): …`.
+  One story = one PR = one squash.
+- Fakes are mandatory: every integration has its scriptable `Fake*`; `CHOREGOS_FAKES=1` switches
+  the whole platform (ADR 0005).
+- Idempotence: every Temporal activity and every provisioning step can be replayed without a double
+  effect (ADR 0008). No PR on `workflows/` without a replayed history (`tests/replay/`).
+- Security: no hard-coded secret; never a broad token in a runner; every tracker write goes through
+  the internal API.
+- Logs: JSON, with the keys `project`, `work_item`, `run_id`, `stage` when they exist.
 
-## Definition of done (bloquante)
-`make ci` vert, docs à jour, critères d'acceptation cochés dans la PR, pas de `TODO` sans issue
-liée, `docs/plan/STATUS.md` mis à jour **en disant ce que la PR prouve et ce qu'elle ne prouve pas**.
+## Definition of done (blocking)
+`make ci` green, docs up to date, acceptance criteria checked in the PR, no `TODO` without a linked
+issue, `docs/plan/STATUS.md` updated **saying what the PR proves and what it does not prove**.
 
-**Rien n'est déclaré ✅ sans un test qui échoue en son absence.** Une fonctionnalité dont la garde
-peut sauter sans faire rougir la suite n'est pas livrée, elle est espérée.
+**Nothing is declared ✅ without a test that fails in its absence.** A feature whose guard can
+be removed without turning the suite red is not delivered, it is hoped for.
 
-## Hors périmètre
-Un problème découvert hors de ta story : n'y touche pas, ouvre une issue `finding` avec
-`origin: <story>`, la preuve et une proposition. Besoin d'un contrat : issue `contract-change`.
+## Out of scope
+A problem found outside your story: do not touch it, open a `finding` issue with
+`origin: <story>`, the evidence and a proposal. Need a contract: a `contract-change` issue.
 
-## Mémoire
-Lis `docs/plan/` et `docs/adr/` avant de décider ; ajoute un ADR (`docs/adr/NNNN-*.md`) pour toute
-décision structurante. Quand une page et le code se contredisent, **le code gagne et la page est un
-bogue**.
+## Memory
+Read `docs/plan/` and `docs/adr/` before deciding; add an ADR (`docs/adr/NNNN-*.md`) for any
+structural decision. When a page and the code contradict each other, **the code wins and the page
+is a bug**.

@@ -22,9 +22,12 @@ state of the project and the work plan that follows from it are in
 
 ## Languages
 
-The reference documentation (`docs/`, ADRs, runbooks) is in **English**; `docs/fr/` archives
-the French versions. The code, its comments, `docs/plan/` (STATUS, BLOCKERS) and commit
-messages are in French.
+Everything is in **English** ([ADR 0046](adr/0046-english-everywhere.md)): the reference
+documentation (`docs/`, ADRs, runbooks), `docs/plan/`, the code, its identifiers, comments and
+tests, commit messages and pull request descriptions; `docs/fr/` archives the French versions.
+Older code is still French and is renamed package by package. `make lint` and CI refuse French in
+the lines a change adds (`tools/check_english.py`); a line that must stay French — a Temporal
+patch id, an alias kept for running workflows — carries `lang: fr-ok` in a comment.
 
 ## The contract before the code
 

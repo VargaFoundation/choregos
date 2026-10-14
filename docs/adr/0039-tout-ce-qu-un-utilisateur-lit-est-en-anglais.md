@@ -1,6 +1,8 @@
 # 0039 — Everything a user reads is in English; identifiers and machine codes do not change
 
-- **Status**: accepted, 2026-10-07
+- **Status**: accepted, 2026-10-07 — §2 and §3 superseded by
+  [ADR 0046](0046-english-everywhere.md) on 2026-10-12 (identifiers, code, `docs/plan` and commit
+  messages are English too); §1 and §4 stand
 - **Concerns**: everything Choregos ships or says to a person — the console, the API's messages,
   the validator's, the shipped workflow templates, policy presets and stack templates, agents,
   skills, the files a template adds to a project's repository, the demo; follows the decision of
