@@ -1586,7 +1586,23 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/platform\/executors$/, []],
     [/^\/projects\/[^/]+\/models$/, { profiles: {}, allow_unvalidated: false, inherited: {} }],
     [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],
-    [/^\/projects\/[^/]+\/policy$/, { name: "solo", version: 1, yaml: "budgets:\n  per_ticket_usd: 25\n", is_active: true }],
+    [
+      /^\/projects\/[^/]+\/policy$/,
+      {
+        name: "solo",
+        version: 1,
+        yaml: "budgets:\n  per_ticket_usd: 25\nrelease_train:\n  prod:\n    mode: train\n  staging:\n    mode: train\n",
+        // the trains page lists these environments (S26-05)
+        json: {
+          apiVersion: "choregos/v1",
+          kind: "Policy",
+          metadata: { name: "solo", version: 1 },
+          budgets: { per_ticket_usd: 25 },
+          release_train: { prod: { mode: "train" }, staging: { mode: "train" } },
+        },
+        is_active: true,
+      },
+    ],
     [/^\/orgs\/[^/]+\/projects$/, projects],
     [/^\/projects\/[^/]*checkout-web$/, projects.items[1]],
     [/^\/projects\/[^/]+$/, projects.items[0]],
