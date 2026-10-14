@@ -30,8 +30,8 @@ describe("the gate of a skill, in the console (S32-06)", () => {
       "neutral",
     ]);
     render(<RiskBadge risk="high" reviewStatus="pending_review" />);
-    expect(screen.getByTestId("risque").textContent).toContain("high risk");
-    expect(screen.getByTestId("revue").textContent).toContain("pending review");
+    expect(screen.getByTestId("risque").textContent).toContain("High risk");
+    expect(screen.getByTestId("revue").textContent).toContain("Pending review");
   });
 
   it("the most severe finding comes first", () => {
@@ -64,7 +64,7 @@ describe("the gate of a skill, in the console (S32-06)", () => {
       { slug: "pdf", status: "active", latest_version: 1, risk: "high", review_status: "pending_review" },
     ]);
     render(<GitImport org="varga" />);
-    fireEvent.click(screen.getByRole("button", { name: "preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(screen.getByTestId("apercu")).toBeTruthy());
     expect(api.previewSkillsFromGit).toHaveBeenCalledWith("varga", {
       repo_url: "https://github.com/anthropics/skills",
@@ -74,7 +74,7 @@ describe("the gate of a skill, in the console (S32-06)", () => {
     const cases = screen.getAllByRole("checkbox");
     expect((cases[1] as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(cases[0]!);
-    fireEvent.click(screen.getByRole("button", { name: /^import 1/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Import 1/ }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("second reviewer"));
     expect(api.importSkillsFromGit).toHaveBeenCalledWith("varga", {
       repo_url: "https://github.com/anthropics/skills",

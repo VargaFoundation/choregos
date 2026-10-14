@@ -25,15 +25,20 @@ export function RiskBadge({ risk, reviewStatus }: { risk?: string | null; review
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <Badge tone={toneOfRisk(risk)} data-testid="risque">
-        {risk ? `${risk} risk` : "not assessed"}
+        {risk ? `${risk[0]!.toUpperCase()}${risk.slice(1)} risk` : "Not assessed"}
       </Badge>
       {reviewStatus === "pending_review" && (
         <Badge tone="waiting" data-testid="revue">
-          pending review
+          Pending review
         </Badge>
       )}
     </span>
   );
+}
+
+/** A code shown as words starts with a capital, like everything the console writes (ADR 0048). */
+function sentence(text: string): string {
+  return text ? `${text[0]!.toUpperCase()}${text.slice(1)}` : text;
 }
 
 const SEVERITY_TONE: Record<string, Tone> = { critical: "danger", warning: "warn", info: "neutral" };
@@ -51,7 +56,7 @@ export function Findings({ findings }: { findings: SkillFinding[] | null | undef
       {sortFindings(findings).map((finding, index) => (
         <li key={`${finding.code}-${finding.file ?? ""}-${index}`} className="flex flex-wrap items-baseline gap-2">
           <Badge tone={SEVERITY_TONE[finding.severity] ?? "neutral"} dot={false}>
-            {finding.code.replaceAll("_", " ")}
+            {sentence(finding.code.replaceAll("_", " "))}
           </Badge>
           <span>{finding.detail}</span>
           {finding.file && (
@@ -132,18 +137,18 @@ export function GitImport({ org, onImported }: { org: string; onImported?: (skil
         that commit, so the skill cannot change under its agents.
       </p>
       <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
-        <Field label="repository">
+        <Field label="Repository">
           {(props) => <Input {...props} value={repo} onChange={(e) => setRepo(e.target.value)} />}
         </Field>
-        <Field label="branch, tag or commit">
+        <Field label="Branch, tag or commit">
           {(props) => <Input {...props} value={ref} onChange={(e) => setRef(e.target.value)} />}
         </Field>
-        <Field label="folder">
+        <Field label="Folder">
           {(props) => <Input {...props} value={path} onChange={(e) => setPath(e.target.value)} />}
         </Field>
       </div>
       <Button onClick={() => void look()} disabled={busy || !repo || !ref}>
-        preview
+        Preview
       </Button>
       {preview && (
         <div className="space-y-2" data-testid="apercu">
@@ -184,7 +189,7 @@ export function GitImport({ org, onImported }: { org: string; onImported?: (skil
             </ul>
           )}
           <Button tone="accent" onClick={() => void bring()} disabled={busy || chosen.length === 0}>
-            import {chosen.length || ""} at {preview.sha.slice(0, 12)}
+            Import {chosen.length || ""} at {preview.sha.slice(0, 12)}
           </Button>
         </div>
       )}
@@ -233,12 +238,12 @@ export function VersionGate({
       <div className="flex flex-wrap items-center gap-2">
         <RiskBadge risk={version.risk} reviewStatus={version.review_status} />
         {version.reviewed_by && (
-          <span className="text-xs text-ink-muted">approved by {version.reviewed_by}</span>
+          <span className="text-xs text-ink-muted">Approved by {version.reviewed_by}</span>
         )}
       </div>
       {version.source && (
         <p className="text-xs text-ink-muted">
-          from <code>{version.source.repo}</code> at <code>{version.source.sha.slice(0, 12)}</code>
+          From <code>{version.source.repo}</code> at <code>{version.source.sha.slice(0, 12)}</code>
           {version.source.path ? (
             <>
               {" "}
@@ -256,7 +261,7 @@ export function VersionGate({
             it.
           </p>
           <Button tone="primary" onClick={() => void approve()} disabled={busy || mine}>
-            approve v{version.version}
+            Approve v{version.version}
           </Button>
           {mine && <p className="text-xs text-ink-muted">You imported it: a second person approves it.</p>}
         </div>
@@ -280,7 +285,7 @@ export function UpdateCheck({ org, slug }: { org: string; slug: string }) {
   }
   return (
     <div className="space-y-2 text-sm">
-      <Button onClick={() => void check()}>check for an update</Button>
+      <Button onClick={() => void check()}>Check for an update</Button>
       {update &&
         (update.up_to_date ? (
           <p role="status">Up to date at {update.sha.slice(0, 12)}.</p>
@@ -292,7 +297,7 @@ export function UpdateCheck({ org, slug }: { org: string; slug: string }) {
             </p>
             {!update.problem && (
               <p className="text-ink-muted">
-                added {(update.added ?? []).join(", ") || "—"} · modified {(update.modified ?? []).join(", ") || "—"} ·
+                Added {(update.added ?? []).join(", ") || "—"} · modified {(update.modified ?? []).join(", ") || "—"} ·
                 removed {(update.removed ?? []).join(", ") || "—"}. Nothing is applied: import this commit to publish it.
               </p>
             )}

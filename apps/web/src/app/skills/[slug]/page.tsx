@@ -44,7 +44,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
       </div>
       {skill.data.description && <p className="max-w-3xl text-sm text-ink-muted">{skill.data.description}</p>}
       {version.data && (
-        <Card title={`gate of v${version.data.version}`}>
+        <Card title={`Gate of v${version.data.version}`}>
           <VersionGate
             org={org}
             slug={slug}
