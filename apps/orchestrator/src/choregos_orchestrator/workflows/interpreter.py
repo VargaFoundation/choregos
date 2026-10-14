@@ -368,7 +368,7 @@ class WorkflowInterpreter:
             # A restarted interpreter starts from what the ticket has cost, not from zero.
             self.cost_usd = max(self.cost_usd, float(context.get("ticket_cost_usd", 0.0)))
         self.state = params.resume_from or context.get("state") or engine.initial_state
-        if self.version_des_champs == 0:  # un `fields_changed` arrivé avant la lecture est plus récent
+        if self.version_des_champs == 0:  # a `fields_changed` that arrived before the read is newer
             self.champs = dict(context.get("fields") or {})
 
     # ───────────────────────── étapes ─────────────────────────
