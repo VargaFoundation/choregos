@@ -134,7 +134,7 @@ class FakeTemporal:
         return workflow_id
 
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str:
-        self.started.setdefault(workflow_id, payload)  # `trial-<work item>` : un seul démarrage
+        self.started.setdefault(workflow_id, payload)  # `trial-<work item>`: a single start
         return workflow_id
 
     async def cancel(self, workflow_id: str) -> None:
