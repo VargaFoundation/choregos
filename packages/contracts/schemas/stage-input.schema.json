@@ -471,6 +471,12 @@
         }
       }
     },
+    "memory_scope": {
+      "type": "string",
+      "enum": ["none", "project", "agent"],
+      "default": "project",
+      "description": "Whose memory the run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none."
+    },
     "skills": {
       "type": "array",
       "description": "The registry agent's skills (ADR 0033): name, version, digest. The runner reads the files through the internal API and checks the digest before laying them down.",

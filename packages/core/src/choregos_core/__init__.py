@@ -74,6 +74,7 @@ from .errors import (
 )
 from .gates import GateContext, GateOutcome, evaluate, is_async_gate, known_gates, matches_any, scan_secrets
 from .injection import Suspicion, analyser, suspicions
+from .memory_scope import MemoryScope, memory_namespace, split_namespace
 from .models import (
     BY_SIZE_MAP,
     KNOWN_BACKEND_NAMES,
@@ -120,6 +121,7 @@ __all__ = [
     "LaunchContext",
     "LaunchSpec",
     "Memory",
+    "MemoryScope",
     "Message",
     "MessageAction",
     "ModelResolutionError",
@@ -165,6 +167,7 @@ __all__ = [
     "load_preset",
     "load_template",
     "matches_any",
+    "memory_namespace",
     "parse_policy",
     "parse_workflow",
     "parse_workflow_file",
@@ -172,6 +175,7 @@ __all__ = [
     "preset_yaml",
     "rapport_d_acces",
     "scan_secrets",
+    "split_namespace",
     "suspicions",
     "template_names",
     "template_yaml",

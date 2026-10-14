@@ -254,6 +254,9 @@ class StageInput(Strict):
     skills: list[SkillRef] = Field(default_factory=list)
     #: The knowledge bases of the registry agent (ADR 0051); empty for a playbook.
     knowledge: list[KnowledgeRef] = Field(default_factory=list)
+    #: Whose memory the run reads and writes (S32-02): the project's, the agent's own within the
+    #: project, or none. `project` for a playbook and before the field existed.
+    memory_scope: Literal["none", "project", "agent"] = "project"
     permissions: Permissions = Field(default_factory=Permissions)
     context: StageContext = Field(default_factory=StageContext)
     callbacks: Callbacks

@@ -7,11 +7,26 @@ from datetime import timedelta
 from typing import Any
 
 from choregos_api.db.models import Finding, Release, Run, WorkItem
-from choregos_core import Fact, Message, Provenance, utcnow
+from choregos_core import Fact, Message, Provenance, memory_namespace, utcnow
 from sqlalchemy import select
 from temporalio import activity
 
 from .base import db, project_bundle
+
+
+def _namespace_of(project: str, run: Any) -> str | None:
+    """Where a fact born of a run goes: the memory scope its `StageInput` carried (S32-02)."""
+    if run is None:
+        return project
+    scope = str((run.stage_input or {}).get("memory_scope") or "project")
+    return memory_namespace(project, scope, run.agent_slug)
+
+
+async def _runs_by_id(session: Any, ids: list[str]) -> dict[str, Any]:
+    if not ids:
+        return {}
+    lignes = await session.execute(select(Run).where(Run.id.in_(ids)))
+    return {run.id: run for run in lignes.scalars()}
 
 
 @activity.defn(name="ingest_sources")
@@ -65,6 +80,7 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 reason = (run.result or {}).get("reason") or "failed"
                 events.append(
                     {
+                        "_namespace": _namespace_of(bundle.slug, run),
                         "external_id": f"run:{run.id}",
                         "kind": "run_lesson",
                         "subject": f"run_lesson:{bundle.slug}:{run.stage_role}",
@@ -113,9 +129,11 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 .scalars()
                 .all()
             )
+            origines = await _runs_by_id(session, [f.origin_run_id for f in findings if f.origin_run_id])
             for finding in findings:
                 events.append(
                     {
+                        "_namespace": _namespace_of(bundle.slug, origines.get(finding.origin_run_id or "")),
                         "external_id": f"finding:{finding.id}",
                         "kind": "finding",
                         "subject": f"finding:{bundle.slug}:{finding.id}",
@@ -124,8 +142,15 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                     }
                 )
 
-        if events:
-            await bundle.adapters.memory.ingest_events(bundle.slug, events)
+        # Each fact goes where its run's agent keeps memory (S32-02): the project, the agent's own,
+        # or nowhere for an agent that keeps none.
+        par_espace: dict[str, list[dict[str, Any]]] = {}
+        for event in events:
+            espace = event.pop("_namespace", bundle.slug)
+            if espace is not None:
+                par_espace.setdefault(espace, []).append(event)
+        for espace, lot in par_espace.items():
+            await bundle.adapters.memory.ingest_events(espace, lot)
         return {"facts": len(events), "sources": sources}
 
 
@@ -155,8 +180,12 @@ async def write_run_lesson(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_slug"])
         if not bundle.engine.memory_enabled():
             return {"written": False}
+        run = await session.get(Run, payload["run_id"]) if payload.get("run_id") else None
+        espace = _namespace_of(bundle.slug, run)
+        if espace is None:
+            return {"written": False, "skipped": "the agent keeps no memory"}
         await bundle.adapters.memory.write_fact(
-            bundle.slug,
+            espace,
             Fact(
                 kind="run_lesson",
                 subject=payload["subject"],

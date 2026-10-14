@@ -24,6 +24,7 @@ from typing import Any
 
 from choregos_contracts import ContextPack, MemoryItem
 from choregos_core.domain import Fact, Memory, Provenance, utcnow
+from choregos_core.memory_scope import split_namespace
 from choregos_core.models import estimate_tokens
 
 from ..errors import ConfigurationError
@@ -95,8 +96,18 @@ class LexicalMemory:
             raise ConfigurationError("pgvector : modèles non injectés (voir `brancher_pgvector`)")
         return self._modeles
 
+    @staticmethod
+    def _scope(memory_fact: Any, project_id: str, namespace: str) -> Any:
+        """The facts of a namespace (S32-02): the project's own (no agent), or one agent's within it."""
+        from sqlalchemy import and_
+
+        agent = split_namespace(namespace)[1]
+        portee = memory_fact.agent_slug.is_(None) if agent is None else memory_fact.agent_slug == agent
+        return and_(memory_fact.project_id == project_id, portee)
+
     async def _project_id(self, session: Any, project: str) -> str:
         Project = self.modeles.Project  # noqa: N806 — c'est une classe
+        project = split_namespace(project)[0]
 
         row = (await session.execute(_select(Project).where(Project.slug == project))).scalar_one_or_none()
         if row is None:
@@ -155,7 +166,7 @@ class LexicalMemory:
         async with self._sessions()() as session:
             project_id = await self._project_id(session, project)
             statement = _select(MemoryFact).where(
-                MemoryFact.project_id == project_id, MemoryFact.status == "active"
+                self._scope(MemoryFact, project_id, project), MemoryFact.status == "active"
             )
             if kinds:
                 statement = statement.where(MemoryFact.kind.in_(kinds))
@@ -174,7 +185,7 @@ class LexicalMemory:
                 (
                     await session.execute(
                         _select(MemoryFact).where(
-                            MemoryFact.project_id == project_id,
+                            self._scope(MemoryFact, project_id, project),
                             MemoryFact.subject == fact.subject,
                             MemoryFact.status == "active",
                         )
@@ -190,6 +201,7 @@ class LexicalMemory:
                 row.valid_to = utcnow()
             created = MemoryFact(
                 project_id=project_id,
+                agent_slug=split_namespace(project)[1],
                 kind=str(fact.kind),
                 subject=fact.subject,
                 content=fact.content,
@@ -213,6 +225,7 @@ class LexicalMemory:
             project_id = await self._project_id(session, project)
             created = MemoryFact(
                 project_id=project_id,
+                agent_slug=split_namespace(project)[1],
                 kind=str(fact.kind),
                 subject=fact.subject,
                 content=fact.content,
@@ -238,7 +251,7 @@ class LexicalMemory:
                 (
                     await session.execute(
                         _select(MemoryFact).where(
-                            MemoryFact.project_id == project_id, MemoryFact.status == "pending"
+                            self._scope(MemoryFact, project_id, project), MemoryFact.status == "pending"
                         )
                     )
                 )

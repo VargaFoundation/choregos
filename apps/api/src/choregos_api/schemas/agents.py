@@ -82,6 +82,9 @@ class AgentSpec(Dto):
     knowledge: list[AgentKnowledgeRef] = Field(default_factory=list)
     #: The agent's eval suite (S32-03): it gates the publication of the next version.
     evals: list[AgentEvalCase] = Field(default_factory=list)
+    #: Whose memory a run reads and writes (S32-02): `project` (shared, the default), `agent` (its
+    #: own, within the project) or `none`.
+    memory: Literal["none", "project", "agent"] = "project"
 
 
 class AgentTrialCreate(Dto):

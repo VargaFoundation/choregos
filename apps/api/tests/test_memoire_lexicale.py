@@ -169,3 +169,28 @@ async def test_le_catalogue_de_l_interface_ne_propose_plus_l_ancien_nom(client: 
     memoire = {entree["type"] for entree in types if entree["kind"] == "memory"}
     assert "lexical" in memoire
     assert "pgvector" not in memoire, "l'ancien nom est encore proposé à la création"
+
+
+async def test_an_agents_own_memory_is_kept_apart_from_the_projects(client: AsyncClient, org: str) -> None:
+    """S32-02: `<project>#agent:<slug>` is the agent's own memory in that project. The project does
+    not read it, the agent reads only it, and a fact of the same subject supersedes nothing across."""
+    from choregos_core import memory_namespace
+
+    await login(client, "admin@varga.dev")
+    await _projet(client, org, "facturation")
+    memoire = _memoire(org)
+    agent = memory_namespace("facturation", "agent", "accountant")
+    await memoire.write_fact(
+        "facturation", Fact(kind="decision", subject="arrondi", content="Round to the cent.")
+    )
+    await memoire.write_fact(
+        agent, Fact(kind="decision", subject="arrondi", content="Round to the half cent.")
+    )
+    projet = [m.content for m in await memoire.search("facturation", "arrondi", k=5)]
+    propre = [m.content for m in await memoire.search(agent, "arrondi", k=5)]
+    assert (projet, propre) == (["Round to the cent."], ["Round to the half cent."])
+    await memoire.propose_fact(
+        agent, Fact(kind="decision", subject="vat", content="VAT at 20 %."), Provenance(source="agent")
+    )
+    assert [m.content for m in await memoire.list_pending(agent)] == ["VAT at 20 %."]
+    assert await memoire.list_pending("facturation") == []

@@ -519,6 +519,13 @@ expired agent does not start, and neither does one that has spent its `daily_usd
 (UTC) — models **and** tool calls. `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
 their success rate, their cost by kind and by project, and what it spent today.
 
+A version also says **whose memory** its runs use — `"memory": "project"` (the default: the
+project's shared memory, as before), `"agent"` (its own memory within the project: what it learns
+is not mixed with what the project knows, and no other agent reads it) or `"none"` (nothing read,
+nothing written). The run's `StageInput` carries it (`memory_scope`); the context pack, the lessons
+and the proposals of the run follow it, and the memory MCP server — which serves the project's
+memory — is only handed to a run whose scope is the project.
+
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). Creating, publishing and revoking need
 `agent:manage` (organisation administrators); a revocation is final.
