@@ -101,15 +101,34 @@ services:
     ports: ["127.0.0.1:${CHOREGOS_PORT_TEMPORAL_UI:-8233}:8080"]
     depends_on: [temporal]
 
+  litellm-config:
+    # Decides the mode from `.env` and writes LiteLLM's configuration: the `platform/*` aliases
+    # routed to Anthropic or OpenAI when a key is there, canned answers otherwise. The key itself
+    # is not written: the config says `os.environ/ANTHROPIC_API_KEY` (choregos_api.local_demo).
+    <<: *platform-image
+    command: ["python", "-m", "choregos_api.local_demo", "litellm-config", "/litellm"]
+    user: "0"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LITELLM_REAL: ${LITELLM_REAL:-auto}
+      CHOREGOS_LOG_JSON: "false"
+    volumes: ["litellm-config:/litellm"]
+    restart: "no"
+
   litellm:
     image: ghcr.io/berriai/litellm-database:v1.95.0
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    command: ["--config", "/litellm/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: sk-local-install-only
       DATABASE_URL: postgresql://choregos:local-dev-only@postgres:5432/litellm
-    volumes: ["./dev/local/litellm.yaml:/app/config.yaml:ro"]
+      # Only LiteLLM holds the provider key: agents get a virtual key per run, minted by the platform.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes: ["litellm-config:/litellm:ro"]
     depends_on:
       postgres: { condition: service_healthy }
+      litellm-config: { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness')"]
       interval: 5s
@@ -165,7 +184,16 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-      target: worker
+      # `worker` plus the Docker CLI, for the local Docker executor.
+      target: worker-local
+    # The Docker socket: the workers start each agent run as a container next to this one.
+    # SECURITY: whoever controls this socket controls the host's Docker, which is root on the host.
+    # The workers run as root here for the socket's sake, and that changes little: the socket
+    # already gives more. Acceptable on a laptop; never expose this compose file beyond one.
+    user: "0"
+    volumes:
+      - run-token-key:/keys:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     command:
       - sh
       - -c
@@ -174,6 +202,9 @@ services:
       <<: *platform-env
       # What an agent calls back, from inside the compose network.
       CHOREGOS_INTERNAL_API_URL: http://api:8000
+      # A project with no runtime connector runs its agents as local containers.
+      CHOREGOS_EXECUTOR_KIND: local_docker
+      CHOREGOS_RUNNER_IMAGE: ghcr.io/vargafoundation/choregos-runner:${CHOREGOS_RUNNER_VERSION:-0.17.12}
     depends_on:
       keys: { condition: service_completed_successfully }
       migrate: { condition: service_completed_successfully }
@@ -183,9 +214,13 @@ services:
     # The demo organisation and project, once; a second `up` changes nothing (choregos_api.local_demo).
     <<: *platform-image
     command: ["python", "-m", "choregos_api.local_demo"]
-    environment: *platform-env
+    environment:
+      <<: *platform-env
+      CHOREGOS_LOCAL_PROVIDER_FILE: /litellm/provider
+    volumes: ["litellm-config:/litellm:ro"]
     depends_on:
       api: { condition: service_healthy }
+      litellm-config: { condition: service_completed_successfully }
     restart: "no"
 
   web:
@@ -223,7 +258,14 @@ services:
       ECPHORIA_MEMORY__COGNITION__DB_PATH: /data/cognition.duckdb
     volumes: ["ecphoriadata:/data"]
 
+# Named, not `<project>_default`: the local Docker executor attaches each run container to it
+# (`choregos_api.local_demo.LOCAL_NETWORK`), whatever the compose project is called.
+networks:
+  default:
+    name: choregos
+
 volumes:
   pgdata:
   run-token-key:
+  litellm-config:
   ecphoriadata:

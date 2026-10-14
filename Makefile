@@ -237,6 +237,12 @@ test-cluster:  ## Tests qui exigent un vrai cluster (S2-12, S7-04, S8-06)
 	CHOREGOS_CLUSTER_CONTEXT=$${CHOREGOS_CLUSTER_CONTEXT:-kind-choregos} \
 	  $(UV) run pytest tests/cluster -m cluster -q
 
+.PHONY: test-live-local
+test-live-local:  ## A work item through a REAL model on the local install (key in .env, Docker)
+	@grep -qE '^(ANTHROPIC|OPENAI)_API_KEY=.+' .env 2>/dev/null || { echo "✗ put ANTHROPIC_API_KEY or OPENAI_API_KEY in .env (cp .env.example .env)"; exit 1; }
+	LITELLM_REAL=1 docker compose up -d --build --wait
+	python3 tools/local_install_check.py --expect-real --stage-timeout 900
+
 .PHONY: test-live
 test-live:  ## Tests contre les vrais services (identifiants dans l'environnement)
 	$(UV) run pytest tests/live -m live -q

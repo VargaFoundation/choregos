@@ -1,5 +1,5 @@
-# Gateway de développement : un fournisseur factice par défaut, un vrai modèle si
-# `LITELLM_REAL=1` et que les clés sont dans l'environnement.
+# Gateway of the dependencies-only stack (`dev/compose.yaml`): canned answers only. A real model is
+# the local install's job (`compose.yaml` at the root, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `.env`).
 model_list:
   - model_name: platform/standard
     litellm_params:

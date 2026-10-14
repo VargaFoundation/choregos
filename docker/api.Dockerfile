@@ -81,6 +81,15 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"
 CMD ["uvicorn", "choregos_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+# --- Target `worker-local`: the workers of the local install (`compose.yaml`), with the Docker CLI.
+#
+# The local Docker executor (`executor/local_docker.py`) starts each run as a container by calling
+# `docker`. Only the local install builds this target; the published `worker` stays without it.
+# Defined BEFORE `worker`, so that a build without `--target` still produces `worker`.
+FROM commun AS worker-local
+COPY --from=docker:28.5.1-cli /usr/local/bin/docker /usr/local/bin/docker
+CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
+
 # --- Cible `worker` : les workers Temporal.
 #
 # Ni `EXPOSE` ni `HEALTHCHECK` : un worker n'écoute sur rien. L'ancienne image héritait de la
@@ -89,3 +98,4 @@ CMD ["uvicorn", "choregos_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 # ordonnanceur qui n'utilise pas les sondes Kubernetes) le croyait.
 FROM commun AS worker
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
+

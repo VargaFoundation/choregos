@@ -101,3 +101,47 @@ def test_the_dependencies_only_stack_is_another_compose_project() -> None:
     deps = yaml.safe_load((ROOT / "dev/compose.yaml").read_text(encoding="utf-8"))["name"]
     local = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["name"]
     assert deps != local
+
+
+# ───────────────────────── S28-02: a real model, the local Docker executor ─────────────────────────
+
+
+def test_only_litellm_and_its_configuration_see_the_provider_key() -> None:
+    """Agents get a virtual key per run (LiteLLM, minted by the platform), never the provider's."""
+    for name, service in _services().items():
+        holds = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY"} & set(_env(service))
+        if name in {"litellm", "litellm-config"}:
+            assert holds == {"ANTHROPIC_API_KEY", "OPENAI_API_KEY"}, name
+        else:
+            assert not holds, f"{name} receives {holds}"
+
+
+def test_litellm_reads_the_generated_configuration() -> None:
+    services = _services()
+    assert "litellm-config:/litellm:ro" in services["litellm"]["volumes"]
+    assert services["litellm"]["command"][:2] == ["--config", "/litellm/config.yaml"]
+    condition = services["litellm"]["depends_on"]["litellm-config"]["condition"]
+    assert condition == "service_completed_successfully"
+    assert _env(services["seed"])["CHOREGOS_LOCAL_PROVIDER_FILE"] == "/litellm/provider"
+
+
+def test_the_workers_run_agents_as_local_containers() -> None:
+    from choregos_api.local_demo import LOCAL_NETWORK
+
+    compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
+    worker = compose["services"]["worker"]
+    assert worker["build"]["target"] == "worker-local"
+    assert "/var/run/docker.sock:/var/run/docker.sock" in worker["volumes"]
+    env = _env(worker)
+    assert env["CHOREGOS_EXECUTOR_KIND"] == "local_docker"
+    assert env["CHOREGOS_RUNNER_IMAGE"].startswith("ghcr.io/vargafoundation/choregos-runner:")
+    # The run containers join the network by name: it must not depend on the project name.
+    assert compose["networks"]["default"]["name"] == LOCAL_NETWORK
+
+
+def test_the_worker_local_target_has_the_docker_cli_and_is_not_the_default_build() -> None:
+    dockerfile = (ROOT / "docker/api.Dockerfile").read_text(encoding="utf-8")
+    stages = [line.split()[-1] for line in dockerfile.splitlines() if line.startswith("FROM ")]
+    assert "worker-local" in stages
+    assert stages[-1] == "worker", "a build without --target must still produce the published worker"
+    assert "/usr/local/bin/docker" in dockerfile.split("AS worker-local", 1)[1].split("FROM ", 1)[0]
