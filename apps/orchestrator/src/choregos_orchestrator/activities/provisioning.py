@@ -252,15 +252,19 @@ async def _memory_initial_import(params: dict[str, Any], bundle: Any, settings: 
     return f"initial import: {', '.join(sources)}"
 
 
+def project_team_id(project_id: str) -> str:
+    """The gateway team of a project: deterministic, so every run's key joins the same one."""
+    return f"choregos-{project_id}"
+
+
 async def _gateway_create_team_and_budget(params: dict[str, Any], bundle: Any, settings: Any) -> str:
-    key = await bundle.adapters.gateway.mint_key(
-        {"project": bundle.slug, "kind": "team"},
-        budget_usd=bundle.engine.daily_budget() or 100.0,
-        ttl_s=30 * 24 * 3600,
-        models=[],
-    )
-    await bundle.adapters.gateway.revoke(key.key_id)
-    return "gateway team and budget created"
+    """The project's gateway team, with its day budget (S27-10, ADR 0047). Before, this step minted a
+    key and revoked it at once: it checked the master key, and created no team."""
+    daily = bundle.engine.daily_budget()
+    if daily is None:
+        return "no daily project budget in the policy: no gateway team"
+    team = await bundle.adapters.gateway.ensure_team(project_team_id(bundle.project.id), daily)
+    return f"gateway team `{team}` created, budget {daily:.2f} $ per day"
 
 
 async def _notify_test_message(params: dict[str, Any], bundle: Any, settings: Any) -> str:

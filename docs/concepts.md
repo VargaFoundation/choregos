@@ -152,6 +152,11 @@ transition's `max_attempts` for the roles it names (it only lowers what the work
 included: the next stage is refused and the work item goes to a person. `attempts.default_max` is
 accepted but not enforced, and saying so is logged.
 
+The project's day (`budgets.daily_project_usd`) is enforced twice. The reservation counts what the
+project already spent today (and its open keys); and with a LiteLLM gateway the project has a
+**team**, created at provisioning with that budget per day (`1d`), that every run key of the
+project joins: the gateway itself refuses calls once the day is spent, whichever run makes them.
+
 More money is a decision. "Replay the stage" on a work item whose budget is spent is refused (409)
 unless it carries a top-up (`top_up_usd`, or `choregos items action <id> rerun_stage --top-up 5`);
 the top-up adds to the work item's budget and the audit log records who granted it

@@ -54,12 +54,29 @@ class FakeGateway:
         self.keys: dict[str, VirtualKey] = {}
         self.spends: dict[str, Spend] = {}
         self.revoked: list[str] = []
+        #: The teams (a project's day budget) and what each has spent, as LiteLLM keeps them (S27-10).
+        self.teams: dict[str, dict[str, Any]] = {}
+        self.team_spend: dict[str, float] = {}
+        self.key_team: dict[str, str] = {}
         self._minted = 0
 
+    async def ensure_team(self, team_id: str, budget_usd: float, duration: str = "1d") -> str:
+        """Idempotent: a team that exists keeps its spend and gets its budget updated."""
+        self.teams[team_id] = {"budget_usd": budget_usd, "duration": duration}
+        self.team_spend.setdefault(team_id, 0.0)
+        return team_id
+
     async def mint_key(
-        self, metadata: dict[str, Any], budget_usd: float, ttl_s: int, models: list[str]
+        self,
+        metadata: dict[str, Any],
+        budget_usd: float,
+        ttl_s: int,
+        models: list[str],
+        team_id: str | None = None,
     ) -> VirtualKey:
         self._minted += 1
+        if team_id is not None:
+            self.key_team[f"key-{self._minted}"] = team_id
         key_id = f"key-{self._minted}"
         key = VirtualKey(
             key=f"sk-fake-{key_id}",
@@ -94,6 +111,15 @@ class FakeGateway:
                 f"Budget has been exceeded! Current cost: {current.cost_usd + cost:.4f}, "
                 f"Max budget: {key.budget_usd:.4f} (key {key_id})"
             )
+        team = self.key_team.get(key_id)
+        if team is not None and team in self.teams:
+            cap = float(self.teams[team]["budget_usd"])
+            if self.team_spend[team] + cost > cap:
+                raise BudgetExceededError(
+                    f"Budget has been exceeded! Current cost: {self.team_spend[team] + cost:.4f}, "
+                    f"Max budget: {cap:.4f} (team {team})"
+                )
+            self.team_spend[team] += cost
         self.spends[key_id] = current + Spend(
             tokens_in=tokens_in,
             tokens_out=tokens_out,
