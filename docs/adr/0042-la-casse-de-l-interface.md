@@ -1,6 +1,7 @@
 # 0042 — What the console names is lowercase; what it says is a sentence
 
-- **Status**: accepted, 2026-10-09
+- **Status**: superseded by [ADR 0048](0048-the-console-owns-its-primitives.md) on 2026-10-12 (accepted 2026-10-09):
+  the console writes in sentence case
 - **Concerns**: every text the web console writes (`apps/web`); amends
   [ADR 0039](0039-tout-ce-qu-un-utilisateur-lit-est-en-anglais.md)
 

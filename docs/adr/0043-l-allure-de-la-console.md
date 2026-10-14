@@ -1,6 +1,8 @@
 # 0043 — The console looks like an operations console: soft contrast, a sans-serif, a chosen theme
 
-- **Status**: accepted, 2026-10-10
+- **Status**: accepted, 2026-10-10; §1, §6, §7 and the type of buttons and table headers (§4)
+  superseded by [ADR 0048](0048-the-console-owns-its-primitives.md) on 2026-10-12 — the console no
+  longer depends on the Varga Foundation design system
 - **Concerns**: the web console (`apps/web`): its colours, type, shapes and theme; amends
   [ADR 0042](0042-la-casse-de-l-interface.md); keeps the Varga Foundation design system as the
   component library
