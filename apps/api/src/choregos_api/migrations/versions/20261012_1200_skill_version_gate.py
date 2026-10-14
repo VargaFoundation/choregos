@@ -6,7 +6,7 @@
 way in was then.
 
 Revision ID: 5f7b9d1c3e4a
-Revises: 4e6a8c0b2d3f
+Revises: d6f8b0c2e4a6
 Create Date: 2026-10-12 12:00:00+00:00
 """
 
@@ -20,7 +20,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "5f7b9d1c3e4a"
-down_revision: str | None = "4e6a8c0b2d3f"
+down_revision: str | None = "d6f8b0c2e4a6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
