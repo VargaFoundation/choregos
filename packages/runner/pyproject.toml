@@ -22,6 +22,9 @@ dependencies = [
     # annoncé, et l'agent se retrouvait SANS AUCUN outil — tout en croyant en avoir, le
     # `StageInput` lui promettant une adresse morte. Vu sur le banc du 2026-09-24.
     "choregos-tools-mcp",
+    # The deterministic backtest engine: a job stage runs `choregos-quant` offline in this image.
+    # Standard library only, so it adds no third-party dependency (docs: S38-06).
+    "choregos-quant",
 ]
 
 [project.scripts]

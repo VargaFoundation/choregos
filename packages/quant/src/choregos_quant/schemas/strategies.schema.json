@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/quant/strategies.schema.json",
+  "title": "Strategies proposed for a backtest campaign",
+  "type": "object",
+  "required": [
+    "strategies"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "strategies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "hypothesis",
+              "family",
+              "params"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "family": {
+                "const": "sma_cross"
+              },
+              "params": {
+                "type": "object",
+                "required": [
+                  "fast",
+                  "slow"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "fast": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 100
+                  },
+                  "slow": {
+                    "type": "integer",
+                    "minimum": 20,
+                    "maximum": 300
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "hypothesis",
+              "family",
+              "params"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "family": {
+                "const": "ema_trend"
+              },
+              "params": {
+                "type": "object",
+                "required": [
+                  "span"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "span": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 300
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "hypothesis",
+              "family",
+              "params"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "family": {
+                "const": "momentum"
+              },
+              "params": {
+                "type": "object",
+                "required": [
+                  "lookback",
+                  "skip"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "lookback": {
+                    "type": "integer",
+                    "minimum": 20,
+                    "maximum": 252
+                  },
+                  "skip": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 21
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "hypothesis",
+              "family",
+              "params"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "family": {
+                "const": "rsi_reversion"
+              },
+              "params": {
+                "type": "object",
+                "required": [
+                  "period",
+                  "entry",
+                  "exit"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "period": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 30
+                  },
+                  "entry": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 40
+                  },
+                  "exit": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 80
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "hypothesis",
+              "family",
+              "params"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,32}$"
+              },
+              "hypothesis": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "family": {
+                "const": "donchian_breakout"
+              },
+              "params": {
+                "type": "object",
+                "required": [
+                  "entry",
+                  "exit"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "entry": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 120
+                  },
+                  "exit": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 60
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
