@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 from choregos_runner.cli import app
@@ -47,3 +49,20 @@ def test_validate_refuse_un_resultat_invalide(tmp_path: Path) -> None:
 def test_validate_signale_un_fichier_absent(tmp_path: Path) -> None:
     result = cli.invoke(app, ["validate", str(tmp_path / "rien.json")])
     assert result.exit_code == int(Exit.INVALID_RESULT)
+
+
+def test_the_cli_starts_without_the_api_dependencies() -> None:
+    """The runner image installs `choregos-runner` alone: no SQLAlchemy, no FastAPI.
+
+    `docker/runner.Dockerfile` runs `choregos-runner --help` and the build failed on main
+    after #409, because importing `choregos_adapters` imported SQLAlchemy. Blocking those
+    modules here reproduces that image in the test suite.
+    """
+    code = (
+        "import sys\n"
+        "for name in ('sqlalchemy', 'fastapi', 'asyncpg', 'alembic'):\n"
+        "    sys.modules[name] = None\n"
+        "from choregos_runner.cli import app\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr

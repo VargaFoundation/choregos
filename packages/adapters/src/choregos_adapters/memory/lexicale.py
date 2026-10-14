@@ -25,7 +25,6 @@ from typing import Any
 from choregos_contracts import ContextPack, MemoryItem
 from choregos_core.domain import Fact, Memory, Provenance, utcnow
 from choregos_core.models import estimate_tokens
-from sqlalchemy import select
 
 from ..errors import ConfigurationError
 
@@ -99,7 +98,7 @@ class LexicalMemory:
     async def _project_id(self, session: Any, project: str) -> str:
         Project = self.modeles.Project  # noqa: N806 — c'est une classe
 
-        row = (await session.execute(select(Project).where(Project.slug == project))).scalar_one_or_none()
+        row = (await session.execute(_select(Project).where(Project.slug == project))).scalar_one_or_none()
         if row is None:
             row = await session.get(Project, project)
         if row is None:
@@ -155,7 +154,7 @@ class LexicalMemory:
         vector = lexical_vector(query)
         async with self._sessions()() as session:
             project_id = await self._project_id(session, project)
-            statement = select(MemoryFact).where(
+            statement = _select(MemoryFact).where(
                 MemoryFact.project_id == project_id, MemoryFact.status == "active"
             )
             if kinds:
@@ -174,7 +173,7 @@ class LexicalMemory:
             previous = (
                 (
                     await session.execute(
-                        select(MemoryFact).where(
+                        _select(MemoryFact).where(
                             MemoryFact.project_id == project_id,
                             MemoryFact.subject == fact.subject,
                             MemoryFact.status == "active",
@@ -238,7 +237,7 @@ class LexicalMemory:
             rows = (
                 (
                     await session.execute(
-                        select(MemoryFact).where(
+                        _select(MemoryFact).where(
                             MemoryFact.project_id == project_id, MemoryFact.status == "pending"
                         )
                     )
@@ -288,6 +287,17 @@ class LexicalMemory:
 
     async def test(self) -> dict[str, Any]:
         return {"ok": True, "backend": "pgvector (repli)"}
+
+
+def _select(*entities: Any) -> Any:
+    """`sqlalchemy.select`, imported on first use.
+
+    The runner image imports `choregos_adapters` (for `sealing`) without SQLAlchemy;
+    a module-level import here made `choregos-runner --help` fail in that image.
+    """
+    from sqlalchemy import select
+
+    return select(*entities)
 
 
 def _memory(row: Any, score: float | None = None) -> Memory:
