@@ -28,7 +28,7 @@ test("the artifacts of a work item: markdown, SARIF, image, download, producer a
   await tabs.getByRole("tab", { name: "spec_markdown" }).click();
   const panel = page.getByRole("tabpanel");
   await expect(panel.getByRole("heading", { name: "Acceptance" })).toBeVisible();
-  await expect(panel.getByTestId("artifact-producer")).toContainText("produced by refine · attempt 1 · agent analyst@3");
+  await expect(panel.getByTestId("artifact-producer")).toContainText("Produced by refine · attempt 1 · agent analyst@3");
   await expect(panel.getByTestId("artifact-download")).toHaveAttribute("download", "spec_markdown.md");
   await panel.getByLabel("revision").selectOption("1");
   await expect(panel.getByTestId("markdown-view")).toContainText("Deduct credit notes from the order total.");

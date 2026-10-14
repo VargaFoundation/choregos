@@ -46,6 +46,7 @@ export function Artifacts({
             aria-selected={group.name === current.name}
             aria-controls={`artifact-panel-${group.name}`}
             data-artifact={group.name}
+            data-donnee
             onClick={() => setSelected(group.name)}
             className={
               "min-h-11 px-3 font-mono text-xs " +
@@ -123,7 +124,7 @@ function ArtifactPanel({
         )}
       </div>
       <p className="text-xs text-ink-muted" data-testid="artifact-producer">
-        produced by{" "}
+        Produced by{" "}
         <Link href={`/p/${slug}/runs/${artifact.produced_by.run_id}`}>
           {artifact.produced_by.stage ?? "a step"}
           {artifact.produced_by.attempt ? ` · attempt ${artifact.produced_by.attempt}` : ""}
