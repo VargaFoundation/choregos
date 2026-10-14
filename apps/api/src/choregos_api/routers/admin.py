@@ -23,7 +23,7 @@ from ..db.models import (
 )
 from ..db.session import en_portee_de_plateforme
 from ..deps import Db, Me, Pagination, exiger_admin_de_plateforme
-from ..errors import conflict, forbidden, not_found
+from ..errors import conflict, forbidden, not_found, unprocessable
 from ..schemas import (
     AgentBackendInfo,
     AgentBackendUpdate,
@@ -178,12 +178,16 @@ async def list_gateway_keys(session: Db, principal: Me) -> list[GatewayKeyInfo]:
 
 
 @router.get("/orgs/{org}/members", response_model=list[MembershipDto], operation_id="listMembers")
-async def list_members(org: str, session: Db, principal: Me) -> list[MembershipDto]:
-    """Who belongs to the organisation (S26-04: any signed-in user could list any organisation).
+async def list_members(
+    org: str, session: Db, principal: Me, project: Annotated[str | None, Query()] = None
+) -> list[MembershipDto]:
+    """Who belongs to the organisation, or to one of its projects with `?project=`.
 
-    A role in the organisation reads every membership; a role on some of its projects only reads the
-    memberships of those projects; anyone else gets 403 — before the lookup, so an organisation's
-    existence is not told to a stranger (as `/orgs/{org}/agents` does).
+    S26-04: any signed-in user could list any organisation. A role in the organisation reads every
+    membership; a role on some of its projects only reads the memberships of those projects; anyone
+    else gets 403 — before the lookup, so an organisation's existence is not told to a stranger (as
+    `/orgs/{org}/agents` does). S30-06: `?project=` narrows to that project and asks the same right
+    on it.
     """
     from ..rbac import Permission
 
@@ -193,6 +197,8 @@ async def list_members(org: str, session: Db, principal: Me) -> list[MembershipD
         for key in principal.project_roles
         if key.startswith(f"{org}/") and principal.can(Permission.MEMBER_READ, org, key.split("/", 1)[1])
     }
+    if project and not (org_wide or project in readable_projects):
+        raise forbidden(f"reading the members of {org}/{project} requires being a member of it")
     if not org_wide and not readable_projects:
         raise forbidden(f"reading the members of {org} requires being a member of it")
     organization = (
@@ -200,24 +206,25 @@ async def list_members(org: str, session: Db, principal: Me) -> list[MembershipD
     ).scalar_one_or_none()
     if organization is None:
         raise not_found("Organisation", org)
-    rows = (
-        await session.execute(
-            select(Membership, User, Project)
-            .join(User, Membership.user_id == User.id)
-            .outerjoin(Project, Membership.project_id == Project.id)
-            .where(Membership.org_id == organization.id)
-        )
-    ).all()
+    query = (
+        select(Membership, User, Project)
+        .join(User, Membership.user_id == User.id)
+        .outerjoin(Project, Membership.project_id == Project.id)
+        .where(Membership.org_id == organization.id)
+    )
+    if project:
+        query = query.where(Project.slug == project)
+    rows = (await session.execute(query)).all()
     return [
         MembershipDto(
             user_id=user.id,
             email=user.email,
             org=org,
-            project_slug=project.slug if project else None,
+            project_slug=row_project.slug if row_project else None,
             role=Role(membership.role),
         )
-        for membership, user, project in rows
-        if org_wide or (project is not None and project.slug in readable_projects)
+        for membership, user, row_project in rows
+        if org_wide or (row_project is not None and row_project.slug in readable_projects)
     ]
 
 
@@ -237,6 +244,10 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
 
     if not principal.can(Permission.MEMBER_MANAGE, org, body.project_slug):
         raise forbidden("managing members needs the project_owner or org_admin role")
+    # A project role adds to the organisation role (rbac.py): `org_admin` on a project row would
+    # read as a project-scoped administrator, which RBAC does not have (S30-06).
+    if body.project_slug and body.role == Role.ORG_ADMIN:
+        raise unprocessable("`org_admin` is a role of the organisation, not of a project")
     # L'e-mail est unique à l'échelle de l'INSTANCE : un utilisateur déjà membre d'une autre
     # organisation est invisible sous la RLS de `users`, et la route tentait un doublon.
     async with en_portee_de_plateforme(session):

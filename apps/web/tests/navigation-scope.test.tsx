@@ -59,7 +59,7 @@ describe("the sidebar switches scope", () => {
     const bar = sidebar("/p/billing-api/board");
     expect(labels(within(bar).getByRole("list", { name: "Work" }))).toEqual(["Overview", "Board", "Inbox", "Trains", "Findings"]);
     expect(labels(within(bar).getByRole("list", { name: "Define" }))).toEqual(["Workflows", "Agents", "Actions", "Memory"]);
-    expect(labels(within(bar).getByRole("list", { name: "Configure" }))).toEqual(["Integrations", "Settings"]);
+    expect(labels(within(bar).getByRole("list", { name: "Configure" }))).toEqual(["Integrations", "Members", "Settings"]);
     expect(within(bar).queryByRole("link", { name: "Skills" })).toBeNull();
     expect(within(bar).getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
     expect(within(bar).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/p/billing-api/workflows");

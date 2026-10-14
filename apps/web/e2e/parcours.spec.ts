@@ -131,6 +131,25 @@ test("administration : membres et jetons ont un écran", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Remove / }).first()).toBeVisible();
 });
 
+test("members: a person appears once; a project has its members; org_admin is not a project role (S30-06)", async ({ page }) => {
+  await page.goto("/admin/members");
+  const membres = page.getByTestId("membres");
+  await expect(membres.getByTestId("membre-marc@acme.dev")).toHaveCount(1);
+  await expect(membres.getByTestId("membre-marc@acme.dev")).toContainText("checkout-web · Release captain");
+  await expect(page.getByTestId("roles-additifs")).toContainText("cannot take anything away");
+  // The scope of an invitation is picked among the projects; a project leaves org_admin out.
+  await page.getByLabel("Scope").selectOption("billing-api");
+  await expect(page.getByLabel("Role", { exact: true }).locator("option[value=org_admin]")).toHaveCount(0);
+
+  await page.goto("/p/billing-api/members");
+  const barre = page.getByRole("complementary", { name: "Sidebar" });
+  await expect(barre.getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("membres").getByRole("row")).toHaveCount(3);
+  const role = page.getByRole("combobox", { name: "Role of lea@acme.dev on billing-api" });
+  await expect(role).toHaveValue("project_owner");
+  await expect(role.locator("option[value=org_admin]")).toHaveCount(0);
+});
+
 test("administration : une section déclarée par un greffon se rend, et son secret ne se montre qu'une fois", async ({
   page,
 }) => {

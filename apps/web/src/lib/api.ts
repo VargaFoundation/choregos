@@ -258,7 +258,9 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   orgs: () => request<Org[]>("/orgs"),
   createOrg: (body: OrgCreate) => request<Org>("/orgs", { method: "POST", body: JSON.stringify(body) }),
-  members: (org: string) => request<Membership[]>(`/orgs/${org}/members`),
+  /** The organisation's memberships; with `project`, that project's only (S30-06). */
+  members: (org: string, project?: string) =>
+    request<Membership[]>(`/orgs/${org}/members${project ? `?project=${encodeURIComponent(project)}` : ""}`),
   /** Retire une appartenance — à l'organisation, ou au seul projet nommé. */
   removeMember: (org: string, userId: string, project?: string | null) =>
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
