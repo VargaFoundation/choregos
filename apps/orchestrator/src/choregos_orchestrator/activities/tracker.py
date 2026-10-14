@@ -6,7 +6,8 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from choregos_api.db.models import Finding, HumanRequest, Run, WorkItem
+from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, Run, WorkItem
+from choregos_api.logging import get_logger
 from choregos_api.services import Naissance, nouveau_ticket, persist_event
 from choregos_contracts import EventType
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
@@ -16,6 +17,12 @@ from temporalio import activity
 from ..config import get_settings
 from ..markdown import STATUS_MARKER, StageLine, StatusComment, render_human_request
 from .base import db, load_work_item, project_bundle, tracker_possede_les_tickets, workflow_du_ticket
+
+logger = get_logger("choregos.tracker")
+
+#: The delivery comment: one per work item, rewritten if needed, so a replayed close_out does not
+#: post a second one.
+DELIVERED_MARKER = "<!-- choregos:delivered -->"
 
 
 @activity.defn(name="mirror_state")
@@ -346,7 +353,53 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
                     provenance=Provenance(source="orchestrator", work_item_key=item.tracker_key),
                 ),
             )
-        return {"closed": True, "state": item.state}
+        tracker_closed = await _close_delivered_item(session, bundle, item)
+        return {"closed": True, "state": item.state, "tracker_closed": tracker_closed}
+
+
+async def _close_delivered_item(session: Any, bundle: Any, item: WorkItem) -> bool:
+    """A delivered work item closes its tracker issue, with a comment naming its release (S22-28).
+
+    Nothing ever closed the issue: `close_out` mirrored the terminal state (the *Done* column) and
+    stopped there, and the pull request only says "Work item: ..." since a merge is not a delivery.
+    Delivered means a terminal state other than the abandon state, reached by a work item that a
+    release train deployed (`deployed_release`, set by `finish_release`). The tracker is a courtesy
+    here: a failure is logged and never fails the end of the work item."""
+    workflow = await workflow_du_ticket(session, item)
+    state = workflow.states.get(item.state)
+    defaults = workflow.defaults.needs_human if workflow.defaults else None
+    abandon = defaults.on_abandon if defaults else None
+    release_id = (item.documents or {}).get("deployed_release")
+    if state is None or not state.terminal or item.state == abandon or not release_id:
+        return False
+    release = await session.get(Release, str(release_id))
+    name = await _release_name(session, release) if release is not None else str(release_id)
+    env = f" to `{release.env}`" if release is not None else ""
+    text = (
+        f"{DELIVERED_MARKER}\n### Choregos — delivered\n"
+        f"Delivered{env} in release `{name}` and closed as **{state.display}**."
+    )
+    try:
+        await bundle.adapters.tracker.upsert_status_comment(item.tracker_key, text, DELIVERED_MARKER)
+        await bundle.adapters.tracker.close_item(item.tracker_key)
+    # Deliberately broad: no tracker failure may kill a work item that is already delivered.
+    except Exception as exc:
+        logger.warning("delivered work item NOT closed in the tracker", key=item.tracker_key, error=str(exc))
+        return False
+    return True
+
+
+async def _release_name(session: Any, release: Release) -> str:
+    """The tag the promotion set (`R-2026.10.10-1`), else the batch number."""
+    revision = (
+        await session.execute(
+            select(Deployment.revision)
+            .where(Deployment.release_id == release.id, Deployment.revision.is_not(None))
+            .order_by(Deployment.created_at)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return str(revision) if revision else f"batch {release.batch_no}"
 
 
 @activity.defn(name="reconcile_tracker")

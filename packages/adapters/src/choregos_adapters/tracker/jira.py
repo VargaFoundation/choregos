@@ -137,6 +137,12 @@ class JiraTracker:
                 keep.append(state_mapping.label)
             await self.client.request("PUT", f"/rest/api/3/issue/{key}", json={"fields": {"labels": keep}})
 
+    async def close_item(self, key: str) -> None:
+        """Nothing to do: in Jira, closing IS a status. The workflow's terminal state already carries it
+        (`tracker: { status: Done }`, applied by `set_state`); a second transition here would look
+        for one out of `Done`, which does not exist (S22-28)."""
+        return
+
     async def _transition(self, key: str, status: str) -> None:
         """Jira ne se laisse pas *écrire* un statut : il faut trouver la transition qui y mène.
 

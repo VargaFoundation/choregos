@@ -124,6 +124,16 @@ class GitLabTracker:
         if payload:
             await self.client.request("PUT", f"/api/v4/projects/{self.encoded}/issues/{iid}", json=payload)
 
+    async def close_item(self, key: str) -> None:
+        """Closes the issue; an issue already closed is left as it is (S22-28)."""
+        iid = self._iid(key)
+        issue = await self.client.request("GET", f"/api/v4/projects/{self.encoded}/issues/{iid}")
+        if issue.get("state") == "closed":
+            return
+        await self.client.request(
+            "PUT", f"/api/v4/projects/{self.encoded}/issues/{iid}", json={"state_event": "close"}
+        )
+
     async def upsert_status_comment(
         self, key: str, markdown: str, marker: str = STATUS_COMMENT_MARKER
     ) -> None:
