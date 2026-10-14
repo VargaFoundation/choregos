@@ -13,6 +13,8 @@ COPY apps/web ./
 # (`compose.yaml`) passes the API's address on its network and turns development sign-in on.
 ARG CHOREGOS_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_DEV_LOGIN=false
+ARG NEXT_PUBLIC_DEV_LOGIN_EMAIL=
+ARG NEXT_PUBLIC_DEV_LOGIN_NEXT=
 RUN pnpm build
 
 # Un `node_modules` de production, reconstruit à part.

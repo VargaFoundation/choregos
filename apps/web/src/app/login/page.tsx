@@ -22,9 +22,11 @@ export default function LoginPage() {
 
 function Connexion() {
   const params = useSearchParams();
-  const next = params.get("next") ?? "/";
-  const [email, setEmail] = useState("");
   const devLogin = process.env.NEXT_PUBLIC_DEV_LOGIN === "true";
+  // The local install (`compose.yaml`) bakes the demo admin and the demo project in: one click on
+  // "enter" and the first sign-in lands on a project with a work item, not on an empty page.
+  const next = params.get("next") || (devLogin && process.env.NEXT_PUBLIC_DEV_LOGIN_NEXT) || "/";
+  const [email, setEmail] = useState(devLogin ? (process.env.NEXT_PUBLIC_DEV_LOGIN_EMAIL ?? "") : "");
 
   return (
     <div className="mx-auto max-w-md space-y-8 py-12">
