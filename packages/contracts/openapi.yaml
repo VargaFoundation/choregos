@@ -1281,13 +1281,61 @@ paths:
     post:
       tags: [agents]
       operationId: importSkill
-      description: A zip archive; zip-slip, symbolic links, more than 64 files or 512 KiB are refused.
+      description: A zip archive; zip-slip, symbolic links, more than 64 files or 512 KiB are refused. From a repository, see `importSkillsFromGit`.
       requestBody:
         required: true
         content: { application/zip: { schema: { type: string, format: binary } } }
       responses:
         "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/skill-sources:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: getSkillSources
+      description: The repositories a project owner may import skills from (ADR 0050); by default `github.com/anthropics/skills` and the GitHub owners of the organisation's connected repositories.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillSources" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      tags: [agents]
+      operationId: putSkillSources
+      description: Replaces the allowlist; `agent:manage`. Each entry is `github.com/<owner>[/<repo>]` or `gitlab.com/<group>[/…]`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillSources" } } }
+      responses:
+        "200": { description: Written, content: { application/json: { schema: { $ref: "#/components/schemas/SkillSources" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/skills/import-git/preview:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: previewSkillsFromGit
+      description: Resolves a branch, a tag or a commit of a github.com or gitlab.com repository to its commit SHA and lists the skill folders under `path`, each checked; nothing is written. `skill:import` for an allowlisted repository, `agent:manage` otherwise.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillGitPreviewRequest" } } }
+      responses:
+        "200": { description: The commit and its skills, content: { application/json: { schema: { $ref: "#/components/schemas/SkillGitPreview" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: "The repository's host did not answer, or not usefully" }
+  /orgs/{org}/skills/import-git:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: importSkillsFromGit
+      description: Imports the named skills at a commit SHA (40 hex characters; a branch or a tag is refused). Each becomes a skill, or its next version, recording its repository, SHA, folder and licence. A project owner may create skills from an allowlisted repository; another source, or a new version of an existing skill, needs `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillGitImport" } } }
+      responses:
+        "201": { description: Published, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skill" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: "The repository's host did not answer, or not usefully" }
   /orgs/{org}/skills/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1425,6 +1473,21 @@ paths:
       responses:
         "202": { description: Accepted for conversion, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/skills/{slug}/update:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: ref, in: query, required: false, schema: { type: string, default: HEAD }, description: "A branch, a tag or a commit; the default branch by default" }
+    get:
+      tags: [agents]
+      operationId: checkSkillUpdate
+      description: What the repository of a skill imported from git holds at `ref`, against its latest version — the commit SHA and the files added, removed and modified. A proposal, never applied; importing that SHA publishes it.
+      responses:
+        "200": { description: The proposal, content: { application/json: { schema: { $ref: "#/components/schemas/SkillUpdate" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: "The repository's host did not answer, or not usefully" }
   /projects/{id}/agents:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2477,6 +2540,15 @@ components:
       required: [files]
       properties:
         files: { type: object, additionalProperties: { type: string }, description: relative path → text }
+    SkillSource:
+      type: object
+      description: Where a version imported from git comes from (ADR 0050).
+      required: [repo, sha, path]
+      properties:
+        repo: { type: string }
+        sha: { type: string, description: the full commit SHA the version is pinned to }
+        path: { type: string, description: "the skill's folder in the repository; empty is the root" }
+        licence: { type: [string, "null"], description: "an SPDX identifier, LicenseRef-proprietary, LicenseRef-unknown, or null when none was found" }
     SkillVersion:
       type: object
       required: [version, digest]
@@ -2486,6 +2558,65 @@ components:
         created_by: { type: [string, "null"] }
         created_at: { type: [string, "null"], format: date-time }
         files: { type: [object, "null"], additionalProperties: { type: string } }
+        source: { oneOf: [{ $ref: "#/components/schemas/SkillSource" }, { type: "null" }] }
+    SkillSources:
+      type: object
+      required: [sources]
+      properties:
+        sources: { type: array, items: { type: string }, maxItems: 100 }
+        default: { type: boolean, description: true when the organisation has not written its own list }
+    SkillGitPreviewRequest:
+      type: object
+      required: [repo_url, ref]
+      properties:
+        repo_url: { type: string, description: "https://github.com/<owner>/<repo> or https://gitlab.com/<group>/…/<project>" }
+        path: { type: string, default: "", description: a folder holding one skill, or several skill folders }
+        ref: { type: string, description: a branch, a tag or a commit }
+    SkillGitImport:
+      type: object
+      required: [repo_url, sha, skills]
+      properties:
+        repo_url: { type: string }
+        path: { type: string, default: "" }
+        sha: { type: string, description: a full commit SHA; a branch or a tag is refused }
+        skills: { type: array, items: { type: string }, minItems: 1, maxItems: 100 }
+    SkillCandidate:
+      type: object
+      required: [path, files, bytes]
+      properties:
+        path: { type: string }
+        name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        files: { type: integer }
+        bytes: { type: integer }
+        licence: { type: [string, "null"] }
+        problem: { type: [string, "null"], description: why it cannot be imported }
+        existing_version: { type: [integer, "null"], description: the latest version of the library's skill of that name }
+    SkillGitPreview:
+      type: object
+      required: [repo, ref, sha, path, allowed, skills]
+      properties:
+        repo: { type: string }
+        ref: { type: string }
+        sha: { type: string }
+        path: { type: string }
+        allowed: { type: boolean, description: whether the repository is in the organisation's allowlist }
+        skills: { type: array, items: { $ref: "#/components/schemas/SkillCandidate" } }
+    SkillUpdate:
+      type: object
+      required: [slug, version, source, ref, sha, up_to_date]
+      properties:
+        slug: { type: string }
+        version: { type: integer }
+        source: { $ref: "#/components/schemas/SkillSource" }
+        ref: { type: string }
+        sha: { type: string }
+        up_to_date: { type: boolean }
+        digest: { type: [string, "null"] }
+        added: { type: array, items: { type: string } }
+        removed: { type: array, items: { type: string } }
+        modified: { type: array, items: { type: string } }
+        problem: { type: [string, "null"] }
     Skill:
       type: object
       required: [slug, status, latest_version]
