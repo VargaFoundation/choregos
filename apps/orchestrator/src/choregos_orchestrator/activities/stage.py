@@ -451,8 +451,8 @@ def _memory_scope(agent: Any) -> str:
 async def _context_pack(
     bundle: Any, item: Any, plan: StagePlan, memory_scope: str = "project", agent: Any = None
 ) -> ContextPack:
-    """Mémoire bornée par rôle ; une panne rend un pack vide plutôt que de bloquer l'étape. Lue
-    dans la portée de l'agent (S32-02) : le projet, la sienne, ou aucune."""
+    """Memory bounded by role; a failure yields an empty pack rather than blocking the stage. Read
+    within the agent's scope (S32-02): the project's, its own, or none."""
     from choregos_core import memory_namespace
 
     engine = bundle.engine
