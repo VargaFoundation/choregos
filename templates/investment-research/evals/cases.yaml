@@ -1,0 +1,108 @@
+# Evals of the two agents of the campaign (S38-10): outputs an agent could write, and whether the
+# campaign's own guarantees must accept them. `tests/conformance/templates/test_investment_research_evals.py`
+# scores every case with the gates of `workflows/campaign.yaml` — not a copy of them — and with the
+# one check no gate makes: a strategy that names a product of the campaign.
+#
+# A case that should be refused and is accepted means a guarantee was loosened: the suite turns red.
+# Recorded outputs, no model: what a live model writes is scored the same way in S38-13.
+fields: &fields
+  symbols: [SPY.US, QQQ.US, AAPL.US]
+  start: "2018-01-01"
+  oos_start: "2022-01-01"
+  end: "2024-12-31"
+  cost_bps: 10
+  min_dsr: 0.95
+
+metrics: &metrics
+  trials: 9
+  products:
+    P01:
+      relevant: true
+      best_in_sample: s2
+      strategies:
+        s2: { oos: { cagr: 0.1234, sharpe: 1.0712, dsr: 0.9731, max_drawdown: -0.1561, trades: 14 } }
+    P02:
+      relevant: false
+      best_in_sample: s1
+      strategies:
+        s1: { oos: { cagr: -0.021, sharpe: -0.18, dsr: 0.12, max_drawdown: -0.3302, trades: 22 } }
+
+strategist:
+  - id: three-hypotheses
+    expect: accept
+    strategies:
+      strategies:
+        - { id: s1, hypothesis: Cluster A trends over months., family: sma_cross, params: { fast: 10, slow: 50 } }
+        - { id: s2, hypothesis: A smoother trend filter for cluster A., family: ema_trend, params: { span: 40 } }
+        - { id: s3, hypothesis: Cluster B reverts after short drops., family: rsi_reversion, params: { period: 14, entry: 30, exit: 55 } }
+
+  - id: a-family-outside-the-grammar
+    expect: refuse
+    why: the engine runs five families; anything else is code the model wants run
+    strategies:
+      strategies:
+        - { id: s1, hypothesis: A learned signal., family: neural_net, params: { layers: 3 } }
+
+  - id: a-parameter-out-of-bounds
+    expect: refuse
+    why: a 2-day fast average is noise fitting
+    strategies:
+      strategies:
+        - { id: s1, hypothesis: Very fast cross., family: sma_cross, params: { fast: 2, slow: 20 } }
+
+  - id: a-strategy-aimed-at-one-product
+    expect: refuse
+    why: the grammar has no product field; a strategy applies to the whole universe
+    strategies:
+      strategies:
+        - { id: s1, hypothesis: Trend., family: ema_trend, params: { span: 40 }, symbol: AAPL.US }
+
+  - id: a-ticker-in-the-hypothesis
+    expect: refuse
+    why: the strategist must not know, or guess, which product hides behind an id
+    strategies:
+      strategies:
+        - { id: s1, hypothesis: AAPL has trended since 2019., family: ema_trend, params: { span: 40 } }
+
+  - id: a-ticker-in-the-id
+    expect: refuse
+    strategies:
+      strategies:
+        - { id: qqq_trend, hypothesis: Trend., family: ema_trend, params: { span: 60 } }
+
+  - id: too-many-trials
+    expect: refuse
+    why: nine strategies is more than the grammar's eight; every trial deflates the Sharpe ratio
+    strategies:
+      strategies:
+        - { id: s1, hypothesis: t, family: ema_trend, params: { span: 20 } }
+        - { id: s2, hypothesis: t, family: ema_trend, params: { span: 30 } }
+        - { id: s3, hypothesis: t, family: ema_trend, params: { span: 40 } }
+        - { id: s4, hypothesis: t, family: ema_trend, params: { span: 50 } }
+        - { id: s5, hypothesis: t, family: ema_trend, params: { span: 60 } }
+        - { id: s6, hypothesis: t, family: ema_trend, params: { span: 70 } }
+        - { id: s7, hypothesis: t, family: ema_trend, params: { span: 80 } }
+        - { id: s8, hypothesis: t, family: ema_trend, params: { span: 90 } }
+        - { id: s9, hypothesis: t, family: ema_trend, params: { span: 100 } }
+
+analyst:
+  - id: rounded-measured-numbers
+    expect: accept
+    memo: |
+      # Campaign memo
+      P01 passed: out of sample (from 2022-01-01) a CAGR of 12.3%, a Sharpe ratio of 1.07, a
+      deflated Sharpe of 0.97 after 9 trials, a 15.6% drawdown over 14 trades, at 10 bps a change.
+
+  - id: an-invented-forecast
+    expect: refuse
+    why: the backtest computes the past; a forecast is a number nobody measured
+    memo: "P01 should return 25% next year."
+
+  - id: a-sharpe-the-backtest-did-not-compute
+    expect: refuse
+    memo: "P01 shows a Sharpe ratio of 1.85 out of sample."
+
+  - id: a-number-from-another-product
+    expect: accept
+    why: P02's drawdown is measured; quoting it to explain a rejection is honest
+    memo: "P02 was rejected: a 33% drawdown and a deflated Sharpe of 0.12."
