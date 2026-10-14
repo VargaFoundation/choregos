@@ -4,8 +4,8 @@
 import { MembersTable } from "@/components/members-table";
 
 /**
- * Les membres de l'organisation (S30-06) : une ligne par personne, son rôle dans l'organisation et
- * ses projets. Le dernier administrateur ne se retire pas — l'API le refuse (409), et l'écran le dit.
+ * The organisation's members (S30-06): one row per person, their role in the organisation and
+ * their projects. The last administrator cannot leave — the API refuses it (409), and the screen says so.
  */
 export default function MembersPage() {
   return <MembersTable />;
