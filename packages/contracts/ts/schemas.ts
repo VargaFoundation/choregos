@@ -267,6 +267,24 @@ export type Policy = {
     auto_accept_after_runs?: number;
     read_timeout_ms?: number;
   };
+  /** Fewer tokens per run (ADR 0055): rtk filters shell output, headroom compresses tool results. Absent = everything off; the deployment's kill switch wins over the policy. */
+  context?: {
+    shell_filter?: "none" | "rtk";
+    compression?: "none" | "headroom";
+    headroom_profile?: "coding" | "balanced" | "general";
+    /** When the compression proxy does not start: bypass to the gateway and journal it, or fail the stage. */
+    on_unavailable?: "bypass" | "fail";
+    /** Commands whose output the shell filter leaves raw. */
+    rtk_exclude_commands?: Array<string>;
+    /** Per stage role, what changes from the project's values; an absent field keeps them. */
+    per_role?: {
+      [key: string]: {
+        shell_filter?: "none" | "rtk";
+        compression?: "none" | "headroom";
+        headroom_profile?: "coding" | "balanced" | "general";
+      };
+    };
+  };
   review?: {
     /** The review backend must differ from the implementation's. */
     cross_backend?: boolean;
@@ -438,6 +456,14 @@ export type StageInput = {
     dod_iterations?: number;
     unknown_requests?: "allow" | "reject";
     max_findings?: number;
+  };
+  /** The context reduction the run starts with, resolved by the orchestrator (ADR 0055). Absent = everything off. */
+  context?: {
+    shell_filter?: "none" | "rtk";
+    compression?: "none" | "headroom";
+    headroom_profile?: "coding" | "balanced" | "general";
+    on_unavailable?: "bypass" | "fail";
+    rtk_exclude_commands?: Array<string>;
   };
   callbacks: {
     api_url: string;

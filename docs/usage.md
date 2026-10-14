@@ -614,6 +614,22 @@ journal says `run.stopped`. When two consecutive attempts of a stage fail the sa
 reason, same first line of summary, numbers aside), the interpreter escalates instead of spending
 its remaining attempts.
 
+**Fewer tokens per run** ([ADR 0055](adr/0055-fewer-tokens-per-run.md)) is off unless the policy
+asks, and the deployment can still refuse it (`CHOREGOS_CONTEXT_REDUCTION=off`):
+
+```yaml
+context:
+  shell_filter: rtk             # none (default) | rtk: shell output filtered before the agent reads it
+  compression: headroom         # none (default) | headroom: tool results compressed, originals kept
+  headroom_profile: coding      # coding | balanced | general
+  on_unavailable: bypass        # the proxy does not start: bypass (journaled) or fail the stage
+  rtk_exclude_commands: ["git diff"]   # left raw
+  per_role:
+    review: { compression: none }      # a reviewer reads raw tool results
+```
+
+The contract carries these switches; the runner does not act on them yet (stream S37).
+
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train
 ([ADR 0041](adr/0041-l-approbation-suit-ce-que-le-lot-emporte.md)). The policy's own human gate is

@@ -150,6 +150,30 @@ class Permissions(Strict):
     unknown_requests: Literal["allow", "reject"] = "allow"
 
 
+ShellFilter = Literal["none", "rtk"]
+Compression = Literal["none", "headroom"]
+HeadroomProfile = Literal["coding", "balanced", "general"]
+
+
+class StageContext(Strict):
+    """The context reduction a run starts with, resolved by the orchestrator from the deployment,
+    the policy and the stage's role (ADR 0055). The defaults are everything off: a runner that gets
+    no `context` reduces nothing."""
+
+    shell_filter: ShellFilter = "none"
+    compression: Compression = "none"
+    headroom_profile: HeadroomProfile = "coding"
+    #: What the runner does when the compression proxy does not start: `bypass` talks to the
+    #: gateway directly and journals it, `fail` fails the stage.
+    on_unavailable: Literal["bypass", "fail"] = "bypass"
+    #: Commands whose output the shell filter leaves raw.
+    rtk_exclude_commands: list[str] = Field(default_factory=list)
+
+    @property
+    def active(self) -> bool:
+        return self.shell_filter != "none" or self.compression != "none"
+
+
 class Callbacks(Strict):
     api_url: str
     run_token: str
@@ -231,6 +255,7 @@ class StageInput(Strict):
     #: The knowledge bases of the registry agent (ADR 0051); empty for a playbook.
     knowledge: list[KnowledgeRef] = Field(default_factory=list)
     permissions: Permissions = Field(default_factory=Permissions)
+    context: StageContext = Field(default_factory=StageContext)
     callbacks: Callbacks
 
     model_config = Strict.model_config | {"populate_by_name": True}
