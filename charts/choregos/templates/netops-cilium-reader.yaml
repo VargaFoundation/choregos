@@ -1,0 +1,56 @@
+{{- if .Values.netops.ciliumReader.enabled }}
+{{- /*
+The identity the `cilium` connector reads the cluster with (ADR 0052): a dedicated service account
+whose ClusterRole grants get, list and watch on Cilium's two policy kinds — and nothing else. The
+connector never borrows a platform pod's own token. Its token is referenced by the connector
+(`secret_refs: {token: env:<NAME>}`), the variable set from the Secret below through
+`global.extraEnv`.
+*/ -}}
+{{- $name := .Values.netops.ciliumReader.name }}
+{{- $labels := dict "app.kubernetes.io/name" $name "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/managed-by" .Release.Service "app.kubernetes.io/part-of" "choregos" "app.kubernetes.io/component" "netops" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- toYaml $labels | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels: {{- toYaml $labels | nindent 4 }}
+rules:
+  - apiGroups: [cilium.io]
+    resources: [ciliumnetworkpolicies, ciliumclusterwidenetworkpolicies]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels: {{- toYaml $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+{{- if .Values.netops.ciliumReader.tokenSecret }}
+---
+# A long-lived token for this account (Kubernetes no longer creates one by itself). Leave
+# `tokenSecret: false` when the token comes from elsewhere — a vault, a projected token.
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/service-account-token
+metadata:
+  name: {{ $name }}-token
+  namespace: {{ .Release.Namespace }}
+  labels: {{- toYaml $labels | nindent 4 }}
+  annotations:
+    kubernetes.io/service-account.name: {{ $name }}
+{{- end }}
+{{- end }}
