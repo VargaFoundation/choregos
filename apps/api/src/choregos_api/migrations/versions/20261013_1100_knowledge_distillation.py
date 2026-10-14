@@ -2,7 +2,7 @@
 """Knowledge distillation (S33-05): what the last distillation of a base gave
 
 Revision ID: b9d1f3a5c7e8
-Revises: a8c0e2f4b6d7
+Revises: f7b9d1e3a5c6
 Create Date: 2026-10-13 11:00:00+00:00
 """
 
@@ -16,7 +16,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "b9d1f3a5c7e8"
-down_revision: str | None = "a8c0e2f4b6d7"
+down_revision: str | None = "f7b9d1e3a5c6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

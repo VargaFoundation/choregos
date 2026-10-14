@@ -173,6 +173,7 @@ async def _dto(
         sources=[await _source_dto(session, source) for source in await _sources(session, base)]
         if with_documents
         else None,
+        distillation=base.distillation,
     )
 
 
@@ -204,7 +205,6 @@ async def _source_dto(session: AsyncSession, source: KnowledgeSource) -> Knowled
         last_error=source.last_error,
         last_summary=source.last_summary,
         document_count=int(count),
-        distillation=base.distillation,
     )
 
 
@@ -748,6 +748,9 @@ async def sync_knowledge_source(
     await session.commit()
     await _start_sync_loop(org, source)
     await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
+    return dto
+
+
 @router.post(
     "/orgs/{org}/knowledge/{slug}/distill",
     response_model=KnowledgeBaseDto,
