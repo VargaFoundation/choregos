@@ -27,7 +27,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-describe("les agents implicites d'un projet (S18-07, computed by the API since S30-04)", () => {
+describe("a project's implicit agents (S18-07, computed by the API since S30-04)", () => {
   const fromApi = [
     { workflow: "onboarding", actor: "redacteur", role: "refine", model: "profile:standard", backend: null, max_turns: 30, max_minutes: null },
   ];
