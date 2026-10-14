@@ -135,3 +135,67 @@ async def test_an_executor_without_readable_logs_does_not_stop_the_run(setup: Fi
     archive = await _archive(run_id)
     assert archive is not None and archive["reason"] == "Error"
     assert archive["error"] and "NotImplementedError" in archive["error"]
+
+
+# ───────────────────────── live tail while the pod runs (S36-03) ─────────────────────────
+
+
+async def test_a_live_snapshot_is_refreshed_then_replaced_by_the_final_archive() -> None:
+    from choregos_adapters.fakes.executor import FakeExecutor
+    from choregos_api.db.models import Run
+    from choregos_contracts import ExecutorKind
+    from choregos_core.domain import ExecStatus
+    from choregos_orchestrator.activities.execution import archive_once, snapshot_live
+
+    executor = FakeExecutor()
+    ref = ExecRef(kind=ExecutorKind.FAKE, name="fake-r", run_id="r")
+    run = Run(log_archive=None)
+    running = ExecStatus(state="running")
+
+    executor.run_logs["r"] = ["cloning", f"token={TOKEN}"]
+    await snapshot_live(executor, run, ref, running)
+    assert run.log_archive is not None and run.log_archive["final"] is False
+    assert run.log_archive["lines"] == ["cloning", "token=[REDACTED]"]
+
+    executor.run_logs["r"] = ["cloning", "agent: turn 1"]
+    await snapshot_live(executor, run, ref, running)
+    assert run.log_archive["lines"][-1] == "agent: turn 1", "each poll refreshes the live tail"
+
+    await archive_once(executor, run, ref, ExecStatus(state="failed", exit_code=137, reason="OOMKilled"))
+    assert run.log_archive["final"] is True and run.log_archive["reason"] == "OOMKilled"
+
+    final = dict(run.log_archive)
+    executor.run_logs["r"] = ["after the end"]
+    await snapshot_live(executor, run, ref, running)
+    await archive_once(executor, run, ref)
+    assert run.log_archive == final, "a final archive is never rewritten"
+
+
+async def test_await_run_takes_a_live_snapshot_while_the_pod_runs(setup: Fixture) -> None:
+    from choregos_adapters.fakes.executor import FakeExecutor
+    from choregos_core.domain import ExecStatus
+
+    class _Running(FakeExecutor):
+        def __init__(self) -> None:
+            super().__init__()
+            self.reads: list[str] = []
+
+        async def status(self, ref: ExecRef) -> ExecStatus:
+            return ExecStatus(state="running")
+
+        async def logs(self, ref: ExecRef) -> Any:
+            self.reads.append("read")
+            yield f"read {len(self.reads)}"
+
+    executor = _Running()
+    setup.adapters.executor = executor
+    run_id = await _prepare_and_start(setup)
+    from choregos_orchestrator.activities import stage as activities
+
+    # A zero budget: one poll while the pod runs, then the run is abandoned and archived.
+    await activities.await_run(
+        {"project_id": setup.project_id, "run_id": run_id, "timeout_minutes": 0, "poll_seconds": 0.01}
+    )
+    assert len(executor.reads) == 2, "one live snapshot during the poll, one final archive"
+    archive = await _archive(run_id)
+    assert archive is not None and archive["final"] is True and archive["lines"] == ["read 2"]

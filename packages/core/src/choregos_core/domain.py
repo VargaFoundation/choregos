@@ -296,6 +296,9 @@ class RunLogArchive(Model):
     truncated: bool = False
     #: Why the logs could not be read, when they could not (the run still gets its archive).
     error: str | None = None
+    #: `False` for a live snapshot taken while the pod runs (S36-03), replaced at each poll and
+    #: then by the final archive; `True` once the run has ended — and then never rewritten.
+    final: bool = True
     archived_at: datetime = Field(default_factory=utcnow)
 
 

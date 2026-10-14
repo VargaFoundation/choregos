@@ -42,6 +42,7 @@ export type {
   ReleasePage,
   Run,
   RunEvent as RunEventDto,
+  RunLogs,
   RunSummary,
   TimelineEntry,
   TrainStatus,

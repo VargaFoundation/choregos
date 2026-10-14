@@ -292,6 +292,24 @@ class ArtifactRef(Dto):
     inline: str | None = None
 
 
+class RunLogsDto(Dto):
+    """The runner pod's log tail and how the pod ended (S36-02, S36-03), redacted.
+
+    `source`: `live` while the pod runs (a snapshot refreshed at each orchestrator poll),
+    `archive` once the run has ended, `none` when nothing was captured (yet).
+    """
+
+    source: Literal["live", "archive", "none"]
+    state: str
+    exit_code: int | None = None
+    reason: str | None = None
+    message: str = ""
+    lines: list[str] = Field(default_factory=list)
+    truncated: bool = False
+    error: str | None = None
+    captured_at: datetime | None = None
+
+
 class DiffFileDto(Dto):
     path: str
     status: str = "modified"

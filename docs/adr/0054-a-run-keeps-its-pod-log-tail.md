@@ -32,9 +32,17 @@ on every executor and was called by nothing.
    nothing (ADR 0008). Logs that cannot be read within 30 s, or at all, still give an archive whose
    `error` says why: a run must end even when its logs cannot be read.
 
+6. **Live tail from the same place (S36-03).** While the pod runs, the orchestrator's poll in
+   `await_run` refreshes a snapshot in the same column, marked `final: false`; the final archive
+   replaces it and is never replaced. `GET /runs/{id}/logs` serves the column (`live`, `archive`
+   or `none`): the API never reads the cluster, so reading pod logs stays a right of the
+   orchestrator alone, and the run's row-level security covers the logs.
+
 ## Consequences
 
-- The run page can show why a pod died even when the journal is empty (S36-03 serves it).
+- The run page can show why a pod died even when the journal is empty.
+- The live tail is as fresh as the poll (`heartbeat_seconds`, 60 s by default), and each poll
+  reads the pod's log once more. It is a snapshot, not a stream.
 - When the runner posts its result, the pod may still be running: the archive then holds the log
   up to that moment and the state `running`, not the final exit code.
 - The archive lives in the database, not the object store: 200 short lines per run is small, and

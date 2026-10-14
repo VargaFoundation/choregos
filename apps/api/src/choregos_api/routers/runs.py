@@ -16,7 +16,7 @@ from ..deps import Db, Me, resolve_project
 from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
 from ..rbac import Permission
-from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto
+from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto, RunLogsDto
 from ..services import run_dto
 
 router = APIRouter(tags=["runs"])
@@ -158,6 +158,31 @@ async def transcript(id: str, session: Db, principal: Me) -> ArtifactRef:
         content_type="application/x-ndjson",
         size_bytes=len(body.encode()),
         inline=body,
+    )
+
+
+@router.get("/runs/{id}/logs", response_model=RunLogsDto, operation_id="getRunLogs")
+async def run_logs(id: str, session: Db, principal: Me) -> RunLogsDto:
+    """The runner pod's log tail and how the pod ended, redacted (S36-02, S36-03).
+
+    The API never reads the cluster: while the pod runs, the orchestrator refreshes a live
+    snapshot at each poll; once the run ends it writes the final archive. Both live in
+    `runs.log_archive`, under the run's row-level security like the rest of the run.
+    """
+    run, _ = await _run(session, id, principal)
+    archive: dict[str, Any] = run.log_archive or {}
+    if not archive:
+        return RunLogsDto(source="none", state=run.status)
+    return RunLogsDto(
+        source="archive" if archive.get("final", True) else "live",
+        state=str(archive.get("state") or run.status),
+        exit_code=archive.get("exit_code"),
+        reason=archive.get("reason"),
+        message=str(archive.get("message") or ""),
+        lines=[str(line) for line in archive.get("lines") or []],
+        truncated=bool(archive.get("truncated")),
+        error=archive.get("error"),
+        captured_at=archive.get("archived_at"),
     )
 
 

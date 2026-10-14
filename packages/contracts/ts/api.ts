@@ -1081,6 +1081,21 @@ export type ArtifactRef = {
   inline?: string | null;
 };
 
+/** The runner pod's log tail (last 200 lines, each redacted) and its termination. `live` is a snapshot the orchestrator refreshes at each poll while the pod runs; `archive` is written once when the run ends; `none` when nothing was captured. */
+export type RunLogs = {
+  source: "live" | "archive" | "none";
+  state: string;
+  exit_code?: number | null;
+  /** The runtime's word: OOMKilled, Error, ErrImagePull, ImagePullBackOff… */
+  reason?: string | null;
+  message?: string;
+  lines?: Array<string>;
+  truncated?: boolean;
+  /** Why the logs could not be read */
+  error?: string | null;
+  captured_at?: string | null;
+};
+
 export type DiffSummary = {
   base?: string | null;
   head?: string | null;
@@ -1511,6 +1526,7 @@ export interface Operations {
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
   getRunInputContent: { method: "GET"; path: "/internal/runs/{id}/inputs/{name}"; body: never; response: void };
   getRunInputs: { method: "GET"; path: "/internal/runs/{id}/inputs"; body: never; response: Array<RunInputFile> };
+  getRunLogs: { method: "GET"; path: "/runs/{id}/logs"; body: never; response: RunLogs };
   getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: Array<{
   slug: string;
   version: number;

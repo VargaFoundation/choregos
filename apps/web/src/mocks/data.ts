@@ -32,6 +32,7 @@ import type {
   Run,
   RunEventDto,
   Artifact,
+  RunLogs,
   HandOff,
   TimelineEntry,
   TrainStatus,
@@ -469,6 +470,37 @@ export function ticketDetaille(id: string): WorkItemDto {
 
 /** Les deux parcours du mode démo, exposés pour la vérification de langue des fixtures. */
 export const parcoursDeDemonstration = [parcoursEnCours(), parcoursTermine()];
+
+/** The pod log tail of the running run (`/runs/{id}/logs`, S36-03): a live snapshot, redacted. */
+export const runLogsLive: RunLogs = {
+  source: "live",
+  state: "running",
+  exit_code: null,
+  reason: null,
+  message: "",
+  lines: [
+    "runner: fetching the stage input",
+    "runner: cloning https://github.com/varga/billing-api.git",
+    "env: GITHUB_TOKEN=[REDACTED]",
+    "acp: session started (claude-code)",
+  ],
+  truncated: false,
+  error: null,
+  captured_at: iso(1),
+};
+
+/** A run whose pod was OOM-killed before the agent spoke: only the archived log tail says why. */
+export const runLogsOom: RunLogs = {
+  source: "archive",
+  state: "failed",
+  exit_code: 137,
+  reason: "OOMKilled",
+  message: "runner exited with 137 (OOMKilled)",
+  lines: ["runner: fetching the stage input", "agent: loading the embeddings index", "Killed"],
+  truncated: true,
+  error: null,
+  captured_at: iso(5),
+};
 
 /** Ce à quoi l'agent a touché, replié depuis son journal (`/runs/{id}/access`). */
 export const runAccess = {
@@ -1642,6 +1674,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/work-items\/[^/]+\/artifacts$/, artifacts],
     [/^\/work-items\/[^/]+\/runs$/, runs],
     [/^\/runs\/[^/]+\/events$/, runEvents],
+    [/^\/runs\/r-oom\/logs$/, runLogsOom],
+    [/^\/runs\/[^/]+\/logs$/, runLogsLive],
     [/^\/runs\/[^/]+\/access$/, runAccess],
     [/^\/runs\/[^/]+\/diff$/, runDiff],
     [/^\/runs\/[^/]+$/, runs[2]],
