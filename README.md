@@ -54,7 +54,7 @@ cp .env.example .env    # optional: ANTHROPIC_API_KEY or OPENAI_API_KEY for real
 docker compose up       # console on http://localhost:3000, a demo project, a work item
 ```
 
-Pour développer la plateforme :
+To develop the platform:
 
 ```bash
 make setup          # uv sync + pnpm install
