@@ -125,6 +125,10 @@ spec:
             - name: CHOREGOS_SANDBOX_ASSIGNMENT_PORT
               value: {{ (($root.Values.runner.sandbox | default dict).assignmentPort | default 8765) | quote }}
             {{- end }}
+            # The kill switch for context reduction (ADR 0055): "off" refuses rtk and headroom
+            # to every run, whatever a project's policy asks.
+            - name: CHOREGOS_CONTEXT_REDUCTION
+              value: {{ ternary "on" "off" (ne $root.Values.runner.contextReduction.enabled false) | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}

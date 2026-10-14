@@ -65,6 +65,11 @@ class OrchestratorSettings(BaseSettings):
     #: model call (ADR 0047, S27-02). `CHOREGOS_MIN_RUN_RESERVATION_USD`.
     min_run_reservation_usd: float = Field(default=0.01, ge=0)
 
+    #: The deployment's kill switch for context reduction (ADR 0055): `off` turns rtk and headroom
+    #: off for every run, whatever a policy asks. `on` (the default) lets the policy decide, and a
+    #: policy without `context` reduces nothing.
+    context_reduction: bool = True
+
     @property
     def callback_url(self) -> str:
         """Ce que le runner reçoit dans `callbacks.api_url`, sans le suffixe d'API interne."""

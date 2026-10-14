@@ -302,6 +302,11 @@ choregos-orchestrator:
       storageClassName: ""
       # Where a warm runner listens for its one assignment (run id, token, environment).
       assignmentPort: 8765
+    # Context reduction (ADR 0055): rtk filters shell output, headroom compresses tool results.
+    # `enabled: false` refuses both to every run; `true` lets each project's policy decide, and a
+    # policy without `context` reduces nothing.
+    contextReduction:
+      enabled: true
     # Le proxy d'egress par lequel CHAQUE pod d'agent sort (`HTTP_PROXY`/`HTTPS_PROXY`),
     # `{namespace}` = celui des runners. Le provisioning y déploie un Squid dont
     # l'allowlist est `policy.sandbox.network.allow_domains` ; sans domaine autorisé,

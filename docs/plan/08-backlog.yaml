@@ -2593,7 +2593,7 @@ stories:
     depends_on: [S37-02]
     acceptance:
       - "The kill switch turns off a policy that enables both"
-      - "Helm runner.contextReduction.enabled renders the env var"
+      - "Helm choregos-orchestrator.runner.contextReduction.enabled renders the env var"
   - id: S37-04
     title: "Runner image: rtk pinned with its sha256, telemetry off, rtk --version at build"
     stream: S37
