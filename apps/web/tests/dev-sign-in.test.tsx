@@ -17,7 +17,7 @@ async function open(env: Record<string, string>) {
 function submitted(): URL {
   const assign = vi.fn();
   vi.stubGlobal("location", { ...window.location, assign });
-  fireEvent.click(screen.getByRole("button", { name: "enter" }));
+  fireEvent.click(screen.getByRole("button", { name: "Enter" }));
   expect(assign).toHaveBeenCalledOnce();
   return new URL(String(assign.mock.calls[0]?.[0]), "http://localhost:3000");
 }
@@ -35,7 +35,7 @@ describe("development sign-in on the local install", () => {
       NEXT_PUBLIC_DEV_LOGIN_EMAIL: "admin@choregos.local",
       NEXT_PUBLIC_DEV_LOGIN_NEXT: "/p/demo",
     });
-    expect(screen.getByLabelText("development e-mail")).toHaveProperty("value", "admin@choregos.local");
+    expect(screen.getByLabelText("Development e-mail")).toHaveProperty("value", "admin@choregos.local");
     const url = submitted();
     expect(url.pathname).toBe("/api/v1/auth/login");
     expect(url.searchParams.get("as")).toBe("admin@choregos.local");
@@ -45,12 +45,12 @@ describe("development sign-in on the local install", () => {
   it("still goes back where the person was going, when a page sent them here", async () => {
     query = new URLSearchParams({ next: "/inbox" });
     await open({ NEXT_PUBLIC_DEV_LOGIN: "true", NEXT_PUBLIC_DEV_LOGIN_NEXT: "/p/demo" });
-    fireEvent.change(screen.getByLabelText("development e-mail"), { target: { value: "a@b.c" } });
+    fireEvent.change(screen.getByLabelText("Development e-mail"), { target: { value: "a@b.c" } });
     expect(submitted().searchParams.get("redirect_to")).toBe("/inbox");
   });
 
   it("offers nothing of it without development sign-in, whatever else was baked in", async () => {
     await open({ NEXT_PUBLIC_DEV_LOGIN_EMAIL: "admin@choregos.local", NEXT_PUBLIC_DEV_LOGIN_NEXT: "/p/demo" });
-    expect(screen.queryByLabelText("development e-mail")).toBeNull();
+    expect(screen.queryByLabelText("Development e-mail")).toBeNull();
   });
 });
