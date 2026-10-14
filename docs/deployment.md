@@ -188,6 +188,10 @@ deleted afterwards), name that cluster explicitly:
 CHOREGOS_CLUSTER_CONTEXT=<context> CHOREGOS_CLUSTER_ALLOW_SHARED=<context> make test-cluster
 ```
 
+Each capability the executor announces (`queue`, `renew`, `snapshot`, `suspend`, `resume`) has a
+test there marked `@pytest.mark.capability("agent_sandbox", …)`; CI refuses an executor that
+announces a capability without one.
+
 **Say what this installation can run.** A project created without an `agent` or `models`
 section inherits the deployment's backend and model profiles; without them, it falls back to the
 contract's defaults (`claude-code`, no profile), and a template's agents never reach a model on an
