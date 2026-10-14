@@ -5,7 +5,7 @@ Replaying a work item whose budget is spent needs a stated top-up; it adds to th
 budget, and the audit log records who granted it.
 
 Revision ID: 1b3d5f7a9c0e
-Revises: d6f8b0c2e4a6
+Revises: f8b0d2e4a6c8
 Create Date: 2026-10-13 10:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "1b3d5f7a9c0e"
-down_revision: str | None = "d6f8b0c2e4a6"
+down_revision: str | None = "f8b0d2e4a6c8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
