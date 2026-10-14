@@ -47,6 +47,12 @@ EXPRESS_LANE_APPROVAL = "express-lane-approval"
 #: or a duplicate carrying the label): a pre-change run replaying a history where nothing diverges never
 #: meets it, and takes the fix if it is updated before then.
 EXPRESS_LANE_READS_ITS_LABEL = "express-lane-reads-its-label"
+#: An express boarding whose lane says `skip_schedule: false` waits for the next scheduled departure (the
+#: cron is due inside an open window) instead of leaving at once (#351, S22-30). Before this marker,
+#: `skip_schedule` was read nowhere and the express lane always bypassed the schedule. `patched` is only
+#: called when the train would otherwise leave against the schedule; a held express that relays carries
+#: `express: True` into the next run.
+EXPRESS_LANE_HONOURS_SKIP_SCHEDULE = "express-lane-honours-skip-schedule"
 #: The express lane label when the policy names none (the default of the `ExpressLane` contract).
 DEFAULT_EXPRESS_LABEL = "hotfix"
 #: Le train au repos se relaie (continue-as-new) avant que Temporal ne le tue (S22-24). Avant ce
@@ -129,6 +135,8 @@ class TrainInput:
     #: `None` : le seuil du code (`SEUIL_DE_RELAIS`, et celui d'avant pour les runs d'avant). Un seuil
     #: donné vaut pour le relais au repos, d'avant comme d'après S22-27.
     seuil_de_relais: int | None = None
+    #: An express departure held by the schedule (`skip_schedule: false`) when the train relayed.
+    express: bool = False
 
     def seuil(self) -> int:
         """Le seuil de relais de ce train."""
@@ -164,6 +172,8 @@ class ReleaseTrain:
         #: the express lane examines them once its label is known.
         self.express_label: str | None = None
         self.pending_labels: list[tuple[list[str], bool]] = []
+        #: A human asked for the departure (`depart_now`): it bypasses the schedule, express or not.
+        self.manual_depart: bool = False
 
     # ───────────────────────── signaux ─────────────────────────
 
@@ -176,6 +186,10 @@ class ReleaseTrain:
         for item in self.batch:
             if item.get("work_item_key") == payload.get("work_item_key"):
                 item["approval"] = _cumul(item.get("approval"), payload.get("approval"))
+                # The labels of every boarding: the release lists those set between two boardings.
+                # An activity input, not a command: replaying an older history is unaffected.
+                if labels:
+                    item["labels"] = list(dict.fromkeys([*(item.get("labels") or []), *labels]))
                 duplicate = True
                 break
         if not duplicate:
@@ -203,6 +217,7 @@ class ReleaseTrain:
     @workflow.signal
     def depart_now(self, payload: dict[str, Any]) -> None:
         self.depart_requested = True
+        self.manual_depart = True
 
     @workflow.signal
     def freeze(self, payload: dict[str, Any]) -> None:
@@ -252,6 +267,8 @@ class ReleaseTrain:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         params = TrainInput(**payload)
+        # A held express is carried by ONE relay; the next relays say it again only if still held.
+        payload = {key: value for key, value in payload.items() if key != "express"}
         # Le signal qui démarre le train est livré AVANT ce corps : le lot en porte déjà le ticket.
         deja_embarques, self.batch = list(self.batch), list(params.carried_items)
         if workflow.patched(LE_SIGNAL_DU_DEMARRAGE_EMBARQUE):
@@ -259,6 +276,9 @@ class ReleaseTrain:
                 self.merged(item)
         self.batch_no = params.batch_no
         self.frozen = params.frozen
+        if params.express:
+            self.express = True
+            self.depart_requested = True
 
         config = await executer_activite(
             train_activities.load_train_config,
@@ -299,6 +319,17 @@ class ReleaseTrain:
                     }
                 )
         return {"status": self.status, "batches": departures}
+
+    def _express_held_by_schedule(self, config: dict[str, Any], *, scheduled: bool) -> bool:
+        """An express departure waits for the schedule when its lane says `skip_schedule: false`.
+
+        A human departure (`depart_now`) is never held. The condition first, `patched` second (see
+        `EXPRESS_LANE_HONOURS_SKIP_SCHEDULE`)."""
+        if not self.express or self.manual_depart or scheduled:
+            return False
+        if (config.get("express_lane") or {}).get("skip_schedule", True):
+            return False
+        return workflow.patched(EXPRESS_LANE_HONOURS_SKIP_SCHEDULE)
 
     def _se_relayer_tot(self, params: TrainInput) -> bool:
         """Le seuil est franchi (ou Temporal suggère le relais) ET le run a pris S22-27.
@@ -358,8 +389,13 @@ class ReleaseTrain:
             )
             # Un départ demandé par un humain (ou un hotfix) passe outre la fenêtre et le cron :
             # c'est un acte délibéré, tracé dans l'audit. Seul le gel le retient.
+            held = False
             if (self.express or self.depart_requested) and self.batch and not self.frozen:
-                return
+                held = self._express_held_by_schedule(
+                    config, scheduled=bool(self.window_open and window.get("due", False))
+                )
+                if not held:
+                    return
             if ready and not self.frozen and len(self.batch) >= int(config.get("batch_min", 1)):
                 return
             # Au repos, l'historique grossit sans départ pour le relayer : le train se relaie ici, son
@@ -381,6 +417,7 @@ class ReleaseTrain:
                         "carried_items": self.batch,
                         "batch_no": self.batch_no,
                         "frozen": self.frozen,
+                        **({"express": True} if held else {}),
                     }
                 )
             # A departure requested without a batch does not leave (above): drop it here, or the
@@ -392,6 +429,7 @@ class ReleaseTrain:
             ):
                 self.depart_requested = False
                 self.express = False
+                self.manual_depart = False
             # A frozen train does not leave (above): a manual request is dropped, `express` is kept
             # but no longer wakes the wait until the unfreeze (see `FROZEN_TRAIN_DOES_NOT_SPIN`).
             held_by_freeze = (
@@ -401,10 +439,18 @@ class ReleaseTrain:
             )
             if held_by_freeze:
                 self.depart_requested = False
+                self.manual_depart = False
                 await _wait(
                     lambda: (
                         self.depart_requested or (self.express and not self.frozen) or self.abort_requested
                     ),
+                    timedelta(seconds=max(5.0, min(wait_s, 900.0))),
+                )
+            elif held:
+                # An express held by the schedule (`skip_schedule: false`, never frozen nor empty):
+                # only a human departure wakes it; the next turn checks the schedule again.
+                await _wait(
+                    lambda: self.manual_depart or self.abort_requested,
                     timedelta(seconds=max(5.0, min(wait_s, 900.0))),
                 )
             else:
@@ -420,6 +466,7 @@ class ReleaseTrain:
         express = self.express
         self.express = False
         self.depart_requested = False
+        self.manual_depart = False
         if self.frozen:
             self.status = str(ReleaseStatus.FROZEN)
             await _wait(lambda: not self.frozen or self.abort_requested)

@@ -446,11 +446,12 @@ async def test_un_depart_express_prend_l_approbation_de_la_voie_express(
 EXPRESS_LABEL_ARCHIVES = {
     "policy-label": "train-express-label-S22-30",
     "labelled-duplicate": "train-express-duplicate-S22-30",
+    "held-by-schedule": "train-express-held-by-schedule-S22-30",
 }
 
 
-async def _express_label(setup: Fixture, label: str) -> None:
-    """The prod express lane is named `label` (`express_lane.label`)."""
+async def _prod_policy(setup: Fixture, **changes: Any) -> None:
+    """Sets fields of the prod train policy; `express_lane__x` sets `express_lane.x`, `None` removes."""
     from choregos_api.db.models import PolicyDef
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
@@ -464,8 +465,20 @@ async def _express_label(setup: Fixture, label: str) -> None:
             )
         ).scalar_one()
         document = copy.deepcopy(row.json_doc)
-        document["release_train"]["prod"]["express_lane"]["label"] = label
+        prod = document["release_train"]["prod"]
+        for key, value in changes.items():
+            target, _, field = key.rpartition("__")
+            place = prod[target] if target else prod
+            if value is None:
+                place.pop(field, None)
+            else:
+                place[field] = value
         row.json_doc = document
+
+
+async def _express_label(setup: Fixture, label: str) -> None:
+    """The prod express lane is named `label` (`express_lane.label`)."""
+    await _prod_policy(setup, express_lane__label=label)
 
 
 async def _replay_and_archive(name: str | None, history: Any) -> None:
@@ -547,6 +560,55 @@ async def test_a_labelled_duplicate_boarding_triggers_the_express_lane(
     assert _departs_express(history) == [True], "a single express departure of a single ticket"
     (release,) = await _releases()
     assert len(release.items) == 1, "the duplicate counts once"
+    assert release.items[0].get("labels") == ["hotfix"], "the release lists the label set in between"
+
+
+async def test_an_express_lane_that_keeps_the_schedule_holds_the_departure(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """`express_lane.skip_schedule: false`: a `hotfix` ticket waits for the schedule (the prod cron is
+    not due) instead of leaving at once; a human `depart_now` still sends it, on the express lane.
+
+    Before #351, `skip_schedule` was read nowhere: the express lane always bypassed the schedule."""
+    await _prod_policy(setup, express_lane__skip_schedule=False)
+    setup.adapters.cd.set_health("billing-api", "Healthy")
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            train = await _train(temporal_env, setup)
+            await train.signal(
+                "merged", {"work_item_key": "varga/billing-api#15", "sha": "s1", "labels": ["hotfix"]}
+            )
+            await _jusqu_a(train, "status_query", lambda s: s["batch_size"] == 1)
+            await asyncio.sleep(3)  # an express that ignores the schedule would already have departed
+            held = await train.query("status_query")
+            await train.signal("depart_now", {"by": "augustin"})
+            await _jusqu_a(train, "status_query", lambda s: s["status"] == "awaiting_approval")
+            await train.signal("abort", {"by": "test"})
+            await train.result()
+            history = await train.fetch_history()
+    await _replay_and_archive(EXPRESS_LABEL_ARCHIVES["held-by-schedule"], history)
+    assert held["status"] == "collecting" and held["release_id"] is None, held
+    assert _departs_express(history) == [True], "the human departure keeps the express lane"
+
+
+async def test_an_express_lane_that_keeps_the_schedule_leaves_when_it_is_due(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """`skip_schedule: false` and a cron due every minute, no window: the express departs on schedule."""
+    await _prod_policy(setup, express_lane__skip_schedule=False, schedule="* * * * *", windows=None)
+    setup.adapters.cd.set_health("billing-api", "Healthy")
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            train = await _train(temporal_env, setup)
+            await train.signal(
+                "merged", {"work_item_key": "varga/billing-api#16", "sha": "s2", "labels": ["hotfix"]}
+            )
+            await _jusqu_a(train, "status_query", lambda s: s["status"] == "awaiting_approval")
+            await train.signal("abort", {"by": "test"})
+            await train.result()
+            history = await train.fetch_history()
+    await _replay_and_archive(None, history)
+    assert _departs_express(history) == [True]
 
 
 # ───────────────────────── un train qui livre sans Slack (S22-26) ─────────────────────────
