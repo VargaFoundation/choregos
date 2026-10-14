@@ -38,7 +38,7 @@ checked by **gates** — mechanical guarantees, not prompts — before the ticke
 - It is not a chat interface. Agents run unattended; humans intervene at the points the
   workflow declares, with a deadline and an escalation path.
 - It is not tied to software delivery. The engine carries any work that arrives as requests
-  and is instructed in steps — see [ADR 0012](adr/0012-le-moteur-n-est-pas-lie-au-logiciel.md)
+  and is instructed in steps — see [ADR 0012](adr/0012-the-engine-is-not-tied-to-software.md)
   for what was made generic and, just as important, what is still shaped by code.
 - It does not hide what it cannot prove. A gate that cannot read what it is supposed to
   check **refuses** instead of passing.

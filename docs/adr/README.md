@@ -17,51 +17,51 @@ nine records did not exist.
 
 | # | Decision | Status |
 | --: | :-- | :-- |
-| [0001](0001-contrats-geles.md) | Contracts are frozen at M0 and versioned | accepted |
-| [0002](0002-acp-comme-contrat-agent.md) | ACP as the agent contract; OpenHands default superseded by 0011 | accepted |
-| [0003](0003-temporal-comme-orchestrateur.md) | Temporal for durable orchestration | accepted |
-| [0004](0004-cout-compte-au-gateway.md) | Cost is counted at the gateway, not by the agent | accepted |
-| [0005](0005-adaptateurs-et-fakes.md) | Every connector has an interface and a fake | accepted |
-| [0006](0006-trois-verrous-de-production.md) | Three independent locks protect production | accepted |
-| [0007](0007-memoire-optionnelle.md) | Memory must earn its place before anything depends on it | accepted |
-| [0008](0008-idempotence-et-run-id.md) | Deterministic identifiers and idempotence everywhere | accepted |
-| [0009](0009-gitops-seule-source-de-verite.md) | The cluster changes only through Git | accepted |
-| [0010](0010-les-gates-sont-des-mecanismes.md) | A guarantee is a mechanism, never a prompt | accepted |
-| [0011](0011-retrait-d-openhands.md) | OpenHands removed; `claude-code` becomes the default | accepted |
-| [0012](0012-le-moteur-n-est-pas-lie-au-logiciel.md) | The engine is not tied to software | accepted |
-| [0013](0013-densite-des-taches-d-agent.md) | Agent task density, and what we take from AX | accepted |
-| [0014](0014-un-catalogue-d-outils-tenu-par-la-plateforme.md) | A platform-held tool catalogue | accepted |
-| [0015](0015-attestation-de-paternite-ia.md) | A signed "AI authorship" attestation per merged change | proposed |
-| [0016](0016-executeur-agent-sandbox.md) | An `agent-sandbox` executor: warm pools, suspend across a human gate, snapshots | accepted |
-| [0017](0017-conformite-mcp-2026-07-28.md) | MCP 2026-07-28: stateless tools, tasks, elicitation, resource-bound OAuth | proposed |
+| [0001](0001-frozen-contracts.md) | Contracts are frozen at M0 and versioned | accepted |
+| [0002](0002-acp-as-the-agent-contract.md) | ACP as the agent contract; OpenHands default superseded by 0011 | accepted |
+| [0003](0003-temporal-as-the-orchestrator.md) | Temporal for durable orchestration | accepted |
+| [0004](0004-cost-counted-at-the-gateway.md) | Cost is counted at the gateway, not by the agent | accepted |
+| [0005](0005-adapters-and-fakes.md) | Every connector has an interface and a fake | accepted |
+| [0006](0006-three-production-locks.md) | Three independent locks protect production | accepted |
+| [0007](0007-optional-memory.md) | Memory must earn its place before anything depends on it | accepted |
+| [0008](0008-idempotence-and-run-id.md) | Deterministic identifiers and idempotence everywhere | accepted |
+| [0009](0009-gitops-single-source-of-truth.md) | The cluster changes only through Git | accepted |
+| [0010](0010-gates-are-mechanisms.md) | A guarantee is a mechanism, never a prompt | accepted |
+| [0011](0011-openhands-removed.md) | OpenHands removed; `claude-code` becomes the default | accepted |
+| [0012](0012-the-engine-is-not-tied-to-software.md) | The engine is not tied to software | accepted |
+| [0013](0013-agent-task-density.md) | Agent task density, and what we take from AX | accepted |
+| [0014](0014-a-platform-held-tool-catalogue.md) | A platform-held tool catalogue | accepted |
+| [0015](0015-ai-authorship-attestation.md) | A signed "AI authorship" attestation per merged change | proposed |
+| [0016](0016-agent-sandbox-executor.md) | An `agent-sandbox` executor: warm pools, suspend across a human gate, snapshots | accepted |
+| [0017](0017-mcp-2026-07-28-conformance.md) | MCP 2026-07-28: stateless tools, tasks, elicitation, resource-bound OAuth | proposed |
 | [0018](0018-otel-genai.md) | OpenTelemetry GenAI spans from the runner and the gateway; the ledger stays the truth for money | proposed |
 | [0019](0019-temporal-workflow-streams.md) | Temporal Workflow Streams as the transport of a run's live journal | proposed |
-| [0020](0020-evals-de-trajectoire.md) | Trajectory evals in the nightly matrix, scored from the journal by mechanisms | proposed |
-| [0021](0021-spiffe-derriere-le-jeton-de-run.md) | SPIFFE identities behind the run token: revocation by deletion, mTLS to the gateway | proposed |
-| [0022](0022-catalogue-federable.md) | A federable catalogue: registry entries become pull requests, born closed | proposed |
-| [0023](0023-constructeur-visuel-de-workflow.md) | A visual builder: read-only map first, then edits that are YAML diffs | proposed |
-| [0024](0024-deux-editions.md) | Two editions: a single-organisation community core, a separate enterprise layer | accepted |
-| [0025](0025-le-moteur-pilote-l-it-de-la-plateforme.md) | The engine drives platform IT: healthcheck findings become governed changes, nodes last | accepted |
-| [0026](0026-ce-que-la-rls-du-coeur-couvre.md) | What the core's RLS covers — every table checked; identity included since 0.11 (update of 2026-09-29) | accepted |
-| [0027](0027-le-voisinage-se-regle-a-l-admission-et-au-quota.md) | Noisy neighbours: bounded at admission and by a per-organisation namespace quota, not by a Temporal queue per organisation | accepted |
-| [0028](0028-l-execution-gouvernee-du-changement.md) | Choregos governs the execution of change, not agents in general; superseded by 0029 | superseded |
-| [0029](0029-une-plateforme-d-agents-gouvernes.md) | Choregos is a general-purpose platform for governed agents: several workflows per project, an agent registry, skills, MCP, connectors by capability | accepted |
-| [0030](0030-une-porte-mcp-pour-les-clients-externes.md) | A door for external MCP clients inside the API: `/mcp`, scoped tokens first, OAuth next, no decision through MCP | accepted |
-| [0031](0031-plusieurs-workflows-par-projet.md) | A project runs several workflows; each work item is pinned to the version it was born in; typed edits are text grafts (amends 0023) | accepted |
-| [0032](0032-sections-d-administration-par-manifeste.md) | Administration sections are declared by manifest; the console renders them, no plugin code runs in it | accepted |
-| [0033](0033-registre-d-agents-et-bibliotheque-de-skills.md) | Agents are registered, versioned objects (internal and external, rights intersected with the human's); skills are a library they carry, declaring no permission | accepted |
-| [0034](0034-connecteurs-par-capacites.md) | Connectors by capability, a policy per operation; a discovered MCP tool is born closed (amends 0014) | accepted |
-| [0035](0035-actions-gouvernees-dans-le-coeur.md) | Governed actions move into the core and run in Temporal; each effect is recorded by key and compensated on failure | accepted |
-| [0036](0036-un-gabarit-livre-ce-qu-un-greffon-installe.md) | A template ships what a plugin installs (`defaults.extensions`); without the plugin the project is born without it, and the audit says so | accepted |
-| [0037](0037-les-effets-d-un-workflow-s-ecrivent.md) | What a workflow does is written (`does`, `production`), not carried by a state's name; names are still read for older workflows, and a rename writes the effect down first | accepted |
-| [0038](0038-un-editeur-yaml-empaquete.md) | The console's YAML editor is bundled CodeMirror, its workflow map is plain HTML; nothing is fetched from a third party at run time | accepted |
-| [0039](0039-tout-ce-qu-un-utilisateur-lit-est-en-anglais.md) | Everything a user reads is in English; identifiers and machine codes do not change, code and `docs/plan` stay in French (§2-3 superseded by 0046) | accepted |
-| [0040](0040-un-catalogue-d-agents-integre.md) | A built-in agent catalogue — one agent per role, a study's researcher and architect, the MCP clients; installed on demand or when a workflow names one, never rewritten (amends 0033) | accepted |
-| [0041](0041-l-approbation-suit-ce-que-le-lot-emporte.md) | The release approval follows what the batch ships (the policy, or a work item whose workflow names an approver); the train tells each work item it has shipped or rolled back; the webhook boards the train the workflow takes (amends 0006) | accepted |
-| [0042](0042-la-casse-de-l-interface.md) | What the console names is lowercase (the design system); what it says is a sentence, with a capital; data keeps its case (amends 0039); superseded by 0048 | superseded |
-| [0043](0043-l-allure-de-la-console.md) | The console looks like an operations console: the design system's tokens remapped to Radix Colors with a contrast budget per mode, Geist to read and Geist Mono to compare, a theme the person chooses applied before the first paint (amends 0042); §1, §6 and §7 superseded by 0048 | accepted |
-| [0044](0044-les-humains-se-declarent-dans-le-workflow.md) | People are declared in the workflow: the policy's `approvals.*` and `review.require_human_for_risk` are accepted but not enforced, and saying so is logged; the presets no longer write them | accepted |
-| [0045](0045-la-provenance-d-un-signal.md) | Every signal says where it comes from — declared by the agent, observed by the platform, inferred, or unknown; `Evidence.measured` carries it, and a run is not shown done on its agent's word alone | accepted |
+| [0020](0020-trajectory-evals.md) | Trajectory evals in the nightly matrix, scored from the journal by mechanisms | proposed |
+| [0021](0021-spiffe-behind-the-run-token.md) | SPIFFE identities behind the run token: revocation by deletion, mTLS to the gateway | proposed |
+| [0022](0022-a-federable-catalogue.md) | A federable catalogue: registry entries become pull requests, born closed | proposed |
+| [0023](0023-a-visual-workflow-builder.md) | A visual builder: read-only map first, then edits that are YAML diffs | proposed |
+| [0024](0024-two-editions.md) | Two editions: a single-organisation community core, a separate enterprise layer | accepted |
+| [0025](0025-the-engine-drives-platform-it.md) | The engine drives platform IT: healthcheck findings become governed changes, nodes last | accepted |
+| [0026](0026-what-the-core-rls-covers.md) | What the core's RLS covers — every table checked; identity included since 0.11 (update of 2026-09-29) | accepted |
+| [0027](0027-noisy-neighbours-at-admission-and-quota.md) | Noisy neighbours: bounded at admission and by a per-organisation namespace quota, not by a Temporal queue per organisation | accepted |
+| [0028](0028-the-governed-execution-of-change.md) | Choregos governs the execution of change, not agents in general; superseded by 0029 | superseded |
+| [0029](0029-a-platform-for-governed-agents.md) | Choregos is a general-purpose platform for governed agents: several workflows per project, an agent registry, skills, MCP, connectors by capability | accepted |
+| [0030](0030-an-mcp-door-for-external-clients.md) | A door for external MCP clients inside the API: `/mcp`, scoped tokens first, OAuth next, no decision through MCP | accepted |
+| [0031](0031-several-workflows-per-project.md) | A project runs several workflows; each work item is pinned to the version it was born in; typed edits are text grafts (amends 0023) | accepted |
+| [0032](0032-admin-sections-by-manifest.md) | Administration sections are declared by manifest; the console renders them, no plugin code runs in it | accepted |
+| [0033](0033-agent-registry-and-skill-library.md) | Agents are registered, versioned objects (internal and external, rights intersected with the human's); skills are a library they carry, declaring no permission | accepted |
+| [0034](0034-connectors-by-capability.md) | Connectors by capability, a policy per operation; a discovered MCP tool is born closed (amends 0014) | accepted |
+| [0035](0035-governed-actions-in-the-core.md) | Governed actions move into the core and run in Temporal; each effect is recorded by key and compensated on failure | accepted |
+| [0036](0036-a-template-ships-what-a-plugin-installs.md) | A template ships what a plugin installs (`defaults.extensions`); without the plugin the project is born without it, and the audit says so | accepted |
+| [0037](0037-a-workflow-s-effects-are-written.md) | What a workflow does is written (`does`, `production`), not carried by a state's name; names are still read for older workflows, and a rename writes the effect down first | accepted |
+| [0038](0038-a-bundled-yaml-editor.md) | The console's YAML editor is bundled CodeMirror, its workflow map is plain HTML; nothing is fetched from a third party at run time | accepted |
+| [0039](0039-everything-a-user-reads-is-in-english.md) | Everything a user reads is in English; identifiers and machine codes do not change, code and `docs/plan` stay in French (§2-3 superseded by 0046) | accepted |
+| [0040](0040-a-built-in-agent-catalogue.md) | A built-in agent catalogue — one agent per role, a study's researcher and architect, the MCP clients; installed on demand or when a workflow names one, never rewritten (amends 0033) | accepted |
+| [0041](0041-approval-follows-what-the-batch-ships.md) | The release approval follows what the batch ships (the policy, or a work item whose workflow names an approver); the train tells each work item it has shipped or rolled back; the webhook boards the train the workflow takes (amends 0006) | accepted |
+| [0042](0042-the-interface-s-letter-case.md) | What the console names is lowercase (the design system); what it says is a sentence, with a capital; data keeps its case (amends 0039); superseded by 0048 | superseded |
+| [0043](0043-the-console-s-look.md) | The console looks like an operations console: the design system's tokens remapped to Radix Colors with a contrast budget per mode, Geist to read and Geist Mono to compare, a theme the person chooses applied before the first paint (amends 0042); §1, §6 and §7 superseded by 0048 | accepted |
+| [0044](0044-people-are-declared-in-the-workflow.md) | People are declared in the workflow: the policy's `approvals.*` and `review.require_human_for_risk` are accepted but not enforced, and saying so is logged; the presets no longer write them | accepted |
+| [0045](0045-the-provenance-of-a-signal.md) | Every signal says where it comes from — declared by the agent, observed by the platform, inferred, or unknown; `Evidence.measured` carries it, and a run is not shown done on its agent's word alone | accepted |
 | [0046](0046-english-everywhere.md) | English everywhere: identifiers, code, comments, `docs/plan`, ADRs and commit messages too; patch ids frozen, Temporal names aliased, contracts via `contract-change`; a guard refuses French in new lines (supersedes 0039 §2-3) | accepted |
 | [0047](0047-a-budget-is-a-reservation.md) | A budget is a reservation: a run's key is minted at what is left (stage, agent, ticket, project day, organisation month); a gateway refusal stops the stage, never retries it; the ledger is the counter; more money is an audited decision | accepted |
 | [0048](0048-the-console-owns-its-primitives.md) | The console owns its primitives: it looks like Temporal's UI, writes in sentence case, uses sans for what is read and mono for what is compared, rounds at 4–6 px, and no longer depends on the Varga Foundation design system (supersedes 0042, and 0043 §1, §6, §7) | accepted |

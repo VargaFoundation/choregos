@@ -2,8 +2,8 @@
 
 - **Status**: accepted, 2026-10-13
 - **Concerns**: the policy contract (`Policy.context`), the stage input, the runner image and its
-  backends, the eval matrix; keeps [ADR 0004](0004-cout-compte-au-gateway.md) (the gateway
-  meters every call) and [ADR 0005](0005-adaptateurs-et-fakes.md) (a scriptable fake per integration)
+  backends, the eval matrix; keeps [ADR 0004](0004-cost-counted-at-the-gateway.md) (the gateway
+  meters every call) and [ADR 0005](0005-adapters-and-fakes.md) (a scriptable fake per integration)
 
 ## Context
 
@@ -50,7 +50,7 @@ store holds plaintext originals.
    - the stage: `StageInput.context` carries the resolved values, so a run says what it ran with.
 5. **A run that loses its proxy says so.** `on_unavailable: bypass` (the default) talks to the
    gateway directly and journals `context.degraded`; `fail` fails the stage.
-6. **What headroom reports is inferred, the cost is observed** ([ADR 0045](0045-la-provenance-d-un-signal.md)):
+6. **What headroom reports is inferred, the cost is observed** ([ADR 0045](0045-the-provenance-of-a-signal.md)):
    its savings figures are journaled as an inferred signal; the real cost stays the ledger's.
 7. **Default-on only after measurement, per backend.** The eval matrix gains a `context` dimension
    (`none`, `rtk`, `headroom`, `rtk+headroom`). A backend turns a reduction on by default only when

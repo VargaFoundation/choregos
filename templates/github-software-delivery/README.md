@@ -1,7 +1,7 @@
 # github-software-delivery — fix, study, feature
 
 Three workflows for a software team on GitHub, run by agents from the platform's catalogue
-([ADR 0040](../../docs/adr/0040-un-catalogue-d-agents-integre.md)). The agents enter the organisation
+([ADR 0040](../../docs/adr/0040-a-built-in-agent-catalogue.md)). The agents enter the organisation
 when the first project is born from this template; the organisation can then tune them by publishing
 its own versions.
 
@@ -39,7 +39,7 @@ same "highest plus one": the second to merge is sent back to the architect, who 
 (they are added to the pull request). Three people decide: `product-owners` on the specification,
 `maintainers` on the pull request — again after a CI fix, since what changed has not been seen —
 and `release-captains` on the production departure of the release train
-([ADR 0041](../../docs/adr/0041-l-approbation-suit-ce-que-le-lot-emporte.md)). Staging comes first,
+([ADR 0041](../../docs/adr/0041-approval-follows-what-the-batch-ships.md)). Staging comes first,
 with no approval.
 
 No agent deploys: the release train does, under the project's policy. A batch that carries a

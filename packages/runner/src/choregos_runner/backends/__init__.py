@@ -30,7 +30,7 @@ RETIRED: dict[str, str] = {
     "openhands": (
         "retired on 2026-09-21: OpenHands exposes no command-line ACP agent — neither in 0.59 "
         "(`serve` and `cli` only), nor in 1.x (no binary any more, an `agent-server` HTTP server). "
-        "See docs/adr/0011-retrait-d-openhands.md; the default is now `claude-code`."
+        "See docs/adr/0011-openhands-removed.md; the default is now `claude-code`."
     ),
 }
 

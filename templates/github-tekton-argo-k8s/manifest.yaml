@@ -25,7 +25,7 @@ defaults:
   policy: preset:solo
   models: platform-defaults
   # `claude-code` : OpenHands a été retiré, faute d'agent ACP en ligne de commande
-  # (docs/adr/0011-retrait-d-openhands.md).
+  # (docs/adr/0011-openhands-removed.md).
   agent: claude-code
 inputs:
   - { name: repo, type: github-repo, required: true, description: "owner/name of the application repository" }

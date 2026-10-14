@@ -2,8 +2,8 @@
 
 - **Status**: accepted, 2026-10-12
 - **Concerns**: the web console (`apps/web`): its components, its case, its type and its shapes;
-  supersedes [ADR 0042](0042-la-casse-de-l-interface.md) and §1, §4 (the type of buttons and
-  table headers), §6 and §7 of [ADR 0043](0043-l-allure-de-la-console.md)
+  supersedes [ADR 0042](0042-the-interface-s-letter-case.md) and §1, §4 (the type of buttons and
+  table headers), §6 and §7 of [ADR 0043](0043-the-console-s-look.md)
 
 ## Context
 

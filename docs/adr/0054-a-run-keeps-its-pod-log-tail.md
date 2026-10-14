@@ -2,7 +2,7 @@
 
 - **Status**: accepted, 2026-10-12
 - **Concerns**: the orchestrator's execution activities, the `Executor` protocol, the `runs` table;
-  builds on [ADR 0008](0008-idempotence-et-run-id.md) (idempotent activities)
+  builds on [ADR 0008](0008-idempotence-and-run-id.md) (idempotent activities)
 
 ## Context
 

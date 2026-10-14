@@ -1,14 +1,14 @@
 # 0046 — English everywhere: code, identifiers, plan and commit messages too
 
 - **Status**: accepted, 2026-10-12 — supersedes §2 and §3 of
-  [ADR 0039](0039-tout-ce-qu-un-utilisateur-lit-est-en-anglais.md)
+  [ADR 0039](0039-everything-a-user-reads-is-in-english.md)
 - **Concerns**: every file of the repository and every commit — code, identifiers, comments,
   docstrings, tests, file names, `docs/` including `docs/plan/`, ADRs, commit messages and pull
   request descriptions; decision D2 of the plan of 2026-10-12 (item 13)
 
 ## Context
 
-[ADR 0039](0039-tout-ce-qu-un-utilisateur-lit-est-en-anglais.md) made English what a *user* reads,
+[ADR 0039](0039-everything-a-user-reads-is-in-english.md) made English what a *user* reads,
 and kept two things in French on purpose: identifiers (§2: state names, field names, machine codes
 are keys) and the code itself, its comments, `docs/plan/` and commit messages (§3). The repository
 is now read by people who do not read French — contributors, reviewers, the customers of the

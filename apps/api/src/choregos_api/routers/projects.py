@@ -78,7 +78,7 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
         if deja:
             raise conflict(
                 "the community edition holds a single organisation. Several organisations, and the "
-                "isolation between them, are the enterprise edition (docs/adr/0024-deux-editions.md)."
+                "isolation between them, are the enterprise edition (docs/adr/0024-two-editions.md)."
             )
     if (
         await session.execute(select(Organization).where(Organization.slug == body.slug))

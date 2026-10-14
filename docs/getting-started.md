@@ -241,7 +241,7 @@ workaround chosen for each. At the time of writing: the platform's high-availabi
 need a staging-sized environment, Azure DevOps (Boards, Pipelines) has no reachable
 organisation, and the single-node bench measures no cost unless a provider key is given to
 the embedded gateway. The default backend is `claude-code`; OpenHands was removed
-([ADR 0011](adr/0011-retrait-d-openhands.md)). The local install's real-model path was run
+([ADR 0011](adr/0011-openhands-removed.md)). The local install's real-model path was run
 end to end up to the provider (which refused the test key): no work item has yet gone through it
 with a valid key. It uses the `opencode` backend for both providers, because `claude-code` in the
 published runner asks the gateway for a model of its own choosing.
@@ -252,4 +252,4 @@ published runner asks the gateway for a model of its own choosing.
 - [security.md](security.md) — what the platform guarantees, and by which mechanism
 - [cli.md](cli.md) — the CLI reference, generated from the CLI itself
 - [runbooks/](runbooks/) — operations
-- [plan/02-orchestrateur-agents-runner.md](plan/02-orchestrateur-agents-runner.md) — agent backends and their invocations (French)
+- [plan/02-orchestrator-agents-runner.md](plan/02-orchestrator-agents-runner.md) — agent backends and their invocations (French)

@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-10-12
 - **Concerns**: `skill_versions` (`source`, `risk`, `findings`, `review_status`), the skills routes (`import-git`, `skill-sources`, `…/approve`,
   `…/update`), the `skill:import` permission, the console's skills page; amends
-  [ADR 0033](0033-registre-d-agents-et-bibliotheque-de-skills.md) (skills are a library)
+  [ADR 0033](0033-agent-registry-and-skill-library.md) (skills are a library)
 
 ## Context
 

@@ -252,7 +252,7 @@ only through a private object, and a route nobody can see is a route nobody can 
 `apps/api/tests/test_greffons_routes.py` proves both with a plugin installed for real.
 
 A plugin that serves administration routes gives them **screens without shipping code to the
-console** ([ADR 0032](adr/0032-sections-d-administration-par-manifeste.md)): it declares each
+console** ([ADR 0032](adr/0032-admin-sections-by-manifest.md)): it declares each
 section as data — `form` (a JSON Schema, a read path, a write path), `table` (a list path, columns,
 row actions), `action` (a confirmation, `danger`, `reauth`), `secret_once` (a secret shown once,
 never kept) — and the console renders it under `/admin/x/{section}`:
@@ -286,13 +286,13 @@ on every save. The console draws a field from its JSON Schema: `string` (with `f
 `password` or `multiline`, the last for a PEM certificate), `number`, `integer`, `boolean`, `enum`,
 an `array` of strings (comma separated) and an `object` of strings (one `key = value` per line).
 
-This is how the enterprise edition attaches ([ADR 0024](adr/0024-deux-editions.md)), and it is
+This is how the enterprise edition attaches ([ADR 0024](adr/0024-two-editions.md)), and it is
 the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which was the model.
 `packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
 rather than stubbing the discovery.
 
 A plugin also brings the **effects** a governed action can run
-([ADR 0035](adr/0035-actions-gouvernees-dans-le-coeur.md)):
+([ADR 0035](adr/0035-governed-actions-in-the-core.md)):
 
 ```python
 from choregos_api.effets import EffetRefuse, declarer_un_effet
@@ -490,7 +490,7 @@ def brancher() -> None:
 
 It is written to the GitOps repository at provisioning, so it takes effect the next time the project
 is provisioned. A malformed quantity is refused at construction, not by Argo CD later. Why there is no
-Temporal queue per organisation: [ADR 0027](adr/0027-le-voisinage-se-regle-a-l-admission-et-au-quota.md).
+Temporal queue per organisation: [ADR 0027](adr/0027-noisy-neighbours-at-admission-and-quota.md).
 
 ## Known pitfalls
 

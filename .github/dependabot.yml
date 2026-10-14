@@ -1,5 +1,5 @@
 # Le plan demande Dependabot ou Renovate dès la création du dépôt
-# (`docs/plan/07-plan-parallelisation-conventions.md` §Bootstrap).
+# (`docs/plan/07-delivery-parallelisation-conventions.md` §Bootstrap).
 #
 # Tout est groupé. L'expérience d'à côté, sur `VargaFoundation/ecphoria`, est nette : sans
 # groupes, dix-neuf PR ouvertes en un mois, dont plusieurs impossibles à fusionner seules —

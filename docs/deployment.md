@@ -123,14 +123,14 @@ choregos-orchestrator:
 
 `maxActive` is the knob that keeps a burst of tickets from becoming a burst of pods. It is a
 **soft** cap: two runs can admit themselves in the same window and exceed it by one. See
-[ADR 0013](adr/0013-densite-des-taches-d-agent.md) for why there is no warm pool.
+[ADR 0013](adr/0013-agent-task-density.md) for why there is no warm pool.
 
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
 
 ### The `agent_sandbox` executor (opt-in)
 
-[ADR 0016](adr/0016-executeur-agent-sandbox.md) adds an executor on
+[ADR 0016](adr/0016-agent-sandbox-executor.md) adds an executor on
 [`kubernetes-sigs/agent-sandbox`](https://github.com/kubernetes-sigs/agent-sandbox): a warm pool
 of sandboxes that have never run anything, and a sandbox that can be suspended across a human
 question. It needs the operator, whose CRDs are **cluster-scoped**: a platform team installs it,
@@ -305,7 +305,7 @@ Two things have to be true for an agent to actually get a tool, and both are eas
 
 A project declares what it calls in its own configuration (`tools: [verifier_adresse]`, or
 `["*"]` for everything it is entitled to) and which groups it belongs to (`groups: [rh]`).
-Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-un-catalogue-d-outils-tenu-par-la-plateforme.md)
+Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
 ## Multi-tenant installations
@@ -540,7 +540,7 @@ curl -s https://<api-host>/edition
 
 This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
 second one is refused with a 409 that names the decision behind it
-([ADR 0024](adr/0024-deux-editions.md)). That is not an arbitrary cap — multi-tenancy is not
+([ADR 0024](adr/0024-two-editions.md)). That is not an arbitrary cap — multi-tenancy is not
 finished here, thirteen tables are still outside row-level security, and a single-organisation
 install is exposed to none of it because there is nothing to cross.
 
@@ -567,7 +567,7 @@ with no visible connection to its cause. Two guards now close that gap:
 
 | Where | What it refuses | Why there |
 |---|---|---|
-| `helm template` | `edition: enterprise` with no `global.imagePullSecrets` | the enterprise images live in a private registry; that pull secret **is** the access control in phase 1 ([ADR 0024](adr/0024-deux-editions.md), decision 5). Without it the pods sit in `ImagePullBackOff`, which never names the cause |
+| `helm template` | `edition: enterprise` with no `global.imagePullSecrets` | the enterprise images live in a private registry; that pull secret **is** the access control in phase 1 ([ADR 0024](adr/0024-two-editions.md), decision 5). Without it the pods sit in `ImagePullBackOff`, which never names the cause |
 | API start-up | `CHOREGOS_EDITION=enterprise` while no plugin declared itself | the image is the community one, or `choregos-ee` is not installed, or its `choregos.plugins` entry point does not call `declarer`. The refusal names all three |
 
 The reverse is **not** refused: a deployment that announces nothing and loads the enterprise

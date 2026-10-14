@@ -120,7 +120,7 @@ RUN set -eux; \
       "@google/gemini-cli@$(version gemini-cli)" \
       "opencode-ai@$(version opencode)"
 
-# OpenHands n'est plus installé (docs/adr/0011-retrait-d-openhands.md). Il n'exposait aucun
+# OpenHands n'est plus installé (docs/adr/0011-openhands-removed.md). Il n'exposait aucun
 # agent ACP en ligne de commande, et il pesait le plus lourd de l'image : son arbre Python
 # portait quatre des quatorze CRITICAL trouvés par Trivy (`litellm`, `fastmcp`, `anyio`,
 # `GitPython`), et c'était lui qui rendait la construction arm64 interminable.
