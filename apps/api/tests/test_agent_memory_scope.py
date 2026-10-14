@@ -14,6 +14,9 @@ def test_the_default_scope_leaves_the_digest_of_older_versions_unchanged() -> No
 
     avant = AgentSpec().model_dump(mode="json")
     del avant["memory"]
+    # Older than the knowledge field too (ADR 0051): an empty one is left out of the digest.
+    if not avant.get("knowledge"):
+        avant.pop("knowledge", None)
     attendu = (
         "sha256:"
         + hashlib.sha256(
