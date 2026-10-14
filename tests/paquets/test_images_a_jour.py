@@ -18,7 +18,7 @@ import re
 
 RACINE = pathlib.Path(__file__).resolve().parents[2]
 DOCKER = RACINE / "docker"
-ETAPE = re.compile(r"^FROM\s+(\S+)(?:\s+AS\s+(\S+))?\s*$", re.M | re.I)
+ETAPE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$", re.M | re.I)
 SOURCE = re.compile(r"COPY\s+--from=(\S+)")
 MISE_A_JOUR = re.compile(r"apt-get\s+upgrade\s+-y")
 

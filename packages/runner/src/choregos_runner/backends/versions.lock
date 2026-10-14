@@ -23,3 +23,13 @@ goose=1.9.0
 # en 1.1.10 — d'où la 1.x et non le plus proche voisin de l'épingle d'origine.
 opencode=1.18.31
 copilot-cli=0.3.0
+# rtk (ADR 0055): not an agent, a shell-output filter the image carries for every backend.
+# Each digest is checked at build time, and a wrong one fails the build. When Renovate bumps
+# the version alone, the old digests fail it too, so a bump never ships an unverified binary.
+# amd64 installs the static musl release binary. arm64 builds the release's source, because
+# upstream's aarch64 binary needs glibc 2.39 and bookworm has 2.36. `cargo --locked` then checks
+# every crate against the lock file of that source.
+# renovate: datasource=github-releases depName=rtk-ai/rtk
+rtk=0.50.0
+rtk-sha256-x86_64-unknown-linux-musl=bc2b8902b0d9c796c82ef45f16ae2307e17757afeca5ee156235a3dc7bda5f89
+rtk-sha256-source=428702395b6593268df073e7724a548fdc98be4a3cdf61656a6678e304a690a8
