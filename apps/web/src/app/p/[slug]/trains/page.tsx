@@ -30,7 +30,7 @@ export default function TrainsPage({ params }: { params: Promise<{ slug: string 
       {!policy.data ? (
         <EtatDeLecture lecture={policy} quoi="the policy's release trains" />
       ) : envs.length === 0 ? (
-        <Empty title="no release train">this project&apos;s policy declares no release_train environment.</Empty>
+        <Empty title="No release train">This project&apos;s policy declares no release_train environment.</Empty>
       ) : (
         envs.map((env) => <TrainCard key={env} slug={slug} env={env} />)
       )}
