@@ -61,7 +61,9 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
 # The Hubble CLI, for the `cilium` connector's flows (ADR 0052): Relay speaks gRPC only, and
 # `hubble observe -o jsonpb` is the client the Cilium project maintains. Pinned, checked against
 # the release's checksum. The connector runs here (API and workers), never in the runner.
-ARG HUBBLE_VERSION=v1.17.0
+# v1.19.4 and not v1.17.0: the latter carried three CRITICAL CVEs (cilium, grpc, Go stdlib) that
+# the image's Trivy gate refuses (#490). Any bump re-checks the `observe` flags the connector uses.
+ARG HUBBLE_VERSION=v1.19.4
 ARG TARGETARCH
 ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz /tmp/hubble.tar.gz
 ADD https://github.com/cilium/hubble/releases/download/${HUBBLE_VERSION}/hubble-linux-${TARGETARCH}.tar.gz.sha256sum /tmp/hubble.sha256sum
