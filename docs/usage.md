@@ -682,7 +682,11 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   `step_up_minutes` (else `401 step_up_required`, and the console re-authenticates). Whoever
   proposed, or owns the agent that proposed, does not decide. A rejection gives its reason. With
   `min: 2`, two different people approve. Of two concurrent approvals, one starts the action; the
-  other gets `409`.
+  other gets `409`. An approver rule may also name a `group` (`{"role": "developer", "group":
+  "netops-approvers"}`): the decider must then belong to that identity-provider group too, as its
+  last OIDC sign-in stated it. The organisation names one per write operation with
+  `PATCH /orgs/{org}/connectors/{name}/operations/{op}` `{"approver_group": "netops-approvers"}`,
+  and the actions an agent proposes through it carry that rule (ADR 0052).
 - **Running**: the approval starts `ActionWorkflow` (`action-<id>`) and answers at once. Each effect
   is recorded under its key (`<action>:<n>`) **before** it is attempted and confirmed after: a
   retried effect finds its key done and does nothing twice; one left started by a dead worker is

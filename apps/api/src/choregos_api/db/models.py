@@ -46,6 +46,9 @@ class User(Base, PkMixin, TimestampMixin):
     display_name: Mapped[str] = mapped_column(String(200), default="")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_service: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: The identity provider's groups, as of the last sign-in through it — what an approval rule
+    #: that names a group checks (ADR 0052). The IdP is authoritative: each sign-in replaces them.
+    groups: Mapped[list[str]] = mapped_column(Json, default=list)
 
 
 class Membership(Base, PkMixin, TimestampMixin):
@@ -548,6 +551,8 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     #: Ce que le courtier annonce à l'agent, et vérifie avant de joindre le serveur.
     input_schema: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The identity-provider group whose members approve the actions it proposes (ADR 0052).
+    approver_group: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):

@@ -223,6 +223,10 @@ async def update_operation(
         ligne.groups = sorted(set(body.groups))
     if "price_usd" in body.model_fields_set:
         ligne.price_usd = body.price_usd
+    if "approver_group" in body.model_fields_set:
+        if body.approver_group and ligne.access != "write":
+            raise unprocessable(f"{name}/{operation} is a read: nobody approves it")
+        ligne.approver_group = body.approver_group
     await record(
         session,
         principal,

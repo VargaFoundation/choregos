@@ -2257,6 +2257,7 @@ components:
         schema_digest: { type: [string, "null"] }
         input_schema: { type: [object, "null"], additionalProperties: true, description: "the input schema the broker announces to the agent and checks before the call" }
         description: { type: [string, "null"] }
+        approver_group: { type: [string, "null"], description: "the identity-provider group whose members approve the actions this operation proposes; none: the project's owners" }
     ConnectorDiscovery:
       type: object
       properties:
@@ -2293,6 +2294,7 @@ components:
         policy: { type: [string, "null"], enum: [allowed, approval, forbidden, null] }
         groups: { type: [array, "null"], items: { type: string } }
         price_usd: { type: [number, "null"], minimum: 0 }
+        approver_group: { type: [string, "null"], description: "an identity-provider group; null clears it" }
     ProjectOperation:
       type: object
       required: [connector, operation, access, org_policy, effective_policy]
@@ -2325,6 +2327,7 @@ components:
             type: object
             properties:
               role: { type: string, enum: [developer, release_captain, project_owner, org_admin] }
+              group: { type: [string, "null"], description: "an identity-provider group the approver must also belong to (ADR 0052)" }
               min: { type: integer, minimum: 1, maximum: 5 }
         step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10 }
         separation_of_duties: { type: boolean, default: true }

@@ -313,9 +313,20 @@ async def decider(
         raise conflict(f"the action is already {action.status}")
     approbation = action.approval or {}
     approbateurs = approbation.get("approvers") or [{"role": "project_owner", "min": 1}]
-    requis = min(RANGS.get(str(a.get("role")), 3) for a in approbateurs)
-    if rang(principal, org_slug, projet.slug) < requis:
+    mon_rang = rang(principal, org_slug, projet.slug)
+    assez_haut = [a for a in approbateurs if mon_rang >= RANGS.get(str(a.get("role") or "project_owner"), 3)]
+    if not assez_haut:
         raise forbidden("deciding this action needs an approver's rank")
+    # A group named by the rule (ADR 0052) is a second condition, not an alternative: a project owner
+    # outside `netops-approvers` does not approve a firewall rule. The groups are the identity
+    # provider's, as of the decider's last sign-in through it.
+    mes_groupes = {str(g) for g in principal.groups}
+    if not any(not a.get("group") or str(a["group"]) in mes_groupes for a in assez_haut):
+        groupes = sorted({str(a["group"]) for a in assez_haut if a.get("group")})
+        raise forbidden(
+            f"deciding this action needs membership of the group {' or '.join(groupes)} "
+            "(identity-provider groups, as of your last sign-in)"
+        )
     if approbation.get("separation_of_duties", True):
         propose_par = action.proposed_by or {}
         moi = principal.email.lower()

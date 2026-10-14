@@ -1,6 +1,6 @@
 # 0052 — Netops connectors: pfSense, Cilium and Hubble, nginx — read through the platform, changed only by a governed action or a pull request
 
-- **Status**: accepted, 2026-10-12; amended 2026-10-13 (§6-7, governed writes, S33-09)
+- **Status**: accepted, 2026-10-12; amended 2026-10-13 (§6-7, governed writes, S33-09; §7, approval by a group, #401)
 - **Concerns**: `choregos_adapters.netops` (three connector types and their fakes), the broker
   (ADR 0034), the `connector.call` effect (ADR 0035), the catalogue agent `netops` (ADR 0040), the
   tool `validate_nginx_config`, the API/worker image (Hubble CLI) and the runner image (nginx), the
@@ -87,10 +87,20 @@ and nothing must let an agent write to it directly.
    the GitOps repository: the forge's webhook maps the merged pull request back to that work item,
    which boards the train its workflow takes (ADR 0041). Otherwise it lands on `netops/<key>`, and
    the repository's own process merges it. The platform never merges it.
-7. **Who approves** is the action's approval rule (ADR 0035): by default a `project_owner`, in a
-   fresh human session, never the agent's owner. Approvers named by an identity-provider GROUP
-   (e.g. `netops-approvers`) need a field in `ActionApproval` — a contract change (ADR 0001) left to
-   its own pull request.
+7. **Who approves** is the action's approval rule (ADR 0035): a rank, in a fresh human session,
+   never the agent's owner — and, since #401, optionally a **group**. An approver entry
+   `{role, group, min}` names an identity-provider group the decider must ALSO belong to: the rank
+   says how much someone may decide, the group who is competent to. It reuses the model of ADR 0044,
+   where a human actor is named by its `group`. The organisation sets an operation's
+   `approver_group` (`PATCH …/operations/{op}`, writes only); the broker then proposes the action
+   with `[{role: developer, group: <approver_group>}]` — without one, the project's owners decide.
+   A project owner outside `netops-approvers` is refused (403).
+   The groups are the identity provider's, as the OIDC sign-in receives them (`groups` claim), now
+   kept on the user (`users.groups`), replaced at each sign-in, and carried by the principal. Until
+   then they were turned into roles and dropped. A group withdrawn at the IdP therefore holds until
+   the person's next sign-in. A development sign-in sets none. A sign-in protocol brought by a
+   plugin (`terminer_la_connexion`) passes its groups the same way. Human actors' `group` in a
+   workflow is still informative: enforcing it at a human step is outside this ADR.
 
 ## Consequences
 
