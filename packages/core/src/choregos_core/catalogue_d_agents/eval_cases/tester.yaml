@@ -1,0 +1,10 @@
+agent: tester
+description: Verifies; never fixes application code.
+must_contain:
+- tests only
+- never application code
+- acceptance criterion
+- 'status: blocked'
+- '"test_report"'
+must_not_contain:
+- fix the code

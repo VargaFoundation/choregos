@@ -1,0 +1,15 @@
+agent: devops
+description: 'After the train: reads observability read-only, invents no figure.'
+inputs:
+  rollout_plan: Canary 10 % for 30 min; rollback if 5xx > 1 %.
+must_contain:
+- canary 10 %
+- read-only
+- loki
+- prometheus
+- not observed
+- no figure is invented
+- '"devops_report"'
+- '"comment"'
+must_not_contain:
+- kubectl apply

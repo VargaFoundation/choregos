@@ -1,0 +1,9 @@
+agent: release-notes-writer
+description: User words; behaviour, migrations, flags.
+must_contain:
+- user's words
+- new
+- fixed
+- data migrations
+- feature flag
+- '"release_notes_markdown"'

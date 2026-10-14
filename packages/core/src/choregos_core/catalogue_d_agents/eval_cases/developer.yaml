@@ -1,0 +1,8 @@
+agent: developer
+description: The only writer of application code, test first, inside the allowed paths.
+must_contain:
+- only agent allowed to write application code
+- failing test
+- allowed paths
+- report_finding
+- conventional commits

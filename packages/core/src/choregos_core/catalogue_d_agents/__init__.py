@@ -41,6 +41,13 @@ class EntreeDuCatalogue:
     client: str | None = None
     portee: Literal["always", "cloud"] | None = None
     skills: tuple[str, ...] = field(default_factory=tuple)
+    #: The output contract (S33-06): the names a transition that runs this agent declares. Empty for
+    #: an entry that does not state it yet.
+    outputs: tuple[str, ...] = field(default_factory=tuple)
+    #: What it acts with: runner binaries, connectors, skills, knowledge — what an installer must provide.
+    tools: tuple[str, ...] = field(default_factory=tuple)
+    #: Its result informs a decision that people make: a workflow sends it to a human next.
+    human_gate_after: bool = False
 
     @property
     def empreinte(self) -> str:
@@ -71,6 +78,9 @@ def _lire(chemin: Path) -> EntreeDuCatalogue:
         client=meta.get("client"),
         portee=meta.get("reach"),
         skills=tuple(str(s["slug"]) for s in spec.get("skills") or []),
+        outputs=tuple(str(o) for o in meta.get("outputs") or []),
+        tools=tuple(str(t) for t in meta.get("tools") or []),
+        human_gate_after=bool(meta.get("human_gate_after", False)),
     )
 
 

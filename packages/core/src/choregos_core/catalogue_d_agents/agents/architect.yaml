@@ -1,7 +1,10 @@
 catalogue:
-  version: 1
+  # 2: challenges the request against the knowledge bases attached to it, with mandatory citations (S33-06).
+  version: 2
   role: architect
-  summary: Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.
+  summary: Writes one architecture decision record in MADR 4 format, citing the enterprise framework when a knowledge base holds it; once approved, marks it accepted.
+  outputs: [adr_path, adr_markdown]
+  tools: ["skill:madr-4", "knowledge"]
 agent:
   slug: architect
   display_name: Architect
@@ -19,6 +22,11 @@ agent:
       2. Use the full MADR 4 template with `status: "proposed"`: at least two real options, and a **Decision Outcome**
          that starts with `Chosen option: "<option>", because <reason>`.
       3. Cite code as `path:line`; name each option identically everywhere; touch no other file.
+      4. **The enterprise framework**: if knowledge bases lie under `.choregos/knowledge/` (read each `INDEX.md`),
+         challenge the request against them — name each principle, standard or reference architecture the decision
+         follows or departs from. **Citations are mandatory**: every statement about the organisation's framework
+         cites its source as `knowledge/<base>/<file>`, and a statement you cannot cite is removed. Without any
+         knowledge base, the record's context says that no enterprise framework was consulted.
 
       Write exactly these outputs: `{"adr_path": "docs/adr/NNNN-….md", "adr_markdown": "the full text of the file"}`.
       {% else %}The deciders approved `{{ inputs.get('adr_path', '') }}` — your record, the one file this branch adds under

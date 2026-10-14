@@ -73,6 +73,18 @@ RUN set -eux; \
     timeout 30 gemini --version >/dev/null; \
     timeout 30 opencode --version >/dev/null
 
+# Mutation testing, for the `qa` agent of the catalogue (S33-06): a test that still passes with the
+# code broken proves nothing. mutmut for Python, Stryker for JavaScript and TypeScript; pinned, and
+# CALLED, like the agents above. A project with its own Python environment runs
+# `uv run --with mutmut mutmut run`, documented in the agent's instructions.
+ARG MUTMUT_VERSION=3.7.0
+ARG STRYKER_VERSION=10.0.0
+RUN set -eux; \
+    pip install --no-cache-dir "mutmut==${MUTMUT_VERSION}"; \
+    npm install -g "@stryker-mutator/core@${STRYKER_VERSION}"; \
+    timeout 30 mutmut --version >/dev/null; \
+    timeout 60 stryker --version >/dev/null
+
 # Shims : défense en profondeur. Aucun credential n'existe de toute façon, mais un agent
 # qui essaie doit être **refusé et tracé**, pas silencieusement ignoré.
 COPY docker/shims/refuse.sh /usr/local/bin/choregos-refuse

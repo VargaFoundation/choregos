@@ -1,0 +1,17 @@
+agent: compliance
+description: 'A review for people who decide: never legal advice, never ''it is legal'',
+  licences, GDPR, terms.'
+must_contain:
+- not legal advice
+- never conclude that something is legal
+- --scanners license
+- copyleft
+- personal data
+- impact assessment
+- third-party terms
+- .choregos/knowledge/
+- a person approves or rejects
+- '"compliance_review"'
+must_not_contain:
+- this is legal advice
+- you approve the change

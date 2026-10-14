@@ -1,0 +1,9 @@
+agent: reviewer
+description: Fresh eyes, classified remarks, verdict.
+must_contain:
+- you change nothing
+- correctness
+- blocking
+- file:line
+- '"review_markdown"'
+- request_changes

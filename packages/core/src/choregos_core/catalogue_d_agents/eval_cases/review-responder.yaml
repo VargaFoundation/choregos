@@ -1,0 +1,8 @@
+agent: review-responder
+description: Handles what is asked, and only that.
+inputs:
+  review_markdown: 'blocking: totals.py:12 rounds twice'
+must_contain:
+- totals.py:12 rounds twice
+- every `blocking` remark
+- do not refactor anything else

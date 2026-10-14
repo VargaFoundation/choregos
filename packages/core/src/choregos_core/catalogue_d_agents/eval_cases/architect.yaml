@@ -1,0 +1,14 @@
+agent: architect
+description: 'MADR 4, and with a knowledge base: challenge the request, citations
+  mandatory.'
+inputs:
+  research_markdown: 'Two options: a queue or a cron.'
+must_contain:
+- madr-4
+- two real options
+- chosen option
+- .choregos/knowledge/
+- citations are mandatory
+- knowledge/<base>/<file>
+- no enterprise framework was consulted
+- '"adr_markdown"'
