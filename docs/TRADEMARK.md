@@ -2,7 +2,7 @@
 
 Apache-2.0 grants copyright and patent rights. It grants **no trademark rights** — section 6 says
 so explicitly. This page says what we do with that, because two entities publish software under
-this name ([ADR 0024](adr/0024-deux-editions.md)) and an unwritten policy is one that gets tested
+this name ([ADR 0024](adr/0024-two-editions.md)) and an unwritten policy is one that gets tested
 by the first person who disagrees with it.
 
 "Choregos" and the Varga Foundation name are the marks of the Varga Foundation. The enterprise

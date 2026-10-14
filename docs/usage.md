@@ -41,7 +41,7 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 | `memory` | `ecphoria`, `lexical`, `fake` |
 | `notify` | `slack`, `fake` |
 
-A project only needs what its workflows read ([ADR 0034](adr/0034-connecteurs-par-capacites.md)).
+A project only needs what its workflows read ([ADR 0034](adr/0034-connectors-by-capability.md)).
 `GET /projects/{id}/requirements` derives it — a guarantee says what it reads (`scope_respected` a
 diff; `ci_green` and `scans_ok` the pull request's checks, read through the `scm`, so GitHub Actions
 needs no `ci` connector), an agent whose role works in a repository needs an `scm`, a release
@@ -74,7 +74,7 @@ connector test with its name — never a silent fallback to a default value.
 **The organisation's connectors.** A directory, a device manager, an MCP server is declared once
 by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
 named, and shared by its projects. It is born with the operations its type declares — a read
-`allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-actions-gouvernees-dans-le-coeur.md)) —
+`allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-governed-actions-in-the-core.md)) —
 and each operation carries its **policy** (`allowed`, `approval`, `forbidden`), the **project
 groups** it opens to (none: every project) and a price. Only the administrator decides them
 (`tools:grant`). A project sees the operations its groups open (`GET /projects/{id}/operations`)
@@ -230,7 +230,7 @@ a screen reader announces.
 ### Several workflows in one project
 
 A project runs as many workflows as it needs — onboarding and offboarding in an HR project, a
-delivery flow and a maintenance flow in a platform team ([ADR 0031](adr/0031-plusieurs-workflows-par-projet.md)):
+delivery flow and a maintenance flow in a platform team ([ADR 0031](adr/0031-several-workflows-per-project.md)):
 
 ```bash
 curl -X PUT  $API/projects/acme:hr/workflows/onboarding  -d '{"yaml": "..."}'   # publishes the next version
@@ -286,7 +286,7 @@ curl         $API/projects/acme:hr/workflows                                    
 
 The console's map and process view change a workflow through typed operations, grafted into the
 YAML text: everything else — comments, quoting, flow or block style — stays byte for byte
-([ADR 0031](adr/0031-plusieurs-workflows-par-projet.md)). The same call is open to any client:
+([ADR 0031](adr/0031-several-workflows-per-project.md)). The same call is open to any client:
 
 ```bash
 curl -X POST $API/workflows/edit -d '{"yaml": "...", "operations": [
@@ -427,7 +427,7 @@ order a laptop — becomes a governed action the policy approves at once: record
 done once, compensated if a later step fails, played by Temporal. The agent still gets what the
 server answered (the call waits up to `courtier_attente_ecriture_s`, 30 s, then answers `202` with
 the action's id), and calling it again with the same arguments returns the same action instead of
-writing twice. A write set to `approval` waits for a person instead ([ADR 0034](adr/0034-connecteurs-par-capacites.md) §7).
+writing twice. A write set to `approval` waits for a person instead ([ADR 0034](adr/0034-connectors-by-capability.md) §7).
 
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
@@ -447,7 +447,7 @@ contract *before* they finish — the same validator the runner applies afterwar
 
 ## 3 ter. Register your agents
 
-An agent is an object of the organisation ([ADR 0033](adr/0033-registre-d-agents-et-bibliotheque-de-skills.md)):
+An agent is an object of the organisation ([ADR 0033](adr/0033-agent-registry-and-skill-library.md)):
 `internal` when the platform runs it, `external` when it is a client of the MCP door. What it *is*
 — instructions, model, limits, budget, skills, MCP servers and the tools it may call — lives in
 **versions that never change**: a change publishes the next one.
@@ -657,19 +657,19 @@ The contract carries these switches; the runner does not act on them yet (stream
 
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train
-([ADR 0041](adr/0041-l-approbation-suit-ce-que-le-lot-emporte.md)). The policy's own human gate is
+([ADR 0041](adr/0041-approval-follows-what-the-batch-ships.md)). The policy's own human gate is
 the release train's: `release_train.<env>.approval` holds a departure until its group approves.
 
 `approvals.*` (`spec`, `merge`, `prod`, `scope_change`) and `review.require_human_for_risk` are
 still accepted, so an older policy stays valid, but **nothing enforces them**: no one is asked
-([ADR 0044](adr/0044-les-humains-se-declarent-dans-le-workflow.md)). Saving a policy that sets
+([ADR 0044](adr/0044-people-are-declared-in-the-workflow.md)). Saving a policy that sets
 them — a rule other than `required: never`, a non-empty list — logs a `policy.not_enforced`
 warning per key, and the presets no longer write them. `review.cross_backend` is enforced.
 
 ## 4 bis. Governed actions
 
 A write into a system that is not ours — create an account, order a laptop, deactivate a badge —
-is a **governed action** ([ADR 0035](adr/0035-actions-gouvernees-dans-le-coeur.md)): proposed,
+is a **governed action** ([ADR 0035](adr/0035-governed-actions-in-the-core.md)): proposed,
 decided by people, then run by the platform in Temporal, **never inside the request that
 approves it**.
 

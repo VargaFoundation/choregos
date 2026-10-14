@@ -54,7 +54,7 @@ decoration.
 
 Why the DCO and not a CLA: it asks contributors to certify something they can actually know, in one
 line, without a lawyer and without assigning anything to anyone. Two entities publish from this
-codebase ([ADR 0024](adr/0024-deux-editions.md)); the DCO is what makes the provenance of each line
+codebase ([ADR 0024](adr/0024-two-editions.md)); the DCO is what makes the provenance of each line
 checkable by anyone, including them.
 
 ## Using the name

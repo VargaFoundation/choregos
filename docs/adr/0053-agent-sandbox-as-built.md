@@ -1,6 +1,6 @@
 # 0053 — The `agent_sandbox` executor as built: a sealed assignment, a queue we hold, a clean sandbox
 
-- **Status**: accepted, 2026-10-12 — amends [ADR 0016](0016-executeur-agent-sandbox.md); stream S35
+- **Status**: accepted, 2026-10-12 — amends [ADR 0016](0016-agent-sandbox-executor.md); stream S35
 - **Concerns**: `packages/adapters/.../executor/agent_sandbox.py`, `choregos-runner await-assignment`,
   the chart (`runner.executor: agent_sandbox`), the conformance suite
 
@@ -57,7 +57,7 @@ repository ships none for runners, and Cilium enforces this standard policy.
 
 ### Alternatives discarded for the push
 
-- **mTLS between executor and runner, or a SPIFFE identity** ([ADR 0021](0021-spiffe-derriere-le-jeton-de-run.md)):
+- **mTLS between executor and runner, or a SPIFFE identity** ([ADR 0021](0021-spiffe-behind-the-run-token.md)):
   0021 is *proposed*, not implemented; it needs SPIRE, cluster-scoped, on top of the operator.
   A per-pod key read through the API server gives the property needed here — only that pod
   reads the token — with nothing to install.

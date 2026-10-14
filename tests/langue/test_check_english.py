@@ -253,6 +253,21 @@ def test_a_french_commit_message_fails(repo: pathlib.Path) -> None:
     assert ce.main(["--range", "main...story", "--no-commits"]) == 0
 
 
+def test_a_page_moved_with_a_redirect_is_not_new_french(repo: pathlib.Path) -> None:
+    """A renamed file keeps a redirect under its old name: git sees a copy, its old lines are not new."""
+    old = repo / "apps" / "api" / "module.py"
+    (repo / "apps" / "api" / "engine.py").write_text(old.read_text(encoding="utf-8"), encoding="utf-8")
+    old.write_text("# Moved to engine.py\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "refactor(api): the module is the engine")
+    assert ce.main(["--range", "main...story"]) == 0
+    engine = repo / "apps" / "api" / "engine.py"
+    added = "# Et encore une\n"  # lang: fr-ok
+    engine.write_text(engine.read_text(encoding="utf-8") + added, encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "feat(api): one more")
+    assert ce.main(["--range", "main...story"]) == 1, "a French line added to the moved file is still new"
+
+
 # ───────────────────────────────────────── the wiring ─────────────────────────────────────────
 
 

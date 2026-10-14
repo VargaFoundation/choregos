@@ -2,7 +2,7 @@
 
 One workflow, `governed-delivery`, for a team whose changes must pass architecture, QA, security,
 supply chain and compliance before they reach production. It is run by the platform's catalogue
-agents ([ADR 0040](../../docs/adr/0040-un-catalogue-d-agents-integre.md)): they enter the organisation
+agents ([ADR 0040](../../docs/adr/0040-a-built-in-agent-catalogue.md)): they enter the organisation
 when the first project is born from this template, and the organisation can then publish its own
 versions of them.
 

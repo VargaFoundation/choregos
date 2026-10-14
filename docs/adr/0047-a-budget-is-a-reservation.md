@@ -2,8 +2,8 @@
 
 - **Status**: accepted, 2026-10-12
 - **Concerns**: the runner, the interpreter, `prepare_stage`, the cost ledger, the policy contract;
-  builds on [ADR 0004](0004-cout-compte-au-gateway.md) (one virtual key per run) and
-  [ADR 0014](0014-un-catalogue-d-outils-tenu-par-la-plateforme.md) (tool calls in the same ledger)
+  builds on [ADR 0004](0004-cost-counted-at-the-gateway.md) (one virtual key per run) and
+  [ADR 0014](0014-a-platform-held-tool-catalogue.md) (tool calls in the same ledger)
 
 ## Context
 

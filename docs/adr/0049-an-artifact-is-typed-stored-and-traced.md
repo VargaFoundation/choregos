@@ -3,9 +3,9 @@
 - **Status**: accepted, 2026-10-12
 - **Concerns**: the artifact contract (`packages/contracts`, `artifact.schema.json`), the API and its
   object store, the runner's workspace, the work item page; builds on
-  [ADR 0005](0005-adaptateurs-et-fakes.md) (every integration has a fake),
-  [ADR 0008](0008-idempotence-et-run-id.md) (idempotence) and
-  [ADR 0045](0045-la-provenance-d-un-signal.md) (hand-off receipts)
+  [ADR 0005](0005-adapters-and-fakes.md) (every integration has a fake),
+  [ADR 0008](0008-idempotence-and-run-id.md) (idempotence) and
+  [ADR 0045](0045-the-provenance-of-a-signal.md) (hand-off receipts)
 
 ## Context
 

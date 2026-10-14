@@ -50,8 +50,8 @@ Décision de travail : **Choregos**. Vocabulaire optionnel pour la communication
 | Section | Fichier | Contenu | Flux concernés |
 | :-- | :-- | :-- | :-- |
 | 1 | `01-architecture-et-contrats.md` | Architecture, dépôt, modèle de données, DSL, StageInput/StageResult, événements, API, interfaces d'adaptateurs | tous |
-| 2 | `02-orchestrateur-agents-runner.md` | Workflows Temporal, client ACP, backends, runner, Task Tekton, sandbox, playbooks | S1, S2 |
-| 3 | `03-connecteurs-templates-front.md` | Connecteurs, templates, provisioning, front, API | S3, S5, S6, S8 |
+| 2 | `02-orchestrator-agents-runner.md` | Workflows Temporal, client ACP, backends, runner, Task Tekton, sandbox, playbooks | S1, S2 |
+| 3 | `03-connectors-templates-front.md` | Connecteurs, templates, provisioning, front, API | S3, S5, S6, S8 |
 | 4 | `04-modeles-couts-memoire.md` | Gateway, profils, coûts dans les tickets, Ecphoria (étude, améliorations, intégration) | S4, S10, S11 |
 | 5 | `05-release-train-findings.md` | Release train, GitOps, findings | S9, S10 |
 | 6 | `06-deploiement-kubernetes.md` | Déploiement de la plateforme sur Kubernetes : charts, namespaces, HA, sauvegardes, sécurité, environnements | S7 |

@@ -29,7 +29,12 @@ def _index() -> dict[str, tuple[str, str]]:
 
 
 def _fichiers() -> dict[str, pathlib.Path]:
-    return {chemin.name[:4]: chemin for chemin in sorted(ADR.glob("[0-9][0-9][0-9][0-9]-*.md"))}
+    # A renamed decision leaves a one-line redirect under its old name (S34-05): not a decision.
+    return {
+        chemin.name[:4]: chemin
+        for chemin in sorted(ADR.glob("[0-9][0-9][0-9][0-9]-*.md"))
+        if not chemin.read_text("utf-8").startswith("# Moved\n")
+    }
 
 
 def test_l_index_n_oublie_aucune_decision() -> None:

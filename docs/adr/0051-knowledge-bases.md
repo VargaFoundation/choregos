@@ -3,8 +3,8 @@
 - **Status**: accepted, 2026-10-12
 - **Concerns**: `apps/api/src/choregos_api/knowledge/`, `routers/knowledge.py`, the `knowledge_*`
   tables, the runner's workspace, the `choregos-tools` sidecar; keeps
-  [ADR 0007](0007-memoire-optionnelle.md) (memory is optional) and
-  [ADR 0026](0026-ce-que-la-rls-du-coeur-couvre.md) (every organisation table under forced RLS)
+  [ADR 0007](0007-optional-memory.md) (memory is optional) and
+  [ADR 0026](0026-what-the-core-rls-covers.md) (every organisation table under forced RLS)
 
 ## Context
 
