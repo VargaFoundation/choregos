@@ -1,0 +1,47 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: software-delivery-governed
+  version: 1.0.0
+  display: GitHub · governed software delivery (architecture, QA, security, compliance)
+  description: >-
+    One workflow for changes that must pass everything, run by the catalogue's specialists: research
+    and a decision record approved by the architects, a specification and a plan, implementation, QA
+    with mutation testing, a security review, a supply-chain scan, a compliance review decided by
+    people, documentation, release readiness, a pull request approved by a maintainer, staging, and
+    production approved by a release captain through the train, verified from observed signals.
+requires:
+  connectors:
+    tracker: github-issues
+    scm: github
+    cd: argocd
+defaults:
+  workflows: [./workflows/governed-delivery.yaml]
+  default_workflow: governed-delivery
+  policy: ./policy.yaml
+  # The agents the workflow names install themselves (ADR 0040 §5); the list says what the template
+  # brings to the organisation.
+  skills: [catalogue:madr-4]
+  agents:
+    - catalogue:triager
+    - catalogue:researcher
+    - catalogue:architect
+    - catalogue:spec-writer
+    - catalogue:planner
+    - catalogue:developer
+    - catalogue:qa
+    - catalogue:security-reviewer
+    - catalogue:secops
+    - catalogue:compliance
+    - catalogue:review-responder
+    - catalogue:docs-writer
+    - catalogue:ci-fixer
+    - catalogue:devops
+inputs:
+  - { name: repo, type: github-repo, required: true, description: "owner/name of the application repository" }
+  - { name: default_branch, type: string, default: main }
+  - { name: language, type: enum, values: [python, node, go, java, dotnet, other], default: python }
+steps:
+  - github.install_app
+  - github.ensure_webhooks:
+      events: [issues, issue_comment, pull_request, pull_request_review, check_suite]
