@@ -115,7 +115,7 @@ describe("the folded sections", () => {
 
   it("a slug comes from a name, and `new` is refused", () => {
     expect(slugFromName("Release Notes  writer!")).toBe("release-notes-writer");
-    expect(slugFromName("Zoë's agent")).toBe("zoes-agent");
+    expect(slugFromName("Zo\u00eb's agent")).toBe("zoes-agent");
     expect(slugFromName("3D checker")).toBe("a-3d-checker");
     expect(slugFromName("new")).toBe("");
     expect(slugFromName("!")).toBe("");
