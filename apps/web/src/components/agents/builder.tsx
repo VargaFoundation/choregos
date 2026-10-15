@@ -20,8 +20,9 @@ import { useId, useState, type ReactNode } from "react";
 import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { EvalSuiteEditor, TrialBench } from "./trial";
+import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
-import type { Agent, AgentSpec, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
+import type { Agent, AgentSpec, UsableModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
 
 /** The model profiles a project maps to models (its settings, `models.yaml`). */
 export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as const;
@@ -208,7 +209,8 @@ export function AgentBuilder({
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<"try" | "costs">("try");
 
-  const models = useQuery({ queryKey: ["platform-models"], queryFn: () => api.platformModels(), retry: false });
+  // Only the models the organisation lets an agent use (`/admin/models`, ADR 0060).
+  const models = useQuery({ queryKey: ["usable-models", org], queryFn: () => usableModels(org, { usage: "agent" }), retry: false });
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
   const library = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
@@ -329,13 +331,13 @@ export function AgentBuilder({
                     <optgroup label="Models">
                       {(models.data ?? []).map((m) => (
                         <option key={m.model_name} value={m.model_name}>
-                          {m.model_name}
+                          {m.display_name || m.model_name}
                         </option>
                       ))}
                     </optgroup>
                   )}
                   {spec.model && !spec.model.startsWith("profile:") && !(models.data ?? []).some((m) => m.model_name === spec.model) && (
-                    <option value={spec.model}>{spec.model}</option>
+                    <option value={spec.model}>{spec.model} (disabled by the organisation)</option>
                   )}
                 </Select>
               )}
@@ -836,7 +838,7 @@ export function BuilderSummary({
   bases = [],
 }: {
   spec: AgentSpec;
-  models: GatewayModel[];
+  models: UsableModel[];
   connectors: OrgConnector[];
   library: Skill[];
   bases?: KnowledgeBase[];
@@ -858,11 +860,13 @@ export function BuilderSummary({
           <p>
             <span className="font-mono">{model.model_name}</span>:{" "}
             {model.input_cost_per_1k != null ? `${usd(model.input_cost_per_1k)} in` : "?"} ·{" "}
-            {model.output_cost_per_1k != null ? `${usd(model.output_cost_per_1k)} out` : "?"} per 1,000 tokens.
+            {model.output_cost_per_1k != null ? `${usd(model.output_cost_per_1k)} out` : "?"} per 1,000 tokens
+            {model.priced_by === "override" ? " (the organisation's price)." : "."}
           </p>
         ) : (
           <p>
-            <span className="font-mono">{spec.model}</span>: not a model of the gateway — a run would fail to resolve it.
+            <span className="font-mono">{spec.model}</span>: disabled by the organisation, or not a model of the gateway — a run
+            would fail to resolve it, and a new version cannot name it.
           </p>
         )}
       </div>

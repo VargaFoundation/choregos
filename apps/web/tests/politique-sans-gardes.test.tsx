@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/app/p/[slug]/settings/page";
 
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
+
 // La politique ne garde ni `approvals` ni `review.require_human_for_risk` (finding #286, ADR 0044) :
 // l'écran des paramètres ne doit plus les ranger parmi ce que l'orchestrateur applique.
 vi.mock("@/lib/api", async (importOriginal) => {

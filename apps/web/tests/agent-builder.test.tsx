@@ -26,8 +26,13 @@ vi.mock("@/lib/api", async (importOriginal) => {
       createAgent: vi.fn().mockResolvedValue({ slug: "triage", display_name: "Triage", latest_version: 1 }),
       publishAgentVersion: vi.fn(),
       projects: vi.fn().mockResolvedValue({ items: [{ slug: "billing-api", name: "Billing API" }], meta: { has_more: false } }),
+      // The picker lists what the organisation lets an agent use (ADR 0060), not the gateway's list.
+      usableModels: vi.fn().mockResolvedValue([
+        { model_name: "platform/cheap", display_name: "platform/cheap", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004, priced_by: "gateway" },
+      ]),
       platformModels: vi.fn().mockResolvedValue([
-        { model_name: "platform/cheap", litellm_model: "x", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004 },
+        { model_name: "platform/cheap", litellm_model: "x" },
+        { model_name: "platform/disabled-here", litellm_model: "y" },
       ]),
       backends: vi.fn().mockResolvedValue([
         { name: "claude-code", enabled: true, capabilities: [] },
@@ -239,5 +244,30 @@ describe("the builder", () => {
     const open = screen.getByTestId("agent-builder").querySelectorAll("details[open]");
     expect(open).toHaveLength(1);
     expect(open[0]).toHaveTextContent("Add a skill");
+  });
+
+  it("offers only the models the organisation lets an agent use", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder org="acme" mode={{ kind: "create" }} />
+      </QueryClientProvider>,
+    );
+    const model = screen.getByLabelText("Model");
+    await within(model).findByRole("option", { name: "platform/cheap" });
+    expect(api.usableModels).toHaveBeenCalledWith("acme", { usage: "agent" });
+    // The gateway lists it, the catalogue does not enable it: the picker does not offer it.
+    expect(within(model).queryByRole("option", { name: "platform/disabled-here" })).toBeNull();
+  });
+
+  it("says that a saved model the organisation disabled since is no longer usable", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder org="acme" mode={{ kind: "create" }} start={{ model: "platform/disabled-here" }} />
+      </QueryClientProvider>,
+    );
+    const model = screen.getByLabelText("Model");
+    await within(model).findByRole("option", { name: "platform/cheap" });
+    expect(within(model).getByRole("option", { name: "platform/disabled-here (disabled by the organisation)" })).toBeInTheDocument();
+    expect(await screen.findByTestId("ce-que-ca-permet")).toHaveTextContent("disabled by the organisation");
   });
 });

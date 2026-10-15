@@ -11,6 +11,8 @@ import type {
   Agent,
   AgentBackendInfo,
   GatewayModel,
+  ModelCatalogue,
+  UsableModel,
   AgentCatalogueEntry,
   AgentCreate,
   AgentEvalCase,
@@ -1348,6 +1350,56 @@ export const platformModels: GatewayModel[] = [
   { model_name: "platform/cheap", litellm_model: "anthropic/claude-haiku-4-5", provider: "anthropic", input_cost_per_1k: 0.0008, output_cost_per_1k: 0.004 },
 ];
 
+/**
+ * The organisation's model catalogue (S39-07, ADR 0060), mutable for the length of the page: a model
+ * disabled on `/admin/models` leaves the agent builder's picker, as it does against the API.
+ */
+export const modelCatalogue: ModelCatalogue = {
+  mode: "open",
+  gateway: { type: "openai-compatible", capabilities: ["list_models"] },
+  tiers: { cheap: null, standard: null, strong: null, aux: null, embed: null, local: null },
+  entries: platformModels.map((m, i) => ({
+    id: `mc-${i + 1}`,
+    model_name: m.model_name,
+    display_name: m.model_name,
+    source: "gateway" as const,
+    enabled: true,
+    allowed_roles: [],
+    usages: ["agent" as const],
+    price_override: null,
+    gateway: {
+      provider: m.provider,
+      upstream_model: m.litellm_model,
+      input_cost_per_1k: m.input_cost_per_1k,
+      output_cost_per_1k: m.output_cost_per_1k,
+      supports_tool_calling: true,
+      supports_vision: false,
+    },
+    last_seen_at: iso(60),
+    missing_since: null,
+    notes: "",
+    updated_by: null,
+  })),
+};
+
+/** What an agent may be given: the enabled entries, for the role and usage asked. */
+export function usableModelsOf(path: string): UsableModel[] {
+  const query = new URLSearchParams(path.split("?")[1] ?? "");
+  const role = query.get("role");
+  const usage = query.get("usage") ?? "agent";
+  return modelCatalogue.entries
+    .filter((e) => e.enabled && (e.usages ?? []).includes(usage as "agent") && (!role || !(e.allowed_roles ?? []).length || (e.allowed_roles ?? []).includes(role)))
+    .map((e) => ({
+      model_name: e.model_name,
+      display_name: e.display_name,
+      provider: e.gateway?.provider ?? "",
+      input_cost_per_1k: e.price_override?.input_per_1k ?? e.gateway?.input_cost_per_1k ?? null,
+      output_cost_per_1k: e.price_override?.output_per_1k ?? e.gateway?.output_cost_per_1k ?? null,
+      priced_by: e.price_override ? ("override" as const) : e.gateway?.input_cost_per_1k != null ? ("gateway" as const) : ("none" as const),
+      tiers: [],
+    }));
+}
+
 export const platformBackends: AgentBackendInfo[] = [
   { name: "claude-code", enabled: true, version: "2.1.0", capabilities: ["mcp", "skills"] },
   { name: "codex", enabled: false, capabilities: ["mcp"], disabled_reason: "conformance below threshold" },
@@ -1827,8 +1879,53 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
+  const catalogueEcrit = /^\/orgs\/[^/]+\/models(?:\/([^/?]+))?$/.exec(chemin ?? "");
+  if (method === "PUT" && catalogueEcrit?.[1] === "settings") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { mode: "open" | "curated"; tiers?: ModelCatalogue["tiers"] };
+    modelCatalogue.mode = corps.mode;
+    modelCatalogue.tiers = { ...modelCatalogue.tiers, ...(corps.tiers ?? {}) };
+    return { mode: modelCatalogue.mode, tiers: modelCatalogue.tiers } as T;
+  }
+  if (method === "POST" && catalogueEcrit?.[1] === "sync") return { added: 0, missing: 0, seen: modelCatalogue.entries.length } as T;
+  if (method === "POST" && catalogueEcrit && !catalogueEcrit[1]) {
+    const corps = JSON.parse(String(init.body ?? "{}")) as { model_name: string };
+    const entree: ModelCatalogue["entries"][number] = {
+      id: `mc-${modelCatalogue.entries.length + 1}`,
+      model_name: corps.model_name,
+      display_name: corps.model_name,
+      source: "manual",
+      enabled: true,
+      allowed_roles: [],
+      usages: ["agent"],
+      price_override: null,
+      gateway: null,
+      last_seen_at: null,
+      missing_since: null,
+      notes: "",
+      updated_by: me.email,
+    };
+    modelCatalogue.entries.push(entree);
+    return entree as T;
+  }
+  if (method === "PATCH" && catalogueEcrit?.[1]) {
+    const entree = modelCatalogue.entries.find((e) => e.id === catalogueEcrit[1]) ?? modelCatalogue.entries[0]!;
+    const corps = JSON.parse(String(init.body ?? "{}")) as { clear_price_override?: boolean } & Partial<ModelCatalogue["entries"][number]>;
+    const { clear_price_override: effacer, ...champs } = corps;
+    Object.assign(entree, champs);
+    if (effacer) entree.price_override = null;
+    return entree as T;
+  }
+  if (method === "DELETE" && catalogueEcrit?.[1]) {
+    modelCatalogue.entries = modelCatalogue.entries.filter((e) => e.id !== catalogueEcrit[1]);
+    return undefined as T;
+  }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
+  if (/^\/orgs\/[^/]+\/models$/.test(route ?? "")) return modelCatalogue as T;
+  if (/^\/orgs\/[^/]+\/models\/usable$/.test(route ?? "")) return usableModelsOf(path) as T;
+  if (/^\/orgs\/[^/]+\/models\/curate-preview$/.test(route ?? "")) {
+    return { refused: [{ kind: "agent", ref: agents[0]?.slug ?? "an-agent", model: "platform/strong" }] } as T;
+  }
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
