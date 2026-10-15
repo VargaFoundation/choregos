@@ -5,7 +5,7 @@ Values typed in the console, encrypted with an envelope (AES-256-GCM), under for
 rest of the registry.
 
 Revision ID: f1b3d5a7c9e2
-Revises: e7a9c1b3d5f7
+Revises: 5b7d9f1a3c4e
 Create Date: 2026-10-16 09:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = 'f1b3d5a7c9e2'
-down_revision: str | None = 'e7a9c1b3d5f7'
+down_revision: str | None = '5b7d9f1a3c4e'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
