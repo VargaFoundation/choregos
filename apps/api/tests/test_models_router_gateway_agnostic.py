@@ -15,7 +15,7 @@ async def test_the_catalogue_comes_from_the_configured_gateway_type(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Red when the router builds `litellm`: the models listed are the other gateway's."""
-    from choregos_adapters import register
+    from choregos_adapters import register, registry
 
     asked: list[str] = []
 
@@ -24,6 +24,9 @@ async def test_the_catalogue_comes_from_the_configured_gateway_type(
             asked.append("scripted")
             return [GatewayModel(model_name="acme/chat", litellm_model="acme/chat", provider="acme")]
 
+    # The registry is process-wide: leave no scripted type behind for the tests that list every gateway.
+    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
+    monkeypatch.setattr(registry, "_SPECS", dict(registry._SPECS))
     register("gateway", "scripted-test")(lambda cfg: Scripted())
     monkeypatch.setenv("CHOREGOS_FAKES", "")
     monkeypatch.setenv("CHOREGOS_GATEWAY_TYPE", "scripted-test")
