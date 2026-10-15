@@ -102,6 +102,9 @@ class LaunchSpec(Strict):
 class AgentRef(Strict):
     backend: str
     launch: LaunchSpec = Field(default_factory=LaunchSpec)
+    image: str | None = Field(default=None, min_length=1)
+    """The image of the run's pod when an agent written in code names its own (ADR 0063): the
+    reference the operator mapped the agent's image name to, never a name a workflow wrote."""
 
 
 class ModelRef(Strict):

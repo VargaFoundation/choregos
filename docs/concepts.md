@@ -42,7 +42,10 @@ same content produced again makes no new version.
 
 Three kinds:
 
-- **`agent`** — a role and a playbook, a model profile, and budgets in turns and minutes.
+- **`agent`** — a role and a playbook, a model profile, and budgets in turns and minutes. A
+  registry agent version has a **runtime**: `acp` (the default — a coding agent the runner ships,
+  chosen by `backend`) or `code` (an ACP agent written in code, in an image the operator named and
+  built from the runner image, [ADR 0063](adr/0063-agents-written-in-code.md)).
 - **`human`** — a group, an SLA in hours, a reminder and an escalation.
 - **`system`** — a transition the platform performs itself, with no agent and no cost.
 

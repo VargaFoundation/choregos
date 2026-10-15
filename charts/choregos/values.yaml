@@ -78,6 +78,14 @@ global:
     allowedBackends: []
     # profile → gateway model: `{ standard: platform/standard }`
     modelProfiles: {}
+  # The images an operator names for job steps (`jobs`) and for agents written in code (`agents`),
+  # as `name: reference` (ADR 0056, ADR 0063). A workflow or an agent version names an image, never
+  # pulls one; each image is built FROM the runner image. `requireDigest` refuses, at start-up, a
+  # reference that is not pinned by `@sha256:`; set it to false only on a bench.
+  images:
+    jobs: {}
+    agents: {}
+    requireDigest: true
   logLevel: INFO
   # Anti-affinity between the replicas of a same component: `soft` (preferred), `hard`
   # (one replica per node, otherwise no pod) or `none`.

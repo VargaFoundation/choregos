@@ -6,6 +6,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
+from choregos_core.images import check_image_map
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -125,6 +126,13 @@ class Settings(BaseSettings):
     # gouvernée (#241), avant de rendre 202 et l'identifiant de l'action.
     courtier_attente_ecriture_s: float = 30.0
     allowed_agent_backends: list[str] = Field(default_factory=list)
+    #: The images an operator names for job steps (ADR 0056) and for agents written in code (ADR 0063),
+    #: as JSON: name -> reference. The orchestrator reads the same variables; the API validates a
+    #: version against the names, and lists them (names only) for the console.
+    job_images: dict[str, str] = Field(default_factory=dict)
+    agent_images: dict[str, str] = Field(default_factory=dict)
+    #: A reference without `@sha256:` is refused at start-up (the chart sets it; a local setup may not).
+    require_image_digest: bool = False
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     memory_url: str = "http://localhost:8432"
     object_store_url: str = "s3://choregos"
@@ -179,6 +187,12 @@ class Settings(BaseSettings):
                 "CHOREGOS_DEV_LOGIN_ENABLED=true en staging/prod : la connexion de développement "
                 "ouvre l'API à quiconque atteint /auth/callback. Refusé."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _images_named_by_the_operator(self) -> Settings:
+        check_image_map("CHOREGOS_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
+        check_image_map("CHOREGOS_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
         return self
 
     @model_validator(mode="after")

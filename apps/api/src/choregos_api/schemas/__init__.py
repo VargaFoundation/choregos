@@ -7,6 +7,7 @@ Huit modules, un par domaine, réexportés : `choregos_api.schemas.X` reste l'ad
 from __future__ import annotations
 
 from .agents import (
+    AcpRuntime,
     AgentCatalogueConnect,
     AgentCatalogueConnection,
     AgentCatalogueEntry,
@@ -17,6 +18,7 @@ from .agents import (
     AgentDto,
     AgentEvalCase,
     AgentEvalResult,
+    AgentImageInfo,
     AgentLifecycleChange,
     AgentLifecycleResult,
     AgentMetrics,
@@ -25,11 +27,13 @@ from .agents import (
     AgentOwnerChange,
     AgentPatch,
     AgentProjectMetrics,
+    AgentRuntime,
     AgentSampleInput,
     AgentSpec,
     AgentTrial,
     AgentTrialCreate,
     AgentVersionDto,
+    CodeRuntime,
     ImplicitAgent,
     ProjectAgentDto,
     ProjectAgentPut,
@@ -188,6 +192,7 @@ from .tickets import (
 
 __all__ = [
     "AbortRequest",
+    "AcpRuntime",
     "AgentBackendInfo",
     "AgentBackendUpdate",
     "AgentCatalogueConnect",
@@ -200,6 +205,7 @@ __all__ = [
     "AgentDto",
     "AgentEvalCase",
     "AgentEvalResult",
+    "AgentImageInfo",
     "AgentLifecycleChange",
     "AgentLifecycleResult",
     "AgentMetrics",
@@ -208,6 +214,7 @@ __all__ = [
     "AgentOwnerChange",
     "AgentPatch",
     "AgentProjectMetrics",
+    "AgentRuntime",
     "AgentSampleInput",
     "AgentSpec",
     "AgentTrial",
@@ -222,6 +229,7 @@ __all__ = [
     "AuditPage",
     "BudgetAlertDto",
     "CiLogs",
+    "CodeRuntime",
     "ConformanceReport",
     "ConnectorCheck",
     "ConnectorDiscovery",

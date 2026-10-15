@@ -7,6 +7,7 @@ from typing import Annotated
 
 from choregos_adapters.registry import default_executor_kind
 from choregos_contracts import Role
+from choregos_core.images import is_digest_pinned
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
 
@@ -22,11 +23,12 @@ from ..db.models import (
     User,
 )
 from ..db.session import en_portee_de_plateforme
-from ..deps import Db, Me, Pagination, exiger_admin_de_plateforme
+from ..deps import Config, Db, Me, Pagination, exiger_admin_de_plateforme
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..schemas import (
     AgentBackendInfo,
     AgentBackendUpdate,
+    AgentImageInfo,
     AuditEntry,
     AuditPage,
     ConformanceReport,
@@ -99,6 +101,19 @@ async def put_backend(body: AgentBackendUpdate, session: Db, principal: Me) -> A
         conformance=ConformanceReport.model_validate(row.conformance or {}),
         disabled_reason=row.disabled_reason,
     )
+
+
+@router.get("/platform/agent-images", response_model=list[AgentImageInfo], operation_id="listAgentImages")
+async def list_agent_images(principal: Me, settings: Config) -> list[AgentImageInfo]:
+    """The names an operator gave to agent images (ADR 0063), for the builder's picker.
+
+    The references are the operator's: they stay out of the response, only whether each is pinned
+    by digest is said.
+    """
+    return [
+        AgentImageInfo(name=name, digest_pinned=is_digest_pinned(reference))
+        for name, reference in sorted(settings.agent_images.items())
+    ]
 
 
 @router.get("/platform/executors", response_model=list[ExecutorInfo], operation_id="listExecutors")

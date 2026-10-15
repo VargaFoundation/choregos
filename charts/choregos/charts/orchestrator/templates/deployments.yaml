@@ -117,6 +117,21 @@ spec:
             # cluster that has gVisor or Kata says so here once. Empty: the cluster's.
             - name: CHOREGOS_RUNNER_RUNTIME_CLASS
               value: {{ $root.Values.runner.runtimeClass | default "" | quote }}
+            {{- with $root.Values.global.images }}
+            # The images an operator names for job steps and agents written in code (ADR 0056,
+            # ADR 0063): name -> reference. The API validates a version against the names, the
+            # orchestrator resolves them; a workflow or an agent never writes a reference.
+            {{- with .jobs }}
+            - name: CHOREGOS_JOB_IMAGES
+              value: {{ toJson . | quote }}
+            {{- end }}
+            {{- with .agents }}
+            - name: CHOREGOS_AGENT_IMAGES
+              value: {{ toJson . | quote }}
+            {{- end }}
+            - name: CHOREGOS_REQUIRE_IMAGE_DIGEST
+              value: {{ .requireDigest | default false | quote }}
+            {{- end }}
             {{- if eq $root.Values.runner.executor "agent_sandbox" }}
             # The warm pool the `agent_sandbox` executor claims from, and the port its warm
             # runners listen on for their one assignment (sandbox.yaml renders both).

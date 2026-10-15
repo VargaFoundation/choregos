@@ -202,8 +202,11 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
             namespace=_runner_namespace(settings, bundle.slug),
-            # A job names its image (ADR 0056); prepare_stage resolved it against `job_images`.
-            runner_image=(stage_input.job.image if stage_input.job else None) or settings.runner_image,
+            # A job names its image (ADR 0056), an agent written in code too (ADR 0063); prepare_stage
+            # resolved each against the operator's map. Neither names a free reference.
+            runner_image=(stage_input.job.image if stage_input.job else None)
+            or stage_input.agent.image
+            or settings.runner_image,
             api_url=stage_input.callbacks.api_url,
             run_token=run_token,
             gateway_key=gateway_key,
