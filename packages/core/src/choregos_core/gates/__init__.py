@@ -14,12 +14,14 @@ Une gate est **le** mécanisme de garantie (docs/plan/01) : elle ne fait pas con
 from __future__ import annotations
 
 import fnmatch
+import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from choregos_contracts import StageResult
+from jsonschema import Draft202012Validator
 
 from ..errors import GateError
 
@@ -61,6 +63,12 @@ class GateContext:
     #: Les chemins présents sur la branche PAR DÉFAUT, sous le dossier que lit la garantie
     #: (`adr_number_free`) ; `None` quand le connecteur SCM n'a pas pu les lister.
     default_branch_files: list[str] | None = None
+    #: The item's documents: the outputs earlier steps declared, by name (`item.documents`).
+    #: `numbers_measured` reads the measured ones there — a job's `metrics` — never the agent's text.
+    documents: dict[str, Any] = field(default_factory=dict)
+    #: The work item's fields (a campaign's period, costs, thresholds): `numbers_measured` reads
+    #: them as the source `fields`, so a memo may restate what it was asked without inventing it.
+    fields: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -446,6 +454,18 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.result is None:
         return GateOutcome("evidence_facts", False, detail="no stage result")
     facts = ctx.result.evidence.facts or {}
+    if params.get("measured_only"):
+        # A fact the platform did not measure is a sentence (ADR 0045): with `measured_only`, a
+        # threshold judges only what a command computed — a job's facts, the project's `dod.facts`.
+        measured = set(ctx.result.evidence.measured or [])
+        declared = [key for key in required if key in facts and f"facts.{key}" not in measured]
+        if declared:
+            return GateOutcome(
+                "evidence_facts",
+                False,
+                detail=f"declared, not measured: {', '.join(declared)}",
+                annotations=declared,
+            )
     manquants = [key for key in required if key not in facts]
     if manquants:
         return GateOutcome(
@@ -474,6 +494,169 @@ def _evidence_facts(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         )
         return GateOutcome("evidence_facts", False, detail=detail, annotations=insuffisants + faux)
     return GateOutcome("evidence_facts", True, detail=f"facts checked: {', '.join(sorted(required))}")
+
+
+def _output_value(raw: Any) -> Any:
+    """An inline output as data: a JSON output may arrive as a JSON string; anything else is kept."""
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return raw
+    return raw
+
+
+@gate("output_schema")
+def _output_schema(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Each named output matches its JSON Schema (2020-12): `{schemas: {strategies: {...}}}`.
+
+    `outputs_present` says an output exists, `outputs_in` that a value is among a few; neither says
+    a document has the shape the next step reads. A job reading strategies an agent wrote would fail
+    on a missing key — or worse, compute on a silently ignored one. The schema is written in the
+    workflow, so the shape is reviewed with it; the validator refuses a schema that is not one.
+    """
+    schemas: dict[str, Any] = dict(params.get("schemas") or {})
+    if not schemas:
+        return GateOutcome("output_schema", False, detail="no schema: `schemas:` missing on the guarantee")
+    if ctx.result is None:
+        return GateOutcome("output_schema", False, detail="no stage result")
+    produced = ctx.result.outputs.model_dump(exclude_none=True)
+    problems: list[str] = []
+    for name, schema in sorted(schemas.items()):
+        if name not in produced:
+            problems.append(f"{name}: missing")
+            continue
+        validator = Draft202012Validator(schema)
+        errors = sorted(validator.iter_errors(_output_value(produced[name])), key=lambda e: list(e.path))
+        problems.extend(
+            f"{name}{''.join(f'[{p!r}]' for p in error.path)}: {error.message[:200]}" for error in errors[:5]
+        )
+    matched = "outputs match their schema: " + ", ".join(sorted(schemas))
+    return GateOutcome(
+        "output_schema",
+        not problems,
+        detail="; ".join(problems) if problems else matched,
+        annotations=problems,
+    )
+
+
+#: A number in prose: not inside a word (`s1`, `sma20`), thousands separators allowed, an optional %.
+_NUMBER = re.compile(r"(?<![\w.])[-+]?\d+(?:[,\u202f ]\d{3})*(?:\.\d+)?(?:\s?%)?(?![\w])")
+_ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+
+def _numbers_in(value: Any) -> list[float]:
+    """Every number a document holds: its JSON numbers, and the numbers written in its strings."""
+    if isinstance(value, bool):
+        return []
+    if isinstance(value, int | float):
+        return [float(value)]
+    if isinstance(value, str):
+        return [n for _text, n in _cited(value)]
+    if isinstance(value, dict):
+        return [n for v in value.values() for n in _numbers_in(v)]
+    if isinstance(value, list):
+        return [n for v in value for n in _numbers_in(v)]
+    return []
+
+
+def _cited(text: str) -> list[tuple[str, float]]:
+    """The numbers a text writes, as written and as values; a percentage is a fraction (12.5% = 0.125)."""
+    found = []
+    for match in _NUMBER.finditer(_ISO_DATE.sub(" ", text)):
+        written = match.group(0).strip()
+        digits = re.sub(r"[,\u202f %]", "", written)
+        try:
+            value = float(digits)
+        except ValueError:
+            continue
+        found.append((written, value / 100 if written.endswith("%") else value))
+    return found
+
+
+def _decimals(written: str) -> int:
+    digits = written.rstrip("% ")
+    return len(digits.split(".", 1)[1]) if "." in digits else 0
+
+
+def _supported(written: str, value: float, measured: list[float], tolerance: float) -> bool:
+    """A cited number is supported when a measured one rounds to it, or lies within the tolerance.
+
+    Signs are ignored ("a 12% drawdown" quotes `max_drawdown: -0.12`); a percentage is compared as a
+    fraction and as written, since a metric may be stored either way; a rounded number matches any
+    measured value that rounds to it at the precision it is written with.
+    """
+    step = 0.5 * 10 ** -_decimals(written)
+    if written.endswith("%"):
+        # As written (12.5), against a measured fraction (0.125) or a metric already in percent (12.5).
+        pairs = [(abs(value) * 100, abs(m) * scale) for m in measured for scale in (100.0, 1.0)]
+    else:
+        pairs = [(abs(value), abs(m)) for m in measured]
+    return any(abs(c - t) <= step + 1e-9 or abs(c - t) <= tolerance * abs(t) for c, t in pairs)
+
+
+@gate("numbers_measured")
+def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """Every number an agent writes in its outputs comes from a measured document.
+
+    `{sources: [metrics, fields], outputs: [memo_markdown], tolerance: 0.005, allow: [252]}`.
+    The analyst writing a research memo may round, express a fraction as a percentage, drop a sign;
+    it may not cite a Sharpe ratio, a drawdown or a return the backtest did not compute. Years and
+    integers below `ignore_below` (list numbering, "3 strategies") are not claims and are skipped;
+    anything else needs a source. The sources are the item's documents that earlier steps declared
+    — a job's measured `metrics` — and `fields`, the work item's own fields: the check reads what
+    was computed or asked, never what was said.
+    """
+    sources = [str(s) for s in (params.get("sources") or [])]
+    if not sources:
+        return GateOutcome("numbers_measured", False, detail="no source: `sources:` missing on the guarantee")
+    if ctx.result is None:
+        return GateOutcome("numbers_measured", False, detail="no stage result")
+    documents = {**ctx.documents, "fields": ctx.fields}
+    absent = [s for s in sources if s not in documents]
+    if absent:
+        return GateOutcome(
+            "numbers_measured",
+            False,
+            detail=f"source documents absent: {', '.join(absent)}",
+            annotations=absent,
+        )
+    measured = [n for s in sources for n in _numbers_in(_output_value(documents[s]))]
+    measured += [float(n) for n in (params.get("allow") or [])]
+    produced = ctx.result.outputs.model_dump(exclude_none=True)
+    checked = [str(o) for o in (params.get("outputs") or ctx.expected_outputs)]
+    missing = [o for o in checked if o not in produced]
+    if not checked or missing:
+        return GateOutcome(
+            "numbers_measured",
+            False,
+            detail=f"outputs to check absent: {', '.join(missing) or '(none named)'}",
+            annotations=missing,
+        )
+    tolerance = float(params.get("tolerance", 0.005))
+    ignore_below = float(params.get("ignore_below", 10))
+    unsupported: list[str] = []
+    count = 0
+    for name in checked:
+        raw = produced[name]
+        text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)
+        for written, value in _cited(text):
+            is_integer = not written.endswith("%") and _decimals(written) == 0
+            if is_integer and (abs(value) < ignore_below or 1900 <= value <= 2100):
+                continue
+            count += 1
+            if not _supported(written, value, measured, tolerance):
+                unsupported.append(f"{name}: {written}")
+    return GateOutcome(
+        "numbers_measured",
+        not unsupported,
+        detail=(
+            f"{len(unsupported)} of {count} cited number(s) measured nowhere: " + ", ".join(unsupported[:20])
+            if unsupported
+            else f"{count} cited number(s), all measured in {', '.join(sources)}"
+        ),
+        annotations=unsupported,
+    )
 
 
 @gate("diff_size_max", needs=("scm",))

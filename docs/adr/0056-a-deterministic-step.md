@@ -71,8 +71,18 @@ anything?") rests on metrics that must be computed by code, the same way every t
   reproducible. The investment template reads its data through a snapshot (S38-03/S38-04) for this
   reason.
 
+## The gates that rest on it (S38-05, S38-07)
+
+- **`output_schema`**: `{schemas: {output: JSON Schema}}` validates a declared output (a JSON string
+  is parsed first) with Draft 2020-12; the validator refuses a schema that is not one, or one for an
+  output the transition does not declare.
+- **`evidence_facts` with `measured_only: true`**: a fact the step only declared is refused
+  ("declared, not measured").
+- **`numbers_measured`**: every number an agent writes in its outputs must be found, within the
+  rounding of the digits written, in the named sources (a stored document such as a job's
+  `metrics`, or the work item's `fields`). Years and small integers are ignored; a percentage
+  matches either its fraction or its written value.
+
 ## Not decided here
 
-- A job's per-output JSON Schema (S38-05) and a gate that checks the numbers an agent quotes against
-  a job's measured facts (S38-07).
 - A job fanning out over N items (S38-12).

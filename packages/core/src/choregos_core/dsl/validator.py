@@ -26,6 +26,8 @@ from choregos_contracts.workflow import (
     effet_implicite,
     est_un_etat_de_production,
 )
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 
 from ..errors import Issue
 from ..gates import known_gates
@@ -72,6 +74,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_prod_states(wf, report, source)
     _check_retries(wf, report, source)
     _check_gates_ont_de_la_matiere(wf, report, source)
+    _check_output_schemas(wf, report, source)
     _check_roles_connus(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
@@ -503,6 +506,8 @@ GATES_A_MATIERE: dict[str, tuple[str, str]] = {
     "tool_called": ("tools", "`tools:` as a parameter of the guarantee"),
     "outputs_in": ("values", "`values:` as a parameter of the guarantee"),
     "markdown_sections": ("paths", "`paths:` as a parameter of the guarantee"),
+    "output_schema": ("schemas", "`schemas:` as a parameter of the guarantee"),
+    "numbers_measured": ("sources", "`sources:` as a parameter of the guarantee"),
 }
 
 
@@ -527,6 +532,44 @@ def _check_gates_ont_de_la_matiere(wf: Workflow, report: ValidationReport, sourc
                 ["transitions", index, "gates", g_index],
                 source,
             )
+
+
+def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """An `output_schema` guarantee checks declared outputs against schemas that are schemas.
+
+    A typo in a schema (`"type": "aray"`) would otherwise surface as a failed guarantee on the first
+    item, and a schema for an output the transition does not declare would check nothing, forever.
+    """
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            if g.name != "output_schema":
+                continue
+            path: list[str | int] = ["transitions", index, "gates", g_index, "params", "schemas"]
+            schemas = g.params.get("schemas")
+            if schemas is None:
+                continue  # `gate.nothing_to_check` says it
+            if not isinstance(schemas, dict):
+                report.error(
+                    "gate.output_schema", "`schemas:` maps an output's name to its JSON Schema", path, source
+                )
+                continue
+            for name, schema in schemas.items():
+                if name not in t.outputs:
+                    report.error(
+                        "gate.output_schema",
+                        f"schema for `{name}`, which the transition does not declare in `outputs:`",
+                        [*path, name],
+                        source,
+                    )
+                try:
+                    Draft202012Validator.check_schema(schema)
+                except SchemaError as exc:
+                    report.error(
+                        "gate.output_schema",
+                        f"the schema of `{name}` is not a JSON Schema: {exc.message[:200]}",
+                        [*path, name],
+                        source,
+                    )
 
 
 def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> None:
