@@ -34,6 +34,8 @@ from .formats import FORMATS, DocumentRefusedError, accept
 logger = get_logger("choregos.knowledge.sync")
 
 KINDS = ("sharepoint", "web", "git")
+#: kinds opened through an organisation `documents` connector, which holds the credentials
+CONNECTED_KINDS = frozenset({"sharepoint"})
 
 # The connector types a source kind may be served by (S39-06a). Confluence and git sources extend it.
 SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {"sharepoint": frozenset({"sharepoint"})}
@@ -46,7 +48,7 @@ class SourceUnavailableError(RuntimeError):
 async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     """The adapter of a source: under `CHOREGOS_FAKES`, its scripted fake."""
     config = source.config or {}
-    if source.kind == "sharepoint":
+    if source.kind in CONNECTED_KINDS:
         connector = (
             await session.execute(
                 select(OrgConnector).where(
@@ -58,19 +60,17 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
         ).scalar_one_or_none()
         if connector is None:
             raise SourceUnavailableError(f"the `documents` connector `{source.connector}` does not exist")
-        if connector.type not in SOURCE_CONNECTOR_TYPES["sharepoint"]:
+        allowed = SOURCE_CONNECTOR_TYPES.get(source.kind, frozenset())
+        if connector.type not in allowed:
             raise SourceUnavailableError(
                 f"the connector `{source.connector}` is a documents/{connector.type} connector: "
-                f"a sharepoint source needs {' or '.join(sorted(SOURCE_CONNECTOR_TYPES['sharepoint']))}"
+                f"a {source.kind} source needs {' or '.join(sorted(allowed))}"
             )
         resolved = await resolved_configuration(
             session, source.org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
         return build("documents", connector.type, resolved).source(  # type: ignore[no-any-return]
-            site_id=config.get("site_id"),
-            drive_id=config.get("drive_id"),
-            folder=config.get("folder"),
-            key=source.id,
+            dict(config), key=source.id
         )
     if fakes_enabled():
         from choregos_adapters.fakes.documents import fake_source

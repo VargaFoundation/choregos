@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
 from typing import Annotated
@@ -40,7 +41,7 @@ from ..knowledge.access import can_curate, can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
-from ..knowledge.sync import SOURCE_CONNECTOR_TYPES
+from ..knowledge.sync import CONNECTED_KINDS, SOURCE_CONNECTOR_TYPES
 from ..rbac import Permission
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
@@ -693,6 +694,49 @@ async def _documents_connector(
     raise unprocessable(f"no `documents` connector `{name}` in {organisation.slug} ({listing})")
 
 
+def _sharepoint_config(config: dict[str, object]) -> dict[str, object]:
+    if not (config.get("site_id") or config.get("drive_id")):
+        raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
+    return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
+
+
+def _web_config(config: dict[str, object]) -> dict[str, object]:
+    url = _https_url(config, "web")
+    return {
+        "url": url,
+        "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
+        "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
+    }
+
+
+def _git_config(config: dict[str, object]) -> dict[str, object]:
+    url = _https_url(config, "git")
+    ref = str(config.get("ref") or "main")
+    if ref.startswith("-"):
+        raise unprocessable(f"not a git ref: `{ref}`")
+    paths = config.get("paths") or ["*.md"]
+    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+        raise unprocessable("`paths` is a list of glob patterns")
+    return {"url": url, "ref": ref, "paths": paths}
+
+
+def _https_url(config: dict[str, object], kind: str) -> str:
+    url = str(config.get("url") or "")
+    if not url.startswith(_HTTPS):
+        raise unprocessable(f"a {kind} source is reached over https: `{url}`")
+    return url
+
+
+#: One validator per source kind: the configuration it keeps, or the reason it is refused.
+_SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] = {
+    "sharepoint": _sharepoint_config,
+    "web": _web_config,
+    "git": _git_config,
+}
+
+_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive"}
+
+
 async def _checked_source_config(
     session: AsyncSession,
     organisation: Organization,
@@ -701,29 +745,11 @@ async def _checked_source_config(
     config: dict[str, object],
 ) -> dict[str, object]:
     """What a source may be: refused here, with its reason, rather than at its first sync."""
-    if kind == "sharepoint":
+    if kind in CONNECTED_KINDS:
         if not connector:
-            raise unprocessable("a SharePoint or OneDrive source names its `documents` connector")
+            raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
         await _documents_connector(session, organisation, connector, kind)
-        if not (config.get("site_id") or config.get("drive_id")):
-            raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
-        return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
-    url = str(config.get("url") or "")
-    if not url.startswith(_HTTPS):
-        raise unprocessable(f"a {kind} source is reached over https: `{url}`")
-    if kind == "web":
-        return {
-            "url": url,
-            "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
-            "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
-        }
-    ref = str(config.get("ref") or "main")
-    if ref.startswith("-"):
-        raise unprocessable(f"not a git ref: `{ref}`")
-    paths = config.get("paths") or ["*.md"]
-    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
-        raise unprocessable("`paths` is a list of glob patterns")
-    return {"url": url, "ref": ref, "paths": paths}
+    return _SOURCE_VALIDATORS[kind](config)
 
 
 async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) -> KnowledgeSource:
@@ -799,7 +825,7 @@ async def create_knowledge_source(
         knowledge_base_id=base.id,
         kind=body.kind,
         name=body.name,
-        connector=body.connector if body.kind == "sharepoint" else None,
+        connector=body.connector if body.kind in CONNECTED_KINDS else None,
         config=config,
         interval_minutes=body.interval_minutes,
         refresh_mode=body.refresh_mode,

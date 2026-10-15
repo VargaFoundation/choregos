@@ -167,6 +167,21 @@ async def test_a_full_listing_deletes_what_it_does_not_list_unless_a_page_was_un
     assert await _deleted(Changes(items=[], deleted=["b", "z"]), known) == {"b"}
 
 
+async def test_an_unknown_source_kind_is_unavailable_not_faked(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from choregos_api.knowledge.sync import SourceUnavailableError, open_source
+
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    from choregos_adapters import registry
+
+    monkeypatch.setattr(registry, "fakes_enabled", lambda: False)
+    monkeypatch.setattr("choregos_api.knowledge.sync.fakes_enabled", lambda: False)
+    source = SimpleNamespace(kind="carrier-pigeon", config={}, connector=None, org_id="o", id="s")
+    with pytest.raises(SourceUnavailableError, match="carrier-pigeon"):
+        await open_source(None, source)  # type: ignore[arg-type]
+
+
 async def test_the_loop_starts_with_the_source_and_syncs_on_demand(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch, app: Any
 ) -> None:

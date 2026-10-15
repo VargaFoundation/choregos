@@ -60,7 +60,5 @@ class FakeDocumentsConnector:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 
-    def source(
-        self, *, site_id: str | None, drive_id: str | None, folder: str | None, key: str
-    ) -> FakeDocumentSource:
+    def source(self, config: dict[str, Any], *, key: str) -> FakeDocumentSource:
         return fake_source(key)
