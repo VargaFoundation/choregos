@@ -43,6 +43,8 @@ BACKEND_API_FORMAT: dict[str, ApiFormat] = {
     "goose": ApiFormat.OPENAI,
     "opencode": ApiFormat.OPENAI,
     "copilot-cli": ApiFormat.OPENAI,
+    # An agent written in code (ADR 0063): OpenAI-compatible unless its runtime says `anthropic`.
+    "code": ApiFormat.OPENAI,
 }
 
 # Contraintes dures d'un backend sur la famille de modèles.
@@ -61,6 +63,11 @@ KNOWN_BACKEND_NAMES: tuple[str, ...] = (
     "opencode",
     "copilot-cli",
 )
+
+
+#: The backends a runtime fixes, never chosen by rotation (`profile:by_size`, cross-backend review):
+#: an agent written in code runs only as the `code` runtime of its version (ADR 0063).
+RUNTIME_BACKENDS: tuple[str, ...] = ("code",)
 
 
 @dataclass(slots=True)

@@ -19,6 +19,7 @@ from choregos_api.services import persist_event
 from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
 from choregos_contracts import (
     AgentRef,
+    ApiFormat,
     Budget,
     Callbacks,
     ContextPack,
@@ -56,6 +57,7 @@ from .execution import (
     start_run,
 )
 from .garde import garde_contre_l_injection
+from .images import named_image
 from .job import prepare_job
 from .plan import StagePlan
 from .run_key import reserve_key
@@ -151,13 +153,18 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             await _budget_du_jour(session, bundle, agent)
         if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
+        code_runtime = _code_runtime(agent)
+        # Before any budget is reserved: an image the operator did not name never reaches a pod.
+        agent_image = named_image(settings, "agent", code_runtime.image) if code_runtime else None
         resolver = ModelResolver(
             gateway_url=settings.gateway_url, gateway_models=await _gateway_catalogue(bundle)
         )
         backend = plan.backend or bundle.config.agent.default_backend
-        if plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
+        if code_runtime is None and plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
             backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
         resolved = _resolve_model(resolver, plan, bundle, item, backend)
+        if code_runtime is not None:
+            resolved.api_format = ApiFormat(code_runtime.api_format)
         budget = engine.budget_for(plan.role, item.size, turns_factor=resolved.turns_factor)
         if plan.max_turns:
             budget = Budget(usd=budget.usd, max_turns=plan.max_turns, max_minutes=budget.max_minutes)
@@ -243,7 +250,11 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             )
             if depot
             else None,
-            agent=AgentRef(backend=backend, launch=LaunchSpec()),
+            agent=AgentRef(
+                backend=backend,
+                launch=LaunchSpec(command=list(code_runtime.command)) if code_runtime else LaunchSpec(),
+                image=agent_image,
+            ),
             model=resolved.to_ref(),
             # In the run's Secret, never here (#523): see `start_run`.
             gateway_key=None,
@@ -696,17 +707,44 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
     que resserrer celles de l'acteur."""
     from dataclasses import replace
 
+    from temporalio.exceptions import ApplicationError
+
     def plus_strict(de_l_acteur: int | None, de_l_agent: int | None) -> int | None:
         valeurs = [v for v in (de_l_acteur, de_l_agent) if v is not None]
         return min(valeurs) if valeurs else None
 
+    runtime = getattr(spec, "runtime", None)
+    backend = spec.backend
+    if runtime is not None and runtime.kind == "code":
+        # A code agent runs as the `code` backend and no other (ADR 0063): an actor that names
+        # `codex` for it contradicts the version, which a retry would not change.
+        if plan.backend and plan.backend != CODE_BACKEND:
+            raise ApplicationError(
+                f"the actor asks for the backend `{plan.backend}`, but the agent is written in code "
+                f"(runtime `code`): drop `backend:` from the actor",
+                type="AgentIndisponible",
+                non_retryable=True,
+            )
+        backend = CODE_BACKEND
+    elif runtime is not None and runtime.backend:
+        backend = runtime.backend
+
     return replace(
         plan,
         model_request=spec.model or plan.model_request,
-        backend=plan.backend or spec.backend,
+        backend=plan.backend or backend,
         max_turns=plus_strict(plan.max_turns, spec.limits.max_turns),
         max_minutes=plus_strict(plan.max_minutes, spec.limits.max_minutes),
     )
+
+
+CODE_BACKEND = "code"
+
+
+def _code_runtime(agent: Any) -> Any:
+    """The `code` runtime of the resolved agent version, or `None` for any other."""
+    runtime = getattr(getattr(agent, "spec", None), "runtime", None)
+    return runtime if runtime is not None and runtime.kind == "code" else None
 
 
 async def _reviewer_backend(

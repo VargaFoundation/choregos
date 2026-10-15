@@ -35,6 +35,7 @@ from choregos_core.redaction import REDACTED
 from temporalio.exceptions import ApplicationError
 
 from .base import without_secrets
+from .images import named_image
 from .plan import StagePlan
 
 #: What `agent.backend` and `run.backend` say for a job: there is no agent backend.
@@ -44,22 +45,8 @@ NO_MODEL = ModelRef(litellm_model="none", base_url="")
 
 
 def job_image(settings: Any, name: str | None) -> str | None:
-    """The image reference a job's image name maps to; `None` runs it in the runner image.
-
-    An unknown name stops the step without a retry: the mapping will not change between attempts,
-    and running the command in another image than the one written would be a silent substitution.
-    """
-    if name is None:
-        return None
-    images: dict[str, str] = dict(getattr(settings, "job_images", {}) or {})
-    if name not in images:
-        known = ", ".join(sorted(images)) or "none"
-        raise ApplicationError(
-            f"unknown job image `{name}` (CHOREGOS_JOB_IMAGES knows: {known})",
-            type="job_image_unknown",
-            non_retryable=True,
-        )
-    return images[name]
+    """The image reference a job's image name maps to; `None` runs it in the runner image."""
+    return named_image(settings, "job", name)
 
 
 def job_ref(command: list[str], image: str | None) -> str:

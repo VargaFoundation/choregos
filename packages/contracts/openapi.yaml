@@ -1184,6 +1184,13 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentBackendUpdate" } } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentBackendInfo" } } } }
+  /platform/agent-images:
+    get:
+      tags: [admin]
+      operationId: listAgentImages
+      summary: The images an operator named for agents written in code (names only, ADR 0063)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentImageInfo" } } } } }
   /platform/executors:
     get:
       tags: [admin]
@@ -3004,7 +3011,15 @@ components:
       properties:
         instructions: { type: string, maxLength: 65536 }
         model: { type: [string, "null"] }
-        backend: { type: [string, "null"] }
+        backend: { type: [string, "null"], description: "the ACP coding agent that carries the version; set only with an `acp` runtime (or none)" }
+        runtime:
+          description: "How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. Later runtimes (remote agents) add a `kind` to this union."
+          oneOf:
+            - { $ref: "#/components/schemas/AcpRuntime" }
+            - { $ref: "#/components/schemas/CodeRuntime" }
+          discriminator:
+            propertyName: kind
+            mapping: { acp: "#/components/schemas/AcpRuntime", code: "#/components/schemas/CodeRuntime" }
         limits: { $ref: "#/components/schemas/AgentLimits" }
         budget: { $ref: "#/components/schemas/AgentBudget" }
         skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
@@ -3012,6 +3027,29 @@ components:
         knowledge: { type: array, description: "the knowledge bases the agent reads (ADR 0051); each must be served to the run's project", items: { type: object, required: [slug], properties: { slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } } } }
         evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalCase" }, description: "The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published" }
         memory: { type: string, enum: [none, project, agent], default: project, description: "whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none" }
+    AcpRuntime:
+      type: object
+      description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [acp] }
+        backend: { type: [string, "null"] }
+    CodeRuntime:
+      type: object
+      description: An agent written in code (ADR 0063) - an ACP agent in an image the operator named, built from the runner image.
+      required: [kind, image, command]
+      properties:
+        kind: { type: string, enum: [code] }
+        image: { type: string, pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the NAME of an image of the operator's `CHOREGOS_AGENT_IMAGES` map, never an image reference" }
+        command: { type: array, minItems: 1, maxItems: 64, items: { type: string, minLength: 1, maxLength: 1024 }, description: "the argv the runner starts in the image; it speaks ACP on stdio" }
+        api_format: { type: string, enum: [openai, anthropic], default: openai, description: "the model API the code calls through the gateway" }
+    AgentImageInfo:
+      type: object
+      description: An image an operator named for code agents. The reference itself is never returned.
+      required: [name, digest_pinned]
+      properties:
+        name: { type: string }
+        digest_pinned: { type: boolean, description: "the reference carries an `@sha256:` digest" }
     AgentEvalCase:
       type: object
       description: A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not.

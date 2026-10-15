@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .base import Backend, LaunchPlan
 from .claude_code import ClaudeCodeBackend
+from .code import CodeBackend
 from .others import (
     CodexBackend,
     CopilotCliBackend,
@@ -22,6 +23,7 @@ BACKENDS: dict[str, type[Backend]] = {
     GooseBackend.name: GooseBackend,
     OpenCodeBackend.name: OpenCodeBackend,
     CopilotCliBackend.name: CopilotCliBackend,
+    CodeBackend.name: CodeBackend,
 }
 
 # Backends retirés : un nom qu'on reconnaît, pour refuser avec la raison plutôt qu'avec un
@@ -47,8 +49,14 @@ def get_backend(name: str) -> Backend:
     return backend_class()
 
 
+#: Backends a runtime brings (ADR 0063): they ship no agent, so they are not "known" in the sense of
+#: the CLI listing, the conformance rotation or the image's pinned binaries. `get_backend` has them.
+RUNTIME_BACKENDS: frozenset[str] = frozenset({CodeBackend.name})
+
+
 def known_backends() -> list[str]:
-    return sorted(BACKENDS)
+    """The ACP backends shipped in the runner image."""
+    return sorted(set(BACKENDS) - RUNTIME_BACKENDS)
 
 
 # Nom du backend → **clé de `versions.lock`**, qui n'est ni le nom du backend ni celui du
@@ -86,8 +94,10 @@ def pinned_versions() -> dict[str, str]:
 __all__ = [
     "BACKENDS",
     "BACKEND_BINARIES",
+    "RUNTIME_BACKENDS",
     "Backend",
     "ClaudeCodeBackend",
+    "CodeBackend",
     "CodexBackend",
     "CopilotCliBackend",
     "GeminiCliBackend",

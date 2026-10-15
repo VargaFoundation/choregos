@@ -14,10 +14,11 @@ from choregos_core.instructions import erreurs_des_instructions
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..db.models import Agent, AgentVersion, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
-from ..schemas import AgentOverrides, AgentSpec
+from ..schemas import AgentOverrides, AgentSpec, CodeRuntime
 
 
 def empreinte(spec: AgentSpec) -> str:
@@ -30,6 +31,9 @@ def empreinte(spec: AgentSpec) -> str:
     # keeps its digest, and the catalogue does not see every agent as changed.
     if contenu.get("memory") == "project":
         del contenu["memory"]
+    # Same for the runtime (ADR 0063): a version that names none keeps the digest it had.
+    if contenu.get("runtime") is None:
+        contenu.pop("runtime", None)
     blob = json.dumps(contenu, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -43,6 +47,21 @@ def erreurs_d_une_version(spec: AgentSpec) -> None:
             "the agent's instructions do not render",
             [{"loc": ["instructions"], "msg": e} for e in erreurs],
         )
+    if isinstance(spec.runtime, CodeRuntime):
+        # The image is a NAME the operator mapped (ADR 0063): an unknown one would fail at the first
+        # run, so it is refused when the version is published, naming the ones that exist.
+        known = sorted(get_settings().agent_images)
+        if spec.runtime.image not in known:
+            raise unprocessable(
+                "the agent's image is not one the operator named",
+                [
+                    {
+                        "loc": ["runtime", "image"],
+                        "msg": f"unknown image `{spec.runtime.image}` "
+                        f"(CHOREGOS_AGENT_IMAGES knows: {', '.join(known) or 'none'})",
+                    }
+                ],
+            )
 
 
 def _outils(spec: AgentSpec) -> set[str]:
