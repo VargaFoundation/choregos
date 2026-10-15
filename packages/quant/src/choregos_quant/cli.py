@@ -37,6 +37,8 @@ def _parser() -> argparse.ArgumentParser:
         if name == "snapshot":
             s.add_argument("--tool", default="marketdata__get_bars")
             s.add_argument("--max-missing", type=int, default=0)
+            s.add_argument("--previous", type=Path, help="a stored snapshot to reuse; the inputs in a job")
+            s.add_argument("--refresh", action="store_true", help="fetch even if a stored snapshot answers")
     return p
 
 
@@ -67,6 +69,7 @@ def main(argv: list[str] | None = None, fetcher: Fetcher | None = None) -> int:
                 args.out,
                 tool=args.tool,
                 max_missing=args.max_missing,
+                previous=None if args.refresh else args.previous,
             )
         if root is not None:
             publish(args.command, args.out, root)

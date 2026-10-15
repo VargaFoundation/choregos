@@ -48,6 +48,7 @@ def paths(command: str, root: Path) -> dict[str, Path]:
         "campaign": meta / "fields.json",
         "bars": meta / "inputs" / "bars.csv",
         "strategies": meta / "inputs" / "strategies.json",
+        "previous": meta / "inputs",  # a re-run of the snapshot step reads what the last one stored
         "out": meta / "quant" / command,
     }
 

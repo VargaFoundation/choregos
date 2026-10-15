@@ -56,10 +56,13 @@ states:
 transitions:
   # The only network access of the campaign: the connector, through the platform, with the run's
   # token. The bars are stored and hashed; every later step reads that file, never the provider.
+  # A re-run reads what the last one stored (absent the first time) and fetches nothing for the
+  # same request: a free source that rewrote its history cannot change a campaign already taken.
   - id: t-snapshot
     from: campaign
     to: snapshotted
     by: market
+    inputs: [snapshot, bars]
     outputs: [snapshot, bars]
     output_types: { bars: csv }
     gates: [outputs_present]

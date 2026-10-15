@@ -1,11 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Snapshot of market data through the platform's tool gateway (the only network access)."""
+"""Snapshot of market data through the platform's tool gateway (the only network access).
+
+A re-run of the step reads the snapshot an earlier run stored instead of the provider (S38-04): when
+the stored `snapshot.json` answers the same request and `bars.csv` still hashes to its digest, both
+are copied byte for byte and nothing is fetched. A free source that changed its history since, or
+that is down today, cannot change a campaign already snapshotted. `--refresh` fetches anyway."""
 
 from __future__ import annotations
 
 import datetime as dt
 import json
 import os
+import shutil
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -23,6 +29,8 @@ from choregos_quant.errors import InputError, SnapshotError
 class Fetched:
     provider: str
     bars: list[dict[str, Any]]
+    #: A `composite` source's comparison with a second source; `None` when nothing was compared.
+    cross_check: dict[str, Any] | None = None
 
 
 Fetcher = Callable[[str, str, str], Fetched]
@@ -49,7 +57,8 @@ def parse_response(payload: Any, symbol: str) -> Fetched:
     if not isinstance(bars, list):
         raise FetchError(f"{symbol}: no bars list in the response")
     provider = holder.get("provider") or payload.get("provider") or "unknown"
-    return Fetched(str(provider), bars)
+    check = holder.get("cross_check")
+    return Fetched(str(provider), bars, check if isinstance(check, dict) else None)
 
 
 class HttpFetcher:
@@ -98,6 +107,44 @@ def _to_bar(symbol: str, raw: dict[str, Any]) -> Bar:
     )
 
 
+def _request(campaign: Campaign, tool: str) -> dict[str, Any]:
+    return {"tool": tool, "symbols": campaign.symbols, "start": campaign.start, "end": campaign.end}
+
+
+def _facts(snap: dict[str, Any], reused: bool) -> dict[str, Any]:
+    """`cross_checked`: symbols a second source confirmed on common days; `diverging`: symbols with
+    at least one close beyond the composite's tolerance. A source that is down leaves a symbol
+    unchecked, and `cross_checked < symbols` says so."""
+    rows = dict(snap["rows"])
+    checks = [c for c in (snap.get("cross_check") or {}).values() if isinstance(c, dict)]
+    return {
+        "symbols": len(rows),
+        "missing": len(snap["missing"]),
+        "data_rows": sum(rows.values()),
+        "bars_sha256": snap["bars_sha256"],
+        "reused": int(reused),
+        "cross_checked": sum(1 for c in checks if c.get("common_days", 0) > 0),
+        "diverging": sum(1 for c in checks if c.get("diverging_days", 0) > 0),
+    }
+
+
+def stored_snapshot(campaign: Campaign, previous: Path, tool: str) -> dict[str, Any] | None:
+    """The snapshot an earlier run stored in `previous`, if it answers this request and its bars
+    still hash to its digest; `None` otherwise — absent, another request, or bars that changed."""
+    snap_path, bars_path = previous / "snapshot.json", previous / "bars.csv"
+    if not (snap_path.is_file() and bars_path.is_file()):
+        return None
+    try:
+        snap = json.loads(snap_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(snap, dict) or snap.get("request") != _request(campaign, tool):
+        return None
+    if snap.get("bars_sha256") != sha256_file(bars_path):
+        return None
+    return snap
+
+
 def take_snapshot(
     campaign: Campaign,
     fetch: Fetcher,
@@ -106,11 +153,23 @@ def take_snapshot(
     tool: str = "marketdata__get_bars",
     max_missing: int = 0,
     now: Callable[[], dt.datetime] | None = None,
+    previous: Path | None = None,
 ) -> dict[str, Any]:
-    """Write `bars.csv` and `snapshot.json`; raise `SnapshotError` when too many symbols are missing."""
+    """Write `bars.csv` and `snapshot.json` — fetched, or copied from `previous` when it holds the
+    same request (`stored_snapshot`); raise `SnapshotError` when too many symbols are missing."""
     out.mkdir(parents=True, exist_ok=True)
+    stored = stored_snapshot(campaign, previous, tool) if previous is not None else None
+    if previous is not None and stored is not None:
+        shutil.copyfile(previous / "bars.csv", out / "bars.csv")
+        write_text(out / "snapshot.json", dumps(stored))
+        write_text(out / "result.json", dumps({"facts": _facts(stored, reused=True)}))
+        if len(stored["missing"]) > max_missing:
+            absent = len(stored["missing"])
+            raise SnapshotError(f"{absent} symbols missing (> {max_missing}) in the stored snapshot")
+        return stored
     rows: list[Bar] = []
     counts: dict[str, int] = {}
+    checks: dict[str, dict[str, Any] | None] = {}
     missing: list[str] = []
     providers: set[str] = set()
     for symbol in campaign.symbols:
@@ -127,24 +186,20 @@ def take_snapshot(
         by_date = {b.date: b for b in bars}
         rows.extend(by_date.values())
         counts[symbol] = len(by_date)
+        checks[symbol] = got.cross_check
     write_bars(rows, out / "bars.csv")
     stamp = (now or (lambda: dt.datetime.now(dt.UTC)))().strftime("%Y-%m-%dT%H:%M:%SZ")
     snap = {
         "provider": ",".join(sorted(providers)),
         "fetched_at": stamp,
-        "request": {"tool": tool, "symbols": campaign.symbols, "start": campaign.start, "end": campaign.end},
+        "request": _request(campaign, tool),
         "rows": {k: counts[k] for k in sorted(counts)},
         "missing": sorted(missing),
+        "cross_check": {k: checks[k] for k in sorted(checks)},
         "bars_sha256": sha256_file(out / "bars.csv"),
     }
     write_text(out / "snapshot.json", dumps(snap))
-    facts = {
-        "symbols": len(counts),
-        "missing": len(missing),
-        "data_rows": sum(counts.values()),
-        "bars_sha256": snap["bars_sha256"],
-    }
-    write_text(out / "result.json", dumps({"facts": facts}))
+    write_text(out / "result.json", dumps({"facts": _facts(snap, reused=False)}))
     if len(missing) > max_missing:
         raise SnapshotError(f"{len(missing)} symbols missing (> {max_missing}): {', '.join(sorted(missing))}")
     return snap
