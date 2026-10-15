@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Archive l'historique d'un workflow Temporal réel pour le rejouer en CI.
+"""Archives the history of a real Temporal workflow to replay it in CI.
 
     uv run python tools/replay_record.py wi-staffing-RH-1b wi-panier-DEMO-1b
     uv run python tools/replay_record.py --address 127.0.0.1:7233 --all-interpreters
 
-Les historiques vont dans `tests/replay/histories/<workflow_id>.json`, et
-`tests/replay/test_replay.py` les rejoue contre le code courant : si une décision change,
-le replay échoue AVANT que ça n'arrive à un ticket en cours. Le dossier était vide depuis
-la création du dépôt — le test skippait, et la garantie centrale d'un produit bâti sur
-Temporal n'existait que dans le README (état des lieux du 2026-09-24).
+Histories go to `tests/replay/histories/<workflow_id>.json`, and
+`tests/replay/test_replay.py` replays them against the current code: if a decision changes,
+the replay fails BEFORE it happens to a work item in flight. The folder had been empty since
+the repository was created — the test skipped, and the central guarantee of a product built on
+Temporal existed only in the README (state of play of 2026-09-24).
 
-Ce qu'un historique contient : les entrées et sorties de chaque activité, donc les tickets,
-les contextes, les résultats d'agent. N'archiver que des workflows de DÉMONSTRATION.
+What a history contains: the inputs and outputs of every activity, so the work items, the
+contexts, the agents' results. Archive DEMONSTRATION workflows only.
 """
 
 from __future__ import annotations
@@ -22,21 +22,21 @@ import json
 import pathlib
 import sys
 
-RACINE = pathlib.Path(__file__).resolve().parents[1]
-HISTORIES = RACINE / "tests" / "replay" / "histories"
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+HISTORIES = ROOT / "tests" / "replay" / "histories"
 
 
 async def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("workflow_ids", nargs="*", help="identifiants de workflows à archiver")
-    parser.add_argument("--address", default="127.0.0.1:7233", help="serveur Temporal (port-forward)")
+    parser.add_argument("workflow_ids", nargs="*", help="identifiers of the workflows to archive")
+    parser.add_argument("--address", default="127.0.0.1:7233", help="Temporal server (port-forward)")
     parser.add_argument("--namespace", default="default")
     parser.add_argument(
         "--all-interpreters",
         action="store_true",
-        help="archive tous les WorkflowInterpreter terminés (démonstration seulement)",
+        help="archives every finished WorkflowInterpreter (demonstration only)",
     )
     args = parser.parse_args()
 
@@ -50,16 +50,16 @@ async def main() -> int:
         ):
             ids.append(wf.id)
     if not ids:
-        parser.error("aucun workflow : donner des identifiants ou --all-interpreters")
+        parser.error("no workflow: give identifiers or --all-interpreters")
 
     HISTORIES.mkdir(parents=True, exist_ok=True)
     for workflow_id in dict.fromkeys(ids):
         handle = client.get_workflow_handle(workflow_id)
         history = await handle.fetch_history()
-        cible = HISTORIES / f"{workflow_id}.json"
-        # `to_json` rend une chaîne ; on la range indentée pour des diffs lisibles en PR.
-        cible.write_text(json.dumps(json.loads(history.to_json()), indent=1, ensure_ascii=False) + "\n")
-        print(f"{workflow_id}: {len(history.events)} événements → {cible.relative_to(RACINE)}")
+        target = HISTORIES / f"{workflow_id}.json"
+        # `to_json` returns a string; it is stored indented for readable diffs in a PR.
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1, ensure_ascii=False) + "\n")
+        print(f"{workflow_id}: {len(history.events)} events → {target.relative_to(ROOT)}")
     return 0
 
 

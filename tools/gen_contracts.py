@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Génère les types TypeScript à partir des JSON Schemas et de l'OpenAPI.
+"""Generates the TypeScript types from the JSON Schemas and the OpenAPI.
 
-`make contracts` exécute ce script ; `make contracts-check` le rejoue en mode `--check`
-et échoue si le résultat diffère de ce qui est committé (le test de non-dérive des contrats).
+`make contracts` runs this script; `make contracts-check` replays it in `--check` mode
+and fails if the result differs from what is committed (the contracts' no-drift test).
 
-Le générateur est volontairement écrit à la main (pas de dépendance npm) : la CI doit pouvoir
-régénérer les contrats hors ligne, et l'émission reste déterministe.
+The generator is written by hand on purpose (no npm dependency): CI must be able to
+regenerate the contracts offline, and the output stays deterministic.
 """
 
 from __future__ import annotations
@@ -24,10 +24,11 @@ CONTRACTS = ROOT / "packages" / "contracts"
 SCHEMAS = CONTRACTS / "schemas"
 TS_DIR = CONTRACTS / "ts"
 
-#: Le bandeau des fichiers TypeScript générés. L'identifiant SPDX en fait partie : ces fichiers
-#: sont distribués comme les autres, et le test de `tests/licences/` l'exige de TOUT ce qui ship.
-#: L'ajouter à la main dans le fichier généré aurait fait rougir `make contracts-check` au premier
-#: passage — un en-tête doit venir de ce qui écrit le fichier.
+#: The banner of the generated TypeScript files. The SPDX identifier is part of it: these files
+#: are distributed like the others, and the test in `tests/licences/` requires it of EVERYTHING
+#: that ships. Adding it by hand in the generated file would have turned `make contracts-check`
+#: red on the first run — a header must come from what writes the file. Its French lines stay
+#: until a `contract-change` PR: they are written into `packages/contracts/ts/`.
 HEADER = """// SPDX-License-Identifier: Apache-2.0
 /* eslint-disable */
 /**
@@ -45,7 +46,7 @@ def pascal(name: str) -> str:
 
 
 class Emitter:
-    """Émet du TypeScript à partir d'un sous-schéma JSON Schema 2020-12."""
+    """Emits TypeScript from a JSON Schema 2020-12 subschema."""
 
     def __init__(self, root: dict[str, Any], defs_prefix: str = "", external_prefix: str = "") -> None:
         self.root = root
@@ -85,7 +86,7 @@ class Emitter:
         return self._compose_of(schema, indent) or self._typed_of(schema, indent)
 
     def _compose_of(self, schema: dict[str, Any], indent: int) -> str:
-        """`oneOf`/`anyOf` → union, `allOf` → intersection ; vide si le schéma n'en a pas."""
+        """`oneOf`/`anyOf` → union, `allOf` → intersection; empty if the schema has none."""
         for key in ("oneOf", "anyOf"):
             if key in schema:
                 return " | ".join(self.type_of(s, indent) for s in schema[key])
@@ -184,7 +185,7 @@ def generate_api_ts() -> str:
         body = emitter.type_of(schema)
         out.append(f"export type {ts_name} = {body};\n")
 
-    # Carte des opérations : opId -> { method, path, response }
+    # Map of the operations: opId -> { method, path, response }
     ops: list[str] = []
     for path, item in spec["paths"].items():
         for verb, op in item.items():
@@ -226,22 +227,22 @@ def _body_type(op: dict[str, Any], emitter: Emitter) -> str:
 
 
 def write(path: Path, content: str, check: bool) -> bool:
-    """Écrit le fichier ; en mode check, signale une différence sans écrire."""
+    """Writes the file; in check mode, reports a difference without writing."""
     current = path.read_text(encoding="utf-8") if path.exists() else None
     if current == content:
         return False
     if check:
-        print(f"[contracts] hors d'état : {path.relative_to(ROOT)}", file=sys.stderr)
+        print(f"[contracts] out of date: {path.relative_to(ROOT)}", file=sys.stderr)
         return True
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
-    print(f"[contracts] écrit {path.relative_to(ROOT)}")
+    print(f"[contracts] wrote {path.relative_to(ROOT)}")
     return True
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Génère les types de contrats")
-    parser.add_argument("--check", action="store_true", help="échoue si les fichiers générés diffèrent")
+    parser = argparse.ArgumentParser(description="Generates the contract types")
+    parser.add_argument("--check", action="store_true", help="fails if the generated files differ")
     args = parser.parse_args()
     changed = False
     changed |= write(TS_DIR / "schemas.ts", generate_schemas_ts(), args.check)
@@ -251,7 +252,7 @@ def main() -> int:
     )
     changed |= write(TS_DIR / "index.ts", index, args.check)
     if args.check and changed:
-        print("[contracts] `make contracts` doit être rejoué et le résultat committé", file=sys.stderr)
+        print("[contracts] `make contracts` must be run again and the result committed", file=sys.stderr)
         return 1
     return 0
 

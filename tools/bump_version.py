@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Pose UNE version partout — ou vérifie qu'elle y est déjà.
+"""Sets ONE version everywhere — or checks it is already there.
 
-    uv run python tools/bump_version.py 0.4.0          # écrit
-    uv run python tools/bump_version.py 0.4.0 --check  # vérifie (la release le fait)
+    uv run python tools/bump_version.py 0.4.0          # writes
+    uv run python tools/bump_version.py 0.4.0 --check  # checks (the release does)
 
-Ce que « partout » veut dire : les neuf `pyproject.toml`, le `Chart.yaml` de l'umbrella
-(sa version, son appVersion, la version de chacune de ses dépendances), le `Chart.yaml` de
-chaque sous-chart, et les tags d'images (`imageTag` global, `image.tag` des sous-charts).
+What "everywhere" means: the nine `pyproject.toml`, the umbrella's `Chart.yaml` (its
+version, its appVersion, the version of each of its dependencies), each subchart's
+`Chart.yaml`, and the image tags (global `imageTag`, the subcharts' `image.tag`).
 
-Avant le 2026-09-24 rien ne faisait ça : les pyproject restaient à 0.1.0, le chart à
-1.0.0, et `release.yml` réécrivait `imageTag` par `sed` au moment du build — le dépôt
-contenait donc en permanence des versions mensongères. Ici, la version se pose AVANT le
-tag, et la release refuse un tag qui ne correspond pas aux fichiers.
+Before 2026-09-24 nothing did this: the pyprojects stayed at 0.1.0, the chart at 1.0.0,
+and `release.yml` rewrote `imageTag` with `sed` at build time — so the repository
+permanently held lying versions. Here the version is set BEFORE the tag, and the release
+refuses a tag that does not match the files.
 """
 
 from __future__ import annotations
@@ -21,22 +21,22 @@ import pathlib
 import re
 import sys
 
-RACINE = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
 
 
-def _fichiers() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
-    """(fichier, [(motif, remplacement-avec-\\g<1>VERSION)])."""
-    cibles: list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]] = []
-    for pyproject in sorted(RACINE.glob("**/pyproject.toml")):
+def _files() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
+    """(file, [(pattern, replacement-with-\\g<1>VERSION)])."""
+    targets: list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]] = []
+    for pyproject in sorted(ROOT.glob("**/pyproject.toml")):
         if ".venv" in pyproject.parts or "node_modules" in pyproject.parts:
             continue
-        texte = pyproject.read_text(encoding="utf-8")
-        if not re.search(r'^name = "choregos', texte, re.M):
+        text = pyproject.read_text(encoding="utf-8")
+        if not re.search(r'^name = "choregos', text, re.M):
             continue
-        cibles.append((pyproject, [(re.compile(r'^(version = ")[^"]+(")', re.M), r"\g<1>{v}\g<2>")]))
-    umbrella = RACINE / "charts" / "choregos" / "Chart.yaml"
-    cibles.append(
+        targets.append((pyproject, [(re.compile(r'^(version = ")[^"]+(")', re.M), r"\g<1>{v}\g<2>")]))
+    umbrella = ROOT / "charts" / "choregos" / "Chart.yaml"
+    targets.append(
         (
             umbrella,
             [
@@ -46,8 +46,8 @@ def _fichiers() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
             ],
         )
     )
-    for chart in sorted((RACINE / "charts" / "choregos" / "charts").glob("*/Chart.yaml")):
-        cibles.append(
+    for chart in sorted((ROOT / "charts" / "choregos" / "charts").glob("*/Chart.yaml")):
+        targets.append(
             (
                 chart,
                 [
@@ -56,47 +56,47 @@ def _fichiers() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
                 ],
             )
         )
-    valeurs = RACINE / "charts" / "choregos" / "values.yaml"
-    cibles.append(
+    values = ROOT / "charts" / "choregos" / "values.yaml"
+    targets.append(
         (
-            valeurs,
+            values,
             [
                 (re.compile(r'^(  imageTag: ").*(")$', re.M), r"\g<1>{v}\g<2>"),
                 (re.compile(r'^(    tag: ")\d[^"]*(")$', re.M), r"\g<1>{v}\g<2>"),
             ],
         )
     )
-    # L'OpenAPI est le contrat que le front et la CLI consomment ; sa `info.version` annonçait
-    # `1.0.0` depuis le premier jour, pendant que tout le reste du dépôt était en 0.x. Une
-    # version qui ment est exactement ce que cet outil existe pour empêcher.
-    openapi = RACINE / "packages" / "contracts" / "openapi.yaml"
-    cibles.append((openapi, [(re.compile(r"^(  version: ).*$", re.M), r"\g<1>{v}")]))
-    # Le plugin Claude Code (ADR 0030) : sa version fige ce que les utilisateurs installent.
-    plugin = RACINE / "integrations" / "claude-code" / ".claude-plugin" / "plugin.json"
-    cibles.append((plugin, [(re.compile(r'^(  "version": ")[^"]+(",)$', re.M), r"\g<1>{v}\g<2>")]))
-    return cibles
+    # The OpenAPI is the contract the front end and the CLI consume; its `info.version` said
+    # `1.0.0` from day one, while the rest of the repository was at 0.x. A lying version is
+    # exactly what this tool exists to prevent.
+    openapi = ROOT / "packages" / "contracts" / "openapi.yaml"
+    targets.append((openapi, [(re.compile(r"^(  version: ).*$", re.M), r"\g<1>{v}")]))
+    # The Claude Code plugin (ADR 0030): its version pins what users install.
+    plugin = ROOT / "integrations" / "claude-code" / ".claude-plugin" / "plugin.json"
+    targets.append((plugin, [(re.compile(r'^(  "version": ")[^"]+(",)$', re.M), r"\g<1>{v}\g<2>")]))
+    return targets
 
 
-def appliquer(version: str, *, check: bool) -> int:
-    ecarts: list[str] = []
-    for fichier, motifs in _fichiers():
-        avant = fichier.read_text(encoding="utf-8")
-        apres = avant
-        for motif, remplacement in motifs:
-            apres = motif.sub(remplacement.replace("{v}", version), apres)
-        if apres != avant:
+def apply(version: str, *, check: bool) -> int:
+    diverging: list[str] = []
+    for file, patterns in _files():
+        before = file.read_text(encoding="utf-8")
+        after = before
+        for pattern, replacement in patterns:
+            after = pattern.sub(replacement.replace("{v}", version), after)
+        if after != before:
             if check:
-                ecarts.append(str(fichier.relative_to(RACINE)))
+                diverging.append(str(file.relative_to(ROOT)))
             else:
-                fichier.write_text(apres, encoding="utf-8")
-                print(f"{fichier.relative_to(RACINE)} → {version}")
-    if check and ecarts:
-        print(f"version {version} absente de : {', '.join(ecarts)}", file=sys.stderr)
+                file.write_text(after, encoding="utf-8")
+                print(f"{file.relative_to(ROOT)} → {version}")
+    if check and diverging:
+        print(f"version {version} missing from: {', '.join(diverging)}", file=sys.stderr)
         return 1
     if check:
-        print(f"version {version} partout")
-    elif any("Chart.yaml" in str(f) for f, _ in _fichiers()):
-        print("→ puis : helm dependency update charts/choregos  (Chart.lock)")
+        print(f"version {version} everywhere")
+    elif any("Chart.yaml" in str(f) for f, _ in _files()):
+        print("→ then: helm dependency update charts/choregos  (Chart.lock)")
     return 0
 
 
@@ -105,11 +105,11 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("version")
-    parser.add_argument("--check", action="store_true", help="ne rien écrire, échouer si un fichier diverge")
+    parser.add_argument("--check", action="store_true", help="write nothing, fail if a file diverges")
     args = parser.parse_args()
     if not SEMVER.match(args.version):
-        parser.error(f"version semver attendue, reçu {args.version!r}")
-    return appliquer(args.version, check=args.check)
+        parser.error(f"semver version expected, got {args.version!r}")
+    return apply(args.version, check=args.check)
 
 
 if __name__ == "__main__":
