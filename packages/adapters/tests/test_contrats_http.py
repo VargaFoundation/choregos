@@ -117,6 +117,33 @@ async def test_litellm_le_catalogue_porte_les_prix_par_millier() -> None:
 
 
 @respx.mock
+async def test_litellm_an_unknown_tool_calling_capability_is_not_a_denial() -> None:
+    """What the dev tenant's LiteLLM answers for its `openai/choregos-*` aliases (S22-42)."""
+    respx.get(f"{LITELLM}/model/info").mock(
+        return_value=Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "model_name": "platform/standard",
+                        "litellm_params": {"model": "openai/choregos-standard"},
+                        "model_info": {"supports_function_calling": None},
+                    },
+                    {
+                        "model_name": "platform/embed",
+                        "litellm_params": {"model": "openai/choregos-embed"},
+                        "model_info": {"supports_function_calling": False},
+                    },
+                ]
+            },
+        )
+    )
+    standard, embed = await LiteLlmGateway(LITELLM, "sk").list_models()
+    assert standard.supports_tool_calling, "an unknown capability must not refuse every stage"
+    assert not embed.supports_tool_calling, "an explicit false still denies it"
+
+
+@respx.mock
 async def test_slack_webhook_puis_bot_et_leurs_refus() -> None:
     hook = respx.post("https://hooks.slack.test/x").mock(return_value=Response(200, text="ok"))
     message = Message(title="Train gelé", body="raison", severity="warning")

@@ -163,7 +163,7 @@ class LiteLlmGateway:
                     input_cost_per_1k=_per_1k(info.get("input_cost_per_token")),
                     output_cost_per_1k=_per_1k(info.get("output_cost_per_token")),
                     max_input_tokens=info.get("max_input_tokens"),
-                    supports_tool_calling=bool(info.get("supports_function_calling", True)),
+                    supports_tool_calling=_unless_denied(info.get("supports_function_calling")),
                     supports_vision=bool(info.get("supports_vision", False)),
                     internal_price=name in self.internal_prices,
                 )
@@ -213,6 +213,16 @@ class LiteLlmGateway:
     async def test(self) -> dict[str, Any]:
         models = await self.list_models()
         return {"ok": bool(models), "models": len(models)}
+
+
+def _unless_denied(flag: Any) -> bool:
+    """A capability LiteLLM does not know is not a capability it denies.
+
+    LiteLLM sends `supports_function_calling: null` for a model it has no metadata for, such as an
+    `openai/<deployment>` alias on the dev tenant. `bool(info.get(key, True))` turned that null into
+    False: every stage was refused with "does not support tool calling" (S22-42). Only an explicit
+    false denies it."""
+    return flag is not False
 
 
 def _per_1k(per_token: Any) -> float | None:
