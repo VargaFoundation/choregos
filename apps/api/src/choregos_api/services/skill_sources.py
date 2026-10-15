@@ -21,10 +21,12 @@ and to `CHOREGOS_FAKES=1` (ADR 0005).
 from __future__ import annotations
 
 import io
+import json
 import posixpath
 import re
 import tarfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote, urlsplit
 
@@ -384,6 +386,16 @@ class FakeSourceFetcher:
         self.refs.setdefault(cle, {})[sha] = sha
         for nom in refs or {}:
             self.refs[cle][nom] = (refs or {})[nom]
+
+    def load_recordings(self, directory: Path) -> None:
+        """Serves the reduced tarballs the skills catalogue was generated from (`meta.json` and the
+        `<owner>__<repo>__<sha12>.tar.gz` files recorded by `tools/catalogues/build_skill_catalogue.py`)."""
+        meta = json.loads((directory / "meta.json").read_text(encoding="utf-8"))
+        for repo, recorded in meta["repos"].items():
+            owner, _, name = repo.partition("/")
+            sha = recorded["sha"]
+            tarball = (directory / f"{owner}__{name}__{sha[:12]}.tar.gz").read_bytes()
+            self.add(f"https://github.com/{repo}", sha, tarball, refs={recorded["ref"]: sha})
 
     async def resolve(self, source: GitSource, ref: str) -> str:
         self.calls.append(("resolve", source.key, ref))

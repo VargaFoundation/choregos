@@ -1527,6 +1527,33 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The repository's host did not answer, or not usefully" }
+  /orgs/{org}/skill-catalogue:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listSkillCatalogue
+      description: The catalogue of default skills shipped with the platform (ADR 0065) and, for each, what it means in this organisation — available, installed, updatable, waiting for a second reviewer, or blocked and why. Listing installs nothing. Its members can read it.
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: "free text over the id, the title, the publisher and the description" }
+        - { name: category, in: query, required: false, schema: { type: string } }
+        - { name: delivery, in: query, required: false, schema: { type: string, enum: [bundled, git] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillCatalogue" } } } }
+  /orgs/{org}/skill-catalogue/{entry_id}/install:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: entry_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: installSkillCatalogueEntry
+      description: Publishes the entry as a skill, or its next version when the catalogue pins a newer one. A bundled entry is read from the image and checked against its provenance; a git entry is fetched at its pinned commit. Both go through the supply-chain gate again (ADR 0050) — a high-risk version waits for a second administrator. `agent:manage` may install any entry; `skill:import` an entry whose repository is in the organisation's allowlist, as a new skill only.
+      responses:
+        "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "502": { description: "The repository did not answer, or the image's bundled skill does not match its provenance" }
   /orgs/{org}/skills/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2555,6 +2582,43 @@ components:
         name: { type: [string, "null"], pattern: "^[a-z][a-z0-9-]{1,62}$", description: "defaults to the entry id" }
         secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a value is refused" }
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
+    SkillCatalogueSignals:
+      type: object
+      required: [stars, stars_as_of]
+      properties:
+        stars: { type: [integer, "null"] }
+        stars_as_of: { type: [string, "null"], format: date }
+    SkillCatalogueEntry:
+      type: object
+      required: [id, title, description, publisher, repo, sha, path, licence, licence_class, files, bytes, digest, risk, findings_count, categories, signals, delivery, state, egress]
+      properties:
+        id: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$", description: "the skill's name, as its SKILL.md says it" }
+        title: { type: string }
+        description: { type: string, maxLength: 300 }
+        publisher: { type: string }
+        repo: { type: string }
+        sha: { type: string, pattern: "^[0-9a-f]{40}$", description: "the pinned commit" }
+        path: { type: string }
+        licence: { type: string, description: "SPDX" }
+        licence_class: { type: string, enum: [permissive, copyleft] }
+        files: { type: integer }
+        bytes: { type: integer }
+        digest: { type: string, description: "sha256 of the files, as the runner recomputes it" }
+        risk: { type: string, enum: [low, medium, high], description: "the gate's answer when the catalogue was generated; the gate runs again at install" }
+        findings_count: { type: integer }
+        categories: { type: array, items: { type: string } }
+        signals: { $ref: "#/components/schemas/SkillCatalogueSignals" }
+        delivery: { type: string, enum: [bundled, git], description: "vendored in the image, or fetched at its pinned commit" }
+        state: { type: string, enum: [available, installed, update, pending_review, blocked] }
+        installed_version: { type: [integer, "null"], description: "the version of the organisation's skill, when there is one" }
+        blocked_reason: { type: [string, "null"] }
+        egress: { type: string, enum: [open, undeclared, unknown], description: "for a git entry, whether the deployment declares codeload.github.com reachable from the API" }
+    SkillCatalogue:
+      type: object
+      required: [meta, entries]
+      properties:
+        meta: { $ref: "#/components/schemas/CatalogueMeta" }
+        entries: { type: array, items: { $ref: "#/components/schemas/SkillCatalogueEntry" } }
     OrgConnectorCreate:
       type: object
       required: [name, type]
@@ -3054,6 +3118,8 @@ components:
         sha: { type: string, description: the full commit SHA the version is pinned to }
         path: { type: string, description: "the skill's folder in the repository; empty is the root" }
         licence: { type: [string, "null"], description: "an SPDX identifier, LicenseRef-proprietary, LicenseRef-unknown, or null when none was found" }
+        catalogue: { type: [string, "null"], description: "`<id>@<catalogue_version>` when installed from the skills catalogue (ADR 0065)" }
+        delivery: { type: [string, "null"], enum: [bundled, git, null], description: "for a catalogue install, whether the files came from the image or from the pinned commit" }
     SkillVersion:
       type: object
       required: [version, digest]

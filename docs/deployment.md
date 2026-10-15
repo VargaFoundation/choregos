@@ -308,6 +308,15 @@ A project declares what it calls in its own configuration (`tools: [verifier_adr
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
+### The skills catalogue: egress for git delivery
+
+A `bundled` skill of the skills catalogue is in the image and needs no network. A `git` entry (a
+copyleft licence, a high-risk skill) is fetched at its pinned commit from **`codeload.github.com`**, as
+the existing *Import from a repository* is: the API pod's egress must allow that host (an egress rule
+in your network policy). `choregos-api.egressHosts` is only the hint the console shows (`egress:
+undeclared` on a `git` entry when the list is set and lacks `codeload.github.com`); it restricts
+nothing. Without the egress rule, installing a bundled skill still works and a git one answers `502`.
+
 ### The MCP server catalogue: egress and your own entries
 
 The image ships a catalogue of well-known MCP servers ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md));

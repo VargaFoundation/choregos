@@ -55,6 +55,9 @@ from .catalogues import (
     McpCatalogueEntryDto,
     McpCatalogueInstall,
     McpCatalogueRemoteDto,
+    SkillCatalogueDto,
+    SkillCatalogueEntryDto,
+    SkillCatalogueSignalsDto,
 )
 from .definitions import (
     GatewayModelDto,
@@ -326,6 +329,9 @@ __all__ = [
     "ScopeChangeDecision",
     "ScopeChangeRequestIn",
     "SkillCandidate",
+    "SkillCatalogueDto",
+    "SkillCatalogueEntryDto",
+    "SkillCatalogueSignalsDto",
     "SkillDto",
     "SkillFiles",
     "SkillFinding",

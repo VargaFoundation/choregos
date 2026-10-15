@@ -242,6 +242,10 @@ class SkillSourceDto(Dto):
     path: str
     #: An SPDX identifier, `LicenseRef-proprietary`, `LicenseRef-unknown`, or `None` if none found.
     licence: str | None = None
+    #: `<id>@<catalogue_version>` when the version was installed from the skills catalogue (ADR 0065).
+    catalogue: str | None = None
+    #: For a catalogue install: `bundled` (the image) or `git` (the pinned commit).
+    delivery: Literal["bundled", "git"] | None = None
 
 
 class SkillFinding(Dto):
