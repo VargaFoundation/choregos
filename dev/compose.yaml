@@ -1,16 +1,16 @@
-# Pile de développement sans Kubernetes : Postgres, Temporal, LiteLLM, Keycloak, un stockage S3 et
-# la mémoire Ecphoria.
+# Development stack without Kubernetes: Postgres, Temporal, LiteLLM, Keycloak, S3 storage and
+# the Ecphoria memory.
 #
-# Les ports hôte sont surchargeables — une machine de développement a souvent déjà un
-# Postgres sur 5432 ou un Keycloak sur 8080, et le défaut faisait échouer `up` sur
-# « port is already allocated » sans dire lequel changer :
+# Host ports can be overridden — a development machine often already has a
+# Postgres on 5432 or a Keycloak on 8080, and the default made `up` fail on
+# "port is already allocated" without saying which one to change:
 #
 #   CHOREGOS_PORT_POSTGRES=15432 docker compose -f dev/compose.yaml up -d
 #
-# Variables : CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,S3,S3_CONSOLE,ECPHORIA}
-# (CHOREGOS_PORT_MINIO et CHOREGOS_PORT_MINIO_CONSOLE restent lus, pour les postes déjà réglés).
+# Variables: CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,S3,S3_CONSOLE,ECPHORIA}
+# (CHOREGOS_PORT_MINIO and CHOREGOS_PORT_MINIO_CONSOLE are still read, for machines already set up).
 
-# Tout ce dont la plateforme a besoin, sans Kubernetes : `docker compose -f dev/compose.yaml up -d`.
+# Everything the platform needs, without Kubernetes: `docker compose -f dev/compose.yaml up -d`.
 # Not `choregos`: that is the local install at the root (`compose.yaml`); the same project name
 # would make each file see the other's containers as orphans and share its volumes.
 name: choregos-deps
@@ -39,9 +39,9 @@ services:
       POSTGRES_USER: choregos
       POSTGRES_PWD: choregos
       POSTGRES_SEEDS: postgres
-      # `development-sql.yaml` n'existe pas dans `auto-setup:1.26.2` — son répertoire de
-      # configuration dynamique ne contient que `docker.yaml`. Temporal démarrait, ne
-      # trouvait pas le fichier, et sortait : « Unable to create dynamic config client ».
+      # `development-sql.yaml` does not exist in `auto-setup:1.26.2` — its dynamic
+      # configuration directory only holds `docker.yaml`. Temporal started, did not
+      # find the file, and exited: "Unable to create dynamic config client".
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/docker.yaml
     ports: ["${CHOREGOS_PORT_TEMPORAL:-7233}:7233"]
 
@@ -73,10 +73,10 @@ services:
     volumes: ["./keycloak-realm.json:/opt/keycloak/data/import/realm.json:ro"]
     ports: ["${CHOREGOS_PORT_KEYCLOAK:-8080}:8080"]
 
-  # RustFS (Apache-2.0) : l'image du serveur MinIO n'est plus publiée, ni sur Docker Hub ni sur
-  # quay.io — un poste neuf ne démarrait plus cette pile (#152). RustFS délivre aussi des identifiants
-  # STS bornés par une politique de session, ce dont un lecteur sans clé S3 a besoin (essai du socle,
-  # élément 7). Mêmes identifiants et mêmes ports que l'ancien service.
+  # RustFS (Apache-2.0): the MinIO server image is no longer published, on neither Docker Hub nor
+  # quay.io — a fresh machine could no longer start this stack (#152). RustFS also issues
+  # STS credentials bounded by a session policy, which a reader without an S3 key needs (foundation trial,
+  # item 7). Same credentials and same ports as the former service.
   s3:
     image: rustfs/rustfs:1.0.1
     command: ["/data"]
@@ -89,31 +89,31 @@ services:
     volumes: ["s3data:/data"]
 
   ecphoria:
-    # `:memory` n'existe pas — le tag de l'édition mémoire est suffixé, pas nommé :
-    # `0.2.5-memory`, `0.2-memory`, `latest-memory`. Épinglé plutôt que `latest-memory`,
-    # pour que la pile de développement soit la même d'une machine à l'autre.
+    # `:memory` does not exist — the memory edition's tag is suffixed, not named:
+    # `0.2.5-memory`, `0.2-memory`, `latest-memory`. Pinned rather than `latest-memory`,
+    # so the development stack is the same from one machine to the next.
     image: ghcr.io/vargafoundation/ecphoria:0.2.5-memory
     environment:
       ECPHORIA_EMBEDDING__PROVIDER: openai_compatible
-      # `OPENAI_BASE_URL`, pas `BASE_URL` : le champ s'appelle `openai_base_url`. Avec le
-      # mauvais nom, la variable était ignorée sans un mot et les embeddings partaient chez
-      # `api.openai.com` — hors de la passerelle où le coût est mesuré, et sans clé.
+      # `OPENAI_BASE_URL`, not `BASE_URL`: the field is called `openai_base_url`. With the
+      # wrong name the variable was ignored without a word and the embeddings went to
+      # `api.openai.com` — outside the gateway where cost is measured, and without a key.
       ECPHORIA_EMBEDDING__OPENAI_BASE_URL: http://litellm:4000/v1
       ECPHORIA_EMBEDDING__MODEL: platform/embed
-      # La mémoire n'écoute que sur le réseau de la pile de développement, et refuse de
-      # démarrer sans authentification sur une interface non-loopback — c'est voulu. Ici on
-      # assume, comme le message d'erreur le propose ; en cluster, le chart pose de vraies
-      # clés (`gateway.authEnabled`).
+      # The memory only listens on the development stack's network, and refuses to
+      # start without authentication on a non-loopback interface — that is intended. Here we
+      # accept it, as the error message suggests; in a cluster, the chart sets real
+      # keys (`gateway.authEnabled`).
       ECPHORIA_GATEWAY__ALLOW_INSECURE: "true"
-      # Sans volume, DuckDB ne peut pas ouvrir ses fichiers et la mémoire retombe en RAM à
-      # chaque démarrage — silencieusement, sur un `WARN` que personne ne lit.
+      # Without a volume, DuckDB cannot open its files and the memory falls back to RAM at
+      # every start — silently, on a `WARN` nobody reads.
       ECPHORIA_MEMORY__EPISODIC__DB_PATH: /data/episodic.duckdb
       ECPHORIA_MEMORY__STATE__DB_PATH: /data/state.db
       ECPHORIA_MEMORY__COGNITION__DB_PATH: /data/cognition.duckdb
     volumes: ["ecphoriadata:/data"]
     ports: ["${CHOREGOS_PORT_ECPHORIA:-8432}:8432"]
-    # Pas de profil : le README annonce Ecphoria dans la pile, et une mémoire absente
-    # fait échouer le premier run de la plateforme sur une erreur de connexion.
+    # No profile: the README announces Ecphoria in the stack, and a missing memory
+    # makes the platform's first run fail on a connection error.
 
 volumes:
   pgdata:

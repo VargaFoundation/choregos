@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""`make dev-seed` : une organisation, un projet, dix tickets, un train.
+"""`make dev-seed`: one organisation, one project, ten tickets, one train.
 
-Le décor est volontairement crédible : des tickets à différents stades, un finding à
-trier, un lot en attente de départ. C'est ce qui permet de juger le front d'un coup d'œil.
+The set is deliberately credible: tickets at different stages, a finding to
+triage, a batch waiting to depart. That is what lets you judge the front end at a glance.
 """
 
 from __future__ import annotations
@@ -13,16 +13,16 @@ import random
 from datetime import timedelta
 
 TITLES = [
-    ("Les avoirs ne sont pas déduits du total de la facture", "M", "low"),
-    ("Exporter les factures en PDF", "L", "low"),
-    ("Corriger l'arrondi des remises en cascade", "S", "medium"),
-    ("Migrer le module de paiement vers pydantic v2", "L", "medium"),
-    ("Ajouter la TVA intracommunautaire", "M", "high"),
-    ("Le webhook de relance part deux fois", "S", "medium"),
-    ("Page d'historique des factures trop lente", "M", "low"),
-    ("Journaliser les échecs de prélèvement", "S", "low"),
-    ("Supporter les paiements partiels", "XL", "high"),
-    ("Documenter le calcul des pénalités de retard", "S", "low"),
+    ("Credit notes are not deducted from the invoice total", "M", "low"),
+    ("Export invoices as PDF", "L", "low"),
+    ("Fix the rounding of cascading discounts", "S", "medium"),
+    ("Migrate the payment module to pydantic v2", "L", "medium"),
+    ("Add intra-EU VAT", "M", "high"),
+    ("The reminder webhook fires twice", "S", "medium"),
+    ("Invoice history page too slow", "M", "low"),
+    ("Log direct-debit failures", "S", "low"),
+    ("Support partial payments", "XL", "high"),
+    ("Document the late-payment penalty calculation", "S", "low"),
 ]
 
 STATES = [
@@ -102,7 +102,7 @@ async def main() -> int:
             (await session.execute(select(WorkItem).where(WorkItem.project_id == project.id))).scalars().all()
         )
         if existing:
-            print(f"· le projet contient déjà {len(existing)} tickets — rien à ajouter")
+            print(f"· the project already holds {len(existing)} tickets — nothing to add")
             return 0
 
         for index, ((title, size, risk), state) in enumerate(zip(TITLES, STATES, strict=True), start=120):
@@ -110,7 +110,7 @@ async def main() -> int:
                 project_id=project.id,
                 tracker_key=f"varga/billing-api#{index}",
                 title=title,
-                body_snapshot="Ticket de démonstration créé par `make dev-seed`.",
+                body_snapshot="Demo ticket created by `make dev-seed`.",
                 url=f"https://github.com/varga/billing-api/issues/{index}",
                 size=size,
                 risk=risk,
@@ -153,7 +153,7 @@ async def main() -> int:
                     result={
                         "schema": "choregos/StageResult/v1",
                         "status": "done",
-                        "summary": f"étape {role} terminée",
+                        "summary": f"{role} stage done",
                         "evidence": {"tests_passed": True, "tests_run": random.randint(80, 500)},
                     },
                     allowed_paths=["src/orders/**"],
@@ -193,7 +193,7 @@ async def main() -> int:
                         project_id=project.id,
                         transition_id="t-approve-spec",
                         kind="approval",
-                        payload={"summary": "Validation de la spécification demandée"},
+                        payload={"summary": "Spec approval requested"},
                         requested_at=utcnow() - timedelta(hours=3),
                         due_at=utcnow() + timedelta(hours=21),
                     )
@@ -204,10 +204,10 @@ async def main() -> int:
         session.add(
             Finding(
                 project_id=project.id,
-                title="Requête N+1 sur le chargement des lignes de commande",
+                title="N+1 query when loading order lines",
                 type="perf",
                 severity="medium",
-                evidence="src/orders/repository.py:88 — 1 + N requêtes pour 200 lignes",
+                evidence="src/orders/repository.py:88 — 1 + N queries for 200 lines",
                 suggested_fix="selectinload(Order.lines) dans OrderRepository.get",
                 estimate="S",
                 status="pending",

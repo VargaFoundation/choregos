@@ -1,4 +1,4 @@
-# La nuit : e2e complet, conformité de tous les backends, évals, replay Temporal, scans.
+# At night: full e2e, conformance of every backend, evals, Temporal replay, scans.
 name: nightly
 
 on:
@@ -21,21 +21,21 @@ jobs:
         with:
           config: dev/kind.yaml
           cluster_name: choregos
-      - name: CNI qui applique les NetworkPolicy
-        # `dev/kind.yaml` désactive le CNI par défaut : kindnet accepte les politiques et
-        # laisse passer le trafic, ce qui rendrait vert un bac à sable qui ne retient rien.
+      - name: CNI that enforces the NetworkPolicy
+        # `dev/kind.yaml` disables the default CNI: kindnet accepts the policies and
+        # lets the traffic through, which would turn a sandbox that holds nothing green.
         run: |
           kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
           kubectl -n kube-system rollout status ds/calico-node --timeout=300s
       - run: uv sync --frozen
-      - name: scénarios de jalon sur kind
+      - name: milestone scenarios on kind
         run: uv run pytest tests/e2e -m e2e -q
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: e2e-report, path: tests/e2e/report, if-no-files-found: ignore }
 
   cluster:
-    name: Ce qui n'est vrai que sur un vrai cluster
+    name: What only holds on a real cluster
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -55,15 +55,15 @@ jobs:
           kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/download/v1.7.2/install.yaml
           kubectl -n argo-rollouts rollout status deploy/argo-rollouts --timeout=300s
       - run: uv sync --frozen
-      - name: image de l'API (la pile de plateforme en a besoin)
+      - name: API image (the platform stack needs it)
         run: |
           docker build -f docker/api.Dockerfile --target api -t choregos-api:dev .
           kind load docker-image choregos-api:dev --name choregos
-      - name: egress, restauration, manifests, plateforme, canary, perte de nœud
+      - name: egress, restore, manifests, platform, canary, node loss
         env:
           CHOREGOS_CLUSTER_CONTEXT: kind-choregos
         run: uv run pytest tests/cluster -m cluster -q
-      - name: état du cluster en cas d'échec
+      - name: cluster state on failure
         if: failure()
         run: |
           kubectl get pods -A
@@ -76,9 +76,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
-      - name: tous les backends ACP
+      - name: all ACP backends
         run: uv run pytest tests/conformance -m conformance -q
-      - name: rapport de conformité
+      - name: conformance report
         run: uv run python -m tests.conformance.report --output conformance.json
         continue-on-error: true
       - uses: actions/upload-artifact@v7
@@ -92,7 +92,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
-      - name: évals des playbooks (seuil bloquant)
+      - name: playbook evals (blocking threshold)
         run: uv run python -m choregos_playbooks.evals.runner --all --json evals.json
       - name: evals of the catalogue's agents (S33-06)
         run: uv run python -m choregos_core.catalogue_d_agents.evals --all
@@ -106,13 +106,13 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
-      - name: replay des historiques Temporal archivés
+      - name: replay of the archived Temporal histories
         run: uv run pytest tests/replay -q
 
   live:
-    # Les adaptateurs face aux VRAIS services (LiteLLM, GitLab, Jira, Ecphoria, ACA). Ils
-    # ne tournaient nulle part : ni en PR, ni la nuit (état des lieux du 2026-09-24). Ils
-    # sont ignorés quand le secret manque — et le disent — plutôt qu'un point vert vide.
+    # The adapters against the REAL services (LiteLLM, GitLab, Jira, Ecphoria, ACA). They
+    # ran nowhere: neither on PRs nor at night (status review of 2026-09-24). They
+    # are skipped when the secret is missing — and say so — rather than an empty green dot.
     runs-on: ubuntu-latest
     env:
       CHOREGOS_LIVE_LITELLM_URL: ${{ secrets.CHOREGOS_LIVE_LITELLM_URL }}
@@ -127,7 +127,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
-      - name: adaptateurs contre les vrais services (ignorés sans secret)
+      - name: adapters against the real services (skipped without a secret)
         run: uv run pytest tests/live -q -m live -rs
 
   dependencies:
@@ -137,8 +137,8 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
       - run: uv run pip list --format=json > deps.json
-      # Un CRITICAL bloque — c'est ce que SECURITY.md promettait, et `exit-code: 0` le
-      # rendait faux ; et ce job n'était pas dans les `needs` de l'alerte.
+      # A CRITICAL blocks — that is what SECURITY.md promised, and `exit-code: 0` made
+      # it false; and this job was not in the alert's `needs`.
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -155,13 +155,13 @@ jobs:
       - uses: actions/github-script@v9
         with:
           script: |
-            // Un échec nocturne ouvre une issue : il ne se perd pas dans les logs.
-            const title = `nightly en échec — ${new Date().toISOString().slice(0, 10)}`;
+            // A nightly failure opens an issue: it does not get lost in the logs.
+            const title = `nightly failed — ${new Date().toISOString().slice(0, 10)}`;
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo,
               state: "open", labels: "nightly",
             });
-            const body = `La CI nocturne a échoué : ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `The nightly CI failed: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             if (existing.data.length === 0) {
               await github.rest.issues.create({
                 owner: context.repo.owner, repo: context.repo.repo,

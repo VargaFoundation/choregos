@@ -26,6 +26,8 @@ ENGLISH = (
     "packages/tools-mcp/",  # #529
     "tools/",  # #530
     "charts/",  # #534
+    ".github/",  # S34-04f
+    "dev/",  # S34-04f
 )
 
 #: (file, start of the line) — French that stays, each with its reason.

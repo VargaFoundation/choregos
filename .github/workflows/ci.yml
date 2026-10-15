@@ -1,4 +1,4 @@
-# CI des PR : ciblée par chemins, pour qu'une PR front n'attende pas les tests Python.
+# PR CI: targeted by path, so a front-end PR does not wait for the Python tests.
 name: ci
 
 on:
@@ -17,10 +17,10 @@ permissions:
 jobs:
   changes:
     runs-on: ubuntu-latest
-    # `dorny/paths-filter` demande à l'API la liste des fichiers de la PR. Le `GITHUB_TOKEN`
-    # d'une PR Dependabot est en lecture seule et ne porte que ce que le workflow déclare :
-    # sans `pull-requests: read`, l'action sort sur « Resource not accessible by integration »
-    # et aucun filtre n'est calculé.
+    # `dorny/paths-filter` asks the API for the list of the PR's files. The `GITHUB_TOKEN`
+    # of a Dependabot PR is read-only and carries only what the workflow declares:
+    # without `pull-requests: read`, the action exits on "Resource not accessible by integration"
+    # and no filter is computed.
     permissions:
       contents: read
       pull-requests: read
@@ -78,9 +78,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.python == 'true' || needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-latest
-    # Un vrai PostgreSQL : la RLS n'existe pas sur SQLite, et elle a été « testée » pendant une
-    # semaine sans jamais tourner (état des lieux du 2026-09-24). `test_rls_postgres.py` ne
-    # s'exécute que si CHOREGOS_TEST_DATABASE_URL est posée.
+    # A real PostgreSQL: RLS does not exist on SQLite, and it was "tested" for a
+    # week without ever running (status review of 2026-09-24). `test_rls_postgres.py` only
+    # runs if CHOREGOS_TEST_DATABASE_URL is set.
     services:
       postgres:
         # PostgreSQL 16 with pgvector: the knowledge index's hybrid ranking runs in CI (ADR 0051).
@@ -100,18 +100,18 @@ jobs:
       - run: uv sync --frozen
       - name: lint
         run: uv run ruff check packages apps/api apps/orchestrator tools tests && uv run ruff format --check packages apps/api apps/orchestrator tools tests
-      - name: typage
+      - name: typing
         run: uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools
-      - name: tests et couverture
+      - name: tests and coverage
         run: uv run pytest --cov --cov-report=xml -q
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
-      # La suite de l'API ENTIÈRE, une seconde fois, sur PostgreSQL sous RLS (schéma migré, rôle non
-      # superutilisateur). La première la joue sur SQLite, où la RLS n'existe pas : trois défauts ne
-      # se voyaient que là — webhooks qui n'acheminaient rien, `POST /orgs` en 500, et un rôle de
-      # projet qui devenait un rôle d'organisation (2026-09-29).
-      - name: suite de l'API sur PostgreSQL
+      # The WHOLE API suite, a second time, on PostgreSQL under RLS (migrated schema, non-
+      # superuser role). The first run plays it on SQLite, where RLS does not exist: three defects
+      # only showed up there — webhooks that routed nothing, `POST /orgs` returning 500, and a
+      # project role that became an organisation role (2026-09-29).
+      - name: API suite on PostgreSQL
         run: uv run pytest apps/api/tests -q
         env:
           CHOREGOS_TEST_SUITE_SUR_POSTGRES: "1"
@@ -124,9 +124,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
-      - name: les types générés sont à jour
+      - name: generated types are up to date
         run: uv run python tools/gen_contracts.py --check
-      - name: exemples valides contre les schémas et les modèles
+      - name: examples valid against the schemas and the models
         run: uv run pytest packages/contracts -q
 
   web:
@@ -137,12 +137,12 @@ jobs:
       run: { working-directory: apps/web }
     steps:
       - uses: actions/checkout@v7
-      # Sans `version` : l'action lit `packageManager` dans `apps/web/package.json`. Une
-      # version écrite ici aussi finit par diverger — c'est ce qui laissait la CI en pnpm 9
-      # alors que le dépôt était passé à 12.
+      # No `version`: the action reads `packageManager` in `apps/web/package.json`. A
+      # version written here too ends up diverging — that is what left CI on pnpm 9
+      # while the repository had moved to 12.
       - uses: pnpm/action-setup@v6
         with: { package_json_file: apps/web/package.json }
-      # Le Node de l'image (`docker/web.Dockerfile`) : la console se teste sur ce qu'elle exécute.
+      # The image's Node (`docker/web.Dockerfile`): the console is tested on what it runs on.
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: pnpm, cache-dependency-path: apps/web/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
@@ -150,10 +150,10 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-      # Le budget de bundle se lit sur le build : une dépendance embarquée par mégarde se voit ici.
+      # The bundle budget is read off the build: a dependency bundled by mistake shows up here.
       - run: pnpm bundle:check
-      # Les parcours Playwright et le passage d'axe tournent contre le build en mode démo :
-      # un écran inaccessible ou un parcours cassé se voit ici, pas chez un utilisateur.
+      # The Playwright journeys and the axe pass run against the build in demo mode:
+      # an inaccessible screen or a broken journey shows up here, not at a user's.
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
         env: { CI: "true" }
@@ -170,7 +170,7 @@ jobs:
       - uses: azure/setup-helm@v5
         with: { version: v3.22.0 }
       - run: helm lint charts/choregos
-      - name: rendu des quatre environnements (local = les dépendances embarquées)
+      - name: render the four environments (local = the bundled dependencies)
         run: |
           for env in local dev staging prod; do
             helm template choregos charts/choregos -f charts/choregos/values/$env.yaml > /tmp/$env.yaml
@@ -182,10 +182,10 @@ jobs:
           ./kubeconform -strict -ignore-missing-schemas -summary /tmp/prod.yaml
       - name: helm unittest
         run: |
-          # Version épinglée : le plugin suit Helm de près — `platformHooks` dans son
-          # plugin.yaml exige Helm ≥ 3.18, et sur une version plus ancienne l'installation
-          # échoue. Le `|| true` d'avant avalait cet échec et le transformait en
-          # « unknown command "unittest" » deux lignes plus bas.
+          # Pinned version: the plugin tracks Helm closely — `platformHooks` in its
+          # plugin.yaml requires Helm >= 3.18, and on an older version the installation
+          # fails. The earlier `|| true` swallowed that failure and turned it into
+          # "unknown command "unittest"" two lines further down.
           helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2
           helm unittest charts/choregos
 
@@ -197,9 +197,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
-      - name: conformité du backend par défaut (les autres tournent la nuit)
+      - name: conformance of the default backend (the others run at night)
         run: uv run pytest tests/conformance/backends -m conformance -q -k "default or protocol"
-      - name: conformité des templates (connecteurs, étapes, scaffold)
+      - name: conformance of the templates (connectors, stages, scaffold)
         run: uv run pytest tests/conformance/templates -m conformance -q
 
   images:
@@ -211,13 +211,13 @@ jobs:
       packages: write
       id-token: write
     strategy:
-      # Sans ceci, la première image en échec annule les quatre autres et on ne sait pas si
-      # elles allaient passer — c'est exactement ce qui s'est produit au premier passage.
+      # Without this, the first failing image cancels the other four and we cannot tell whether
+      # they would have passed — which is exactly what happened on the first run.
       fail-fast: false
       matrix:
         include:
-          # `api` et `orchestrator` sortent du même Dockerfile, à deux cibles près : même
-          # dépendances, même code, même commit. Voir docker/api.Dockerfile.
+          # `api` and `orchestrator` come out of the same Dockerfile, two targets apart: same
+          # dependencies, same code, same commit. See docker/api.Dockerfile.
           - image: api
             file: docker/api.Dockerfile
             target: api
@@ -237,7 +237,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         with:
           registry: ghcr.io
-          # L'identité qui pousse ne dépend pas de qui a déclenché le workflow.
+          # The identity that pushes does not depend on who triggered the workflow.
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v7
@@ -249,13 +249,13 @@ jobs:
           platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
-          # SBOM et provenance SLSA attachés à l'image (attestations BuildKit). SECURITY.md
-          # les promettait depuis le début ; aucun n'existait (état des lieux du 2026-09-24).
+          # SBOM and SLSA provenance attached to the image (BuildKit attestations). SECURITY.md
+          # promised them from the start; none existed (status review of 2026-09-24).
           sbom: ${{ github.ref == 'refs/heads/main' }}
           provenance: ${{ github.ref == 'refs/heads/main' && 'mode=max' || 'false' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: scan Trivy (aucun CRITICAL toléré)
+      - name: Trivy scan (no CRITICAL tolerated)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/vargafoundation/choregos-${{ matrix.image }}:${{ github.sha }}
@@ -265,7 +265,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
       - uses: sigstore/cosign-installer@v3
         if: github.ref == 'refs/heads/main'
-      - name: signature keyless
+      - name: keyless signature
         if: github.ref == 'refs/heads/main'
         run: cosign sign --yes ghcr.io/vargafoundation/choregos-${{ matrix.image }}@${{ steps.build.outputs.digest }}
 
@@ -299,9 +299,9 @@ jobs:
         run: docker compose down -v --remove-orphans
 
   secrets:
-    # Un secret commité ne se rattrape pas : il est déjà dans l'historique. Deux fichiers
-    # avaient un `noqa S105` et deux bases SQLite étaient suivies par git — sans qu'un scan
-    # le voie (état des lieux du 2026-09-24).
+    # A committed secret cannot be taken back: it is already in the history. Two files
+    # had a `noqa S105` and two SQLite databases were tracked by git — without any scan
+    # seeing it (status review of 2026-09-24).
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -312,37 +312,37 @@ jobs:
             detect --source /repo --config /repo/.gitleaks.toml --redact --exit-code 1 --no-banner
 
   dco:
-    # Chaque commit certifie le Developer Certificate of Origin (fichier `DCO`) par une ligne
-    # `Signed-off-by`. Ce job existe parce qu'un certificat que personne ne vérifie est une
-    # décoration : la demander dans CONTRIBUTING sans la contrôler aurait produit exactement ce
-    # que ce dépôt traque — une règle qui ressemble à une règle.
+    # Every commit certifies the Developer Certificate of Origin (`DCO` file) with a
+    # `Signed-off-by` line. This job exists because a certificate nobody checks is
+    # decoration: asking for it in CONTRIBUTING without enforcing it would have produced exactly what
+    # this repository hunts down — a rule that merely looks like a rule.
     #
-    # Deux entités publient depuis ce code (ADR 0024). La provenance de chaque ligne doit être
-    # vérifiable par quiconque, y compris par elles.
+    # Two entities publish from this code (ADR 0024). The provenance of every line must be
+    # verifiable by anyone, themselves included.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - name: chaque commit porte un Signed-off-by
+      - name: every commit carries a Signed-off-by
         run: |
           base='${{ github.event.pull_request.base.sha }}'
-          tete='${{ github.event.pull_request.head.sha }}'
-          manquants=0
+          tip='${{ github.event.pull_request.head.sha }}'
+          missing=0
           while read -r sha; do
             [ -z "$sha" ] && continue
             if ! git show -s --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
-              echo "::error::commit sans Signed-off-by : $sha $(git show -s --format=%s "$sha")"
-              manquants=$((manquants + 1))
+              echo "::error::commit without Signed-off-by: $sha $(git show -s --format=%s "$sha")"
+              missing=$((missing + 1))
             fi
-          done <<< "$(git rev-list "$base..$tete")"
-          if [ "$manquants" -gt 0 ]; then
-            echo "$manquants commit(s) non signé(s). `git commit --amend -s` sur le dernier," \
-                 "ou `git rebase --signoff $base` pour toute la branche. Voir DCO et" \
+          done <<< "$(git rev-list "$base..$tip")"
+          if [ "$missing" -gt 0 ]; then
+            echo "$missing unsigned commit(s). `git commit --amend -s` on the last one," \
+                 "or `git rebase --signoff $base` for the whole branch. See DCO and" \
                  "docs/CONTRIBUTING.md."
             exit 1
           fi
-          echo "tous les commits portent leur Signed-off-by"
+          echo "all commits carry their Signed-off-by"
 
   english:
     # ADR 0046: everything new is in English. The guard reads only the lines the pull request adds
@@ -360,26 +360,26 @@ jobs:
           --range '${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}'
 
   ci-ok:
-    # Cible unique pour la protection de branche et la merge queue.
+    # Single target for branch protection and the merge queue.
     #
-    # `images` en fait partie : sans lui, la porte était verte alors qu'aucune des cinq images
-    # de la plateforme ne se construisait — c'est exactement ce qui s'est passé au premier
-    # passage de cette CI. Trois minutes d'attente contre une branche `main` dont on ne peut
-    # rien déployer, le compte est vite fait.
+    # `images` is part of it: without it, the gate was green while none of the platform's five
+    # images was building — which is exactly what happened on the first run of this CI.
+    # Three minutes of waiting against a `main` branch from which nothing can be deployed;
+    # the sum is quickly done.
     #
-    # `changes` en fait partie aussi : quand le calcul des filtres échoue, tous les jobs qui en
-    # dépendent sont *sautés*, et une porte qui ne regarde que des jobs sautés est verte. Une PR
-    # Dependabot est passée comme ça, sans qu'une seule ligne n'ait été testée.
+    # `changes` is part of it too: when the filter computation fails, every job that depends on
+    # it is *skipped*, and a gate that only looks at skipped jobs is green. A Dependabot PR
+    # went through like that, without a single line having been tested.
     #
-    # La porte n'accepte que `success` et `skipped`. Elle refusait `failure` et `cancelled` : le
-    # 2026-10-05, les runners hébergés n'acquéraient plus les jobs, `python` est revenu
-    # `abandoned`, et la porte d'une PR était verte sans qu'un seul test Python ait tourné. Ce que
-    # GitHub inventera demain fermera la porte aussi : on énumère ce qui passe, pas ce qui casse.
+    # The gate accepts only `success` and `skipped`. It used to reject `failure` and `cancelled`: on
+    # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
+    # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
+    # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
     needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: vérifier que chaque job requis a réussi ou a été sauté
+      - name: check that every required job succeeded or was skipped
         run: |
           results='${{ toJSON(needs) }}'
           echo "$results"

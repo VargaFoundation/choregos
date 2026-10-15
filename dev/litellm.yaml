@@ -6,13 +6,13 @@ model_list:
       model: openai/gpt-4o-mini
       api_base: http://localhost:4010/v1
       api_key: fake-key
-      mock_response: "réponse simulée du fournisseur de développement"
+      mock_response: "simulated response from the development provider"
   - model_name: platform/cheap
     litellm_params:
       model: openai/gpt-4o-mini
       api_base: http://localhost:4010/v1
       api_key: fake-key
-      mock_response: "réponse simulée"
+      mock_response: "simulated response"
   - model_name: platform/embed
     litellm_params:
       model: openai/text-embedding-3-small

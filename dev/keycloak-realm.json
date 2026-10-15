@@ -1,7 +1,7 @@
 {
   "realm": "choregos",
   "enabled": true,
-  "displayName": "Choregos (développement)",
+  "displayName": "Choregos (development)",
   "registrationAllowed": false,
   "groups": [
     {

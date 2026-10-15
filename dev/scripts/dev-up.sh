@@ -1,40 +1,40 @@
 #!/usr/bin/env bash
-# Monte l'environnement de développement complet : cluster kind, opérateurs, Tilt.
-# Objectif tenu par le plan : moins de 15 minutes sur un poste de 16 Go.
+# Brings up the whole development environment: kind cluster, operators, Tilt.
+# Target set by the plan: under 15 minutes on a 16 GB machine.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 CLUSTER=${CLUSTER:-choregos}
 
 require() {
-  command -v "$1" >/dev/null 2>&1 || { echo "✗ $1 est requis (voir docs/development.md)"; exit 1; }
+  command -v "$1" >/dev/null 2>&1 || { echo "✗ $1 is required (see docs/development.md)"; exit 1; }
 }
 require kind
 require kubectl
 require helm
 
 if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
-  echo "· cluster kind '$CLUSTER' déjà présent"
+  echo "· kind cluster '$CLUSTER' already present"
 else
-  echo "· création du cluster kind '$CLUSTER'"
+  echo "· creating the kind cluster '$CLUSTER'"
   kind create cluster --config dev/kind.yaml --wait 120s
 fi
 kubectl config use-context "kind-$CLUSTER"
 
-echo "· dépendances (Postgres, Temporal, LiteLLM, Keycloak, RustFS) en docker compose"
+echo "· dependencies (Postgres, Temporal, LiteLLM, Keycloak, RustFS) in docker compose"
 docker compose -f dev/compose.yaml up -d
 
-echo "· namespaces de la plateforme"
+echo "· platform namespaces"
 for ns in choregos-system choregos-data choregos-temporal choregos-gateway choregos-memory gateway monitoring; do
   kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 done
 
 if command -v tilt >/dev/null 2>&1; then
-  echo "· tilt up (Ctrl-C pour quitter, `make dev-down` pour tout détruire)"
+  echo "· tilt up (Ctrl-C to quit, `make dev-down` to destroy everything)"
   cd dev && exec tilt up
 fi
 
-echo "· Tilt n'est pas installé : déploiement direct du chart en mode développement"
+echo "· Tilt is not installed: deploying the chart directly in development mode"
 helm upgrade --install choregos charts/choregos \
   --namespace choregos-system \
   -f charts/choregos/values.yaml -f charts/choregos/values/dev.yaml \

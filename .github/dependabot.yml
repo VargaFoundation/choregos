@@ -1,14 +1,14 @@
-# Le plan demande Dependabot ou Renovate dès la création du dépôt
+# The plan asks for Dependabot or Renovate from the day the repository is created
 # (`docs/plan/07-delivery-parallelisation-conventions.md` §Bootstrap).
 #
-# Tout est groupé. L'expérience d'à côté, sur `VargaFoundation/ecphoria`, est nette : sans
-# groupes, dix-neuf PR ouvertes en un mois, dont plusieurs impossibles à fusionner seules —
-# trois bumps RustCrypto qui n'étaient qu'un seul changement, cinq actions qui n'étaient
-# qu'une migration de runtime. Une montée qui touche quatre paquets à la fois est **une**
-# décision, pas quatre.
+# Everything is grouped. The experience next door, on `VargaFoundation/ecphoria`, is clear: without
+# groups, nineteen open PRs in a month, several impossible to merge on their own —
+# three RustCrypto bumps that were a single change, five actions that were only
+# one runtime migration. An upgrade that touches four packages at once is **one**
+# decision, not four.
 version: 2
 updates:
-  # Actions tierces de la CI : hygiène de chaîne d'approvisionnement.
+  # Third-party CI actions: supply-chain hygiene.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -17,19 +17,19 @@ updates:
       github-actions:
         patterns: ["*"]
 
-  # Python : l'espace de travail uv à la racine (packages/*, apps/api, apps/orchestrator, tools).
+  # Python: the uv workspace at the root (packages/*, apps/api, apps/orchestrator, tools).
   - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
     groups:
-      # Temporal, son SDK et les activités qui s'appuient dessus bougent ensemble.
+      # Temporal, its SDK and the activities built on it move together.
       temporal:
         patterns: ["temporalio*"]
-      # La pile HTTP et la validation : httpx, pydantic et fastapi partagent des types.
+      # The HTTP and validation stack: httpx, pydantic and fastapi share types.
       web-stack:
         patterns: ["fastapi*", "starlette*", "uvicorn*", "httpx*", "pydantic*"]
-      # Le reste, en mineur et correctif seulement. Les majeures restent seules, pour être lues.
+      # The rest, minor and patch only. Majors stay on their own, so they get read.
       python-minor:
         patterns: ["*"]
         update-types: ["minor", "patch"]
@@ -46,9 +46,9 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  # Images de base des cinq Dockerfiles. Une seule PR : quatre partagent `python:3.12-slim`, la
-  # console part de `node:24`, et les décaler les unes des autres n'a aucun sens. Une montée vers
-  # une version de Node qui n'est pas LTS se ferme : la règle est dans `docker/README.md`.
+  # Base images of the five Dockerfiles. A single PR: four share `python:3.12-slim`, the
+  # console starts from `node:24`, and moving them out of step with each other makes no sense. An upgrade to
+  # a Node version that is not LTS gets closed: the rule is in `docker/README.md`.
   - package-ecosystem: docker
     directory: /docker
     schedule:
