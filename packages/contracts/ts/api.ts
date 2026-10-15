@@ -870,6 +870,13 @@ export type KnowledgeBaseCreate = {
   serving_mode?: "files" | "index";
 };
 
+export type ProjectKnowledgeBaseCreate = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  serving_mode?: "files" | "index";
+};
+
 export type KnowledgeBasePatch = {
   name?: string | null;
   description?: string | null;
@@ -930,6 +937,8 @@ export type KnowledgeBase = {
   eval_set?: Array<KnowledgeEvalCase>;
   /** returned by the reading of one base */
   sources?: Array<KnowledgeSource> | null;
+  /** the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base */
+  owner_project?: string | null;
   /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at` */
   distillation?: {
     [key: string]: unknown;
@@ -1914,6 +1923,7 @@ export interface Operations {
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
+  createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
   createSkill: { method: "POST"; path: "/orgs/{org}/skills"; body: SkillFiles; response: Skill };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };

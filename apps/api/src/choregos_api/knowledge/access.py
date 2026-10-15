@@ -8,7 +8,8 @@ Row-level security keeps a knowledge base inside its organisation; inside it, `s
 - `groups`: humans of one of the listed IdP groups. A run carries no group, so it is never served
   a group-scoped base.
 
-The organisation's administrators (`agent:manage`) see every base: they curate them.
+The organisation's administrators (`agent:manage`) see every base: they curate them. A base created
+from a project is also curated by that project's owners (`owner_project`, S39-14).
 """
 
 from __future__ import annotations
@@ -20,6 +21,18 @@ from ..rbac import Permission, Principal
 
 def can_manage(principal: Principal, org: str) -> bool:
     return principal.can(Permission.AGENT_MANAGE, org)
+
+
+def can_curate(principal: Principal, org: str, base: Any) -> bool:
+    """Whether this caller may feed, sync, distil or archive this base (S39-14).
+
+    An organisation administrator always; the owners of the project that owns the base (a base
+    created from a project, `owner_project`) too. Widening the scope is `can_manage` only.
+    """
+    if can_manage(principal, org):
+        return True
+    owner = getattr(base, "owner_project", None)
+    return bool(owner) and principal.can(Permission.PROJECT_WRITE, org, owner)
 
 
 def visible_to(principal: Principal, org: str, base: Any) -> bool:

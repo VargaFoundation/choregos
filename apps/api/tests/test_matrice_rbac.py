@@ -49,6 +49,8 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("platform:admin", "PUT", "/api/v1/platform/backends", {"name": "claude-code", "enabled": True}),
         ("project:delete", "DELETE", f"/api/v1/projects/{project_id}", None),
         ("agent:manage", "POST", "/api/v1/orgs/varga/agent-catalogue/triager/install", {}),
+        # A knowledge base owned by the project (S39-14): its owners create it.
+        ("project:write", "POST", f"/api/v1/projects/{project_id}/knowledge", {"slug": "kb-matrix", "name": "M"}),
         # Allowlisted by default; the empty fake fetcher answers 502 to whoever may ask.
         (
             "skill:import",

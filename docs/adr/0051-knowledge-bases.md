@@ -115,3 +115,24 @@ there (D10), with full-text search built in and `pgvector` one extension away.
    guidance reaches no agent before a person approves it. The version's author is the agent
    (`agent:knowledge-distiller`), so the administrator who asked may approve it; the request and
    the documents used are recorded on the base (`distillation`).
+
+## Update — 2026-10-15: ownership, a project-owned base (S39-14)
+
+11. **Ownership is a fact apart from reach.** `knowledge_bases.owner_project` (nullable) names the
+    project a base was created from. Reach stays `scope`: a project-owned base is `scope: projects`
+    naming its owner, so reading and serving a run (`served_to_project`) are unchanged. No new scope
+    value: it would duplicate `projects: [x]` and every consumer of the scope (agent specs, the
+    builder) would need a new branch for nothing. Ownership is explicit, never inferred from "one
+    project in the list": an administrator narrowing an organisation base to one project must not
+    hand its curation to that project's owners by accident.
+12. **Who curates what.** `POST /projects/{id}/knowledge` (`project:write`, the project's owners)
+    creates a base with `owner_project` set. The owners of `owner_project` upload and delete
+    documents, add, edit, sync and remove sources, edit the eval set, reindex, distil, rename, change
+    the serving mode and archive it (`can_curate`). They never change `scope`, `projects` or `groups`:
+    that stays `agent:manage` (an organisation administrator), and an administrator who changes
+    them clears `owner_project`, so the base becomes the organisation's. Organisation administrators
+    keep every right, over every base. A base without `owner_project` (every base created from
+    `/orgs/{org}/knowledge`) is curated by administrators only, as before.
+13. **The console.** A project's *Knowledge* section lists what its runs are served and creates a
+    base owned by the project; the organisation's registry (`/knowledge`) lists every base with its
+    scope. The migration adds one nullable column: existing bases have no owner.

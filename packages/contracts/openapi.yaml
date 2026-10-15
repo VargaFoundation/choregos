@@ -1552,6 +1552,21 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/knowledge:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [knowledge]
+      operationId: createProjectKnowledgeBase
+      description: "A knowledge base owned by this project (S39-14, ADR 0051): scope `projects` naming it, `owner_project` set, so its owners curate it and an organisation administrator alone widens it. `project:write`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectKnowledgeBaseCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/knowledge/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1566,7 +1581,7 @@ paths:
     patch:
       tags: [knowledge]
       operationId: updateKnowledgeBase
-      description: Renames it, changes its scope or serving mode, archives it. `agent:manage`.
+      description: Renames it, changes its serving mode, archives it (`agent:manage`, or `project:write` on the owning project). Changing its scope, projects or groups is `agent:manage` only, and clears `owner_project`.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBasePatch" } } }
@@ -1585,7 +1600,7 @@ paths:
       description: >-
         One document (docx, pptx, xlsx, pdf, md, html, txt), converted to markdown in the background:
         answered 202 `pending`, then `ready` or `failed` with its reason. The same bytes twice answer the
-        existing document (200). `agent:manage`.
+        existing document (200). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content:
@@ -1617,7 +1632,7 @@ paths:
     delete:
       tags: [knowledge]
       operationId: deleteKnowledgeDocument
-      description: "`agent:manage`."
+      description: "`agent:manage`, or `project:write` on the owning project (`owner_project`)."
       responses:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1630,7 +1645,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: convertKnowledgeDocument
-      description: Converts the document again (after a failure, or a converter upgrade). `agent:manage`.
+      description: Converts the document again (after a failure, or a converter upgrade). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Accepted for conversion, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1685,7 +1700,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: reindexKnowledgeBase
-      description: Cuts and embeds every ready document again, in the background. `agent:manage`.
+      description: Cuts and embeds every ready document again, in the background. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Reindexing, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1699,7 +1714,7 @@ paths:
       description: >-
         The `knowledge-distiller` agent compiles the base into a principles skill (`<slug>-principles`), each principle
         citing its source documents, in the background. The version is published `pending_review` whatever its risk:
-        a person approves it before any agent carries it (S32-06). The outcome lands in `distillation`. `agent:manage`.
+        a person approves it before any agent carries it (S32-06). The outcome lands in `distillation`. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Distilling, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1710,7 +1725,7 @@ paths:
     put:
       tags: [knowledge]
       operationId: putKnowledgeEvalSet
-      description: The base's eval set — questions and the documents (file name or title) expected to answer them. `agent:manage`.
+      description: The base's eval set — questions and the documents (file name or title) expected to answer them. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEvalSet" } } }
@@ -1724,7 +1739,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: runKnowledgeEval
-      description: Runs the eval set against the index and records recall@5 (`eval_result`). `agent:manage`.
+      description: Runs the eval set against the index and records recall@5 (`eval_result`). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1740,7 +1755,7 @@ paths:
         Where the base's documents are synced from (S33-04): `sharepoint` (a site or drive through an
         organisation connector of capability `documents`, Graph `Sites.Selected`, delta sync), `web` (one
         https site, same host, robots.txt obeyed) or `git` (an https repository). Synced at once, then every
-        `interval_minutes`; a document deleted at the source leaves the base and its index. `agent:manage`.
+        `interval_minutes`; a document deleted at the source leaves the base and its index. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSourceCreate" } } }
@@ -1756,7 +1771,7 @@ paths:
     patch:
       tags: [knowledge]
       operationId: updateKnowledgeSource
-      description: Renames it, changes its interval or configuration (a new configuration syncs from scratch). `agent:manage`.
+      description: Renames it, changes its interval or configuration (a new configuration syncs from scratch). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSourcePatch" } } }
@@ -1767,7 +1782,7 @@ paths:
     delete:
       tags: [knowledge]
       operationId: deleteKnowledgeSource
-      description: The source and the documents it brought leave the base. `agent:manage`.
+      description: The source and the documents it brought leave the base. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1779,7 +1794,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: syncKnowledgeSource
-      description: Syncs now rather than at the end of the interval. `agent:manage`.
+      description: Syncs now rather than at the end of the interval. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Sync requested, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSource" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -3078,6 +3093,15 @@ components:
         projects: { type: array, items: { type: string }, maxItems: 200 }
         groups: { type: array, items: { type: string }, maxItems: 200 }
         serving_mode: { type: string, enum: [files, index], default: files, description: "`files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search" }
+    ProjectKnowledgeBaseCreate:
+      type: object
+      required: [slug, name]
+      additionalProperties: false
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        serving_mode: { type: string, enum: [files, index], default: files }
     KnowledgeBasePatch:
       type: object
       additionalProperties: false
@@ -3135,6 +3159,7 @@ components:
             mode: { type: string }
         eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
         sources: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeSource" }, description: returned by the reading of one base }
+        owner_project: { type: [string, "null"], description: "the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base" }
         distillation:
           type: [object, "null"]
           description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`"
