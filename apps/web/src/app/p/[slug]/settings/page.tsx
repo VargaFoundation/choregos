@@ -9,7 +9,7 @@ import { EvalMatrixTable } from "@/components/eval-matrix";
 import { OperationsDuProjet } from "@/components/operations-du-projet";
 import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
 import { api } from "@/lib/api";
-import { eur, usd } from "@/lib/format";
+import { eur } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { usableModels } from "@/lib/usable-models";
 import type { ProjectModels } from "@/lib/types";
