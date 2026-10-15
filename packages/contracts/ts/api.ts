@@ -1932,7 +1932,12 @@ export interface Operations {
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";
   features: Array<string>;
+  /** the core's version */
   version: string;
+  /** who publishes the running edition, as announced by its plugin; null in the community edition */
+  publisher?: string | null;
+  /** the version of the edition plugin; null in the community edition */
+  edition_version?: string | null;
 } };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };

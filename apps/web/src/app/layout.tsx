@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Container, Wordmark } from "@/components/ui";
+import { EditionFooterLine } from "@/components/edition";
 import { BarreLaterale } from "@/components/coquille/barre-laterale";
 import { SCRIPT_DES_PREFERENCES } from "@/lib/preferences";
 import "./globals.css";
@@ -74,7 +75,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 >
                   <span>A ticket goes in, a controlled production release comes out.</span>
                   {/* The foundation is named here, and only here (ADR 0048). */}
-                  <span data-testid="footer-foundation">Choregos by Varga Foundation · Apache 2.0</span>
+                  <EditionFooterLine />
                 </Container>
               </footer>
             </div>

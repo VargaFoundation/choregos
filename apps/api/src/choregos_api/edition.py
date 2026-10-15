@@ -19,6 +19,7 @@ où un client l'hébergera lui-même (ADR 0024, décision 5).
 
 from __future__ import annotations
 
+import re
 from typing import Any, Final
 
 COMMUNAUTAIRE: Final = "community"
@@ -26,15 +27,49 @@ ENTREPRISE: Final = "enterprise"
 
 #: Un dictionnaire plutôt qu'une variable de module : muter un état partagé par `global` est
 #: exactement ce que `ruff` refuse, et un conteneur nommé dit mieux qu'il y a UN état.
-_etat: dict[str, object] = {"edition": COMMUNAUTAIRE, "fonctions": frozenset[str]()}
+_etat: dict[str, object] = {
+    "edition": COMMUNAUTAIRE,
+    "fonctions": frozenset[str](),
+    "publisher": None,
+    "edition_version": None,
+}
+
+_MAX_PUBLISHER = 80
+_MAX_VERSION = 40
+_VERSION_FORMAT = re.compile(r"^[0-9A-Za-z.+-]+$")
 
 
-def declarer(nom: str, *, fonctions: frozenset[str] | None = None) -> None:
-    """Appelée par l'édition entreprise à son chargement. Le cœur ne l'appelle jamais."""
+def declarer(
+    nom: str,
+    *,
+    fonctions: frozenset[str] | None = None,
+    publisher: str | None = None,
+    version: str | None = None,
+) -> None:
+    """Appelée par l'édition entreprise à son chargement. Le cœur ne l'appelle jamais.
+
+    `publisher` (who publishes the running edition) and `version` (the edition plugin's own version)
+    are announced by the plugin and only rendered by the core: the core never names an edition's
+    publisher itself. Both are optional, and refused for the community edition, which has neither.
+    """
     if nom not in (COMMUNAUTAIRE, ENTREPRISE):
         raise ValueError(f"édition inconnue : {nom!r}")
+    if publisher is not None:
+        publisher = publisher.strip()
+        if not 1 <= len(publisher) <= _MAX_PUBLISHER or any(ord(c) < 32 or ord(c) == 127 for c in publisher):
+            raise ValueError(
+                f"publisher must be 1 to {_MAX_PUBLISHER} characters, without control characters"
+            )
+    if version is not None and (len(version) > _MAX_VERSION or not _VERSION_FORMAT.match(version)):
+        raise ValueError(
+            f"edition version must match {_VERSION_FORMAT.pattern} (at most {_MAX_VERSION} characters)"
+        )
+    if nom == COMMUNAUTAIRE and (publisher is not None or version is not None):
+        raise ValueError("the community edition has no publisher and no edition version")
     _etat["edition"] = nom
     _etat["fonctions"] = fonctions or frozenset[str]()
+    _etat["publisher"] = publisher
+    _etat["edition_version"] = version
 
 
 #: Ce que le CŒUR sait faire d'une liste de groupes d'IdP : `choregos:<org>:<role>`, et un groupe
@@ -85,6 +120,18 @@ def fonctions() -> frozenset[str]:
     valeur = _etat["fonctions"]
     assert isinstance(valeur, frozenset)
     return valeur
+
+
+def publisher() -> str | None:
+    """Who publishes the running edition, as announced by its plugin; `None` in the community edition."""
+    valeur = _etat["publisher"]
+    return valeur if isinstance(valeur, str) else None
+
+
+def edition_version() -> str | None:
+    """The edition plugin's own version, as announced by it; `None` in the community edition."""
+    valeur = _etat["edition_version"]
+    return valeur if isinstance(valeur, str) else None
 
 
 def est_entreprise() -> bool:

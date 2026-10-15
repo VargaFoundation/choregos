@@ -130,3 +130,65 @@ async def test_administrer_la_plateforme_est_un_droit_sur_l_instance(
     detail = refus.json()["detail"]
     assert "instance" in detail, f"le refus doit dire pourquoi : {detail}"
     assert "autre-locataire" in detail, "et nommer ce qui manque, sinon personne ne comprend"
+
+
+def test_the_edition_names_its_publisher_and_version() -> None:
+    from choregos_api import edition
+
+    edition.declarer(edition.ENTREPRISE, publisher="  Acme Corp ", version="1.2.3")
+    assert edition.publisher() == "Acme Corp"
+    assert edition.edition_version() == "1.2.3"
+    edition.reinitialiser()
+    assert edition.publisher() is None
+    assert edition.edition_version() is None
+
+
+@pytest.mark.parametrize(
+    ("publisher", "version"),
+    [
+        ("", None),
+        ("   ", None),
+        ("x" * 81, None),
+        ("bad\nname", None),
+        (None, "1 2"),
+        (None, "v" * 41),
+        (None, ""),
+    ],
+)
+def test_a_malformed_publisher_or_version_is_refused(publisher: str | None, version: str | None) -> None:
+    from choregos_api import edition
+
+    with pytest.raises(ValueError):
+        edition.declarer(edition.ENTREPRISE, publisher=publisher, version=version)
+    assert edition.publisher() is None
+
+
+def test_the_community_edition_has_no_publisher() -> None:
+    from choregos_api import edition
+
+    with pytest.raises(ValueError, match="community"):
+        edition.declarer(edition.COMMUNAUTAIRE, publisher="Acme")
+    with pytest.raises(ValueError, match="community"):
+        edition.declarer(edition.COMMUNAUTAIRE, version="1.0.0")
+
+
+async def test_the_edition_route_serves_the_publisher(client: AsyncClient) -> None:
+    from choregos_api import edition
+
+    community = (await client.get("/edition")).json()
+    assert community["publisher"] is None and community["edition_version"] is None
+
+    edition.declarer(edition.ENTREPRISE, fonctions=frozenset({"saml"}), publisher="Acme", version="0.2.0")
+    for path in ("/edition", "/api/v1/edition"):
+        body = (await client.get(path)).json()
+        assert body["edition"] == "enterprise"
+        assert body["publisher"] == "Acme"
+        assert body["edition_version"] == "0.2.0"
+        assert body["version"] and body["version"] != "0.2.0", "the core's version stays the core's"
+        import choregos_contracts as contracts
+        from jsonschema import Draft202012Validator
+
+        schema = contracts.load_openapi()["paths"]["/edition"]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
+        Draft202012Validator(schema).validate(body)

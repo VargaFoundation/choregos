@@ -270,3 +270,25 @@ def test_an_unknown_reduction_is_refused_by_the_schema_and_the_model() -> None:
     assert list(_validator("policy.schema.json").iter_errors(raw))
     with pytest.raises(ValueError, match="compression"):
         Policy.model_validate(raw)
+
+
+def _edition_validator() -> Draft202012Validator:
+    spec = contracts.load_openapi()
+    schema = spec["paths"]["/edition"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+    return Draft202012Validator(schema)
+
+
+def test_the_edition_schema_accepts_the_community_and_the_enterprise_shapes() -> None:
+    validator = _edition_validator()
+    base = {"edition": "community", "features": [], "version": "0.17.16"}
+    validator.validate(base)  # an older core, without the two new fields, stays valid
+    validator.validate({**base, "publisher": None, "edition_version": None})
+    validator.validate({**base, "edition": "enterprise", "publisher": "Acme", "edition_version": "0.2.0"})
+
+
+@pytest.mark.parametrize("extra", [{"publisher": 3}, {"edition_version": 3}, {"publisher": "x" * 81}])
+def test_the_edition_schema_refuses_a_malformed_publisher_or_version(extra: dict[str, Any]) -> None:
+    from jsonschema import ValidationError
+
+    with pytest.raises(ValidationError):
+        _edition_validator().validate({"edition": "community", "features": [], "version": "1", **extra})
