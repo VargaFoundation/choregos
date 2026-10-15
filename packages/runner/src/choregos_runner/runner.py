@@ -24,6 +24,7 @@ from choregos_contracts import (
     StageStatus,
 )
 
+from . import compression
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome
 from .acp.guard import TurnGuard
@@ -152,6 +153,16 @@ class Runner:
             self.settings.event_batch_size,
             seq=_events_already_journaled(workspace.path / ".choregos" / "transcript.jsonl"),
         )
+        # The run's compression proxy (ADR 0055) dies with the run, whatever way the run ends.
+        self.compressor: compression.Compressor | None = None
+        try:
+            return await self._execute(stage_input, client, workspace, journal)
+        finally:
+            await compression.stop(self.compressor)
+
+    async def _execute(
+        self, stage_input: StageInput, client: InternalClient, workspace: Workspace, journal: EventJournal
+    ) -> RunOutcome:
         await journal.record(
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
         )
@@ -192,6 +203,10 @@ class Runner:
         context = await self._context(client)
         if (refus := await self._write_context(client, journal, stage_input, workspace, context)) is not None:
             return refus
+
+        # The agent reaches its model through the run's proxy, if the run asks for one.
+        if (refusal := await self._compress(stage_input, journal)) is not None:
+            return refusal
 
         # 4-5. backend et lancement
         backend = get_backend(stage_input.agent.backend)
@@ -331,6 +346,33 @@ class Runner:
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     # ───────────────────────── étapes internes ─────────────────────────
+
+    async def _compress(self, stage_input: StageInput, journal: Any) -> RunOutcome | None:
+        """Starts headroom when the run's context asks for it (ADR 0055), and points the run's
+        model at it. If it does not start, `bypass` goes to the gateway directly and says so;
+        `fail` stops the run."""
+        if not compression.wanted(stage_input):
+            return None
+        assert stage_input.context is not None
+        try:
+            self.compressor = await compression.start(stage_input, command=self.settings.headroom_command)
+        except compression.CompressionUnavailableError as exc:
+            on_unavailable = stage_input.context.on_unavailable
+            await journal.record(
+                "context.degraded",
+                {"compression": "headroom", "reason": str(exc)[:500], "on_unavailable": on_unavailable},
+            )
+            if on_unavailable == "fail":
+                await journal.record("run.failed", {"phase": "context", "error": str(exc)[:500]})
+                await journal.flush()
+                return RunOutcome(Exit.CONTEXT_UNAVAILABLE, detail=str(exc))
+            return None
+        await journal.record(
+            "context.compression",
+            {"compression": "headroom", "profile": stage_input.context.headroom_profile},
+        )
+        stage_input.model = compression.through(stage_input.model, self.compressor)
+        return None
 
     async def _poser_les_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any

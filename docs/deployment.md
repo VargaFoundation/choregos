@@ -208,7 +208,7 @@ global:
 A project that names its own `agent` or `models` keeps them. When a runner pod dies before it can
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
-digest…), or why the container never started.
+digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start…), or why the container never started.
 
 ## Playbooks and the tool catalogue
 
