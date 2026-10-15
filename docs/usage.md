@@ -1062,6 +1062,7 @@ between two fires) or `manual` (only when someone syncs). The page shows `next s
 source (an estimate: a worker that is down at the cron minute syncs at its next pass), and **edit
 refresh** changes the mode, with **apply to all sources** to set the same schedule everywhere; the
 change takes effect at once, not at the end of the current wait. A manual sync always runs.
+
 #### A knowledge base as code
 
 `choregos knowledge apply -f kb.yaml [--org <slug>] [--dry-run] [--prune]` makes a base match a
