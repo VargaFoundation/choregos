@@ -475,38 +475,6 @@ async def test_a_confluence_source_is_refused_before_its_first_sync(
 
 
 async def test_a_confluence_source_refuses_a_connector_of_another_type(
-
-
-async def _git_connector(client: AsyncClient, name: str = "diametral-github") -> None:
-    created = await client.post(
-        "/api/v1/orgs/varga/connectors",
-        json={"name": name, "kind": "documents", "type": "git", "config": {"host": "github.com"},
-              "secret_refs": {"token": "env:KB_GIT_TOKEN"}},
-    )  # fmt: skip
-    assert created.status_code == 201, created.text
-
-
-async def test_a_git_source_names_a_git_connector_for_a_private_repository(
-    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from choregos_adapters.fakes.documents import fake_source
-
-    monkeypatch.setenv("KB_GIT_TOKEN", "t" + "ok-" + "x")
-
-    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
-    await _git_connector(client)
-    created = await client.post(
-        f"{BASE}/framework/sources",
-        json={"kind": "git", "name": "brand", "connector": "diametral-github",
-              "config": {"url": "https://github.com/acme/private.git"}},
-    )  # fmt: skip
-    assert created.status_code == 201, created.text
-    assert created.json()["connector"] == "diametral-github"
-    fake_source(created.json()["id"]).put("brand.md", "brand.md", b"# Brand\n")
-    assert (await _sync(created.json()["id"]))["added"] == 1, "through the connector, here its fake"
-
-
-async def test_a_git_source_refuses_another_kind_of_connector_and_still_works_without_one(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     await _sharepoint(client, monkeypatch)
@@ -616,6 +584,41 @@ async def test_a_web_source_keeps_its_exclusions_and_refuses_a_bad_one(
     assert bad.status_code == 422 and "exclude" in bad.json()["detail"]
 
 
+async def _git_connector(client: AsyncClient, name: str = "diametral-github") -> None:
+    created = await client.post(
+        "/api/v1/orgs/varga/connectors",
+        json={"name": name, "kind": "documents", "type": "git", "config": {"host": "github.com"},
+              "secret_refs": {"token": "env:KB_GIT_TOKEN"}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+
+
+async def test_a_git_source_names_a_git_connector_for_a_private_repository(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_adapters.fakes.documents import fake_source
+
+    monkeypatch.setenv("KB_GIT_TOKEN", "t" + "ok-" + "x")
+
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    await _git_connector(client)
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "brand", "connector": "diametral-github",
+              "config": {"url": "https://github.com/acme/private.git"}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+    assert created.json()["connector"] == "diametral-github"
+    fake_source(created.json()["id"]).put("brand.md", "brand.md", b"# Brand\n")
+    assert (await _sync(created.json()["id"]))["added"] == 1, "through the connector, here its fake"
+
+
+async def test_a_git_source_refuses_another_kind_of_connector_and_still_works_without_one(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _sharepoint(client, monkeypatch)
+    refused = await client.post(
+        f"{BASE}/framework/sources",
         json={"kind": "git", "name": "g", "connector": "sharepoint",
               "config": {"url": "https://github.com/acme/private.git"}},
     )  # fmt: skip
