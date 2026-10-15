@@ -1,6 +1,6 @@
 """headroom in a run: started by the runner, on loopback, between the agent and the gateway.
 
-ADR 0055, S37-07. The proxy is a scriptable fake (`fixtures/fake_headroom.py`) taking the real
+ADR 0055, S37-07 and S37-08. The proxy is a scriptable fake (`fixtures/fake_headroom.py`) taking the real
 one's arguments; the gateway is a local HTTP server that writes down what reaches it. A last test
 runs the real headroom when it is installed.
 """
@@ -137,6 +137,7 @@ async def test_without_compression_nothing_starts_and_the_agent_talks_to_the_gat
     assert [call["path"] for call in gateway.calls] == ["/v1/chat/completions"]
     assert "x-fake-headroom" not in gateway.calls[0]["headers"]
     assert _events(client, "context.compression") == _events(client, "context.degraded") == []
+    assert _events(client, "context.reduction") == _events(client, "context.savings") == []
 
 
 async def test_the_agent_reaches_the_gateway_through_the_run_s_proxy(
@@ -153,7 +154,11 @@ async def test_the_agent_reaches_the_gateway_through_the_run_s_proxy(
     assert call["path"] == "/v1/chat/completions"
     assert call["headers"]["x-fake-headroom"] == "1"
     assert call["headers"]["x-api-key"] == "sk-fake"
-    assert _events(client, "context.compression") == [{"compression": "headroom", "profile": "balanced"}]
+    assert _events(client, "context.compression") == [
+        {"compression": "headroom", "profile": "balanced", "version": "0.0.0-fake"}
+    ]
+    # What the run was given, as resolved: the run page reads it from here.
+    assert _events(client, "context.reduction") == [stage_input.context.model_dump(mode="json")]
 
     started = json.loads(record.read_text(encoding="utf-8"))
     argv = started["argv"]
@@ -309,9 +314,69 @@ async def test_the_real_headroom_forwards_to_the_gateway_with_the_run_s_key(
                 json=body,
                 headers={"x-api-key": "sk-fake", "anthropic-version": "2023-06-01"},
             )
+        saved = await compression.savings(compressor)
     finally:
         await compression.stop(compressor)
     assert gateway.calls, compression._tail(compressor.log, 2000)
     call = gateway.calls[-1]
     assert call["path"] == "/v1/messages"
     assert call["headers"].get("x-api-key") == "sk-fake"
+    # What the run journals reads from the real `/livez` and `/stats`, not from the fake's shape.
+    assert re.fullmatch(r"\d+\.\d+\.\d+.*", compressor.version or ""), compressor.version
+    assert saved is not None and saved["requests"] >= 1, saved
+    assert saved["tokens_before"] > 0, saved
+
+
+async def test_the_run_says_what_headroom_saved_as_inferred(
+    stage_input: StageInput, runner_settings: Any, gateway: Gateway, headroom: Any
+) -> None:
+    headroom(removed=40, retrievals=2)
+    outcome, client, _ = await _run(_compressed(stage_input, gateway), runner_settings)
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    [call] = gateway.calls
+    # headroom's own counts, marked inferred (ADR 0045); none of its dollar figures, and not the
+    # retrievals of its MCP server.
+    assert _events(client, "context.savings") == [
+        {
+            "compression": "headroom",
+            "provenance": "inferred",
+            "requests": 1,
+            "requests_compressed": 1,
+            "tokens_before": len(call["body"]),
+            "tokens_removed": 40,
+            "retrievals": 2,
+        }
+    ]
+    # Read once the agent is done, before the result: in the journal the API received.
+    kinds = [event["type"] for event in client.events]
+    assert kinds.index("context.savings") < kinds.index("run.result")
+
+
+async def test_a_proxy_whose_stats_do_not_answer_says_no_savings(
+    stage_input: StageInput, runner_settings: Any, gateway: Gateway, headroom: Any
+) -> None:
+    headroom(removed=40, stats="down")
+    outcome, client, _ = await _run(_compressed(stage_input, gateway), runner_settings)
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    assert _events(client, "context.savings") == []
+    assert len(_events(client, "context.compression")) == 1
+
+
+@pytest.mark.parametrize(("backend", "applied"), [("claude-code", True), ("codex", False)])
+async def test_the_run_says_whether_its_backend_applied_the_shell_filter(
+    stage_input: StageInput, runner_settings: Any, backend: str, applied: bool
+) -> None:
+    runner_settings.tools_url = "https://tools.invalid/mcp"
+    stage_input.agent.backend = backend
+    stage_input.model.litellm_model = "claude-sonnet"  # Claude Code takes Claude models only
+    stage_input.context = StageContext(shell_filter="rtk")
+    turn = {"writes": [{"path": "src/orders.py", "content": "x = 1\n"}], "result": valid_result()}
+    outcome, client, runner = await _run(stage_input, runner_settings, [turn])
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    assert _events(client, "context.reduction") == [stage_input.context.model_dump(mode="json")]
+    assert _events(client, "context.shell_filter") == [
+        {"shell_filter": "rtk", "backend": backend, "applied": applied}
+    ]
+    # No compression asked: no proxy, no compression event.
+    assert runner.compressor is None
+    assert _events(client, "context.compression") == []

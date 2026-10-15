@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { ActiviteDuRunVue } from "@/components/activite-du-run";
+import { ContextReductionCard } from "@/components/context-reduction";
 import { LiveLog } from "@/components/live-log";
 import { PlanDeLAgent } from "@/components/plan-de-l-agent";
 import { Provenance } from "@/components/provenance";
@@ -15,6 +16,7 @@ import { PodLogs } from "@/components/pod-logs";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { activiteDuRun } from "@/lib/activite-du-run";
+import { contextReductionOf } from "@/lib/context-reduction";
 import { planDeLAgent } from "@/lib/plan-de-l-agent";
 import { finDeclaree } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
@@ -160,6 +162,8 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       )}
 
       <Garanties events={events} />
+
+      <ContextReductionCard reduction={contextReductionOf(events)} />
 
       <Acces acces={acces.data} />
 
