@@ -1,0 +1,28 @@
+apiVersion: choregos/v1
+kind: Template
+metadata:
+  name: investment-research
+  version: 0.1.0
+  display: Investment research (equities, ETFs)
+  description: >-
+    One work item is a research campaign over a universe of listed products. A job takes a hashed
+    snapshot of daily bars through the platform's market data connector; a job profiles the universe
+    without names; an agent proposes strategies in a closed grammar; a job backtests them with
+    costs, an out-of-sample period and a Deflated Sharpe Ratio; the platform keeps the campaign only
+    if a product passes, on measured facts; an agent writes the memo, every number of which must be
+    one the backtest computed; a person decides. A research note for internal use, never an order.
+requires:
+  connectors:
+    tracker: internal
+  # The organisation's connector the snapshot job calls, by NAME, and its capability.
+  org_connectors:
+    marketdata: marketdata
+defaults:
+  workflows: [./workflows/campaign.yaml]
+  default_workflow: campaign
+  # A closed sandbox: neither agent needs the network, the data goes through the platform.
+  policy: preset:regulated
+  skills: [./skills/strategy-grammar, ./skills/reading-metrics]
+  agents: [./agents/quant-strategist.yaml, ./agents/quant-analyst.yaml]
+inputs: []
+steps: []
