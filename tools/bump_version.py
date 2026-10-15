@@ -34,7 +34,11 @@ def _files() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
         text = pyproject.read_text(encoding="utf-8")
         if not re.search(r'^name = "choregos', text, re.M):
             continue
-        targets.append((pyproject, [(re.compile(r'^(version = ")[^"]+(")', re.M), r"\g<1>{v}\g<2>")]))
+        patterns = [(re.compile(r'^(version = ")[^"]+(")', re.M), r"\g<1>{v}\g<2>")]
+        if 'name = "choregos-agent-sdk"' in text:
+            # The SDK is published beside the contracts it validates against: same version, pinned.
+            patterns.append((re.compile(r'("choregos-contracts==)[^"]+(")'), r"\g<1>{v}\g<2>"))
+        targets.append((pyproject, patterns))
     umbrella = ROOT / "charts" / "choregos" / "Chart.yaml"
     targets.append(
         (
