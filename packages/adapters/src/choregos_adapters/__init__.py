@@ -447,6 +447,13 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _objet(
             {
                 "url": {"type": "string", "description": "the server's MCP endpoint, https"},
+                "auth_scheme": {
+                    "type": "string",
+                    "enum": ["bearer", "basic"],
+                    "default": "bearer",
+                    "description": "how the token is sent: Bearer, or Basic base64(username:token)",
+                },
+                "username": {"type": "string", "description": "the account, for `basic` (an email)"},
                 "timeout_s": {"type": "number", "default": 30},
             },
             ("url",),
@@ -474,7 +481,11 @@ def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
     if FAUX_MCP is None:
         FAUX_MCP = FakeMcpServer()
     return ClientMcp(
-        cfg.get("url", "http://fake-mcp.test/mcp"), token=cfg.get("token", ""), transport=FAUX_MCP.transport()
+        cfg.get("url", "http://fake-mcp.test/mcp"),
+        token=cfg.get("token", ""),
+        auth_scheme=cfg.get("auth_scheme", "bearer"),
+        username=cfg.get("username", ""),
+        transport=FAUX_MCP.transport(),
     )
 
 
@@ -858,7 +869,11 @@ def _register_builtins() -> None:
 
     register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(
         lambda cfg: ClientMcp(
-            cfg["url"], token=cfg.get("token", ""), timeout_s=float(cfg.get("timeout_s", 30))
+            cfg["url"],
+            token=cfg.get("token", ""),
+            auth_scheme=cfg.get("auth_scheme", "bearer"),
+            username=cfg.get("username", ""),
+            timeout_s=float(cfg.get("timeout_s", 30)),
         )
     )
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(

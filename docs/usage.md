@@ -83,7 +83,9 @@ and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operat
 later hardening by the organisation always overrides.
 
 **An MCP server** is a connector of type `mcp`: its URL, and its key by reference
-(`secret_refs: {"token": "env:SUPPLIER_KEY"}`). It declares no operation — they are
+(`secret_refs: {"token": "env:SUPPLIER_KEY"}`); the token is sent as a Bearer by default, or as
+`Basic base64(username:token)` with `auth_scheme: basic` and a `username`
+([Atlassian's Rovo MCP Server](integrations.md#atlassians-rovo-mcp-server-as-a-connector)). It declares no operation — they are
 **discovered**: `POST /orgs/{org}/connectors/{name}/discover` (or *discover* in the console) runs
 `initialize` and `tools/list` over Streamable HTTP — JSON or SSE answers, the session the server
 gives, every page of the list — and returns the diff. **A new tool is born closed**

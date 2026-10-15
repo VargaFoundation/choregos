@@ -199,6 +199,32 @@ with the agent's**: a `choregos` entry in the version's `mcp_servers` names the 
 call (patterns allowed); a person without a right gives an agent without it. The agent's state is
 read on **every call**: revoked, suspended or expired, the next call answers `401`.
 
+## Atlassian's Rovo MCP Server, as a connector
+
+The other direction: an internal agent calling **Rovo's tools** (search, Jira, Confluence, JSM,
+Bitbucket, Compass) through an `mcp` connector. This gives the agents Atlassian's tools under the
+platform's per-operation policy and approvals; it does not invoke the Rovo agent itself.
+
+1. In Atlassian Administration, allow API-token access to the Rovo MCP Server.
+2. Create a service account (or a dedicated user) with the Jira and Confluence permissions the
+   agents should have, and an API token with granular scopes, for example `read:jira-work`,
+   `write:jira-work` (only if writes are wanted), `read:page:confluence`, `search:confluence`,
+   `search:rovo:mcp`. Without the search scopes only some tools appear.
+3. Declare the connector. The token is sent as `Authorization: Basic base64(email:token)`, which
+   is what the server expects for an API token (Bearer is refused):
+
+```bash
+curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "rovo", "type": "mcp",
+  "config": {"url": "https://mcp.atlassian.com/v1/mcp", "auth_scheme": "basic",
+             "username": "choregos-bot@example.com"},
+  "secret_refs": {"token": "env:ROVO_API_TOKEN"}}'
+```
+
+4. *Discover* the connector, then open the tools the agents need: a new tool is born closed.
+
+`auth_scheme` is `bearer` (the default, unchanged) or `basic`; `basic` needs `username`. The
+server allows about 1 000 calls per hour on Standard and Premium plans.
+
 ## Limits
 
 - 120 calls a minute per token, per API replica (HTTP 429 with `Retry-After` beyond).
