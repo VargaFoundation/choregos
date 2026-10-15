@@ -206,6 +206,8 @@ def main() -> int:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     _write(target, write)
 
+            outgoing_id = _report_tool_calls(session_id, plan.get("tool_calls", []), outgoing_id)
+
             for command in plan.get("commands", []):
                 outgoing_id += 1
                 request(
@@ -240,6 +242,33 @@ def main() -> int:
                 }
             )
     return 0
+
+
+def _report_tool_calls(session_id: str, calls: list[dict[str, Any]], outgoing_id: int) -> int:
+    """`tool_calls`: calls reported the way opencode does (S22-44) — announced `pending` with an
+    empty `rawInput`, the arguments on the `in_progress` update, then `completed`."""
+    for call in calls:
+        outgoing_id += 1
+        call_id = f"tc-{outgoing_id}"
+        announced = {"toolCallId": call_id, "title": call["tool"], "kind": call["kind"]}
+        for update in (
+            {"sessionUpdate": "tool_call", **announced, "status": "pending", "rawInput": {}},
+            {
+                "sessionUpdate": "tool_call_update",
+                **announced,
+                "status": "in_progress",
+                "rawInput": call["input"],
+            },
+            {"sessionUpdate": "tool_call_update", "toolCallId": call_id, "status": "completed"},
+        ):
+            send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "session/update",
+                    "params": {"sessionId": session_id, "update": update},
+                }
+            )
+    return outgoing_id
 
 
 def _write(target: Path, write: dict[str, Any]) -> None:

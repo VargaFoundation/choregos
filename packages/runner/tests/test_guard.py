@@ -36,11 +36,71 @@ def test_past_max_turns_the_agent_is_stopped() -> None:
     assert [guard.observe(_call(n, f"cmd {n}")) for n in range(4)] == [None, None, None, "max_turns"]
 
 
-async def _run(stage_input: StageInput, runner_settings: Any, commands: list[str], max_turns: int) -> Any:
+def _announced(n: int, tool: str = "read", kind: str = "read") -> dict[str, Any]:
+    """A call as opencode announces it: `pending`, its arguments not known yet."""
+    return {"toolCallId": f"tc-{n}", "title": tool, "kind": kind, "status": "pending", "rawInput": {}}
+
+
+def _filled(n: int, arguments: dict[str, Any], tool: str = "read", kind: str = "read") -> dict[str, Any]:
+    """The `tool_call_update` that brings the call's arguments."""
+    return {
+        "toolCallId": f"tc-{n}",
+        "title": tool,
+        "kind": kind,
+        "status": "in_progress",
+        "rawInput": arguments,
+    }
+
+
+def test_reads_of_different_files_announced_without_arguments_are_not_a_loop() -> None:
+    """S22-44: the verifier of sandbox-dev#4 and #6, stopped on `read:{}` after five reads of five
+    different files whose `rawInput` was empty on the `tool_call` and filled on its update."""
+    guard = TurnGuard(loop_threshold=5)
+    files = ["task.md", "context.md", "smoke.py", "total.py", "test_total.py", "__init__.py"]
+    for n in range(len(files)):
+        assert guard.observe(_announced(n)) is None
+    for n, path in enumerate(files):
+        assert guard.observe(_filled(n, {"filePath": f"/workspace/{path}"})) is None
+        assert guard.observe({"toolCallId": f"tc-{n}", "status": "completed", "title": path}) is None
+    assert guard.turns == len(files)
+
+
+def test_the_same_read_five_times_is_still_a_loop_once_its_arguments_are_known() -> None:
+    guard = TurnGuard(loop_threshold=5)
+    for n in range(4):
+        assert guard.observe(_announced(n)) is None
+        assert guard.observe(_filled(n, {"filePath": "/workspace/total.py"})) is None
+    assert guard.observe(_announced(4)) is None, "announced, arguments unknown: not compared yet"
+    assert guard.observe(_filled(4, {"filePath": "/workspace/total.py"})) == "loop"
+    assert 'read:{"filePath": "/workspace/total.py"}' in guard.detail
+
+
+def test_calls_that_end_without_arguments_are_never_the_same_call() -> None:
+    """Unknown arguments are not identical arguments: a call that completes without them is not
+    compared, and different tools of the same kind (`other`, every MCP tool) are not one tool."""
+    guard = TurnGuard(loop_threshold=3)
+    for n in range(6):
+        assert guard.observe(_announced(n, "choregos_get_ticket", "other")) is None
+        assert guard.observe({"toolCallId": f"tc-{n}", "status": "completed"}) is None
+    for n, tool in enumerate(["choregos_get_ticket", "choregos_get_context", "choregos_get_ci_logs"], 10):
+        assert guard.observe(_announced(n, tool, "other")) is None
+        assert guard.observe(_filled(n, {"tail": 100}, tool, "other")) is None
+    assert guard.tripped is None
+
+
+async def _run(
+    stage_input: StageInput,
+    runner_settings: Any,
+    commands: list[str],
+    max_turns: int,
+    tool_calls: list[dict[str, Any]] | None = None,
+) -> Any:
     looping = stage_input.model_copy(deep=True)
     looping.budget.max_turns = max_turns
     agent_script(
-        {"turns": [{"commands": commands, "result": valid_result()}]}, looping, runner_settings.workspace
+        {"turns": [{"commands": commands, "tool_calls": tool_calls or [], "result": valid_result()}]},
+        looping,
+        runner_settings.workspace,
     )
     client = FakeInternalClient(looping)
     runner = Runner(runner_settings, client)
@@ -76,3 +136,28 @@ async def test_an_agent_within_its_limits_is_not_stopped(
     _outcome, client = await _run(stage_input, runner_settings, ["a", "b", "a"], max_turns=10)
     (result,) = client.results
     assert result.status.value == "done", result.summary
+
+
+def _reads(*paths: str) -> list[dict[str, Any]]:
+    return [{"tool": "read", "kind": "read", "input": {"filePath": f"/workspace/{p}"}} for p in paths]
+
+
+async def test_a_verifier_reading_different_files_the_opencode_way_is_not_stopped(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """S22-44, end to end: through the ACP client, not only the guard."""
+    paths = ["task.md", "context.md", "smoke.py", "total.py", "__init__.py", "test_total.py"]
+    _outcome, client = await _run(stage_input, runner_settings, [], max_turns=100, tool_calls=_reads(*paths))
+    (result,) = client.results
+    assert result.status.value == "done", result.summary
+
+
+async def test_the_same_file_read_the_opencode_way_eight_times_is_still_a_loop(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    _outcome, client = await _run(
+        stage_input, runner_settings, [], max_turns=100, tool_calls=_reads(*["total.py"] * 8)
+    )
+    (result,) = client.results
+    assert (result.status.value, result.reason) == ("failed", "loop")
+    assert "same call 5 times in a row" in result.summary

@@ -513,7 +513,8 @@ class AcpClient:
             if isinstance(text, str) and text:
                 self.outcome.said.append(text[:500])
                 del self.outcome.said[:-SAID_KEPT]
-        if kind == "tool_call":
+        if kind in {"tool_call", "tool_call_update"}:
+            # The update too: it is often the first to carry the call's arguments (S22-44).
             await self._watch(update)
         if self.on_update is not None:
             await self.on_update(params)
