@@ -1416,3 +1416,4 @@ les 492 tests ne disaient pas :
     change les groupes. La matrice RBAC reste verte.
     **Ce que ça ne prouve pas** : la politique par opération des connecteurs (flux S19), qui
     remplacera ces deux listes.
+| S39-20a | S39 | 🟡 | — | a `documents` connector opens a source from its configuration (`source(config, *, key)`, a `DocumentsConnector` protocol, `CONNECTED_KINDS`, one validator per source kind): no behaviour change, it prepares the Confluence type (S39-20b). Proved by the existing source tests (unchanged) plus `test_a_documents_connector_opens_a_source_from_its_configuration` (the Graph connector reads `site_id`/`drive_id`/`folder` from the config, red if it ignores it) and `test_an_unknown_source_kind_is_unavailable_not_faked`. Does not prove: a second documents type (20b). |

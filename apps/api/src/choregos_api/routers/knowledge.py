@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
 from typing import Annotated
@@ -38,6 +39,7 @@ from ..knowledge.access import can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
+from ..knowledge.sync import CONNECTED_KINDS
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
@@ -574,6 +576,71 @@ async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -
 _HTTPS = ("https://",)
 
 
+async def _connected_config(
+    session: AsyncSession,
+    organisation: Organization,
+    connector: str | None,
+    what: str,
+) -> None:
+    """A connected source names an existing `documents` connector of its organisation."""
+    if not connector:
+        raise unprocessable(f"a {what} source names its `documents` connector")
+    found = (
+        await session.execute(
+            select(OrgConnector.id).where(
+                OrgConnector.org_id == organisation.id,
+                OrgConnector.name == connector,
+                OrgConnector.kind == "documents",
+            )
+        )
+    ).first()
+    if found is None:
+        raise unprocessable(f"no `documents` connector `{connector}` in {organisation.slug}")
+
+
+def _sharepoint_config(config: dict[str, object]) -> dict[str, object]:
+    if not (config.get("site_id") or config.get("drive_id")):
+        raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
+    return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
+
+
+def _web_config(config: dict[str, object]) -> dict[str, object]:
+    url = _https_url(config, "web")
+    return {
+        "url": url,
+        "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
+        "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
+    }
+
+
+def _git_config(config: dict[str, object]) -> dict[str, object]:
+    url = _https_url(config, "git")
+    ref = str(config.get("ref") or "main")
+    if ref.startswith("-"):
+        raise unprocessable(f"not a git ref: `{ref}`")
+    paths = config.get("paths") or ["*.md"]
+    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+        raise unprocessable("`paths` is a list of glob patterns")
+    return {"url": url, "ref": ref, "paths": paths}
+
+
+def _https_url(config: dict[str, object], kind: str) -> str:
+    url = str(config.get("url") or "")
+    if not url.startswith(_HTTPS):
+        raise unprocessable(f"a {kind} source is reached over https: `{url}`")
+    return url
+
+
+#: One validator per source kind: the configuration it keeps, or the reason it is refused.
+_SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] = {
+    "sharepoint": _sharepoint_config,
+    "web": _web_config,
+    "git": _git_config,
+}
+
+_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive"}
+
+
 async def _checked_source_config(
     session: AsyncSession,
     organisation: Organization,
@@ -582,39 +649,9 @@ async def _checked_source_config(
     config: dict[str, object],
 ) -> dict[str, object]:
     """What a source may be: refused here, with its reason, rather than at its first sync."""
-    if kind == "sharepoint":
-        if not connector:
-            raise unprocessable("a SharePoint or OneDrive source names its `documents` connector")
-        found = (
-            await session.execute(
-                select(OrgConnector.id).where(
-                    OrgConnector.org_id == organisation.id,
-                    OrgConnector.name == connector,
-                    OrgConnector.kind == "documents",
-                )
-            )
-        ).first()
-        if found is None:
-            raise unprocessable(f"no `documents` connector `{connector}` in {organisation.slug}")
-        if not (config.get("site_id") or config.get("drive_id")):
-            raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
-        return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
-    url = str(config.get("url") or "")
-    if not url.startswith(_HTTPS):
-        raise unprocessable(f"a {kind} source is reached over https: `{url}`")
-    if kind == "web":
-        return {
-            "url": url,
-            "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
-            "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
-        }
-    ref = str(config.get("ref") or "main")
-    if ref.startswith("-"):
-        raise unprocessable(f"not a git ref: `{ref}`")
-    paths = config.get("paths") or ["*.md"]
-    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
-        raise unprocessable("`paths` is a list of glob patterns")
-    return {"url": url, "ref": ref, "paths": paths}
+    if kind in CONNECTED_KINDS:
+        await _connected_config(session, organisation, connector, _CONNECTED_WHAT.get(kind, kind))
+    return _SOURCE_VALIDATORS[kind](config)
 
 
 async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) -> KnowledgeSource:
@@ -657,7 +694,7 @@ async def create_knowledge_source(
         knowledge_base_id=base.id,
         kind=body.kind,
         name=body.name,
-        connector=body.connector if body.kind == "sharepoint" else None,
+        connector=body.connector if body.kind in CONNECTED_KINDS else None,
         config=config,
         interval_minutes=body.interval_minutes,
         status="idle",

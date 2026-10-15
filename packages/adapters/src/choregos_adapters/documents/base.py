@@ -39,5 +39,13 @@ class DocumentSource(Protocol):
     async def fetch(self, item: SourceItem) -> bytes: ...
 
 
+class DocumentsConnector(Protocol):
+    """An organisation's `documents` connector: it holds the credentials, and each knowledge source
+    opens from it the part it names. `config` is the source's own configuration (a SharePoint
+    `site_id`, a Confluence `space_key`…); `key` identifies the source."""
+
+    def source(self, config: dict[str, Any], *, key: str) -> DocumentSource: ...
+
+
 class SourceRefusedError(ValueError):
     """A source configuration the platform refuses (a private address, a non-https URL…)."""

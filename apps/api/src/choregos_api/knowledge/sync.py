@@ -32,6 +32,8 @@ from .formats import FORMATS, DocumentRefusedError, accept
 logger = get_logger("choregos.knowledge.sync")
 
 KINDS = ("sharepoint", "web", "git")
+#: kinds opened through an organisation `documents` connector, which holds the credentials
+CONNECTED_KINDS = frozenset({"sharepoint"})
 
 
 class SourceUnavailableError(RuntimeError):
@@ -41,7 +43,7 @@ class SourceUnavailableError(RuntimeError):
 async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     """The adapter of a source: under `CHOREGOS_FAKES`, its scripted fake."""
     config = source.config or {}
-    if source.kind == "sharepoint":
+    if source.kind in CONNECTED_KINDS:
         connector = (
             await session.execute(
                 select(OrgConnector).where(
@@ -57,10 +59,7 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             connector.kind, connector.type, connector.config, connector.secret_refs
         )
         return build("documents", connector.type, resolved).source(  # type: ignore[no-any-return]
-            site_id=config.get("site_id"),
-            drive_id=config.get("drive_id"),
-            folder=config.get("folder"),
-            key=source.id,
+            dict(config), key=source.id
         )
     if fakes_enabled():
         from choregos_adapters.fakes.documents import fake_source

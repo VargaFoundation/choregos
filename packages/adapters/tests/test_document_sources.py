@@ -204,3 +204,19 @@ async def test_the_fake_source_answers_like_a_delta() -> None:
     assert ([i.ref for i in second.items], second.deleted) == (["b"], ["a"])
     assert await fake.fetch(second.items[0]) == b"# B2\n"
     assert asyncio.iscoroutinefunction(fake.changes)
+
+
+def test_a_documents_connector_opens_a_source_from_its_configuration() -> None:
+    from choregos_adapters.documents.base import DocumentsConnector
+    from choregos_adapters.documents.graph import GraphDocumentsConnector
+    from choregos_adapters.fakes.documents import FakeDocumentsConnector, fake_source
+
+    graph: DocumentsConnector = GraphDocumentsConnector({"tenant_id": "t", "client_id": "c"})
+    opened = graph.source({"site_id": "s1", "drive_id": "d1", "folder": "/Policies/"}, key="src1")
+    assert isinstance(opened, GraphDriveSource)
+    assert (opened.site_id, opened.drive_id, opened.folder) == ("s1", "d1", "/Policies")
+    with pytest.raises(ValueError, match="site_id"):
+        graph.source({}, key="src2")
+
+    fake: DocumentsConnector = FakeDocumentsConnector({})
+    assert fake.source({"anything": 1}, key="src3") is fake_source("src3")
