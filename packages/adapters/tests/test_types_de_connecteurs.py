@@ -54,6 +54,17 @@ def test_une_reference_est_resolue_champ_par_champ(monkeypatch: pytest.MonkeyPat
     )
 
 
+def test_a_preresolved_field_is_not_resolved_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The platform reads `store:` values with the organisation's context (ADR 0058) and hands them
+    over; the sync resolver of the core, which cannot, is never asked for them."""
+    monkeypatch.setenv("JIRA_EMAIL_TOKEN", "from-env")
+    refs = {"api_token": "store:connector/jira/api_token", "webhook_secret": "env:JIRA_EMAIL_TOKEN"}
+    config = configuration_resolue("tracker", "jira", {}, refs, preresolved={"api_token": "sealed"})
+    assert config == {"api_token": "sealed", "webhook_secret": "from-env"}
+    with pytest.raises(SecretIntrouvable, match="resolved by the platform"):
+        configuration_resolue("tracker", "jira", {}, refs)
+
+
 def test_une_reference_irresoluble_arrete_la_construction(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mieux qu'un adaptateur qui retombe en silence sur sa valeur par défaut."""
     monkeypatch.delenv("CONNECTOR_ARGO_TOKEN", raising=False)

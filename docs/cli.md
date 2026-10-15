@@ -8,6 +8,27 @@ path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`
 `CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
 
 
+## `choregos admin`
+
+Platform administration
+
+## `choregos admin secrets`
+
+Sealed connector secrets
+
+### `choregos admin secrets rewrap`
+
+```text
+Usage: choregos admin secrets rewrap [OPTIONS]
+
+  Re-wrap every sealed secret under the active key, after a key rotation (the
+  new key first in CHOREGOS_SECRETS_KEKS, the API restarted). The values are
+  not read out nor changed.
+
+Options:
+  --help  Show this message and exit.
+```
+
 ## `choregos dev`
 
 Development environment

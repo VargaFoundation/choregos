@@ -8,11 +8,12 @@ from typing import Annotated
 from choregos_core import utcnow
 from fastapi import APIRouter, Path
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..config import get_settings
 from ..db.models import Connector
-from ..deps import Db, ProjectCtx
+from ..deps import Db, ProjectContext, ProjectCtx
 from ..errors import not_found, unprocessable
 from ..rbac import Permission
 from ..schemas import (
@@ -22,9 +23,53 @@ from ..schemas import (
     ConnectorType,
     ConnectorUpsert,
     ProjectRequirement,
+    SecretValue,
+)
+from ..secret_store import derived_project_name, resolved_configuration, secret_states
+from ..services.connector_secrets import (
+    drop_replaced_store_values,
+    put_values,
+    refs_with_values,
+    require_store,
 )
 
 router = APIRouter(tags=["connectors"])
+
+Field = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
+
+
+def _prefix(ctx: ProjectContext, kind: str) -> str:
+    """`project/<slug>/<kind>`: the name a project connector's sealed secrets derive from."""
+    return derived_project_name(ctx.project.slug, kind, "")[:-1]
+
+
+async def _audit_secrets(
+    session: AsyncSession,
+    ctx: ProjectContext,
+    row: Connector,
+    action: str,
+    fields_versions: dict[str, int | None],
+) -> None:
+    """Who set or cleared which field, at which version — never the value."""
+    for field, version in fields_versions.items():
+        await record(
+            session,
+            ctx.principal,
+            action,
+            org_id=ctx.project.org_id,
+            target_type="connector",
+            target_id=row.id,
+            kind=row.kind,
+            field=field,
+            version=version,
+        )
+
+
+async def _dto(session: AsyncSession, ctx: ProjectContext, row: Connector) -> ConnectorDto:
+    dto = ConnectorDto.model_validate(row)
+    refs = dict(row.secret_refs or {})
+    dto.secrets = await secret_states(session, ctx.project.org_id, refs)
+    return dto
 
 
 @router.get("/connectors/types", response_model=list[ConnectorType], operation_id="listConnectorTypes")
@@ -58,7 +103,7 @@ async def list_connectors(ctx: ProjectCtx, session: Db) -> list[ConnectorDto]:
         .scalars()
         .all()
     )
-    return [ConnectorDto.model_validate(row) for row in rows]
+    return [await _dto(session, ctx, row) for row in rows]
 
 
 @router.put("/projects/{id}/connectors/{kind}", response_model=ConnectorDto, operation_id="putConnector")
@@ -81,6 +126,7 @@ async def put_connector(
         )
     from ..services.connecteurs import spec_du_type, verifier_les_secrets
 
+    prefix = _prefix(ctx, kind)
     verifier_les_secrets(
         spec_du_type(kind, body.type),
         body.type,
@@ -88,17 +134,30 @@ async def put_connector(
         body.secret_refs,
         body.secret_ref,
         may_reference=ctx.principal.can(Permission.TOOLS_GRANT, ctx.org_slug),
+        secret_values=body.secret_values,
+        store_prefix=prefix,
     )
+    store = require_store(body.secret_values)
     row = (
         await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))
     ).scalar_one_or_none()
     if row is None:
         row = Connector(project_id=ctx.id, kind=kind, type=body.type)
         session.add(row)
+    spec = spec_du_type(kind, body.type)
+    before = dict(row.secret_refs or {})
+    # A PUT replaces the references, but a sealed value is kept unless this body overrides its field
+    # or the type no longer has it: re-saving the configuration must not wipe a typed secret.
+    kept = {f: r for f, r in before.items() if r.startswith("store:") and f in spec.secret_fields}
+    after = refs_with_values({**kept, **body.secret_refs}, prefix, body.secret_values)
+    metas = await put_values(
+        session, store, ctx.project.org_id, prefix, body.secret_values, ctx.principal.email
+    )
+    cleared = await drop_replaced_store_values(session, store, ctx.project.org_id, before, after)
     row.type = body.type
     row.config = body.config
     row.secret_ref = body.secret_ref
-    row.secret_refs = dict(body.secret_refs) or None
+    row.secret_refs = after or None
     row.status = "unknown"
     await session.flush()
     await record(
@@ -111,7 +170,74 @@ async def put_connector(
         kind=kind,
         type=body.type,
     )
-    return ConnectorDto.model_validate(row)
+    await _audit_secrets(session, ctx, row, "connector.secret.set", {f: m.version for f, m in metas.items()})
+    await _audit_secrets(session, ctx, row, "connector.secret.clear", dict.fromkeys(cleared))
+    return await _dto(session, ctx, row)
+
+
+async def _connector_row(ctx: ProjectContext, kind: str, session: AsyncSession) -> Connector:
+    row = (
+        await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))
+    ).scalar_one_or_none()
+    if row is None:
+        raise not_found("Connector", kind)
+    return row
+
+
+@router.put(
+    "/projects/{id}/connectors/{kind}/secrets/{field}",
+    response_model=ConnectorDto,
+    operation_id="setConnectorSecret",
+)
+async def set_connector_secret(
+    ctx: ProjectCtx, kind: Annotated[str, Path()], field: Field, body: SecretValue, session: Db
+) -> ConnectorDto:
+    """Type a secret once (or replace it): sealed, never returned."""
+    from ..services.connecteurs import spec_du_type, verifier_les_secrets
+
+    ctx.require(Permission.CONNECTOR_WRITE)
+    row = await _connector_row(ctx, kind, session)
+    prefix = _prefix(ctx, kind)
+    verifier_les_secrets(
+        spec_du_type(kind, row.type),
+        row.type,
+        {},
+        {},
+        secret_values={field: body.value},
+        store_prefix=prefix,
+    )
+    store = require_store({field: body.value})
+    metas = await put_values(
+        session, store, ctx.project.org_id, prefix, {field: body.value}, ctx.principal.email
+    )
+    row.secret_refs = refs_with_values(row.secret_refs, prefix, {field: body.value})
+    row.status = "unknown"
+    await session.flush()
+    await _audit_secrets(session, ctx, row, "connector.secret.set", {field: metas[field].version})
+    return await _dto(session, ctx, row)
+
+
+@router.delete(
+    "/projects/{id}/connectors/{kind}/secrets/{field}",
+    response_model=ConnectorDto,
+    operation_id="clearConnectorSecret",
+)
+async def clear_connector_secret(
+    ctx: ProjectCtx, kind: Annotated[str, Path()], field: Field, session: Db
+) -> ConnectorDto:
+    """Remove a secret field's value or reference: the connector no longer holds it."""
+    ctx.require(Permission.CONNECTOR_WRITE)
+    row = await _connector_row(ctx, kind, session)
+    before = dict(row.secret_refs or {})
+    if field not in before:
+        raise not_found("Secret", field)
+    after = {f: r for f, r in before.items() if f != field}
+    await drop_replaced_store_values(session, require_store(None), ctx.project.org_id, before, after)
+    row.secret_refs = after or None
+    row.status = "unknown"
+    await session.flush()
+    await _audit_secrets(session, ctx, row, "connector.secret.clear", {field: None})
+    return await _dto(session, ctx, row)
 
 
 @router.get(
@@ -141,9 +267,7 @@ async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequ
         ProjectRequirement(
             capability=e.capacite,
             reasons=list(e.raisons),
-            connector=ConnectorDto.model_validate(configures[e.capacite])
-            if e.capacite in configures
-            else None,
+            connector=await _dto(session, ctx, configures[e.capacite]) if e.capacite in configures else None,
             default_type=None if e.capacite in configures else type_par_defaut(e.capacite),
         )
         for e in exigences(workflow_model(row) for row in actifs)
@@ -162,20 +286,25 @@ async def test_connector(ctx: ProjectCtx, kind: Annotated[str, Path()], session:
     if row is None:
         raise not_found("Connector", kind)
 
-    from choregos_adapters import build, configuration_resolue, fakes_enabled
+    from choregos_adapters import build, fakes_enabled
+    from choregos_core.redaction import redact, redact_known
 
     checks: list[ConnectorCheck] = []
     try:
         # Les secrets RÉSOLUS ici, dans ce processus : une référence qu'il ne sait pas lire est
         # un échec de test qui la nomme, pas un adaptateur qui retombe sur sa valeur par défaut.
-        config = configuration_resolue(kind, row.type, row.config, row.secret_refs, row.secret_ref)
+        config = await resolved_configuration(
+            session, ctx.project.org_id, kind, row.type, row.config, row.secret_refs, row.secret_ref
+        )
         adapter = build(kind, row.type, config)
         checks.append(ConnectorCheck(name="construction", ok=True, detail=type(adapter).__name__))
         tester = getattr(adapter, "test", None)
         if tester is not None:
             result = await tester()
             checks.append(
-                ConnectorCheck(name="connection", ok=bool(result.get("ok", True)), detail=str(result))
+                ConnectorCheck(
+                    name="connection", ok=bool(result.get("ok", True)), detail=redact_known(str(result))
+                )
             )
         else:
             checks.append(
@@ -186,10 +315,10 @@ async def test_connector(ctx: ProjectCtx, kind: Annotated[str, Path()], session:
                 )
             )
     except Exception as exc:  # une erreur de connecteur n'est jamais une erreur 500
-        checks.append(ConnectorCheck(name="connection", ok=False, detail=str(exc)[:500]))
+        checks.append(ConnectorCheck(name="connection", ok=False, detail=redact(str(exc))[:500]))
 
     ok = all(check.ok for check in checks)
     row.status = "ok" if ok else "error"
     row.last_check_at = utcnow()
-    row.last_error = None if ok else "; ".join(c.detail or "" for c in checks if not c.ok)[:1000]
+    row.last_error = None if ok else redact("; ".join(c.detail or "" for c in checks if not c.ok))[:1000]
     return ConnectorTestResult(ok=ok, checks=checks)

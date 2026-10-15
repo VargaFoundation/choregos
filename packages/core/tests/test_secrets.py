@@ -66,3 +66,16 @@ def test_un_greffon_declare_son_coffre() -> None:
     assert "vault" in secrets.schemas()
     with pytest.raises(ValueError, match="already declared"):
         secrets.declarer_un_resolveur("vault", lambda chemin: chemin)
+
+
+def test_a_store_reference_is_known_but_never_resolved_by_the_core() -> None:
+    """`store:` values are sealed in the database (ADR 0058): the sync core accepts the scheme at
+    write time, and a call site that forgot the platform's resolver fails loudly, not silently."""
+    assert "store" in secrets.schemas()
+    secrets.verifier("store:connector/jira/api_token")
+    assert secrets.est_une_reference_du_magasin("store:connector/jira/api_token")
+    assert not secrets.est_une_reference_du_magasin("env:X") and not secrets.est_une_reference_du_magasin(
+        None
+    )
+    with pytest.raises(SecretIntrouvable, match="resolved by the platform"):
+        secrets.resoudre("store:connector/jira/api_token")

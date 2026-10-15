@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.models import Action, ConnectorOperation, OrgConnector, Project
+from .secret_store import resolved_configuration
 
 
 class EffetRefuse(Exception):  # noqa: N818 - un refus définitif, rendu tel quel
@@ -103,7 +104,7 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
 
     L'action a été approuvée : une opération `approval` s'exécute donc ; une `forbidden` non."""
     import httpx
-    from choregos_adapters import build, configuration_resolue
+    from choregos_adapters import build
     from choregos_adapters.errors import AdapterError, UpstreamError
     from choregos_adapters.mcp import ErreurMcp
     from choregos_contracts import ActionStatus
@@ -149,7 +150,9 @@ async def _appel_de_connecteur(ctx: ContexteEffet, params: dict[str, Any]) -> di
             raise EffetRefuse(f"{nom}/{operation} : {exc.message}") from exc
     arguments.update(await _arguments_de_la_plateforme(ctx, instance, operation, arguments))
     try:
-        config = configuration_resolue(instance.kind, instance.type, instance.config, instance.secret_refs)
+        config = await resolved_configuration(
+            ctx.session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        )
         client = build(instance.kind, instance.type, config)
         if hasattr(client, "call_tool"):
             resultat = await client.call_tool(operation, arguments)

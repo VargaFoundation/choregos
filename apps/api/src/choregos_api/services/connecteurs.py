@@ -51,36 +51,60 @@ def verifier_les_secrets(
     secret_ref: str | None = None,
     *,
     may_reference: bool = True,
+    secret_values: dict[str, str] | None = None,
+    store_prefix: str | None = None,
 ) -> None:
     """Un secret écrit en clair, un champ secret inconnu, une référence illisible : 422.
 
     Les champs secrets d'un type (`api_token` de Jira, `token` d'Argo CD…) partaient dans `config`,
     en clair dans la base et dans chaque réponse de l'API. Ils s'écrivent désormais en
-    references (`secret_refs`), resolved when the adapter is built.
+    references (`secret_refs`), resolved when the adapter is built, or as VALUES (`secret_values`),
+    sealed in the database and replaced by a derived `store:` reference (ADR 0058).
 
-    A reference names a variable of the platform's environment (S39-06b): only the organisation's
-    administrator writes one (`may_reference`)."""
-    from choregos_core.secrets import ReferenceInvalide, verifier
+    A reference to the environment names a variable of the platform (S39-06b): only the
+    organisation's administrator writes one (`may_reference`). A `store:` reference is never
+    user-written: it is accepted only when it is exactly the one this connector's field derives from
+    `store_prefix` (the idempotent re-send of a DTO). Otherwise a project owner could point a
+    connector at `store:connector/entra-acme/client_secret` and read the organisation's secret
+    through a host they control."""
+    from choregos_core.secrets import ReferenceInvalide, est_une_reference_du_magasin, verifier
 
     en_clair = sorted(set(config) & set(spec.secret_fields))
     if en_clair:
         raise unprocessable(
             f"secret written in clear: {', '.join(en_clair)}. A secret is written as a reference, in "
-            f"`secret_refs` (`{en_clair[0]}: env:VARIABLE_NAME`) — never its value"
+            f"`secret_refs` (`{en_clair[0]}: env:VARIABLE_NAME`), or as a `secret_values` entry that "
+            "the platform seals — never inside `config`"
         )
-    inconnus = sorted(set(secret_refs) - set(spec.secret_fields))
+    valeurs = secret_values or {}
+    inconnus = sorted((set(secret_refs) | set(valeurs)) - set(spec.secret_fields))
     if inconnus:
         raise unprocessable(
             f"`{type_name}` has no secret field {', '.join(inconnus)} "
             f"(its own: {', '.join(spec.secret_fields) or 'none'})"
         )
-    written = [*secret_refs.values(), *([secret_ref] if secret_ref else [])]
-    if written and not may_reference:
+    doubles = sorted(set(secret_refs) & set(valeurs))
+    if doubles:
         raise unprocessable(
-            "only the organisation's administrator writes a secret reference (`env:NAME`): a reference "
-            "reads a variable of the platform's environment"
+            f"{', '.join(doubles)}: a secret field is given as a value or as a reference, not both"
         )
-    for reference in written:
+    vides = sorted(f for f, v in valeurs.items() if not v)
+    if vides:
+        raise unprocessable(f"{', '.join(vides)}: an empty secret value (to remove a secret, clear it)")
+    written = [(f, r) for f, r in [*secret_refs.items(), *([("", secret_ref)] if secret_ref else [])]]
+    for champ, reference in written:
+        if est_une_reference_du_magasin(reference):
+            if champ and store_prefix is not None and reference == f"store:{store_prefix}/{champ}":
+                continue
+            raise unprocessable(
+                "a `store:` reference is derived by the platform, never written: type the value "
+                "(`secret_values`) to store a secret"
+            )
+        if not may_reference:
+            raise unprocessable(
+                "only the organisation's administrator writes a secret reference (`env:NAME`): a reference "
+                "reads a variable of the platform's environment; type the value instead"
+            )
         try:
             verifier(reference)
         except ReferenceInvalide as refus:
