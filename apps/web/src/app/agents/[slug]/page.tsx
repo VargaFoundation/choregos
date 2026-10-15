@@ -15,6 +15,8 @@ import {
   ScopePanel,
   UpstreamBanner,
 } from "@/components/agents/governance";
+import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
+import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
 import { estUnClientMcp, etatDuClient, readOnly, resumeDeLaVersion } from "@/components/agents/registre";
 import {
   Badge,
@@ -81,7 +83,9 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
           {a.display_name}
         </Heading>
         <span className="font-mono text-sm text-ink-muted">{a.slug}</span>
-        <Badge tone={a.kind === "external" ? "accent" : "neutral"}>{a.kind === "external" ? "External" : "Internal"}</Badge>
+        <Badge tone={a.kind === "internal" ? "neutral" : "accent"}>
+          {a.kind === "external" ? "External" : a.kind === "remote" ? "Remote · A2A" : "Internal"}
+        </Badge>
         <ScopeBadge agent={a} />
         <Badge tone={a.status === "active" ? "ok" : "danger"}>{a.status}</Badge>
         <LifecycleBadges agent={a} />
@@ -114,6 +118,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       {onglet === "overview" && (
         <>
           {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
+          {a.kind === "remote" && <RemoteDrift org={org} slug={slug} />}
           <Statut org={org} agent={a} />
           <Card title="Lifecycle">
             <LifecyclePanel org={org} agent={a} disabled={a.can?.manage === false || readOnly(a)} />
@@ -261,8 +266,44 @@ function Mesures({ org, slug }: { org: string; slug: string }) {
   );
 }
 
-/** What the agent is: its current version, and the next one, published from it (S30-05). */
+/** A remote agent whose latest run stopped on a card that moved says so, with the way out (ADR 0062). */
+function RemoteDrift({ org, slug }: { org: string; slug: string }) {
+  const runs = useQuery({ queryKey: ["agent-runs", org, slug], queryFn: () => api.agentRuns(org, slug) });
+  const latest = runs.data?.[0];
+  return latest?.result?.reason === "remote_card_changed" ? <CardChangedWarning slug={slug} /> : null;
+}
+
+/** What the agent is: a remote agent shows its pinned card, any other its current version (S30-05). */
 function Definition({ org, agent }: { org: string; agent: Agent }) {
+  const courante = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version)[0];
+  if (agent.kind === "remote" && courante && a2aOf(courante.spec)) return <RemoteVersion org={org} agent={agent} />;
+  return <AcpDefinition org={org} agent={agent} />;
+}
+
+/** A remote agent has no model, backend or skills: its next version is the card read again. */
+function RemoteVersion({ org, agent }: { org: string; agent: Agent }) {
+  const client = useQueryClient();
+  const courante = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version)[0]!;
+  return (
+    <>
+      <RemoteDefinition spec={courante.spec} version={courante.version} />
+      {agent.status !== "revoked" && (
+        <section className="space-y-3" aria-labelledby="new-version-title">
+          <Heading as="h2" size="md" id="new-version-title">{`New version (v${agent.latest_version + 1})`}</Heading>
+          <RemoteAgentForm
+            key={agent.latest_version}
+            org={org}
+            existing={{ agent, spec: courante.spec }}
+            onDone={() => void client.invalidateQueries({ queryKey: ["agent", org, agent.slug] })}
+          />
+        </section>
+      )}
+    </>
+  );
+}
+
+/** What the agent is: its current version, and the next one, published from it (S30-05). */
+function AcpDefinition({ org, agent }: { org: string; agent: Agent }) {
   const versions = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version);
   const courante = versions[0];
   // The publication message lives HERE: the form remounts when the published version arrives
