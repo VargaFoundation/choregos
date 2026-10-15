@@ -107,6 +107,28 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
+**The MCP catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) is a list
+of well-known MCP servers shipped in the image, so an administrator does not need to know a
+vendor's URL by heart: `choregos_core/mcp_catalogue/catalogue.yaml`, about a hundred entries,
+validated by a JSON Schema. **An entry is an offer, not a connector**: nothing is installed, no
+tool is open, no network call is made by listing it. Each entry says who publishes it, whether it is
+*official* (the registry namespace, the repository owner or the host belongs to the vendor, decided
+from a reviewed vendor map and never set by hand), its licence, its stars with their date, how it
+authenticates (`none`, `bearer`, `header:<Name>` or `oauth`) and the host the API must be able to
+reach (`egress_hosts`). What a release can do with an entry is computed, not stored:
+`installable` (a hosted Streamable HTTP server with a static key or none), `needs_oauth` (listed, not
+installable until a connector can carry a per-user authorisation) and `needs_hosting` (a server
+that runs as a local process: running a third party's code is the operator's decision, so it is
+listed with what to run and nothing more).
+
+The file is **generated, not typed**: `make catalogues` replays recorded answers of the official
+MCP Registry and of GitHub over the reviewed seed in `tools/catalogues/mcp/seed.yaml`, drops
+what the rules refuse (archived, deleted, tunnel or relay hosts, anonymous hosting, aggregators,
+arbitrary command execution, a hosted process without an open licence) and writes the same bytes
+every time; `make catalogues-check` fails when the committed file differs. To propose a server, add
+a line to the seed and run `make catalogues-record` (network and `GITHUB_TOKEN`), then review the
+diff — see the [runbook](runbooks/refresh-catalogues.md).
+
 **A directory: `entra`** (Microsoft Entra ID through Graph, kind `identity`) is declared like any
 connector of the organisation — tenant, application, the **administrative unit** the platform may
 touch, and the application secret by reference. Its six operations come with their input schema:
