@@ -82,6 +82,18 @@ descriptions** of the organisation's skills, knowledge bases and connector opera
 gateway's model, never documents, files or secrets. The description is marked as data; the answer is
 filtered to names that exist, and a draft is never saved or run.
 
+## Remote agents: who they act as
+
+A remote agent (A2A, [ADR 0062](adr/0062-remote-agents-over-a2a.md)) runs outside the platform, with the
+rights of **the person who authorised its credential** — Atlassian's Rovo has no service account. Treat
+that authorisation as granting that person's access to the agent, use a dedicated least-privileged
+account, and read `authorised as` on the credential. The refresh token is a sealed value of the secret
+store (ADR 0058): never returned, rewritten at every refresh, deleted on revocation. A run receives only
+a short-lived access token, in its Secret (`CHOREGOS_RUN_REMOTE_TOKEN`), never in a payload or a journal.
+The agent card is pinned at publication and read again by the pod: a card that changed stops the step
+before anything is sent. The runner pod may reach only the hosts the project's policy allows. The
+project's memory is not sent to a remote agent.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.

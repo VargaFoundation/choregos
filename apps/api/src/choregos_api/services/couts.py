@@ -85,8 +85,10 @@ async def record_cost(  # noqa: PLR0913 — une ligne du registre, champ par cha
     tokens_cached: int,
     cost_usd: float,
     fx_rate: float,
+    kind: str = "model",
 ) -> CostLedger:
     entry = CostLedger(
+        kind=kind,
         **await dimensions_of(session, run_id),
         project_id=project_id,
         work_item_id=work_item_id,

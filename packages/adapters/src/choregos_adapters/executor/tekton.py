@@ -339,6 +339,8 @@ def _parse_time(value: Any) -> Any:
 #: The key of a run's Secret that holds its gateway key (#523); the runner gets it as
 #: `CHOREGOS_RUN_GATEWAY_KEY`, next to `CHOREGOS_RUN_TOKEN` from the key `token`.
 GATEWAY_KEY_FIELD = "gateway-key"
+#: The key that holds the access token of a remote agent (ADR 0062): `CHOREGOS_RUN_REMOTE_TOKEN`.
+REMOTE_TOKEN_FIELD = "remote-token"  # noqa: S105 - a Secret key name, not a secret
 
 
 def run_secret_data(spec: StageJobSpec) -> dict[str, str]:
@@ -346,4 +348,6 @@ def run_secret_data(spec: StageJobSpec) -> dict[str, str]:
     data = {"token": base64.b64encode(spec.run_token.encode()).decode()}
     if spec.gateway_key:
         data[GATEWAY_KEY_FIELD] = base64.b64encode(spec.gateway_key.encode()).decode()
+    if spec.remote_token:
+        data[REMOTE_TOKEN_FIELD] = base64.b64encode(spec.remote_token.encode()).decode()
     return data

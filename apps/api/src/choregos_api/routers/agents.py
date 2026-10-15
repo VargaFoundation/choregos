@@ -65,6 +65,7 @@ from ..schemas import (
     ProjectAgentPut,
     RunDto,
 )
+from ..schemas.agents import check_remote_kind
 from ..services.agent_evals import evaluate, gate, suite_for
 from ..services.agent_governance import (
     Action,
@@ -94,6 +95,7 @@ from ..services.agents import (
     erreurs_d_une_version,
     resoudre_l_agent,
 )
+from ..services.remote_agents import pin_remote_runtime
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
 
@@ -285,6 +287,8 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     gate(body.spec, None)
     organisation = await _organisation(session, org)
     projet = await _projet(session, organisation, body.project) if body.project else None
+    # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
+    body.spec = await pin_remote_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
     existant = (
@@ -386,6 +390,11 @@ async def publish_version(
     erreurs_d_une_version(body)
     await _skills_usable(session, organisation, body)
     await _model_allowed(session, organisation, body)
+    try:
+        check_remote_kind(agent.kind, body)
+    except ValueError as erreur:
+        raise unprocessable(str(erreur)) from erreur
+    body = await pin_remote_runtime(session, organisation.id, body)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":

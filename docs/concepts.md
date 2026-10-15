@@ -80,6 +80,14 @@ project (or forked into one) to reach a workflow. A **fork** is a new agent whos
 one version of its source and which remembers where it came from; it never follows the source on its
 own — it tells you when the source moved on.
 
+## Agent kinds and runtimes
+
+An agent of the registry has a **kind**: `internal` (the platform runs it), `external` (a client of the
+MCP door, ADR 0033) or `remote` (the platform calls it over A2A, ADR 0062 — for example Atlassian's
+Rovo). A version's **runtime** says how it runs: `acp` (a coding agent the runner ships), `code` (an
+agent written in code, ADR 0063) or `a2a` (a remote agent: the runner pod calls it, a declared cost
+is booked, the same gates read its outputs).
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,

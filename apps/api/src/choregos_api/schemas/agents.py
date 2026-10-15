@@ -109,7 +109,44 @@ class AgentImageInfo(Dto):
     digest_pinned: bool
 
 
-AgentRuntime = Annotated[AcpRuntime | CodeRuntime, Field(discriminator="kind")]
+class A2aDeclaredCost(Dto):
+    """What a remote agent costs, as the organisation DECLARES it (ADR 0062): A2A reports no figure."""
+
+    per_task_usd: float | None = Field(default=None, ge=0)
+    per_minute_usd: float | None = Field(default=None, ge=0)
+
+
+class A2aPinnedCard(Dto):
+    """The card as it was when the version was published: the API fills it, never the caller."""
+
+    url: str
+    protocol_version: str
+    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    skills: list[str] = Field(default_factory=list)
+
+
+class A2aRuntime(Dto):
+    """An agent that runs elsewhere and is reached over A2A (ADR 0062), e.g. Atlassian's Rovo.
+
+    The step runs in the runner pod (it calls the endpoint), not in the orchestrator. `credential`
+    names an organisation remote credential; `pinned_card` is what publication read. `model` and
+    `backend` of the spec mean nothing here: the remote agent brings its own model.
+    """
+
+    kind: Literal["a2a"] = "a2a"
+    card_url: str = Field(pattern=r"^https://", max_length=2048)
+    #: One skill of the card the step asks for; absent leaves the choice to the remote agent.
+    skill: str | None = Field(default=None, max_length=200)
+    #: The organisation's remote credential; absent only for a card that asks for none.
+    credential: str | None = Field(default=None, pattern=SLUG)
+    timeout_minutes: int = Field(default=30, ge=1, le=480)
+    declared_cost: A2aDeclaredCost = Field(default_factory=A2aDeclaredCost)
+    #: `text`: instructions and task as one text part. `text+files`: the declared inputs go along.
+    input: Literal["text", "text+files"] = "text"
+    pinned_card: A2aPinnedCard | None = None
+
+
+AgentRuntime = Annotated[AcpRuntime | CodeRuntime | A2aRuntime, Field(discriminator="kind")]
 
 
 class AgentSpec(Dto):
@@ -138,6 +175,14 @@ class AgentSpec(Dto):
         agree with the top-level `backend`: two answers to one question are refused."""
         if isinstance(self.runtime, CodeRuntime) and self.backend:
             raise ValueError("a `code` runtime fixes the backend: `backend` must be empty")
+        if isinstance(self.runtime, A2aRuntime):
+            if self.backend or self.model:
+                raise ValueError("an `a2a` runtime brings its own model: `backend` and `model` must be empty")
+            if self.skills or self.knowledge or self.mcp_servers:
+                raise ValueError(
+                    "an `a2a` runtime runs elsewhere: it uses none of the platform's skills, knowledge "
+                    "bases or MCP servers"
+                )
         if (
             isinstance(self.runtime, AcpRuntime)
             and self.runtime.backend
@@ -172,9 +217,20 @@ class AgentTrial(Dto):
 RESERVED_SLUGS = frozenset({"new"})
 
 
+def check_remote_kind(kind: str, spec: AgentSpec) -> None:
+    """`remote` and an `a2a` runtime come together: one without the other is a mistake, not a default."""
+    is_a2a = isinstance(spec.runtime, A2aRuntime)
+    if kind == "remote" and not is_a2a:
+        raise ValueError("a `remote` agent needs a `runtime` of kind `a2a`")
+    if kind != "remote" and is_a2a:
+        raise ValueError("an `a2a` runtime belongs to an agent of kind `remote`")
+
+
 class AgentCreate(Dto):
     slug: str = Field(pattern=SLUG)
-    kind: Literal["internal", "external"] = "internal"
+    #: `internal`: run by the platform. `external`: a client of the MCP door. `remote`: an agent
+    #: the platform calls over A2A (ADR 0062); it needs an `a2a` runtime, and only that kind has one.
+    kind: Literal["internal", "external", "remote"] = "internal"
     display_name: str = Field(min_length=1, max_length=200)
     description: str | None = None
     spec: AgentSpec = Field(default_factory=AgentSpec)
@@ -197,6 +253,11 @@ class AgentCreate(Dto):
         if value in RESERVED_SLUGS:
             raise ValueError(f"`{value}` is reserved: the console's `/agents/{value}` page is not an agent")
         return value
+
+    @model_validator(mode="after")
+    def _remote_means_a2a(self) -> AgentCreate:
+        check_remote_kind(self.kind, self.spec)
+        return self
 
 
 class AgentFork(Dto):
@@ -282,7 +343,7 @@ class AgentCatalogueEntry(Dto):
     """Un agent que le catalogue propose (ADR 0040), et ce qu'il en est dans l'organisation."""
 
     slug: str
-    kind: Literal["internal", "external"]
+    kind: Literal["internal", "external", "remote"]
     display_name: str
     description: str | None = None
     #: Le rôle du paquet qu'il tient (`implement`, `review`…), ou `external` pour un client.
@@ -344,7 +405,7 @@ class AgentVersionDto(Dto):
 
 class AgentDto(Dto):
     slug: str
-    kind: Literal["internal", "external"]
+    kind: Literal["internal", "external", "remote"]
     display_name: str
     description: str | None = None
     status: str
