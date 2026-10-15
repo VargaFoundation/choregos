@@ -1,17 +1,17 @@
-"""Perte d'un **nœud** pendant qu'un worker tourne dessus (S12-05).
+"""Loss of a **node** while a worker runs on it (S12-05).
 
-`test_platform_on_cluster.py` tue un *pod* : Kubernetes le remplace en quelques secondes, et le
-run reprend. Ce fichier retire le **nœud** sous le pod, ce qui est une autre panne : l'API server
-n'apprend rien tout de suite, il attend de ne plus recevoir de battement de cœur, puis attend
-encore la tolérance de la pod avant d'évincer. Le temps entre les deux est du temps pendant lequel
-le travail ne bouge pas, et personne ne le voit.
+`test_platform_on_cluster.py` kills a *pod*: Kubernetes replaces it within seconds, and the run
+resumes. This file removes the **node** under the pod, which is a different failure: the API
+server learns nothing right away, it waits until it no longer receives a heartbeat, then waits
+again for the pod's toleration before evicting. The time between the two is time during which
+the work does not move, and nobody sees it.
 
-Fidélité : arrêter le conteneur d'un nœud kind, c'est exactement « le nœud a disparu » du point de
-vue de l'API server — le kubelet cesse de répondre, sans terminaison propre. Une éviction spot est
-*plus douce* (30 secondes de préavis et un taint). Ce qui passe ici passe donc là-bas ; ce qui n'est
-pas couvert est la gestion du préavis, que la plateforme n'implémente pas.
+Fidelity: stopping a kind node's container is exactly "the node disappeared" from the API
+server's point of view — the kubelet stops answering, with no clean termination. A spot
+eviction is *gentler* (30 seconds' notice and a taint). What passes here therefore passes there;
+what is not covered is the handling of the notice, which the platform does not implement.
 
-Le nœud est redémarré à la fin : le test rend le cluster comme il l'a trouvé.
+The node is restarted at the end: the test leaves the cluster as it found it.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ pytestmark = [pytest.mark.cluster, pytest.mark.slow]
 
 NS = "choregos-node-loss-test"
 IMAGE = "choregos-api:dev"
-# Le worker est épinglé ici, l'API ailleurs : la perte du nœud du worker ne doit pas emporter l'API.
+# The worker is pinned here, the API elsewhere: losing the worker's node must not take the API down.
 WORKER_NODE = "choregos-worker2"
 API_NODE = "choregos-worker"
 
@@ -49,10 +49,10 @@ def node_names() -> set[str]:
 @pytest.fixture(scope="module", autouse=True)
 def stack() -> None:
     if subprocess.run(["docker", "image", "inspect", IMAGE], capture_output=True, check=False).returncode:
-        pytest.skip(f"image `{IMAGE}` absente — `docker build -f docker/api.Dockerfile --target api`")
+        pytest.skip(f"image `{IMAGE}` is absent — `docker build -f docker/api.Dockerfile --target api`")
     missing = {WORKER_NODE, API_NODE} - node_names()
     if missing:
-        pytest.skip(f"nœuds absents du cluster : {sorted(missing)} — ce test veut `make cluster-up`")
+        pytest.skip(f"nodes missing from the cluster: {sorted(missing)} — this test wants `make cluster-up`")
 
     kubectl("delete", "ns", NS, "--ignore-not-found", "--wait=true", timeout_s=180, check=False)
     kubectl(
@@ -65,17 +65,17 @@ def stack() -> None:
     kubectl("-n", NS, "rollout", "status", "deploy/api", "--timeout=240s", timeout_s=300)
     kubectl("-n", NS, "rollout", "status", "deploy/worker", "--timeout=240s", timeout_s=300)
     yield
-    # Le nœud d'abord : un namespace ne se supprime pas proprement si un nœud manque.
+    # The node first: a namespace does not delete cleanly if a node is missing.
     docker("start", WORKER_NODE, check=False)
     _wait_node_ready(WORKER_NODE, timeout_s=180)
     kubectl("delete", "ns", NS, "--ignore-not-found", "--wait=false", check=False)
 
 
 def _stack() -> str:
-    """Deux déploiements sans dépendance externe : ce qui est mesuré est le replacement, pas l'appli.
+    """Two deployments with no external dependency: what is measured is the replacement, not the app.
 
-    `CHOREGOS_FAKES=1` et pas de base : le test porte sur l'ordonnancement, et une dépendance de
-    plus ne ferait qu'ajouter des raisons d'échouer qui n'ont rien à voir avec la perte d'un nœud.
+    `CHOREGOS_FAKES=1` and no database: the test is about scheduling, and one more dependency
+    would only add reasons to fail that have nothing to do with losing a node.
     """
 
     def deployment(name: str, node: str, tolerations: list[dict[str, object]] | None) -> dict[str, object]:
@@ -104,8 +104,8 @@ def _stack() -> str:
             },
         }
 
-    # Le worker n'est PAS épinglé par un nodeSelector pour son remplaçant : on le laisse libre de
-    # repartir ailleurs. L'épinglage sert seulement à choisir où il démarre.
+    # The worker is NOT pinned by a nodeSelector for its replacement: it is left free to restart
+    # elsewhere. The pinning only serves to choose where it starts.
     worker = deployment("worker", WORKER_NODE, None)
     del worker["spec"]["template"]["spec"]["nodeSelector"]  # type: ignore[index]
     worker["spec"]["template"]["spec"]["affinity"] = {  # type: ignore[index]
@@ -139,7 +139,7 @@ def _wait_node_ready(node: str, timeout_s: float = 180.0) -> None:
         if conditions == "True":
             return
         time.sleep(3)
-    raise AssertionError(f"le nœud {node} n'est pas redevenu Ready en {timeout_s:.0f}s")
+    raise AssertionError(f"node {node} did not become Ready again within {timeout_s:.0f}s")
 
 
 def pod_on(node: str, app: str) -> str | None:
@@ -156,11 +156,12 @@ def pod_uids(app: str) -> set[str]:
 
 
 def new_running_pod_elsewhere(app: str, gone: str, known: set[str]) -> str | None:
-    """Un pod **créé après** la coupure, prêt, sur un autre nœud.
+    """A pod **created after** the cut, ready, on another node.
 
-    Chercher « un pod ailleurs » ne suffit pas : un rollout antérieur peut en avoir laissé un, et
-    le test rend alors deux secondes en croyant mesurer un replacement. La comparaison porte donc
-    sur les UID connus avant la panne — un pod qui n'y figure pas est bien un remplaçant.
+    Looking for "a pod elsewhere" is not enough: an earlier rollout may have left one, and the
+    test then returns two seconds believing it measured a replacement. The comparison is
+    therefore on the UIDs known before the failure — a pod that is not among them is truly a
+    replacement.
     """
     payload = json.loads(kubectl("-n", NS, "get", "pods", "-l", f"app={app}", "-o", "json"))
     for item in payload["items"]:
@@ -179,7 +180,7 @@ def new_running_pod_elsewhere(app: str, gone: str, known: set[str]) -> str | Non
 
 
 def single_pod_on(app: str, node: str, timeout_s: float = 180.0) -> str:
-    """Attend qu'il ne reste **qu'un** pod, sur le nœud voulu — sinon la mesure est faussée."""
+    """Wait until **only one** pod remains, on the wanted node — otherwise the measurement is skewed."""
     deadline = time.monotonic() + timeout_s
     last: list[tuple[str, str]] = []
     while time.monotonic() < deadline:
@@ -194,15 +195,15 @@ def single_pod_on(app: str, node: str, timeout_s: float = 180.0) -> str:
         if len(alive) == 1 and alive[0][1] == node:
             return alive[0][0]
         time.sleep(3)
-    raise AssertionError(f"pas exactement un pod `{app}` sur {node} : {last}")
+    raise AssertionError(f"not exactly one `{app}` pod on {node}: {last}")
 
 
 def test_un_noeud_perdu_est_remarque_puis_le_travail_repart(stack: None) -> None:
-    """Combien de temps le travail reste immobile — c'est le nombre que personne ne mesure.
+    """How long the work stays still — the number nobody measures.
 
-    Trois instants comptent : la disparition du nœud, le moment où Kubernetes le déclare
-    injoignable, et le moment où le pod tourne ailleurs. L'écart entre les deux derniers est la
-    tolérance de la pod, dont **le défaut est de cinq minutes**.
+    Three instants matter: the node's disappearance, the moment Kubernetes declares it
+    unreachable, and the moment the pod runs elsewhere. The gap between the last two is the pod's
+    toleration, whose **default is five minutes**.
     """
     original = single_pod_on("worker", WORKER_NODE)
     known = pod_uids("worker")
@@ -212,7 +213,7 @@ def test_un_noeud_perdu_est_remarque_puis_le_travail_repart(stack: None) -> None
     t0 = time.monotonic()
     docker("stop", WORKER_NODE)
 
-    # 1. Kubernetes finit par ne plus recevoir de battement de cœur.
+    # 1. Kubernetes eventually stops receiving a heartbeat.
     not_ready_at = None
     deadline = t0 + 180
     while time.monotonic() < deadline:
@@ -228,9 +229,9 @@ def test_un_noeud_perdu_est_remarque_puis_le_travail_repart(stack: None) -> None
             not_ready_at = time.monotonic()
             break
         time.sleep(2)
-    assert not_ready_at is not None, "le nœud arrêté n'a jamais été marqué NotReady"
+    assert not_ready_at is not None, "the stopped node was never marked NotReady"
 
-    # 2. …puis le pod repart ailleurs. C'est cette attente-là qui coûte.
+    # 2. …then the pod restarts elsewhere. That wait is the one that costs.
     replacement = None
     deadline = t0 + 480
     while time.monotonic() < deadline:
@@ -242,24 +243,24 @@ def test_un_noeud_perdu_est_remarque_puis_le_travail_repart(stack: None) -> None
 
     detection = not_ready_at - t0
     total = rescheduled_at - t0
-    print(f"\nnœud perdu → NotReady : {detection:.0f}s ; nœud perdu → worker reparti : {total:.0f}s")
+    print(f"\nnode lost → NotReady: {detection:.0f}s; node lost → worker restarted: {total:.0f}s")
 
     assert replacement is not None, (
-        f"le worker n'est pas reparti en {total:.0f}s. Avec les tolérances par défaut "
-        "(`node.kubernetes.io/unreachable`, 300 s), c'est attendu — et c'est le problème : "
-        "voir `docs/runbooks/perte-de-noeud.md`."
+        f"the worker did not restart within {total:.0f}s. With the default tolerations "
+        "(`node.kubernetes.io/unreachable`, 300 s) that is expected — and that is the problem: "
+        "see `docs/runbooks/perte-de-noeud.md`."
     )
     assert replacement != original
 
-    # 3. L'API, elle, n'a rien vu : elle est sur un autre nœud.
-    assert pod_on(API_NODE, "api") == api_before, "l'API a bougé alors que son nœud était intact"
+    # 3. The API saw nothing: it is on another node.
+    assert pod_on(API_NODE, "api") == api_before, "the API moved although its node was intact"
 
 
 def test_une_tolerance_courte_divise_l_attente(stack: None) -> None:
-    """La même panne, avec `tolerationSeconds: 20` : le remplacement arrive en dizaines de secondes.
+    """The same failure, with `tolerationSeconds: 20`: the replacement arrives in tens of seconds.
 
-    C'est le correctif, et il se mesure. Le nœud a été arrêté par le test précédent : ce test le
-    remet en service lui-même — la fixture est à portée de module et ne nettoie qu'à la fin.
+    This is the fix, and it can be measured. The node was stopped by the previous test: this test
+    puts it back into service itself — the fixture is module-scoped and only cleans up at the end.
     """
     docker("start", WORKER_NODE, check=False)
     _wait_node_ready(WORKER_NODE)
@@ -280,7 +281,7 @@ def test_une_tolerance_courte_divise_l_attente(stack: None) -> None:
     kubectl("-n", NS, "patch", "deploy/worker", "--type=merge", "-p", json.dumps(patch))
     kubectl("-n", NS, "rollout", "status", "deploy/worker", "--timeout=180s", timeout_s=240)
 
-    # Le nodeSelector a servi à le poser sur le bon nœud ; on le retire pour qu'il puisse partir.
+    # The nodeSelector served to put it on the right node; it is removed so the pod can leave.
     kubectl(
         "-n",
         NS,
@@ -290,9 +291,9 @@ def test_une_tolerance_courte_divise_l_attente(stack: None) -> None:
         "-p",
         json.dumps([{"op": "remove", "path": "/spec/template/spec/nodeSelector"}]),
     )
-    # Retirer le nodeSelector relance un rollout : attendre qu'il ne reste qu'un pod, sur le nœud
-    # visé. Sans cela, un pod du rollout précédent traîne ailleurs et le test « mesure » deux
-    # secondes — un test vert qui ne mesure rien.
+    # Removing the nodeSelector triggers a rollout: wait until only one pod remains, on the
+    # targeted node. Without that, a pod from the previous rollout lingers elsewhere and the test
+    # "measures" two seconds — a green test that measures nothing.
     single_pod_on("worker", WORKER_NODE)
     known = pod_uids("worker")
 
@@ -306,14 +307,14 @@ def test_une_tolerance_courte_divise_l_attente(stack: None) -> None:
             break
         time.sleep(3)
     total = time.monotonic() - t0
-    print(f"\navec tolerationSeconds=20 : worker reparti en {total:.0f}s")
+    print(f"\nwith tolerationSeconds=20: worker restarted in {total:.0f}s")
 
-    assert replacement is not None, f"pas de remplacement en {total:.0f}s malgré la tolérance courte"
-    # La mesure de référence est de 354 s ; une tolérance de 20 s doit diviser l'attente, pas la
-    # grignoter. La borne est large pour absorber le temps de téléchargement d'image sur un nœud
-    # qui n'a jamais porté ce pod.
-    assert total < 150, f"la tolérance courte n'a pas réduit l'attente ({total:.0f}s)"
+    assert replacement is not None, f"no replacement within {total:.0f}s despite the short toleration"
+    # The reference measurement is 354 s; a 20 s toleration must divide the wait, not nibble at
+    # it. The bound is wide to absorb the image download time on a node that never carried this
+    # pod.
+    assert total < 150, f"the short toleration did not reduce the wait ({total:.0f}s)"
     assert total > 10, (
-        f"remplacement en {total:.0f}s : trop rapide pour être une réaction à la panne — "
-        "un pod tournait déjà ailleurs et la mesure ne mesure rien"
+        f"replacement in {total:.0f}s: too fast to be a reaction to the failure — "
+        "a pod was already running elsewhere and the measurement measures nothing"
     )

@@ -108,7 +108,10 @@ async def matrix(ctx: ProjectCtx, session: Db) -> ModelMatrix:
             entries.append(ModelMatrixEntry(backend=backend, model=row.litellm_model, validated=True))
         extra = (row.params or {}).get("matrix", [])
         for entry in extra:
-            entries.append(ModelMatrixEntry.model_validate(entry))
+            # A published cell carries more than the matrix shows (`cases`, `details`…): the
+            # entry keeps its own fields, and a cell is never refused for what it adds.
+            shown = {key: value for key, value in entry.items() if key in ModelMatrixEntry.model_fields}
+            entries.append(ModelMatrixEntry.model_validate(shown))
         if (row.params or {}).get("matrix_generated_at"):
             generated_at = row.params["matrix_generated_at"]
     return ModelMatrix(generated_at=generated_at, entries=entries)

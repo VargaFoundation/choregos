@@ -154,6 +154,29 @@ demonstration environment for a `cd: demo` connector (`/cd/mcp`): the release tr
 project promotes, checks and rolls back there, with no Argo CD — refused in staging and prod too. A supplier's agent needs no family: it is an MCP
 server like any other, its tools discovered and born closed.
 
+**Market data: `marketdata`.** Daily prices for stocks and ETFs, read **through the platform**: the
+run's sandbox keeps its egress closed, provider keys stay on the API side (`secret_refs`, never in
+the pod), and every call is a row of the cost ledger. Read-only, so both operations are `allowed`:
+`get_bars` (`symbol`, `start`, `end` as `YYYY-MM-DD` — bars sorted, one per date, `adj_close` null
+when the source has none) and `get_instrument` (`symbol` — name, `stock`/`etf`/`unknown`, currency,
+exchange). A run sees them as `<connector>__get_bars` and `<connector>__get_instrument`. A symbol
+must match `^[A-Za-z0-9.^=_-]{1,20}$` and can never change the URL; an unknown symbol or a quota
+is a named error (`422`).
+
+| Type | Source | Config | Secret | Mind |
+| --- | --- | --- | --- | --- |
+| `stooq` | daily CSV | `suffix_map` (ticker suffix to Stooq market: `""` is `.us`, `.L` is `.uk`, `.DE`, `.HK`, `.T`, `.WA`, `.PA` are mapped) | `api_key` (optional, appended as `&apikey=` when Stooq asks for it) | not dividend-adjusted; only `.us` is a known quantity, the other markets are unverified, hence the map; on 2026-10-14 Stooq answered scripts with a JavaScript browser check, reported as a source failure |
+| `yahoo` | unofficial chart endpoint | — | — | **personal use only, may break** without notice; has `adj_close` |
+| `alphavantage` | `TIME_SERIES_DAILY` | — | `api_key` | free tier about 25 requests a day, unadjusted, recent history only |
+| `composite` | the three above | `sources` (types, in order), `source_configs`, `cross_check` (default true), `tolerance` (default 0.02) | `stooq_api_key`, `alphavantage_api_key` | falls back on an error or an empty answer; with `cross_check` the next source that answers is compared on common closes: `cross_check: {source, common_days, max_rel_diff, diverging_days}` — it reports a divergence, it does not pick a winner |
+
+The composite lists provider **types**, not other connectors (an adapter is built from one
+connector's configuration and secrets), hence the flat `<type>_api_key` secret fields. With
+`CHOREGOS_FAKES=1` a `fake` serves deterministic synthetic bars (a random walk seeded by the symbol,
+business days only). Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
+the canonical JSON) in its `tool.called` event, so a result can later be matched to what the run was
+served.
+
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
 `pgvector` until 2026-09-26, which promised something the code does not do; that name still
@@ -1163,6 +1186,54 @@ issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 50
 choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE
 ```
+
+### Work items on a schedule
+
+With `tracker: internal`, a project can open work items by itself (S38-11):
+
+```yaml
+schedules:
+  - name: weekly
+    cron: "0 6 * * mon"          # five fields, UTC
+    title: Weekly campaign
+    fields: { symbols: [SPY.US, QQQ.US], start: "2018-01-01", oos_start: "2024-01-01", end: "{window}" }
+    workflow: campaign           # optional; the project's routing otherwise
+```
+
+The reconciliation pass opens the work item of the current window, keyed by the window
+(`RESEARCH-weekly-20261019T0600Z`), then starts it. Two passes in the same window find the key and
+open nothing more. `{window}` in a text field becomes the window's date. A window missed by more than an hour — the workers were down — is skipped, not run
+late. With an external tracker, or with the reconciliation loop off
+(`reconcile_interval_seconds: 0`), nothing fires. Fields the workflow refuses are logged and the
+pass reports the schedule under `refused`; the other schedules still fire.
+
+### One child work item per element, then a join
+
+A system transition can open one child work item per element of a list and pass once every child
+is settled (S38-12, ADR 0057):
+
+```yaml
+- id: t-review-each
+  from: screened
+  to: decided
+  by: platform                       # a `system` actor; the transition does nothing else
+  spawn:
+    workflow: review                 # the children's workflow, in the same project
+    for_each: outputs.metrics.relevant   # or fields.<name>
+    title: "Review {{ item.symbol }}"
+    fields: { symbol: "{{ item.symbol }}", dsr: "{{ item.dsr }}" }   # one expression keeps its type
+    max_children: 20                 # a longer list is refused
+    succeeded: [adopted]             # the children's states that count as a success
+    min_succeeded: 1                 # fewer fails the join
+  on_fail: { to: screened, max_attempts: 1, escalate_to: nothing_adopted }   # required
+```
+
+The children are keyed by the parent's key and their rank (`RESEARCH-12.1`): a retry or a replay
+finds them and opens none twice. Each child signals its parent as it closes, and the parent
+re-reads its children every 30 minutes in case a signal is lost; its status says how many are still
+open. The join writes `documents.children` on the parent: the count per state, and each child's key,
+title, final state and fields. A list that cannot be read, too long, or a child its workflow refuses,
+follows `on_fail`. Children need the internal tracker; the local mode stops at a fan-out.
 
 ## 6. Read what came out
 

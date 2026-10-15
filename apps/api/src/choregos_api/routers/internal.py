@@ -7,6 +7,8 @@ descend dans le workspace : tout passe ici (§1.10, §2.2).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Annotated, Any
 
 from choregos_adapters.storage import ObjectStoreError
@@ -675,6 +677,12 @@ async def _outils_des_greffons(
     return trouves
 
 
+def json_sha256(valeur: Any) -> str:
+    """The SHA-256 of the canonical JSON of a value: sorted keys, compact separators, UTF-8."""
+    canonique = json.dumps(valeur, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+    return hashlib.sha256(canonique.encode("utf-8")).hexdigest()
+
+
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
 async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     """Les outils que CE run peut appeler, au format MCP (`name`, `description`, `inputSchema`)."""
@@ -791,6 +799,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         tool=name,
         provider=fournisseur,
         status_code=code,
+        # Provenance: WHAT went in and WHAT came back, as digests of the canonical JSON — the event
+        # keeps no payload, but a result that is later disputed can be matched to the bytes served.
+        request_sha256=json_sha256(body or {}),
+        response_sha256=json_sha256(corps),
     )
     return {
         "status_code": code,

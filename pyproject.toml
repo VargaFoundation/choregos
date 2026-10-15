@@ -1,6 +1,6 @@
 [project]
 name = "choregos-workspace"
-version = "0.17.15"
+version = "0.17.16"
 description = "Choregos — plateforme de delivery agentique (Varga Foundation)"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -11,6 +11,7 @@ dependencies = [
   "choregos-ontology",
   "choregos-adapters",
   "choregos-runner",
+  "choregos-quant",
   "choregos-tools-mcp",
   "choregos-playbooks",
   "choregos-cli",
@@ -49,6 +50,7 @@ choregos-core = { workspace = true }
 choregos-ontology = { workspace = true }
 choregos-adapters = { workspace = true }
 choregos-runner = { workspace = true }
+choregos-quant = { workspace = true }
 choregos-tools-mcp = { workspace = true }
 choregos-playbooks = { workspace = true }
 choregos-cli = { workspace = true }
@@ -118,7 +120,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["(^|/)(\\.venv|node_modules|generated)/", "^apps/web/"]
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = "packages/contracts/src:packages/core/src:packages/ontology/src:packages/adapters/src:packages/runner/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:apps/api/src:apps/orchestrator/src"
+mypy_path = "packages/contracts/src:packages/core/src:packages/ontology/src:packages/adapters/src:packages/runner/src:packages/quant/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:apps/api/src:apps/orchestrator/src"
 
 [[tool.mypy.overrides]]
 module = ["celpy.*", "temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 from . import (
     actions,
     bilan,
+    children,
     evals,
     execution,
     findings,
@@ -16,6 +17,7 @@ from . import (
     knowledge,
     memory,
     provisioning,
+    schedules,
     scm,
     stage,
     suspension,
@@ -57,6 +59,9 @@ ALL_ACTIVITIES = [
     tracker.notify,
     tracker.close_out,
     tracker.reconcile_tracker,
+    schedules.fire_schedules,
+    children.spawn_children,
+    children.children_state,
     gates.evaluate_gates,
     gates.check_scope_violations,
     scm.open_pull_request,
@@ -92,6 +97,9 @@ ALL_ACTIVITIES = [
     evals.list_fixtures,
     evals.run_eval_cell,
     evals.publish_matrix,
+    evals.seed_eval_ticket,
+    evals.judge_eval_run,
+    evals.summarize_eval_cell,
 ]
 
 __all__ = [
@@ -103,6 +111,7 @@ __all__ = [
     "gates",
     "memory",
     "provisioning",
+    "schedules",
     "scm",
     "stage",
     "tracker",

@@ -1484,6 +1484,16 @@ export type ModelMatrix = {
     median_duration_s?: number | null;
     with_memory?: boolean | null;
     report_url?: string | null;
+    /** The context reduction the cell's runs were given (ADR 0055). */
+    context?: "none" | "rtk" | "headroom" | "rtk+headroom" | null;
+    /** Cases the gateway's ledger has a measure for. */
+    metered?: number | null;
+    /** Input tokens from the ledger, cache reads included. */
+    median_tokens_in?: number | null;
+    /** Cache-read input tokens from the ledger. */
+    median_tokens_cached?: number | null;
+    median_tokens_out?: number | null;
+    median_turns?: number | null;
   }>;
 };
 

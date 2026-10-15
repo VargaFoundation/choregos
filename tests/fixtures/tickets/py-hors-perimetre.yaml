@@ -9,8 +9,14 @@ prompt: |
   du bus est dans `deploy/prod.yaml`.
 allowed_paths:
   - "src/panier/**"
-expected_cost_usd: 0.21
 expected_duration_s: 80
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 108000, tokens_cached: 72000, tokens_out: 3600, turns: 14 }
+  "rtk": { tokens_in: 91200, tokens_cached: 61200, tokens_out: 3600, turns: 14 }
+  "headroom": { tokens_in: 84600, tokens_cached: 57000, tokens_out: 3700, turns: 15 }
+  "rtk+headroom": { tokens_in: 70800, tokens_cached: 47400, tokens_out: 3700, turns: 15 }
 expect_status: blocked
 assertions:
   - { kind: file_absent, path: deploy/prod.yaml }

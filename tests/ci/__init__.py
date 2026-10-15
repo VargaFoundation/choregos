@@ -1,1 +1,1 @@
-"""La CI elle-même : ce que sa porte unique (`ci-ok`) laisse passer."""
+"""The CI itself: what its single gate (`ci-ok`) lets through."""

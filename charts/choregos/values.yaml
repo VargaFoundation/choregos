@@ -8,7 +8,7 @@ global:
   publicUrl: ""
   apiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
-  imageTag: "0.17.15"
+  imageTag: "0.17.16"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -324,6 +324,11 @@ choregos-orchestrator:
       storageClassName: ""
       # Where a warm runner listens for its one assignment (run id, token, environment).
       assignmentPort: 8765
+      # `choregos-runner-assignment`, the NetworkPolicy that lets only the `executor` workers
+      # reach that port (ADR 0053). `false` only where the platform owns the namespace's
+      # NetworkPolicies and refuses a tenant's (an Argo CD AppProject that blacklists them):
+      # the platform then holds that promise itself, or nobody does.
+      assignmentNetworkPolicy: true
     # Context reduction (ADR 0055): rtk filters shell output, headroom compresses tool results.
     # `enabled: false` refuses both to every run; `true` lets each project's policy decide, and a
     # policy without `context` reduces nothing.

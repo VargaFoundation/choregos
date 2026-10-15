@@ -1,11 +1,11 @@
-"""S7-04 — la sauvegarde Postgres se restaure vraiment.
+"""S7-04 — the Postgres backup really restores.
 
-Un `ScheduledBackup` dans un dépôt n'est pas une sauvegarde : tant qu'une restauration n'a
-pas rendu les données, on a un fichier YAML et une espérance. Ce test monte le vrai
-CloudNativePG avec la configuration Barman du dépôt, écrit des lignes, sauvegarde, détruit
-le cluster, restaure depuis l'objet, et relit les lignes.
+A `ScheduledBackup` in a repository is not a backup: until a restore has returned the data,
+there is a YAML file and a hope. This test stands up the real CloudNativePG with the
+repository's Barman configuration, writes rows, backs up, destroys the cluster, restores from
+the object store, and reads the rows back.
 
-Il est lent (quelques minutes) et marqué `cluster` : il n'a de sens que sur un vrai cluster.
+It is slow (a few minutes) and marked `cluster`: it only makes sense on a real cluster.
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ def cnpg_present() -> bool:
 @pytest.fixture(scope="module", autouse=True)
 def stack() -> None:
     if not cnpg_present():
-        pytest.skip("test ignoré — l'opérateur CloudNativePG n'est pas installé sur ce cluster")
-    # Un namespace en cours de suppression refuse tout : on attend qu'il ait disparu avant
-    # de le recréer, sinon un second passage du test échoue sur un reste du premier.
+        pytest.skip("test skipped — the CloudNativePG operator is not installed on this cluster")
+    # A namespace being deleted refuses everything: we wait until it has gone before recreating
+    # it, otherwise a second run of the test fails on a leftover of the first.
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
         phase = kubectl("get", "ns", NS, "-o", "jsonpath={.status.phase}", check=False).strip()
@@ -56,24 +56,23 @@ def stack() -> None:
     kubectl("delete", "ns", NS, "--ignore-not-found", "--wait=false", check=False)
 
 
-# Le magasin d'objets du test. SeaweedFS et non MinIO : le 2026-09-27, `minio/minio` a cessé
-# d'être tirable ANONYMEMENT sur quay.io (401 sur le tag épinglé) comme sur Docker Hub
-# (« authentication required »). Le commentaire précédent disait déjà s'être replié de Docker Hub
-# vers quay pour cette raison ; quay a suivi. Le test échouait toutes les nuits au montage, sur
-# un pod qui n'atteignait jamais `Ready` — et le message parlait d'une condition non remplie, pas
-# d'une image introuvable.
+# The test's object store. SeaweedFS and not MinIO: on 2026-09-27, `minio/minio` stopped being
+# pullable ANONYMOUSLY on quay.io (401 on the pinned tag) as on Docker Hub ("authentication
+# required"). The previous comment already said it had fallen back from Docker Hub to quay for
+# this reason; quay followed. The test failed every night at setup, on a pod that never reached
+# `Ready` — and the message spoke of an unmet condition, not of a missing image.
 #
-# Une seule image, et elle sert aussi de client : `weed shell` crée le seau, donc rien à tirer de
-# plus. Version figée pour la raison habituelle : une nuit ne doit pas changer d'image toute
-# seule. Vérifié à la main avant de changer le test — seau créé, objet écrit et relu, et surtout
-# un envoi MULTIPART complet de 6 Mo relu à l'octet, puisque c'est ce que fait Barman.
+# A single image, and it also serves as the client: `weed shell` creates the bucket, so nothing
+# more to pull. Version pinned for the usual reason: a night must not change image by itself.
+# Checked by hand before changing the test — bucket created, object written and read back, and
+# above all a full MULTIPART upload of 6 MB read back byte for byte, since that is what Barman does.
 SEAWEEDFS = "chrislusf/seaweedfs:3.97"
-#: Le port S3 de SeaweedFS, là où MinIO écoutait 9000.
+#: SeaweedFS's S3 port, where MinIO listened on 9000.
 S3_PORT = 8333
 
 
 def _magasin() -> str:
-    """SeaweedFS mono-pod : le magasin d'objets que Barman utilisera."""
+    """Single-pod SeaweedFS: the object store Barman will use."""
     return yaml.safe_dump_all(
         [
             {
@@ -85,10 +84,10 @@ def _magasin() -> str:
                         {
                             "name": "magasin",
                             "image": SEAWEEDFS,
-                            # `server -s3` monte maître, volume, filer et passerelle S3 dans un
-                            # seul processus : c'est fait pour un test. Sans `-s3.config`, la
-                            # passerelle accepte n'importe quelles clés — d'où les identifiants
-                            # factices du secret, qui ne sont vérifiés par personne.
+                            # `server -s3` runs master, volume, filer and S3 gateway in a single
+                            # process: it is made for a test. Without `-s3.config`, the gateway
+                            # accepts any keys — hence the secret's dummy credentials, which
+                            # nobody checks.
                             "args": ["server", "-s3", "-dir=/data"],
                             "imagePullPolicy": "IfNotPresent",
                             "ports": [{"containerPort": S3_PORT}],
@@ -130,10 +129,10 @@ def _secrets() -> str:
 
 
 def _create_bucket() -> None:
-    """Le seau est créé DEPUIS le pod du magasin, par `weed shell`.
+    """The bucket is created FROM the store pod, by `weed shell`.
 
-    Avant, un second pod tirait le client `mc`. Une image de moins à tirer est une cause
-    d'échec de moins la nuit — et c'était précisément la deuxième image disparue.
+    Before, a second pod pulled the `mc` client. One image fewer to pull is one cause of failure
+    fewer at night — and it was precisely the second image that disappeared.
     """
     kubectl(
         "-n",
@@ -153,21 +152,20 @@ def _wait_ready(target: str, condition: str, timeout: str = "600s") -> None:
 
 
 def _cluster_manifest(name: str, *, restore_from: str | None = None) -> str:
-    """La configuration du dépôt, ramenée à la taille d'un cluster de test.
+    """The repository's configuration, scaled down to a test cluster.
 
-    Ce qui change : une instance au lieu de trois, la classe de stockage par défaut, des
-    volumes de 1 Gi, et un magasin S3 local à la place de celui du nuage. Ce qui ne change pas —
-    et qui est l'objet du test — c'est le bloc `backup.barmanObjectStore` et le chemin de
-    restauration.
+    What changes: one instance instead of three, the default storage class, 1 Gi volumes, and a
+    local S3 store instead of the cloud one. What does not change — and is the object of the
+    test — is the `backup.barmanObjectStore` block and the restore path.
     """
     source = yaml.safe_load(_repo_cluster())
     spec = source["spec"]
     spec["instances"] = 1
     spec["storage"] = {"size": "1Gi"}
     spec["walStorage"] = {"size": "1Gi"}
-    # La mémoire demandée doit rester au-dessus du `shared_buffers` du dépôt (512 Mo) :
-    # CNPG refuse le cluster sinon, et c'est une bonne chose — un Postgres qui démarre avec
-    # moins de mémoire que ses buffers ne démarre pas longtemps.
+    # The requested memory must stay above the repository's `shared_buffers` (512 MB): CNPG
+    # refuses the cluster otherwise, and that is a good thing — a Postgres that starts with less
+    # memory than its buffers does not start for long.
     spec["resources"] = {"requests": {"cpu": "100m", "memory": "1Gi"}}
     spec["backup"]["barmanObjectStore"]["destinationPath"] = f"s3://{BUCKET}/{name}"
     spec["backup"]["barmanObjectStore"]["endpointURL"] = f"http://magasin:{S3_PORT}"
@@ -184,9 +182,9 @@ def _cluster_manifest(name: str, *, restore_from: str | None = None) -> str:
                 "barmanObjectStore": {
                     "destinationPath": f"s3://{BUCKET}/{restore_from}",
                     "endpointURL": f"http://magasin:{S3_PORT}",
-                    # Sans `serverName`, CNPG cherche la sauvegarde sous le nom du **nouveau**
-                    # cluster et répond « no target backup found ». C'est le nom du serveur
-                    # d'origine qu'il faut donner : le piège classique d'une restauration.
+                    # Without `serverName`, CNPG looks for the backup under the **new** cluster's
+                    # name and answers "no target backup found". The original server's name
+                    # must be given: the classic restore trap.
                     "serverName": restore_from,
                     "s3Credentials": spec["backup"]["barmanObjectStore"]["s3Credentials"],
                     "wal": {"maxParallel": 2},
@@ -205,19 +203,19 @@ def _repo_cluster() -> str:
     for document in raw.read_text(encoding="utf-8").split("---"):
         if "kind: Cluster" in document:
             return document
-    raise AssertionError("aucun `kind: Cluster` dans infra/bootstrap/data.yaml")
+    raise AssertionError("no `kind: Cluster` in infra/bootstrap/data.yaml")
 
 
 def psql(cluster: str, sql: str) -> str:
     pod = kubectl(
         "-n", NS, "get", "pod", "-l", f"cnpg.io/cluster={cluster},role=primary", "-o", "name"
     ).strip()
-    assert pod, f"aucun primaire pour {cluster}"
+    assert pod, f"no primary for {cluster}"
     return kubectl("-n", NS, "exec", pod, "--", "psql", "-U", "postgres", "-d", "choregos", "-tAc", sql)
 
 
 def test_le_cluster_du_depot_demarre(stack: None) -> None:
-    """Première vérité : la configuration du dépôt produit un Postgres qui démarre."""
+    """First truth: the repository's configuration produces a Postgres that starts."""
     kubectl("apply", "-f", "-", input_text=_cluster_manifest(CLUSTER))
     deadline = time.monotonic() + 600
     ready = ""
@@ -230,13 +228,13 @@ def test_le_cluster_du_depot_demarre(stack: None) -> None:
         time.sleep(10)
     if ready != "1":
         etat = kubectl("-n", NS, "describe", "cluster", CLUSTER, check=False)[-1500:]
-        raise AssertionError(f"le cluster n'est jamais devenu prêt :\n{etat}")
+        raise AssertionError(f"the cluster never became ready:\n{etat}")
 
 
 def test_une_sauvegarde_se_restaure_avec_ses_donnees(stack: None) -> None:
     psql(CLUSTER, "CREATE TABLE IF NOT EXISTS preuve (id int primary key, texte text);")
-    psql(CLUSTER, "INSERT INTO preuve VALUES (1, 'avant la sauvegarde') ON CONFLICT DO NOTHING;")
-    assert "avant la sauvegarde" in psql(CLUSTER, "SELECT texte FROM preuve WHERE id = 1;")
+    psql(CLUSTER, "INSERT INTO preuve VALUES (1, 'before the backup') ON CONFLICT DO NOTHING;")
+    assert "before the backup" in psql(CLUSTER, "SELECT texte FROM preuve WHERE id = 1;")
 
     kubectl(
         "apply",
@@ -262,12 +260,12 @@ def test_une_sauvegarde_se_restaure_avec_ses_donnees(stack: None) -> None:
         time.sleep(10)
     if phase != "completed":
         detail = kubectl("-n", NS, "describe", "backup", "sauvegarde-1", check=False)[-800:]
-        raise AssertionError(f"sauvegarde en phase `{phase}` :\n{detail}")
+        raise AssertionError(f"backup in phase `{phase}`:\n{detail}")
 
-    # Une écriture postérieure à la sauvegarde : elle ne doit PAS réapparaître après restauration.
-    psql(CLUSTER, "INSERT INTO preuve VALUES (2, 'après la sauvegarde') ON CONFLICT DO NOTHING;")
+    # A write made after the backup: it must NOT reappear after the restore.
+    psql(CLUSTER, "INSERT INTO preuve VALUES (2, 'after the backup') ON CONFLICT DO NOTHING;")
 
-    # La panne : le cluster disparaît, volumes compris.
+    # The failure: the cluster disappears, volumes included.
     kubectl("-n", NS, "delete", "cluster", CLUSTER, "--wait=true")
 
     kubectl("apply", "-f", "-", input_text=_cluster_manifest(RESTORED, restore_from=CLUSTER))
@@ -283,5 +281,5 @@ def test_une_sauvegarde_se_restaure_avec_ses_donnees(stack: None) -> None:
     assert ready == "1", kubectl("-n", NS, "describe", "cluster", RESTORED, check=False)[-1500:]
 
     restaure = psql(RESTORED, "SELECT texte FROM preuve ORDER BY id;")
-    assert "avant la sauvegarde" in restaure, restaure
+    assert "before the backup" in restaure, restaure
     assert json.dumps(restaure), restaure

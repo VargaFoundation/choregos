@@ -37,6 +37,7 @@ with workflow.unsafe.imports_passed_through():
     from choregos_core.gates import ACTION_REGLEE, GateOutcome
 
     from ..activities import actions as action_activities
+    from ..activities import children as children_activities
     from ..activities import gates as gate_activities
     from ..activities import scm as scm_activities
     from ..activities import stage as stage_activities
@@ -105,6 +106,11 @@ BUDGET_NEVER_RETRIES = "budget-never-retries"
 #: The same failure on two consecutive attempts of a stage escalates instead of retrying (S27-07):
 #: a third identical attempt would cost the same and fail the same.
 IDENTICAL_FAILURE_ESCALATES = "identical-failure-escalates"
+#: A system transition can open one child work item per element of a list and wait until every child
+#: is settled (S38-12, ADR 0057). No history before this marker holds a `spawn:`.
+FAN_OUT = "fan-out-and-join"
+#: The safety net of a join: the children re-read at this pace, in case a `child_settled` is lost.
+CHILDREN_REREAD = timedelta(minutes=30)
 
 #: `prepare_stage` mints a run's key at what is left, and refuses to start a stage below the floor
 #: (S27-02, ADR 0047): the stage is then sent to a person without a run. Before this marker,
@@ -238,6 +244,8 @@ class WorkflowInterpreter:
         self.resume_lookups: int = 0
         self.project_id: str = ""
         self.work_item_id: str = ""
+        #: How many `child_settled` signals arrived: a join re-reads its children when it moves.
+        self.children_settled: int = 0
 
     # ───────────────────────── signaux et requêtes ─────────────────────────
 
@@ -264,6 +272,11 @@ class WorkflowInterpreter:
         """Les champs ont changé (S20-05) : une date d'action se recalcule, son minuteur se réarme."""
         self.champs = dict(payload.get("fields") or {})
         self.version_des_champs += 1
+
+    @workflow.signal
+    def child_settled(self, payload: dict[str, Any]) -> None:
+        """A child work item this one opened is closed (S38-12): the join re-reads its children."""
+        self.children_settled += 1
 
     @workflow.signal
     def action_settled(self, payload: dict[str, Any]) -> None:
@@ -981,6 +994,8 @@ class WorkflowInterpreter:
         attempt = self.attempts[key]
         self.attempts[key] = attempt + 1
 
+        if transition.spawn is not None and workflow.patched(FAN_OUT):
+            return await self._run_spawn(params, engine, transition)
         if transition.action is not None and workflow.patched(ACTIONS_DE_TRANSITION):
             return await self._run_action(params, engine, transition, attempt + 1)
 
@@ -1057,6 +1072,53 @@ class WorkflowInterpreter:
         )
         outcomes = await self._gates(params, autres, self.last_run or "")
         return engine.after_action(transition, statut, outcomes, self._essais(transition.key))
+
+    async def _run_spawn(self, params: InterpreterInput, engine: WorkflowEngine, transition: Any) -> Any:
+        """A fan-out and its join (S38-12, ADR 0057): open the children, then wait until every one is
+        settled — woken by `child_settled`, re-reading them every `CHILDREN_REREAD` in case a signal
+        is lost —, and judge the join with the transition's other gates. Opening is idempotent (the
+        children's keys are the parent's with a rank): a migration or a retry finds them again."""
+        spec = transition.spawn.model_dump(mode="json")
+        opened = await executer_activite(
+            children_activities.spawn_children,
+            {
+                "project_id": params.project_id,
+                "work_item_id": params.work_item_id,
+                "workflow_id": workflow.info().workflow_id,
+                "spawn": spec,
+            },
+            start_to_close_timeout=timedelta(minutes=5),
+            retry_policy=DEFAULT_RETRY,
+        )
+        if opened.get("refused"):
+            refused = GateOutcome(
+                "children_settled", False, detail=f"the children cannot be opened: {opened['refused']}"
+            )
+            return engine.after_gates(transition, [refused], self._essais(transition.key))
+        children = list(opened["children"])
+        while not self.stopped and self.workflow_override is None:
+            seen = self.children_settled
+            state = await executer_activite(
+                children_activities.children_state,
+                {"work_item_id": params.work_item_id, "children": children, "spawn": spec},
+                start_to_close_timeout=timedelta(minutes=1),
+                retry_policy=DEFAULT_RETRY,
+            )
+            if not state["pending"]:
+                break
+            self.attente = f"{len(state['pending'])} of {len(children)} child work items not settled"
+            await wait_signal(
+                lambda seen=seen: (
+                    self.children_settled != seen or self.stopped or self.workflow_override is not None
+                ),
+                CHILDREN_REREAD,
+            )
+        self.attente = None
+        if self.stopped or self.workflow_override is not None:
+            return None  # stopped, or a migration to apply: the loop sees to it
+        joined = GateOutcome("children_settled", bool(state["passed"]), detail=str(state["detail"]))
+        outcomes = await self._gates(params, transition, self.last_run or "")
+        return engine.after_gates(transition, [joined, *outcomes], self._essais(transition.key))
 
     async def _attendre_la_date(self, expression: str) -> bool:
         """Attend `not_before`, RECALCULÉ à chaque changement des champs : déplacer la date

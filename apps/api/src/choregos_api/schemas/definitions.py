@@ -175,6 +175,13 @@ class ModelMatrixEntry(Dto):
     median_duration_s: float | None = None
     with_memory: bool | None = None
     report_url: str | None = None
+    # S37-09 (ADR 0055): the cell's context reduction, and its tokens from the gateway's ledger.
+    context: Literal["none", "rtk", "headroom", "rtk+headroom"] | None = None
+    metered: int | None = None
+    median_tokens_in: float | None = None
+    median_tokens_cached: float | None = None
+    median_tokens_out: float | None = None
+    median_turns: float | None = None
 
 
 class ModelMatrix(Dto):

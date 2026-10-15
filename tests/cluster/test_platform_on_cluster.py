@@ -1,12 +1,12 @@
-"""M5 sur cluster — la plateforme tourne vraiment sur Kubernetes, et survit à la perte d'un worker.
+"""M5 on a cluster — the platform really runs on Kubernetes, and survives the loss of a worker.
 
-Ce que les scénarios e2e en mémoire ne peuvent pas montrer : que l'image construite démarre,
-que l'API et les workers se trouvent, que Temporal reprend un run après la mort du pod qui le
-portait — et surtout qu'une reprise **ne facture pas deux fois** (S12-05).
+What the in-memory e2e scenarios cannot show: that the built image starts, that the API and the
+workers find each other, that Temporal resumes a run after the death of the pod carrying it —
+and above all that a resumption **does not bill twice** (S12-05).
 
-La pile est volontairement petite : Postgres, un Temporal de développement, l'API et un
-worker, tous en `CHOREGOS_FAKES=1`. Ce qui est éprouvé ici, c'est la plateforme elle-même,
-pas les services tiers.
+The stack is deliberately small: Postgres, a development Temporal, the API and a worker, all
+with `CHOREGOS_FAKES=1`. What is exercised here is the platform itself, not the third-party
+services.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _image_present() -> bool:
 @pytest.fixture(scope="module", autouse=True)
 def platform() -> None:
     if not _image_present():
-        pytest.skip(f"image `{IMAGE}` absente — `make images`")
+        pytest.skip(f"image `{IMAGE}` is absent — `make images`")
     _wait_namespace_gone()
     kubectl(
         "apply",
@@ -61,7 +61,7 @@ def _wait_namespace_gone() -> None:
 
 
 def _stack() -> str:
-    """Postgres + Temporal de dev + API + worker, à partir de l'image du dépôt."""
+    """Postgres + dev Temporal + API + worker, from the repository image."""
     env = [
         {"name": "CHOREGOS_FAKES", "value": "1"},
         {"name": "CHOREGOS_ENV", "value": "test"},
@@ -114,9 +114,9 @@ def _stack() -> str:
                 command=[
                     "sh",
                     "-c",
-                    # Pas de `|| true` : il transformait un échec de migration en démarrage
-                    # silencieux, le schéma venait alors de `create_all` — et ce banc ne
-                    # prouvait rien sur les migrations. Même commande que le Job du chart.
+                    # No `|| true`: it turned a migration failure into a silent start, the
+                    # schema then came from `create_all` — and this bench proved nothing about
+                    # the migrations. Same command as the chart's Job.
                     "python -m choregos_api.migrer && "
                     "uvicorn choregos_api.main:app --host 0.0.0.0 --port 8000",
                 ],
@@ -185,11 +185,11 @@ def _service(name: str, port: int) -> dict:
 
 
 def api(method: str, path: str, body: dict | None = None, *, tries: int = 6) -> dict:
-    """Appelle l'API depuis l'intérieur du cluster — pas de port-forward à orchestrer.
+    """Call the API from inside the cluster — no port-forward to orchestrate.
 
-    Un `rollout status` terminé ne veut pas dire que le `Service` a ses endpoints : il y a
-    quelques secondes entre les deux, pendant lesquelles `curl` échoue avec un refus de
-    connexion. On réessaie plutôt que de transformer cette latence en échec de test.
+    A finished `rollout status` does not mean the `Service` has its endpoints: there are a few
+    seconds between the two, during which `curl` fails with a connection refusal. We retry
+    rather than turn this latency into a test failure.
     """
     for attempt in range(tries):
         try:
@@ -198,7 +198,7 @@ def api(method: str, path: str, body: dict | None = None, *, tries: int = 6) -> 
             if attempt == tries - 1:
                 raise
             time.sleep(5)
-    raise AssertionError("inatteignable")
+    raise AssertionError("unreachable")
 
 
 def _api_once(method: str, path: str, body: dict | None = None) -> dict:
@@ -231,19 +231,19 @@ def _api_once(method: str, path: str, body: dict | None = None) -> dict:
 
 
 def test_l_api_repond_depuis_le_cluster(platform: None) -> None:
-    """L'image du dépôt démarre, trouve sa base, et applique ses migrations."""
+    """The repository image starts, finds its database, and applies its migrations."""
     health = api("GET", "/healthz")
     assert health.get("status") in {"ok", "healthy"}, health
 
 
 def test_les_workers_sont_connectes_a_temporal(platform: None) -> None:
     logs = kubectl("-n", NS, "logs", "deploy/worker", "--tail=50")
-    assert "workers démarrés" in logs or "worker" in logs.lower(), logs[-500:]
+    assert "workers démarrés" in logs or "worker" in logs.lower(), logs[-500:]  # lang: fr-ok (product output)
     assert "Traceback" not in logs, logs[-800:]
 
 
 def test_la_base_porte_le_schema_complet(platform: None) -> None:
-    """Les migrations Alembic tournent sur un vrai Postgres, pas sur SQLite."""
+    """The Alembic migrations run on a real Postgres, not on SQLite."""
     tables = kubectl(
         "-n",
         NS,
@@ -259,21 +259,21 @@ def test_la_base_porte_le_schema_complet(platform: None) -> None:
         "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';",
         timeout_s=120,
     ).strip()
-    assert int(tables) >= 20, f"{tables} tables seulement — les migrations n'ont pas tourné"
+    assert int(tables) >= 20, f"only {tables} tables — the migrations did not run"
 
 
 def test_un_worker_tue_repart_sans_perdre_le_travail(platform: None) -> None:
-    """S12-05 — la reprise après la perte d'un worker ne rejoue pas ce qui est déjà fait."""
+    """S12-05 — resuming after the loss of a worker does not replay what is already done."""
     before = kubectl("-n", NS, "get", "pod", "-l", "app=worker", "-o", "name").strip()
-    assert before, "aucun worker à tuer"
+    assert before, "no worker to kill"
 
     kubectl("-n", NS, "delete", "pod", "-l", "app=worker", "--wait=true", timeout_s=180)
     kubectl("-n", NS, "rollout", "status", "deploy/worker", "--timeout=300s", timeout_s=400)
 
     after = kubectl("-n", NS, "get", "pod", "-l", "app=worker", "-o", "name").strip()
-    assert after and after != before, "le worker n'a pas été remplacé"
+    assert after and after != before, "the worker was not replaced"
 
     logs = kubectl("-n", NS, "logs", "deploy/worker", "--tail=40")
     assert "Traceback" not in logs, logs[-800:]
-    # L'API reste servie pendant le remplacement : les deux ne sont pas couplés.
+    # The API stays served during the replacement: the two are not coupled.
     assert api("GET", "/healthz").get("status") in {"ok", "healthy"}

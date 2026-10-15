@@ -336,11 +336,15 @@ async def notify(payload: dict[str, Any]) -> dict[str, Any]:
 @activity.defn(name="close_out")
 async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
     """Fin de ticket : état terminal reflété, commentaire final, leçon écrite en mémoire."""
+    from .children import notify_parent, parent_of
+
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         if item.closed_at is None:
             item.closed_at = utcnow()
+        # A child work item (S38-12) tells its parent once it is closed, after the commit below.
+        settled = parent_of(item)
         await persist_event(
             session,
             EventType.WORKITEM_CLOSED,
@@ -372,7 +376,10 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
                 ),
             )
         tracker_closed = await _close_delivered_item(session, bundle, item)
-        return {"closed": True, "state": item.state, "tracker_closed": tracker_closed}
+        state = item.state
+    if settled is not None:
+        await notify_parent(settled)
+    return {"closed": True, "state": state, "tracker_closed": tracker_closed}
 
 
 async def _close_delivered_item(session: Any, bundle: Any, item: WorkItem) -> bool:

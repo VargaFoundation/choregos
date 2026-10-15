@@ -1,8 +1,8 @@
-"""Le proxy d'egress d'un projet, tel que le provisioning l'écrit, sur un vrai cluster.
+"""A project's egress proxy, as provisioning writes it, on a real cluster.
 
-Les manifests viennent de `render_project_manifests` : ce qui est vérifié est ce qui sera
-appliqué. Un pod d'agent sort par le proxy (`HTTPS_PROXY`) : un domaine de l'allowlist
-répond, un autre reçoit 403 du proxy — sans dépendre du CNI, c'est Squid qui refuse.
+The manifests come from `render_project_manifests`: what is checked is what will be applied. An
+agent pod goes out through the proxy (`HTTPS_PROXY`): a domain on the allowlist answers, another
+gets 403 from the proxy — without depending on the CNI, it is Squid that refuses.
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ def _via_proxy(cible: str) -> str:
     return run_probe(
         RUNNERS,
         "probe-proxy",
-        # curl ignore `HTTP_PROXY` en majuscules (héritage CGI) : les deux casses, comme
-        # le runner les reçoit (`env_du_runner`).
+        # curl ignores upper-case `HTTP_PROXY` (CGI legacy): both cases, as the runner
+        # receives them (`env_du_runner`).
         f"export HTTPS_PROXY={PROXY} HTTP_PROXY={PROXY} https_proxy={PROXY} http_proxy={PROXY}; "
         f"curl -s -m 20 -o /dev/null -w '%{{http_code}}' {cible} || echo KO",
     )
@@ -49,7 +49,7 @@ def test_un_domaine_de_l_allowlist_passe() -> None:
 
 
 def test_un_domaine_hors_allowlist_est_refuse_par_le_proxy() -> None:
-    # Un tunnel CONNECT refusé : curl rend 000 puis « KO », ou 403 selon la version.
+    # A refused CONNECT tunnel: curl returns 000 then "KO", or 403 depending on the version.
     tunnel = _via_proxy("https://example.com/").strip()
     assert tunnel.startswith("403") or tunnel.endswith("KO"), tunnel
     assert _via_proxy("http://example.com/").strip() == "403"

@@ -26,6 +26,8 @@ from choregos_contracts.workflow import (
     effet_implicite,
     est_un_etat_de_production,
 )
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 
 from ..errors import Issue
 from ..gates import known_gates
@@ -72,10 +74,12 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_prod_states(wf, report, source)
     _check_retries(wf, report, source)
     _check_gates_ont_de_la_matiere(wf, report, source)
+    _check_output_schemas(wf, report, source)
     _check_roles_connus(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
     _check_tasks(wf, report, source)
+    _check_spawns(wf, report, source)
     _check_effets(wf, report, source)
     _check_output_types(wf, report, source)
     _check_warnings(wf, report, source)
@@ -200,6 +204,54 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 "action.date_field_not_date",
                 f"`fields.{nom}` is not declared as a date (`format: date` or `date-time`)",
                 [*chemin, "action", "not_before"],
+                source,
+            )
+
+
+def _check_spawns(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A fan-out (S38-12, ADR 0057) is the platform's: a `system` transition that does nothing else.
+    Its list is a declared field when it walks `fields.`, and a join that can fail says where the
+    work item goes."""
+    champs = dict((wf.metadata.inputs or {}).get("properties") or {})
+    for index, t in enumerate(wf.transitions):
+        if t.spawn is None:
+            continue
+        chemin: list[str | int] = ["transitions", index, "spawn"]
+        if not isinstance(wf.actors.get(t.by) if t.by else None, SystemActor):
+            report.error(
+                "spawn.not_system",
+                "only a platform transition (`by:` a `system` actor) opens child work items",
+                chemin,
+                source,
+            )
+        if t.action is not None or t.does is not None:
+            report.error(
+                "spawn.not_alone",
+                "a transition that opens children does nothing else: no `action:`, no `does:`",
+                chemin,
+                source,
+            )
+        root, _, rest = t.spawn.for_each.partition(".")
+        nom = rest.split(".", 1)[0]
+        if root == "fields" and champs and nom not in champs:
+            report.error(
+                "spawn.field_unknown",
+                f"`for_each` reads `fields.{nom}`, which `metadata.inputs` does not declare",
+                [*chemin, "for_each"],
+                source,
+            )
+        if t.spawn.min_succeeded and not t.spawn.succeeded:
+            report.error(
+                "spawn.succeeded_missing",
+                "`min_succeeded` counts the children ending in a `succeeded` state: list those states",
+                [*chemin, "min_succeeded"],
+                source,
+            )
+        if t.on_fail is None:  # a list refused, a child workflow absent, too few successes
+            report.error(
+                "spawn.on_fail_missing",
+                "a fan-out can fail: `on_fail: {to, max_attempts, escalate_to}` says where the item goes",
+                chemin,
                 source,
             )
 
@@ -503,6 +555,8 @@ GATES_A_MATIERE: dict[str, tuple[str, str]] = {
     "tool_called": ("tools", "`tools:` as a parameter of the guarantee"),
     "outputs_in": ("values", "`values:` as a parameter of the guarantee"),
     "markdown_sections": ("paths", "`paths:` as a parameter of the guarantee"),
+    "output_schema": ("schemas", "`schemas:` as a parameter of the guarantee"),
+    "numbers_measured": ("sources", "`sources:` as a parameter of the guarantee"),
 }
 
 
@@ -527,6 +581,44 @@ def _check_gates_ont_de_la_matiere(wf: Workflow, report: ValidationReport, sourc
                 ["transitions", index, "gates", g_index],
                 source,
             )
+
+
+def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """An `output_schema` guarantee checks declared outputs against schemas that are schemas.
+
+    A typo in a schema (`"type": "aray"`) would otherwise surface as a failed guarantee on the first
+    item, and a schema for an output the transition does not declare would check nothing, forever.
+    """
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            if g.name != "output_schema":
+                continue
+            path: list[str | int] = ["transitions", index, "gates", g_index, "params", "schemas"]
+            schemas = g.params.get("schemas")
+            if schemas is None:
+                continue  # `gate.nothing_to_check` says it
+            if not isinstance(schemas, dict):
+                report.error(
+                    "gate.output_schema", "`schemas:` maps an output's name to its JSON Schema", path, source
+                )
+                continue
+            for name, schema in schemas.items():
+                if name not in t.outputs:
+                    report.error(
+                        "gate.output_schema",
+                        f"schema for `{name}`, which the transition does not declare in `outputs:`",
+                        [*path, name],
+                        source,
+                    )
+                try:
+                    Draft202012Validator.check_schema(schema)
+                except SchemaError as exc:
+                    report.error(
+                        "gate.output_schema",
+                        f"the schema of `{name}` is not a JSON Schema: {exc.message[:200]}",
+                        [*path, name],
+                        source,
+                    )
 
 
 def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> None:

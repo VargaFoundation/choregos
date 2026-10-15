@@ -7,7 +7,9 @@ forwards every POST to its `--anthropic-api-url`, marking it `x-fake-headroom: 1
 can tell what came through it. Like headroom, it leaves a file in its working directory.
 
 The script (JSON): `record` (where to write down the start), `exit` (exit at once with that code),
-`silent` (run, never answer).
+`silent` (run, never answer), `removed` (the tokens it says it removed from each request it
+forwarded), `retrievals` (the originals it says the model asked back), `stats` (`down`: `/stats`
+does not answer).
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 FORWARDED = ("content-type", "x-api-key", "authorization")
+VERSION = "0.0.0-fake"
 
 
 def _flag(argv: list[str], name: str) -> str:
@@ -44,18 +47,40 @@ def main() -> int:
         return 0
     # Like headroom: the upstream loses its `/v1`, the request's path keeps its own.
     upstream = _flag(argv, "--anthropic-api-url").rstrip("/").removesuffix("/v1")
+    forwarded_requests: list[int] = []
+    removed = int(script.get("removed", 0))
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             if self.path == "/livez":
-                self._answer(200, {"alive": True})
-            elif self.path == "/stats":
-                self._answer(200, {"summary": {"compression": {"total_tokens_removed": 0}}})
+                self._answer(200, {"alive": True, "version": VERSION})
+            elif self.path == "/stats" and script.get("stats") != "down":
+                # The shape of headroom 0.39.1's `/stats`, the counters the runner reads.
+                count = len(forwarded_requests)
+                self._answer(
+                    200,
+                    {
+                        "summary": {
+                            "api_requests": count,
+                            "compression": {
+                                "requests_compressed": count if removed else 0,
+                                "total_tokens_before": sum(forwarded_requests),
+                                "total_tokens_removed": removed * count,
+                            },
+                            # Counters the runner must not read: headroom's MCP server, its
+                            # dollar figures from a price list that is not ours.
+                            "mcp": {"retrievals": 99},
+                            "cost": {"total_saved_usd": 12.5},
+                        },
+                        "feedback_loop": {"total_retrievals": int(script.get("retrievals", 0))},
+                    },
+                )
             else:
                 self._answer(404, {})
 
         def do_POST(self) -> None:
             body = self.rfile.read(int(self.headers.get("content-length") or 0))
+            forwarded_requests.append(len(body))
             headers = {k: v for k, v in self.headers.items() if k.lower() in FORWARDED}
             headers["x-fake-headroom"] = "1"
             forwarded = urllib.request.Request(upstream + self.path, body, headers, method="POST")

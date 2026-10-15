@@ -68,7 +68,15 @@ from .policy import (
     ScopePolicy,
     TrainEnvPolicy,
 )
-from .project import AgentConfig, DodConfig, ModelProfile, ModelsConfig, ProjectConfig, RepoConfig
+from .project import (
+    AgentConfig,
+    DodConfig,
+    ModelProfile,
+    ModelsConfig,
+    ProjectConfig,
+    RepoConfig,
+    ScheduleConfig,
+)
 from .stage import (
     STAGE_INPUT_SCHEMA,
     STAGE_RESULT_SCHEMA,
@@ -119,6 +127,7 @@ from .workflow import (
     JobActor,
     JobTools,
     Retry,
+    SpawnSpec,
     State,
     SystemActor,
     TaskSpec,
@@ -261,11 +270,13 @@ __all__ = [
     "Role",
     "RunStatus",
     "SandboxPolicy",
+    "ScheduleConfig",
     "ScopeChangeRequest",
     "ScopePolicy",
     "Severity",
     "Size",
     "SkillRef",
+    "SpawnSpec",
     "StageContext",
     "StageInput",
     "StageOutputs",

@@ -349,6 +349,19 @@ export type Project = {
   };
   /** Catalogue tools this project may call, by name. Empty = none. ['*'] opens the whole catalogue. */
   tools?: Array<string>;
+  /** Work items the platform opens by itself, on a cron (S38-11). One per window: two firings of the same window open one work item. Needs the internal tracker. */
+  schedules?: Array<{
+    name: string;
+    /** Five fields, UTC, minute resolution. */
+    cron: string;
+    title: string;
+    /** The work item's fields; `{window}` in a text value becomes the window's date. */
+    fields?: {
+      [key: string]: unknown;
+    };
+    /** The workflow of the work item; the project's routing when absent. */
+    workflow?: string | null;
+  }>;
   /** The organisation's groups this project belongs to. They decide what the deployment opens to it in the tool catalogue. */
   groups?: Array<string>;
   labels?: {
@@ -854,6 +867,24 @@ export type WorkflowBudget = {
   ticket_usd?: number;
   /** Where a work item goes when its budget is spent; before defaults.from_any_agent_state.on_budget_exceeded. */
   on_exceeded?: WorkflowIdentifier;
+};
+
+export type WorkflowSpawn = {
+  /** the children's workflow, in the same project */
+  workflow: string;
+  /** the list walked: `fields.symbols`, `outputs.metrics.relevant` */
+  for_each: string;
+  /** the child's title, in sandboxed Jinja with `item`, `rank`, `fields`, `outputs`, `parent` */
+  title: string;
+  /** the child's fields, rendered like the title; a single `{{ … }}` keeps its type */
+  fields?: {
+    [key: string]: unknown;
+  };
+  max_children?: number;
+  /** the children's states that count as a success */
+  succeeded?: Array<string>;
+  /** fewer successful children fails the transition */
+  min_succeeded?: number;
 };
 
 /** Choregos workflow DSL: a declarative state machine per project (docs/plan/01 §1.4). */

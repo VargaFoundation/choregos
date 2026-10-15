@@ -12,6 +12,7 @@ secret au journal.
 
 from __future__ import annotations
 
+from .marketdata.base import DATE_PATTERN, SYMBOL_PATTERN
 from .registry import OperationSpec, schema_d_entree
 
 #: `mdm` : le parc. Un poste s'inscrit au nom de son utilisateur et s'efface à son retour.
@@ -71,6 +72,34 @@ OPERATIONS_CONTROLE_D_ACCES: tuple[OperationSpec, ...] = (
     ),
     OperationSpec(
         "badge_status", "read", "reads a badge: its holder and whether it opens", schema_d_entree("uid")
+    ),
+)
+
+#: `marketdata`: daily bars and the description of a symbol, from free sources. Read-only — no write,
+#: so no approval: the platform is the go-between (the sandbox's egress stays closed, keys stay out of
+#: the pod, every call is counted). See `marketdata/`.
+OPERATIONS_MARKETDATA: tuple[OperationSpec, ...] = (
+    OperationSpec(
+        "get_bars",
+        "read",
+        "reads the daily bars (open, high, low, close, adjusted close, volume) of a stock or ETF "
+        "between two dates, sorted, one per date",
+        schema_d_entree(
+            "symbol",
+            "start",
+            "end",
+            symbol={"type": "string", "pattern": SYMBOL_PATTERN, "description": "e.g. AAPL, MC.PA, ^GSPC"},
+            start={"type": "string", "pattern": DATE_PATTERN, "description": "YYYY-MM-DD"},
+            end={"type": "string", "pattern": DATE_PATTERN, "description": "YYYY-MM-DD, not before start"},
+        ),
+    ),
+    OperationSpec(
+        "get_instrument",
+        "read",
+        "reads what a symbol is: its name, whether it is a stock or an ETF, its currency and exchange",
+        schema_d_entree(
+            "symbol", symbol={"type": "string", "pattern": SYMBOL_PATTERN, "description": "e.g. AAPL"}
+        ),
     ),
 )
 

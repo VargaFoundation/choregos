@@ -37,3 +37,7 @@ class StagePlan:
     trial_budget_usd: float | None = None
     #: A job step (ADR 0056): `{"command": [...], "image": name | None}`; no model, no key.
     job: dict[str, Any] | None = None
+    #: An eval cell's run (S37-10, ADR 0055): `context` (the cell's reduction, still under the
+    #: deployment's kill switch), `base_branch` (the toy repository's branch) and `facts` (the
+    #: ticket's assertions, measured by the runner). Nothing else ever sets it.
+    eval_cell: dict[str, Any] | None = None

@@ -1,12 +1,12 @@
-"""Le banc de bout en bout n'impose pas son environnement au reste d'une session pytest (#259).
+"""The end-to-end bench does not impose its environment on the rest of a pytest session (#259).
 
-`tests/e2e/conftest.py` posait ses variables dans `os.environ` à l'import. Une session qui
-collectait `tests/e2e` avec `apps/api/tests` les imposait à TOUS les tests : le webhook Tekton
-d'un test de l'API, qui supposait un secret vide, rendait 401. La CI ne le voyait pas
-(`norecursedirs` écarte `tests/e2e` de la suite principale) ; une sélection faite à la main, si.
+`tests/e2e/conftest.py` set its variables in `os.environ` at import. A session that collected
+`tests/e2e` together with `apps/api/tests` imposed them on EVERY test: the Tekton webhook of an
+API test, which assumed an empty secret, returned 401. The CI did not see it (`norecursedirs`
+keeps `tests/e2e` out of the main suite); a hand-made selection did.
 
-On joue ici de vraies sessions pytest, dans un sous-processus à l'environnement nettoyé : ce qui
-est en cause, c'est ce qu'une session laisse d'un répertoire à l'autre.
+Here real pytest sessions are played, in a subprocess with a cleaned environment: what is at
+stake is what a session leaves behind from one directory to the next.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import sys
 RACINE = pathlib.Path(__file__).resolve().parents[2]
 E2E = RACINE / "tests" / "e2e"
 
-#: Les variables que pose le banc de bout en bout (`ENVIRONNEMENT_E2E` de son conftest).
+#: The variables the end-to-end bench sets (`ENVIRONNEMENT_E2E` in its conftest).
 VARIABLES_DU_BANC = (
     "CHOREGOS_FAKES",
     "CHOREGOS_ENV",
@@ -33,21 +33,21 @@ SONDE = '''
 import os
 
 def test_sonde_259() -> None:
-    """Un autre répertoire de la même session : il voit l'environnement d'origine."""
+    """Another directory of the same session: it sees the original environment."""
     vues = {{nom: os.environ.get(nom) for nom in {variables!r}}}
-    assert vues == {attendu!r}, f"le banc de bout en bout a laissé : {{vues}}"
+    assert vues == {attendu!r}, f"the end-to-end bench left behind: {{vues}}"
 '''
 
 
 def _environnement_propre(**poses: str) -> dict[str, str]:
-    """L'environnement du processus courant, sans aucune variable `CHOREGOS_*`, plus `poses`."""
+    """The current process environment, without any `CHOREGOS_*` variable, plus `poses`."""
     env = {nom: valeur for nom, valeur in os.environ.items() if not nom.startswith("CHOREGOS_")}
     env.update(poses)
     return env
 
 
 def _pytest(*args: str, racine: pathlib.Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    """Une session pytest jouée depuis `racine`, avec la configuration qu'elle y trouve."""
+    """A pytest session played from `racine`, with the configuration it finds there."""
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", *args],
         cwd=racine,
@@ -69,9 +69,9 @@ def _sonde(dossier: pathlib.Path, attendu: dict[str, str | None]) -> pathlib.Pat
 def test_collecter_le_bout_en_bout_ne_touche_pas_l_environnement_d_un_autre_repertoire(
     tmp_path: pathlib.Path,
 ) -> None:
-    """La commande de preuve de #259 : `tests/e2e` collecté, ses scénarios écartés par `-k`.
+    """The proof command of #259: `tests/e2e` collected, its scenarios dropped by `-k`.
 
-    Avec les variables posées à l'import du conftest, la sonde les voyait toutes.
+    With the variables set at the conftest's import, the probe saw all of them.
     """
     sonde = _sonde(tmp_path / "autre", dict.fromkeys(VARIABLES_DU_BANC))
     resultat = _pytest(str(E2E), str(sonde), "-k", "sonde_259", racine=RACINE, env=_environnement_propre())
@@ -80,14 +80,14 @@ def test_collecter_le_bout_en_bout_ne_touche_pas_l_environnement_d_un_autre_repe
 
 
 def test_le_banc_rend_l_environnement_apres_son_dernier_test(tmp_path: pathlib.Path) -> None:
-    """Le conftest réel du banc, devant un test qui s'en sert, puis la sonde d'un autre répertoire.
+    """The bench's real conftest, in front of a test that uses it, then another directory's probe.
 
-    Le test du banc voit ses variables — sauf celle que l'environnement posait déjà, qui l'emporte.
-    Après lui, la sonde retrouve l'environnement d'origine : une fixture de portée `session` ne se
-    démonterait qu'à la fin de la session, et la sonde verrait encore les variables du banc.
+    The bench's test sees its variables, except the one the environment already set, which wins.
+    After it, the probe finds the original environment again: a `session`-scoped fixture would
+    only tear down at the end of the session, and the probe would still see the bench's variables.
     """
-    # Un dépôt jetable à l'image de celui-ci : `tests/e2e` (son conftest réel) et `apps/api/tests`
-    # sous une même racine, en `--import-mode=importlib` comme le `pyproject.toml` du dépôt.
+    # A throwaway repository shaped like this one: `tests/e2e` (its real conftest) and
+    # `apps/api/tests` under one root, in `--import-mode=importlib` like the repository's `pyproject.toml`.
     (tmp_path / "pytest.ini").write_text("[pytest]\naddopts = --import-mode=importlib\n", encoding="utf-8")
     banc = tmp_path / "tests" / "e2e"
     banc.mkdir(parents=True)
@@ -98,7 +98,7 @@ def test_le_banc_rend_l_environnement_apres_son_dernier_test(tmp_path: pathlib.P
         "def test_banc_259() -> None:\n"
         "    assert os.environ['CHOREGOS_GENERIC_WEBHOOK_SECRET'] == 'e2e-webhook-secret'\n"
         "    assert os.environ['CHOREGOS_DEV_LOGIN_ENABLED'] == 'true'\n"
-        "    assert os.environ['CHOREGOS_ENV'] == 'deja-pose', 'une valeur déjà posée l’emporte'\n",
+        "    assert os.environ['CHOREGOS_ENV'] == 'deja-pose', 'a value already set wins'\n",
         encoding="utf-8",
     )
     attendu: dict[str, str | None] = dict.fromkeys(VARIABLES_DU_BANC)

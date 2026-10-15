@@ -79,6 +79,34 @@ class NotifyConfig(Strict):
     emails: list[str] = Field(default_factory=list)
 
 
+class ScheduleConfig(Strict):
+    """A work item the platform opens by itself, on a cron (S38-11).
+
+    The key of the work item is made of the schedule's name and the start of its window
+    (`RESEARCH-weekly-20261019T0600Z`): two firings of the same window find the same key and open
+    one work item, whatever retried them. The cron is UTC, five fields, minute resolution.
+
+        schedules:
+          - name: weekly
+            cron: "0 6 * * mon"
+            title: Weekly campaign
+            fields: { symbols: [SPY.US, QQQ.US], start: "2018-01-01", end: "{window}" }
+    """
+
+    name: Slug
+    cron: str
+    title: str = Field(min_length=1, max_length=500)
+    fields: dict[str, Any] = Field(default_factory=dict)
+    workflow: str | None = None
+
+    @field_validator("cron")
+    @classmethod
+    def _five_fields(cls, value: str) -> str:
+        if len(value.split()) != 5:
+            raise ValueError("a cron has five fields: minute hour day-of-month month day-of-week")
+        return value
+
+
 class ProjectConfig(Strict):
     slug: Slug
     org: Slug
@@ -111,6 +139,9 @@ class ProjectConfig(Strict):
     #: obtenu que par un projet du groupe `rh`, même s'il le déclare dans `tools`.
     #: Le projet choisit ce dont il se sert ; il ne choisit pas ce à quoi il a droit.
     groups: list[str] = Field(default_factory=list)
+    #: Work items the platform opens by itself (S38-11). Needs the internal tracker: an external
+    #: tracker is where its requests are created.
+    schedules: list[ScheduleConfig] = Field(default_factory=list)
     labels: dict[str, str] = Field(default_factory=dict)
 
     @property
@@ -147,4 +178,5 @@ __all__ = [
     "NotifyConfig",
     "ProjectConfig",
     "RepoConfig",
+    "ScheduleConfig",
 ]

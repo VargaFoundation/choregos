@@ -20,6 +20,7 @@ RTK_CONFIG = ".config/rtk/config.toml"
 class ClaudeCodeBackend(Backend):
     name: ClassVar[str] = "claude-code"
     skills_dir: ClassVar[str | None] = ".claude/skills"
+    shell_filters: ClassVar[frozenset[str]] = frozenset({"rtk"})
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp", "agents_md", "structured_output"})
     model_constraint: ClassVar[tuple[str, ...]] = ("claude", "anthropic")
 

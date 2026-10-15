@@ -210,13 +210,15 @@ def release_dto(row: Release, project_slug: str) -> ReleaseDto:
     )
 
 
-async def cle_de_ticket_interne(session: AsyncSession, project: Project) -> str:
+async def cle_de_ticket_interne(session: AsyncSession, project: Project, *, numerotee: bool = True) -> str:
     """Attribue `<PRÉFIXE>-<n>` quand la plateforme tient elle-même les tickets (`tracker: internal`).
 
     Compter en base plutôt que tenir un compteur évite un deuxième endroit où l'état vit ;
     la course entre deux créations simultanées est laissée à la contrainte d'unicité
     `(project_id, tracker_key)`. Servait à l'orchestrateur (findings) ; sert aussi à l'API
     depuis que `POST /projects/{id}/work-items` existe.
+
+    `numerotee=False` returns the prefix alone: a schedule builds its own key on it (S38-11).
     """
     connecteur = (
         await session.execute(
@@ -225,6 +227,8 @@ async def cle_de_ticket_interne(session: AsyncSession, project: Project) -> str:
     ).scalar_one_or_none()
     configure = (connecteur.config or {}).get("key_prefix") if connecteur else None
     prefixe = str(configure or project.slug).upper()
+    if not numerotee:
+        return prefixe
     existantes = (
         (
             await session.execute(
@@ -314,6 +318,7 @@ async def creer_un_ticket(
     demande: WorkItemCreate,
     *,
     canal: str = "api",
+    cle: str | None = None,
 ) -> WorkItem:
     """Files a work item in Choregos, whatever the project's tracker (ADR 0059).
 
@@ -328,7 +333,8 @@ async def creer_un_ticket(
     row, adapter = await tracker_du_projet(session, project)
     url: str | None = None
     if adapter is None:
-        key = await cle_de_ticket_interne(session, project)
+        # A schedule gives its own key, one per window, so that a second firing finds the first (S38-11).
+        key = cle or await cle_de_ticket_interne(session, project)
     else:
         # Validate first: a refused field or budget must not leave an issue behind.
         await verifier_la_naissance(
@@ -345,6 +351,7 @@ async def creer_un_ticket(
             ),
         )
         assert row is not None
+        # A schedule gives its own key, one per window (S38-11); an external tracker mints its own.
         key, url = await _classer_dans_le_tracker(row.type, adapter, principal, demande)
     item = await nouveau_ticket(
         session,

@@ -175,6 +175,48 @@ async def test_l_appel_est_inscrit_au_registre_de_couts(
     assert lignes[0].cost_eur == pytest.approx(0.02)
 
 
+async def test_the_event_carries_the_digest_of_the_request_and_the_response(
+    client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Provenance: the event keeps the SHA-256 of the canonical JSON of what went in and of what
+    came back, so a result disputed later can be matched to what the run was served."""
+    import hashlib
+    import json
+
+    from choregos_api.db.models import Event
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    _intercepter(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json={"profils": [{"nom": "é"}]},
+            request=httpx.Request("GET", "https://api.annuaire.example/v1/search"),
+        ),
+        [],
+    )
+    reponse = await client.post(
+        f"/api/v1/internal/runs/{run_id}/tools/recherche_profils",
+        headers=headers,
+        json={"metier": "x", "a": 1},
+    )
+    assert reponse.status_code == 200, reponse.text
+
+    def empreinte(valeur: Any) -> str:
+        brut = json.dumps(valeur, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(brut.encode()).hexdigest()
+
+    async with session_scope() as session:
+        evenements = (
+            (await session.execute(select(Event).where(Event.type == "choregos.tool.called"))).scalars().all()
+        )
+    (evenement,) = [e for e in evenements if e.subject == run_id]
+    assert evenement.payload["request_sha256"] == empreinte({"metier": "x", "a": 1})
+    assert evenement.payload["response_sha256"] == empreinte(reponse.json()["result"])
+
+
 async def test_un_outil_non_declare_par_le_projet_est_introuvable(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

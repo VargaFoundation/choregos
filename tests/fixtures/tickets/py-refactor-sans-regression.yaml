@@ -10,8 +10,14 @@ prompt: |
 allowed_paths:
   - "src/panier/**"
   - "tests/**"
-expected_cost_usd: 0.4
 expected_duration_s: 150
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 252000, tokens_cached: 168000, tokens_out: 8400, turns: 14 }
+  "rtk": { tokens_in: 212800, tokens_cached: 142800, tokens_out: 8400, turns: 14 }
+  "headroom": { tokens_in: 197400, tokens_cached: 133000, tokens_out: 8700, turns: 15 }
+  "rtk+headroom": { tokens_in: 165200, tokens_cached: 110600, tokens_out: 8700, turns: 15 }
 assertions:
   - { kind: file_matches, path: src/panier/panier.py, pattern: "def appliquer_tva", absent: false }
   - { kind: file_unchanged, path: tests/test_panier.py }

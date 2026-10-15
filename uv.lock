@@ -16,6 +16,7 @@ members = [
     "choregos-ontology",
     "choregos-orchestrator",
     "choregos-playbooks",
+    "choregos-quant",
     "choregos-runner",
     "choregos-tools-mcp",
     "choregos-workspace",
@@ -292,7 +293,7 @@ wheels = [
 
 [[package]]
 name = "choregos-adapters"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/adapters" }
 dependencies = [
     { name = "choregos-core" },
@@ -317,7 +318,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-api"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "aiosqlite" },
@@ -364,7 +365,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-cli"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "choregos-core" },
@@ -385,7 +386,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-contracts"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -400,7 +401,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-core"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -423,7 +424,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-ontology"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/ontology" }
 dependencies = [
     { name = "cel-python" },
@@ -451,7 +452,7 @@ provides-extras = ["service"]
 
 [[package]]
 name = "choregos-orchestrator"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "apps/orchestrator" }
 dependencies = [
     { name = "choregos-adapters" },
@@ -476,7 +477,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-playbooks"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/playbooks" }
 dependencies = [
     { name = "jinja2" },
@@ -492,12 +493,18 @@ requires-dist = [
 ]
 
 [[package]]
+name = "choregos-quant"
+version = "0.17.16"
+source = { editable = "packages/quant" }
+
+[[package]]
 name = "choregos-runner"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/runner" }
 dependencies = [
     { name = "choregos-adapters" },
     { name = "choregos-core" },
+    { name = "choregos-quant" },
     { name = "choregos-tools-mcp" },
     { name = "httpx" },
     { name = "pydantic-settings" },
@@ -510,6 +517,7 @@ dependencies = [
 requires-dist = [
     { name = "choregos-adapters", editable = "packages/adapters" },
     { name = "choregos-core", editable = "packages/core" },
+    { name = "choregos-quant", editable = "packages/quant" },
     { name = "choregos-tools-mcp", editable = "packages/tools-mcp" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic-settings", specifier = ">=2.6" },
@@ -520,7 +528,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-tools-mcp"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "packages/tools-mcp" }
 dependencies = [
     { name = "choregos-contracts" },
@@ -547,7 +555,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-workspace"
-version = "0.17.15"
+version = "0.17.16"
 source = { editable = "." }
 dependencies = [
     { name = "choregos-adapters" },
@@ -558,6 +566,7 @@ dependencies = [
     { name = "choregos-ontology" },
     { name = "choregos-orchestrator" },
     { name = "choregos-playbooks" },
+    { name = "choregos-quant" },
     { name = "choregos-runner" },
     { name = "choregos-tools-mcp" },
 ]
@@ -590,6 +599,7 @@ requires-dist = [
     { name = "choregos-ontology", editable = "packages/ontology" },
     { name = "choregos-orchestrator", editable = "apps/orchestrator" },
     { name = "choregos-playbooks", editable = "packages/playbooks" },
+    { name = "choregos-quant", editable = "packages/quant" },
     { name = "choregos-runner", editable = "packages/runner" },
     { name = "choregos-tools-mcp", editable = "packages/tools-mcp" },
 ]

@@ -429,6 +429,10 @@
             "merge_pr"
           ],
           "description": "What the platform does when it takes a system transition: open the work item's pull request, or merge it (before #175: the `pr_` or `merged` prefix of the target state)."
+        },
+        "spawn": {
+          "$ref": "#/$defs/spawn",
+          "description": "a fan-out (ADR 0057): one child work item per element of a list, the transition passes once every child is settled"
         }
       },
       "oneOf": [
@@ -683,6 +687,59 @@
         "on_exceeded": {
           "$ref": "#/$defs/identifier",
           "description": "Where a work item goes when its budget is spent; before defaults.from_any_agent_state.on_budget_exceeded."
+        }
+      }
+    },
+    "spawn": {
+      "type": "object",
+      "required": [
+        "workflow",
+        "for_each",
+        "title"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "description": "the children's workflow, in the same project"
+        },
+        "for_each": {
+          "type": "string",
+          "pattern": "^(fields|outputs)(\\.[A-Za-z0-9_-]{1,64}){1,8}$",
+          "description": "the list walked: `fields.symbols`, `outputs.metrics.relevant`"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "the child's title, in sandboxed Jinja with `item`, `rank`, `fields`, `outputs`, `parent`"
+        },
+        "fields": {
+          "type": "object",
+          "description": "the child's fields, rendered like the title; a single `{{ … }}` keeps its type"
+        },
+        "max_children": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "succeeded": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$"
+          },
+          "description": "the children's states that count as a success"
+        },
+        "min_succeeded": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "description": "fewer successful children fails the transition"
         }
       }
     }

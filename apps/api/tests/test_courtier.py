@@ -143,6 +143,35 @@ async def test_la_cle_atteint_le_serveur_jamais_le_pod(
     )
 
 
+async def test_the_call_event_carries_the_digest_of_the_broker_response(
+    client: AsyncClient, project: dict[str, Any], fournisseur: Any
+) -> None:
+    """Provenance for a broker tool: digests of the canonical JSON of the arguments and of the result."""
+    import hashlib
+    import json
+
+    from choregos_api.db.models import Event
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    base, entetes = await _preparer(client, project, ["*"])
+    reponse = await client.post(f"{base}/fournisseur__suivi_commande", headers=entetes, json={"numero": "42"})
+    assert reponse.status_code == 200, reponse.text
+
+    def empreinte(valeur: Any) -> str:
+        brut = json.dumps(valeur, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(brut.encode()).hexdigest()
+
+    async with session_scope() as session:
+        evenements = (
+            (await session.execute(select(Event).where(Event.type == "choregos.tool.called"))).scalars().all()
+        )
+    (evenement,) = [e for e in evenements if e.subject == "run-courtier-1"]
+    assert evenement.payload["request_sha256"] == empreinte({"numero": "42"})
+    assert evenement.payload["response_sha256"] == empreinte(reponse.json()["result"])
+    assert len(evenement.payload["response_sha256"]) == 64
+
+
 async def test_un_argument_hors_schema_est_refuse_avant_le_serveur(
     client: AsyncClient, project: dict[str, Any], fournisseur: Any
 ) -> None:

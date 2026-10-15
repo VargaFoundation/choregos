@@ -1,0 +1,76 @@
+{
+ "start": "2026-07-01",
+ "end": "2026-09-30",
+ "results": {
+  "stooq:SPY": {
+   "error": "MarketDataError: stooq: an HTML page (browser check) in place of the CSV"
+  },
+  "stooq:AAPL": {
+   "error": "MarketDataError: stooq: an HTML page (browser check) in place of the CSV"
+  },
+  "stooq:MC.PA": {
+   "error": "MarketDataError: stooq: an HTML page (browser check) in place of the CSV"
+  },
+  "stooq:IBM": {
+   "error": "MarketDataError: stooq: an HTML page (browser check) in place of the CSV"
+  },
+  "stooq:NOSUCHXYZ": {
+   "error": "MarketDataError: stooq: an HTML page (browser check) in place of the CSV"
+  },
+  "yahoo:SPY": {
+   "provider": "yahoo",
+   "bars": 64,
+   "first": "2026-07-01",
+   "last": "2026-09-30",
+   "last_close": 762.6300048828125
+  },
+  "yahoo:AAPL": {
+   "provider": "yahoo",
+   "bars": 64,
+   "first": "2026-07-01",
+   "last": "2026-09-30",
+   "last_close": 333.0199890136719
+  },
+  "yahoo:MC.PA": {
+   "provider": "yahoo",
+   "bars": 66,
+   "first": "2026-07-01",
+   "last": "2026-09-30",
+   "last_close": 390.0
+  },
+  "yahoo:IBM": {
+   "provider": "yahoo",
+   "bars": 64,
+   "first": "2026-07-01",
+   "last": "2026-09-30",
+   "last_close": 219.92999267578125
+  },
+  "yahoo:NOSUCHXYZ": {
+   "error": "UnknownSymbol: yahoo: Not Found for NOSUCHXYZ"
+  },
+  "alphavantage:IBM": {
+   "provider": "alphavantage",
+   "bars": 64,
+   "first": "2026-07-01",
+   "last": "2026-09-30",
+   "last_close": 219.93
+  },
+  "composite:IBM": {
+   "provider": "yahoo",
+   "bars": 64,
+   "first": "2026-07-01",
+   "last": "2026-09-30",
+   "last_close": 219.92999267578125,
+   "cross_check": {
+    "source": "alphavantage",
+    "common_days": 64,
+    "max_rel_diff": 4.13377303284106e-08,
+    "diverging_days": 0,
+    "diverging_dates": []
+   }
+  },
+  "composite:NOSUCHXYZ": {
+   "error": "MarketDataError: composite: no source answered (yahoo: yahoo: Not Found for NOSUCHXYZ; alphavantage: alphavantage: The ******* API key is for *** purposes only. Please claim your free API key at (https://www.alphavantage.co/support/#api-key) to explore our full API offerings. It takes fewer than 20 "
+  }
+ }
+}

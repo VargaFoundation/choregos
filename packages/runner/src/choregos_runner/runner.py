@@ -140,6 +140,8 @@ class Runner:
         self.knowledge_index = ""
         #: Le jeton git du run (S22-07) : en mémoire seulement, pour le clone et le push.
         self.jeton_git: str | None = None
+        #: The run's compression proxy (ADR 0055), when it runs one.
+        self.compressor: compression.Compressor | None = None
 
     async def run(self) -> RunOutcome:
         client = self.client or InternalClient(
@@ -171,7 +173,7 @@ class Runner:
             seq=_events_already_journaled(workspace.path / ".choregos" / "transcript.jsonl"),
         )
         # The run's compression proxy (ADR 0055) dies with the run, whatever way the run ends.
-        self.compressor: compression.Compressor | None = None
+        self.compressor = None
         try:
             return await self._execute(stage_input, client, workspace, journal)
         finally:
@@ -218,6 +220,7 @@ class Runner:
         # 4-5. backend et lancement
         backend = get_backend(stage_input.agent.backend)
         plan = backend.launch_plan(stage_input, workspace.path)
+        await self._record_shell_filter(stage_input, backend, journal)
         written = plan.materialize(workspace.path)
         workspace.exclude(written)
         plan.materialize_home(agent_home(stage_input))
@@ -358,12 +361,16 @@ class Runner:
     # ───────────────────────── étapes internes ─────────────────────────
 
     async def _compress(self, stage_input: StageInput, journal: Any) -> RunOutcome | None:
-        """Starts headroom when the run's context asks for it (ADR 0055), and points the run's
-        model at it. If it does not start, `bypass` goes to the gateway directly and says so;
-        `fail` stops the run."""
+        """Says which context reduction the run was given, then starts headroom when it asks for it
+        (ADR 0055) and points the run's model at it. If it does not start, `bypass` goes to the
+        gateway directly and says so; `fail` stops the run."""
+        if stage_input.context is None or not stage_input.context.active:
+            return None
+        # What the run was given, as the orchestrator resolved it: the run page and the eval
+        # matrix read it here, not from a policy that may have changed since.
+        await journal.record("context.reduction", stage_input.context.model_dump(mode="json"))
         if not compression.wanted(stage_input):
             return None
-        assert stage_input.context is not None
         try:
             self.compressor = await compression.start(stage_input, command=self.settings.headroom_command)
         except compression.CompressionUnavailableError as exc:
@@ -379,7 +386,11 @@ class Runner:
             return None
         await journal.record(
             "context.compression",
-            {"compression": "headroom", "profile": stage_input.context.headroom_profile},
+            {
+                "compression": "headroom",
+                "profile": stage_input.context.headroom_profile,
+                "version": self.compressor.version,
+            },
         )
         stage_input.model = compression.through(stage_input.model, self.compressor)
         return None
@@ -472,6 +483,32 @@ class Runner:
         )
         final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
+
+    async def _record_shell_filter(
+        self, stage_input: StageInput, backend: Any, journal: EventJournal
+    ) -> None:
+        """Whether the run's backend wired the shell filter it was asked for (ADR 0055): only
+        Claude Code has a hook for rtk, and another backend runs without it."""
+        if stage_input.context is None or stage_input.context.shell_filter == "none":
+            return
+        shell_filter = stage_input.context.shell_filter
+        await journal.record(
+            "context.shell_filter",
+            {
+                "shell_filter": shell_filter,
+                "backend": backend.name,
+                "applied": shell_filter in backend.shell_filters,
+            },
+        )
+
+    async def _record_savings(self, journal: EventJournal) -> None:
+        """What headroom says it saved, once the agent is done (ADR 0055). Inferred (ADR 0045):
+        headroom's count, before the gateway; the run's cost stays the gateway's."""
+        if self.compressor is None or (counts := await compression.savings(self.compressor)) is None:
+            return
+        await journal.record(
+            "context.savings", {"compression": "headroom", "provenance": "inferred", **counts}
+        )
 
     async def _poser_les_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any
@@ -628,6 +665,7 @@ class Runner:
         depart: str = "",
     ) -> StageResult:
         """Commit, push, transcript, puis dépôt du résultat (étapes 11 et 12)."""
+        await self._record_savings(journal)
         await self._deliver(client, journal, workspace, stage_input, result)
         commit_message = _commit_message(stage_input, result)
         sha = await workspace.commit(commit_message)

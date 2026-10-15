@@ -1,5 +1,5 @@
-# Déclencheurs GitHub → PipelineRun de CI. Le secret du webhook est monté depuis
-# External Secrets ; Choregos ne le voit jamais en clair.
+# GitHub triggers → CI PipelineRun. The webhook secret is mounted from
+# External Secrets; Choregos never sees it in clear.
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
 metadata:

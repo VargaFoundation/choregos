@@ -1,9 +1,9 @@
-"""S7-08 — le canary de la plateforme s'arrête vraiment à son premier palier.
+"""S7-08 — the platform's canary really stops at its first step.
 
-Un `Rollout` dans un chart ne prouve rien : ce qui compte est qu'une nouvelle version soit
-**retenue** à 10 % au lieu de remplacer l'ancienne. Le test déploie le Rollout rendu par le
-chart, change l'image, et vérifie que le rollout se met en pause avec l'ancienne version
-encore majoritaire — puis qu'un abandon la restaure.
+A `Rollout` in a chart proves nothing: what matters is that a new version is **held back** at
+10 % instead of replacing the old one. The test deploys the Rollout rendered by the chart,
+changes the image, and checks that the rollout pauses with the old version still in the
+majority — then that an abort restores it.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def rollouts_installed() -> bool:
 @pytest.fixture(scope="module", autouse=True)
 def namespace() -> None:
     if not rollouts_installed():
-        pytest.skip("test ignoré — Argo Rollouts n'est pas installé sur ce cluster")
+        pytest.skip("test skipped — Argo Rollouts is not installed on this cluster")
     deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
         if kubectl("get", "ns", NS, "-o", "jsonpath={.status.phase}", check=False).strip() == "":
@@ -46,7 +46,7 @@ def namespace() -> None:
 
 
 def rollout(image: str) -> str:
-    """Les mêmes paliers que `global.canary.steps` du chart, sur un pod trivial."""
+    """The same steps as the chart's `global.canary.steps`, on a trivial pod."""
     return yaml.safe_dump(
         {
             "apiVersion": "argoproj.io/v1alpha1",
@@ -86,7 +86,7 @@ def rollout(image: str) -> str:
 
 
 def running_images() -> set[str]:
-    """Images des pods encore vivants — un pod en cours d'arrêt n'est pas une version servie."""
+    """Images of the pods still alive — a pod being terminated is not a served version."""
     pods = json.loads(kubectl("-n", NS, "get", "pods", "-o", "json"))["items"]
     return {
         pod["spec"]["containers"][0]["image"]
@@ -108,7 +108,7 @@ def wait_for(predicate, timeout: float = 300) -> dict:
         if predicate(state):
             return state
         time.sleep(5)
-    raise AssertionError(f"état jamais atteint : {json.dumps(state)[:600]}")
+    raise AssertionError(f"state never reached: {json.dumps(state)[:600]}")
 
 
 def test_le_rollout_initial_se_deploie(namespace: None) -> None:
@@ -118,22 +118,22 @@ def test_le_rollout_initial_se_deploie(namespace: None) -> None:
 
 
 def test_une_nouvelle_version_est_retenue_au_premier_palier(namespace: None) -> None:
-    """Le cœur de S7-08 : la version suivante ne remplace pas l'ancienne d'un coup."""
+    """The heart of S7-08: the next version does not replace the old one all at once."""
     kubectl("apply", "-f", "-", input_text=rollout("hashicorp/http-echo:0.2.3"))
     state = wait_for(lambda s: s.get("phase") == "Paused", timeout=300)
 
     assert state.get("currentStepIndex") in {1, 2}, state
-    # Le canary ne porte qu'une fraction du trafic : l'ancienne version sert encore.
+    # The canary only carries a fraction of the traffic: the old version still serves.
     stable = state.get("stableRS")
     current = state.get("currentPodHash")
     assert stable and current and stable != current, state
     pods = kubectl("-n", NS, "get", "pods", "-o", "json")
     versions = {pod["spec"]["containers"][0]["image"] for pod in json.loads(pods)["items"]}
-    assert len(versions) == 2, f"les deux versions doivent coexister pendant le palier : {versions}"
+    assert len(versions) == 2, f"both versions must coexist during the step: {versions}"
 
 
 def test_un_abandon_restaure_la_version_stable(namespace: None) -> None:
-    """Le rollback est l'autre moitié de la garantie : un canary qu'on ne peut pas annuler n'en est pas un."""
+    """Rollback is the other half of the guarantee: a canary that cannot be cancelled is not one."""
     kubectl(
         "-n",
         NS,
@@ -150,8 +150,8 @@ def test_un_abandon_restaure_la_version_stable(namespace: None) -> None:
     state = wait_for(lambda s: s.get("phase") == "Healthy", timeout=300)
     assert state.get("readyReplicas") == 4, state
 
-    # Les pods du canary abandonné s'éteignent en arrière-plan : on attend la convergence
-    # plutôt que de photographier un instant de transition.
+    # The aborted canary's pods shut down in the background: we wait for convergence rather
+    # than photograph a moment of transition.
     deadline = time.monotonic() + 180
     versions: set[str] = set()
     while time.monotonic() < deadline:
@@ -159,4 +159,4 @@ def test_un_abandon_restaure_la_version_stable(namespace: None) -> None:
         if versions == {"hashicorp/http-echo:1.0"}:
             return
         time.sleep(5)
-    raise AssertionError(f"la version abandonnée est restée : {versions}")
+    raise AssertionError(f"the aborted version stayed: {versions}")

@@ -186,6 +186,15 @@ global:
   rbac: { jobRunner: true }           # or the platform grants the same verbs (see rbac-jobs.yaml)
 ```
 
+The chart also renders `choregos-runner-assignment`, a NetworkPolicy that lets only the
+orchestrator's `executor` workers reach the assignment port. Where the platform lays the
+namespace's NetworkPolicies and refuses a tenant's (an Argo CD AppProject that blacklists
+`NetworkPolicy` fails the whole sync on that one object), set
+`runner.sandbox.assignmentNetworkPolicy: false`: the platform must then close that port to every
+other pod of the namespace itself. Otherwise any pod there can push first and hold a warm sandbox
+until the real run gets a 409: it cannot read a run's token (the assignment is sealed to the
+pod's key), but it can deny the run its sandbox.
+
 How a run goes ([ADR 0053](adr/0053-agent-sandbox-as-built.md)): the executor writes the run's
 token into a Secret owned by the run's `SandboxClaim`; the controller binds a warm sandbox to
 the claim (or cold-starts one from the template when the pool is empty); once it is Ready, the
