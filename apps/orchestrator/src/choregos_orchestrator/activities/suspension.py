@@ -26,6 +26,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from .base import db, load_work_item, project_bundle, without_secrets
+from .run_key import key_ttl_seconds, mint_key, revoke
 
 #: What the agent reads first when its run goes on — the same heading as a replayed stage.
 ANSWER_HEADING = "## A person answered the question that stopped this work item"
@@ -115,12 +116,9 @@ async def resume_run(payload: dict[str, Any]) -> dict[str, Any]:
             ttl_minutes=timeout_minutes + 15,
         )
         until = utcnow() + timedelta(minutes=timeout_minutes)
-        resume = getattr(executor, "resume")  # noqa: B009 - not in the `Executor` protocol
-        if not await resume(_ref(run, _namespace(bundle.slug)), token, until):
-            return {"resumed": False}
-
         spent = float(run.cost_usd or 0.0)
-        key = await bundle.adapters.gateway.mint_key(
+        key = await mint_key(
+            bundle,
             {
                 "project": bundle.slug,
                 "work_item": item.tracker_key,
@@ -129,9 +127,14 @@ async def resume_run(payload: dict[str, Any]) -> dict[str, Any]:
                 "resumed": int(tokens.get("resumed", 0)) + 1,
             },
             budget_usd=max(float(budget["usd"]) - spent, 0.01),
-            ttl_s=(int(budget["max_minutes"]) + 30) * 60,
+            ttl_s=key_ttl_seconds(int(budget["max_minutes"])),
             models=[run.model] if run.model else [],
         )
+        # The fresh key goes to the sandbox's Secret with the fresh token, never to the row (#523).
+        resume = getattr(executor, "resume")  # noqa: B009 - not in the `Executor` protocol
+        if not await resume(_ref(run, _namespace(bundle.slug)), token, until, gateway_key=key.key):
+            await revoke(bundle, key.key_id)  # nothing will use it
+            return {"resumed": False}
         session.add(
             GatewayKeyRow(
                 key_id=key.key_id,
@@ -146,10 +149,9 @@ async def resume_run(payload: dict[str, Any]) -> dict[str, Any]:
         if answer and playbook.get("prompt") is not None:
             playbook["prompt"] = f"{ANSWER_HEADING}\n\n{answer}\n\n---\n\n{playbook['prompt']}"
         stage_input["playbook"] = playbook
-        # The runner reads its input again, the new key included; `collect_spend` drops it at the
-        # end. The fresh run token went to the sandbox's Secret through `resume`, never here (#519).
-        stage_input["gateway_key"] = key.key
-        run.stage_input = without_secrets(stage_input, keep_gateway_key=True)
+        # The runner reads its input again; its fresh token and key went to the sandbox's Secret
+        # through `resume`, never here (#519, #523).
+        run.stage_input = without_secrets(stage_input, keep_gateway_key=False)
         run.gateway_key_id = key.key_id
         run.result = None
         run.spend_collected = False

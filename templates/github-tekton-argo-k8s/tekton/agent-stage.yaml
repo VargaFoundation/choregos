@@ -40,6 +40,12 @@ spec:
     - name: run
       image: $(params.runner-image)
       workingDir: $(workspaces.source.path)
+      env:
+        # The run's gateway key, from the run's Secret (#523); optional: a runner without it
+        # reads the key from its input, as before.
+        - name: CHOREGOS_RUN_GATEWAY_KEY
+          valueFrom:
+            secretKeyRef: { name: run-$(params.run-id), key: gateway-key, optional: true }
       script: |
         #!/usr/bin/env bash
         set -euo pipefail

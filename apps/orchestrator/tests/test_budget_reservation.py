@@ -73,12 +73,20 @@ async def _run_count(setup: Fixture) -> int:
 
 
 async def test_a_ticket_with_ten_cents_left_gets_a_ten_cent_key(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.stage import prepare_stage
+    from choregos_orchestrator.activities.stage import prepare_stage, start_run
 
     await leave_on_ticket(setup, 0.10)
     prepared = await prepare_stage(_plan(setup))
     assert "refused" not in prepared
     assert prepared["stage_input"]["budget"]["usd"] == pytest.approx(0.10)
+    # The key is minted when the run starts, for its Secret (#523).
+    await start_run(
+        {
+            "project_id": setup.project_id,
+            "work_item_id": setup.work_item_id,
+            "stage_input": prepared["stage_input"],
+        }
+    )
     [key] = setup.adapters.gateway.keys.values()
     assert key.budget_usd == pytest.approx(0.10), "the gateway's hard cap is the reservation"
 

@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec
+from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, ExecStatus, StageJobSpec
 
 from ..errors import ConfigurationError, UpstreamError
 
@@ -177,6 +177,12 @@ class AcaExecutor:
                 # Le jeton passe par un secret de job : il n'apparaît pas dans la définition
                 # rendue par ARM, donc pas dans un `az containerapp job show`.
                 {"name": "CHOREGOS_RUN_TOKEN", "secretRef": "run-token"},
+                # The run's gateway key, a job secret too (#523): never in the rendered definition.
+                *(
+                    [{"name": RUN_GATEWAY_KEY_ENV, "secretRef": "run-gateway-key"}]
+                    if spec.gateway_key
+                    else []
+                ),
                 *[{"name": key, "value": value} for key, value in spec.env.items()],
             ],
             "resources": self._resources(spec),
@@ -186,7 +192,10 @@ class AcaExecutor:
             "replicaTimeout": spec.timeout_minutes * 60,
             "replicaRetryLimit": 0,  # la reprise est décidée par l'orchestrateur
             "manualTriggerConfig": {"parallelism": 1, "replicaCompletionCount": 1},
-            "secrets": [{"name": "run-token", "value": spec.run_token}],
+            "secrets": [
+                {"name": "run-token", "value": spec.run_token},
+                *([{"name": "run-gateway-key", "value": spec.gateway_key}] if spec.gateway_key else []),
+            ],
         }
         if self.registry_server and self.identity_id:
             configuration["registries"] = [{"server": self.registry_server, "identity": self.identity_id}]

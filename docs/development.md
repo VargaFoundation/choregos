@@ -407,8 +407,9 @@ def brancher() -> None:
     declarer_une_admission("suspension", organisation_active)
 ```
 
-The orchestrator plays every declared check in `prepare_stage`, **before** minting the gateway key
-and creating the run, so a refusal costs nothing and leaves no key behind — and **after** the replay
+The orchestrator plays every declared check in `prepare_stage`, **before** reserving the gateway
+key's cap and creating the run (the key itself is minted by `start_run`), so a refusal costs nothing
+and leaves no key behind — and **after** the replay
 path, so a run already prepared is never refused afterwards (what is running finishes). A refusal
 stops the stage without retry and marks the ticket dead with the reason, prefixed by the check's
 name: write it so it says what to do. A check that raises anything else is an outage, not a

@@ -26,7 +26,9 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..gitops import PLAGES_PRIVEES
-from .base import db, project_bundle
+from .base import db, project_bundle, without_secrets
+from .bilan import close_run_spend
+from .run_key import mint_run_key
 
 
 def _runner_namespace(settings: Any, slug: str) -> str:
@@ -195,10 +197,7 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
                 work_item_key=stage_input.work_item.key,
                 ttl_minutes=stage_input.budget.max_minutes + 15,
             )
-        # The executor sees the input its runner will read from `GET /internal/runs/{id}/input`:
-        # the row's, gateway key included — a key no Temporal payload carries (#519).
-        if run is not None and stage_input.gateway_key is None and run.stage_input:
-            stage_input = stage_input.model_copy(update={"gateway_key": run.stage_input.get("gateway_key")})
+        gateway_key = await _gateway_key(session, bundle, run, stage_input)
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
@@ -206,7 +205,8 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             runner_image=settings.runner_image,
             api_url=stage_input.callbacks.api_url,
             run_token=run_token,
-            stage_input=stage_input,
+            gateway_key=gateway_key,
+            stage_input=stage_input.model_copy(update={"gateway_key": None}),
             timeout_minutes=stage_input.budget.max_minutes + 10,
             runtime_class=classe_d_execution(settings, bundle.policy),
             env=env_du_runner(settings, _runner_namespace(settings, bundle.slug)),
@@ -250,6 +250,23 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             "queued": en_file,
             "capabilities": capabilities,
         }
+
+
+async def _gateway_key(session: Any, bundle: Any, run: Run | None, stage_input: StageInput) -> str | None:
+    """The run's gateway key, for its Secret only (#523): minted now, never stored on the row.
+
+    A run prepared before #523 already has one: on its row (S22-37) or in the payload of an older
+    history (before #519). That key is used, and the row's copy leaves the row — the runner reads
+    it from its Secret now.
+    """
+    if run is None:
+        return stage_input.gateway_key
+    legacy = stage_input.gateway_key or (run.stage_input or {}).get("gateway_key")
+    if legacy:
+        if run.stage_input and run.stage_input.get("gateway_key") is not None:
+            run.stage_input = without_secrets(run.stage_input, keep_gateway_key=False)
+        return str(legacy)
+    return await mint_run_key(session, bundle, run, stage_input)
 
 
 @activity.defn(name="await_run")
@@ -418,6 +435,12 @@ async def _abandonner(project_id: str, run_id: str, ref: ExecRef) -> None:
 
 @activity.defn(name="cancel_run")
 async def cancel_run(payload: dict[str, Any]) -> None:
+    """Stops a run nobody will wait for — its interpreter was cancelled — and closes its key.
+
+    Replayable (ADR 0008): cancelling what is gone is not an error, and the spend is booked once.
+    Its key is revoked and scrubbed after the executor is told to stop (#523), never before: a
+    revoked key may no longer tell what it spent.
+    """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         run = await session.get(Run, payload["run_id"])
@@ -430,6 +453,9 @@ async def cancel_run(payload: dict[str, Any]) -> None:
             run_id=run.id,
         )
         await archive_once(bundle.adapters.executor, run, ref)
-        await bundle.adapters.executor.cancel(ref)
-        run.status = "cancelled"
-        run.ended_at = utcnow()
+        with contextlib.suppress(Exception):  # gone already, or never started
+            await bundle.adapters.executor.cancel(ref)
+        if run.status in {"queued", "running"}:  # a run that ended keeps how it ended
+            run.status = "cancelled"
+        run.ended_at = run.ended_at or utcnow()
+    await close_run_spend(payload["project_id"], payload["run_id"])

@@ -13,7 +13,7 @@ import asyncio
 from hashlib import sha256
 from typing import Any
 
-from choregos_api.db.models import GatewayKeyRow, Run
+from choregos_api.db.models import Run
 from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
 from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
@@ -57,6 +57,7 @@ from .execution import (
 )
 from .garde import garde_contre_l_injection
 from .plan import StagePlan
+from .run_key import reserve_key
 
 __all__ = [
     "FILE_MAX_MINUTES",
@@ -111,10 +112,10 @@ async def _gateway_catalogue(bundle: Any) -> list[Any]:
 
 @activity.defn(name="prepare_stage")
 async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
-    """Résout le modèle, mint la clé gateway, construit le context pack et le `StageInput`.
+    """Resolves the model, reserves the key's cap, builds the context pack and the `StageInput`.
 
-    Une seule activité pour tout le travail préparatoire : le `run_id` la rend rejouable,
-    et la clé virtuelle n'est mintée qu'une fois par run.
+    One activity for all the preparation: the `run_id` makes it replayable. The gateway key is
+    minted by `start_run`, for the run's Secret only (#523).
     """
     plan = StagePlan(**plan_data)
     settings = get_settings()
@@ -176,50 +177,11 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
 
         await _admettre(bundle, item, run_id, plan, backend, budget.usd)
 
-        # The project's day budget is also the gateway's, through a team every key of the project joins
-        # (S27-10): the reservation above is the platform's read of it, the team is the hard stop.
-        team_id = None
-        if (daily := engine.daily_budget()) is not None:
-            from .provisioning import project_team_id
-
-            team_id = await bundle.adapters.gateway.ensure_team(project_team_id(bundle.project.id), daily)
-        key = await bundle.adapters.gateway.mint_key(
-            {
-                "project": bundle.slug,
-                "work_item": item.tracker_key,
-                "run_id": run_id,
-                "transition": plan.transition_id,
-                "attempt": plan.attempt,
-                "actor": plan.actor,
-                "backend": backend,
-            },
-            budget_usd=budget.usd,
-            ttl_s=(budget.max_minutes + 30) * 60,
-            models=[resolved.litellm_model],
-            team_id=team_id,
-        )
-        # Rejouable : une activité Temporal peut repasser ici sur le MÊME run, et la clé
-        # est déterministe. Un `INSERT` sec répondait alors « duplicate key value violates
-        # unique constraint "ix_gateway_keys_key_id" » — une erreur de base remontée telle
-        # quelle jusqu'au workflow, qui mourait. Vu sur le banc du 2026-09-24.
-        # AGENTS.md l'exige : toute activité est rejouable sans effet double.
-        existante = (
-            await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.key_id == key.key_id))
-        ).scalar_one_or_none()
-        if existante is None:
-            session.add(
-                GatewayKeyRow(
-                    key_id=key.key_id,
-                    run_id=run_id,
-                    project_id=bundle.project.id,
-                    budget_usd=budget.usd,
-                    expires_at=key.expires_at,
-                )
-            )
-        else:
-            existante.run_id = run_id
-            existante.budget_usd = budget.usd
-            existante.expires_at = key.expires_at
+        # The key itself is minted by `start_run`, which hands it to the run's Secret: no row and
+        # no Temporal payload ever holds it (#523). Its cap is reserved here, where the budget
+        # is decided, so that another run cannot take it in between; `start_run` turns this row
+        # into the key's. Replayable: the row is found again by its run (ADR 0008).
+        await reserve_key(session, bundle, run_id, budget)
 
         memory_scope = _memory_scope(agent)
         context_pack = await _context_pack(bundle, item, plan, memory_scope, agent)
@@ -281,7 +243,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             else None,
             agent=AgentRef(backend=backend, launch=LaunchSpec()),
             model=resolved.to_ref(),
-            gateway_key=key.key,
+            # In the run's Secret, never here (#523): see `start_run`.
+            gateway_key=None,
             budget=budget,
             allowed_paths=allowed_paths,
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
@@ -317,10 +280,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         run.backend = backend
         run.model = resolved.litellm_model
         run.status = "queued"
-        # The gateway key stays on the row while the run lives — the runner reads it from
-        # `GET /internal/runs/{id}/input` — and `collect_spend` drops it when it revokes the key.
         run.stage_input = payload
-        run.gateway_key_id = key.key_id
         run.context_pack = context_pack.model_dump(mode="json", by_alias=True)
         run.context_pack_url = stage_input.context_pack_url
         run.playbook_checksum = stage_input.playbook.ref

@@ -116,6 +116,8 @@ class TektonExecutor:
         )
 
     async def _ensure_secret(self, spec: StageJobSpec, name: str) -> None:
+        """The run's token and gateway key (#523), written even if a Secret of this name exists:
+        a run started again must not get the key of an earlier attempt, revoked or unaccounted."""
         secret = {
             "apiVersion": "v1",
             "kind": "Secret",
@@ -125,11 +127,15 @@ class TektonExecutor:
                 "labels": {"choregos/run-id": spec.run_id, "choregos/project": spec.project_slug},
             },
             "type": "Opaque",
-            "data": {"token": base64.b64encode(spec.run_token.encode()).decode()},
+            "data": run_secret_data(spec),
         }
         existing = await self.client.request("GET", f"{CORE_API}/namespaces/{spec.namespace}/secrets/{name}")
         if existing is None:
             await self.client.request("POST", f"{CORE_API}/namespaces/{spec.namespace}/secrets", json=secret)
+        else:
+            await self.client.request(
+                "PUT", f"{CORE_API}/namespaces/{spec.namespace}/secrets/{name}", json=secret
+            )
 
     def _pipeline_run(self, spec: StageJobSpec, name: str) -> dict[str, Any]:
         depot = spec.stage_input.repo if spec.stage_input else None
@@ -274,3 +280,16 @@ def _parse_time(value: Any) -> Any:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return utcnow()
+
+
+#: The key of a run's Secret that holds its gateway key (#523); the runner gets it as
+#: `CHOREGOS_RUN_GATEWAY_KEY`, next to `CHOREGOS_RUN_TOKEN` from the key `token`.
+GATEWAY_KEY_FIELD = "gateway-key"
+
+
+def run_secret_data(spec: StageJobSpec) -> dict[str, str]:
+    """The data of a run's Secret: its token and, when one was minted, its gateway key (#523)."""
+    data = {"token": base64.b64encode(spec.run_token.encode()).decode()}
+    if spec.gateway_key:
+        data[GATEWAY_KEY_FIELD] = base64.b64encode(spec.gateway_key.encode()).decode()
+    return data

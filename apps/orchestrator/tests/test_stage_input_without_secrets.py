@@ -2,9 +2,8 @@
 
 On the dev tenant, `runs.stage_input` of finished runs held the run's gateway key and its callback
 token in clear: the row outlives the run indefinitely, and backups copy it. The run token now lives
-in the run's Secret only (`start_run` mints it), the gateway key stays on the row only while the run
-lives (its runner reads it from `GET /internal/runs/{id}/input`), and `collect_spend` revokes it and
-drops it.
+in the run's Secret only (`start_run` mints it), and so does the gateway key (#523): `start_run` mints
+it for the executor, the row never holds it, and `collect_spend` revokes it.
 """
 
 from __future__ import annotations
@@ -52,31 +51,43 @@ def _minted_key(setup: Fixture) -> str:
     return str(next(iter(gateway.keys.values())).key)
 
 
-async def test_no_run_token_is_stored_and_no_secret_is_in_the_temporal_payload(setup: Fixture) -> None:
-    prepared = await _prepare(setup)
-    key = _minted_key(setup)
-
-    # What Temporal records: neither the key nor a token.
-    assert prepared["stage_input"]["gateway_key"] is None
-    assert prepared["stage_input"]["callbacks"]["run_token"] == REDACTED
-    # What the row keeps while the run lives: the key its runner reads, no token.
-    stored = await _stored(prepared["run_id"])
-    assert stored["callbacks"]["run_token"] == REDACTED
-    assert stored["gateway_key"] == key
-
-
-async def test_start_run_gives_the_executor_a_valid_run_token(setup: Fixture) -> None:
-    from choregos_api.security import verify_run_token
+async def _start(setup: Fixture, prepared: dict[str, Any]) -> dict[str, Any]:
     from choregos_orchestrator.activities import stage as activities
 
-    prepared = await _prepare(setup)
-    await activities.start_run(
+    return await activities.start_run(
         {
             "project_id": setup.project_id,
             "work_item_id": setup.work_item_id,
             "stage_input": prepared["stage_input"],
         }
     )
+
+
+async def test_no_run_token_is_stored_and_no_secret_is_in_the_temporal_payload(setup: Fixture) -> None:
+    prepared = await _prepare(setup)
+    assert not setup.adapters.gateway.keys, "the key is minted when the run starts (#523)"
+    started = await _start(setup, prepared)
+    key = _minted_key(setup)
+
+    # What Temporal records: neither the key nor a token.
+    assert prepared["stage_input"]["gateway_key"] is None
+    assert prepared["stage_input"]["callbacks"]["run_token"] == REDACTED
+    assert key not in str(started)
+    # What the row keeps: neither (#523).
+    stored = await _stored(prepared["run_id"])
+    assert stored["callbacks"]["run_token"] == REDACTED
+    assert stored["gateway_key"] is None and key not in str(stored)
+    # What the executor gets: the key, for the run's Secret, outside the input.
+    spec = setup.adapters.executor.started[-1]
+    assert spec.gateway_key == key
+    assert spec.stage_input is not None and spec.stage_input.gateway_key is None
+
+
+async def test_start_run_gives_the_executor_a_valid_run_token(setup: Fixture) -> None:
+    from choregos_api.security import verify_run_token
+
+    prepared = await _prepare(setup)
+    await _start(setup, prepared)
     spec = setup.adapters.executor.started[-1]
     assert spec.run_token != REDACTED
     assert verify_run_token(spec.run_token).run_id == prepared["run_id"]
@@ -98,6 +109,7 @@ async def test_the_key_is_revoked_and_dropped_from_the_row_when_the_run_ends(set
     from sqlalchemy import select
 
     prepared = await _prepare(setup)
+    await _start(setup, prepared)
     key = _minted_key(setup)
     key_id = next(iter(setup.adapters.gateway.keys))
     await activities.collect_spend({"project_id": setup.project_id, "run_id": prepared["run_id"]})
@@ -125,6 +137,7 @@ async def test_a_gateway_that_cannot_revoke_does_not_fail_the_stage(
         raise ConnectionError("gateway unreachable")
 
     prepared = await _prepare(setup)
+    await _start(setup, prepared)
     key_id = next(iter(setup.adapters.gateway.keys))
     monkeypatch.setattr(setup.adapters.gateway, "revoke", unreachable)
     spend = await activities.collect_spend({"project_id": setup.project_id, "run_id": prepared["run_id"]})

@@ -67,7 +67,14 @@ async def test_the_51st_stage_is_refused_at_the_default_50(setup: Fixture) -> No
     refused = await prepare_stage(_plan(setup, attempt=2))
     assert refused["refused"]["reason"] == "max_stages"
     assert "50" in refused["refused"]["detail"]
-    assert len(setup.adapters.gateway.keys) == 1, "no key for the refused stage"
+    # The key is minted when a run starts (#523): what prepare_stage holds is its reservation.
+    from choregos_api.db.models import GatewayKeyRow
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        held = (await session.execute(select(GatewayKeyRow.key_id))).scalars().all()
+    assert held == [f"reserved:{fiftieth['run_id']}"], "no key nor reservation for the refused stage"
 
 
 async def test_a_capped_ticket_goes_to_a_person_instead_of_retrying(
