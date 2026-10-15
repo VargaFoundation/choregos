@@ -116,6 +116,11 @@ POLICY_ATTEMPTS_CEILING = "policy-attempts-ceiling"
 #: stage (S27-03, ADR 0047). Before this marker it lived in workflow memory, summed from model
 #: spend only, and a restarted interpreter started again at zero.
 TICKET_SPEND_FROM_LEDGER = "ticket-spend-from-ledger"
+#: Once a transition's pending guarantees (CI, review) have their verdict, ALL its guarantees are
+#: evaluated again before deciding (S22-32, #359): one more activity per resolution, not per poll.
+#: Before this marker, the synchronous ones kept the verdict read when the transition was entered,
+#: and an ADR number taken on the default branch during the CI was merged as a duplicate.
+GATES_REREAD_AFTER_WAIT = "gates-reread-after-wait"
 
 
 @dataclass
@@ -635,6 +640,19 @@ class WorkflowInterpreter:
     async def _gates(self, params: InterpreterInput, transition: Any, run_id: str) -> list[Any]:
         if not transition.gates:
             return []
+        outcomes = await self._evaluate_all_gates(params, transition, run_id)
+        pending = [o for o in outcomes if o.pending]
+        if pending and transition.timeout_hours:
+            resolved = await self._await_async_gates(params, transition, run_id, [o.name for o in pending])
+            # Replaced by name: the wait returns the pending guarantees only, or all of them once
+            # they are read again (`GATES_REREAD_AFTER_WAIT`).
+            fresh = {o.name for o in resolved}
+            outcomes = [o for o in outcomes if o.name not in fresh] + resolved
+        return outcomes
+
+    async def _evaluate_all_gates(self, params: InterpreterInput, transition: Any, run_id: str) -> list[Any]:
+        """Every guarantee of the transition, read now — on entry, and again once the pending ones
+        have their verdict: a synchronous one may have changed meanwhile (#359)."""
         from choregos_core import GateOutcome
 
         raw = await executer_activite(
@@ -643,15 +661,15 @@ class WorkflowInterpreter:
                 "project_id": params.project_id,
                 "work_item_id": params.work_item_id,
                 "run_id": run_id,
-                # Ce que la transition déclare produire : la gate générique `outputs_present`
-                # s'en sert quand elle n'a pas de liste explicite.
+                # What the transition declares it produces: the generic `outputs_present`
+                # guarantee uses it when it has no explicit list.
                 "expected_outputs": list(transition.outputs),
                 "gates": [{"name": g.name, "params": g.params} for g in transition.gates],
             },
             start_to_close_timeout=timedelta(minutes=3),
             retry_policy=DEFAULT_RETRY,
         )
-        outcomes = [
+        return [
             GateOutcome(
                 name=item["name"],
                 passed=item["passed"],
@@ -661,11 +679,6 @@ class WorkflowInterpreter:
             )
             for item in raw
         ]
-        pending = [o for o in outcomes if o.pending]
-        if pending and transition.timeout_hours:
-            resolved = await self._await_async_gates(params, transition, run_id, [o.name for o in pending])
-            outcomes = [o for o in outcomes if not o.pending] + resolved
-        return outcomes
 
     async def _await_async_gates(
         self, params: InterpreterInput, transition: Any, run_id: str, names: list[str]
@@ -702,7 +715,17 @@ class WorkflowInterpreter:
                 for item in raw
             ]
             if not any(o.pending for o in outcomes) or self.stopped:
-                return outcomes
+                # The condition first, `patched` next: an old history replayed here answers no
+                # without the marker being asked any earlier (S22-32).
+                if not self.stopped and workflow.patched(GATES_REREAD_AFTER_WAIT):
+                    complete = await self._evaluate_all_gates(params, transition, run_id)
+                    again = [o.name for o in complete if o.pending]
+                    if not again:
+                        return complete
+                    # A guarantee pending again (CI re-run on a new push): wait for it as before.
+                    names = again
+                else:
+                    return outcomes
             waited += step
             if received is False:  # wait_condition a expiré sans signal
                 continue
