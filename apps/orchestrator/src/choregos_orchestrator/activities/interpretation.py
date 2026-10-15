@@ -153,6 +153,94 @@ async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
         return {"recorded": True, "pinned": cible is not None}
 
 
+@activity.defn(name="escalation_context")
+async def escalation_context(payload: dict[str, Any]) -> dict[str, Any]:
+    """Where a parked work item resumes, for an interpreter that did not park it (S22-41).
+
+    An interpreter started again from the database knows its state (`needs_human`) but not the
+    stage that escalated: `rerun_stage` and an answer did nothing. Since S22-41 the escalation
+    writes `parked` — `[parked state, origin state, transition]` — on its `state_changed` event;
+    a work item that escalated before has it derived: the transition out of the state it came
+    from, other than a person's, whose escalation leads where it now stands. Also returns how
+    many attempts that transition already made: a run number is never reused, it names the run.
+
+    Read only: replaying it changes nothing.
+    """
+    from choregos_core import WorkflowEngine
+
+    async with db() as session:
+        item = await load_work_item(session, payload["work_item_id"])
+        state = str(payload.get("state") or item.state)
+        events = (
+            await session.execute(
+                select(Event)
+                .where(
+                    Event.work_item_id == item.id,
+                    Event.type == str(EventType.WORKITEM_STATE_CHANGED),
+                )
+                .order_by(Event.ts.desc())
+            )
+        ).scalars()
+        arrival = next((e.payload or {} for e in events if (e.payload or {}).get("to") == state), None)
+        if arrival is None:
+            return {"parked": None}
+        parked = arrival.get("parked")
+        if not (isinstance(parked, list) and len(parked) == 3 and parked[0] == state):
+            engine = WorkflowEngine(workflow_model(await workflow_du_ticket(session, item)))
+            parked = await _derived_parking(session, item.id, engine, state, arrival)
+        if parked is None:
+            return {"parked": None}
+        attempts = (
+            await session.execute(
+                select(Run.attempt).where(Run.work_item_id == item.id, Run.transition_id == parked[2])
+            )
+        ).scalars()
+        return {"parked": [str(p) for p in parked], "attempts": max(attempts, default=0)}
+
+
+async def _derived_parking(
+    session: Any, work_item_id: str, engine: Any, state: str, arrival: dict[str, Any]
+) -> list[str] | None:
+    """The escalation context of a work item parked before S22-41, read from what it left."""
+    origin = arrival.get("from")
+    if not origin or origin == state or arrival.get("reason") == "external event":
+        return None  # moved there by a person on the board: nothing escalated
+    candidates = [
+        t
+        for t in engine.wf.transitions_from(origin)
+        if engine.actor_kind(t) != "human" and state != t.to and state in _escalation_targets(engine, t)
+    ]
+    if not candidates:
+        return None
+    keys = {t.key for t in candidates}
+    last_run = (
+        await session.execute(
+            select(Run.transition_id)
+            .where(Run.work_item_id == work_item_id, Run.transition_id.in_(keys))
+            .order_by(Run.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    key = last_run or candidates[0].key
+    return [state, str(origin), str(key)]
+
+
+def _escalation_targets(engine: Any, transition: Any) -> set[str]:
+    """Every state a stage of `transition` may park the work item in (engine: escalation,
+    question, budget, stage cap)."""
+    budget, defaults = engine.wf.budget, engine.wf.defaults
+    from_any = defaults.from_any_agent_state if defaults else None
+    targets = {
+        engine.question_state(),
+        getattr(from_any, "on_budget_exceeded", None),
+        budget.on_exceeded if budget is not None else None,
+    }
+    for retry in (transition.on_fail, transition.on_changes_requested):
+        if retry is not None:
+            targets.add(retry.escalate_to)
+    return {str(t) for t in targets if t}
+
+
 #: Ce que Temporal met à la place d'un message absent, littéralement
 #: (`converter/_failure_converter.py`, branche `application_failure_info` :
 #: `failure.message or "Application error"`). Le message n'est donc JAMAIS vide, et un test de

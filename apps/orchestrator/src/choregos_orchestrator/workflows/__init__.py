@@ -3,7 +3,13 @@
 
 from __future__ import annotations
 
-from ..activities.interpretation import load_context, record_migration, record_workflow_failure, signal_train
+from ..activities.interpretation import (
+    escalation_context,
+    load_context,
+    record_migration,
+    record_workflow_failure,
+    signal_train,
+)
 from .action import ActionWorkflow
 from .evals import EvalMatrix
 from .findings import FindingsTriage
@@ -28,7 +34,13 @@ ALL_WORKFLOWS = [
     KnowledgeSync,
 ]
 
-WORKFLOW_ACTIVITIES = [load_context, record_workflow_failure, record_migration, signal_train]
+WORKFLOW_ACTIVITIES = [
+    load_context,
+    record_workflow_failure,
+    record_migration,
+    signal_train,
+    escalation_context,
+]
 
 __all__ = [
     "ALL_WORKFLOWS",
