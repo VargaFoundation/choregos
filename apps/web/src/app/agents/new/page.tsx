@@ -137,6 +137,9 @@ function NewAgent() {
               <Link href="/agents?catalogue=1" className={buttonClasses("ghost")}>
                 Or add one from the catalogue
               </Link>
+              <Link href="/agents/new/remote" className={buttonClasses("ghost")}>
+                Or register a remote agent (A2A)
+              </Link>
             </div>
             {drafting && (
               <p role="status" className="text-sm text-ink-muted">

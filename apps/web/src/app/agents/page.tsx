@@ -116,9 +116,9 @@ function Agents() {
                       <span className="ml-2">
                         <ScopeBadge agent={agent} />
                       </span>
-                      {agent.kind === "external" && (
+                      {agent.kind !== "internal" && (
                         <Badge tone="accent" className="ml-2">
-                          External
+                          {agent.kind === "remote" ? "Remote · A2A" : "External"}
                         </Badge>
                       )}
                     </TD>

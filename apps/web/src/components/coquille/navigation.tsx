@@ -177,6 +177,7 @@ export function adminGroups(pluginSections: { id: string; title: string }[] = []
         page("/admin/members", "Members", Users),
         page("/admin/connectors", "Connectors", Plug),
         page("/admin/models", "Models", Cpu),
+        page("/admin/remote-agents", "Remote agents", Bot),
         page("/admin/audit", "Audit", ScrollText),
         page("/admin/platform", "Platform", Server),
         page("/admin/edition", "Edition", BadgeCheck),
