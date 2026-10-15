@@ -13,15 +13,15 @@ const ENTERPRISE = {
   edition: "enterprise" as const,
   features: ["saml"],
   version: "0.17.16",
-  publisher: "graal.systems",
+  publisher: "GraalSystems",
   edition_version: "0.2.0",
 };
 const COMMUNITY = { edition: "community" as const, features: [], version: "0.17.16", publisher: null, edition_version: null };
 
-function renderFooter() {
+function renderFooter(productName?: string) {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <EditionFooterLine />
+      <EditionFooterLine productName={productName} />
     </QueryClientProvider>,
   );
 }
@@ -31,7 +31,7 @@ describe("the edition names its publisher", () => {
 
   it("the admin card shows the edition version, the publisher and the core version", () => {
     render(<EditionCard edition={ENTERPRISE} />);
-    expect(screen.getByText(/published by graal\.systems/)).toBeInTheDocument();
+    expect(screen.getByText(/published by GraalSystems/)).toBeInTheDocument();
     expect(screen.getByText("0.2.0")).toBeInTheDocument();
     expect(screen.getByText("0.17.16")).toBeInTheDocument();
     expect(screen.getByText(/core/)).toBeInTheDocument();
@@ -44,20 +44,28 @@ describe("the edition names its publisher", () => {
   });
 
   it("the badge tooltip names the publisher", () => {
-    render(<EditionBadge edition="enterprise" publisher="graal.systems" />);
+    render(<EditionBadge edition="enterprise" publisher="GraalSystems" />);
     expect(screen.getByTestId("edition-badge")).toHaveAttribute(
       "title",
-      "Enterprise edition, published by graal.systems",
+      "Enterprise edition, published by GraalSystems",
     );
   });
 
   it("the footer says the enterprise edition is by its publisher, built on the core", async () => {
     vi.mocked(api.edition).mockResolvedValue(ENTERPRISE);
     renderFooter();
-    expect(await screen.findByText(/Choregos Enterprise edition by graal\.systems/)).toHaveTextContent(
-      "Choregos Enterprise edition by graal.systems · built on Choregos by Varga Foundation (Apache 2.0)",
+    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems/)).toHaveTextContent(
+      "Choregos Enterprise edition by GraalSystems · built on Choregos by Varga Foundation (Apache 2.0)",
     );
     expect(screen.getByTestId("footer-foundation")).toBeInTheDocument();
+  });
+
+  it("a renamed instance shows its product, the publisher and the foundation in one line", async () => {
+    vi.mocked(api.edition).mockResolvedValue(ENTERPRISE);
+    renderFooter("Graal Agentic Platform");
+    expect(await screen.findByText(/Choregos Enterprise edition by GraalSystems/)).toHaveTextContent(
+      "Graal Agentic Platform · Choregos Enterprise edition by GraalSystems · built on Choregos by Varga Foundation (Apache 2.0)",
+    );
   });
 
   it("the footer keeps the foundation's line in the community edition", async () => {
