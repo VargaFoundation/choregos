@@ -1043,7 +1043,15 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   A crawl that lists no page at all (a moved site, a wall) is reported as unreadable and **deletes
   nothing**.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
-  (`*.md` by default).
+  (`*.md` by default). A document is named by its whole path (`docs-adr-0001.md`), so two
+  `README.md` do not collide; a repository where no file matches `paths` is reported unreadable and
+  deletes nothing. A **private** repository is read through a `documents` connector of type `git`
+  (`host`, default `github.com`, and `auth`): `auth: token` with a fine-grained access token
+  (`Contents: read`) in the `token` secret field, or `auth: github_app` with the App's `app_id`, its
+  `private_key` secret and optionally the `installation_id`, from which a one-hour installation
+  token limited to that repository and `contents: read` is minted at each read. The source names the
+  connector (`connector`); the repository's host must be the connector's host, so the credential is
+  never sent elsewhere, and it travels to git in the environment, never in a command line.
 
 **Refresh schedule.** A source refreshes in one of three modes (`refresh_mode`): `interval` (every
 `interval_minutes`, 5 minutes to 7 days; the default), `cron` (`refresh_cron` with five fields, for

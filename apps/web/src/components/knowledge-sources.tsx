@@ -138,7 +138,7 @@ export function KnowledgeSources({
               api.createKnowledgeSource(org, slug, {
                 kind,
                 name: fields.name || KIND[kind],
-                connector: CONNECTED.includes(kind) ? fields.connector : null,
+                connector: CONNECTED.includes(kind) ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
                 config: sourceConfig(kind, { ...fields, attachments }),
                 ...refreshBody(refresh),
               }),
@@ -198,6 +198,14 @@ export function KnowledgeSources({
             <>
               <Input aria-label="ref" placeholder="branch or commit" value={fields.ref} onChange={set("ref")} />
               <Input aria-label="paths" placeholder="docs/*.md, *.md" value={fields.paths} onChange={set("paths")} />
+              <Select aria-label="git connector" value={fields.connector} onChange={set("connector")} className="sm:col-span-2">
+                <option value="">public repository (no connector)</option>
+                {pickable.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
             </>
           )}
           <div>
