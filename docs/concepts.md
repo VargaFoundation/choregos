@@ -13,6 +13,11 @@ control (`github`), CI (`tekton`), CD (`argocd`), execution (`tekton`, `k8s_job`
 `local_docker`), model gateway (`litellm`, `direct`), memory (`ecphoria`, `lexical`) and
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
+A **catalogue** is what the platform *offers*; a **connector** is what an organisation has
+*enabled*. The image ships a catalogue of well-known MCP servers (and one of skills): listing an
+entry enables nothing, and installing one goes through the same governance as declaring it by hand
+([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)).
+
 `tracker: internal` means there is no outside tracker: Choregos' own database holds the
 tickets, assigns their keys and discovers them. Use it for work that exists nowhere else —
 an HR request, a file to process — or for a bench. A work item filed from the console or MCP on

@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json\",\"name\":\"io.github.hashicorp/terraform-mcp-server\",\"description\":\"Generate more accurate Terraform and automate workflows for HCP Terraform and Terraform Enterprise\",\"title\":\"Terraform\",\"repository\":{\"url\":\"https://github.com/hashicorp/terraform-mcp-server\",\"source\":\"github\"},\"version\":\"1.0.0\",\"packages\":[{\"registryType\":\"oci\",\"identifier\":\"docker.io/hashicorp/terraform-mcp-server:1.0.0\",\"runtimeHint\":\"docker\",\"transport\":{\"type\":\"stdio\"},\"runtimeArguments\":[{\"description\":\"HCP Terraform or Terraform Enterprise base URL.\",\"value\":\"TFE_ADDRESS={address}\",\"variables\":{\"address\":{\"format\":\"string\",\"default\":\"https://app.terraform.io\"}},\"type\":\"named\",\"name\":\"-e\"},{\"description\":\"HCP Terraform or Terraform Enterprise API token used to authenticate requests.\",\"value\":\"TFE_TOKEN={token}\",\"variables\":{\"token\":{\"format\":\"string\",\"isSecret\":true}},\"type\":\"named\",\"name\":\"-e\"},{\"description\":\"Set to true to enable tools that execute Terraform operations requiring explicit approval.\",\"value\":\"ENABLE_TF_OPERATIONS={enabled}\",\"variables\":{\"enabled\":{\"format\":\"boolean\",\"default\":\"false\"}},\"type\":\"named\",\"name\":\"-e\"}]}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2026-06-10T18:53:10.818441Z\",\"publishedAt\":\"2026-06-10T18:53:10.818441Z\",\"updatedAt\":\"2026-06-10T18:53:10.818441Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.hashicorp%2Fterraform-mcp-server/versions/latest"
+}

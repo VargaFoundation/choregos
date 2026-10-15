@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json\",\"name\":\"io.github.mapbox/mcp-server\",\"description\":\"Geospatial intelligence with Mapbox APIs like geocoding, POI search, directions, isochrones, etc.\",\"repository\":{\"url\":\"https://github.com/mapbox/mcp-server\",\"source\":\"github\"},\"version\":\"99.0.0-dev\",\"packages\":[{\"registryType\":\"npm\",\"registryBaseUrl\":\"https://registry.npmjs.org\",\"identifier\":\"@mapbox/mcp-server\",\"version\":\"99.0.0-dev\",\"runtimeHint\":\"npx\",\"transport\":{\"type\":\"stdio\"},\"environmentVariables\":[{\"description\":\"Your Mapbox access token\",\"isRequired\":true,\"format\":\"string\",\"isSecret\":true,\"name\":\"MAPBOX_ACCESS_TOKEN\"}]}],\"remotes\":[{\"type\":\"streamable-http\",\"url\":\"https://mcp.mapbox.com/mcp\"}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2026-03-10T20:02:30.330489Z\",\"publishedAt\":\"2026-03-10T20:02:30.330489Z\",\"updatedAt\":\"2026-03-10T20:02:30.330489Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.mapbox%2Fmcp-server/versions/latest"
+}

@@ -1,0 +1,35 @@
+# What never enters the MCP catalogue, whatever the seed says (ADR 0065). Each rule has a reason,
+# and the generator reports which rule dropped which line. The patterns are matched against the
+# lowercase text they name; a `*.` host pattern also matches the bare domain.
+
+# Hosts of ephemeral tunnels, relays and anonymous hosting: a server there can vanish or change
+# hands with no notice, and nothing proves who runs it.
+hosts:
+  - { pattern: "*.trycloudflare.com", reason: "an ephemeral Cloudflare tunnel" }
+  - { pattern: "*.ngrok.io", reason: "an ngrok tunnel" }
+  - { pattern: "*.ngrok-free.app", reason: "an ngrok tunnel" }
+  - { pattern: "*.ngrok.app", reason: "an ngrok tunnel" }
+  - { pattern: "*.loca.lt", reason: "a localtunnel tunnel" }
+  - { pattern: "*.workers.dev", reason: "anonymous Cloudflare Workers hosting, not the vendor's domain" }
+  - { pattern: "*.railway.app", reason: "anonymous Railway hosting" }
+  - { pattern: "*.vercel.app", reason: "anonymous Vercel hosting, not the vendor's domain" }
+  - { pattern: "*.netlify.app", reason: "anonymous Netlify hosting, not the vendor's domain" }
+  - { pattern: "*.onrender.com", reason: "anonymous Render hosting" }
+  - { pattern: "*.herokuapp.com", reason: "anonymous Heroku hosting" }
+  - { pattern: "*.smithery.ai", reason: "a Smithery relay (an aggregator)" }
+  - { pattern: "*.pipeworx.io", reason: "a relay of third-party APIs (an aggregator)" }
+  - { pattern: "*.mcp.ai", reason: "a relay (an aggregator)" }
+  - { pattern: "*.waystation.ai", reason: "a relay (an aggregator)" }
+
+# Seeds whose id, title, registry name or repository names something the platform will not offer.
+names:
+  - { pattern: "desktop commander", reason: "arbitrary command execution on a desktop" }
+  - { pattern: "terminal", reason: "arbitrary command execution" }
+  - { pattern: "bypass", reason: "anti-bot circumvention" }
+  - { pattern: "anti-detect", reason: "anti-detection browsing" }
+  - { pattern: "x402", reason: "agent payments" }
+  - { pattern: "wallet", reason: "crypto wallet control" }
+  - { pattern: "gateway", reason: "a gateway that re-opens discovery (ADR 0022)" }
+  - { pattern: "aggregator", reason: "an aggregator that re-opens discovery (ADR 0022)" }
+
+# Registry statuses that are not `active` are dropped too (deprecated, deleted): see the code.

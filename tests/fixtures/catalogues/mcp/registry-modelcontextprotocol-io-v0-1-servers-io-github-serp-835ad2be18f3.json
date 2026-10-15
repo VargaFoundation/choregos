@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json\",\"name\":\"io.github.serpapi/serpapi-mcp\",\"description\":\"Official SerpApi MCP server for Google, Bing, and other search engines.\",\"title\":\"SerpApi\",\"repository\":{\"url\":\"https://github.com/serpapi/serpapi-mcp\",\"source\":\"github\"},\"version\":\"2.0.0\",\"websiteUrl\":\"https://serpapi.com/\",\"remotes\":[{\"type\":\"streamable-http\",\"url\":\"https://mcp.serpapi.com/mcp\",\"headers\":[{\"description\":\"Bearer token authentication using your SerpApi API key.\",\"isRequired\":true,\"value\":\"Bearer {SERPAPI_API_KEY}\",\"isSecret\":true,\"variables\":{\"SERPAPI_API_KEY\":{\"description\":\"Your SerpApi API key. Get one at https://serpapi.com/manage-api-key\",\"isRequired\":true,\"isSecret\":true,\"placeholder\":\"your-serpapi-api-key\"}},\"name\":\"Authorization\"}]}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2026-09-22T04:55:30.305312Z\",\"publishedAt\":\"2026-09-22T04:55:30.305312Z\",\"updatedAt\":\"2026-09-22T04:55:30.305312Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.serpapi%2Fserpapi-mcp/versions/latest"
+}
