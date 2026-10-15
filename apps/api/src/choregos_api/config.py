@@ -172,6 +172,17 @@ class Settings(BaseSettings):
     log_json: bool = True
     fx_usd_eur: float = 0.92
 
+    @property
+    def cookies_secure(self) -> bool:
+        """Whether the session and OIDC cookies carry `Secure`.
+
+        Always in staging/prod; and in any environment whose public or API URL is https, because
+        a deployment behind a TLS-terminating ingress is served over HTTPS whatever `env` says
+        (a dev tenant on https must not send its session cookie in clear on a stray http hop).
+        """
+        https = any(u.strip().lower().startswith("https://") for u in (self.public_url, self.api_url))
+        return self.env in {"staging", "prod"} or https
+
     @model_validator(mode="after")
     def _pas_de_porte_derobee_en_production(self) -> Settings:
         if self.dev_login_enabled and self.env in {"staging", "prod"}:
