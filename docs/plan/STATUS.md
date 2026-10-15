@@ -359,7 +359,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
-**Total** : 247 livrées, 84 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+**Total** : 247 livrées, 86 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
@@ -1416,3 +1416,4 @@ les 492 tests ne disaient pas :
     change les groupes. La matrice RBAC reste verte.
     **Ce que ça ne prouve pas** : la politique par opération des connecteurs (flux S19), qui
     remplacera ces deux listes.
+| S39-06a | S39 | 🟡 | — | a SharePoint source picks its documents connector from a list in the console, and the API says why a name is refused: case (names are lowercase, it suggests the right one), kind (`identity/entra`), type (`SOURCE_CONNECTOR_TYPES`, also checked at sync), or no connector at all. `test_knowledge_sources.py` (3 cases), `knowledge-sources.test.tsx` and `connecteurs-org.test.tsx` (`?type=` preselects the type). Does not prove: the failing request on the dev tenant (it predates the API log window, so the cause there is inferred, not observed); that a source declared earlier with a wrongly-cased name is migrated (it stays refused at sync: the connector "does not exist"). |

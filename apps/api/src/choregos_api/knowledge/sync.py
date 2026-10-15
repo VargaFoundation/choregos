@@ -33,6 +33,9 @@ logger = get_logger("choregos.knowledge.sync")
 
 KINDS = ("sharepoint", "web", "git")
 
+# The connector types a source kind may be served by (S39-06a). Confluence and git sources extend it.
+SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {"sharepoint": frozenset({"sharepoint"})}
+
 
 class SourceUnavailableError(RuntimeError):
     """The source cannot be opened (its connector is gone, its configuration refused)."""
@@ -53,6 +56,11 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
         ).scalar_one_or_none()
         if connector is None:
             raise SourceUnavailableError(f"the `documents` connector `{source.connector}` does not exist")
+        if connector.type not in SOURCE_CONNECTOR_TYPES["sharepoint"]:
+            raise SourceUnavailableError(
+                f"the connector `{source.connector}` is a documents/{connector.type} connector: "
+                f"a sharepoint source needs {' or '.join(sorted(SOURCE_CONNECTOR_TYPES['sharepoint']))}"
+            )
         resolved = configuration_resolue(
             connector.kind, connector.type, connector.config, connector.secret_refs
         )

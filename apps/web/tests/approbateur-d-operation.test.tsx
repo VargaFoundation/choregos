@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
 import type { OrgConnector } from "@/lib/types";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors", useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "varga" }) }));
 
 const { pare_feu, miseAJour } = vi.hoisted(() => ({

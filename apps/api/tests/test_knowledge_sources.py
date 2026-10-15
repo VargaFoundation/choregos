@@ -211,6 +211,74 @@ async def test_a_source_is_refused_before_its_first_sync(
     assert reason in refused.json()["detail"]
 
 
+async def _declare(client: AsyncClient, name: str, kind: str, type_: str) -> None:
+    created = await client.post(
+        "/api/v1/orgs/varga/connectors", json={"name": name, "kind": kind, "type": type_, "config": {}}
+    )
+    assert created.status_code == 201, created.text
+
+
+async def _source_refused(client: AsyncClient, connector: str) -> str:
+    refused = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "sharepoint", "name": "s", "connector": connector, "config": {"site_id": "x"}},
+    )
+    assert refused.status_code == 422, refused.text
+    return str(refused.json()["detail"])
+
+
+async def test_a_sharepoint_source_names_an_existing_documents_connector(
+    client: AsyncClient, admin: str
+) -> None:
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    # No connector at all: the message says who declares one.
+    assert "none: an org admin declares one in /admin/connectors" in await _source_refused(
+        client, "Diametral"
+    )
+    # An `identity` connector of that name is named for what it is.
+    await _declare(client, "diametral", "identity", "fake")
+    assert "`diametral` is a identity/fake connector, not a documents one" in await _source_refused(
+        client, "diametral"
+    )
+    # A documents connector under another name: the message lists the ones that exist.
+    await _declare(client, "wiki", "documents", "fake")
+    assert "documents connectors here: wiki" in await _source_refused(client, "other")
+    # Names are lowercase: the capitalised name is not found, and the message says what to type.
+    await _declare(client, "sharepoint", "documents", "sharepoint")
+    assert 'did you mean "sharepoint"?' in await _source_refused(client, "Sharepoint")
+
+
+async def test_a_sharepoint_source_refuses_a_connector_of_another_type(
+    client: AsyncClient, admin: str
+) -> None:
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    await _declare(client, "wiki", "documents", "fake")
+    reason = await _source_refused(client, "wiki")
+    assert "`wiki` is a documents/fake connector: a sharepoint source needs sharepoint" in reason
+
+
+async def test_a_sync_refuses_a_connector_of_another_type(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same check at sync time: a connector whose type changed after the source was declared."""
+    from choregos_api.db.models import KnowledgeSource, OrgConnector
+    from choregos_api.db.session import session_scope
+    from choregos_api.knowledge.sync import SourceUnavailableError, open_source
+    from sqlalchemy import select
+
+    source = await _sharepoint(client, monkeypatch)
+    async with session_scope() as session:
+        connector = (
+            await session.execute(select(OrgConnector).where(OrgConnector.name == "sharepoint"))
+        ).scalar_one()
+        connector.type = "fake"
+    async with session_scope() as session:
+        row = await session.get(KnowledgeSource, source["id"])
+        assert row is not None
+        with pytest.raises(SourceUnavailableError, match="documents/fake connector"):
+            await open_source(session, row)
+
+
 async def test_web_and_git_sources_sync_through_their_fakes(client: AsyncClient, admin: str) -> None:
     from choregos_adapters.fakes.documents import fake_source
 

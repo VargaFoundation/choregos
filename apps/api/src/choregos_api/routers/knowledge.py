@@ -38,6 +38,7 @@ from ..knowledge.access import can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
+from ..knowledge.sync import SOURCE_CONNECTOR_TYPES
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
@@ -574,6 +575,49 @@ async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -
 _HTTPS = ("https://",)
 
 
+async def _documents_connector(
+    session: AsyncSession, organisation: Organization, name: str, source_kind: str
+) -> OrgConnector:
+    """The `documents` connector a source names, or the reason it is not one (422).
+
+    Connector names are lowercase, so the lookup ignores case and says what the name should be;
+    a connector of another kind or type is named for what it is rather than "not found".
+    """
+    rows = (
+        (await session.execute(select(OrgConnector).where(OrgConnector.org_id == organisation.id)))
+        .scalars()
+        .all()
+    )
+    exact = [c for c in rows if c.name == name]
+    folded = [c for c in rows if c.name.lower() == name.strip().lower()]
+    match = (exact + folded)[0] if exact or folded else None
+    if match is not None and match.kind != "documents":
+        raise unprocessable(
+            f"no `documents` connector `{name}` in {organisation.slug}: "
+            f"`{match.name}` is a {match.kind}/{match.type} connector, not a documents one"
+        )
+    if match is not None and match.name != name:
+        raise unprocessable(
+            f"no `documents` connector `{name}` in {organisation.slug} "
+            f'(names are lowercase: did you mean "{match.name}"?)'
+        )
+    if match is not None:
+        allowed = SOURCE_CONNECTOR_TYPES.get(source_kind, frozenset())
+        if match.type not in allowed:
+            raise unprocessable(
+                f"`{name}` is a documents/{match.type} connector: "
+                f"a {source_kind} source needs {' or '.join(sorted(allowed))}"
+            )
+        return match
+    names = sorted(c.name for c in rows if c.kind == "documents")
+    listing = (
+        f"documents connectors here: {', '.join(names)}"
+        if names
+        else "none: an org admin declares one in /admin/connectors"
+    )
+    raise unprocessable(f"no `documents` connector `{name}` in {organisation.slug} ({listing})")
+
+
 async def _checked_source_config(
     session: AsyncSession,
     organisation: Organization,
@@ -585,17 +629,7 @@ async def _checked_source_config(
     if kind == "sharepoint":
         if not connector:
             raise unprocessable("a SharePoint or OneDrive source names its `documents` connector")
-        found = (
-            await session.execute(
-                select(OrgConnector.id).where(
-                    OrgConnector.org_id == organisation.id,
-                    OrgConnector.name == connector,
-                    OrgConnector.kind == "documents",
-                )
-            )
-        ).first()
-        if found is None:
-            raise unprocessable(f"no `documents` connector `{connector}` in {organisation.slug}")
+        await _documents_connector(session, organisation, connector, kind)
         if not (config.get("site_id") or config.get("drive_id")):
             raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
         return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}

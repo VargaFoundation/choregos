@@ -3,7 +3,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { estUneReference } from "@/components/connecteurs";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
@@ -88,7 +89,9 @@ export default function OrgConnectorsPage() {
           ))}
       </section>
       <OutilsDeLivraison org={org} />
-      <Declarer org={org} />
+      <Suspense>
+        <Declarer org={org} />
+      </Suspense>
     </div>
   );
 }
@@ -292,7 +295,8 @@ function Declarer({ org }: { org: string }) {
   const client = useQueryClient();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const [nom, setNom] = useState("");
-  const [choix, setChoix] = useState("");
+  // `?type=documents/sharepoint` preselects the type (the knowledge form links here).
+  const [choix, setChoix] = useState(useSearchParams().get("type") ?? "");
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [references, setReferences] = useState<Record<string, string>>({});
   const [erreur, setErreur] = useState<string | null>(null);
