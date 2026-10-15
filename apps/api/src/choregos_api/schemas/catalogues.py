@@ -59,6 +59,8 @@ class McpCatalogueDto(Dto):
 class McpCatalogueInstall(Dto):
     name: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{1,62}$")
     secret_refs: dict[str, str] = Field(default_factory=dict)
+    #: The credential typed once: sealed at rest, never returned (ADR 0058).
+    secret_values: dict[str, str] = Field(default_factory=dict, repr=False)
     auth_header: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{1,64}$")
 
 
