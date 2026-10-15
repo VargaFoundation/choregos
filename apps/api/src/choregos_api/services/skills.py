@@ -19,9 +19,16 @@ import re
 import stat
 import zipfile
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import yaml
 from choregos_contracts import empreinte_de_skill
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    from ..db.models import Organization, Skill, SkillVersion
+    from ..deps import Me
 
 MAX_FICHIERS = 256
 MAX_OCTETS = 5 * 1024 * 1024
@@ -138,3 +145,76 @@ def valider(fichiers: dict[str, str], slug: str | None = None) -> Entete:
 def empreinte(fichiers: dict[str, str]) -> str:
     """L'empreinte d'une version : le runner la recalcule avant de poser les fichiers."""
     return empreinte_de_skill(fichiers)
+
+
+async def publish_version(  # noqa: PLR0913 - the old `_publier`, moved, plus one switch
+    session: AsyncSession,
+    principal: Me,
+    organisation: Organization,
+    fichiers: dict[str, str],
+    slug: str | None,
+    source: dict[str, object] | None = None,
+    *,
+    executables: list[str] | None = None,
+    repo_licences: dict[str, str] | None = None,
+    review_as_platform: bool = False,
+) -> tuple[Skill, SkillVersion]:
+    """Creates the skill (version 1) or publishes its next version, never a rewrite. The version
+    goes through the gate (S32-06): its risk, what the scan finds; `high` waits for a second reviewer.
+
+    `review_as_platform` is for a version the platform itself ships (the bundled skills of the catalogue,
+    ADR 0065): it is approved by `platform` like the agent catalogue's skills (ADR 0050 §7), and only if
+    the gate does not call it high risk — a high-risk version is never approved on the platform's word."""
+    from ..audit import record
+    from ..db.models import Skill, SkillVersion
+    from ..errors import unprocessable
+    from . import skill_gate
+
+    try:
+        tete = valider(fichiers, slug)
+    except SkillRefusee as refus:
+        raise unprocessable(str(refus)) from refus
+    skill = (
+        await session.execute(select(Skill).where(Skill.org_id == organisation.id, Skill.slug == tete.name))
+    ).scalar_one_or_none()
+    assessment = skill_gate.assess(fichiers, executables=executables or [], repo_licences=repo_licences)
+    columns = skill_gate.columns(assessment)
+    if review_as_platform:
+        if assessment.risk == "high":
+            raise unprocessable(
+                f"`{tete.name}` is assessed high risk: the platform does not approve it on its own word"
+            )
+        columns = {**columns, "review_status": "approved", "reviewed_by": skill_gate.PLATFORM}
+    if skill is None:
+        skill = Skill(org_id=organisation.id, slug=tete.name, description=tete.description, status="active")
+        session.add(skill)
+        await session.flush()
+    skill.description = tete.description
+    derniere = (
+        await session.execute(select(func.max(SkillVersion.version)).where(SkillVersion.skill_id == skill.id))
+    ).scalar() or 0
+    version = SkillVersion(
+        skill_id=skill.id,
+        org_id=organisation.id,
+        version=derniere + 1,
+        files=dict(fichiers),
+        digest=empreinte(fichiers),
+        created_by=principal.email,
+        source=source,
+        **columns,
+    )
+    session.add(version)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "skill.publish",
+        org_id=organisation.id,
+        target_type="skill",
+        target_id=skill.id,
+        version=version.version,
+        risk=version.risk,
+        review_status=version.review_status,
+        **({"source": source} if source else {}),
+    )
+    return skill, version
