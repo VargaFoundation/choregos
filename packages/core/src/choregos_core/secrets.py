@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Les références de secret (ADR 0034) — la couture `SecretResolver`.
 
-Un connecteur ne porte jamais un secret en clair : sa configuration nomme une RÉFÉRENCE
+A connector never carries a secret in clear: its configuration names a REFERENCE
 (`env:CONNECTOR_JIRA_TOKEN`), which the platform resolves when it builds the adapter, in the process
-that needs it, jamais dans la base, jamais dans la réponse d'une API. Le cœur sait lire
-l'environnement (`env:`) ; un greffon déclare les autres schémas — un coffre (`vault:`,
-`infisical:`) — par `declarer_un_resolveur`.
+that needs it, never in the database, never in an API response. The core reads the environment
+(`env:`); a plugin declares the other schemes (a vault: `vault:`, `infisical:`) with
+`declarer_un_resolveur`.
 
 `connectors.secret_ref` existait depuis le schéma initial, stocké et jamais lu : un secret
 « configuré » n'atteignait aucun adaptateur, qui retombait en silence sur sa valeur par défaut.
