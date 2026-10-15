@@ -490,8 +490,8 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await page.getByLabel("Add a connector").selectOption("notify");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByTestId("connecteur-notify")).toBeVisible();
-  // Jira : le formulaire vient de son schéma ; un secret se tape (un mot de passe, scellé par la
-  // plateforme, ADR 0058) ou, pour un opérateur, se nomme par référence.
+  // Jira: the form comes from its schema; a secret is typed (a password, sealed by the platform,
+  // ADR 0058) or, for an operator, named by reference.
   await page.getByTestId("connecteur-tracker").getByRole("button", { name: "Edit" }).click();
   await page.getByTestId("connecteur-tracker").getByRole("combobox").first().selectOption("jira");
   await expect(page.getByLabel("api token value")).toHaveAttribute("type", "password");
