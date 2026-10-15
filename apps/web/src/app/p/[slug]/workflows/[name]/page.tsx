@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { useParams } from "next/navigation";
 import { useState } from "react";
-import { ActorIcon, Button, Card, Empty, ErrorNote, PhraseDuMoteur, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, PhraseDuMoteur, StateBadge } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { FormulaireDEtape, PanneauDeTransition } from "@/components/workflows/panneaux";
+import { StepDetails } from "@/components/workflows/step-details";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
-
-const GENRE: Record<string, string> = {
-  agent: "agent",
-  human: "human",
-  system: "system",
-  release_train: "train",
-};
+import { useAgentResolution } from "@/components/workflows/use-agent-resolution";
 
 /**
  * La vue processus : chaque transition dite en clair (S16-08) — qui fait passer un ticket d'un
@@ -21,12 +17,15 @@ const GENRE: Record<string, string> = {
  */
 export default function ProcessPage() {
   const brouillon = useBrouillon();
+  const { slug } = useParams<{ slug: string }>();
+  const resolutions = useAgentResolution(slug, brouillon.process);
   const [ouverte, setOuverte] = useState<string | null>(null);
   if (brouillon.definition.error)
     return <ErrorNote>{String(brouillon.definition.error)}</ErrorNote>;
   // Le brouillon : les gestes pas encore publiés se lisent ici aussi (S16-12).
   const etapes = brouillon.process;
   const acteurs = Object.keys(brouillon.definition.data?.json?.actors ?? {});
+  const parId = new Map((etapes ?? []).map((e) => [e.id, e]));
   if (!etapes) return <Empty>Reading the workflow…</Empty>;
   const ajouter = (
     <Card title="Add a step">
@@ -52,7 +51,7 @@ export default function ProcessPage() {
             <Card>
               <div className="space-y-3" data-testid={`process-step-${etape.id}`}>
                 <div className="flex items-start gap-2">
-                  <p className="flex-1 text-sm">
+                  <p className="min-w-0 flex-1 break-words text-sm">
                     <span className="mr-2 text-ink-muted">{index + 1}.</span>
                     <PhraseDuMoteur texte={etape.sentence} />
                   </p>
@@ -60,22 +59,18 @@ export default function ProcessPage() {
                     {ouverte === etape.id ? "Close" : `Edit ${etape.id}`}
                   </Button>
                 </div>
+                <StepDetails
+                  step={etape}
+                  resolution={etape.agent ? resolutions.get(etape.agent) : undefined}
+                  flow={brouillon.graph?.artifacts}
+                  stepsById={parId}
+                />
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                   <dt className="text-ink-muted">From → to</dt>
                   <dd className="flex flex-wrap items-center gap-2">
                     <StateBadge state={etape.from} display={etape.from_display} />
                     <span aria-hidden>→</span>
                     <StateBadge state={etape.to} display={etape.to_display} />
-                  </dd>
-                  <dt className="text-ink-muted">Who</dt>
-                  <dd className="flex items-center gap-2">
-                    <ActorIcon
-                      kind={GENRE[etape.actor_type] ?? "system"}
-                      name={etape.actor}
-                    />
-                    <span className="text-ink-muted">
-                      <PhraseDuMoteur texte={etape.who} />
-                    </span>
                   </dd>
                   {etape.gates && etape.gates.length > 0 && (
                     <>
@@ -90,12 +85,6 @@ export default function ProcessPage() {
                           ))}
                         </ul>
                       </dd>
-                    </>
-                  )}
-                  {etape.outputs && etape.outputs.length > 0 && (
-                    <>
-                      <dt className="text-ink-muted">Produces</dt>
-                      <dd>{etape.outputs.join(", ")}</dd>
                     </>
                   )}
                   {etape.on_fail && (

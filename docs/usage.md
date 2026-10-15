@@ -335,6 +335,16 @@ answer and on the ticket's journey):
   (`scope_respected`, `no_secrets`, `diff_size_max`, `markdown_sections`, `adr_number_free`): it
   changes the work item's branch even though it lists no output.
 
+In the console, the **Process** tab shows this as a card per step: the agent's name (a link to
+`/agents/<slug>`) with a chip, "v1 · pinned", "v3 · latest", "not installed: installs when this
+workflow is published", "unknown agent" or "unavailable: …"; a person's group and SLA; a job's
+command; **Reads** with the source of each document ("from *Tested* (`t-test`)", "a person's
+rejection reason", "a work item field", or "nothing produces it" as a warning); **Produces**, with
+"changes on the work item's branch" for a step that writes code. On the **Map**, each box carries
+one line, "→ spec_markdown, allowed_paths" or "→ branch", and an **Artifacts** table under the
+diagram lists each document with its type, its producers and its readers; hovering or focusing a
+row outlines those boxes. Choosing a box shows the same card above its editor.
+
 `graph.artifacts` is the artifact flow: one entry per document with `produced_by`, `read_by`,
 `origin`, `context` (given to every agent stage) and `in_pull_request`.
 

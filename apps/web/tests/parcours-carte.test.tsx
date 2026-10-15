@@ -37,6 +37,12 @@ const statut = (id: string) => screen.getByTestId(`etape-${id}`).getAttribute("d
 afterEach(() => vi.useRealTimers());
 
 describe("la carte animée du parcours (S22-02)", () => {
+  it("a ticket's journey keeps its layout budget: no outputs line under the boxes (S39-13)", () => {
+    rendre();
+    expect(screen.getByTestId("etape-t-implement")).toBeInTheDocument();
+    expect(document.querySelector("[data-testid^='sorties-']")).toBeNull();
+  });
+
   it("la barre de relecture n'a plus d'aplat d'encre : l'action en iris, le direct en bleu (S24-04)", () => {
     rendre();
     const relire = screen.getByRole("button", { name: "Replay the journey" });

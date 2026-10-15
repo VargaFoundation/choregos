@@ -20,6 +20,8 @@ const PAGES = [
   "/p/billing-api/workflows/default-simple/yaml",
   "/p/billing-api/workflows/default-simple/history",
   "/p/billing-api/workflows/release-full/map",
+  "/p/billing-api/workflows/dev-complex",
+  "/p/billing-api/workflows/dev-complex/map",
   "/p/billing-api/agents",
   "/p/billing-api/actions",
   "/p/billing-api/actions/act-poste",

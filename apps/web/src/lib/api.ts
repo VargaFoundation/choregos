@@ -25,6 +25,7 @@ import type {
   AgentTrial,
   AgentTrialCreate,
   AgentMetricsSummary,
+  AgentResolution,
   ImplicitAgent,
   AgentPatch,
   AgentSpec,
@@ -317,6 +318,11 @@ export const api = {
   agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
   /** A project's implicit agents, computed by the API (S30-04). */
   implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
+  /** Which agent version a run would load for each reference, through the runtime's resolver (S39-13). */
+  resolveProjectAgents: (id: string, refs: string[]) =>
+    request<AgentResolution[]>(
+      `/projects/${qualify(id)}/agent-resolution?${refs.map((ref) => `ref=${encodeURIComponent(ref)}`).join("&")}`,
+    ),
   /** Try a draft version once, under a capped budget (S32-03). */
   startAgentTrial: (org: string, body: AgentTrialCreate) =>
     request<AgentTrial>(`/orgs/${org}/agent-trials`, { method: "POST", body: JSON.stringify(body) }),

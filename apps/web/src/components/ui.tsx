@@ -440,6 +440,8 @@ const ACTORS: Record<string, { tone: Tone; label: string }> = {
   user: { tone: "running", label: "Human" },
   human: { tone: "running", label: "Human" },
   system: { tone: "neutral", label: "System" },
+  // A job is deterministic code the platform runs (ADR 0056): it reads as the platform, not as a model.
+  job: { tone: "neutral", label: "Job" },
   train: { tone: "succeeded", label: "Release train" },
 };
 
