@@ -1753,6 +1753,25 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (!agents.some((a) => a.slug === cree.slug)) agents.push(cree);
     return structuredClone(cree) as T;
   }
+  if (method === "POST" && /^\/orgs\/[^/]+\/agent-drafts$/.test(chemin ?? "")) {
+    // A fixed proposal (S39-05): nothing is saved, as on the real endpoint.
+    const corps = JSON.parse(String(init.body ?? "{}")) as { display_name: string; description: string };
+    return {
+      display_name: corps.display_name,
+      slug: "release-notes-writer",
+      description: corps.description,
+      spec: {
+        instructions: "You are a release notes writer.\n\n1. Read {{ ticket.title }}.\n2. List the merged pull requests.\n\n## Output\nThe notes, grouped by theme.",
+        skills: [{ slug: "onboarding-procedure" }],
+        limits: { max_turns: 20, max_minutes: 30 },
+        budget: { run_usd: 1 },
+        evals: [{ name: "groups by theme", input: { title: "Release 1.2", body: "" }, must_contain: ["theme"] }],
+      },
+      sample: { title: "Release notes for 1.2", body: "Merged: 14 pull requests since v1.1." },
+      notes: ["dropped skill `ghost`: not in the organisation, or not usable yet"],
+      model: "mock/drafter",
+    } as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/agent-trials$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentTrialCreate;
     const publiee = agents.find((a) => a.slug === corps.agent);

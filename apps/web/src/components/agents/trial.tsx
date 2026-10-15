@@ -95,12 +95,21 @@ export function EvalResults({ results }: { results: AgentEvalResult[] }) {
 }
 
 /** The bench: a project, a sample, a budget — and the run, read until it ends. */
-export function TrialBench({ spec, agent }: { spec: AgentSpec; agent?: string }) {
+export function TrialBench({
+  spec,
+  agent,
+  initialSample,
+}: {
+  spec: AgentSpec;
+  agent?: string;
+  /** A sample to start from, such as the one a drafted agent came with (S39-05). */
+  initialSample?: { title?: string; body?: string };
+}) {
   const { org } = useSession();
   const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
   const [project, setProject] = useState("");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [title, setTitle] = useState(initialSample?.title ?? "");
+  const [body, setBody] = useState(initialSample?.body ?? "");
   const [budget, setBudget] = useState("0.25");
   const [trial, setTrial] = useState<AgentTrial | null>(null);
   const [error, setError] = useState<string | null>(null);

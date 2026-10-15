@@ -29,6 +29,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
+      draftAgent: vi.fn(),
       createAgent: vi.fn().mockResolvedValue({ slug: "release-notes-writer", display_name: "Release notes writer", latest_version: 1 }),
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       platformModels: vi.fn().mockResolvedValue([]),
@@ -135,5 +136,70 @@ describe("the new agent's page", () => {
     expect(within(builder).getByTestId("ce-que-ca-permet").closest("[role=tabpanel]")).toHaveAttribute("hidden");
     fireEvent.click(tabs[1]!);
     expect(within(builder).getByTestId("ce-que-ca-permet").closest("[role=tabpanel]")).not.toHaveAttribute("hidden");
+  });
+
+  describe("'Draft it for me'", () => {
+    const DRAFT = {
+      display_name: "Release notes writer",
+      slug: "release-notes-writer",
+      description: DESCRIPTION,
+      spec: {
+        instructions: "1. Read the merged pull requests.\n## Output\nThe notes.",
+        skills: [{ slug: "release-style" }],
+        evals: [],
+      },
+      sample: { title: "Notes for 1.2", body: "14 pull requests merged." },
+      notes: ["dropped skill `ghost`: not in the organisation, or not usable yet"],
+      model: "fake/agent-drafter",
+    };
+
+    function fillStepOne() {
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Release notes writer" } });
+      fireEvent.change(screen.getByLabelText("What should it do?"), { target: { value: DESCRIPTION } });
+    }
+
+    it("is disabled until the name and a description are filled", () => {
+      show();
+      const button = screen.getByRole("button", { name: "Draft it for me" });
+      expect(button).toBeDisabled();
+      fillStepOne();
+      expect(button).toBeEnabled();
+    });
+
+    it("calls the endpoint and opens the form pre-filled, with the sample and the platform's notes", async () => {
+      vi.mocked(api.draftAgent).mockResolvedValue(DRAFT as never);
+      vi.mocked(api.skills).mockResolvedValue([
+        { slug: "release-style", description: "How we write release notes.", status: "active", latest_version: 1, used_by: [] },
+      ] as never);
+      const view = show();
+      fillStepOne();
+      fireEvent.click(screen.getByRole("button", { name: "Draft it for me" }));
+      await waitFor(() =>
+        expect(api.draftAgent).toHaveBeenCalledWith("acme", { display_name: "Release notes writer", description: DESCRIPTION }),
+      );
+      view.rerender(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <NewAgentPage />
+        </QueryClientProvider>,
+      );
+      const builder = await screen.findByTestId("agent-builder");
+      expect(within(builder).getByLabelText("Instructions")).toHaveValue(DRAFT.spec.instructions);
+      // The suggested skill opens its section; nothing the draft left alone does.
+      const skills = Array.from(builder.querySelectorAll("details")).find((el) => el.textContent?.includes("Add a skill"));
+      expect(skills).toHaveAttribute("open");
+      expect(screen.getByText(DRAFT.notes[0]!)).toBeInTheDocument();
+      expect(within(builder).getByLabelText("Sample title")).toHaveValue("Notes for 1.2");
+      expect(api.createAgent).not.toHaveBeenCalled();
+    });
+
+    it("says so when the draft fails, and the blank form still works", async () => {
+      vi.mocked(api.draftAgent).mockRejectedValue(new Error("the gateway answered 500"));
+      show();
+      fillStepOne();
+      fireEvent.click(screen.getByRole("button", { name: "Draft it for me" }));
+      expect(await screen.findByText(/The draft failed: the gateway answered 500/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Start from a blank form" })).toBeEnabled();
+      expect(nav.push).not.toHaveBeenCalled();
+    });
   });
 });

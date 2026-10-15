@@ -487,8 +487,12 @@ curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
 In the console, **Agents → New agent** opens a full page (`/agents/new`), in two steps:
 
 1. **Describe.** Two fields: the *name* and *what it should do* (ten characters at least; it becomes the
-   agent's description). **Start from a blank form** goes on; **Or add one from the catalogue** goes
-   back to the catalogue's drawer.
+   agent's description). **Draft it for me** asks a model for a first version (see below) and goes on
+   with the form pre-filled: instructions, suggested skills, knowledge bases and tools (their sections
+   open), the sample of **Try it**, and, above the form, what the platform changed in the draft. It
+   saves nothing. If the draft fails (too many drafts in a minute, gateway down), the page says so.
+   **Start from a blank form** goes on empty; **Or add one from the catalogue** goes back to the
+   catalogue's drawer.
 2. **Configure.** The *basics* are always open: name, slug (derived from the name, editable until the
    agent exists, then fixed; `new` is refused because `/agents/new` is a page), description and
    instructions. The seven other sections are folded and each says its value in one line: model and
