@@ -364,7 +364,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
-**Total** : 247 livrées, 94 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+**Total** : 247 livrées, 95 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 | S39-13a | S39 | 🟡 | #572 | a workflow step names its registry agent, its inputs, its typed outputs and whether it writes the branch; the graph carries the artifact flow (who produces, who reads, context documents, pull-request sections); `GET /projects/{id}/agent-resolution` says which agent version a run would load, through the runtime's own resolver. Proves: dev-complex's steps and flow (`test_process_view_names_the_agent`, `test_artifact_flow`), the resolution for pinned, explicit, draft, absent and catalogue agents (`test_agent_resolution`), the pull request body built from the shared sections (`test_pull_request_body`). Does not prove: anything in the console (S39-13b); a flow that is wrong because an agent writes a document its transition does not declare (only declared outputs count). |
 | S39-13b | S39 | 🟡 | #581 | the Process tab and the map show each step's agent (name, version, pinned or latest, link to /agents/<slug>), people's group and SLA, a job's command, what it reads and from where, what it produces; the map's Artifacts table highlights producers and readers. Proves: RTL (`step-details`, `artifact-flow`, `carte-en-serpentin`, `parcours-modele`) and Playwright (`workflow-agents-and-artifacts`, `sans-debordement`) on the dev-complex fixture. Does not prove: the real dev tenant (needs a release deployed); readability on workflows with many more states than dev-complex beyond the overflow check. |
 
