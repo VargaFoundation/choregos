@@ -142,6 +142,20 @@ installable until a connector can carry a per-user authorisation) and `needs_hos
 that runs as a local process: running a third party's code is the operator's decision, so it is
 listed with what to run and nothing more).
 
+**Installing an entry** is `POST /orgs/{org}/mcp-catalogue/{entry_id}/install` (the organisation's
+administrator only; *Administration → connectors → catalogue* in the console). It declares an
+ordinary `mcp` connector through the same door as `POST /orgs/{org}/connectors`: `{"name": "notion",
+"secret_refs": {"token": "env:CONNECTOR_NOTION"}}` (the name defaults to the entry id; the
+credential is a reference, never a value, and an entry that needs none refuses one). The connector
+remembers `catalogue_entry: "<id>@<catalogue_version>"`, so the catalogue shows which entries are
+installed and which have an update; it has **no operation** until *discover* runs, and each tool is
+born closed as for any MCP connector. An entry that is `needs_oauth` or `needs_hosting` answers
+`422` with the reason. `GET /orgs/{org}/mcp-catalogue` filters on `q`, `category`, `install` and
+`official`, and says per entry whether the deployment declares its host reachable from the API
+(`egress`, see [deployment](deployment.md#the-mcp-server-catalogue-egress-and-your-own-entries)). A
+server that wants its key in another header than `Authorization` (`X-API-Key`) takes `auth_header` in
+the connector's configuration.
+
 The file is **generated, not typed**: `make catalogues` replays recorded answers of the official
 MCP Registry and of GitHub over the reviewed seed in `tools/catalogues/mcp/seed.yaml`, drops
 what the rules refuse (archived, deleted, tunnel or relay hosts, anonymous hosting, aggregators,

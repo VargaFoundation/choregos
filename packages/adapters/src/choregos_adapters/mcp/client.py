@@ -79,6 +79,7 @@ class ClientMcp:
         token: str = "",
         auth_scheme: str = "bearer",
         username: str = "",
+        auth_header: str = "Authorization",
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -92,6 +93,9 @@ class ClientMcp:
         # which Atlassian's Rovo MCP Server asks for when it is given an API token.
         self._auth_scheme = auth_scheme
         self._username = username
+        #: The header the token travels in. `Authorization` (the default) carries `Bearer <token>`;
+        #: any other name carries the raw token, which is what `X-API-Key`-style servers expect.
+        self._auth_header = auth_header
         self._timeout = timeout_s
         self._transport = transport
         self._session: str | None = None
@@ -108,8 +112,10 @@ class ClientMcp:
         if self._token and self._auth_scheme == "basic":
             pair = base64.b64encode(f"{self._username}:{self._token}".encode()).decode("ascii")
             entetes["Authorization"] = f"Basic {pair}"
-        elif self._token:
+        elif self._token and self._auth_header.lower() == "authorization":
             entetes["Authorization"] = f"Bearer {self._token}"
+        elif self._token:
+            entetes[self._auth_header] = self._token
         if self._session:
             entetes["Mcp-Session-Id"] = self._session
         return entetes

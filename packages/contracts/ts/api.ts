@@ -355,7 +355,79 @@ export type OrgConnector = {
   last_check_at?: string | null;
   last_error?: string | null;
   created_by?: string | null;
+  /** `<id>@<catalogue_version>` when it was installed from the MCP catalogue (ADR 0065) */
+  catalogue_entry?: string | null;
   operations?: Array<ConnectorOperation>;
+};
+
+/** Provenance shared by the platform's catalogues (ADR 0065) — which file, built when, from what. */
+export type CatalogueMeta = {
+  /** CalVer, e.g. 2026.10.0 */
+  catalogue_version: string;
+  generated_at: string;
+  /** each source the generator read, with its snapshot date */
+  sources?: {
+    [key: string]: string;
+  };
+};
+
+export type McpCatalogue = {
+  meta: CatalogueMeta;
+  entries: Array<McpCatalogueEntry>;
+};
+
+export type McpCatalogueRemote = {
+  url: string;
+  protocol: "streamable-http" | "sse";
+};
+
+export type McpCatalogueEntry = {
+  id: string;
+  title: string;
+  description: string;
+  publisher: string;
+  /** the registry namespace or the repository owner is the vendor's own */
+  official: boolean;
+  /** one of the modelcontextprotocol reference servers */
+  reference: boolean;
+  /** the shipped catalogue, or the operator's own file (CHOREGOS_MCP_CATALOGUE_EXTRA) */
+  origin?: "catalogue" | "site";
+  registry_name?: string | null;
+  registry_version?: string | null;
+  repo?: string | null;
+  /** SPDX; null for a hosted service */
+  licence?: string | null;
+  terms_url?: string | null;
+  transport: "remote" | "stdio";
+  remote?: McpCatalogueRemote | null;
+  /** none, bearer, oauth or header:<Name> */
+  auth: string;
+  egress_hosts?: Array<string>;
+  categories: Array<string>;
+  stars?: number | null;
+  stars_as_of?: string | null;
+  /** computed from what this release can do, never stored in the file */
+  install: "installable" | "needs_oauth" | "needs_hosting";
+  /** for a stdio server, what an operator needs to host it */
+  hosting?: {
+    [key: string]: unknown;
+  } | null;
+  state: "available" | "installed" | "update";
+  /** names of the org connectors created from this entry */
+  installed_as?: Array<string>;
+  /** whether the deployment declares the host reachable from the API */
+  egress: "open" | "undeclared" | "unknown";
+};
+
+export type McpCatalogueInstall = {
+  /** defaults to the entry id */
+  name?: string | null;
+  /** by reference; a value is refused */
+  secret_refs?: {
+    [key: string]: string;
+  };
+  /** for an entry whose auth is header:<Name>, the header's name; defaults to the entry's */
+  auth_header?: string | null;
 };
 
 export type OrgConnectorCreate = {
@@ -2401,6 +2473,7 @@ export interface Operations {
   importSkill: { method: "POST"; path: "/orgs/{org}/skills/import"; body: void; response: Skill };
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
+  installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2421,6 +2494,7 @@ export interface Operations {
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
+  listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };

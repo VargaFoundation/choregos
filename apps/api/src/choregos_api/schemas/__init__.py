@@ -56,6 +56,13 @@ from .base import (
     Dto,
     PageMeta,
 )
+from .catalogues import (
+    CatalogueMetaDto,
+    McpCatalogueDto,
+    McpCatalogueEntryDto,
+    McpCatalogueInstall,
+    McpCatalogueRemoteDto,
+)
 from .definitions import (
     GatewayModelDto,
     ModelMatrix,
@@ -239,6 +246,7 @@ __all__ = [
     "AuditEntry",
     "AuditPage",
     "BudgetAlertDto",
+    "CatalogueMetaDto",
     "CiLogs",
     "ConformanceReport",
     "ConnectorCheck",
@@ -276,6 +284,10 @@ __all__ = [
     "IntegrationsDto",
     "JourneyMove",
     "JourneyStep",
+    "McpCatalogueDto",
+    "McpCatalogueEntryDto",
+    "McpCatalogueInstall",
+    "McpCatalogueRemoteDto",
     "MeDto",
     "MembershipDto",
     "MembershipUpsert",

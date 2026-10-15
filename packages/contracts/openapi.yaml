@@ -349,6 +349,36 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
         "502": { description: "The server did not answer, or refused the connector's key" }
+  /orgs/{org}/mcp-catalogue:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [connectors]
+      operationId: listMcpCatalogue
+      description: The catalogue of well-known MCP servers shipped with the platform (ADR 0065) and, for each, what it means in this organisation — available, installed (the connectors that carry it) or updatable. Listing enables nothing. Its members can read it.
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: "free text over the id, the title, the publisher and the description" }
+        - { name: category, in: query, required: false, schema: { type: string } }
+        - { name: install, in: query, required: false, schema: { type: string, enum: [installable, needs_oauth, needs_hosting] } }
+        - { name: official, in: query, required: false, schema: { type: boolean }, description: "only the entries the vendor itself publishes" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/McpCatalogue" } } } }
+  /orgs/{org}/mcp-catalogue/{entry_id}/install:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: entry_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [connectors]
+      operationId: installMcpCatalogueEntry
+      description: Declares an `mcp` connector from the entry — an ordinary org connector, its tools born closed, its secret given by reference. Refused with 422 for an entry that needs OAuth or hosting. The organisation's administrator only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/McpCatalogueInstall" } } }
+      responses:
+        "201": { description: Declared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/connectors/{name}/operations/{operation}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2833,7 +2863,62 @@ components:
         last_check_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
         created_by: { type: [string, "null"] }
+        catalogue_entry: { type: [string, "null"], description: "`<id>@<catalogue_version>` when it was installed from the MCP catalogue (ADR 0065)" }
         operations: { type: array, items: { $ref: "#/components/schemas/ConnectorOperation" } }
+    CatalogueMeta:
+      type: object
+      description: Provenance shared by the platform's catalogues (ADR 0065) — which file, built when, from what.
+      required: [catalogue_version, generated_at]
+      properties:
+        catalogue_version: { type: string, description: "CalVer, e.g. 2026.10.0" }
+        generated_at: { type: string, format: date-time }
+        sources: { type: object, additionalProperties: { type: string }, description: "each source the generator read, with its snapshot date" }
+    McpCatalogue:
+      type: object
+      required: [meta, entries]
+      properties:
+        meta: { $ref: "#/components/schemas/CatalogueMeta" }
+        entries: { type: array, items: { $ref: "#/components/schemas/McpCatalogueEntry" } }
+    McpCatalogueRemote:
+      type: object
+      required: [url, protocol]
+      properties:
+        url: { type: string }
+        protocol: { type: string, enum: [streamable-http, sse] }
+    McpCatalogueEntry:
+      type: object
+      required: [id, title, description, publisher, official, reference, transport, auth, install, categories, state, egress]
+      properties:
+        id: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        title: { type: string }
+        description: { type: string, maxLength: 300 }
+        publisher: { type: string }
+        official: { type: boolean, description: "the registry namespace or the repository owner is the vendor's own" }
+        reference: { type: boolean, description: "one of the modelcontextprotocol reference servers" }
+        origin: { type: string, enum: [catalogue, site], description: "the shipped catalogue, or the operator's own file (CHOREGOS_MCP_CATALOGUE_EXTRA)" }
+        registry_name: { type: [string, "null"] }
+        registry_version: { type: [string, "null"] }
+        repo: { type: [string, "null"] }
+        licence: { type: [string, "null"], description: "SPDX; null for a hosted service" }
+        terms_url: { type: [string, "null"] }
+        transport: { type: string, enum: [remote, stdio] }
+        remote: { oneOf: [{ $ref: "#/components/schemas/McpCatalogueRemote" }, { type: "null" }] }
+        auth: { type: string, description: "none, bearer, oauth or header:<Name>" }
+        egress_hosts: { type: array, items: { type: string } }
+        categories: { type: array, items: { type: string } }
+        stars: { type: [integer, "null"] }
+        stars_as_of: { type: [string, "null"], format: date }
+        install: { type: string, enum: [installable, needs_oauth, needs_hosting], description: "computed from what this release can do, never stored in the file" }
+        hosting: { type: [object, "null"], additionalProperties: true, description: "for a stdio server, what an operator needs to host it" }
+        state: { type: string, enum: [available, installed, update] }
+        installed_as: { type: array, items: { type: string }, description: "names of the org connectors created from this entry" }
+        egress: { type: string, enum: [open, undeclared, unknown], description: "whether the deployment declares the host reachable from the API" }
+    McpCatalogueInstall:
+      type: object
+      properties:
+        name: { type: [string, "null"], pattern: "^[a-z][a-z0-9-]{1,62}$", description: "defaults to the entry id" }
+        secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a value is refused" }
+        auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
     OrgConnectorCreate:
       type: object
       required: [name, type]

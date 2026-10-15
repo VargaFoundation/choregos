@@ -117,3 +117,9 @@ def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatc
         },
     )
     assert client._entetes()["Authorization"].startswith("Basic ")
+async def test_a_custom_auth_header_carries_the_raw_key_and_no_authorization() -> None:
+    """`auth_header: X-API-Key` (the catalogue's `header:<Name>` entries) sends the key as it is (S39-10c)."""
+        "https://f.test/mcp", token="the-key", auth_header="X-API-Key", transport=serveur.transport()
+        assert entetes["x-api-key"] == "the-key", methode
+        assert "authorization" not in entetes, methode
+async def test_the_default_header_is_still_a_bearer() -> None:

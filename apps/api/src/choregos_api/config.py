@@ -127,6 +127,12 @@ class Settings(BaseSettings):
     # gouvernée (#241), avant de rendre 202 et l'identifiant de l'action.
     courtier_attente_ecriture_s: float = 30.0
     allowed_agent_backends: list[str] = Field(default_factory=list)
+    #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
+    #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
+    #: instead of `undeclared` (ADR 0065). It restricts nothing; the network policy does.
+    api_egress_hosts: list[str] = Field(default_factory=list)
+    #: The operator's own MCP catalogue entries, merged after the shipped catalogue (ADR 0065).
+    mcp_catalogue_extra: str | None = None
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
     memory_url: str = "http://localhost:8432"
     object_store_url: str = "s3://choregos"

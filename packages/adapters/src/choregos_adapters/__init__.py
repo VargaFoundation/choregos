@@ -546,6 +546,12 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "description": "how the token is sent: Bearer, or Basic base64(username:token)",
                 },
                 "username": {"type": "string", "description": "the account, for `basic` (an email)"},
+                "auth_header": {
+                    "type": "string",
+                    "default": "Authorization",
+                    "description": "the header the token travels in: `Authorization` sends a Bearer, "
+                    "another name (`X-API-Key`) sends the raw token",
+                },
                 "timeout_s": {"type": "number", "default": 30},
             },
             ("url",),
@@ -577,6 +583,7 @@ def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
         token=cfg.get("token", ""),
         auth_scheme=cfg.get("auth_scheme", "bearer"),
         username=cfg.get("username", ""),
+        auth_header=cfg.get("auth_header", "Authorization"),
         transport=FAUX_MCP.transport(),
     )
 
@@ -1038,6 +1045,7 @@ def _register_builtins() -> None:
             token=cfg.get("token", ""),
             auth_scheme=cfg.get("auth_scheme", "bearer"),
             username=cfg.get("username", ""),
+            auth_header=cfg.get("auth_header", "Authorization"),
             timeout_s=float(cfg.get("timeout_s", 30)),
         )
     )
