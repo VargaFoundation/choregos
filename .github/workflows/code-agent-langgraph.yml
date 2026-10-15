@@ -1,0 +1,32 @@
+# Manual only: builds the LangGraph example agent image and runs the seven conformance checks of a
+# code agent inside it (ADR 0063). LangGraph and LangChain are heavy and stay out of the repository's
+# lock file, so this is not part of the blocking CI; run it when the SDK or the example changes.
+name: code-agent-langgraph
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner-image:
+        description: "The runner image the example is built FROM"
+        default: ghcr.io/vargafoundation/choregos-runner:0.17.15
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --frozen
+      - name: build the example image
+        run: |
+          docker build -f examples/agents/langgraph/Dockerfile \
+            --build-arg RUNNER_IMAGE="${{ inputs.runner-image }}" -t langgraph-triager .
+      - name: conformance of the image
+        run: |
+          make conformance-agent IMAGE=langgraph-triager \
+            COMMAND='["/opt/agents/langgraph/bin/python","-m","langgraph_triager"]'

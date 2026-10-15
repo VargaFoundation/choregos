@@ -46,6 +46,17 @@ organisations must assume **a member of one will try to read another**.
 - **Development login opens the API** to anyone who can reach it. It exists for benches
   without an identity provider (`values/local.yaml`), nowhere else.
 
+## Agents written in code
+
+A code agent ([ADR 0063](adr/0063-agents-written-in-code.md)) runs in the run's pod, in the sandbox,
+with the run's token and the run's own gateway key, and no secret an ordinary agent would not have.
+Its image is **named by the operator and pinned by digest** (a workflow or an agent version names an
+image, never a reference; a tag-only reference stops the platform at start-up). The SDK sends every
+tool call and every write through the runner's permission path; that path is the reason the SDK, not
+the user's code, makes the call. It is a convention the SDK keeps, not a wall: Python code in the pod
+can open a socket or run a command like any program, and is bounded by the sandbox, not by the SDK.
+Cosign verification of agent images is not built yet.
+
 ## Injection through context
 
 Context packs and tickets contain text written by third parties. Two rules:

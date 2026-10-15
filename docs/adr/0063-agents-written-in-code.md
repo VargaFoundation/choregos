@@ -64,5 +64,16 @@ Three shapes were compared:
   per run). The refusal is explicit, never a silent substitution.
 - Cosign verification of agent images is not built; the digest pin and the operator's list are the
   control for now.
-- The SDK that hides ACP from Python authors, the examples and conformance for code agents follow in
-  the next PRs of S39-17; resume of a code agent (`session/load`) is not supported in v1.
+- `choregos-agent-sdk` (`packages/agent-sdk`, Apache-2.0, built on the official ACP SDK
+  `agent-client-protocol`) hides ACP from Python authors; see [code-agents](../code-agents.md). Its
+  obligations: every tool call and write goes through `session/request_permission` before it runs,
+  model and tool calls count as turns and stop at `max_turns`, the result is validated against
+  `StageResult` before it is written, standard output stays the protocol's. It is a convention, not
+  a wall: code in the pod is bounded by the sandbox.
+- Code agents pass the seven conformance checks (`tests/conformance/backends/test_code_agents.py`;
+  the plain example in CI, the LangGraph example by a manual workflow, an image by
+  `make conformance-agent`). A code agent is not scripted, so the checks observe a deliverable the SDK
+  writes through the guard rather than the shipped backends' `hello.py`.
+- Publishing `choregos-agent-sdk` and `choregos-contracts` to PyPI is a release gesture (trusted
+  publishing, `release.yml`, off until `PUBLISH_TO_PYPI` is set); resume of a code agent
+  (`session/load`) is not supported in v1.

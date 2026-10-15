@@ -256,6 +256,12 @@ test-live:  ## Tests contre les vrais services (identifiants dans l'environnemen
 conformance:  ## Suites de conformité (backends ACP, templates)
 	$(UV) run pytest tests/conformance -m conformance -q
 
+.PHONY: conformance-agent
+conformance-agent:  ## The 7 conformance checks of a code agent inside an image: IMAGE=<ref> COMMAND='["python","-m","my_agent"]'
+	@test -n '$(IMAGE)' && test -n '$(COMMAND)' || { echo "usage: make conformance-agent IMAGE=<ref> COMMAND='[\"python\",\"-m\",\"my_agent\"]'"; exit 2; }
+	CHOREGOS_CONFORMANCE_CODE_AGENTS='{"image": {"image": "$(IMAGE)", "command": $(COMMAND)}}' \
+	  $(UV) run pytest tests/conformance/backends/test_code_agents.py -m conformance -q -k code_agent_passes
+
 .PHONY: evals
 evals:  ## Evals of the playbooks and of the catalogue agents
 	$(UV) run python -m choregos_playbooks.evals.runner --all
