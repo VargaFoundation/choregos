@@ -136,6 +136,11 @@ ESCALATION_CONTEXT_AFTER_RESTART = "escalation-context-after-restart"
 #: attempt, and the interpreter waits for the configuration to be fixed and the stage replayed
 #: (#543). Before this marker the refusal failed the interpreter, and the work item had no workflow.
 STAGE_CONFIG_REFUSAL_ESCALATES = "stage-config-refusal-escalates"
+#: An interpreter (re)started on a work item restores each transition's attempts from its runs
+#: that ended without success (#550). Before this marker it started at attempt 1: `prepare_stage`
+#: handed back the run of that number, already over, `await_run` its old result, and the stage was
+#: never played again.
+ATTEMPTS_FROM_RUNS = "attempts-from-runs"
 #: The non-retryable error types `prepare_stage` raises for a configuration an operator can fix.
 #: Any other failure — a bug, an unreachable database once its retries are spent, an admission rule,
 #: a suspected prompt injection — still fails the interpreter, as before.
@@ -344,6 +349,7 @@ class WorkflowInterpreter:
         )
         engine = WorkflowEngine(Workflow.model_validate(context["workflow"]))
         self._start_from(params, engine, context)
+        self._restore_attempts(context)
 
         await self._mirror(params, "started")
 
@@ -417,6 +423,20 @@ class WorkflowInterpreter:
         self.state = params.resume_from or context.get("state") or engine.initial_state
         if self.version_des_champs == 0:  # a `fields_changed` that arrived before the read is newer
             self.champs = dict(context.get("fields") or {})
+
+    def _restore_attempts(self, context: dict[str, Any]) -> None:
+        """The attempts each transition spent before this interpreter, read from its runs (#550).
+
+        Only a run that ended without success counts: one still queued or running, or a last run that
+        succeeded, keeps its number, and the stage awaits it or reads its result back (ADR 0008).
+        The attempts budget counts them too, as if nothing had died.
+        """
+        spent = {str(k): int(v) for k, v in (context.get("attempts_spent") or {}).items()}
+        behind = {key: count for key, count in spent.items() if count > self.attempts[key]}
+        # The condition first, `patched` next: a history without runs behind never asks.
+        if behind and workflow.patched(ATTEMPTS_FROM_RUNS):
+            for key, count in behind.items():  # `Counter.update` would add them
+                self.attempts[key] = count
 
     # ───────────────────────── étapes ─────────────────────────
 
