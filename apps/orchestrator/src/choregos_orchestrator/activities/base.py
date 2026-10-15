@@ -91,6 +91,9 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     connectors = (
         (await session.execute(select(Connector).where(Connector.project_id == project.id))).scalars().all()
     )
+    # The sealed `store:` values of the project's connectors, read here with the organisation's
+    # context (the sync adapter factory cannot): `from_connectors` receives them as `resolved`.
+    sealed = {c.kind: await _sealed_values(session, project.org_id, c) for c in connectors}
     return ProjectBundle(
         project=project,
         org_slug=org.slug if org else "",
@@ -110,11 +113,27 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
                     # Des RÉFÉRENCES (ADR 0034) : `from_connectors` les résout en construisant.
                     "secret_refs": c.secret_refs or {},
                     "secret_ref": c.secret_ref,
+                    "resolved": sealed[c.kind],
                 }
                 for c in connectors
             }
         ),
     )
+
+
+async def _sealed_values(session: AsyncSession, org_id: str, connector: Connector) -> dict[str, str]:
+    """field -> value for a connector's `store:` references. A value that cannot be read is left
+    out: the adapter's build then fails loudly on that reference, for that connector only — the
+    other connectors of the project stay usable."""
+    from choregos_api.secret_store import resolve_store_fields
+    from choregos_core.secrets import SecretIntrouvable
+
+    try:
+        return await resolve_store_fields(
+            session, org_id, connector.kind, connector.type, connector.secret_refs, connector.secret_ref
+        )
+    except SecretIntrouvable:
+        return {}
 
 
 def tracker_possede_les_tickets(adapter: object) -> bool:

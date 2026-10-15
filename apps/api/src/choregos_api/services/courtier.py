@@ -36,6 +36,7 @@ from ..db.models import (
     ProjectOperationPolicy,
     Run,
 )
+from ..secret_store import resolved_configuration
 from .connecteurs import human_floor, plus_stricte
 
 SEPARATEUR = "__"
@@ -330,17 +331,22 @@ def verifier_les_arguments(outil: OutilDuCourtier, arguments: dict[str, Any]) ->
         ) from exc
 
 
-async def appeler(outil: OutilDuCourtier, arguments: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+async def appeler(
+    session: AsyncSession, outil: OutilDuCourtier, arguments: dict[str, Any]
+) -> tuple[int, dict[str, Any]]:
     """`tools/call` sur le serveur, avec la clé du connecteur résolue ICI — jamais dans le pod."""
     import httpx
-    from choregos_adapters import build, configuration_resolue
+    from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
     from choregos_adapters.mcp import ErreurMcp
+    from choregos_core.redaction import redact
     from choregos_core.secrets import SecretIntrouvable
 
     instance = outil.connecteur
     try:
-        config = configuration_resolue(instance.kind, instance.type, instance.config, instance.secret_refs)
+        config = await resolved_configuration(
+            session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        )
         client = build(instance.kind, instance.type, config)
         if hasattr(client, "call_tool"):
             resultat = await client.call_tool(outil.operation.name, arguments)
@@ -350,11 +356,11 @@ async def appeler(outil: OutilDuCourtier, arguments: dict[str, Any]) -> tuple[in
             brut = await client.executer(outil.operation.name, arguments)
             resultat = {"content": [{"type": "text", "text": _json(brut)}], "structuredContent": brut}
     except ErreurMcp as erreur:
-        return 502, {"error": str(erreur)}
+        return 502, {"error": redact(str(erreur))}
     except AdapterError as refus:
-        return 422, {"error": str(refus)}
+        return 422, {"error": redact(str(refus))}
     except (SecretIntrouvable, httpx.HTTPError) as panne:
-        return 502, {"error": f"{instance.name} unreachable: {panne}"}
+        return 502, {"error": redact(f"{instance.name} unreachable: {panne}")}
     return (200 if not resultat.get("isError") else 422), resultat
 
 

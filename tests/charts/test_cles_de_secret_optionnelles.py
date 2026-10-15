@@ -40,6 +40,8 @@ DE_FONCTIONNALITE = {
     "generic-webhook-secret",
     "github-app-id",
     "github-app-private-key",
+    # The key sealing the connector secrets (ADR 0058): absent, typing a secret answers 409.
+    "secrets-keks",
 }
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")

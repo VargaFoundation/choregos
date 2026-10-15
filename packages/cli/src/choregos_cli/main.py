@@ -25,8 +25,12 @@ workflow_app = typer.Typer(help="Workflows")
 dev_app = typer.Typer(help="Development environment")
 orgs_app = typer.Typer(help="Organisations")
 tokens_app = typer.Typer(help="API tokens")
+admin_app = typer.Typer(help="Platform administration")
+secrets_app = typer.Typer(help="Sealed connector secrets")
+admin_app.add_typer(secrets_app, name="secrets")
 app.add_typer(orgs_app, name="orgs")
 app.add_typer(tokens_app, name="tokens")
+app.add_typer(admin_app, name="admin")
 app.add_typer(projects_app, name="projects")
 app.add_typer(items_app, name="items")
 app.add_typer(runs_app, name="runs")
@@ -104,6 +108,14 @@ def orgs_create(slug: str, name: Annotated[str | None, typer.Option()] = None) -
     """Create an organisation (requires being an admin of an organisation already)."""
     org = client().post("/orgs", json={"slug": slug, "name": name or slug})
     console.print(f"[green]✓[/green] organisation {org['slug']} created, you are its admin")
+
+
+@secrets_app.command("rewrap")
+def secrets_rewrap() -> None:
+    """Re-wrap every sealed secret under the active key, after a key rotation (the new key first in
+    CHOREGOS_SECRETS_KEKS, the API restarted). The values are not read out nor changed."""
+    result = client().post("/platform/secrets/rewrap")
+    console.print(f"[green]✓[/green] {result['rewrapped']} secret(s) re-wrapped under the active key")
 
 
 @tokens_app.command("create")

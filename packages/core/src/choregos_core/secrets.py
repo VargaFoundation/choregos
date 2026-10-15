@@ -68,7 +68,28 @@ def _environnement(nom: str) -> str:
     return valeur
 
 
-_RESOLVEURS: dict[str, Callable[[str], str]] = {"env": _environnement}
+#: The scheme of a value typed in the console and sealed in the database (ADR 0058).
+STORE_SCHEME = "store"
+
+
+def _store_is_resolved_by_the_platform(name: str) -> str:
+    """The sync core cannot read the store: it needs the database and the organisation. A call site
+    that forgot to go through `choregos_api.secret_store` fails loudly here, never silently."""
+    raise SecretIntrouvable(
+        f"`store:{name}`: store references are resolved by the platform with the organisation's "
+        "context (resolved_configuration), not by the core"
+    )
+
+
+def est_une_reference_du_magasin(reference: str | None) -> bool:
+    """Is this a reference to a sealed value (`store:connector/jira/api_token`)?"""
+    return bool(reference) and str(reference).startswith(f"{STORE_SCHEME}:")
+
+
+_RESOLVEURS: dict[str, Callable[[str], str]] = {
+    "env": _environnement,
+    STORE_SCHEME: _store_is_resolved_by_the_platform,
+}
 
 
 def declarer_un_resolveur(schema: str, resoudre_: Callable[[str], str]) -> None:
@@ -116,13 +137,16 @@ def reinitialiser() -> None:
     """Pour les tests : seul le résolveur du cœur reste."""
     _RESOLVEURS.clear()
     _RESOLVEURS["env"] = _environnement
+    _RESOLVEURS[STORE_SCHEME] = _store_is_resolved_by_the_platform
 
 
 __all__ = [
+    "STORE_SCHEME",
     "ReferenceInvalide",
     "SecretIntrouvable",
     "VariableRefusee",
     "declarer_un_resolveur",
+    "est_une_reference_du_magasin",
     "reinitialiser",
     "resoudre",
     "schemas",

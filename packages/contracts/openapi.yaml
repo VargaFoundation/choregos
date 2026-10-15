@@ -215,6 +215,30 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/connectors/{kind}/secrets/{field}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { $ref: "#/components/parameters/ConnectorKind" }
+      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+    put:
+      tags: [connectors]
+      operationId: setConnectorSecret
+      description: Type a secret once, or replace it. Sealed in the database (AES-256-GCM envelope, key from the deployment) and never returned; the connector keeps a derived `store:` reference. Needs `connector:write`. 409 when the deployment has no secrets key (ADR 0058).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SecretValue" } } }
+      responses:
+        "200": { description: Set; the connector with its secret states, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [connectors]
+      operationId: clearConnectorSecret
+      description: Remove the secret field's value or reference from the connector; a sealed value is deleted.
+      responses:
+        "200": { description: Cleared, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/connectors/{kind}/test:
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/ConnectorKind" }]
     post:
@@ -267,12 +291,51 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [connectors]
+      operationId: updateOrgConnector
+      description: Edit the configuration and the secrets of a declared connector. `secret_refs` and `secret_values` merge into the connector's; the operations are not touched. The organisation's administrator only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnectorUpdate" } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     delete:
       tags: [connectors]
       operationId: deleteOrgConnector
       responses:
         "204": { description: "Removed, with its operations" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/connectors/{name}/secrets/{field}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+    put:
+      tags: [connectors]
+      operationId: setOrgConnectorSecret
+      description: Type a secret once, or replace it. Sealed (AES-256-GCM envelope, key from the deployment), never returned; the connector keeps a derived `store:` reference. The organisation's administrator only. 409 when the deployment has no secrets key (ADR 0058).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SecretValue" } } }
+      responses:
+        "200": { description: Set; the connector with its secret states, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [connectors]
+      operationId: clearOrgConnectorSecret
+      description: Remove the secret field's value or reference from the connector; a sealed value is deleted.
+      responses:
+        "200": { description: Cleared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/connectors/{name}/discover:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1098,6 +1161,15 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/TemplateUpsert" } } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateSummary" } } } }
+  /platform/secrets/rewrap:
+    post:
+      tags: [admin]
+      operationId: rewrapSecrets
+      description: After a key rotation (the new key first in `CHOREGOS_SECRETS_KEKS`), re-wrap the data key of every sealed secret under the active key. The values are never read out nor changed (ADR 0058). The platform administrator only.
+      responses:
+        "200": { description: Re-wrapped, content: { application/json: { schema: { $ref: "#/components/schemas/SecretsRewrap" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /platform/backends:
     get:
       tags: [admin]
@@ -2568,10 +2640,32 @@ components:
         type: { type: string }
         config: { type: object, additionalProperties: true }
         secret_ref: { type: [string, "null"] }
-        secret_refs: { type: object, additionalProperties: { type: string }, description: "the secrets, field by field, as references (`env:NAME`) — never their value (ADR 0034)" }
+        secret_refs: { type: object, additionalProperties: { type: string }, description: "the secrets, field by field, as references (`env:NAME`, or `store:...` for a sealed value) — never their value (ADR 0034, ADR 0058)" }
+        secrets: { type: array, items: { $ref: "#/components/schemas/ConnectorSecretState" }, description: "one state per configured secret field: where it comes from and when it was last set" }
         status: { type: string, enum: [unknown, ok, degraded, error] }
         last_check_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
+    ConnectorSecretState:
+      type: object
+      required: [field, source]
+      description: What the console may know of one secret field. Never its value (ADR 0058).
+      properties:
+        field: { type: string }
+        source: { type: string, enum: [store, reference] }
+        reference: { type: [string, "null"], description: "only for source=reference: the reference itself (`env:NAME`)" }
+        version: { type: [integer, "null"], description: "only for source=store: +1 at every set; null when the sealed value is gone" }
+        rotated_at: { type: [string, "null"], format: date-time }
+        rotated_by: { type: [string, "null"] }
+    SecretValue:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, minLength: 1, maxLength: 16384, writeOnly: true }
+    SecretsRewrap:
+      type: object
+      required: [rewrapped]
+      properties:
+        rewrapped: { type: integer }
     ConnectorUpsert:
       type: object
       required: [type, config]
@@ -2580,6 +2674,7 @@ components:
         config: { type: object, additionalProperties: true, description: "no secret field: a plaintext secret gets 422" }
         secret_ref: { type: [string, "null"] }
         secret_refs: { type: object, additionalProperties: { type: string } }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058)." }
     ConnectorTestResult:
       type: object
       required: [ok, checks]
@@ -2634,6 +2729,7 @@ components:
         type: { type: string }
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
+        secrets: { type: array, items: { $ref: "#/components/schemas/ConnectorSecretState" } }
         status: { type: string }
         last_check_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
@@ -2648,6 +2744,14 @@ components:
         kind: { type: [string, "null"] }
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058)" }
+    OrgConnectorUpdate:
+      type: object
+      description: Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's.
+      properties:
+        config: { type: [object, "null"], additionalProperties: true }
+        secret_refs: { type: [object, "null"], additionalProperties: { type: string } }
+        secret_values: { type: [object, "null"], additionalProperties: { type: string }, writeOnly: true }
     OperationPatch:
       type: object
       properties:

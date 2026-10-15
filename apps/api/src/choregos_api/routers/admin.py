@@ -35,6 +35,7 @@ from ..schemas import (
     MembershipDto,
     MembershipUpsert,
     PageMeta,
+    SecretsRewrap,
 )
 
 router = APIRouter(tags=["admin"])
@@ -47,6 +48,24 @@ KNOWN_BACKENDS = [
     ("opencode", ["acp", "mcp"]),
     ("copilot-cli", ["acp"]),
 ]
+
+
+@router.post("/platform/secrets/rewrap", response_model=SecretsRewrap, operation_id="rewrapSecrets")
+async def rewrap_secrets(session: Db, principal: Me) -> SecretsRewrap:
+    """After a KEK rotation (the new key first in `CHOREGOS_SECRETS_KEKS`): re-wrap every sealed
+    secret's data key under the active key. The values are never read out nor changed (ADR 0058)."""
+    from ..secret_store import SealedDbSecretStore, SecretStoreUnavailable
+
+    await exiger_admin_de_plateforme(session, principal)
+    try:
+        async with en_portee_de_plateforme(session):
+            rewrapped = await SealedDbSecretStore().rewrap(session)
+    except SecretStoreUnavailable as refus:
+        raise conflict(str(refus)) from refus
+    await record(
+        session, principal, "org.secret.rewrap", org_id=None, target_type="org_secret", rewrapped=rewrapped
+    )
+    return SecretsRewrap(rewrapped=rewrapped)
 
 
 @router.get("/platform/backends", response_model=list[AgentBackendInfo], operation_id="listBackends")

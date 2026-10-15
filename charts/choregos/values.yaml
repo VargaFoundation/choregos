@@ -195,6 +195,20 @@ global:
   # Local bench only: the chart itself writes the application secrets (see
   # templates/secrets-embarques.yaml). Never true in production.
   devSecrets: false
+  # Connector secrets typed in the console are sealed in the database under a key the DEPLOYMENT
+  # holds (ADR 0058): `CHOREGOS_SECRETS_KEKS="k2:<base64 of 32 bytes>,k1:<...>"`, the first key
+  # seals, the others only open. Without it the API runs, references (`env:NAME`) keep working,
+  # and typing a secret answers 409 naming the missing key. Generate one with
+  # `python -c "import os,base64;print('k1:'+base64.b64encode(os.urandom(32)).decode())"`.
+  secrets:
+    # The Secret that carries the key; empty: `apiSecretRef` (the key is then one more entry of it).
+    keksSecretRef: ""
+    # Its entry. Optional in the pod spec: absent, the feature is off, the pod still starts.
+    keksKey: secrets-keks
+    # Also list the entry in the chart's ExternalSecret (`remoteRef` choregos/api). Off by default:
+    # a missing remote property would make the whole ExternalSecret fail, so turn it on once the
+    # key exists in the store.
+    keksInExternalSecret: false
   externalSecrets:
     enabled: true
     storeRef: choregos-cluster-store

@@ -38,10 +38,46 @@ _SECRET_ASSIGNMENT = re.compile(
 )
 
 
+#: Values the platform resolved in this process (a connector's secret, read to build an adapter).
+#: They are masked wherever they would be written — a log line, a `last_error`, an error body —
+#: whatever shape they have, which the pattern rules above cannot know. Process-local, never
+#: persisted; bounded, oldest first. A value shorter than `_MIN_REMEMBERED` is not remembered:
+#: masking "1234" would shred every log line.
+_REMEMBERED: dict[str, None] = {}
+_MIN_REMEMBERED = 6
+_MAX_REMEMBERED = 5000
+
+
+def remember_secret(value: str | None) -> None:
+    """Register a resolved secret so that `redact` and `redact_known` mask it from now on."""
+    if not value or len(value) < _MIN_REMEMBERED:
+        return
+    _REMEMBERED.pop(value, None)
+    _REMEMBERED[value] = None
+    while len(_REMEMBERED) > _MAX_REMEMBERED:
+        _REMEMBERED.pop(next(iter(_REMEMBERED)))
+
+
+def forget_secrets() -> None:
+    """For tests: nothing is remembered any more."""
+    _REMEMBERED.clear()
+
+
+def redact_known(text: str) -> str:
+    """`text` with every remembered secret value replaced by `REDACTED` — and nothing else."""
+    if not text or not _REMEMBERED:
+        return text
+    for value in sorted(_REMEMBERED, key=len, reverse=True):
+        if value in text:
+            text = text.replace(value, REDACTED)
+    return text
+
+
 def redact(text: str) -> str:
     """`text` with every secret it visibly holds replaced by `REDACTED`."""
     if not text:
         return text
+    text = redact_known(text)
     masked = _SECRET_ASSIGNMENT.sub(
         lambda m: m.group(0) if m.group(3) == REDACTED else f"{m.group(1)}{m.group(2)}{REDACTED}", text
     )
@@ -52,4 +88,4 @@ def redact(text: str) -> str:
     return masked
 
 
-__all__ = ["REDACTED", "redact"]
+__all__ = ["REDACTED", "forget_secrets", "redact", "redact_known", "remember_secret"]
