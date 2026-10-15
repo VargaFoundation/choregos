@@ -930,6 +930,10 @@ export type KnowledgeBase = {
   eval_set?: Array<KnowledgeEvalCase>;
   /** returned by the reading of one base */
   sources?: Array<KnowledgeSource> | null;
+  /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at` */
+  distillation?: {
+    [key: string]: unknown;
+  } | null;
   /** the last run of the eval set */
   eval_result?: {
     k?: number;
@@ -1923,6 +1927,7 @@ export interface Operations {
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
+  distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";

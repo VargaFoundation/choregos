@@ -882,6 +882,8 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     eval_set: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
     #: the last run of the eval set: recall@5, per question, when, in which search mode
     eval_result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: the last distillation into a principles skill (S33-05): status, skill, version, dropped, error
+    distillation: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class KnowledgeDocument(Base, PkMixin, TimestampMixin):

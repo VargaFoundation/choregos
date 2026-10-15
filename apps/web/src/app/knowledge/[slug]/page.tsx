@@ -9,7 +9,7 @@ import { KnowledgeSources } from "@/components/knowledge-sources";
 import { Badge, Card, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
-import { scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
+import { distillationLabel, scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
 import { useSession } from "@/lib/session";
 
 // Only an `index` base shows the search and eval panel: loaded when needed, outside the page's chunk.
@@ -29,7 +29,8 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
     queryKey: ["knowledge-base", org, slug],
     queryFn: () => api.knowledgeBase(org, slug),
     // A conversion runs in the background: the page follows it until nothing is pending.
-    refetchInterval: (query) => (stillConverting(query.state.data) ? 2000 : false),
+    refetchInterval: (query) =>
+      stillConverting(query.state.data) || query.state.data?.distillation?.status === "running" ? 2000 : false,
   });
   const [shown, setShown] = useState<string | null>(null);
   const document = useQuery({
@@ -86,6 +87,17 @@ export default function KnowledgeBasePage({ params }: { params: Promise<{ slug: 
         {base.data.status !== "active" && ` · ${base.data.status}`}
       </p>
       {base.data.description && <p className="max-w-3xl text-sm">{base.data.description}</p>}
+      <p className="text-sm" data-testid="knowledge-distillation">
+        Principles skill: {distillationLabel(base.data.distillation)}
+        {base.data.distillation?.skill ? (
+          <Link href={`/skills/${String(base.data.distillation.skill)}`} className="ml-2 underline">
+            Review
+          </Link>
+        ) : null}
+        <button type="button" className="ml-2 underline" onClick={() => void act(() => api.distillKnowledgeBase(org, slug))}>
+          Distill
+        </button>
+      </p>
       <Card title="Documents">
         {documents.length === 0 ? (
           <Empty title="No document yet">Upload the corpus below.</Empty>

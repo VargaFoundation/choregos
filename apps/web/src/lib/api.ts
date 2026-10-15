@@ -384,6 +384,8 @@ export const api = {
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/reindex`, { method: "POST" }),
   putKnowledgeEvalSet: (org: string, slug: string, cases: KnowledgeEvalCase[]) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval`, { method: "PUT", body: JSON.stringify({ cases }) }),
+  distillKnowledgeBase: (org: string, slug: string) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/distill`, { method: "POST" }),
   runKnowledgeEval: (org: string, slug: string) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval/run`, { method: "POST" }),
   createKnowledgeSource: (org: string, slug: string, body: KnowledgeSourceCreate) =>
