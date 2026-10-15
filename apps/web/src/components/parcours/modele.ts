@@ -41,6 +41,13 @@ export type Etape = {
   surLeChemin: boolean;
   /** La phrase de la vue processus : ce que fait la transition, à quelles conditions. */
   phrase: string | null;
+  /** The registry agent the actor names (`slug` or `slug@N`), when it names one (S39-13). */
+  agentRef: string | null;
+  /** The documents the step produces and reads, as the workflow declares them. */
+  outputs: string[];
+  inputs: string[];
+  /** The step changes the work item's branch (a gate reads the diff), though it lists no output. */
+  writesBranch: boolean;
 };
 
 /** Un état hors du chemin dont on revient : la case de sa transition, d'où l'on y tombe, où l'on revient. */
@@ -164,7 +171,17 @@ function etapeDe(
     maxTours: borneDe(aretes, arete.from),
     surLeChemin,
     phrase: etape?.sentence ?? null,
+    agentRef: etape?.agent ?? null,
+    outputs: etape?.outputs ?? [],
+    inputs: etape?.inputs ?? [],
+    writesBranch: etape?.writes_branch ?? false,
   };
+}
+
+/** What a box says it produces, on one line: `→ spec_markdown, allowed_paths`, or `→ branch`. */
+export function sortiesDe(etape: Pick<Etape, "outputs" | "writesBranch">): string | null {
+  const noms = [...etape.outputs, ...(etape.writesBranch ? ["branch"] : [])];
+  return noms.length > 0 ? `→ ${noms.join(", ")}` : null;
 }
 
 const SECONDAIRES = new Set(["reject", "retry", "escalate"]);

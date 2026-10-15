@@ -13,7 +13,7 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     const carte = screen.getByTestId("carte-en-serpentin");
     expect(carte.querySelectorAll("[data-etape]")).toHaveLength(17); // quinze étapes et deux détours
     expect(screen.queryByRole("toolbar", { name: "Replay the journey" })).not.toBeInTheDocument();
-    expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer, agent, writes the change — 0 attempts$/);
+    expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer, agent, writes the change — produces branch — 0 attempts$/);
     const forme = (id: string) => carte.querySelector(`[data-etape="${id}"] .parcours-forme`)!.getAttribute("stroke");
     // Prune l'agent, bleu la personne, ardoise la plateforme, vert le train (S24-04) — les couleurs
     // de la carte en liste, pour que les deux vues d'un workflow disent la même chose.
@@ -26,6 +26,22 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
     }
     expect(carte.querySelectorAll("[data-arc]").length).toBeGreaterThan(5);
     expect(screen.getByRole("list", { name: "Who carries each step" })).toHaveTextContent("Release train");
+  });
+
+  it("in the workflow map, each box says what it produces (S39-13)", () => {
+    render(<CarteEnSerpentin graph={graph} process={process} initial={initial} />);
+    expect(screen.getByTestId("sorties-t-specify")).toHaveTextContent("→ spec_markdown, allowed_paths");
+    expect(screen.getByTestId("sorties-t-implement")).toHaveTextContent(/^→ branch$/);
+    expect(screen.queryByTestId("sorties-t-approve-spec")).not.toBeInTheDocument();
+    expect(screen.getByTestId("etape-t-specify")).toHaveAccessibleName(/produces spec_markdown, allowed_paths/);
+  });
+
+  it("a highlight puts data-flow on the boxes it names", () => {
+    const highlight = new Map<string, "produces" | "reads">([["t-test", "produces"], ["t-implement", "reads"]]);
+    render(<CarteEnSerpentin graph={graph} process={process} initial={initial} highlight={highlight} />);
+    expect(screen.getByTestId("etape-t-test")).toHaveAttribute("data-flow", "produces");
+    expect(screen.getByTestId("etape-t-implement")).toHaveAttribute("data-flow", "reads");
+    expect(screen.getByTestId("etape-t-review")).not.toHaveAttribute("data-flow");
   });
 
   it("cliquer une étape rend sa transition, pour le panneau d'édition", () => {

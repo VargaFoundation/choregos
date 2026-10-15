@@ -32,11 +32,14 @@ export const RAYON = 13;
 const HAUT = 92;
 /** Sous une case : son titre, son action, son détail — sur deux lignes au plus chacun. */
 const SOUS_LA_CASE = 104;
+/** The workflow map adds one line under the action — what the step produces — of two lines at most. */
+const LIGNE_DES_SORTIES = 34;
 /** Au-dessus d'une rangée : la place des arcs de renvoi. */
 const AU_DESSUS = 76;
 const DESCENTE_DU_DETOUR = 150;
 
-export function placer(modele: Modele, largeur: number): Placement {
+export function placer(modele: Modele, largeur: number, avecSorties = false): Placement {
+  const sousLaCase = SOUS_LA_CASE + (avecSorties ? LIGNE_DES_SORTIES : 0);
   // Sur un téléphone, des marges et un pas plus serrés : deux colonnes tiennent dans 340 px.
   const etroit = largeur < 600;
   const MARGE_X = etroit ? 40 : 60;
@@ -54,7 +57,7 @@ export function placer(modele: Modele, largeur: number): Placement {
     const k = items.indexOf(detour.sources[0] ?? "");
     if (k >= 0) rangeesAvecDetour.add(rangeeDe(k));
   }
-  const hauteurDe = (r: number) => SOUS_LA_CASE + AU_DESSUS + (rangeesAvecDetour.has(r) ? DESCENTE_DU_DETOUR : 0);
+  const hauteurDe = (r: number) => sousLaCase + AU_DESSUS + (rangeesAvecDetour.has(r) ? DESCENTE_DU_DETOUR : 0);
   const ys: number[] = [HAUT];
   for (let r = 1; r < nombreDeRangees; r += 1) ys.push(ys[r - 1]! + hauteurDe(r - 1));
 
@@ -166,7 +169,7 @@ export function placer(modele: Modele, largeur: number): Placement {
   const basDesCases = Math.max(derniere.y, ...positions.map((p) => p.y), ...poses.map((p) => p.y));
   return {
     largeur: MARGE_X * 2 + utile,
-    hauteur: basDesCases + SOUS_LA_CASE,
+    hauteur: basDesCases + sousLaCase,
     colonnes,
     debut: positions[0]!,
     fin: derniere,
