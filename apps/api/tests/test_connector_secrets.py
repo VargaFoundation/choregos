@@ -224,10 +224,10 @@ async def test_without_a_deployment_key_a_value_is_refused_and_a_reference_still
     assert refused.status_code == 409 and "CHOREGOS_SECRETS_KEKS" in refused.text
     assert VALUE_1 not in refused.text
     assert (await client.get(f"{ORG}/vendor")).status_code == 404, "nothing half-created"
-    by_reference = await client.post(ORG, json=_declare(secret_refs={"token": "env:VENDOR_KEY"}))
+    by_reference = await client.post(ORG, json=_declare(secret_refs={"token": "env:CONNECTOR_VENDOR_KEY"}))
     assert by_reference.status_code == 201, by_reference.text
     (state,) = by_reference.json()["secrets"]
-    assert (state["source"], state["reference"]) == ("reference", "env:VENDOR_KEY")
+    assert (state["source"], state["reference"]) == ("reference", "env:CONNECTOR_VENDOR_KEY")
 
 
 async def test_an_edit_merges_and_a_reference_replaces_a_stored_value(
@@ -240,7 +240,9 @@ async def test_an_edit_merges_and_a_reference_replaces_a_stored_value(
     assert edited.json()["secrets"][0]["version"] == 1, "the stored secret is kept"
     assert len(await _stored_rows()) == 1
 
-    switched = await client.patch(f"{ORG}/vendor", json={"secret_refs": {"token": "env:VENDOR_KEY"}})
+    switched = await client.patch(
+        f"{ORG}/vendor", json={"secret_refs": {"token": "env:CONNECTOR_VENDOR_KEY"}}
+    )
     assert switched.status_code == 200, switched.text
     assert switched.json()["secrets"][0]["source"] == "reference"
     assert await _stored_rows() == [], "a value no reference points to is deleted"
@@ -403,3 +405,30 @@ async def test_a_sharepoint_source_syncs_with_a_store_held_secret(
     summary = await sync_module.sync_source("varga", source["id"])
     assert summary["added"] == 1, summary
     assert seen and seen[0]["client_secret"] == VALUE_1
+
+
+async def test_a_project_owner_types_values_but_does_not_write_references(
+    client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]]
+) -> None:
+    """Sealed values are the normal way for a tenant role; `env:` references stay the
+    administrator's (S39-06b)."""
+    await client.post(
+        "/api/v1/orgs/varga/members",
+        json={"email": "po@varga.dev", "role": "project_owner", "project_slug": "billing-api"},
+    )
+    client.cookies.clear()
+    await login(client, "po@varga.dev")
+    url = f"/api/v1/projects/{project['id']}/connectors/tracker"
+    by_reference = await client.put(
+        url, json={"type": "probe", "config": {}, "secret_refs": {"api_token": "env:CONNECTOR_X"}}
+    )
+    assert by_reference.status_code == 422 and "administrator" in by_reference.text
+    typed = await client.put(
+        url, json={"type": "probe", "config": {}, "secret_values": {"api_token": VALUE_1}}
+    )
+    assert typed.status_code == 200, typed.text
+    assert typed.json()["secrets"][0]["source"] == "store"
+    again = await client.put(
+        url, json={"type": "probe", "config": {}, "secret_refs": typed.json()["secret_refs"]}
+    )
+    assert again.status_code == 200, "re-sending the derived reference is not writing one"
