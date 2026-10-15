@@ -11,6 +11,7 @@ from typing import Any
 
 from choregos_api.db.models import Finding as FindingRow
 from choregos_api.db.models import GatewayKeyRow, Project, Run
+from choregos_api.logging import get_logger
 from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_api.services.artifacts import record_inline_outputs
 from choregos_api.services.budget_alerts import unsent_month_alerts
@@ -23,7 +24,9 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, without_secrets
+
+logger = get_logger("choregos.bilan")
 
 
 async def _tell_slack_of_agent_alerts(session: Any, bundle: Any) -> None:
@@ -119,18 +122,37 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         item.totals = totals
 
         if run.gateway_key_id:
-            await bundle.adapters.gateway.revoke(run.gateway_key_id)
+            revoked = await _revoke(bundle, run.gateway_key_id)
             key_row = (
                 await session.execute(select(GatewayKeyRow).where(GatewayKeyRow.key_id == run.gateway_key_id))
             ).scalar_one_or_none()
             if key_row is not None:
                 key_row.spend_usd = spend.cost_usd
-                key_row.revoked = True
+                key_row.revoked = key_row.revoked or revoked
+        # The run is over: its key leaves the row (#519). The runner read it from
+        # `GET /internal/runs/{id}/input`, which answers 409 once a result is posted.
+        if run.stage_input:
+            run.stage_input = without_secrets(run.stage_input, keep_gateway_key=False)
         await session.flush()
         await _tell_slack_of_agent_alerts(session, bundle)
         # What the ticket has cost, read from the ledger — this run's line included, tool calls
         # too (S27-03): the interpreter's counter is this, not a sum it keeps in memory.
         return {**run.tokens, **await _ticket_view(session, bundle, item.id)}
+
+
+async def _revoke(bundle: Any, key_id: str) -> bool:
+    """Revokes the run's gateway key; a failure is logged, not fatal (#519).
+
+    The spend is already read and about to be recorded: a gateway that cannot revoke must not undo
+    that nor kill the stage. The key still dies at its TTL (stage budget + 30 min), and its row
+    stays `revoked = false`, which says the truth.
+    """
+    try:
+        await bundle.adapters.gateway.revoke(key_id)
+    except Exception as error:  # a cleanup, never a reason to fail the stage
+        logger.warning("gateway key not revoked", key_id=key_id, error=str(error)[:300])
+        return False
+    return True
 
 
 async def _ticket_view(session: Any, bundle: Any, work_item_id: str) -> dict[str, float]:
