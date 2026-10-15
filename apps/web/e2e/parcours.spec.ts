@@ -385,7 +385,9 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   await builder.getByRole("button", { name: "Read it" }).click();
   await expect(bases).toContainText("architecture-framework");
   // A base already read is no longer offered.
-  await expect(builder.getByLabel("Add a knowledge base").locator("option")).toHaveCount(1);
+  // (The placeholder and the demo's project-scoped base remain.)
+  await expect(builder.getByLabel("Add a knowledge base").locator("option")).toHaveCount(2);
+  await expect(builder.getByLabel("Add a knowledge base").locator("option[value='architecture-framework']")).toHaveCount(0);
   await builder.getByLabel("Memory scope").selectOption("agent");
   await page.getByRole("tab", { name: "What it costs and allows" }).click();
   const allows = page.getByTestId("ce-que-ca-permet");
