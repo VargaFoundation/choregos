@@ -69,6 +69,10 @@ import type { Operations } from "@choregos/contracts/api";
 export type {
   Action,
   ActionEffect,
+  CatalogueMeta,
+  McpCatalogue,
+  McpCatalogueEntry,
+  McpCatalogueInstall,
   ConnectorDiscovery,
   ConnectorOperation,
   ConnectorSecretState,

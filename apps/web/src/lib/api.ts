@@ -11,6 +11,8 @@ import type {
   ConnectorDiscovery,
   ConnectorOperation,
   OperationPatch,
+  McpCatalogue,
+  McpCatalogueInstall,
   OrgConnector,
   OrgConnectorCreate,
   OrgConnectorUpdate,
@@ -508,6 +510,13 @@ export const api = {
   updateConnectorOperation: (org: string, name: string, operation: string, body: OperationPatch) =>
     request<ConnectorOperation>(`/orgs/${org}/connectors/${name}/operations/${encodeURIComponent(operation)}`, {
       method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  /** The catalogue of well-known MCP servers and what each means in this organisation (ADR 0065). */
+  mcpCatalogue: (org: string) => request<McpCatalogue>(`/orgs/${org}/mcp-catalogue`),
+  installMcpCatalogueEntry: (org: string, id: string, body: McpCatalogueInstall) =>
+    request<OrgConnector>(`/orgs/${org}/mcp-catalogue/${encodeURIComponent(id)}/install`, {
+      method: "POST",
       body: JSON.stringify(body),
     }),
   /** Un serveur MCP dit ses outils ; un nouveau naît fermé, un schéma qui dérive le referme. */

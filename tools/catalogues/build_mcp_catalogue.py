@@ -38,6 +38,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SEED_DIR = ROOT / "tools" / "catalogues" / "mcp"
 FIXTURES = ROOT / "tests" / "fixtures" / "catalogues" / "mcp"
 OUTPUT = ROOT / "packages" / "core" / "src" / "choregos_core" / "mcp_catalogue" / "catalogue.yaml"
+#: The console's demo mode answers the catalogue from this file: the real entries, as the API shows them.
+WEB_MOCK = ROOT / "apps" / "web" / "src" / "mocks" / "mcp-catalogue.json"
 REGISTRY = "https://registry.modelcontextprotocol.io"
 
 #: Open-source licences accepted for a server whose code the operator would host.
@@ -372,6 +374,29 @@ def render(document: dict[str, Any]) -> str:
     return HEADER + body
 
 
+def render_web_mock(document: dict[str, Any]) -> str:
+    """The shipped catalogue as `GET /orgs/{org}/mcp-catalogue` answers it for an organisation that
+    installed nothing and whose deployment declares no egress: the console's demo data (ADR 0065)."""
+    entries = []
+    for e in document["entries"]:
+        entries.append(
+            {k: e[k] for k in ENTRY_KEYS}
+            | {
+                "origin": "catalogue",
+                "install": McpEntry.model_validate(e).install,
+                "state": "available",
+                "installed_as": [],
+                "egress": "unknown",
+            }
+        )
+    meta = {
+        "catalogue_version": document["catalogue_version"],
+        "generated_at": document["generated_at"],
+        "sources": document["sources"],
+    }
+    return json.dumps({"meta": meta, "entries": entries}, indent=1, ensure_ascii=False) + "\n"
+
+
 # ------------------------------------------------------------------------------ discover
 
 
@@ -439,23 +464,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"dropped {drop.entry_id}: {drop.reason}", file=sys.stderr)
     print(f"{len(document['entries'])} entries, {len(drops)} dropped", file=sys.stderr)
 
+    outputs = {OUTPUT: text, WEB_MOCK: render_web_mock(document)}
     if args.check:
-        current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""
-        if current != text:
-            sys.stderr.writelines(
-                difflib.unified_diff(
-                    current.splitlines(keepends=True),
-                    text.splitlines(keepends=True),
-                    "committed",
-                    "generated",
+        stale = False
+        for path, wanted in outputs.items():
+            current = path.read_text(encoding="utf-8") if path.exists() else ""
+            if current != wanted:
+                stale = True
+                sys.stderr.writelines(
+                    difflib.unified_diff(
+                        current.splitlines(keepends=True),
+                        wanted.splitlines(keepends=True),
+                        "committed",
+                        "generated",
+                    )
                 )
-            )
-            print(
-                "the catalogue is out of date: run `make catalogues` and commit the result", file=sys.stderr
-            )
-            return 1
-        return 0
-    OUTPUT.write_text(text, encoding="utf-8")
+                print(f"{path.name} is out of date: run `make catalogues`", file=sys.stderr)
+        return 1 if stale else 0
+    for path, wanted in outputs.items():
+        path.write_text(wanted, encoding="utf-8")
     return 0
 
 

@@ -4,8 +4,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
+import { ConnectorTabs } from "@/components/connecteurs-onglets";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { Glossaire } from "@/components/glossaire";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
@@ -37,6 +38,9 @@ const CE_QUE_CA_PERMET = {
 export default function OrgConnectorsPage() {
   const { org } = useSession();
   const instances = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  // Landing from the catalogue (ADR 0065): the connector just installed is marked, with what its
+  // first discovery found.
+  const arrivee = useArrivee();
   const { metier, mcp } = rangerLesConnecteurs(instances.data ?? []);
   const lecture = instances.error ? (
     <ErrorNote>{String(instances.error)}</ErrorNote>
@@ -45,6 +49,13 @@ export default function OrgConnectorsPage() {
   ) : null;
   return (
     <div className="space-y-6">
+      <ConnectorTabs active="connectors" />
+      {arrivee && (
+        <p className="max-w-3xl text-sm" role="status" data-testid="installed-from-catalogue">
+          Installed <strong data-donnee>{arrivee.name}</strong> from the catalogue.
+          {arrivee.discovery ? ` Tools: ${arrivee.discovery}.` : ""} Open the tools your agents need below.
+        </p>
+      )}
       <div className="space-y-3">
         <p className="max-w-3xl text-sm text-ink-muted">
           A connector is a system Choregos reaches out to. Those of the organisation are declared once and shared by its
@@ -83,9 +94,20 @@ export default function OrgConnectorsPage() {
         </p>
         {lecture ??
           (mcp.length === 0 ? (
-            <Empty title="No MCP server yet">Declare one below, type “MCP server”.</Empty>
+            <Empty
+              title="No MCP server yet"
+              action={
+                <Link href="/admin/connectors/catalogue" className="text-sm underline">
+                  Browse the MCP catalogue
+                </Link>
+              }
+            >
+              Pick one from the catalogue, or declare one below, type “MCP server”.
+            </Empty>
           ) : (
-            mcp.map((instance) => <Instance key={instance.name} org={org} instance={instance} />)
+            mcp.map((instance) => (
+              <Instance key={instance.name} org={org} instance={instance} highlighted={instance.name === arrivee?.name} />
+            ))
           ))}
       </section>
       <OutilsDeLivraison org={org} />
@@ -96,7 +118,21 @@ export default function OrgConnectorsPage() {
   );
 }
 
-function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
+const NO_SEARCH = () => "";
+const subscribeToLocation = (notify: () => void) => {
+  window.addEventListener("popstate", notify);
+  return () => window.removeEventListener("popstate", notify);
+};
+
+/** The connector the catalogue just installed, and what its first discovery found (empty on the server). */
+function useArrivee(): { name: string; discovery: string } | null {
+  const search = useSyncExternalStore(subscribeToLocation, () => window.location.search, NO_SEARCH);
+  const params = new URLSearchParams(search);
+  const name = params.get("name");
+  return name ? { name, discovery: params.get("discovery") ?? "" } : null;
+}
+
+function Instance({ org, instance, highlighted }: { org: string; instance: OrgConnector; highlighted?: boolean }) {
   const client = useQueryClient();
   const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
   const type = (types.data ?? []).find((t) => t.kind === instance.kind && t.type === instance.type);
@@ -123,7 +159,14 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
     </span>
   );
   return (
-    <Card title={`${instance.name} — ${instance.type}`} titreDonnee action={action}>
+    <Card
+      title={`${instance.name} — ${instance.type}`}
+      titreDonnee
+      action={action}
+      className={highlighted ? "border-accent" : undefined}
+      aria-current={highlighted ? "true" : undefined}
+      data-testid={`connector-${instance.name}`}
+    >
       {diff && (
         <p className="mb-2 text-sm" role="status">
           {diff}
