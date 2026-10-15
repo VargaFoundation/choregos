@@ -68,7 +68,7 @@ async def _escalate_then_restart(temporal_env: Any, setup: Fixture, *, legacy: b
     restarted = await start(temporal_env, setup)
     await _wait_until(restarted, "the restarted interpreter waits", lambda s: s["pending_request"])
     status = await restarted.query("status")
-    assert status["state"] == "needs_human" and status["attempts"] == {}, status
+    assert status["state"] == "needs_human" and status["attempts"] == {"t-refine": 2}, status
     return restarted
 
 
