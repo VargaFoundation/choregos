@@ -46,6 +46,23 @@ Three kinds:
 - **`human`** — a group, an SLA in hours, a reminder and an escalation.
 - **`system`** — a transition the platform performs itself, with no agent and no cost.
 
+## Agent scope
+
+An agent is a registered, versioned object ([ADR 0033](adr/0033-agent-registry-and-skill-library.md))
+with an **owner**, its scope ([ADR 0061](adr/0061-agent-ownership-scopes-and-forks.md)):
+
+- **common** (`platform`) — installed from the built-in catalogue; only an organisation administrator
+  changes it. To extend it, **fork** it;
+- **organisation** (`org`) — shared by every project, written by the organisation;
+- **project** — one project's; its project owner changes it, and it runs only in that project;
+- **personal** — one person's drafts and experiments; nobody else sees it.
+
+A **personal agent never runs in a workflow**: a process a whole team runs must not depend on an agent
+one person can change at will or take away when they leave. It runs in trials, and is promoted to a
+project (or forked into one) to reach a workflow. A **fork** is a new agent whose first version copies
+one version of its source and which remembers where it came from; it never follows the source on its
+own — it tells you when the source moved on.
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,

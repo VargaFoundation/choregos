@@ -41,6 +41,12 @@ class Permission(StrEnum):
     #: owner may, since the allowlist is what the administrator decided to trust. Another source,
     #: or a new version of an existing skill, still needs `agent:manage`.
     SKILL_IMPORT = "skill:import"
+    #: Create and keep a personal agent (S39-09, ADR 0061): every role that does work — a viewer-only
+    #: member has none. Whoever holds it in the organisation or in any of its projects may.
+    AGENT_CREATE_PERSONAL = "agent:create_personal"
+    #: Create, publish and manage the agents that belong to ONE project (S39-09, ADR 0061), checked
+    #: against that project. `agent:manage` keeps its meaning: organisation and common agents.
+    AGENT_PROJECT_MANAGE = "agent:project_manage"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
@@ -53,6 +59,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.ITEM_CONTROL,
             Permission.RUN_REPLAY,
             Permission.FINDING_TRIAGE,
+            Permission.AGENT_CREATE_PERSONAL,
         }
     ),
     Role.RELEASE_CAPTAIN: frozenset(
@@ -65,6 +72,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.FINDING_TRIAGE,
             Permission.TRAIN_OPERATE,
             Permission.TRAIN_APPROVE,
+            Permission.AGENT_CREATE_PERSONAL,
         }
     ),
     Role.PROJECT_OWNER: frozenset(
@@ -85,6 +93,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.MEMBER_MANAGE,
             Permission.AUDIT_READ,
             Permission.SKILL_IMPORT,
+            Permission.AGENT_CREATE_PERSONAL,
+            Permission.AGENT_PROJECT_MANAGE,
         }
     ),
     Role.ORG_ADMIN: frozenset(Permission),

@@ -25,6 +25,8 @@ async def _agent(
     instructions: str = INSTRUCTIONS,
     lifecycle: str = "active",
     epingle: dict[str, Any] | None = None,
+    scope: str = "org",
+    project: str | None = None,
 ) -> None:
     from choregos_api.db.models import Agent, AgentVersion, Project, ProjectAgent
     from choregos_api.db.session import session_scope
@@ -32,6 +34,14 @@ async def _agent(
     async with session_scope() as session:
         projet = await session.get(Project, setup.project_id)
         assert projet is not None
+        project_id = None
+        if project == "this":
+            project_id = projet.id
+        elif project == "other":
+            elsewhere = Project(org_id=projet.org_id, slug="elsewhere", name="Elsewhere")
+            session.add(elsewhere)
+            await session.flush()
+            project_id = elsewhere.id
         agent = Agent(
             org_id=projet.org_id,
             slug=slug,
@@ -39,6 +49,8 @@ async def _agent(
             display_name=slug,
             status=status,
             lifecycle=lifecycle,
+            scope=scope,
+            project_id=project_id,
         )
         session.add(agent)
         await session.flush()
@@ -129,6 +141,34 @@ async def test_ce_qui_ne_part_pas_le_dit_sans_reessayer(
     with pytest.raises(ApplicationError, match=motif) as refus:
         await prepare_stage(_plan(setup, agent="coordinateur"))
     assert refus.value.non_retryable
+
+
+@pytest.mark.parametrize(
+    ("agent", "motif"),
+    [
+        pytest.param({"scope": "personal"}, "personal agent", id="personal"),
+        pytest.param({"scope": "project", "project": "other"}, "another project", id="another-projects"),
+    ],
+)
+async def test_an_agent_that_may_not_run_here_stops_the_run_without_a_retry(
+    setup: Fixture, agent: dict[str, Any], motif: str
+) -> None:
+    """Whatever got the name into the workflow (the publication check is bypassed here), the run
+    refuses a personal agent and another project's agent (ADR 0061)."""
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _agent(setup, **agent)
+    with pytest.raises(ApplicationError, match=motif) as refus:
+        await prepare_stage(_plan(setup, agent="coordinateur"))
+    assert refus.value.non_retryable
+
+
+async def test_a_project_agent_runs_in_its_own_project(setup: Fixture) -> None:
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _agent(setup, scope="project", project="this")
+    entree = (await prepare_stage(_plan(setup, agent="coordinateur")))["stage_input"]
+    assert entree["playbook"]["ref"].startswith("agent:coordinateur@1@sha256:")
 
 
 async def test_l_interpreteur_transmet_l_agent_que_l_acteur_nomme(

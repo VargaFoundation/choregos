@@ -98,6 +98,9 @@ async def installer_skills_et_agents(
             description=corps.description,
             owner_id=None,
             status="active",
+            # What the built-in catalogue installs is common to everyone (ADR 0061); a template's
+            # agents belong to the organisation.
+            scope="platform" if auteur.startswith("catalogue:") else "org",
         )
         session.add(agent)
         await session.flush()

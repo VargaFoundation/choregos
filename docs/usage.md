@@ -554,8 +554,79 @@ and the proposals of the run follow it, and the memory MCP server — which serv
 memory — is only handed to a run whose scope is the project.
 
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
-an override that widens is refused (`422`). Creating, publishing and revoking need
-`agent:manage` (organisation administrators); a revocation is final.
+an override that widens is refused (`422`). A revocation is final.
+
+### Who owns an agent, who may change it
+
+An agent has a **scope** ([ADR 0061](adr/0061-agent-ownership-scopes-and-forks.md)):
+
+| scope | what it is | changed by |
+| :-- | :-- | :-- |
+| `platform` | a **common** agent, installed from the built-in catalogue | an `org_admin` only |
+| `org` | an agent shared by every project, written by the organisation | an `org_admin` |
+| `project` | one project's agent; it runs only in that project | that project's `project_owner`, or an `org_admin` |
+| `personal` | someone's own agent: drafts, experiments | its owner, or an `org_admin` |
+
+The server decides — the console only shows its answer. Each agent carries `can`
+(`publish`, `manage`, `pin`, `fork_scopes`) and, when something is refused, `cannot_reason`, one
+sentence saying why and what to do instead ("`developer` is a common agent: only an org_admin changes
+it; fork it into your project or your own agents to extend it"). The matrix, by who may:
+
+| action | common | organisation | project P | personal (owner U) |
+| :-- | :-- | :-- | :-- | :-- |
+| see | any member | any member | members of P, org_admin | U, org_admin |
+| create | org_admin (catalogue) | org_admin | P's project_owner, org_admin | any developer and above (becomes U) |
+| publish a version, edit, lifecycle | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
+| suspend, revoke, transfer, clients | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
+| pin on project Q | Q's project_owner | Q's project_owner | only Q = P | refused (`422`): promote or fork first |
+| trial run | `item:control` on the trial project | same | trial project must be P | U only |
+| fork into a scope | whoever sees it and may create in that scope | same | same | same |
+
+An agent you may not see is a **404**, not a 403: a personal agent of someone else does not exist for
+you. `GET /orgs/{org}/agents` returns only what you may see, and takes `?scope=` and `?project=`.
+
+```bash
+# a developer's own agent, then a project owner's
+curl -X POST $API/orgs/acme/agents -d '{"slug": "my-helper", "display_name": "Mine", "scope": "personal", "spec": {...}}'
+curl -X POST $API/orgs/acme/agents -d '{"slug": "hr-helper", "display_name": "HR", "scope": "project", "project": "hr", "spec": {...}}'
+```
+
+**A personal agent never runs in a project's workflow, and a project's agent runs only in its
+project**: a process a whole team runs must not depend on one person's agent. Pinning one (`422`),
+publishing a workflow that names one (`422`, naming the agent, its scope and the fix) and starting a
+run with one (the stage stops, without retry) are all refused. A personal agent runs in **trials**
+(`POST /orgs/{org}/agent-trials`, which needs `item:control` on the trial project and the right to
+create a personal agent).
+
+**Fork** a common agent to extend it:
+
+```bash
+curl -X POST $API/orgs/acme/agents/developer/fork \
+  -d '{"slug": "hr-developer", "scope": "project", "project": "hr", "version": 3}'
+```
+
+The fork's version 1 is a byte-for-byte copy of the source's version 3 (the latest when `version` is
+left out — same spec, same checksum). It records `forked_from` and inherits nothing else: no pin, no
+client, no metrics. The source is never touched. The fork reports its upstream: `forked_from` says
+`behind: true` when the source published a newer version — nothing re-bases by itself; publishing the
+fork's next version from the upstream's is your decision. A developer forks into `personal`, a project
+owner into their project, an `org_admin` anywhere; nothing is forked into the common agents.
+
+**Promote** an agent to hand it over (`POST /orgs/{org}/agents/{slug}/scope`):
+
+```bash
+curl -X POST $API/orgs/acme/agents/my-helper/scope -d '{"scope": "project", "project": "hr"}'
+```
+
+A personal agent goes to a project (its owner **and** that project's owner, or an `org_admin`) or to
+the organisation (`org_admin`); a project's agent to the organisation (`org_admin`); an organisation
+agent into one project (`org_admin`, refused while another project pins or names it). A common agent
+never moves. Existing agents were migrated by ADR 0061: those installed from the catalogue are common,
+every other one is an organisation agent — nothing changed hands and no pin moved.
+
+The permissions behind it: `agent:manage` (org_admin: organisation and common agents),
+`agent:project_manage` (project_owner: the agents of that project) and `agent:create_personal`
+(developer, release captain, project owner: a personal agent).
 
 An agent also has a **lifecycle**, apart from that operational status: `draft` (no project pins
 it, no run starts with it) → `active` → `deprecated` (it still runs; a pin of it answers with a

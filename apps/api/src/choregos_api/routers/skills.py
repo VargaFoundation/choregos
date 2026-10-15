@@ -93,7 +93,8 @@ async def _utilisee_par(session: AsyncSession, organisation: Organization, slug:
     lignes = await session.execute(
         select(Agent.slug, AgentVersion.version, AgentVersion.spec)
         .join(Agent, Agent.id == AgentVersion.agent_id)
-        .where(AgentVersion.org_id == organisation.id)
+        # A personal agent is its owner's business: it does not show among the skill's users (ADR 0061).
+        .where(AgentVersion.org_id == organisation.id, Agent.scope != "personal")
         .order_by(Agent.slug, AgentVersion.version)
     )
     return [

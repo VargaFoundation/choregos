@@ -399,6 +399,7 @@ paths:
     put:
       tags: [workflows]
       operationId: putWorkflow
+      description: "A workflow that names a personal agent or another project's agent is refused with 422 naming the agent, its scope and the fix (ADR 0061)."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowPut" } } }
@@ -426,6 +427,7 @@ paths:
     put:
       tags: [workflows]
       operationId: putNamedWorkflow
+      description: "A workflow that names a personal agent or another project's agent is refused with 422 (ADR 0061)."
       summary: Publish the next version of THIS workflow; a stale `base_version`, or `create_only` on an existing name → 409
       requestBody:
         required: true
@@ -1196,13 +1198,16 @@ paths:
     get:
       tags: [agents]
       operationId: listAgents
-      description: The organisation's agent registry (ADR 0033).
+      description: The agents the caller may see (ADR 0033, ADR 0061) — a personal agent only to its owner and an org_admin, a project's agent to the members of that project.
+      parameters:
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [platform, org, project, personal] } }
+        - { name: project, in: query, required: false, schema: { type: string }, description: "a project's slug: only the agents that project owns" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
     post:
       tags: [agents]
       operationId: createAgent
-      description: Create an agent and its version 1; `agent:manage` (org_admin).
+      description: "Create an agent and its version 1, in the scope asked (ADR 0061): an `org` agent needs `agent:manage` (org_admin), a `project` agent the project's owner (`agent:project_manage`), a `personal` agent `agent:create_personal` (developer and above). The 403 carries the reason."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentCreate" } } }
@@ -1334,6 +1339,40 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/fork:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: forkAgent
+      description: A new agent, in the scope asked, whose version 1 is a byte-for-byte copy of one of the source's versions (its latest by default; same checksum). It records `forked_from` and inherits nothing else. Needs to see the source AND to create in that scope (a developer forks into `personal`, a project owner into their project, an org_admin anywhere). A source the caller may not see is a 404. Audited (`agent.fork`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentFork" } } }
+      responses:
+        "201": { description: The fork, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/scope:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: changeAgentScope
+      description: Promote an agent (ADR 0061). A personal agent goes to a project (its owner AND that project's owner, or an org_admin) or to the organisation (org_admin); a project's agent to the organisation (org_admin); an organisation agent into one project (org_admin; 409 while another project pins or names it). A common agent never moves. Audited (`agent.scope`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentScopeChange" } } }
+      responses:
+        "200": { description: The agent in its new scope, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/owner:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1805,7 +1844,7 @@ paths:
     put:
       tags: [agents]
       operationId: pinProjectAgent
-      description: Pin a version; an override that widens the version gets 422.
+      description: "Pin a version; an override that widens the version gets 422, and so does a personal agent or another project's agent (ADR 0061). 403 carries the reason; an agent the caller may not see is a 404."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentPut" } } }
@@ -2781,6 +2820,42 @@ components:
         description: { type: [string, "null"] }
         spec: { $ref: "#/components/schemas/AgentSpec" }
         lifecycle: { type: string, enum: [draft, active], default: active, description: a draft is neither pinned nor run until it is activated }
+        scope: { type: string, enum: [org, project, personal], default: org, description: "who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue" }
+        project: { type: [string, "null"], description: "the project's slug: required for, and only for, a `project` agent" }
+    AgentFork:
+      type: object
+      required: [slug, scope]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$", description: "slugs are unique per organisation: a fork takes a new one" }
+        display_name: { type: [string, "null"] }
+        scope: { type: string, enum: [org, project, personal] }
+        project: { type: [string, "null"], description: "required for, and only for, a `project` fork" }
+        version: { type: [integer, "null"], minimum: 1, description: "the source version to copy; absent, its latest" }
+    AgentScopeChange:
+      type: object
+      required: [scope]
+      properties:
+        scope: { type: string, enum: [org, project, personal] }
+        project: { type: [string, "null"], description: "required for, and only for, a move to a `project`" }
+    AgentUpstream:
+      type: object
+      description: What a fork was copied from, and whether the source moved on since (ADR 0061).
+      required: [slug, version]
+      properties:
+        slug: { type: string }
+        version: { type: integer, description: the version the fork copied }
+        scope: { type: [string, "null"], enum: [platform, org, project, personal, null], description: absent when the source is no longer visible to the caller }
+        latest_version: { type: [integer, "null"] }
+        behind: { type: boolean, description: the source published a version newer than the one copied }
+        available: { type: boolean, description: false when the source is deleted or not visible to the caller }
+    AgentPermissions:
+      type: object
+      description: What the caller may do with an agent, decided by the server (ADR 0061).
+      properties:
+        publish: { type: boolean, description: "publish a version, edit it, move it through its life" }
+        manage: { type: boolean, description: "suspend, revoke, change its owner, attach clients" }
+        pin: { type: boolean, description: pin it on a project the caller owns }
+        fork_scopes: { type: array, items: { type: string, enum: [org, project, personal] } }
     AgentCatalogueEntry:
       type: object
       description: An agent the platform's catalogue offers (ADR 0040), and its state in the organisation.
@@ -2799,6 +2874,7 @@ components:
         installed: { type: boolean }
         installed_version: { type: [integer, "null"] }
         own_agent: { type: boolean, description: "an agent of the organisation has this name and does not come from the catalogue" }
+        scope: { type: [string, "null"], enum: [platform, org, project, personal, null], description: "the scope of the agent of this name in the organisation, if any (ADR 0061)" }
         update_available: { type: boolean }
         offered: { type: boolean, description: "false for a client the door does not accept yet (OAuth, registered client, https)" }
         unavailable_reason: { type: [string, "null"] }
@@ -2853,6 +2929,11 @@ components:
         retired_at: { type: [string, "null"], format: date-time }
         last_run_at: { type: [string, "null"], format: date-time }
         unused: { type: boolean, description: no run for 60 days (since its creation if it never ran) }
+        scope: { type: string, enum: [platform, org, project, personal], default: org, description: "who owns it (ADR 0061)" }
+        project: { type: [string, "null"], description: "the slug of its project, for a `project` agent" }
+        forked_from: { oneOf: [{ $ref: "#/components/schemas/AgentUpstream" }, { type: "null" }], description: set on a fork }
+        can: { $ref: "#/components/schemas/AgentPermissions" }
+        cannot_reason: { type: [string, "null"], description: "the server's sentence for what the caller may not do: shown as is, never guessed from roles" }
     AgentLifecycleChange:
       type: object
       required: [to]

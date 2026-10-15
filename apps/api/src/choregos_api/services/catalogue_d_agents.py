@@ -39,6 +39,8 @@ class EtatDansLOrganisation:
     #: L'agent du même nom vient du catalogue ; sinon, c'est celui de l'organisation, intouchable.
     du_catalogue: bool
     mise_a_jour: bool
+    #: The scope of the agent of that name (ADR 0061), if there is one.
+    scope: str | None = None
 
 
 def auteur(entree_: EntreeDuCatalogue) -> str:
@@ -65,7 +67,7 @@ async def etat(session: AsyncSession, org_id: Any, entree_: EntreeDuCatalogue) -
     premiere, derniere = versions[0], versions[-1]
     du_catalogue = (premiere.created_by or "").startswith(PREFIXE)
     change = derniere.checksum != empreinte(spec_de(entree_))
-    return EtatDansLOrganisation(True, derniere.version, du_catalogue, du_catalogue and change)
+    return EtatDansLOrganisation(True, derniere.version, du_catalogue, du_catalogue and change, agent.scope)
 
 
 async def installer(
