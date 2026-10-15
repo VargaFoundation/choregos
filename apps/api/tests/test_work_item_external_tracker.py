@@ -19,10 +19,10 @@ metadata:
   version: 1
   inputs:
     type: object
-    required: [poste]
+    required: [role]
     additionalProperties: false
     properties:
-      poste: {type: string, minLength: 1}
+      role: {type: string, minLength: 1}
 actors:
   rh: {type: human, group: rh}
 states:
@@ -84,7 +84,7 @@ async def test_a_github_project_files_the_issue_then_the_work_item(
             "title": "Add SSO",
             "body": "Please.",
             "workflow": "onboarding",
-            "fields": {"poste": "data"},
+            "fields": {"role": "data"},
             "budget_usd": 1.5,
             "labels": ["team:identity"],
         },
@@ -97,7 +97,7 @@ async def test_a_github_project_files_the_issue_then_the_work_item(
     assert "agent-ready" not in issue.labels
     assert "Filed from Choregos by admin@varga.dev" in issue.body and issue.body.startswith("Please.")
     body = created.json()
-    assert body["fields"] == {"poste": "data"} and body["budget_usd"] == 1.5
+    assert body["fields"] == {"role": "data"} and body["budget_usd"] == 1.5
     assert body["url"] == f"https://fake.tracker/{key}"
     assert interpreter_id("billing-api", key) in get_temporal().started  # type: ignore[attr-defined]
 
@@ -112,7 +112,7 @@ async def test_refused_fields_leave_no_issue(
     assert refused.status_code == 422, refused.text
     wider = await client.post(
         f"/api/v1/projects/{pid}/work-items",
-        json={"title": "x", "workflow": "onboarding", "fields": {"poste": "a"}, "budget_usd": 99},
+        json={"title": "x", "workflow": "onboarding", "fields": {"role": "a"}, "budget_usd": 99},
     )
     assert wider.status_code == 422, wider.text
     assert not [call for call in tracker.calls if call[0] == "create_item"] and not tracker.items
@@ -128,7 +128,7 @@ async def test_a_tracker_refusal_is_a_readable_502(
     pid = await _github(client, project)
     refused = await client.post(
         f"/api/v1/projects/{pid}/work-items",
-        json={"title": "x", "workflow": "onboarding", "fields": {"poste": "a"}},
+        json={"title": "x", "workflow": "onboarding", "fields": {"role": "a"}},
     )
     assert refused.status_code == 502, refused.text
     assert "Resource not accessible by integration" in refused.text and "github-issues" in refused.text
@@ -156,7 +156,7 @@ async def test_the_webhook_ignores_the_issue_until_labelled(
     pid = await _github(client, project)
     created = await client.post(
         f"/api/v1/projects/{pid}/work-items",
-        json={"title": "Add SSO", "workflow": "onboarding", "fields": {"poste": "a"}},
+        json={"title": "Add SSO", "workflow": "onboarding", "fields": {"role": "a"}},
     )
     key = created.json()["tracker_key"]
     started = dict(get_temporal().started)  # type: ignore[attr-defined]
