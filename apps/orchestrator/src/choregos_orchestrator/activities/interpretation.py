@@ -22,6 +22,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 from ..train_client import signal_release_train
 from .base import db, load_work_item, project_bundle
 from .bilan import close_run_spend
+from .execution import abandon_queued_runs
 
 
 @activity.defn(name="load_context")
@@ -87,6 +88,9 @@ async def record_workflow_failure(payload: dict[str, Any]) -> dict[str, Any]:
         open_runs = await _runs_without_spend(session, item.id)
     # The interpreter dies — `await_run` gave up, an activity failed for good: nothing will call
     # `collect_spend` for its run. Its spend is booked and its key revoked here (#523).
+    # A run still waiting for a slot is removed at the executor first, or its suspended Job and
+    # its Secret stay forever (#501); the key is revoked after, as `cancel_run` does.
+    await abandon_queued_runs(payload["project_id"], open_runs)
     for run_id in open_runs:
         await close_run_spend(payload["project_id"], run_id)
     return failure
