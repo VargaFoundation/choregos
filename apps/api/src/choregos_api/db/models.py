@@ -792,6 +792,9 @@ class Agent(Base, PkMixin, TimestampMixin):
     forked_from_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     display_name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Labels people find the agent by (S40-10). Metadata, not part of a version: editing them never
+    #: publishes one and never moves a checksum.
+    tags: Mapped[list[str]] = mapped_column(Json, default=list, server_default="[]")
     owner_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="active")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

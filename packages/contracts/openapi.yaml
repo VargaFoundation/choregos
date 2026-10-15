@@ -1281,6 +1281,7 @@ paths:
       parameters:
         - { name: scope, in: query, required: false, schema: { type: string, enum: [platform, org, project, personal] } }
         - { name: project, in: query, required: false, schema: { type: string }, description: "a project's slug: only the agents that project owns" }
+        - { name: tag, in: query, required: false, style: form, explode: true, schema: { type: array, items: { type: string } }, description: "repeatable: only the agents carrying every tag given (AND, S40-10); applied after visibility, so a tag never reveals an agent the caller cannot see" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
     post:
@@ -3155,6 +3156,12 @@ components:
         budget_usd: { type: number }
         status: { type: string }
         evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalResult" } }
+    AgentTags:
+      type: array
+      maxItems: 10
+      uniqueItems: true
+      items: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,31}$" }
+      description: Labels people find the agent by (S40-10); never part of a version
     AgentCreate:
       type: object
       required: [slug, display_name]
@@ -3167,6 +3174,7 @@ components:
         lifecycle: { type: string, enum: [draft, active], default: active, description: a draft is neither pinned nor run until it is activated }
         scope: { type: string, enum: [org, project, personal], default: org, description: "who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue" }
         project: { type: [string, "null"], description: "the project's slug: required for, and only for, a `project` agent" }
+        tags: { $ref: "#/components/schemas/AgentTags" }
     AgentFork:
       type: object
       required: [slug, scope]
@@ -3232,6 +3240,7 @@ components:
         summary: { type: string }
         version: { type: integer, description: the catalogue's version of the entry }
         skills: { type: array, items: { type: string } }
+        tags: { type: array, items: { type: string }, description: "labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed" }
         client: { type: [string, "null"], description: "an external client's id on the AI clients page" }
         reach: { type: [string, "null"], enum: [always, cloud, null], description: "`cloud`: it calls from its vendor's cloud" }
         installed: { type: boolean }
@@ -3264,6 +3273,7 @@ components:
         description: { type: [string, "null"] }
         status: { type: [string, "null"], enum: [active, suspended, revoked, null] }
         expires_at: { type: [string, "null"], format: date-time }
+        tags: { oneOf: [{ $ref: "#/components/schemas/AgentTags" }, { type: "null" }], description: "replaces the agent's tags; absent or null leaves them as they are (S40-10)" }
     AgentVersion:
       type: object
       required: [version, spec, checksum]
@@ -3281,6 +3291,7 @@ components:
         kind: { type: string, enum: [internal, external] }
         display_name: { type: string }
         description: { type: [string, "null"] }
+        tags: { $ref: "#/components/schemas/AgentTags" }
         status: { type: string }
         owner: { type: [string, "null"] }
         expires_at: { type: [string, "null"], format: date-time }

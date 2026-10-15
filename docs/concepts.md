@@ -70,7 +70,8 @@ A **personal agent never runs in a workflow**: a process a whole team runs must 
 one person can change at will or take away when they leave. It runs in trials, and is promoted to a
 project (or forked into one) to reach a workflow. A **fork** is a new agent whose first version copies
 one version of its source and which remembers where it came from; it never follows the source on its
-own — it tells you when the source moved on.
+own — it tells you when the source moved on. An agent also carries **tags**, labels people find it by;
+they are metadata outside its versions, so editing them publishes nothing.
 
 ## Stage and run
 

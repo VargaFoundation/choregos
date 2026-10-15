@@ -614,6 +614,25 @@ In the console, **Agents → New agent** opens a full page (`/agents/new`), in t
 
 **New version**, on an agent's page (Definition tab), is the same form without the first step.
 
+**Tags** (S40-10) are the labels people find an agent by: `madr`, `architecture`, `design`. A tag is a
+lowercase slug (`^[a-z0-9][a-z0-9-]{0,31}$`), an agent carries at most **10**, and they are **metadata, not
+part of a version**: changing them publishes nothing and moves no checksum. Whoever may publish the agent
+edits them (`PATCH`: an `org_admin` for a common or organisation agent, the project owner for a project's,
+the owner for a personal one). The registry filters with a repeatable `tag` query parameter, **every tag
+given** (AND), applied after visibility, so a tag never reveals an agent the caller cannot see. A fork
+copies the tags of its source. The built-in catalogue ships tags (the architect: `madr`, `architecture`,
+`design`); a catalogue upgrade **adds** the tags an agent lacks and never removes one.
+
+```bash
+curl -X PATCH $API/orgs/acme/agents/architect -d '{"tags": ["madr", "architecture", "design"]}'
+curl "$API/orgs/acme/agents?tag=madr&tag=design"   # only the agents carrying both
+```
+
+In the console, the registry shows each agent's tags and a row of tag chips (several can be selected; the
+selection is in the address: `/agents?tag=madr`). On an agent's page the tags sit under the title, and
+**Edit details** (Overview tab) changes the name, the description and the tags; the builder asks for tags
+when you create an agent.
+
 *Why not a clone of Microsoft's Agent Builder or Copilot Studio?* We took what fits and left the rest.
 Kept: a short first step in which the author says what the agent is for, one form for the details with
 the advanced fields folded, a test pane beside it, and draft-then-publish. Not kept: a conversational

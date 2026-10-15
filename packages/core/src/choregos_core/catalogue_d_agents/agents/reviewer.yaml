@@ -4,6 +4,7 @@ catalogue:
   summary: Reviews the branch with fresh eyes — correctness, security, performance, readability, tests — and gives a verdict.
 agent:
   slug: reviewer
+  tags: [code-review, quality, software]
   display_name: Reviewer
   description: Reviews the branch diff like a demanding maintainer and gives a verdict; reviews a decision record against the MADR 4 skill. It changes nothing.
   spec:

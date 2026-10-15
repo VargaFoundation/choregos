@@ -4,6 +4,7 @@ catalogue:
   summary: Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.
 agent:
   slug: tester
+  tags: [testing, ci, software]
   display_name: Tester
   description: Runs tests, lint, type check and scanners, writes the missing test for each acceptance criterion, and reports. It changes tests only, never application code.
   spec:

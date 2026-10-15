@@ -20,6 +20,7 @@ import { useId, useState, type ReactNode } from "react";
 import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { scopeHint, scopeLabel } from "./registre";
+import { TagEditor } from "./tags";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usd } from "@/lib/format";
 import type { Agent, AgentSpec, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
@@ -204,6 +205,7 @@ export function AgentBuilder({
   // The slug follows the name until a person edits it: it never changes once the agent exists.
   const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [tags, setTags] = useState<string[]>([]);
   const wanted = scopes?.options.find((s) => s === initial?.scope) ?? scopes?.options[0];
   const [scope, setScope] = useState<"org" | "project" | "personal" | undefined>(wanted);
   const [project, setProject] = useState(initial?.project ?? "");
@@ -226,6 +228,8 @@ export function AgentBuilder({
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
   const library = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
+  const registry = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org), enabled: mode.kind === "create", retry: false });
+  const knownTags = [...new Set((registry.data ?? []).flatMap((a) => a.tags ?? []))].sort();
   const bases = useQuery({ queryKey: ["knowledge", org], queryFn: () => api.knowledgeBases(org), retry: false });
 
   const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
@@ -247,6 +251,7 @@ export function AgentBuilder({
           kind: "internal",
           display_name: name || slug,
           description: description.trim() || null,
+          ...(tags.length > 0 ? { tags } : {}),
           spec: cleanSpec(spec),
           lifecycle,
           ...(scope ? { scope, project: scope === "project" ? projectChoice : null } : {}),
@@ -346,6 +351,7 @@ export function AgentBuilder({
                 <Textarea id={id} rows={3} maxLength={4000} value={description} onChange={(e) => setDescription(e.target.value)} />
               )}
             </Field>
+            <TagEditor value={tags} onChange={setTags} suggestions={knownTags} />
             <InstructionsField spec={spec} set={set} />
           </Section>
         )}
