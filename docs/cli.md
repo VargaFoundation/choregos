@@ -5,8 +5,7 @@ Generated from the CLI itself by `tools/gen_cli_reference.py` — do not edit by
 
 The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrides the
 path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
-`CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists. Help strings are in
-French, like the rest of the code.
+`CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
 
 
 ## `choregos dev`

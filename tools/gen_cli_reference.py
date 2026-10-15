@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Génère `docs/cli.md` depuis la CLI elle-même : une référence qui ne peut pas mentir.
+"""Generates `docs/cli.md` from the CLI itself: a reference that cannot lie.
 
-    uv run python tools/gen_cli_reference.py            # écrit docs/cli.md
-    uv run python tools/gen_cli_reference.py --check    # échoue si docs/cli.md diverge
+    uv run python tools/gen_cli_reference.py            # writes docs/cli.md
+    uv run python tools/gen_cli_reference.py --check    # fails if docs/cli.md diverges
 
-Il n'existait aucune référence de la CLI, dans aucune langue (état des lieux du
-2026-09-24) : `usage.md` en montrait cinq commandes, `dev.md` six autres, et rien ne disait
-`~/.config/choregos/config.json`. Ce fichier est produit par Typer à partir des commandes
-réelles, avec leurs options et leurs aides — et un test le compare au dépôt.
+There was no CLI reference, in any language (state of play of 2026-09-24): `usage.md`
+showed five of its commands, `dev.md` six others, and nothing mentioned
+`~/.config/choregos/config.json`. This file is produced by Typer from the real commands,
+with their options and their help — and a test compares it with the repository.
 """
 
 from __future__ import annotations
@@ -16,64 +16,63 @@ import os
 import pathlib
 import sys
 
-# Avec rich, Typer IMPRIME l'aide sur une console et `get_help` rend une chaîne vide.
-# La variable se lit à l'import de `typer.core` : la poser avant, c'est l'aide texte de click.
+# With rich, Typer PRINTS the help on a console and `get_help` returns an empty string.
+# The variable is read when `typer.core` is imported: setting it before gives click's text help.
 os.environ["TYPER_USE_RICH"] = "0"
 from typing import Any
 
-RACINE = pathlib.Path(__file__).resolve().parents[1]
-CIBLE = RACINE / "docs" / "cli.md"
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+TARGET = ROOT / "docs" / "cli.md"
 
-EN_TETE = """# CLI reference
+HEADER = """# CLI reference
 
 Generated from the CLI itself by `tools/gen_cli_reference.py` — do not edit by hand
 (`make docs-cli` regenerates it, a test checks it is current).
 
 The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrides the
 path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
-`CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists. Help strings are in
-French, like the rest of the code.
+`CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
 
 """
 
 
-def _rendre(commande: Any, chemin: list[str], sortie: list[str]) -> None:
-    """Typer embarque son propre click (`typer._click`) : on reconnaît un groupe à ses `commands`."""
-    nom = " ".join(chemin)
-    sous_commandes = getattr(commande, "commands", None)
-    if sous_commandes is not None:
-        if len(chemin) > 1:
-            sortie.append(f"## `{nom}`\n")
-            if commande.help:
-                sortie.append(commande.help.strip() + "\n")
-        for sous_nom in sorted(sous_commandes):
-            _rendre(sous_commandes[sous_nom], [*chemin, sous_nom], sortie)
+def _render(command: Any, path: list[str], output: list[str]) -> None:
+    """Typer bundles its own click (`typer._click`): a group is recognised by its `commands`."""
+    name = " ".join(path)
+    subcommands = getattr(command, "commands", None)
+    if subcommands is not None:
+        if len(path) > 1:
+            output.append(f"## `{name}`\n")
+            if command.help:
+                output.append(command.help.strip() + "\n")
+        for sub_name in sorted(subcommands):
+            _render(subcommands[sub_name], [*path, sub_name], output)
         return
-    contexte = commande.make_context(nom, [], resilient_parsing=True)
-    sortie.append(f"### `{nom}`\n")
-    sortie.append("```text\n" + commande.get_help(contexte).strip() + "\n```\n")
+    context = command.make_context(name, [], resilient_parsing=True)
+    output.append(f"### `{name}`\n")
+    output.append("```text\n" + command.get_help(context).strip() + "\n```\n")
 
 
-def generer() -> str:
+def generate() -> str:
     import typer.core
     from choregos_cli.main import app
 
-    racine = typer.main.get_command(app)
-    sortie: list[str] = [EN_TETE]
-    _rendre(racine, ["choregos"], sortie)
-    return "\n".join(sortie).rstrip() + "\n"
+    root = typer.main.get_command(app)
+    output: list[str] = [HEADER]
+    _render(root, ["choregos"], output)
+    return "\n".join(output).rstrip() + "\n"
 
 
 def main() -> int:
-    contenu = generer()
+    content = generate()
     if "--check" in sys.argv:
-        if not CIBLE.exists() or CIBLE.read_text(encoding="utf-8") != contenu:
-            print(f"{CIBLE.relative_to(RACINE)} n'est pas à jour : lancer `make docs-cli`", file=sys.stderr)
+        if not TARGET.exists() or TARGET.read_text(encoding="utf-8") != content:
+            print(f"{TARGET.relative_to(ROOT)} is out of date: run `make docs-cli`", file=sys.stderr)
             return 1
-        print("docs/cli.md à jour")
+        print("docs/cli.md is up to date")
         return 0
-    CIBLE.write_text(contenu, encoding="utf-8")
-    print(f"écrit {CIBLE.relative_to(RACINE)} ({len(contenu.splitlines())} lignes)")
+    TARGET.write_text(content, encoding="utf-8")
+    print(f"wrote {TARGET.relative_to(ROOT)} ({len(content.splitlines())} lines)")
     return 0
 
 
