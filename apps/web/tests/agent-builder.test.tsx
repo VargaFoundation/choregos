@@ -297,7 +297,7 @@ describe("the builder", () => {
     expect(within(image).getByRole("option", { name: "scratch-bench (not pinned by digest)" })).toBeInTheDocument();
 
     // Neither an image nor a command: refused before any call.
-    fireEvent.click(within(builder).getByRole("button", { name: "Create the agent" }));
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
     expect(await within(builder).findByText("A code agent needs an image and a command.")).toBeInTheDocument();
     expect(api.createAgent).not.toHaveBeenCalled();
 
@@ -306,7 +306,7 @@ describe("the builder", () => {
     fireEvent.change(within(builder).getByLabelText("Model API"), { target: { value: "anthropic" } });
     expect(screen.getByTestId("runtime-resolu")).toHaveTextContent("Your code runs in the image ticket-triager");
 
-    fireEvent.click(within(builder).getByRole("button", { name: "Create the agent" }));
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
     await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
     const sent = vi.mocked(api.createAgent).mock.calls[0]![1];
     expect(sent.spec?.runtime).toEqual({
