@@ -182,6 +182,9 @@ COPY --from=builder --chown=1000:1000 /app /app
 # dépendance oubliée ne se voyait qu'au premier agent lancé en cluster, sur un
 # `ModuleNotFoundError` (arrivé avec `pydantic-settings`). Ici, la construction échoue.
 RUN /app/.venv/bin/choregos-runner --help >/dev/null
+# Same for the deterministic backtest engine (a dependency of the runner package): a job stage
+# runs `choregos-quant` with no network, so it must be installed and start here.
+RUN /app/.venv/bin/choregos-quant --help >/dev/null
 WORKDIR /workspace
 USER 1000
 ENTRYPOINT ["/usr/bin/tini", "--", "choregos-runner"]
