@@ -21,6 +21,8 @@ import type {
   AgentCreate,
   AgentDraft,
   AgentDraftRequest,
+  AgentFork,
+  AgentScopeChange,
   AgentCredential,
   AgentLifecycleChange,
   AgentLifecycleResult,
@@ -295,6 +297,12 @@ export const api = {
   /** A model drafts an agent from its description: a proposal, never saved (S39-05). */
   draftAgent: (org: string, body: AgentDraftRequest) =>
     request<AgentDraft>(`/orgs/${org}/agent-drafts`, { method: "POST", body: JSON.stringify(body) }),
+  /** A fork: a new agent in the scope asked, whose v1 copies a version of the source (ADR 0061). */
+  forkAgent: (org: string, slug: string, body: AgentFork) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/fork`, { method: "POST", body: JSON.stringify(body) }),
+  /** Move an agent to another scope (promote a personal or project agent); the server decides who may. */
+  changeAgentScope: (org: string, slug: string, body: AgentScopeChange) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (org: string, slug: string, body: AgentPatch) =>
     request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
   /** Its life (S32-04): activate a draft, deprecate, retire — retiring runs its checklist. */

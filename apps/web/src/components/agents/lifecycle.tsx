@@ -69,7 +69,8 @@ export function checklistSentence(result: AgentLifecycleResult): string {
   return `Retired: ${parts.join(", ")}.`;
 }
 
-export function LifecyclePanel({ org, agent }: { org: string; agent: Agent }) {
+/** `disabled`: the server says the caller may not manage this agent (`can.manage`, ADR 0061). */
+export function LifecyclePanel({ org, agent, disabled = false }: { org: string; agent: Agent; disabled?: boolean }) {
   const client = useQueryClient();
   const lifecycle = (agent.lifecycle ?? "active") as Lifecycle;
   const [confirming, setConfirming] = useState(false);
@@ -134,7 +135,7 @@ export function LifecyclePanel({ org, agent }: { org: string; agent: Agent }) {
           {nextMoves(lifecycle)
             .filter((to) => to !== "retired")
             .map((to) => (
-              <Button key={to} size="sm" onClick={() => void move(to)}>
+              <Button key={to} size="sm" disabled={disabled} onClick={() => void move(to)}>
                 {LIBELLE[to](lifecycle)}
               </Button>
             ))}
@@ -149,7 +150,7 @@ export function LifecyclePanel({ org, agent }: { org: string; agent: Agent }) {
               </Button>
             </span>
           ) : (
-            <Button size="sm" tone="danger" onClick={() => setConfirming(true)}>
+            <Button size="sm" tone="danger" disabled={disabled} onClick={() => setConfirming(true)}>
               {LIBELLE.retired(lifecycle)}
             </Button>
           )}
@@ -167,10 +168,10 @@ export function LifecyclePanel({ org, agent }: { org: string; agent: Agent }) {
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Transfer ownership to" className="min-w-0 flex-1">
             {(props) => (
-              <Input {...props} type="email" placeholder="member@org" value={owner} onChange={(e) => setOwner(e.target.value)} />
+              <Input {...props} type="email" placeholder="member@org" value={owner} onChange={(e) => setOwner(e.target.value)} disabled={disabled} />
             )}
           </Field>
-          <Button size="sm" onClick={() => void transfer()} disabled={!owner.includes("@")}>
+          <Button size="sm" onClick={() => void transfer()} disabled={disabled || !owner.includes("@")}>
             Transfer
           </Button>
         </div>

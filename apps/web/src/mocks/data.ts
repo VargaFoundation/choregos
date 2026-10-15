@@ -14,6 +14,8 @@ import type {
   GatewayModel,
   AgentCatalogueEntry,
   AgentCreate,
+  AgentFork,
+  AgentScopeChange,
   AgentEvalCase,
   AgentEvalResult,
   AgentSpec,
@@ -1270,6 +1272,8 @@ export const agents: Agent[] = [
     status: "active",
     owner: "lea@acme.dev",
     latest_version: 2,
+    scope: "org",
+    can: { publish: true, manage: true, pin: true, fork_scopes: ["org", "project", "personal"] },
     created_at: iso(60 * 24 * 9),
     versions: [
       {
@@ -1308,6 +1312,81 @@ export const agents: Agent[] = [
         version: 1,
         spec: { mcp_servers: [{ connector: "choregos", tools: ["list_*", "search_*", "get_*", "create_work_item"] }] },
         checksum: "sha256:5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+        created_by: "lea@acme.dev",
+        created_at: iso(60 * 24),
+      },
+    ],
+  },
+  // One agent per scope (S39-09, ADR 0061). The `can` and the reason are the server's: the console shows them as they are.
+  {
+    slug: "developer",
+    kind: "internal",
+    display_name: "Developer",
+    description: "Implements the specification inside the allowed paths, test first.",
+    status: "active",
+    owner: null,
+    latest_version: 2,
+    scope: "platform",
+    project: null,
+    can: { publish: false, manage: false, pin: true, fork_scopes: ["project", "personal"] },
+    cannot_reason: "This is a common agent of the platform's catalogue: only an organisation admin changes it. Fork it into your project to change a copy.",
+    versions: [
+      {
+        version: 2,
+        spec: { instructions: "Implement the specification, test first.\nSmall conventional commits.", model: "profile:standard" },
+        checksum: "sha256:2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+        created_by: "catalogue:developer@2",
+        created_at: iso(60 * 24 * 3),
+      },
+      {
+        version: 1,
+        spec: { instructions: "Implement the specification.", model: "profile:standard" },
+        checksum: "sha256:1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
+        created_by: "catalogue:developer@1",
+        created_at: iso(60 * 24 * 20),
+      },
+    ],
+  },
+  {
+    slug: "developer-billing-api",
+    kind: "internal",
+    display_name: "Developer (billing-api)",
+    description: "The common developer, forked into billing-api.",
+    status: "active",
+    owner: "lea@acme.dev",
+    latest_version: 1,
+    scope: "project",
+    project: "billing-api",
+    forked_from: { slug: "developer", version: 1, scope: "platform", latest_version: 2, behind: true, available: true },
+    can: { publish: true, manage: true, pin: true, fork_scopes: ["project", "personal"] },
+    cannot_reason: null,
+    versions: [
+      {
+        version: 1,
+        spec: { instructions: "Implement the specification.", model: "profile:standard" },
+        checksum: "sha256:1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
+        created_by: "lea@acme.dev",
+        created_at: iso(60 * 24 * 5),
+      },
+    ],
+  },
+  {
+    slug: "leas-scratchpad",
+    kind: "internal",
+    display_name: "Lea's scratchpad",
+    description: "An experiment of Lea's: it never runs in a workflow.",
+    status: "active",
+    owner: "lea@acme.dev",
+    latest_version: 1,
+    scope: "personal",
+    project: null,
+    can: { publish: true, manage: true, pin: false, fork_scopes: ["project", "personal"] },
+    cannot_reason: null,
+    versions: [
+      {
+        version: 1,
+        spec: { instructions: "Try ideas.", model: "profile:cheap" },
+        checksum: "sha256:3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
         created_by: "lea@acme.dev",
         created_at: iso(60 * 24),
       },
@@ -1861,6 +1940,36 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       notes: ["dropped skill `ghost`: not in the organisation, or not usable yet"],
       model: "mock/drafter",
     } as T;
+  }
+  if (method === "POST" && agentEcrit?.[2] === "/fork") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as AgentFork;
+    const source = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
+    if (agents.some((a) => a.slug === corps.slug)) throw new ApiError(409, { detail: `\`${corps.slug}\` already exists: a fork takes a new slug` });
+    const copied = source.versions?.find((v) => v.version === (corps.version ?? source.latest_version)) ?? source.versions![0]!;
+    const fork = {
+      slug: corps.slug,
+      kind: source.kind,
+      display_name: corps.display_name || `${source.display_name} (fork)`,
+      description: source.description ?? null,
+      status: "active",
+      owner: me.email,
+      latest_version: 1,
+      scope: corps.scope,
+      project: corps.scope === "project" ? (corps.project ?? null) : null,
+      forked_from: { slug: source.slug, version: copied.version, scope: source.scope ?? "org", latest_version: source.latest_version, behind: copied.version < source.latest_version, available: true },
+      can: { publish: true, manage: true, pin: corps.scope !== "personal", fork_scopes: ["org", "project", "personal"] },
+      cannot_reason: null,
+      versions: [{ version: 1, spec: copied.spec, checksum: copied.checksum, created_by: me.email }],
+    } as Agent;
+    agents.push(fork);
+    return structuredClone(fork) as T;
+  }
+  if (method === "POST" && agentEcrit?.[2] === "/scope") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as AgentScopeChange;
+    const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
+    agent.scope = corps.scope;
+    agent.project = corps.scope === "project" ? (corps.project ?? null) : null;
+    return structuredClone(agent) as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/agent-trials$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentTrialCreate;

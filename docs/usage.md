@@ -740,6 +740,16 @@ agent into one project (`org_admin`, refused while another project pins or names
 never moves. Existing agents were migrated by ADR 0061: those installed from the catalogue are common,
 every other one is an organisation agent — nothing changed hands and no pin moved.
 
+In the console, `/agents` carries a scope badge per agent (Common, Organisation, Project · name,
+Personal) and filter chips by scope. An agent's page disables its edit, publish, lifecycle and
+suspend controls when the API says `can.publish` or `can.manage` is false, and prints `cannot_reason`
+in the page itself (never only in a tooltip). **Fork** opens a dialog limited to `can.fork_scopes`
+(new slug, project, source version) and lands on the fork; a fork that is behind its source shows a
+banner, and whoever holds `can.manage` on a personal or project agent finds **Change scope** on its
+overview. A project's agents page lists the agents that project owns first, and its "Pin an agent"
+list leaves out personal agents and other projects' agents. `/agents/new` asks for a scope among those
+the person's memberships can create; the API stays the judge.
+
 The permissions behind it: `agent:manage` (org_admin: organisation and common agents),
 `agent:project_manage` (project_owner: the agents of that project) and `agent:create_personal`
 (developer, release captain, project owner: a personal agent).

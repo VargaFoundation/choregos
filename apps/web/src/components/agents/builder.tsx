@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
 import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
+import { scopeHint, scopeLabel } from "./registre";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usd } from "@/lib/format";
 import type { Agent, AgentSpec, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
@@ -173,6 +174,7 @@ export function AgentBuilder({
   start = {},
   initial,
   initialSample,
+  scopes,
   onDone,
   onCreated,
   onBack,
@@ -185,6 +187,12 @@ export function AgentBuilder({
   initial?: { display_name?: string; slug?: string; description?: string };
   /** The input "Try it" starts with, such as a drafted agent's sample (S39-05). */
   initialSample?: { title?: string; body?: string };
+  initial?: { display_name?: string; slug?: string; description?: string; scope?: string; project?: string };
+  /**
+   * Create mode: who the agent may belong to, among what the person may create (ADR 0061) and the
+   * projects to choose from. Absent, no scope is asked and the API's default (the organisation) applies.
+   */
+  scopes?: { options: Array<"org" | "project" | "personal">; projects: string[] };
   onDone?: (message: string) => void;
   /** Create mode: the agent that was registered, to go and read it. */
   onCreated?: (agent: Agent) => void;
@@ -197,6 +205,10 @@ export function AgentBuilder({
   // The slug follows the name until a person edits it: it never changes once the agent exists.
   const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState(initial?.description ?? "");
+  const wanted = scopes?.options.find((s) => s === initial?.scope) ?? scopes?.options[0];
+  const [scope, setScope] = useState<"org" | "project" | "personal" | undefined>(wanted);
+  const [project, setProject] = useState(initial?.project ?? "");
+  const projectChoice = project || scopes?.projects[0] || "";
   const [spec, setSpec] = useState<AgentSpec>(() => ({
     ...start,
     limits: { ...start.limits },
@@ -238,6 +250,7 @@ export function AgentBuilder({
           description: description.trim() || null,
           spec: cleanSpec(spec),
           lifecycle,
+          ...(scope ? { scope, project: scope === "project" ? projectChoice : null } : {}),
         });
         await client.invalidateQueries({ queryKey: ["agents", org] });
         onDone?.(`${agent.display_name} registered as v${agent.latest_version}${lifecycle === "draft" ? ", as a draft" : ""}`);
@@ -301,6 +314,34 @@ export function AgentBuilder({
                 )}
               </Field>
             </div>
+            {scopes && scopes.options.length > 0 && scope && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Scope" hint={scopeHint(scope)}>
+                  {(id) => (
+                    <Select id={id} value={scope} onChange={(e) => setScope(e.target.value as "org" | "project" | "personal")}>
+                      {scopes.options.map((s) => (
+                        <option key={s} value={s}>
+                          {scopeLabel(s)}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                {scope === "project" && (
+                  <Field label="Project">
+                    {(id) => (
+                      <Select id={id} value={projectChoice} onChange={(e) => setProject(e.target.value)}>
+                        {scopes.projects.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                )}
+              </div>
+            )}
             <Field label="Description" hint="What the agent is for, in a sentence or two. People read it in the registry.">
               {(id) => (
                 <Textarea id={id} rows={3} maxLength={4000} value={description} onChange={(e) => setDescription(e.target.value)} />

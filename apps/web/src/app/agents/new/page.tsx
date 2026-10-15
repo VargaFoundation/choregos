@@ -6,6 +6,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { slugFromName } from "@/components/agents/builder";
+import { creatableScopes, makeScopes } from "@/components/agents/registre";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { api, ApiError } from "@/lib/api";
 import type { AgentDraft } from "@/lib/types";
@@ -38,7 +41,20 @@ function NewAgent() {
   const [notes, setNotes] = useState<string[]>([]);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const { org } = useSession();
+  const { org, me } = useSession();
+  // `?scope=project&project=dev`: the project page's "New project agent" says where it starts.
+  const wantedScope = search.get("scope");
+  const wantedProject = search.get("project");
+  const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org), enabled: !!me && !!org, retry: false });
+  const allProjects = (projects.data?.items ?? []).map((p) => p.slug);
+  const configureUrl = `/agents/new?step=configure${wantedScope ? `&scope=${wantedScope}` : ""}${wantedProject ? `&project=${wantedProject}` : ""}`;
+  const creatable = me ? creatableScopes(me.memberships ?? [], org) : null;
+  const scopes = creatable
+    ? {
+        options: makeScopes(creatable, allProjects),
+        projects: creatable.org ? allProjects : creatable.projects,
+      }
+    : undefined;
   const ready = name.trim().length > 0 && description.trim().length >= MIN_DESCRIPTION;
 
   function toConfigure() {
@@ -46,7 +62,7 @@ function NewAgent() {
     setStart({});
     setSample(undefined);
     setNotes([]);
-    router.push("/agents/new?step=configure");
+    router.push(configureUrl);
   }
 
   /** One model call; nothing is saved. The form opens pre-filled and a person reviews it. */
@@ -59,7 +75,7 @@ function NewAgent() {
       setStart(draft.spec);
       setSample(draft.sample);
       setNotes(draft.notes ?? []);
-      router.push("/agents/new?step=configure");
+      router.push(configureUrl);
     } catch (cause) {
       setDraftError(
         cause instanceof ApiError && cause.status === 429
@@ -146,7 +162,8 @@ function NewAgent() {
             org={org}
             mode={{ kind: "create" }}
             start={start}
-            initial={initial}
+            initial={{ ...initial, scope: wantedScope ?? undefined, project: wantedProject ?? undefined }}
+            scopes={scopes}
             initialSample={sample}
             onBack={() => router.back()}
             onCreated={(agent) => router.push(`/agents/${agent.slug}`)}

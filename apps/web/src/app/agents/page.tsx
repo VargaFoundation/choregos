@@ -7,7 +7,8 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AgentCatalogue } from "@/components/agents/catalogue";
 import { LifecycleBadges } from "@/components/agents/lifecycle";
-import { resumeDeLaVersion } from "@/components/agents/registre";
+import { ScopeBadge, ScopeFilter } from "@/components/agents/governance";
+import { resumeDeLaVersion, scopeLabel, type AgentScope } from "@/components/agents/registre";
 import { Glossaire } from "@/components/glossaire";
 import {
   Badge,
@@ -49,7 +50,9 @@ function Agents() {
   const catalogue = useSearchParams().get("catalogue") === "1";
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   const metrics = useQuery({ queryKey: ["agent-metrics", org], queryFn: () => api.agentMetricsList(org) });
+  const [scope, setScope] = useState<AgentScope | null>(null);
   const [drawer, setDrawer] = useState<"catalogue" | null>(catalogue ? "catalogue" : null);
+  const shown = (agents.data ?? []).filter((a) => scope === null || (a.scope ?? "org") === scope);
   const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
@@ -71,6 +74,7 @@ function Agents() {
         </div>
       </div>
       <Glossaire ici="agents" />
+      {agents.data && agents.data.length > 0 && <ScopeFilter agents={agents.data} value={scope} onChange={setScope} />}
       <Card title="Registry" padding="none" className="overflow-hidden">
         {agents.error ? (
           <div className="p-5">
@@ -81,6 +85,10 @@ function Agents() {
         ) : agents.data.length === 0 ? (
           <div className="p-5">
             <Empty title="No agent yet">Create one, or add one from the catalogue.</Empty>
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="p-5">
+            <Empty title={`No ${scopeLabel(scope ?? undefined).toLowerCase()} agent`}>Pick another scope, or clear the filter.</Empty>
           </div>
         ) : (
           <Table data-testid="registre">
@@ -96,7 +104,7 @@ function Agents() {
               </TR>
             </THead>
             <TBody>
-              {agents.data.map((agent) => {
+              {shown.map((agent) => {
                 const m = parAgent.get(agent.slug);
                 return (
                   <TR key={agent.slug} interactive data-testid={`agent-${agent.slug}`}>
@@ -105,6 +113,9 @@ function Agents() {
                         {agent.display_name}
                       </Link>
                       <span className="ml-2 font-mono text-xs text-ink-muted">{agent.slug}</span>
+                      <span className="ml-2">
+                        <ScopeBadge agent={agent} />
+                      </span>
                       {agent.kind === "external" && (
                         <Badge tone="accent" className="ml-2">
                           External
