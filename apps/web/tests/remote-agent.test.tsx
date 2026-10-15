@@ -204,6 +204,11 @@ describe("registering a remote agent from its card (ADR 0062)", () => {
     expect(screen.queryByTestId("card-summary")).toBeNull();
   });
 
+  it("leaves a place for a per-type procedure above the card step", () => {
+    wrap(<RemoteAgentForm org="acme" onDone={vi.fn()} procedure={<p>Set up Rovo in four steps</p>} />);
+    expect(screen.getByTestId("remote-procedure")).toHaveTextContent("Set up Rovo");
+  });
+
   it("only an https card can be read", () => {
     wrap(<RemoteAgentForm org="acme" onDone={vi.fn()} />);
     fireEvent.change(screen.getByLabelText(/Card URL/), { target: { value: "http://plain.example/card" } });
