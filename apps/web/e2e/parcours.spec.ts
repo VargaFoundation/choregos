@@ -490,12 +490,15 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await page.getByLabel("Add a connector").selectOption("notify");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByTestId("connecteur-notify")).toBeVisible();
-  // Jira : le formulaire vient de son schéma, ses secrets se nomment par référence.
+  // Jira: the form comes from its schema; a secret is typed (a password, sealed by the platform,
+  // ADR 0058) or, for an operator, named by reference.
   await page.getByTestId("connecteur-tracker").getByRole("button", { name: "Edit" }).click();
   await page.getByTestId("connecteur-tracker").getByRole("combobox").first().selectOption("jira");
-  await page.getByLabel("api token").fill("s3cr3t");
-  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("a reference is expected");
-  await page.getByLabel("api token").fill("env:CONNECTOR_JIRA_TOKEN");
+  await expect(page.getByLabel("api token value")).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Use a reference instead" }).first().click();
+  await page.getByLabel("api token reference").fill("s3cr3t");
+  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("A reference is expected");
+  await page.getByLabel("api token reference").fill("env:CONNECTOR_JIRA_TOKEN");
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
   await expect(connecteurs).toBeVisible();
 });

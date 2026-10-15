@@ -71,10 +71,12 @@ export type {
   ActionEffect,
   ConnectorDiscovery,
   ConnectorOperation,
+  ConnectorSecretState,
   Integrations,
   OperationPatch,
   OrgConnector,
   OrgConnectorCreate,
+  OrgConnectorUpdate,
   ProjectOperation,
   ProjectRequirement,
 } from "@choregos/contracts/api";

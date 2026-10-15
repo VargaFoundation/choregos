@@ -13,6 +13,7 @@ import type {
   OperationPatch,
   OrgConnector,
   OrgConnectorCreate,
+  OrgConnectorUpdate,
   ProjectOperation,
   ProjectRequirement,
   AgentCatalogueConnection,
@@ -476,6 +477,17 @@ export const api = {
     request<OrgConnector>(`/orgs/${org}/connectors`, { method: "POST", body: JSON.stringify(body) }),
   deleteOrgConnector: (org: string, name: string) =>
     request<void>(`/orgs/${org}/connectors/${name}`, { method: "DELETE" }),
+  /** Edit a declared connector: its configuration, and its secrets by reference (ADR 0058). */
+  updateOrgConnector: (org: string, name: string, body: OrgConnectorUpdate) =>
+    request<OrgConnector>(`/orgs/${org}/connectors/${name}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /** A secret is typed once and never read back: the answer says it is set, not what it is. */
+  setOrgConnectorSecret: (org: string, name: string, field: string, value: string) =>
+    request<OrgConnector>(`/orgs/${org}/connectors/${name}/secrets/${field}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+  clearOrgConnectorSecret: (org: string, name: string, field: string) =>
+    request<OrgConnector>(`/orgs/${org}/connectors/${name}/secrets/${field}`, { method: "DELETE" }),
   updateConnectorOperation: (org: string, name: string, operation: string, body: OperationPatch) =>
     request<ConnectorOperation>(`/orgs/${org}/connectors/${name}/operations/${encodeURIComponent(operation)}`, {
       method: "PATCH",
@@ -498,6 +510,13 @@ export const api = {
   projectRequirements: (id: string) => request<ProjectRequirement[]>(`/projects/${qualify(id)}/requirements`),
   putConnector: (id: string, kind: string, body: unknown) =>
     request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}`, { method: "PUT", body: JSON.stringify(body) }),
+  setConnectorSecret: (id: string, kind: string, field: string, value: string) =>
+    request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}/secrets/${field}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+  clearConnectorSecret: (id: string, kind: string, field: string) =>
+    request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}/secrets/${field}`, { method: "DELETE" }),
   testConnector: (id: string, kind: string) =>
     request<ConnectorTestResult>(`/projects/${qualify(id)}/connectors/${kind}/test`, { method: "POST" }),
 

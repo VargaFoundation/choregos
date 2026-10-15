@@ -5,7 +5,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
-import { Button, Card, ErrorNote, Input, Select, StateBadge } from "@/components/ui";
+import {
+  EMPTY_DRAFT,
+  SecretField,
+  bodyOfDrafts,
+  estUneReference,
+  problemOfDraft,
+  type SecretDraft,
+} from "@/components/secret-field";
+import { Button, Card, ErrorNote, Select, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
@@ -27,10 +35,7 @@ export function lignesDeConnecteurs(exigences: ProjectRequirement[], configures:
   });
 }
 
-/** A secret reference, not a value: `scheme:rest` (`env:CONNECTOR_JIRA_TOKEN`). */
-export function estUneReference(valeur: string): boolean {
-  return /^[a-z][a-z0-9-]{1,31}:.+$/.test(valeur);
-}
+export { estUneReference };
 
 export function Connecteurs({ slug }: { slug: string }) {
   const client = useQueryClient();
@@ -42,6 +47,7 @@ export function Connecteurs({ slug }: { slug: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   if (exigences.error) return <ErrorNote>{String(exigences.error)}</ErrorNote>;
+  const actuelDe = (sorte: string) => (connecteurs.data ?? []).find((c) => c.kind === sorte);
   const parSorte = new Map((exigences.data ?? []).map((e) => [e.capability, e]));
   const lignes = [...lignesDeConnecteurs(exigences.data ?? [], connecteurs.data ?? []), ...ajoutees];
   const autres = [...new Set((types.data ?? []).map((t) => t.kind))].filter((k) => !lignes.includes(k)).sort();
@@ -63,8 +69,9 @@ export function Connecteurs({ slug }: { slug: string }) {
     <Card title="Connectors" className="lg:col-span-2">
       <div className="space-y-3">
         <p className="text-sm text-ink-muted">
-          What this project&apos;s workflows need, and why. A secret is never typed here: name it by reference
-          (<code>env:NAME</code>), the platform reads it when the connector is used. Systems the whole organisation
+          What this project&apos;s workflows need, and why. A secret is typed once and stored encrypted: the console
+          then only shows that it is set and when it last changed. An operator may name it by reference
+          (<code>env:NAME</code>) instead. Systems the whole organisation
           shares — a directory, MCP servers — are declared in{" "}
           <Link href="/admin/connectors" className="underline">
             Admin › connectors
@@ -90,6 +97,22 @@ export function Connecteurs({ slug }: { slug: string }) {
               actuel={(connecteurs.data ?? []).find((c) => c.kind === sorte)}
               types={(types.data ?? []).filter((t) => t.kind === sorte)}
               onSave={(corps) => agir(() => api.putConnector(slug, sorte, corps), `${sorte} connector saved`)}
+              onSecret={(field, draft) =>
+                agir(async () => {
+                  if (draft.mode === "value") await api.setConnectorSecret(slug, sorte, field, draft.text);
+                  else {
+                    const refs = { ...(actuelDe(sorte)?.secret_refs ?? {}), [field]: draft.text };
+                    await api.putConnector(slug, sorte, {
+                      type: actuelDe(sorte)?.type,
+                      config: actuelDe(sorte)?.config ?? {},
+                      secret_refs: refs,
+                    });
+                  }
+                }, `${sorte}: ${field.replaceAll("_", " ")} saved`)
+              }
+              onClearSecret={(field) =>
+                agir(() => api.clearConnectorSecret(slug, sorte, field), `${sorte}: ${field.replaceAll("_", " ")} cleared`)
+              }
               onTest={() =>
                 agir(async () => {
                   const resultat = await api.testConnector(slug, sorte);
@@ -143,13 +166,17 @@ function Ligne({
   actuel,
   types,
   onSave,
+  onSecret,
+  onClearSecret,
   onTest,
 }: {
   sorte: string;
   exigence?: ProjectRequirement;
   actuel?: ConnectorDto;
   types: ConnectorType[];
-  onSave: (corps: { type: string; config: Record<string, unknown>; secret_refs: Record<string, string> }) => Promise<void>;
+  onSave: (corps: ConnectorBody) => Promise<void>;
+  onSecret: (field: string, draft: SecretDraft) => Promise<void>;
+  onClearSecret: (field: string) => Promise<void>;
   onTest: () => Promise<void>;
 }) {
   const [ouvert, setOuvert] = useState(false);
@@ -200,6 +227,8 @@ function Ligne({
         <Formulaire
           types={types}
           actuel={actuel}
+          onSecret={onSecret}
+          onClearSecret={onClearSecret}
           onSave={async (corps) => {
             await onSave(corps);
             setOuvert(false);
@@ -210,30 +239,51 @@ function Ligne({
   );
 }
 
-/** Le type, sa configuration tirée de son schéma, et ses secrets en références. */
+type ConnectorBody = {
+  type: string;
+  config: Record<string, unknown>;
+  secret_refs: Record<string, string>;
+  secret_values: Record<string, string>;
+};
+
+/**
+ * The type, its configuration drawn from its schema, and its secrets (ADR 0058). A secret that is
+ * already set is replaced or cleared on the spot (its own call, the value never comes back); one
+ * that is not is typed here and goes with Save. The references already held are sent again, since a
+ * save replaces them; a stored value the body does not name is kept by the API.
+ */
 function Formulaire({
   types,
   actuel,
   onSave,
+  onSecret,
+  onClearSecret,
 }: {
   types: ConnectorType[];
   actuel?: ConnectorDto;
-  onSave: (corps: { type: string; config: Record<string, unknown>; secret_refs: Record<string, string> }) => Promise<void>;
+  onSave: (corps: ConnectorBody) => Promise<void>;
+  onSecret: (field: string, draft: SecretDraft) => Promise<void>;
+  onClearSecret: (field: string) => Promise<void>;
 }) {
   const [type, setType] = useState(actuel?.type ?? types[0]?.type ?? "");
   const [config, setConfig] = useState<Record<string, unknown>>(actuel?.config ?? {});
-  const [references, setReferences] = useState<Record<string, string>>(actuel?.secret_refs ?? {});
+  const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const choisi = types.find((t) => t.type === type);
   const schema = (choisi?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
   const manquants = champsManquants(schema, config);
-  const illisibles = Object.entries(references).filter(([, v]) => v && !estUneReference(v));
+  const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
+  const memeType = actuel?.type === type;
+  const etats = memeType ? (actuel?.secrets ?? []) : [];
   return (
     <form
       className="mt-3 space-y-3 border-t border-line pt-3 text-sm"
       onSubmit={(event) => {
         event.preventDefault();
-        const refs = Object.fromEntries(Object.entries(references).filter(([, v]) => v));
-        void onSave({ type, config, secret_refs: refs });
+        const kept = Object.fromEntries(
+          etats.filter((s) => s.source === "reference" && s.reference).map((s) => [s.field, s.reference as string]),
+        );
+        const { secret_values, secret_refs } = bodyOfDrafts(secrets);
+        void onSave({ type, config, secret_refs: { ...kept, ...secret_refs }, secret_values });
       }}
     >
       <label className="block space-y-1">
@@ -244,7 +294,7 @@ function Formulaire({
           onChange={(event) => {
             setType(event.target.value);
             setConfig({});
-            setReferences({});
+            setSecrets({});
           }}
         >
           {types.map((t) => (
@@ -257,23 +307,26 @@ function Formulaire({
       <SchemaForm schema={schema} value={config} onChange={setConfig} />
       {(choisi?.secret_fields ?? []).length > 0 && (
         <fieldset className="space-y-2">
-          <legend className="text-xs text-ink-muted">Secrets — by reference, never the value</legend>
-          {(choisi?.secret_fields ?? []).map((champ) => (
-            <label key={champ} className="block space-y-1">
-              <span className="text-xs text-ink-muted">{champ.replaceAll("_", " ")}</span>
-              <Input
-                className="w-full font-mono"
-                placeholder="env:NAME"
-                value={references[champ] ?? ""}
-                onChange={(event) => setReferences({ ...references, [champ]: event.target.value })}
+          <legend className="text-xs text-ink-muted">Secrets — typed once, never shown again</legend>
+          {(choisi?.secret_fields ?? []).map((champ) => {
+            const etat = etats.find((s) => s.field === champ);
+            return etat ? (
+              <SecretField
+                key={champ}
+                field={champ}
+                state={etat}
+                onSave={(draft) => onSecret(champ, draft)}
+                onClear={() => onClearSecret(champ)}
               />
-            </label>
-          ))}
-          {illisibles.length > 0 && (
-            <p className="text-xs text-danger" role="alert">
-              {illisibles.map(([champ]) => champ).join(", ")}: a reference is expected (env:NAME), not a value
-            </p>
-          )}
+            ) : (
+              <SecretField
+                key={champ}
+                field={champ}
+                draft={secrets[champ] ?? EMPTY_DRAFT}
+                onChange={(draft) => setSecrets({ ...secrets, [champ]: draft })}
+              />
+            );
+          })}
         </fieldset>
       )}
       <div className="flex justify-end">

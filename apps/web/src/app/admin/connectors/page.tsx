@@ -5,16 +5,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { estUneReference } from "@/components/connecteurs";
 import { OutilsDeLivraison, rangerLesConnecteurs } from "@/components/connecteurs-org";
 import { resumeDeLaDecouverte } from "@/components/decouverte";
 import { Glossaire } from "@/components/glossaire";
 import { SchemaForm, champsManquants, type JsonSchema } from "@/components/schema-form";
+import { EMPTY_DRAFT, SecretField, bodyOfDrafts, problemOfDraft, type SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { estUneSorteDuProjet, libelleDeSorte } from "@/lib/sortes-de-connecteurs";
-import type { ConnectorOperation, OperationPatch, OrgConnector } from "@/lib/types";
+import type { ConnectorOperation, ConnectorSecretState, OperationPatch, OrgConnector } from "@/lib/types";
 import { Confirmation } from "@/components/geste-confirme";
 
 const POLITIQUES = ["allowed", "approval", "forbidden"] as const;
@@ -98,6 +98,8 @@ export default function OrgConnectorsPage() {
 
 function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
   const client = useQueryClient();
+  const types = useQuery({ queryKey: ["connector-types"], queryFn: () => api.connectorTypes() });
+  const type = (types.data ?? []).find((t) => t.kind === instance.kind && t.type === instance.type);
   const [diff, setDiff] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   async function decouvrir() {
@@ -128,6 +130,7 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
         </p>
       )}
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
+      <Secrets org={org} instance={instance} fields={type?.secret_fields ?? []} schema={type?.config_schema} />
       {(instance.operations ?? []).length === 0 ? (
         <p className="text-sm text-ink-muted">
           {instance.kind === "mcp"
@@ -156,6 +159,99 @@ function Instance({ org, instance }: { org: string; instance: OrgConnector }) {
       )}
     </Card>
   );
+}
+
+/**
+ * The secrets of a declared connector, and its settings (ADR 0058). A secret is typed once: the
+ * console only knows that it is set, when and by whom, and offers to replace or clear it. The
+ * settings (its configuration) are edited in place.
+ */
+function Secrets({
+  org,
+  instance,
+  fields,
+  schema,
+}: {
+  org: string;
+  instance: OrgConnector;
+  fields: string[];
+  schema?: unknown;
+}) {
+  const client = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [config, setConfig] = useState<Record<string, unknown>>(instance.config ?? {});
+  const [erreur, setErreur] = useState<string | null>(null);
+  const names = [...new Set([...fields, ...(instance.secrets ?? []).map((s) => s.field)])];
+  const refresh = () => client.invalidateQueries({ queryKey: ["org-connectors", org] });
+  const jsonSchema = (schema ?? { type: "object", properties: {} }) as JsonSchema;
+  if (names.length === 0 && Object.keys(jsonSchema.properties ?? {}).length === 0) return null;
+  async function saveConfig() {
+    setErreur(null);
+    try {
+      await api.updateOrgConnector(org, instance.name, { config });
+      setEditing(false);
+      await refresh();
+    } catch (cause) {
+      setErreur(cause instanceof Error ? cause.message : "refused");
+    }
+  }
+  return (
+    <div className="mb-3 space-y-2 border-b border-line pb-3" data-testid={`secrets-${instance.name}`}>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-medium">Secrets and settings</h3>
+        <Button size="sm" onClick={() => setEditing(!editing)}>
+          {editing ? "Close settings" : "Edit settings"}
+        </Button>
+      </div>
+      {editing && (
+        <form
+          className="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveConfig();
+          }}
+        >
+          <SchemaForm schema={jsonSchema} value={config} onChange={setConfig} />
+          <Button size="sm" tone="primary" type="submit" disabled={champsManquants(jsonSchema, config).length > 0}>
+            Save settings
+          </Button>
+          {erreur && <ErrorNote>{erreur}</ErrorNote>}
+        </form>
+      )}
+      {names.map((field) => {
+        const state = (instance.secrets ?? []).find((s) => s.field === field);
+        return (
+          <ExistingOrNew key={field} org={org} instance={instance} field={field} state={state} onDone={refresh} />
+        );
+      })}
+    </div>
+  );
+}
+
+/** A configured field: replace or clear. A field never set: a first value, typed once. */
+function ExistingOrNew({
+  org,
+  instance,
+  field,
+  state,
+  onDone,
+}: {
+  org: string;
+  instance: OrgConnector;
+  field: string;
+  state: ConnectorSecretState | undefined;
+  onDone: () => Promise<unknown>;
+}) {
+  const save = async (draft: SecretDraft) => {
+    if (draft.mode === "value") await api.setOrgConnectorSecret(org, instance.name, field, draft.text);
+    else await api.updateOrgConnector(org, instance.name, { secret_refs: { [field]: draft.text } });
+    await onDone();
+  };
+  const clear = async () => {
+    await api.clearOrgConnectorSecret(org, instance.name, field);
+    await onDone();
+  };
+  return <SecretField field={field} state={state} onSave={save} onClear={clear} />;
 }
 
 function Operation({ org, connecteur, operation }: { org: string; connecteur: string; operation: ConnectorOperation }) {
@@ -298,7 +394,7 @@ function Declarer({ org }: { org: string }) {
   // `?type=documents/sharepoint` preselects the type (the knowledge form links here).
   const [choix, setChoix] = useState(useSearchParams().get("type") ?? "");
   const [config, setConfig] = useState<Record<string, unknown>>({});
-  const [references, setReferences] = useState<Record<string, string>>({});
+  const [secrets, setSecrets] = useState<Record<string, SecretDraft>>({});
   const [erreur, setErreur] = useState<string | null>(null);
   // Les outils de livraison d'un projet se règlent dans le projet : ils ne se déclarent pas ici.
   const candidats = (types.data ?? []).filter((t) => !estUneSorteDuProjet(t.kind));
@@ -308,7 +404,7 @@ function Declarer({ org }: { org: string }) {
   ].filter((famille) => famille.types.length > 0);
   const type = candidats.find((t) => `${t.kind}/${t.type}` === choix);
   const schema = (type?.config_schema ?? { type: "object", properties: {} }) as JsonSchema;
-  const illisibles = Object.values(references).filter((v) => v && !estUneReference(v));
+  const illisibles = Object.values(secrets).filter((draft) => problemOfDraft(draft) !== null);
   async function declarer() {
     if (!type) return;
     setErreur(null);
@@ -318,12 +414,12 @@ function Declarer({ org }: { org: string }) {
         type: type.type,
         kind: type.kind,
         config,
-        secret_refs: Object.fromEntries(Object.entries(references).filter(([, v]) => v)),
+        ...bodyOfDrafts(secrets),
       });
       setNom("");
       setChoix("");
       setConfig({});
-      setReferences({});
+      setSecrets({});
       await client.invalidateQueries({ queryKey: ["org-connectors", org] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "refused");
@@ -361,7 +457,7 @@ function Declarer({ org }: { org: string }) {
                 onChange={(e) => {
                   setChoix(e.target.value);
                   setConfig({});
-                  setReferences({});
+                  setSecrets({});
                 }}
               >
                 <option value="">—</option>
@@ -379,21 +475,13 @@ function Declarer({ org }: { org: string }) {
           </div>
           {type && <SchemaForm schema={schema} value={config} onChange={setConfig} />}
           {(type?.secret_fields ?? []).map((champ) => (
-            <label key={champ} className="block space-y-1">
-              <span className="text-xs text-ink-muted">{champ.replaceAll("_", " ")} (by reference)</span>
-              <Input
-                className="w-full font-mono"
-                placeholder="env:NAME"
-                value={references[champ] ?? ""}
-                onChange={(event) => setReferences({ ...references, [champ]: event.target.value })}
-              />
-            </label>
+            <SecretField
+              key={champ}
+              field={champ}
+              draft={secrets[champ] ?? EMPTY_DRAFT}
+              onChange={(draft) => setSecrets({ ...secrets, [champ]: draft })}
+            />
           ))}
-          {illisibles.length > 0 && (
-            <p className="text-xs text-danger" role="alert">
-              A reference is expected (env:NAME), not a value
-            </p>
-          )}
           {erreur && <ErrorNote>{erreur}</ErrorNote>}
           <Button
             type="submit"

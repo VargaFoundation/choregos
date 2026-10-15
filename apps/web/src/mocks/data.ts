@@ -1587,6 +1587,14 @@ export const connectorTypes: ConnectorType[] = [
   { kind: "gateway", type: "litellm", display: "LiteLLM", config_schema: objet({ base_url: { type: "string" } }), capabilities: ["gateway"], secret_fields: ["master_key"] },
   { kind: "notify", type: "slack", display: "Slack", config_schema: objet({ channel: { type: "string" } }), capabilities: ["notify"], secret_fields: ["webhook_url", "bot_token"] },
   { kind: "identity", type: "entra", display: "Microsoft Entra ID", config_schema: objet({ tenant: { type: "string" } }, ["tenant"]), capabilities: ["identity"], secret_fields: ["client_secret"] },
+  {
+    kind: "documents",
+    type: "sharepoint",
+    display: "SharePoint / OneDrive",
+    config_schema: objet({ tenant_id: { type: "string" }, client_id: { type: "string" } }, ["tenant_id", "client_id"]),
+    capabilities: ["documents"],
+    secret_fields: ["client_secret"],
+  },
 ];
 
 /** Un annuaire de l'organisation (ADR 0034) : chaque opération porte sa politique. */
@@ -1597,6 +1605,8 @@ export const orgConnectors: OrgConnector[] = [
     type: "entra",
     config: { tenant: "acme.onmicrosoft.com" },
     secret_refs: { client_secret: "env:CONNECTOR_ENTRA_CLIENT_SECRET" },
+    // A reference an operator wrote: the console shows it as such (ADR 0058).
+    secrets: [{ field: "client_secret", source: "reference", reference: "env:CONNECTOR_ENTRA_CLIENT_SECRET" }],
     status: "ok",
     created_by: "lea@acme.dev",
     operations: [
@@ -1612,7 +1622,9 @@ orgConnectors.push({
   kind: "mcp",
   type: "mcp",
   config: { url: "https://supplier.example/mcp" },
-  secret_refs: { token: "env:CONNECTOR_SUPPLIER_TOKEN" },
+  secret_refs: { token: "store:connector/supplier-agent/token" },
+  // A value typed in the console: the console only knows it is set, when and by whom.
+  secrets: [{ field: "token", source: "store", version: 2, rotated_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), rotated_by: "lea@acme.dev" }],
   status: "ok",
   operations: [
     { name: "track_order", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
@@ -1906,6 +1918,61 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       temporal_wf_id: `action-${action.id}`,
     } as T;
   }
+  // Connector secrets (ADR 0058): the mock keeps what the console may know — set, version, who — and,
+  // like the API, never a value.
+  if (/^\/orgs\/[^/]+\/connectors(\/|$)/.test(chemin ?? "") && !/\/(discover|operations)/.test(chemin ?? "")) {
+    const [, , , , nom, , champ] = (chemin ?? "").split("/");
+    const corps = JSON.parse(String(init.body ?? "{}")) as {
+      name?: string;
+      kind?: string;
+      type?: string;
+      config?: Record<string, unknown>;
+      secret_refs?: Record<string, string>;
+      secret_values?: Record<string, string>;
+    };
+    const maintenant = new Date().toISOString();
+    const etat = (field: string, version = 1): NonNullable<OrgConnector["secrets"]>[number] => ({
+      field,
+      source: "store",
+      version,
+      rotated_at: maintenant,
+      rotated_by: me.email,
+    });
+    if (method === "POST" && !nom) {
+      const cree: OrgConnector = {
+        name: corps.name ?? "new",
+        kind: corps.kind ?? "mcp",
+        type: corps.type ?? "mcp",
+        config: corps.config ?? {},
+        secret_refs: {
+          ...(corps.secret_refs ?? {}),
+          ...Object.fromEntries(Object.keys(corps.secret_values ?? {}).map((f) => [f, `store:connector/${corps.name}/${f}`])),
+        },
+        secrets: [
+          ...Object.keys(corps.secret_values ?? {}).map((f) => etat(f)),
+          ...Object.entries(corps.secret_refs ?? {}).map(([f, r]) => ({ field: f, source: "reference" as const, reference: r })),
+        ],
+        status: "unknown",
+        operations: [],
+      };
+      orgConnectors.push(cree);
+      return cree as T;
+    }
+    const cible = orgConnectors.find((c) => c.name === nom);
+    if (cible && method === "PUT" && champ) {
+      const avant = cible.secrets?.find((s) => s.field === champ);
+      cible.secrets = [...(cible.secrets ?? []).filter((s) => s.field !== champ), etat(champ, (avant?.version ?? 0) + 1)];
+      return structuredClone(cible) as T;
+    }
+    if (cible && method === "DELETE" && champ) {
+      cible.secrets = (cible.secrets ?? []).filter((s) => s.field !== champ);
+      return structuredClone(cible) as T;
+    }
+    if (cible && method === "PATCH") {
+      cible.config = corps.config ?? cible.config;
+      return structuredClone(cible) as T;
+    }
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
@@ -1917,6 +1984,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const statut = new URLSearchParams(path.split("?")[1] ?? "").get("status");
     return actions.filter((a) => !statut || a.status === statut) as T;
   }
+  // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
+  // would be seen by the query cache as unchanged.
+  if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
   if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
