@@ -77,7 +77,7 @@ export default function OrgConnectorsPage() {
           supplier&apos;s agent served over MCP is declared here — to Choregos it is a tool server. To let <em>your</em>{" "}
           assistant call Choregos, see{" "}
           <Link href="/integrations" className="underline">
-            AI clients
+            Integrations
           </Link>
           .
         </p>
