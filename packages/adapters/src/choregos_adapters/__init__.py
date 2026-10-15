@@ -246,6 +246,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "warm_pool": {"type": "string", "default": "choregos-runner"},
                 "assignment_port": _ENTIER,
                 "runtime_class": _TEXTE,
+                "pool_image": _TEXTE,
                 "max_active": _ENTIER,
                 "env_from_secrets": {"type": "array", "items": _TEXTE},
             }
@@ -779,6 +780,9 @@ def _register_builtins() -> None:
             # The template's RuntimeClass, which the chart sets from `runner.runtimeClass`.
             runtime_class=cfg.get("runtime_class", os.environ.get("CHOREGOS_RUNNER_RUNTIME_CLASS", ""))
             or None,
+            # The chart builds the warm pool's template and the orchestrator's `CHOREGOS_RUNNER_IMAGE`
+            # from the same value: a run asking for another image cannot be honoured.
+            pool_image=cfg.get("pool_image", os.environ.get("CHOREGOS_RUNNER_IMAGE", "")) or None,
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
             env_from_secrets=cfg.get("env_from_secrets")
             or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
