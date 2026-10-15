@@ -445,6 +445,25 @@ choregos projects create staffing --name "Staffing"            # no --repo: trac
 choregos items create staffing --title "Data PM for 6 months" --size M
 ```
 
+## HTTPS behind a platform-issued certificate
+
+An instance has **one host**: `global.publicUrl` (the console) and `global.apiUrl` (the API) are
+what the API builds everything from, namely the OIDC `redirect_uri`
+(`<apiUrl>/api/v1/auth/callback`), the MCP OAuth resource metadata, the commands on the
+Integrations page and the links in notifications. Serve it over HTTPS by putting TLS on the
+ingress (the certificate comes from the platform, or from cert-manager) and by setting both
+URLs to `https://…`. Nothing else follows from the chart: the console's CSP and CORS are derived
+from the same two values.
+
+The session cookie and the sign-in handshake cookie are `Secure` when `CHOREGOS_ENV` is
+`staging` or `prod`, **or when `publicUrl` or `apiUrl` starts with `https://`**, in any
+environment. A dev tenant served over HTTPS therefore never sends its session cookie in clear;
+a bench on `http://localhost` keeps working because its cookie is not `Secure`. A browser only
+returns a `Secure` cookie over HTTPS, so a deployment whose URLs say `https` but whose ingress
+still answers on plain HTTP cannot sign in: redirect HTTP to HTTPS at the ingress. When you move
+a deployment to a new host, register the new `<apiUrl>/api/v1/auth/callback` at the identity
+provider before switching, and keep the old one until the old host only redirects.
+
 ## Identity: what the OIDC provider must give us
 
 Any OIDC issuer works: the API reads `<issuer>/.well-known/openid-configuration` and uses
