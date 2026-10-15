@@ -196,6 +196,9 @@ async def test_an_import_pins_the_commit_and_records_where_the_skill_comes_from(
         "sha": SHA1,
         "path": "skills/onboarding",
         "licence": "Apache-2.0",
+        # Not from the skills catalogue (ADR 0065): those two say nothing.
+        "catalogue": None,
+        "delivery": None,
     }
     assert ("tarball", "github.com/anthropics/skills", SHA1) in fake.calls
 

@@ -758,6 +758,25 @@ digest on each skill, and writes the catalogue, the bundled tree and `THIRD_PART
 byte for byte; `make catalogues-check` fails when one differs. A line asking for `delivery: bundled`
 is a request: a skill that is not eligible is delivered by `git` and the generator says so.
 
+**Installing a catalogue skill** is `POST /orgs/{org}/skill-catalogue/{entry_id}/install` (*Skills →
+Catalogue* in the console), and `GET /orgs/{org}/skill-catalogue` shows what each entry means in your
+organisation: `available`, `installed`, `update` (the catalogue pins a newer version), `pending_review`
+(installed, waiting for a second administrator) or `blocked` with the reason (a skill of that name that
+does not come from the catalogue, or a permission you lack). An install publishes an ordinary skill
+version through the same door as an import, so **the gate runs again**: the `risk` the catalogue shows is
+what it said when the catalogue was generated, and a test asserts it equals what the install gets for
+every entry. A `bundled` entry is read from the image and checked against its sha256 provenance (a
+changed file is refused with `502`); a `git` entry is fetched at its pinned commit from
+`codeload.github.com` and must hash to the digest the catalogue carries. A `bundled` version is approved
+by `platform` like the agent catalogue's skills, and never when the gate calls it high risk; a `git`
+version is an ordinary import: a high-risk one waits for a second administrator, so an agent can neither
+pin nor carry it until then. An administrator installs any entry; a project owner (`skill:import`) a
+**new** skill from a repository in the organisation's allowlist
+(`GET|PUT /orgs/{org}/skill-sources`, [ADR 0050](adr/0050-skill-supply-chain-gate.md) unchanged). A skill
+of the same name that was not installed from the entry is **left untouched** (`409`), and an entry
+already installed at this version answers `409`. Nothing follows upstream by itself: an `update` is a
+newer catalogue release and a person clicking.
+
 A workflow actor **names** an agent — `{type: agent, role: implement, agent: onboarding-coordinator}`,
 or `…@2` for a given version. The run then takes the project's pinned version (else the latest),
 overrides applied: its model, its limits and its budget, which only tighten the actor's own. Its

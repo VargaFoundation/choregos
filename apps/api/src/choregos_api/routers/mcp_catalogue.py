@@ -29,13 +29,12 @@ from ..schemas import (
     OrgConnectorCreate,
     OrgConnectorDto,
 )
+from ..services.catalogues import egress_of
 from .org_connectors import _administrer, _organisation, declare_org_connector
 
 router = APIRouter(tags=["connectors"])
 
 EntryId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
-
-Egress = Literal["open", "undeclared", "unknown"]
 
 
 def _site_path() -> str | None:
@@ -47,26 +46,6 @@ def _catalogue() -> catalogue.McpCatalogue:
         return catalogue.load_with_site(_site_path())
     except CatalogueError as refusal:
         raise unprocessable(f"the site MCP catalogue is invalid: {refusal}") from refusal
-
-
-def host_open(host: str, declared: list[str]) -> bool:
-    """`mcp.notion.com` is open when the deployment declares it, or a `*.notion.com` wildcard."""
-    host = host.lower()
-    for pattern in (d.lower().strip() for d in declared):
-        if pattern == host or (pattern.startswith("*.") and host.endswith(pattern[1:])):
-            return True
-    return False
-
-
-def egress_of(entry: catalogue.McpEntry, declared: list[str]) -> Egress:
-    """Whether the deployment says the API can reach the entry's host.
-
-    `unknown` when the deployment declares nothing (the common case: the network policy is not the
-    API's to describe) or the entry has no host to reach. `undeclared` is a warning, not a verdict:
-    the network policy decides, this only tells the administrator before a silent timeout."""
-    if not declared or not entry.egress_hosts:
-        return "unknown"
-    return "open" if all(host_open(h, declared) for h in entry.egress_hosts) else "undeclared"
 
 
 def _version_of(connector_entry: str) -> tuple[str, str]:
@@ -90,7 +69,7 @@ def _dto(
         install=entry.install,
         state=state,
         installed_as=[name for name, _ in here],
-        egress=egress_of(entry, declared),
+        egress=egress_of(entry.egress_hosts, declared),
     )
     return McpCatalogueEntryDto.model_validate(body)
 

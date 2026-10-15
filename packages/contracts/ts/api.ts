@@ -430,6 +430,48 @@ export type McpCatalogueInstall = {
   auth_header?: string | null;
 };
 
+export type SkillCatalogueSignals = {
+  stars: number | null;
+  stars_as_of: string | null;
+};
+
+export type SkillCatalogueEntry = {
+  /** the skill's name, as its SKILL.md says it */
+  id: string;
+  title: string;
+  description: string;
+  publisher: string;
+  repo: string;
+  /** the pinned commit */
+  sha: string;
+  path: string;
+  /** SPDX */
+  licence: string;
+  licence_class: "permissive" | "copyleft";
+  files: number;
+  bytes: number;
+  /** sha256 of the files, as the runner recomputes it */
+  digest: string;
+  /** the gate's answer when the catalogue was generated; the gate runs again at install */
+  risk: "low" | "medium" | "high";
+  findings_count: number;
+  categories: Array<string>;
+  signals: SkillCatalogueSignals;
+  /** vendored in the image, or fetched at its pinned commit */
+  delivery: "bundled" | "git";
+  state: "available" | "installed" | "update" | "pending_review" | "blocked";
+  /** the version of the organisation's skill, when there is one */
+  installed_version?: number | null;
+  blocked_reason?: string | null;
+  /** for a git entry, whether the deployment declares codeload.github.com reachable from the API */
+  egress: "open" | "undeclared" | "unknown";
+};
+
+export type SkillCatalogue = {
+  meta: CatalogueMeta;
+  entries: Array<SkillCatalogueEntry>;
+};
+
 export type OrgConnectorCreate = {
   name: string;
   type: string;
@@ -1092,6 +1134,10 @@ export type SkillSource = {
   path: string;
   /** an SPDX identifier, LicenseRef-proprietary, LicenseRef-unknown, or null when none was found */
   licence?: string | null;
+  /** `<id>@<catalogue_version>` when installed from the skills catalogue (ADR 0065) */
+  catalogue?: string | null;
+  /** for a catalogue install, whether the files came from the image or from the pinned commit */
+  delivery?: "bundled" | "git" | null;
 };
 
 export type SkillVersion = {
@@ -2474,6 +2520,7 @@ export interface Operations {
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
   installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
+  installSkillCatalogueEntry: { method: "POST"; path: "/orgs/{org}/skill-catalogue/{entry_id}/install"; body: never; response: Skill };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2509,6 +2556,7 @@ export interface Operations {
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
+  listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };

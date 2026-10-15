@@ -60,3 +60,37 @@ class McpCatalogueInstall(Dto):
     name: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{1,62}$")
     secret_refs: dict[str, str] = Field(default_factory=dict)
     auth_header: str | None = Field(default=None, pattern=r"^[A-Za-z0-9-]{1,64}$")
+
+
+class SkillCatalogueSignalsDto(Dto):
+    stars: int | None = None
+    stars_as_of: date | None = None
+
+
+class SkillCatalogueEntryDto(Dto):
+    id: str
+    title: str
+    description: str
+    publisher: str
+    repo: str
+    sha: str
+    path: str
+    licence: str
+    licence_class: Literal["permissive", "copyleft"]
+    files: int
+    bytes: int
+    digest: str
+    risk: Literal["low", "medium", "high"]
+    findings_count: int
+    categories: list[str]
+    signals: SkillCatalogueSignalsDto
+    delivery: Literal["bundled", "git"]
+    state: Literal["available", "installed", "update", "pending_review", "blocked"]
+    installed_version: int | None = None
+    blocked_reason: str | None = None
+    egress: Literal["open", "undeclared", "unknown"]
+
+
+class SkillCatalogueDto(Dto):
+    meta: CatalogueMetaDto
+    entries: list[SkillCatalogueEntryDto]
