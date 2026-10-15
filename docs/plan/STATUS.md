@@ -365,6 +365,10 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 **Total** : 247 livrées, 93 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+| S39-13a | S39 | 🟡 | #572 | a workflow step names its registry agent, its inputs, its typed outputs and whether it writes the branch; the graph carries the artifact flow (who produces, who reads, context documents, pull-request sections); `GET /projects/{id}/agent-resolution` says which agent version a run would load, through the runtime's own resolver. Proves: dev-complex's steps and flow (`test_process_view_names_the_agent`, `test_artifact_flow`), the resolution for pinned, explicit, draft, absent and catalogue agents (`test_agent_resolution`), the pull request body built from the shared sections (`test_pull_request_body`). Does not prove: anything in the console (S39-13b); a flow that is wrong because an agent writes a document its transition does not declare (only declared outputs count). |
+
+
+
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

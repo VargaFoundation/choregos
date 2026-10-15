@@ -390,6 +390,22 @@ class AgentMetricsSummary(Dto):
     cost_usd: float = 0.0
 
 
+class AgentResolution(Dto):
+    """Which agent version a run would load for a reference (S39-13), through the runtime's resolver."""
+
+    ref: str
+    slug: str
+    status: Literal["resolved", "not_installed", "unavailable"]
+    version: int | None = None
+    #: True when the version comes from the project's pin (no explicit `@N` in the reference).
+    pinned: bool = False
+    display_name: str | None = None
+    lifecycle: str | None = None
+    #: For `not_installed`: publishing the workflow installs the agent from the catalogue (ADR 0040).
+    in_catalogue: bool = False
+    reason: str | None = None
+
+
 class ImplicitAgent(Dto):
     """A workflow actor that runs as an agent without naming one of the registry (S30-04)."""
 

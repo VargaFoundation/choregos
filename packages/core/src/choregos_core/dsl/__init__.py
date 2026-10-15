@@ -10,6 +10,7 @@ from pathlib import Path
 from choregos_contracts import Workflow
 
 from .engine import Decision, WorkflowEngine
+from .flow import CONTEXT_DOCUMENTS, PULL_REQUEST_SECTIONS, artifact_flow
 from .graph import to_graph, to_mermaid
 from .parser import checksum, dump_workflow, parse_workflow, parse_workflow_file
 from .process import RESUMES, to_process
@@ -80,12 +81,15 @@ def template_yaml(name: str) -> str:
 
 
 __all__ = [
+    "CONTEXT_DOCUMENTS",
+    "PULL_REQUEST_SECTIONS",
     "RESUMES",
     "TEMPLATES_DIR",
     "TEMPLATE_NAMES",
     "Decision",
     "ValidationReport",
     "WorkflowEngine",
+    "artifact_flow",
     "checksum",
     "dump_workflow",
     "extra_templates_dirs",

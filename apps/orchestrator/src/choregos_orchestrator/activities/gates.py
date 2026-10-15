@@ -12,7 +12,7 @@ from choregos_api.db.models import CostLedger, Run
 from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
 from choregos_core.domain import DiffSummary, PrRef
-from choregos_core.gates import MOTIF_ADR
+from choregos_core.gates import DIFF_GATES, MOTIF_ADR
 from temporalio import activity
 
 from .base import db, load_work_item, project_bundle
@@ -40,14 +40,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         additions = deletions = 0
         secrets: list[str] = []
         ajoute: dict[str, str] = {}
-        lisent_le_diff = {
-            "scope_respected",
-            "diff_size_max",
-            "no_secrets",
-            "markdown_sections",
-            "adr_number_free",
-        }
-        needs_diff = any(g["name"] in lisent_le_diff for g in gates)
+        needs_diff = any(g["name"] in DIFF_GATES for g in gates)
         # Sans dépôt, il n'y a pas de diff — et pas d'erreur non plus : la garantie refusera
         # d'elle-même (`diff_available`), ce qui est exactement ce qu'on veut qu'elle fasse.
         depot = bundle.config.repo

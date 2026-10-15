@@ -535,7 +535,7 @@ export type ProcessStep = {
   to: string;
   to_display?: string;
   actor: string;
-  actor_type: "agent" | "human" | "system" | "release_train";
+  actor_type: "agent" | "human" | "system" | "job" | "release_train";
   who: string;
   outputs?: Array<string>;
   gates?: Array<{
@@ -545,7 +545,33 @@ export type ProcessStep = {
   on_fail?: string | null;
   on_reject?: string | null;
   timeout_hours?: number | null;
+  /** The governed action the transition proposes */
+  action?: string | null;
+  /** The task a person does */
+  task?: string | null;
   sentence: string;
+  /** The registry agent the actor names, `slug` or `slug@N` (ADR 0033); null for an implicit playbook actor and for any actor that is not an agent. */
+  agent?: string | null;
+  /** The role of an agent or job actor. */
+  role?: string | null;
+  /** The model or profile of an agent actor, as written (`profile:standard`). */
+  model?: string | null;
+  /** The group of a human actor. */
+  group?: string | null;
+  /** The SLA of a human actor. */
+  sla_hours?: number | null;
+  /** The argv of a job actor. */
+  command?: Array<string> | null;
+  /** The image name of a job actor. */
+  image?: string | null;
+  /** The documents the step reads (`inputs:` of the transition). */
+  inputs?: Array<string>;
+  /** The declared file type of an output (ADR 0049); an output not listed is inline, markdown or JSON. */
+  output_types?: {
+    [key: string]: string;
+  };
+  /** True for an agent or job step whose transition carries a gate that reads the diff: it changes the work item's branch. */
+  writes_branch?: boolean;
 };
 
 /** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`). */
@@ -784,6 +810,21 @@ export type AgentMetricsSummary = {
   runs: number;
   success_rate?: number | null;
   cost_usd?: number;
+};
+
+export type AgentResolution = {
+  /** The reference as asked (`slug` or `slug@N`). */
+  ref: string;
+  slug: string;
+  /** `resolved`: a run would load `version`. `not_installed`: the organisation has no such agent (`in_catalogue` says whether publishing the workflow installs it, ADR 0040). `unavailable`: it exists but a run would not start (`reason`: draft, retired, expired, disabled, no such version). */
+  status: "resolved" | "not_installed" | "unavailable";
+  version?: number | null;
+  /** True when the version comes from the project's pin rather than from the reference or the latest. */
+  pinned: boolean;
+  display_name?: string | null;
+  lifecycle?: string | null;
+  in_catalogue: boolean;
+  reason?: string | null;
 };
 
 /** A workflow actor that runs as an agent without naming one of the registry. */
@@ -1168,6 +1209,24 @@ export type WorkflowGraph = {
     via?: string | null;
     timeout_hours?: number | null;
   }>;
+  /** The artifact flow (S39-13), one entry per document the workflow produces or reads. */
+  artifacts?: Array<ArtifactFlow>;
+};
+
+export type ArtifactFlow = {
+  name: string;
+  /** The declared file type of the first producer's output; null for an inline value. */
+  type?: string | null;
+  /** The ids of the transitions that output it. */
+  produced_by: Array<string>;
+  /** The ids of the transitions that list it in `inputs`. */
+  read_by: Array<string>;
+  /** `step`: some transition outputs it. `feedback`: `human_feedback`, written by a person's rejection (`produced_by` lists the human transitions with `on_reject`). `field`: a property of `metadata.inputs`. `missing`: read, but nothing produces it. */
+  origin: "step" | "feedback" | "field" | "missing";
+  /** True when the platform gives it to every agent stage. */
+  context?: boolean;
+  /** True when the pull request body carries it. */
+  in_pull_request?: boolean;
 };
 
 export type WorkflowTemplate = {
@@ -2259,6 +2318,7 @@ export interface Operations {
   reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
+  resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };

@@ -80,6 +80,13 @@ class GateOutcome:
 
 GateFn = Callable[[GateContext, dict[str, Any]], GateOutcome]
 
+#: The gates that read the work item's diff. A step whose transition carries one of them writes to the
+#: work item's branch: the orchestrator fetches the diff for them, and the process view says so
+#: (`writes_branch`). One place: a new diff gate is added here, nowhere else.
+DIFF_GATES: frozenset[str] = frozenset(
+    {"scope_respected", "diff_size_max", "no_secrets", "markdown_sections", "adr_number_free"}
+)
+
 _REGISTRY: dict[str, GateFn] = {}
 _ASYNC_GATES: set[str] = set()
 _NEEDS: dict[str, frozenset[str]] = {}
@@ -618,6 +625,7 @@ def _external(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 
 
 __all__ = [
+    "DIFF_GATES",
     "GateContext",
     "GateOutcome",
     "evaluate",

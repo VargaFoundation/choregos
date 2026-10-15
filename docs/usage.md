@@ -328,6 +328,39 @@ read: if someone published meanwhile, the console says so (`409`) instead of ove
 state to an existing or a new one without choosing a state first. The draft survives a detour
 through another page of the console (it is kept for the browser tab), and **discard** asks first.
 
+### What each step shows
+
+The process view describes every step from the workflow's YAML (`process` in the validation
+answer and on the ticket's journey):
+
+- **Who**: for an agent step, the registry agent it names (`agent`, `slug` or `slug@N`, which is
+  not the actor's key), its role and model; for a person, the group and the SLA; for a job, the
+  command and the image.
+- **Reads**: the `inputs` of the transition. The map's artifact flow says where each comes from:
+  another step, a person's rejection reason, a work item field, or nothing (`missing`).
+- **Produces**: the `outputs`, typed when `output_types` declares a file type, and
+  `writes_branch` for an agent or job step whose transition carries a gate that reads the diff
+  (`scope_respected`, `no_secrets`, `diff_size_max`, `markdown_sections`, `adr_number_free`): it
+  changes the work item's branch even though it lists no output.
+
+`graph.artifacts` is the artifact flow: one entry per document with `produced_by`, `read_by`,
+`origin`, `context` (given to every agent stage) and `in_pull_request`.
+
+Which agent version a run would load for those references, through the runtime's own resolver
+(an explicit `@N`, else the project's pin, else the latest version), is read, without changing
+anything, with:
+
+```bash
+curl "$API/projects/$PROJECT/agent-resolution?ref=developer&ref=spec-writer@2"
+# [{"ref": "developer", "slug": "developer", "status": "resolved", "version": 1, "pinned": true, ...},
+#  {"ref": "spec-writer@2", "status": "not_installed", "in_catalogue": true, ...}]
+```
+
+`status` is `resolved`, `not_installed` (the organisation has no such agent; `in_catalogue` says
+whether publishing the workflow installs it) or `unavailable` (it exists but a run would not
+start: draft, retired, expired, disabled; `reason` has the runtime's own words). One to 64
+`ref` parameters.
+
 ### Workflows outside software
 
 The same engine carries work that has no repository. Name your own roles, bring your own

@@ -8,6 +8,8 @@ from typing import Any
 from choregos_contracts import AgentActor, HumanActor, JobActor, StateKind, Workflow
 from choregos_contracts.workflow import AGENT_WILDCARD
 
+from .flow import artifact_flow
+
 
 def _lane(wf: Workflow, state: str) -> str:
     """Couloir d'un état : le type de l'acteur qui en sort."""
@@ -28,7 +30,7 @@ def _lane(wf: Workflow, state: str) -> str:
 
 
 def to_graph(wf: Workflow) -> dict[str, Any]:
-    """Graphe {nodes, edges} consommé par React Flow (`/p/{slug}/workflow`).
+    """Graph {nodes, edges, artifacts} read by React Flow (`/p/{slug}/workflow`).
 
     Les arêtes nominales (`kind: "nominal"`) viennent des transitions ; les arêtes
     secondaires (rejet, reprise, escalade, défauts) sont rendues aussi, sinon les états
@@ -121,7 +123,7 @@ def to_graph(wf: Workflow) -> dict[str, Any]:
             continue
         seen.add(edge["id"])
         unique.append(edge)
-    return {"nodes": nodes, "edges": unique}
+    return {"nodes": nodes, "edges": unique, "artifacts": artifact_flow(wf)}
 
 
 def to_mermaid(wf: Workflow) -> str:
