@@ -5,7 +5,10 @@ import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { Connecteurs } from "@/components/connecteurs";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/admin/connectors",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 
 const VALUE = "client-secret-AAAA-1111";
