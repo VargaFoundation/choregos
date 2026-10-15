@@ -6,13 +6,15 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { ActorIcon, Button, Card, CostChip, Dot, Empty, ErrorNote, Heading, Input, LEGENDE, Select, Textarea, tonDEtat } from "@/components/ui";
+import { ActorIcon, Button, Card, CostChip, Dot, Drawer, Empty, ErrorNote, Heading, LEGENDE, Select, tonDEtat } from "@/components/ui";
 import { columnsFromGraph, itemsOf } from "@/components/workflows/board";
-import { champsDepuisSchema, valeursPourLApi, type Champ } from "@/components/workflows/champs";
+import { NewWorkItemForm } from "@/components/workflows/new-work-item";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { relative } from "@/lib/format";
+import { trackerOf } from "@/lib/tracker";
+import type { WorkItemDto } from "@/lib/types";
 
 /**
  * Un board par workflow (ADR 0031, S16-10) : ses colonnes sont les états du workflow, lus par le
@@ -30,11 +32,11 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   const choisi = search.get("workflow") ?? defaut;
   const { definition, validation } = useWorkflow(slug, choisi);
   const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
-  // Quand le tracker est interne, la demande se pose ICI — sinon elle vient de GitHub/Jira.
-  const trackerInterne = (connectors.data ?? []).some(
-    (c) => c.kind === "tracker" && ["internal", "fake"].includes(c.type),
-  );
+  // A work item is filed from here whatever the tracker: with an external one the platform creates
+  // the issue there first (ADR 0059).
+  const tracker = trackerOf(connectors.data);
   const [nouvelle, setNouvelle] = useState(false);
+  const [created, setCreated] = useState<WorkItemDto | null>(null);
 
   if (items.error) return <ErrorNote>{(items.error as Error).message}</ErrorNote>;
 
@@ -72,24 +74,41 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         <span className="text-sm text-ink-muted">
           {choisi || "—"} v{definition.data?.version ?? "?"}
         </span>
-        {trackerInterne && (
-          <span className="ml-auto">
-            <Button tone="accent" size="sm" onClick={() => setNouvelle((n) => !n)}>
-              New request
-            </Button>
-          </span>
-        )}
+        <span className="ml-auto">
+          <Button tone="accent" size="sm" onClick={() => setNouvelle(true)}>
+            New work item
+          </Button>
+        </span>
       </div>
-      {nouvelle && (
-        <NouvelleDemande
-          slug={slug}
-          workflows={workflows.data?.map((w) => w.name) ?? []}
-          initial={choisi}
-          onDone={() => {
-            setNouvelle(false);
-            void queryClient.invalidateQueries({ queryKey: ["items", slug] });
-          }}
-        />
+      <Drawer open={nouvelle} onClose={() => setNouvelle(false)} title="New work item">
+        {nouvelle && (
+          <NewWorkItemForm
+            slug={slug}
+            workflows={workflows.data?.map((w) => w.name) ?? []}
+            initial={choisi}
+            tracker={tracker}
+            onDone={(item) => {
+              setNouvelle(false);
+              setCreated(item);
+              void queryClient.invalidateQueries({ queryKey: ["items", slug] });
+            }}
+          />
+        )}
+      </Drawer>
+      {created && (
+        <p role="status" className="text-sm" data-testid="work-item-created">
+          Created <span className="font-mono">{created.tracker_key}</span>
+          {" · "}
+          <Link href={`/p/${slug}/items/${created.id}`}>open it here</Link>
+          {created.url && (
+            <>
+              {" · "}
+              <a href={created.url} target="_blank" rel="noreferrer">
+                open the issue
+              </a>
+            </>
+          )}
+        </p>
       )}
       {items.isLoading && <Empty>Loading…</Empty>}
       {enAttente.length > 0 && (
@@ -201,189 +220,5 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         ))}
       </div>
     </div>
-  );
-}
-
-/**
- * Poser une demande dans Choregos : son workflow, ses champs (lus dans `metadata.inputs`), un titre,
- * un corps, une taille. L'interpréteur démarre tout de suite ; l'API valide les champs.
- */
-function NouvelleDemande({
-  slug,
-  workflows,
-  initial,
-  onDone,
-}: {
-  slug: string;
-  workflows: string[];
-  initial: string;
-  onDone: () => void;
-}) {
-  const [workflow, setWorkflow] = useState(initial);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [size, setSize] = useState<"S" | "M" | "L" | "XL" | "">("");
-  const [budget, setBudget] = useState("");
-  const [saisies, setSaisies] = useState<Record<string, string | boolean>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { definition } = useWorkflow(slug, workflow);
-  const champs = champsDepuisSchema(definition.data?.json?.metadata?.inputs as Record<string, unknown> | undefined);
-
-  async function poser() {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.createWorkItem(slug, {
-        title,
-        body,
-        size: size || null,
-        start: true,
-        workflow: workflow || null,
-        fields: valeursPourLApi(champs, saisies),
-        budget_usd: budget ? Number(budget) : null,
-      });
-      onDone();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "request refused");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="p-3">
-      <form
-        className="space-y-2 text-sm"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void poser();
-        }}
-      >
-        {workflows.length > 1 && (
-          <Select
-            aria-label="Workflow of the request"
-            value={workflow}
-            onChange={(event) => {
-              setWorkflow(event.target.value);
-              setSaisies({});
-            }}
-            className="w-auto"
-          >
-            {workflows.map((nom) => (
-              <option key={nom} value={nom}>
-                {nom}
-              </option>
-            ))}
-          </Select>
-        )}
-        {champs.length > 0 && (
-          <fieldset className="grid gap-2 md:grid-cols-2" data-testid="request-fields">
-            <legend className="sr-only">Fields of the request</legend>
-            {champs.map((champ) => (
-              <ChampDeDemande
-                key={champ.name}
-                champ={champ}
-                valeur={saisies[champ.name]}
-                onChange={(valeur) => setSaisies((avant) => ({ ...avant, [champ.name]: valeur }))}
-              />
-            ))}
-          </fieldset>
-        )}
-        <Input
-          aria-label="Request title"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Data project manager for a 6-month assignment"
-          className="w-full"
-        />
-        <Textarea
-          aria-label="Request details"
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          rows={4}
-          placeholder="Client, start date, expected outcome, constraints…"
-          className="w-full"
-        />
-        <div className="flex items-center gap-2">
-          <Select
-            aria-label="Size"
-            value={size}
-            onChange={(event) => setSize(event.target.value as typeof size)}
-            className="w-auto"
-          >
-            <option value="">Size?</option>
-            {["S", "M", "L", "XL"].map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
-          <Input
-            aria-label="budget in USD"
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={budget}
-            onChange={(event) => setBudget(event.target.value)}
-            placeholder="max budget, $"
-            className="w-36"
-          />
-          <Button tone="primary" size="sm" type="submit" disabled={busy || !title}>
-            File and start
-          </Button>
-        </div>
-        {error && <ErrorNote>{error}</ErrorNote>}
-      </form>
-    </Card>
-  );
-}
-
-/** Un champ de la demande, au contrôle que son type appelle. */
-function ChampDeDemande({
-  champ,
-  valeur,
-  onChange,
-}: {
-  champ: Champ;
-  valeur: string | boolean | undefined;
-  onChange: (valeur: string | boolean) => void;
-}) {
-  const libelle = `${champ.label}${champ.required ? " (required)" : ""}`;
-  if (champ.control === "boolean") {
-    return (
-      <label className="flex items-center gap-2">
-        <input type="checkbox" checked={Boolean(valeur)} onChange={(event) => onChange(event.target.checked)} />
-        {libelle}
-      </label>
-    );
-  }
-  if (champ.control === "choice") {
-    return (
-      <Select
-        aria-label={libelle}
-        value={String(valeur ?? "")}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">{libelle}</option>
-        {champ.choices?.map((choix) => (
-          <option key={choix} value={choix}>
-            {choix}
-          </option>
-        ))}
-      </Select>
-    );
-  }
-  const type =
-    champ.control === "date" ? "date" : champ.control === "number" || champ.control === "integer" ? "number" : "text";
-  return (
-    <Input
-      aria-label={libelle}
-      title={champ.hint}
-      type={type}
-      required={champ.required}
-      value={String(valeur ?? "")}
-      placeholder={champ.control === "list" ? `${champ.label}, comma separated` : champ.label}
-      onChange={(event) => onChange(event.target.value)}
-    />
   );
 }
