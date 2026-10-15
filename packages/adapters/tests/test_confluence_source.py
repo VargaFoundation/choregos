@@ -195,6 +195,6 @@ def test_a_site_that_is_not_atlassian_cloud_is_refused() -> None:
 
 
 def test_a_slug_is_a_safe_file_name() -> None:
-    assert slug("Déploiement: l'été / 2026!") == "deploiement-l-ete-2026"
+    assert slug("Caf\u00e9 men\u00fc: na\u00efve / 2026!") == "cafe-menu-naive-2026"
     assert slug("???") == "page"
     assert len(slug("a" * 200)) <= 60
