@@ -1210,6 +1210,26 @@ paths:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agent-drafts:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: draftAgent
+      description: >-
+        One capped model call (2,500 output tokens, 60 s) proposes an agent from its description (S39-05). The
+        instructions are those of the catalogue's `agent-drafter`, or of the organisation's installed version. The
+        answer holds only skills, knowledge bases and connectors the organisation has and may use; what was dropped
+        or clamped is said in `notes`. Nothing is saved: a person creates the agent from the draft. Ten drafts a
+        minute per person. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentDraftRequest" } } }
+      responses:
+        "200": { description: The proposal, not saved, content: { application/json: { schema: { $ref: "#/components/schemas/AgentDraft" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: More than ten drafts in a minute (`Retry-After`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "502": { description: The gateway did not answer, or its answer holds no JSON object, or no gateway key is configured }
   /orgs/{org}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2775,12 +2795,30 @@ components:
       type: object
       required: [slug, display_name]
       properties:
-        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$", description: "`new` is reserved: the console's `/agents/new` page would shadow it (422)" }
         kind: { type: string, enum: [internal, external], default: internal }
         display_name: { type: string }
         description: { type: [string, "null"] }
         spec: { $ref: "#/components/schemas/AgentSpec" }
         lifecycle: { type: string, enum: [draft, active], default: active, description: a draft is neither pinned nor run until it is activated }
+    AgentDraftRequest:
+      type: object
+      required: [display_name, description]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 10, maxLength: 4000, description: what the agent is for; data for the drafting model, never instructions }
+    AgentDraft:
+      type: object
+      description: A proposal that is never saved; the builder is pre-filled with it and a person creates the agent.
+      required: [display_name, slug, description, spec, sample, model]
+      properties:
+        display_name: { type: string }
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        description: { type: string }
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+        sample: { $ref: "#/components/schemas/AgentSampleInput" }
+        notes: { type: array, items: { type: string }, description: what the platform changed or dropped in the model's answer }
+        model: { type: string, description: the model that drafted it }
     AgentCatalogueEntry:
       type: object
       description: An agent the platform's catalogue offers (ADR 0040), and its state in the organisation.

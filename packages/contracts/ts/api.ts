@@ -545,6 +545,7 @@ export type AgentTrial = {
 };
 
 export type AgentCreate = {
+  /** `new` is reserved: the console's `/agents/new` page would shadow it (422) */
   slug: string;
   kind?: "internal" | "external";
   display_name: string;
@@ -552,6 +553,25 @@ export type AgentCreate = {
   spec?: AgentSpec;
   /** a draft is neither pinned nor run until it is activated */
   lifecycle?: "draft" | "active";
+};
+
+export type AgentDraftRequest = {
+  display_name: string;
+  /** what the agent is for; data for the drafting model */
+  description: string;
+};
+
+/** A proposal that is never saved; the builder is pre-filled with it and a person creates the agent. */
+export type AgentDraft = {
+  display_name: string;
+  slug: string;
+  description: string;
+  spec: AgentSpec;
+  sample: AgentSampleInput;
+  /** what the platform changed or dropped in the model's answer */
+  notes?: Array<string>;
+  /** the model that drafted it */
+  model: string;
 };
 
 /** An agent the platform's catalogue offers (ADR 0040), and its state in the organisation. */
@@ -1928,6 +1948,7 @@ export interface Operations {
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
+  draftAgent: { method: "POST"; path: "/orgs/{org}/agent-drafts"; body: AgentDraftRequest; response: AgentDraft };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";

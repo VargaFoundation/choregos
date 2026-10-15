@@ -521,6 +521,30 @@ An agent carries **skills** — a folder with a `SKILL.md` whose header gives it
 curl -X POST $API/orgs/acme/skills/import -H 'Content-Type: application/zip' --data-binary @onboarding.zip
 ```
 
+### Draft an agent from a description
+
+Writing instructions is the hard part, so the platform can propose a first version
+(`POST /orgs/acme/agent-drafts`, `agent:manage`):
+
+```bash
+curl -X POST $API/orgs/acme/agent-drafts -d '{"display_name": "Release notes writer",
+  "description": "Writes release notes from the pull requests merged since the last tag."}'
+```
+
+The answer is an `AgentDraft`: a slug, a `spec` (numbered instructions, suggested skills, knowledge
+bases, connectors and tool patterns, limits, an eval case or two), a `sample` work item for **Try
+it**, `notes` and the `model` that wrote it. **A draft is a proposal and is never saved**: a person
+reads it, edits it and creates the agent (`POST /orgs/acme/agents`) themselves. One model call on the
+gateway, capped at 2,500 output tokens and 60 seconds, with the instructions of the catalogue's
+`agent-drafter` — or the organisation's own version of it, once installed and edited, as for the
+knowledge distiller. The model sees the description (marked as data) and only the names and one-line
+descriptions of the skills, knowledge bases and connectors the organisation has; anything it suggests
+beyond them is dropped and listed in `notes`, limits are clamped, and instructions that use a template
+variable outside the sandbox's list are emptied with a note. Ten drafts a minute per person (429 with
+`Retry-After`); a gateway failure is a 502. The slug `new` is reserved (422): `/agents/new` is the
+console's page. The drafting model call appears in the gateway's logs under `agent-drafter`, not in
+Choregos' spend ledger.
+
 A skill **declares no permission**: an `allowed-tools` field is refused, because what an agent may
 call is decided by its version and its project, never by a file it reads. An archive that leaves
 its folder (`../`), holds a symbolic link, more than 256 files or 5 MiB, or a file that is not
@@ -806,7 +830,11 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   request (approval, question, scope change, task — overdue first, then the nearest due date, then
   the oldest), decided in place as on the board, and the actions waiting for approval. Groups are
   not checked yet: everyone sees everything that waits, including what is addressed to others. The
-  former `/approvals` link redirects there.
+  former `/approvals` link redirects there. There are two inboxes: the organisation's, which a
+  **Project** filter (`/inbox?project=<slug>`) narrows to one project, and each project's own
+  (`/p/<slug>/inbox`, the **Inbox** entry of the project's sidebar), which lists and counts only
+  that project's tickets, actions and project budget alerts. An agent's budget alert stays in the
+  organisation's inbox, because an agent serves several projects.
 
 The core ships two effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP

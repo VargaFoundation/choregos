@@ -70,6 +70,19 @@ describe("the sidebar switches scope", () => {
     expect(within(switcher).getByRole("link", { name: "Billing API" })).toHaveAttribute("aria-current", "true");
   });
 
+  it("inside a project, Inbox is the project's inbox, not the organisation's (S39-04)", () => {
+    const bar = sidebar("/p/billing-api/board");
+    expect(within(bar).getByRole("link", { name: "Inbox" })).toHaveAttribute("href", "/p/billing-api/inbox");
+    expect(within(bar).getByRole("link", { name: "Inbox" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("on the project's inbox, that entry is the current page and the only one", () => {
+    const bar = sidebar("/p/billing-api/inbox");
+    expect(within(bar).getByRole("link", { name: "Inbox" })).toHaveAttribute("aria-current", "page");
+    expect(bar.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(projectTrail("billing-api", "/p/billing-api/inbox")).toEqual([{ label: "Inbox" }]);
+  });
+
   it("at the organisation's level, lists the organisation's pages", () => {
     const bar = sidebar("/skills");
     expect(labels(within(bar).getByRole("list", { name: "Catalogue" }))).toEqual(["Agents", "Skills", "Knowledge", "AI clients"]);

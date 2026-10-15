@@ -28,7 +28,7 @@ from ..db.models import (
     WorkflowDef,
 )
 from ..deps import Config, Db, Me, ProjectCtx
-from ..errors import conflict, forbidden, not_found, unprocessable
+from ..errors import ApiError, conflict, forbidden, not_found, unprocessable, upstream
 from ..rbac import Permission
 from ..schemas import (
     AgentCatalogueConnect,
@@ -38,6 +38,8 @@ from ..schemas import (
     AgentCreate,
     AgentCredentialCreate,
     AgentCredentialDto,
+    AgentDraft,
+    AgentDraftRequest,
     AgentDto,
     AgentLifecycleChange,
     AgentLifecycleResult,
@@ -207,6 +209,38 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         session, principal, "agent.create", org_id=organisation.id, target_type="agent", target_id=agent.id
     )
     return await _dto(session, agent, avec_versions=True)
+
+
+@router.post("/orgs/{org}/agent-drafts", response_model=AgentDraft, operation_id="draftAgent")
+async def draft_agent(org: str, body: AgentDraftRequest, session: Db, principal: Me) -> AgentDraft:
+    """One capped model call proposes an agent from its description (S39-05). Nothing is saved: the
+    console fills the builder with the draft, and a person creates the agent."""
+    from ..services import agent_drafts
+
+    _gerer(principal, org)
+    admitted, wait = agent_drafts.limiter.admet(f"{org}:{principal.user_id}")
+    if not admitted:
+        raise ApiError(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many drafts",
+            f"more than {agent_drafts.PER_MINUTE} drafts per minute",
+            retry_after=wait,
+        )
+    organisation = await _organisation(session, org)
+    try:
+        proposal = await agent_drafts.draft(session, organisation, body)
+    except agent_drafts.DraftingError as exc:
+        raise upstream("gateway", str(exc)) from exc
+    await record(
+        session,
+        principal,
+        "agent.draft",
+        org_id=organisation.id,
+        model=proposal.model,
+        description_chars=len(body.description),
+        notes=len(proposal.notes),
+    )
+    return proposal
 
 
 @router.get("/orgs/{org}/agents/{slug}", response_model=AgentDto, operation_id="getAgent")
