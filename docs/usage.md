@@ -903,9 +903,11 @@ tool returns **structured** (`structuredContent`) is its result, so a later effe
 `effects[0].serial` as it would for a typed connector. An `approval` operation runs here — the
 action was approved; one this **project** cannot use — the organisation forbids it, the project
 tightened it to `forbidden`, or its groups are not the project's — never does, and an action
-calling it is refused when it is proposed (`422`). `verifier` is a check that touches nothing
+calling it is refused when it is proposed (`422`). `check` is a check that touches nothing
 outside: a condition, rendered with the earlier effects' results, that must be true — otherwise the
-action fails, named by its `motif` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
+action fails, named by its `reason` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
+`verifier` (with `motif`) is the name it had before S39-11: it stays registered as an alias, so a
+workflow or an action written with it keeps running; write `check` and `reason` from now on.
 
 **An action at a date, from a workflow.** A system transition can propose the action itself. Its
 title, justification and parameters are rendered (sandboxed Jinja) with the item's `fields` and the

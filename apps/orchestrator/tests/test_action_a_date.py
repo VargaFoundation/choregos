@@ -293,3 +293,22 @@ async def test_une_action_impossible_a_proposer_le_dit_et_le_ticket_suit_on_fail
         await _attendre(handle, lambda s: s["state"] == "a_revoir", "le ticket est à revoir")
         await handle.signal("control", {"action": "stop"})
     assert await _actions(setup) == [] and faits == []
+
+
+async def test_an_action_written_with_verifier_still_runs(
+    setup: Fixture, temporal_env: Any, worker_factory: Any, faits: list[dict[str, Any]]
+) -> None:
+    """S39-11a: `verifier` is the old name of the `check` effect; an action stored with it, after
+    an effect that did something, still completes (the alias is guarded by this case)."""
+    debut = await temporal_env.get_current_time()
+    document = _arrivee()
+    effets = document["transitions"][0]["action"]["effects"]
+    check = {"condition": "{{ effects[0].id is not none }}", "motif": "the account"}
+    effets.append({"effect": "verifier", "with": check})
+    await _ticket(setup, document, {"upn": "lea@acme.test", "date_arrivee": _iso(debut)})
+    async with worker_factory():
+        handle = await _demarrer(temporal_env, setup)
+        resultat = await handle.result()
+    assert resultat["state"] == "fait" and faits == [{"upn": "lea@acme.test"}]
+    (action,) = await _actions(setup)
+    assert action.status == "succeeded"
