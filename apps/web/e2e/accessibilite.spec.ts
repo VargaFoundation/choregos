@@ -11,6 +11,8 @@ const PAGES = [
   "/p/billing-api",
   "/p/billing-api/board",
   "/p/billing-api/trains",
+  "/p/billing-api/knowledge",
+  "/p/billing-api/knowledge/billing-runbooks",
   "/p/billing-api/workflows",
   "/p/billing-api/workflows/new",
   "/p/billing-api/workflows/default-simple",

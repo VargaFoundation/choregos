@@ -1471,6 +1471,25 @@ export const knowledgeBase: KnowledgeBase = {
   ],
 };
 
+/** A base scoped to one project (S39-14): the runs of `billing-api` read it, nobody else's. */
+export const projectKnowledgeBase: KnowledgeBase = {
+  slug: "billing-runbooks",
+  name: "Billing runbooks",
+  scope: "projects",
+  projects: ["billing-api"],
+  groups: [],
+  serving_mode: "files",
+  status: "active",
+  document_count: 0,
+  documents_by_status: {},
+  created_by: "lea@varga.dev",
+  created_at: iso(60 * 24 * 2),
+  documents: [],
+};
+
+/** What `GET /orgs/{org}/knowledge` returns: the organisation's base, then the project's. */
+export const knowledgeBases: KnowledgeBase[] = [knowledgeBase, projectKnowledgeBase];
+
 export const skillVersion: SkillVersion = {
   version: 1,
   digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c",
@@ -1679,6 +1698,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     }
     return workflowValidation as T;
   }
+  if (method === "POST" && /^\/orgs\/[^/]+\/knowledge$/.test(path)) {
+    // The base created, as the body says it (its slug, scope and projects): the page opens it next.
+    return { ...knowledgeBase, documents: [], document_count: 0, documents_by_status: {}, ...(body as object) } as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
     return { id: "t2", name: "okta", token: "scim_demo_shown_once" } as T;
@@ -1869,8 +1892,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, projectAgents],
     [/^\/orgs\/[^/]+\/skills$/, skills],
-    [/^\/orgs\/[^/]+\/knowledge$/, [{ ...knowledgeBase, documents: null }]],
+    [/^\/orgs\/[^/]+\/knowledge$/, knowledgeBases.map((b) => ({ ...b, documents: null }))],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
+    [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, projectKnowledgeBase],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...knowledgeBase, documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
     [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],

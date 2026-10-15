@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Suspense } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import KnowledgeBasePage from "@/app/knowledge/[slug]/page";
 import KnowledgePage from "@/app/knowledge/page";
 import { api } from "@/lib/api";
@@ -16,6 +16,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       knowledgeBases: vi.fn(),
+      projects: vi.fn(),
       knowledgeBase: vi.fn(),
       createKnowledgeBase: vi.fn(),
       uploadKnowledgeDocument: vi.fn(),
@@ -61,13 +62,23 @@ describe("what the knowledge pages say", () => {
 });
 
 describe("the knowledge page (S33-01)", () => {
+  beforeEach(() => {
+    vi.mocked(api.projects).mockResolvedValue({
+      items: [
+        { slug: "billing-api", name: "Billing API" },
+        { slug: "checkout-web", name: "Checkout web" },
+      ],
+    } as never);
+  });
+
   it("lists the bases with their scope and documents, and creates one", async () => {
     vi.mocked(api.knowledgeBases).mockResolvedValue([{ ...base, documents: null }]);
     vi.mocked(api.createKnowledgeBase).mockResolvedValue(base);
     wrap(<KnowledgePage />);
     const table = await screen.findByTestId("knowledge-bases");
     expect(table).toHaveTextContent("Architecture framework");
-    expect(table).toHaveTextContent("projects: billing-api");
+    expect(table).toHaveTextContent("Billing API");
+    expect(within(table).getByRole("link", { name: "Billing API" })).toHaveAttribute("href", "/p/billing-api/knowledge");
     expect(table).toHaveTextContent("1 ready · 1 failed");
 
     fireEvent.change(screen.getByPlaceholderText("architecture-framework"), { target: { value: "security" } });
@@ -104,5 +115,47 @@ describe("the knowledge page (S33-01)", () => {
     fireEvent.change(input, { target: { files: [deck] } });
     await waitFor(() => expect(api.uploadKnowledgeDocument).toHaveBeenCalledWith("varga", "architecture", deck));
     expect(await screen.findByRole("status")).toHaveTextContent("zoning.pptx: pending");
+  });
+});
+
+describe("the registry's scope (S39-14)", () => {
+  const org: KnowledgeBase = { ...base, slug: "policy", name: "Security policy", scope: "org", projects: [] };
+  const people: KnowledgeBase = { ...base, slug: "audit", name: "Audit notes", scope: "groups", projects: [], groups: ["auditors"] };
+  beforeEach(() => {
+    vi.mocked(api.projects).mockResolvedValue({
+      items: [
+        { slug: "billing-api", name: "Billing API" },
+        { slug: "checkout-web", name: "Checkout web" },
+      ],
+    } as never);
+    vi.mocked(api.knowledgeBases).mockResolvedValue([org, base, people].map((b) => ({ ...b, documents: null })));
+    vi.mocked(api.createKnowledgeBase).mockResolvedValue(base);
+    window.history.replaceState(null, "", "/knowledge");
+  });
+
+  it("filters by scope and says who uses each base", async () => {
+    wrap(<KnowledgePage />);
+    const table = await screen.findByTestId("knowledge-bases");
+    expect(table).toHaveTextContent("Every project");
+    expect(table).toHaveTextContent("People in groups auditors (never agents)");
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
+    expect(table).toHaveTextContent("Audit notes");
+    expect(table).not.toHaveTextContent("Security policy");
+    expect(window.location.search).toBe("?scope=groups");
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(table).toHaveTextContent("Security policy");
+  });
+
+  it("picks the projects from a list, not from typed slugs", async () => {
+    wrap(<KnowledgePage />);
+    await screen.findByTestId("knowledge-bases");
+    fireEvent.change(screen.getByRole("combobox", { name: "Scope" }), { target: { value: "projects" } });
+    expect(screen.queryByText(/comma-separated/)).toBeNull();
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Checkout web/ }));
+    fireEvent.change(screen.getByPlaceholderText("architecture-framework"), { target: { value: "checkout-docs" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(api.createKnowledgeBase).toHaveBeenCalled());
+    expect(vi.mocked(api.createKnowledgeBase).mock.calls[0]![1]).toMatchObject({ scope: "projects", projects: ["checkout-web"] });
+    expect(screen.getByText(/create it from the project's Knowledge page/)).toBeInTheDocument();
   });
 });

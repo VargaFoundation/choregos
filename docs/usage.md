@@ -600,8 +600,14 @@ gives its text without headings, and a scanned PDF fails (no OCR). Each document
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
 `groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage`. In the
-console, **knowledge** (top bar) lists the bases; a base's page uploads documents and follows each
-conversion.
+console there are two ways in. **From a project**: its sidebar's **Knowledge** section lists what its
+runs are served (the project's own bases, then the organisation-wide ones, read-only from there;
+a group's base is never served to a run, so it is not listed), and **New knowledge base** creates one
+served to this project's runs only (there is no scope to choose); the base opens inside the project,
+where you upload documents or add a source. **From the organisation**: **Knowledge** (`/knowledge`) is
+the registry of every base, filterable by scope (organisation-wide, project, group), with who uses
+each one; its creation form is where a base is shared with several projects (picked from a list) or
+with groups. A base's page uploads documents and follows each conversion.
 
 An agent version reads a base by naming it: `"knowledge": [{"slug": "architecture"}]` in its spec.
 When a run is prepared, each named base must exist and be served to the run's project — otherwise

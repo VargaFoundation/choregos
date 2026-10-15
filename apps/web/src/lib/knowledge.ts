@@ -9,6 +9,26 @@ export function scopeLabel(base: Pick<KnowledgeBase, "scope" | "projects" | "gro
   return "whole organisation";
 }
 
+/** Whether a project's runs are served this base: an organisation-wide one, or one that names the project. */
+export function servedToProject(base: Pick<KnowledgeBase, "scope" | "projects">, slug: string): boolean {
+  return base.scope === "org" || (base.scope === "projects" && (base.projects ?? []).includes(slug));
+}
+
+/** Whether a base is the project's own: scoped to projects and naming this one. */
+export function ownedByProject(base: Pick<KnowledgeBase, "scope" | "projects">, slug: string): boolean {
+  return base.scope === "projects" && (base.projects ?? []).includes(slug);
+}
+
+/** The registry's "Used by", in words: who is served, with the projects' names where known. */
+export function usedByLabel(
+  base: Pick<KnowledgeBase, "scope" | "projects" | "groups">,
+  projectNames: Record<string, string> = {},
+): string {
+  if (base.scope === "projects") return (base.projects ?? []).map((p) => projectNames[p] ?? p).join(", ");
+  if (base.scope === "groups") return `People in groups ${(base.groups ?? []).join(", ")} (never agents)`;
+  return "Every project";
+}
+
 /** `{"ready": 3, "failed": 1}` → `3 ready · 1 failed`. */
 export function statusSummary(counts: Record<string, number> | undefined): string {
   const order = ["ready", "pending", "converting", "failed"];
