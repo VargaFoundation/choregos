@@ -79,6 +79,10 @@ describe("les clients MCP", () => {
     ).toBe("profile:standard · 2 skills · 1 tool pattern · $5/day");
   });
 
+  it("a version's summary names its monthly cap", () => {
+    expect(resumeDeLaVersion({ budget: { monthly_usd: 100 } })).toBe("$100/month");
+  });
+
   it("enregistrer un Claude Code crée l'agent externe PUIS lui rattache son jeton", async () => {
     vi.mocked(api.createAgent).mockResolvedValue({} as never);
     vi.mocked(api.attachAgentToken).mockResolvedValue({} as never);

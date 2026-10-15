@@ -99,6 +99,7 @@ describe("the builder", () => {
     fireEvent.change(within(builder).getByLabelText("Max minutes"), { target: { value: "20" } });
     fireEvent.change(within(builder).getByLabelText("Budget per run (USD)"), { target: { value: "0.5" } });
     fireEvent.change(within(builder).getByLabelText("Budget per day (USD)"), { target: { value: "4" } });
+    fireEvent.change(within(builder).getByLabelText("Budget per month (USD)"), { target: { value: "100" } });
     // A skill not yet approved cannot be carried.
     const skill = within(builder).getByLabelText("Add a skill");
     await within(skill).findByRole("option", { name: "onboarding-procedure" });
@@ -124,6 +125,7 @@ describe("the builder", () => {
     const summary = screen.getByTestId("ce-que-ca-permet");
     expect(summary).toHaveTextContent("platform/cheap");
     expect(summary).toHaveTextContent("A run stops at US$0.50");
+    expect(summary).toHaveTextContent("Alerts at 50, 80 and 100 % of US$100.00 a month; suspended at 100 %.");
     expect(within(summary).getByTestId("outils-resolus")).toHaveTextContent("track_order — called freely");
     expect(within(summary).getByTestId("outils-resolus")).toHaveTextContent("track_parcel — each call asks a person, US$0.01 a call");
     expect(within(summary).getByTestId("outils-resolus")).not.toHaveTextContent("order_laptop");
@@ -143,7 +145,7 @@ describe("the builder", () => {
         model: "platform/cheap",
         backend: "claude-code",
         limits: { max_turns: 12, max_minutes: 20 },
-        budget: { run_usd: 0.5, daily_usd: 4 },
+        budget: { run_usd: 0.5, daily_usd: 4, monthly_usd: 100 },
         skills: [{ slug: "onboarding-procedure", version: 2 }],
         mcp_servers: [{ connector: "supplier", tools: ["track_*"] }],
         knowledge: [{ slug: "network-runbooks" }],

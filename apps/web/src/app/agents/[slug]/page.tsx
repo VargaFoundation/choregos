@@ -403,6 +403,7 @@ function Specification({ spec }: { spec: AgentSpec }) {
         <dd>
           {spec.budget?.run_usd != null ? `${usd(spec.budget.run_usd)}/run` : "—"} ·{" "}
           {spec.budget?.daily_usd != null ? `${usd(spec.budget.daily_usd)}/day` : "—"}
+          {spec.budget?.monthly_usd != null ? ` · ${usd(spec.budget.monthly_usd)}/month` : ""}
         </dd>
         <dt className="text-ink-muted">Skills</dt>
         <dd>

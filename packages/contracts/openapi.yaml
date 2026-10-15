@@ -2580,6 +2580,7 @@ components:
       properties:
         run_usd: { type: [number, "null"], exclusiveMinimum: 0 }
         daily_usd: { type: [number, "null"], exclusiveMinimum: 0 }
+        monthly_usd: { type: [number, "null"], exclusiveMinimum: 0 }
     AgentSpec:
       type: object
       description: What an agent version is; it never changes (ADR 0033).

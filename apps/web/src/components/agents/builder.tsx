@@ -75,7 +75,12 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     model: spec.model || null,
     backend: spec.backend || null,
     limits: { max_turns: spec.limits?.max_turns ?? null, max_minutes: spec.limits?.max_minutes ?? null },
-    budget: { ...spec.budget, run_usd: spec.budget?.run_usd ?? null, daily_usd: spec.budget?.daily_usd ?? null },
+    budget: {
+      ...spec.budget,
+      run_usd: spec.budget?.run_usd ?? null,
+      daily_usd: spec.budget?.daily_usd ?? null,
+      monthly_usd: spec.budget?.monthly_usd ?? null,
+    },
     skills: spec.skills ?? [],
     mcp_servers: (spec.mcp_servers ?? []).filter((s) => s.connector),
     knowledge: spec.knowledge ?? [],
@@ -302,6 +307,18 @@ export function AgentBuilder({
                   step="0.5"
                   value={spec.budget?.daily_usd ?? ""}
                   onChange={(e) => set({ budget: { ...spec.budget, daily_usd: numberOrNull(e.target.value) } })}
+                />
+              )}
+            </Field>
+            <Field label="Budget per month (USD)">
+              {(id) => (
+                <Input
+                  id={id}
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={spec.budget?.monthly_usd ?? ""}
+                  onChange={(e) => set({ budget: { ...spec.budget, monthly_usd: numberOrNull(e.target.value) } })}
                 />
               )}
             </Field>
@@ -659,6 +676,9 @@ export function BuilderSummary({
           {spec.budget?.daily_usd != null
             ? `; no new run once ${usd(spec.budget.daily_usd)} is spent in a day.`
             : "; no daily cap of its own."}
+          {spec.budget?.monthly_usd != null
+            ? ` Alerts at 50, 80 and 100 % of ${usd(spec.budget.monthly_usd)} a month; suspended at 100 %.`
+            : ""}
         </p>
         <p>
           {spec.limits?.max_turns != null ? `${spec.limits.max_turns} turns` : "The role's turns"},{" "}

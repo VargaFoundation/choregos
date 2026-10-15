@@ -52,3 +52,22 @@ Worst case: stages × attempts × stage budget, with each human click starting o
   replay their old decisions.
 - A refusal the gateway words differently from LiteLLM would not be recognised: the signatures
   live in `choregos_runner.budget` and a new gateway adds its own there.
+
+## Addendum: the monthly cap and the reservation (S27-09)
+
+Decision 6 gives an agent a monthly cap (`AgentBudget.monthly_usd`). It is a cap like the others
+and enters the reservation like them: the run's key is minted at the minimum of what is left under
+each cap, and the monthly cap contributes `agent_month = monthly_usd - spend of the calendar month`.
+A run starting with USD 0.30 left on the month therefore gets a key of USD 0.30, and the gateway
+refuses beyond it (`reason="budget"`, to a person, never a retry).
+
+- Alerts: `month` alerts at 50, 80 and 100 %, once per (agent, month, threshold). Slack is told
+  once per alert (`notified_at`); a notifier failure leaves the alert unsent, and the next
+  collection retries it.
+- At 100 % the agent is suspended (audit action `agent.budget_suspend`) and a new run is refused
+  at admission with a non-retryable `admission_refused`.
+- Limit, stated plainly: like `agent_day`, `agent_month` subtracts what has been spent, not what
+  the agent's other open keys may still spend. Two concurrent runs of one agent can each be
+  minted the whole remainder, so the month can be overshot by the keys in flight at the
+  moment. The 100 % suspension bounds the overshoot to those runs; it does not remove it.
+  Closing it means summing the agent's open reservations, as the ticket cap does for tickets.

@@ -20,13 +20,16 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import record
 from ..db.models import Agent, AgentVersion, BudgetAlert, CostLedger, Project, Run
 from ..schemas import AgentSpec
-from .agents import depense_du_jour
+from .agents import depense_du_jour, depense_du_mois
 
 #: The thresholds, in the order they are crossed: the policy's `alert_at_ratio` (0.8 by default), then
 #: the budget itself.
 FULL = 1.0
+#: An agent's monthly cap alerts at half, at 80 %, and at the cap (S27-09).
+MONTH_RATIOS = (0.5, 0.8, FULL)
 
 
 def thresholds(alert_at_ratio: float | None) -> tuple[float, ...]:
@@ -44,7 +47,7 @@ def crossed(spent: float, budget: float | None, ratios: tuple[float, ...]) -> li
     return [round(ratio * 100) for ratio in ratios if spent >= ratio * budget]
 
 
-async def _raise(
+async def _raise(  # noqa: PLR0913 - one alert is these nine facts
     session: AsyncSession,
     *,
     org_id: str,
@@ -54,6 +57,7 @@ async def _raise(
     percent: int,
     spent: float,
     budget: float,
+    period: str = "day",
 ) -> BudgetAlert | None:
     """The alert for this threshold and day, once. `None` when it already exists."""
     existing = await session.execute(
@@ -61,7 +65,7 @@ async def _raise(
             BudgetAlert.org_id == org_id,
             BudgetAlert.scope == scope,
             BudgetAlert.subject == subject,
-            BudgetAlert.period == "day",
+            BudgetAlert.period == period,
             BudgetAlert.period_key == day,
             BudgetAlert.threshold == percent,
         )
@@ -72,7 +76,7 @@ async def _raise(
         org_id=org_id,
         scope=scope,
         subject=subject,
-        period="day",
+        period=period,
         period_key=day,
         threshold=percent,
         spent_usd=round(spent, 6),
@@ -150,7 +154,85 @@ async def check_after_spend(session: AsyncSession, run_id: str | None) -> list[B
             )
             if alert is not None:
                 raised.append(alert)
+        raised += await _check_agent_month(session, project.org_id, run.agent_slug, spec_row)
     return raised
 
 
-__all__ = ["check_after_spend", "crossed", "thresholds"]
+async def _check_agent_month(
+    session: AsyncSession, org_id: str, slug: str, spec_row: Any
+) -> list[BudgetAlert]:
+    """The agent's monthly cap: an alert at 50, 80 and 100 %, once each per month. At 100 % the
+    agent is suspended: its next runs are refused, until a person lifts the suspension (and, for the
+    rest of the month, raises the cap)."""
+    cap = AgentSpec.model_validate(spec_row or {}).budget.monthly_usd
+    if not cap:
+        return []
+    spent = await depense_du_mois(session, org_id, slug)
+    month = utcnow().strftime("%Y-%m")
+    raised: list[BudgetAlert] = []
+    reached = crossed(spent, cap, MONTH_RATIOS)
+    for percent in reached:
+        alert = await _raise(
+            session,
+            org_id=org_id,
+            scope="agent",
+            subject=slug,
+            day=month,
+            percent=percent,
+            spent=spent,
+            budget=float(cap),
+            period="month",
+        )
+        if alert is not None:
+            raised.append(alert)
+    if 100 in reached:
+        await suspend_for_budget(session, org_id, slug, spent=spent, cap=float(cap))
+    return raised
+
+
+async def suspend_for_budget(
+    session: AsyncSession, org_id: str, slug: str, *, spent: float, cap: float
+) -> bool:
+    """The hard stop: the agent is `suspended`, and the audit log says why. `False` when it already
+    was (or is revoked): nothing to do twice."""
+    agent = (
+        await session.execute(select(Agent).where(Agent.org_id == org_id, Agent.slug == slug))
+    ).scalar_one_or_none()
+    if agent is None or agent.status != "active":
+        return False
+    agent.status = "suspended"
+    await record(
+        session,
+        None,
+        "agent.budget_suspend",
+        org_id=org_id,
+        target_type="agent",
+        target_id=agent.id,
+        spent_usd=round(spent, 6),
+        monthly_usd=cap,
+    )
+    return True
+
+
+async def unsent_month_alerts(session: AsyncSession, org_id: str) -> list[BudgetAlert]:
+    """The monthly agent alerts that have not reached Slack yet, oldest first."""
+    rows = await session.execute(
+        select(BudgetAlert)
+        .where(
+            BudgetAlert.org_id == org_id,
+            BudgetAlert.scope == "agent",
+            BudgetAlert.period == "month",
+            BudgetAlert.notified_at.is_(None),
+        )
+        .order_by(BudgetAlert.threshold)
+    )
+    return list(rows.scalars())
+
+
+__all__ = [
+    "check_after_spend",
+    "crossed",
+    "suspend_for_budget",
+    "thresholds",
+    "unsent_month_alerts",
+]
