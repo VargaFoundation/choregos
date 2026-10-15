@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: contrat, displayName: Contrat, description: "Le contrat d'une personne : sa nature et ses dates.", owner: rh}
+spec:
+  datasource: contrats
+  primaryKey: reference
+  titleProperty: reference
+  properties:
+    reference: {type: string, required: true}
+    matricule: {type: string, required: true}
+    nature: {type: string, enum: [cdi, cdd, alternance, stage, prestation], required: true}
+    debut: {type: date, required: true}
+    fin: {type: date}

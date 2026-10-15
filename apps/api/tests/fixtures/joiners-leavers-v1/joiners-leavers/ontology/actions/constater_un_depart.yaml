@@ -1,0 +1,37 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: constater_un_depart
+  displayName: Record a leaver
+  description: "Declares the person gone and closes in the registry what the offboarding workflow cut: their account, their badge, and their collected laptop."
+spec:
+  target: {objectType: collaborateur, cardinality: one}
+  parameters:
+    date_depart: {type: date, required: true}
+    upn: {type: string, required: true}
+    badge: {type: string, required: true, description: "The UID of the cut badge."}
+    numero_de_serie: {type: string, required: true, description: "The collected laptop."}
+  preconditions:
+    - {name: pas_deja_parti, expr: "target.statut != 'parti'", message: "This person has already left."}
+  permissions:
+    propose: [agent:coordinateur-offboarding, role:contributor]
+    approve: policy:rh
+  risk: medium
+  reversibility: reversible  # une mise à jour du registre, qu'une autre défait
+  effects:
+    - type: object.update
+      with: {objectType: account, id: "${params.upn}", properties: {actif: false, ferme_le: "${now}"}}
+    - type: object.update
+      with: {objectType: badge, id: "${params.badge}", properties: {actif: false, coupe_le: "${now}"}}
+    - type: object.update
+      with: {objectType: materiel, id: "${params.numero_de_serie}", properties: {statut: repris}}
+    - type: object.update
+      with:
+        objectType: collaborateur
+        id: "${target.matricule}"
+        properties: {statut: parti, date_depart: "${params.date_depart}"}
+  evidence:
+    - name: depart_au_registre
+      collect: {type: object.reread, with: {}}
+      expect: "result.statut == 'parti'"
+  idempotencyKey: "${target.matricule + ':depart'}"

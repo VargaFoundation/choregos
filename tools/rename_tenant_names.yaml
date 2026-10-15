@@ -1,0 +1,49 @@
+# The mapping `tools/rename_tenant_names.py` reads (S39-11): what a tenant's French names become.
+# It is data, not code: a tenant with other names edits a copy and passes `--mapping`.
+# Every old name here is French on purpose: this file is the table of what is being renamed.
+
+# Organisation connectors: old name -> new name (same type, kind, config and secret references).
+connectors:  # lang: fr-ok
+  annuaire: directory  # lang: fr-ok
+  parc: devices  # lang: fr-ok
+  transporteur: carrier  # lang: fr-ok
+  lecteurs: badge-readers  # lang: fr-ok
+  fournisseur: supplier  # lang: fr-ok
+
+# An operation that was renamed with its connector (the supplier's tools): old -> new.
+operations:  # lang: fr-ok
+  commander_poste: order_laptop  # lang: fr-ok
+  suivi_commande: order_status  # lang: fr-ok
+
+# Agents: old slug -> the template's new slug. The old one is deprecated, never retired here.
+agents:  # lang: fr-ok
+  coordinateur-onboarding: onboarding-coordinator  # lang: fr-ok
+  coordinateur-offboarding: offboarding-coordinator  # lang: fr-ok
+
+# The workflows of the HR template: a project's workflow of this name that still has the
+# French state `a_revoir` is re-published from the template as its next version.
+workflows:
+  onboarding: workflows/onboarding.yaml
+  offboarding: workflows/offboarding.yaml
+french_marker_state: a_revoir  # lang: fr-ok
+routing_labels:
+  depart: leaver  # lang: fr-ok
+
+# Project display names (the slug is a URL and is never renamed).
+projects:
+  rh: HR  # lang: fr-ok
+  rh-demo: HR demo  # lang: fr-ok
+  essai-defauts: "Trial: deployment defaults"  # lang: fr-ok
+  essai-flux: "Trial: several workflows"  # lang: fr-ok
+  essai-it4it: "Trial: IT4IT (foundation)"  # lang: fr-ok
+  preuve: Proof  # lang: fr-ok
+
+# State labels of hand-made workflows, by "<project>/<workflow>": old label -> new label.
+# Only `display` is translated; state ids belong to the project and open items sit on them.
+labels:
+  preuve/preuve-agent:  # lang: fr-ok
+    "À faire": "To do"  # lang: fr-ok
+    "En cours": "In progress"  # lang: fr-ok
+    "Fini": "Done"  # lang: fr-ok
+    "Intervention humaine": "Needs a person"  # lang: fr-ok
+    "Abandonné": "Abandoned"  # lang: fr-ok

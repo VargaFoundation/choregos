@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: Ontology
+metadata: {name: rh-arrivees-departs, version: 1.0.0}
+spec:
+  description: >-
+    The registry of what an onboarding opens and what an offboarding must close: the person and
+    their contract, their account and groups, their laptop, their badge. The workflows act on the
+    directory, the device fleet and the badge readers; this registry keeps what they opened, and an
+    HR person's Claude queries it through the MCP door — who among the leavers still holds an
+    active badge?
+  defaults:
+    sensitivity: internal
+    mcp: {exposeObjects: true, exposeActions: true}
