@@ -2,7 +2,7 @@
 """The organisation's model catalogue (S39-07b, ADR 0060): `model_catalogue`
 
 Revision ID: c8e0a2b4d6f1
-Revises: e7a9c1b3d5f7
+Revises: c4e6a8b0d2f4
 Create Date: 2026-10-15 12:00:00+00:00
 """
 
@@ -16,7 +16,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "c8e0a2b4d6f1"
-down_revision: str | None = "e7a9c1b3d5f7"
+down_revision: str | None = "c4e6a8b0d2f4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
