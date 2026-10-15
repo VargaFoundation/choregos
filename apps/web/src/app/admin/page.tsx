@@ -62,7 +62,7 @@ export default function AdminPage() {
         <Card title="My access tokens">
           <p className="mb-3 text-xs text-ink-muted" id="jetons">
             Every token you hold: for the API and the CLI, or for an AI client at the MCP door (created from{" "}
-            <Link href="/integrations">AI clients</Link> or <Link href="/agents">Agents</Link>).
+            <Link href="/integrations">Integrations</Link> or <Link href="/agents">Agents</Link>).
           </p>
           {/* Le clair n'existe qu'ici, une fois : il n'est jamais stocké ni réaffiché. */}
           {tokenClair && (

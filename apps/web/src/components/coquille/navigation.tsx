@@ -34,16 +34,18 @@ import { cn } from "@/lib/cn";
 import type { BreadcrumbStep } from "@/components/ui";
 import { useSession } from "@/lib/session";
 
-// Les skills ont leur entrée (revue du 07/10 : « il n'y a pas de lien direct dans le menu ») et
-// « AI clients » plutôt qu'« integrations » : la page sert aux assistants qui entrent DANS Choregos,
-// quand les connecteurs (administration) sont ce vers quoi Choregos sort.
+// Skills have their own entry (review of 7 Oct: "there is no direct link in the menu"). The
+// `/integrations` page is where a person connects their AI assistant to Choregos through the MCP
+// door (inbound, whereas the connectors in the administration are where Choregos reaches out). It
+// bears the name of the project's own entry, "Integrations", and sits in the Organisation group:
+// it is how the organisation's people plug in, not something agents use (S40-08).
 export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/", label: "Projects", icone: FolderKanban },
   { href: "/agents", label: "Agents", icone: Bot },
   { href: "/skills", label: "Skills", icone: BookOpen },
   { href: "/knowledge", label: "Knowledge", icone: Library },
   { href: "/inbox", label: "Inbox", icone: Inbox },
-  { href: "/integrations", label: "AI clients", icone: Plug },
+  { href: "/integrations", label: "Integrations", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
   { href: "/admin", label: "Admin", icone: Settings },
 ];
@@ -52,11 +54,11 @@ export function entreeActive(href: string, pathname: string): boolean {
   return href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(href);
 }
 
-/** Les entrées, rangées : le travail, ce qu'on y branche, l'organisation. */
+/** The entries, grouped: the work, what agents use, the organisation (S40-08). */
 export const GROUPES: { titre: string; entrees: string[] }[] = [
   { titre: "Work", entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/integrations"] },
-  { titre: "Organisation", entrees: ["/costs", "/admin"] },
+  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge"] },
+  { titre: "Organisation", entrees: ["/integrations", "/costs", "/admin"] },
 ];
 
 // ───────────────────────────── scopes (S30-03) ─────────────────────────────
