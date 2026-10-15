@@ -1,13 +1,13 @@
-# Une étude poussée, close par un ADR au format MADR 4 — fusionné, jamais déployé.
+# A thorough study, closed by an ADR in the MADR 4 format — merged, never deployed.
 #
-# Le rédacteur de spec pose la question et les critères ; le chercheur instruit, preuves `chemin:ligne`
-# à l'appui ; l'architecte écrit UN ADR dans `docs/adr/` — la garantie `markdown_sections` lit ce que
-# la branche AJOUTE (contexte, options, décision « Chosen option: »), pas le récit de l'agent. Un
-# critique le relit ; les architectes décident (un refus renvoie à l'instruction, la raison suit) ;
-# l'architecte passe alors le statut à `accepted`, ce que la même garantie vérifie, et la PR fusionne —
-# si son numéro est encore libre sur la branche par défaut (`adr_number_free`) ; pris entre-temps par
-# une autre étude, il retourne à l'architecte, qui renumérote.
-# Aucun train : une étude ne part pas en production (ADR 0041).
+# The spec writer poses the question and the criteria; the researcher investigates, with `path:line`
+# evidence; the architect writes ONE ADR in `docs/adr/` — the `markdown_sections` guarantee reads what
+# the branch ADDS (context, options, decision "Chosen option:"), not the agent's account. A
+# critic re-reads it; the architects decide (a refusal sends it back to the instruction, the reason follows);
+# the architect then moves the status to `accepted`, which the same guarantee checks, and the PR merges —
+# if its number is still free on the default branch (`adr_number_free`); taken meanwhile by
+# another study, it returns to the architect, who renumbers.
+# No train: a study does not go to production (ADR 0041).
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -95,8 +95,8 @@ transitions:
     to: adopted
     by: platform
     does: merge_pr
-    # Deux études simultanées lisent le même « plus grand numéro » : la seconde à fusionner voit son
-    # numéro refusé, et retourne à l'architecte, qui renumérote avant de reposer `accepted` (#287).
+    # Two simultaneous studies read the same "highest number": the second to merge has its
+    # number refused, and returns to the architect, who renumbers before putting `accepted` back (#287).
     gates: [ci_green, adr_number_free]
     timeout_hours: 24
     on_fail: { to: decided, max_attempts: 2, escalate_to: needs_human }

@@ -1,4 +1,4 @@
-# SLO par défaut : taux de 5xx, latence p95, erreurs métier. Paramétrable par projet.
+# Default SLOs: 5xx rate, p95 latency, business errors. Configurable per project.
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:

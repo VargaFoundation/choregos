@@ -1,5 +1,5 @@
-# CI du projet : build, test, lint, scans, image signée. Le résultat repart en
-# CloudEvents vers l'API Choregos, qui le transforme en InboundEvent.
+# The project's CI: build, test, lint, scans, signed image. The result goes back as
+# CloudEvents to the Choregos API, which turns it into an InboundEvent.
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:

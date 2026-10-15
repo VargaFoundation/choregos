@@ -1,5 +1,5 @@
-# Pipeline d'une étape agent : clone puis exécution. Chains signe le PipelineRun,
-# ce qui rend la provenance des commits d'agent vérifiable.
+# Pipeline of an agent stage: clone then execution. Chains signs the PipelineRun,
+# which makes the provenance of agent commits verifiable.
 apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
