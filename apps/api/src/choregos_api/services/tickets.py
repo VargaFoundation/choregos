@@ -205,13 +205,15 @@ def release_dto(row: Release, project_slug: str) -> ReleaseDto:
     )
 
 
-async def cle_de_ticket_interne(session: AsyncSession, project: Project) -> str:
+async def cle_de_ticket_interne(session: AsyncSession, project: Project, *, numerotee: bool = True) -> str:
     """Attribue `<PRÉFIXE>-<n>` quand la plateforme tient elle-même les tickets (`tracker: internal`).
 
     Compter en base plutôt que tenir un compteur évite un deuxième endroit où l'état vit ;
     la course entre deux créations simultanées est laissée à la contrainte d'unicité
     `(project_id, tracker_key)`. Servait à l'orchestrateur (findings) ; sert aussi à l'API
     depuis que `POST /projects/{id}/work-items` existe.
+
+    `numerotee=False` returns the prefix alone: a schedule builds its own key on it (S38-11).
     """
     connecteur = (
         await session.execute(
@@ -220,6 +222,8 @@ async def cle_de_ticket_interne(session: AsyncSession, project: Project) -> str:
     ).scalar_one_or_none()
     configure = (connecteur.config or {}).get("key_prefix") if connecteur else None
     prefixe = str(configure or project.slug).upper()
+    if not numerotee:
+        return prefixe
     existantes = (
         (
             await session.execute(
@@ -283,6 +287,7 @@ async def creer_un_ticket(
     demande: WorkItemCreate,
     *,
     canal: str = "api",
+    cle: str | None = None,
 ) -> WorkItem:
     """Pose une demande dans Choregos — seulement quand le tracker est interne.
 
@@ -295,7 +300,8 @@ async def creer_un_ticket(
         raise conflict(
             "this project receives its work items from an external tracker: create the request there"
         )
-    key = await cle_de_ticket_interne(session, project)
+    # A schedule gives its own key, one per window, so that a second firing finds the first (S38-11).
+    key = cle or await cle_de_ticket_interne(session, project)
     item = await nouveau_ticket(
         session,
         project,

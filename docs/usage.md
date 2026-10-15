@@ -1007,6 +1007,26 @@ choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE
 ```
 
+### Work items on a schedule
+
+With `tracker: internal`, a project can open work items by itself (S38-11):
+
+```yaml
+schedules:
+  - name: weekly
+    cron: "0 6 * * mon"          # five fields, UTC
+    title: Weekly campaign
+    fields: { symbols: [SPY.US, QQQ.US], start: "2018-01-01", oos_start: "2024-01-01", end: "{window}" }
+    workflow: campaign           # optional; the project's routing otherwise
+```
+
+The reconciliation pass opens the work item of the current window, keyed by the window
+(`RESEARCH-weekly-20261019T0600Z`), then starts it. Two passes in the same window find the key and
+open nothing more. `{window}` in a text field becomes the window's date. A window missed by more than an hour — the workers were down — is skipped, not run
+late. With an external tracker, or with the reconciliation loop off
+(`reconcile_interval_seconds: 0`), nothing fires. Fields the workflow refuses are logged and the
+pass reports the schedule under `refused`; the other schedules still fire.
+
 ## 6. Read what came out
 
 In the UI, a run shows its cost, its duration, its **evidence**, its scope, its full ACP
