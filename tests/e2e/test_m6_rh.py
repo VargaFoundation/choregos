@@ -77,35 +77,33 @@ async def _organisation(client: AsyncClient) -> None:
     """Le geste de l'administrateur : les cinq connecteurs que le gabarit annonce, leurs clés en
     référence, et ce que l'organisation permet sans décision humaine."""
     for corps in (
-        {"name": "annuaire", "kind": "identity", "type": "entra",
+        {"name": "directory", "kind": "identity", "type": "entra",
          "config": {"tenant_id": "acme", "client_id": "choregos"},
          "secret_refs": {"client_secret": "env:CONNECTOR_E2E_CLE_ANNUAIRE"}},
-        {"name": "parc", "kind": "mdm", "type": "demo",
+        {"name": "devices", "kind": "mdm", "type": "demo", "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
+        {"name": "carrier", "kind": "shipping", "type": "demo",
          "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
-        {"name": "transporteur", "kind": "shipping", "type": "demo",
+        {"name": "badge-readers", "kind": "access_control", "type": "demo",
          "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
-        {"name": "lecteurs", "kind": "access_control", "type": "demo",
-         "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
-        {"name": "fournisseur", "kind": "mcp", "type": "mcp", "config": {"url": "https://fournisseur.test/mcp"},
+        {"name": "supplier", "kind": "mcp", "type": "mcp", "config": {"url": "https://supplier.test/mcp"},
          "secret_refs": {"token": "env:CONNECTOR_E2E_CLE_FOURNISSEUR"}},
     ):  # fmt: skip
         cree = await client.post(f"{ORG}/connectors", json=corps)
         assert cree.status_code == 201, cree.text
     # Les outils du fournisseur se DÉCOUVRENT, et naissent fermés.
-    decouverte = await client.post(f"{ORG}/connectors/fournisseur/discover")
+    decouverte = await client.post(f"{ORG}/connectors/supplier/discover")
     assert decouverte.status_code == 200, decouverte.text
     operations = {
-        o["name"]: o["policy"]
-        for o in (await client.get(f"{ORG}/connectors/fournisseur")).json()["operations"]
+        o["name"]: o["policy"] for o in (await client.get(f"{ORG}/connectors/supplier")).json()["operations"]
     }
-    assert operations == {"commander_poste": "forbidden", "suivi_commande": "forbidden"}, (
+    assert operations == {"order_laptop": "forbidden", "order_status": "forbidden"}, (
         "un outil découvert naît fermé"
     )
     permises = {
-        "annuaire": ["create_user", "add_to_group", "remove_from_group", "disable_user", "revoke_sessions"],
-        "parc": ["enroll_device", "wipe_device"],
-        "transporteur": ["create_shipment", "create_return"],
-        "lecteurs": ["activate_badge", "deactivate_badge"],
+        "directory": ["create_user", "add_to_group", "remove_from_group", "disable_user", "revoke_sessions"],
+        "devices": ["enroll_device", "wipe_device"],
+        "carrier": ["create_shipment", "create_return"],
+        "badge-readers": ["activate_badge", "deactivate_badge"],
     }
     for connecteur, noms in permises.items():
         for nom in noms:
@@ -115,7 +113,7 @@ async def _organisation(client: AsyncClient) -> None:
             assert ouverte.status_code == 200, ouverte.text
     # Un achat se décide : la commande du poste reste sous validation.
     sous_validation = await client.patch(
-        f"{ORG}/connectors/fournisseur/operations/commander_poste", json={"policy": "approval"}
+        f"{ORG}/connectors/supplier/operations/order_laptop", json={"policy": "approval"}
     )
     assert sous_validation.status_code == 200, sous_validation.text
 
@@ -151,8 +149,8 @@ async def _par_claude(platform: Platform, client: AsyncClient, champs: dict[str,
             headers={"Authorization": f"Bearer {jeton['token']}"},
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                   "params": {"name": "create_work_item",
-                             "arguments": {"title": f"Arrivée de {champs['nom']}", "workflow": "onboarding",
-                                           "fields": champs}}},
+                             "arguments": {"title": f"Arrival of {champs['full_name']}",
+                                           "workflow": "onboarding", "fields": champs}}},
         )  # fmt: skip
     finally:
         await claude.aclose()
@@ -248,20 +246,20 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
     debut = await platform.env.get_current_time()
     arrivee = (debut + timedelta(days=15)).date()
     champs = {
-        "nom": "Léa Martin",
+        "full_name": "Léa Martin",
         "upn": "lea@acme.test",
-        "date_arrivee": arrivee.isoformat(),
-        "poste": "Développeuse",
-        "groupe": "devs",
-        "groupe_sensible": "prod-lecture",
-        "adresse": "12 rue de la Paix, Paris",
+        "start_date": arrivee.isoformat(),
+        "job": "Developer",
+        "group": "devs",
+        "sensitive_group": "prod-read",
+        "address": "12 Peace Street, Paris",
     }
     ticket = await _par_claude(platform, client, champs)
 
     async with worker():
-        platform.adapters.executor.queue_result(_plan("plan_d_acces"))
+        platform.adapters.executor.queue_result(_plan("access_plan"))
         interprete = await _demarrer(platform, projet, ticket)
-        await _etat(client, ticket["work_item"], "plan", "l'agent du registre a préparé le plan")
+        await _etat(client, ticket["work_item"], "planned", "the registry agent prepared the plan")
         await _demande(client, ticket["work_item"])
         assert (
             await client.post(f"/api/v1/work-items/{ticket['work_item']}/decisions", json={"kind": "approve"})
@@ -272,7 +270,7 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
         assert statut["waiting_until"].startswith((arrivee - timedelta(days=10)).isoformat())
         assert faux.annuaire.comptes == {}, "rien avant J-10"
         await platform.env.sleep(timedelta(days=5, hours=1))
-        await _etat(client, ticket["work_item"], "comptes", "le compte est créé à J-10")
+        await _etat(client, ticket["work_item"], "accounts_created", "the account is created at D-10")
         (compte,) = faux.annuaire.comptes.values()
         assert (
             compte["userPrincipalName"] == "lea@acme.test"
@@ -281,21 +279,21 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
         assert compte["id"] in faux.annuaire.groupes["devs"]
 
         # Le groupe sensible : une personne ré-authentifiée.
-        await _approuver_l_action(client, projet, "arrivee.groupe_sensible")
-        await _etat(client, ticket["work_item"], "sensible", "le groupe sensible est décidé")
-        assert compte["id"] in faux.annuaire.groupes["prod-lecture"]
+        await _approuver_l_action(client, projet, "onboarding.sensitive_group")
+        await _etat(client, ticket["work_item"], "sensitive_granted", "the sensitive group is decided")
+        assert compte["id"] in faux.annuaire.groupes["prod-read"]
 
         # J-7 : la commande au fournisseur se décide ; le parc et l'envoi suivent son numéro de série.
         await _attendre(interprete, lambda s: s.get("waiting_until"), "J-7 attendu")
         assert faux.fournisseur.commandes == {}
         await platform.env.sleep(timedelta(days=3))
-        await _approuver_l_action(client, projet, "arrivee.poste")
-        await _etat(client, ticket["work_item"], "poste", "le poste est commandé, inscrit, expédié")
+        await _approuver_l_action(client, projet, "onboarding.laptop")
+        await _etat(client, ticket["work_item"], "laptop_shipped", "the laptop is ordered, enrolled, shipped")
         (commande,) = faux.fournisseur.commandes.values()
         serie = commande["serial"]
         assert faux.parc.postes[serie] == {"serial": serie, "upn": "lea@acme.test", "state": "enrolled"}
         (envoi,) = faux.transporteur.envois.values()
-        assert (envoi["items"], envoi["address"]) == ([serie], champs["adresse"])
+        assert (envoi["items"], envoi["address"]) == ([serie], champs["address"])
         assert {e["authorization"] for _, e, _ in faux.serveur.recues} == {f"Bearer {CLE_FOURNISSEUR}"}
 
         # Le badge : une tâche, sa preuve ; puis la plateforme l'active.
@@ -306,7 +304,7 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
             json={"kind": "complete", "values": {"badge_uid": "04A1B2C3"}, "attested": True},
         )
         assert tache.status_code == 202, tache.text
-        await _etat(client, ticket["work_item"], "actif", "le badge est actif")
+        await _etat(client, ticket["work_item"], "active", "the badge is active")
         assert faux.lecteurs.badges["04A1B2C3"] == {
             "uid": "04A1B2C3",
             "holder": "lea@acme.test",
@@ -316,19 +314,19 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
         # J+1 : la plateforme relit et vérifie.
         await platform.env.sleep(timedelta(days=12))
         resultat = await interprete.result()
-    assert resultat["state"] == "pret"
+    assert resultat["state"] == "ready"
 
     actions = await _actions(client, projet)
     assert {k: a["status"] for k, a in actions.items()} == {
-        "arrivee.comptes": "succeeded",
-        "arrivee.groupe_sensible": "succeeded",
-        "arrivee.poste": "succeeded",
-        "arrivee.badge": "succeeded",
-        "arrivee.controle": "succeeded",
+        "onboarding.accounts": "succeeded",
+        "onboarding.sensitive_group": "succeeded",
+        "onboarding.laptop": "succeeded",
+        "onboarding.badge": "succeeded",
+        "onboarding.check": "succeeded",
     }
-    assert actions["arrivee.comptes"]["decisions"][0]["by"] == "policy"
-    assert actions["arrivee.groupe_sensible"]["decisions"][0]["by"] == "admin@varga.dev"
-    assert actions["arrivee.groupe_sensible"]["decisions"][0]["auth_age_seconds"] is not None
+    assert actions["onboarding.accounts"]["decisions"][0]["by"] == "policy"
+    assert actions["onboarding.sensitive_group"]["decisions"][0]["by"] == "admin@varga.dev"
+    assert actions["onboarding.sensitive_group"]["decisions"][0]["auth_age_seconds"] is not None
     chronologie = (await client.get(f"/api/v1/work-items/{ticket['work_item']}/timeline")).text
     assert ATTESTATION_BADGE in chronologie, "la preuve de la remise se lit dans le dossier"
 
@@ -346,19 +344,19 @@ async def test_un_depart_a_j0_tout_coupe_le_poste_repris_recu_efface(
     faux.parc.postes["PC-0042"] = {"serial": "PC-0042", "upn": "paul@acme.test", "state": "enrolled"}
     debut = await platform.env.get_current_time()
     depart = (debut + timedelta(days=3)).date()
-    champs = {"nom": "Paul Durand", "upn": "paul@acme.test", "date_depart": depart.isoformat(),
-              "badge_uid": "04D5E6F7", "serial": "PC-0042", "adresse": "8 quai des Brumes, Lyon"}  # fmt: skip
+    champs = {"full_name": "Paul Durand", "upn": "paul@acme.test", "last_day": depart.isoformat(),
+              "badge_uid": "04D5E6F7", "serial": "PC-0042", "address": "8 Fog Quay, Lyon"}  # fmt: skip
     cree = await client.post(
         f"/api/v1/projects/{projet['id']}/work-items",
-        json={"title": "Départ de Paul", "labels": ["depart"], "fields": champs},
+        json={"title": "Departure of Paul", "labels": ["leaver"], "fields": champs},
     )
     assert cree.status_code == 201 and cree.json()["workflow_name"] == "offboarding", cree.text
     ticket = {"work_item": cree.json()["id"], "key": cree.json()["tracker_key"]}
 
     async with worker():
-        platform.adapters.executor.queue_result(_plan("plan_de_depart"))
+        platform.adapters.executor.queue_result(_plan("leaver_plan"))
         interprete = await _demarrer(platform, projet, ticket)
-        await _etat(client, ticket["work_item"], "plan", "le plan de départ est prêt")
+        await _etat(client, ticket["work_item"], "planned", "the leaver plan is ready")
         await _demande(client, ticket["work_item"])
         assert (
             await client.post(f"/api/v1/work-items/{ticket['work_item']}/decisions", json={"kind": "approve"})
@@ -366,28 +364,30 @@ async def test_un_depart_a_j0_tout_coupe_le_poste_repris_recu_efface(
         await _attendre(interprete, lambda s: s.get("waiting_until"), "J0 attendu")
         assert faux.annuaire.comptes[identifiant]["accountEnabled"] is True, "rien avant J0"
         await platform.env.sleep(timedelta(days=3, hours=1))
-        await _etat(client, ticket["work_item"], "reprise", "les accès sont coupés et la reprise planifiée")
+        await _etat(
+            client, ticket["work_item"], "pickup_scheduled", "the access is cut and the pickup scheduled"
+        )
         assert faux.annuaire.comptes[identifiant]["accountEnabled"] is False
         assert faux.annuaire.sessions_revoquees == ["paul@acme.test"]
         assert faux.lecteurs.badges["04D5E6F7"]["active"] is False
-        retour = faux.transporteur.envois[f"{ticket['key']}-retour"]
-        assert (retour["direction"], retour["address"]) == ("return", champs["adresse"])
+        retour = faux.transporteur.envois[f"{ticket['key']}-return"]
+        assert (retour["direction"], retour["address"]) == ("return", champs["address"])
 
         assert (await _demande(client, ticket["work_item"]))["kind"] == "task"
         reception = await client.post(
             f"/api/v1/work-items/{ticket['work_item']}/decisions",
-            json={"kind": "complete", "values": {"etat_du_poste": "intact"}, "attested": True},
+            json={"kind": "complete", "values": {"laptop_condition": "intact"}, "attested": True},
         )
         assert reception.status_code == 202, reception.text
         resultat = await interprete.result()
-    assert resultat["state"] == "clos"
+    assert resultat["state"] == "closed"
     assert faux.parc.postes["PC-0042"]["state"] == "wiped"
     actions = await _actions(client, projet)
     assert {k: a["status"] for k, a in actions.items()} == {
-        "depart.coupure": "succeeded",
-        "depart.reprise": "succeeded",
-        "depart.effacement": "succeeded",
-        "depart.controle": "succeeded",
+        "offboarding.cut_access": "succeeded",
+        "offboarding.pickup": "succeeded",
+        "offboarding.wipe": "succeeded",
+        "offboarding.check": "succeeded",
     }
     chronologie = (await client.get(f"/api/v1/work-items/{ticket['work_item']}/timeline")).text
     assert ATTESTATION_RECEPTION in chronologie

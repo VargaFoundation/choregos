@@ -485,6 +485,8 @@ prepares the access plan with its skills, a person from HR validates it, and eve
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated
 approval, the laptop ordered from the supplier's agent at D-7, the badge a **task** with its proof,
 the check at D+1; at departure, D0 cuts the account, its sessions and the badge in one gesture.
+Since 2.0.0 every identifier it ships is English (`onboarding-coordinator`, `directory`, `requested` …
+`ready`, `onboarding.accounts`); a project born from an older version keeps its own.
 See [§4 bis](#4-bis-governed-actions).
 
 ## 3 bis. Give agents tools they cannot misuse

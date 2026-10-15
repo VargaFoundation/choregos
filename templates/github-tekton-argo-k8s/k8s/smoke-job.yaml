@@ -13,6 +13,6 @@ spec:
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
-        echo "smoke $(params.env) sur $(params.base-url)"
+        echo "smoke $(params.env) on $(params.base-url)"
         curl -fsS --max-time 10 "$(params.base-url)/healthz" > /dev/null
         curl -fsS --max-time 10 "$(params.base-url)/readyz" > /dev/null

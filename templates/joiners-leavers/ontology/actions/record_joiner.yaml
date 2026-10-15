@@ -1,0 +1,47 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: record_joiner
+  displayName: Record a joiner
+  description: "Records the person who is joining and their contract, once the onboarding request is approved."
+spec:
+  target: {cardinality: none}
+  parameters:
+    employee_id: {type: string, required: true}
+    full_name: {type: string, required: true}
+    email: {type: string}
+    job: {type: string}
+    manager: {type: string}
+    start_date: {type: date, required: true}
+    contract: {type: string, required: true, description: "Contract reference."}
+    contract_type: {type: string, enum: [permanent, fixed_term, apprenticeship, internship, contractor], required: true}
+    end_date: {type: date, description: "End of the contract, if it has one."}
+  permissions:
+    propose: [agent:onboarding-coordinator, role:contributor]
+    approve: policy:hr
+  risk: low
+  reversibility: reversible
+  effects:
+    - type: object.create
+      with:
+        objectType: employee
+        id: "${params.employee_id}"
+        properties:
+          employee_id: "${params.employee_id}"
+          full_name: "${params.full_name}"
+          email: "${has(params.email) ? params.email : null}"
+          job: "${has(params.job) ? params.job : null}"
+          manager: "${has(params.manager) ? params.manager : null}"
+          status: upcoming
+          start_date: "${params.start_date}"
+    - type: object.create
+      with:
+        objectType: contract
+        id: "${params.contract}"
+        properties:
+          reference: "${params.contract}"
+          employee_id: "${params.employee_id}"
+          contract_type: "${params.contract_type}"
+          start_date: "${params.start_date}"
+          end_date: "${has(params.end_date) ? params.end_date : null}"
+  idempotencyKey: "${params.employee_id}"

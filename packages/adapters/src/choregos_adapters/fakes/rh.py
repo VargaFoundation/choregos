@@ -42,6 +42,8 @@ class FauxMetier:
     la clé qu'ils attendent (vide : aucune)."""
 
     operations: ClassVar[tuple[OperationSpec, ...]] = ()
+    #: `old name -> (new name, {old parameter: new parameter})`: answered, never announced.
+    anciens_noms: ClassVar[dict[str, tuple[str, dict[str, str]]]] = {}  # lang: fr-ok
     cle_attendue: str = field(default="", repr=False, kw_only=True)
 
     def authentifier(self, cle: str) -> None:
@@ -49,6 +51,9 @@ class FauxMetier:
             raise UpstreamError(type(self).__name__, "clé refusée", status_code=401)
 
     def faire(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
+        if operation in self.anciens_noms:
+            operation, renamed = self.anciens_noms[operation]
+            params = {renamed.get(name, name): value for name, value in params.items()}
         if operation not in {o.name for o in self.operations}:
             raise AdapterError(f"{type(self).__name__} n'a pas d'opération {operation}")
         methode = getattr(self, operation)
@@ -154,38 +159,46 @@ class FakeBadges(FauxMetier):
         return dict(self.badges.get(uid) or {"uid": uid, "holder": None, "active": False})
 
 
-#: Les outils de l'agent du fournisseur. Il les annonce lui-même, en MCP : la plateforme les
-#: découvre, et ils naissent fermés (ADR 0034).
+#: The supplier agent's tools. It announces them itself, over MCP: the platform discovers them, and
+#: they are born closed (ADR 0034).
 OUTILS_DU_FOURNISSEUR: tuple[OperationSpec, ...] = (
     OperationSpec(
-        "commander_poste",
+        "order_laptop",
         "write",
-        "commande un poste pour un arrivant ; une commande par référence",
-        schema_d_entree("reference", "modele", "upn"),
+        "orders a laptop for a joiner; one order per reference",
+        schema_d_entree("reference", "model", "upn"),
     ),
     OperationSpec(
-        "suivi_commande",
+        "order_status",
         "read",
-        "où en est une commande : son état, le numéro de série du poste, le suivi du colis",
+        "where an order stands: its state, the laptop's serial number, the parcel's tracking",
         schema_d_entree("reference"),
     ),
 )
+
+#: The names the supplier's tools had before S39-11 (and the old parameter names), still answered
+#: but no longer announced: a workflow published from the 1.x template keeps calling them.
+ANCIENS_OUTILS_DU_FOURNISSEUR: dict[str, tuple[str, dict[str, str]]] = {  # lang: fr-ok
+    "commander_poste": ("order_laptop", {"modele": "model"}),  # lang: fr-ok
+    "suivi_commande": ("order_status", {}),  # lang: fr-ok
+}
 
 
 @dataclass
 class FakeFournisseur(FauxMetier):
     operations = OUTILS_DU_FOURNISSEUR
+    anciens_noms = ANCIENS_OUTILS_DU_FOURNISSEUR
     commandes: dict[str, dict[str, Any]] = field(default_factory=dict)
 
-    def commander_poste(self, reference: str, modele: str, upn: str) -> dict[str, Any]:
+    def order_laptop(self, reference: str, model: str, upn: str) -> dict[str, Any]:
         deja = self.commandes.get(reference)
         if deja is not None:
-            if (deja["modele"], deja["upn"]) != (modele, upn):
-                raise AdapterError(f"la commande {reference} existe déjà, pour un autre poste")
+            if (deja["model"], deja["upn"]) != (model, upn):
+                raise AdapterError(f"order {reference} already exists, for another laptop")
             return {**deja, "created": False}
         self.commandes[reference] = {
             "reference": reference,
-            "modele": modele,
+            "model": model,
             "upn": upn,
             "serial": f"PC-{_empreinte(reference)}",
             "state": "confirmed",
@@ -193,11 +206,11 @@ class FakeFournisseur(FauxMetier):
         }
         return {**self.commandes[reference], "created": True}
 
-    def suivi_commande(self, reference: str) -> dict[str, Any]:
+    def order_status(self, reference: str) -> dict[str, Any]:
         return dict(self.commandes.get(reference) or {"reference": reference, "state": "unknown"})
 
     def expedier(self, reference: str) -> None:
-        """Mise en scène : le fournisseur expédie le poste."""
+        """Staging: the supplier ships the laptop."""
         self.commandes[reference].update(state="shipped", tracking=f"COLIS-{_empreinte(reference)}")
 
 
@@ -260,5 +273,8 @@ def serveur_mcp(faux: FauxMetier, *, jeton: str = "") -> FakeMcpServer:
             for operation in faux.operations
         ],
         jeton=jeton,
-        gestes={operation.name: partial(faux.faire, operation.name) for operation in faux.operations},
+        gestes={
+            name: partial(faux.faire, name)
+            for name in [*(operation.name for operation in faux.operations), *faux.anciens_noms]
+        },
     )

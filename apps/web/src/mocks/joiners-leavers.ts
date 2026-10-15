@@ -6,7 +6,7 @@
  *
  * `joiners-leavers.json` is what the API returns for the template's onboarding workflow: the YAML
  * (its comments dropped), the part of the parsed document the console reads (`WorkflowDef.json`:
- * inputs and actors), the `task` of `t-badge`, and `POST /workflows/validate` (its graph; the
+ * inputs and actors), the `task` of `t-hand-over-badge`, and `POST /workflows/validate` (its graph; the
  * process view emptied). It was written by running the API's `validate` route and
  * `choregos_core.parse_workflow` over `templates/joiners-leavers/workflows/onboarding.yaml`. The
  * offboarding workflow and the process view are left out: every fixture counts in the bundle budget.
@@ -42,7 +42,7 @@ export const peopleOps: ProjectDto = {
   org: "varga",
   name: "People Ops",
   status: "active",
-  template_ref: "joiners-leavers@1.0.0",
+  template_ref: "joiners-leavers@2.0.0",
   config: { slug: SLUG, org: "varga" },
   workflow_name: "onboarding",
   policy_name: "solo",
@@ -79,7 +79,7 @@ function onboardingDef(): WorkflowDef {
   };
 }
 
-/** The badge task, as the interpreter asks it: the `task` of `t-badge`, word for word. */
+/** The badge task, as the interpreter asks it: the `task` of `t-hand-over-badge`, word for word. */
 function badgeTask(): Record<string, unknown> {
   const task = ONBOARDING.badge_task;
   return { summary: task.title, instructions: task.instructions, form: task.form, attest: task.attest };
@@ -93,25 +93,25 @@ const waitingForBadge: WorkItemDto = {
   project_slug: SLUG,
   tracker_key: "people-ops#7",
   title: "Paul Martin joins as data analyst",
-  state: "poste",
+  state: "laptop_shipped",
   state_display: "Laptop ordered, enrolled, shipped",
   workflow_name: "onboarding",
   workflow_version: 1,
   paused: false,
   fields: {
-    nom: "Paul Martin",
+    full_name: "Paul Martin",
     upn: "paul.martin@acme.test",
-    date_arrivee: new Date(now + 3 * 24 * 3_600_000).toISOString().slice(0, 10),
-    poste: "Data analyst",
-    groupe: "grp-data",
-    groupe_sensible: "grp-finance-read",
-    adresse: "12 Harbour Street, Lyon",
+    start_date: new Date(now + 3 * 24 * 3_600_000).toISOString().slice(0, 10),
+    job: "Data analyst",
+    group: "grp-data",
+    sensitive_group: "grp-finance-read",
+    address: "12 Harbour Street, Lyon",
   },
   totals: TOTALS,
   pending_request: {
     id: "hr1-badge",
     work_item_id: "hr1",
-    transition_id: "t-badge",
+    transition_id: "t-hand-over-badge",
     kind: "task",
     payload: badgeTask(),
     requested_at: iso(50),
@@ -132,7 +132,7 @@ function file(body: WorkItemCreate): WorkItemDto {
     project_slug: SLUG,
     tracker_key: `people-ops#${7 + items.length}`,
     title: body.title,
-    state: "demande",
+    state: "requested",
     state_display: "Request received",
     workflow_name: "onboarding",
     workflow_version: 1,
@@ -150,12 +150,12 @@ function journey(item: WorkItemDto): WorkItemJourney {
   const path: Array<[string | null, string, string | null]> =
     item.id === waitingForBadge.id
       ? [
-          [null, "demande", null],
-          ["demande", "plan", "t-plan"],
-          ["plan", "valide", "t-validation"],
-          ["valide", "comptes", "t-comptes"],
-          ["comptes", "sensible", "t-sensible"],
-          ["sensible", "poste", "t-poste"],
+          [null, "requested", null],
+          ["requested", "planned", "t-plan"],
+          ["planned", "approved", "t-approve"],
+          ["approved", "accounts_created", "t-create-accounts"],
+          ["accounts_created", "sensitive_granted", "t-grant-sensitive"],
+          ["sensitive_granted", "laptop_shipped", "t-ship-laptop"],
         ]
       : [[null, item.state, null]];
   const moves: JourneyMove[] = path.map(([from, to, transition], index) => ({
@@ -172,7 +172,7 @@ function journey(item: WorkItemDto): WorkItemJourney {
             id: "r-plan-1",
             kind: "agent",
             transition_id: "t-plan",
-            actor: "coordinateur",
+            actor: "coordinator",
             role: "coordination",
             attempt: 1,
             status: "succeeded",
@@ -182,10 +182,10 @@ function journey(item: WorkItemDto): WorkItemJourney {
             cost_usd: 3.37,
           },
           {
-            id: "hr-validation-1",
+            id: "hr-approval-1",
             kind: "human",
-            transition_id: "t-validation",
-            actor: "rh",
+            transition_id: "t-approve",
+            actor: "hr",
             role: "approval",
             attempt: 1,
             status: "approved",
@@ -200,7 +200,7 @@ function journey(item: WorkItemDto): WorkItemJourney {
     tracker_key: item.tracker_key,
     workflow_name: item.workflow_name,
     workflow_version: 1,
-    initial: "demande",
+    initial: "requested",
     state: item.state,
     closed: false,
     graph: validation.graph!,
@@ -242,9 +242,9 @@ export function peopleOpsApi(method: string, route: string, body: unknown): unkn
     const decision = body as { kind: string; values?: Record<string, unknown> };
     const decided = { ...item.pending_request!, decided_by: "augustin@varga.dev", decided_at: new Date().toISOString(), decision };
     if (decision.kind === "complete") {
-      Object.assign(item, { fields: { ...item.fields, ...decision.values }, state: "badge", state_display: "Badge handed over" });
+      Object.assign(item, { fields: { ...item.fields, ...decision.values }, state: "badge_issued", state_display: "Badge handed over" });
     } else {
-      Object.assign(item, { state: "a_revoir", state_display: "To review" });
+      Object.assign(item, { state: "needs_review", state_display: "To review" });
     }
     item.pending_request = null;
     return decided;

@@ -161,7 +161,7 @@ def test_les_actions_n_appellent_que_ce_que_le_gabarit_annonce(path: Path) -> No
                 specs = [effet.model_dump(by_alias=True), *([effet.compensate] if effet.compensate else [])]
                 for spec in specs:
                     nom = str(spec["effect"])
-                    assert nom in {"connector.call", "verifier"}, (
+                    assert nom in {"connector.call", "check", "verifier"}, (
                         f"{transition.key} : effet `{nom}` hors du cœur"
                     )
                     if nom != "connector.call":

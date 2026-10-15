@@ -1,18 +1,18 @@
 apiVersion: choregos.dev/v1alpha1
 kind: ActionType
 metadata:
-  name: consigner_le_badge
+  name: record_badge
   displayName: Record the badge
   description: "Records the badge handed over in person and activated, under the UID the task captured."
 spec:
-  target: {objectType: collaborateur, cardinality: one}
+  target: {objectType: employee, cardinality: one}
   parameters:
     uid: {type: string, required: true}
   preconditions:
-    - {name: pas_parti, expr: "target.statut != 'parti'", message: "No badge is activated for a person who has left."}
+    - {name: not_gone, expr: "target.status != 'gone'", message: "No badge is activated for a person who has left."}
   permissions:
-    propose: [agent:coordinateur-onboarding, role:contributor]
-    approve: policy:rh
+    propose: [agent:onboarding-coordinator, role:contributor]
+    approve: policy:hr
   risk: low
   reversibility: reversible
   effects:
@@ -22,12 +22,12 @@ spec:
         id: "${params.uid}"
         properties:
           uid: "${params.uid}"
-          matricule: "${target.matricule}"
-          actif: true
-          remis_le: "${now}"
+          employee_id: "${target.employee_id}"
+          active: true
+          handed_over_at: "${now}"
     - type: object.update
       with:
-        objectType: collaborateur
-        id: "${target.matricule}"
-        properties: {statut: present}
+        objectType: employee
+        id: "${target.employee_id}"
+        properties: {status: present}
   idempotencyKey: "${params.uid}"

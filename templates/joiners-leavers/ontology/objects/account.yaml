@@ -2,13 +2,13 @@ apiVersion: choregos.dev/v1alpha1
 kind: ObjectType
 metadata: {name: account, displayName: Account, description: "The directory account opened for a person, and its groups.", owner: it}
 spec:
-  datasource: comptes
+  datasource: accounts
   primaryKey: upn
   titleProperty: upn
   properties:
     upn: {type: string, required: true}
-    matricule: {type: string, required: true}
-    actif: {type: boolean, required: true}
-    groupes: {type: "array<string>"}
-    ouvert_le: {type: timestamp}
-    ferme_le: {type: timestamp}
+    employee_id: {type: string, required: true}
+    active: {type: boolean, required: true}
+    groups: {type: "array<string>"}
+    opened_at: {type: timestamp}
+    closed_at: {type: timestamp}

@@ -72,19 +72,27 @@ async def test_l_agent_du_fournisseur_commande_suit_et_refuse_en_mcp() -> None:
         transport=serveur_mcp(fournisseur, jeton="cle").transport(),
     )
     outils = {o.name: o for o in await client.list_tools()}
-    assert {n: o.read_only for n, o in outils.items()} == {"commander_poste": False, "suivi_commande": True}
-    commande = await client.call_tool("commander_poste", {"reference": "RH-1", "modele": "p14", "upn": "lea"})
+    assert {n: o.read_only for n, o in outils.items()} == {"order_laptop": False, "order_status": True}
+    commande = await client.call_tool("order_laptop", {"reference": "RH-1", "model": "p14", "upn": "lea"})
     serie = commande["structuredContent"]["serial"]
     assert serie.startswith("PC-") and commande["structuredContent"]["state"] == "confirmed"
     fournisseur.expedier("RH-1")
-    suivi: dict[str, Any] = (await client.call_tool("suivi_commande", {"reference": "RH-1"}))[
+    suivi: dict[str, Any] = (await client.call_tool("order_status", {"reference": "RH-1"}))[
         "structuredContent"
     ]
     assert (suivi["state"], suivi["serial"], suivi["tracking"]) == ("shipped", serie, f"COLIS-{serie[3:]}")
     # Un refus du fournisseur est un résultat d'outil en erreur, pas une erreur du protocole.
-    refus = await client.call_tool("commander_poste", {"reference": "RH-1", "modele": "p16", "upn": "lea"})
-    assert refus["isError"] is True and "pour un autre poste" in refus["content"][0]["text"]
+    refus = await client.call_tool("order_laptop", {"reference": "RH-1", "model": "p16", "upn": "lea"})
+    assert refus["isError"] is True and "for another laptop" in refus["content"][0]["text"]
     assert len(fournisseur.commandes) == 1
+    # S39-11: the names of the 1.x template are still answered (not announced): same order, same state.
+    ancien = await client.call_tool(  # lang: fr-ok
+        "commander_poste",
+        {"reference": "RH-1", "modele": "p14", "upn": "lea"},  # lang: fr-ok
+    )
+    assert ancien["structuredContent"]["created"] is False and ancien["structuredContent"]["serial"] == serie
+    vieux = await client.call_tool("suivi_commande", {"reference": "RH-1"})  # lang: fr-ok
+    assert vieux["structuredContent"]["state"] == "shipped"
 
 
 def test_les_familles_sont_des_types_de_connecteurs_et_demo_est_refuse_en_production(

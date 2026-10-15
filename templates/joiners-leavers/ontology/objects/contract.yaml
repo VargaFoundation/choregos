@@ -1,0 +1,13 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: contract, displayName: Contract, description: "A person's contract: its type and its dates.", owner: hr}
+spec:
+  datasource: contracts
+  primaryKey: reference
+  titleProperty: reference
+  properties:
+    reference: {type: string, required: true}
+    employee_id: {type: string, required: true}
+    contract_type: {type: string, enum: [permanent, fixed_term, apprenticeship, internship, contractor], required: true}
+    start_date: {type: date, required: true}
+    end_date: {type: date}
