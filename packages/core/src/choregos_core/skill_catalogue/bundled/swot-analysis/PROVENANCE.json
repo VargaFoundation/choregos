@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "ef5efbc2d4b84237469808cc9ce90016d926c0b3d65977f7edf21c60e3d5f85b"
+ },
+ "id": "swot-analysis",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a2c922f9b81b4f40347ddfa79c38eda0f1278b5a6d108bd4099b4da254c774ee",
+  "stored_as": "LICENSE"
+ },
+ "path": "pm-product-strategy/skills/swot-analysis",
+ "repo": "https://github.com/phuryn/pm-skills",
+ "sha": "c68487d721e419ec87af1ae6412a842978eab785"
+}

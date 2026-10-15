@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/skill-catalogue.schema.json",
+  "title": "Skills catalogue (ADR 0065)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "catalogue_version", "generated_at", "sources", "entries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "catalogue_version": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "sources": { "type": "object", "additionalProperties": { "type": "string" } },
+    "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "title", "description", "publisher", "repo", "sha", "path", "licence", "licence_class",
+        "files", "bytes", "digest", "risk", "findings_count", "categories", "signals", "delivery"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,62}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "publisher": { "type": "string", "minLength": 1 },
+        "repo": { "type": "string", "pattern": "^https://github\\.com/[^/]+/[^/]+$" },
+        "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "path": { "type": "string" },
+        "licence": { "type": "string", "minLength": 1 },
+        "licence_class": { "enum": ["permissive", "copyleft"] },
+        "files": { "type": "integer", "minimum": 1, "maximum": 256 },
+        "bytes": { "type": "integer", "minimum": 1, "maximum": 5242880 },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "risk": { "enum": ["low", "medium", "high"] },
+        "findings_count": { "type": "integer", "minimum": 0 },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "engineering", "review", "testing", "security", "documentation", "product", "design", "data",
+              "finance", "legal", "hr", "sales", "marketing", "operations", "support", "cloud", "research"
+            ]
+          }
+        },
+        "signals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stars", "stars_as_of"],
+          "properties": {
+            "stars": { "type": ["integer", "null"], "minimum": 0 },
+            "stars_as_of": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+          }
+        },
+        "delivery": { "enum": ["bundled", "git"] }
+      }
+    }
+  }
+}

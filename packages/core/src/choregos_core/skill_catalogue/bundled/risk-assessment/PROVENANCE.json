@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "82e29810a762c396a56f92bbd5c5afd252f7a07c6be69a246c28f7b82c4086d9"
+ },
+ "id": "risk-assessment",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "operations/skills/risk-assessment",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

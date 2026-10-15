@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "b617edd39e721267c9726286b6304f086991f5e2215b848c952a8ad9e001a0d3"
+ },
+ "id": "release-notes",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a2c922f9b81b4f40347ddfa79c38eda0f1278b5a6d108bd4099b4da254c774ee",
+  "stored_as": "LICENSE"
+ },
+ "path": "pm-execution/skills/release-notes",
+ "repo": "https://github.com/phuryn/pm-skills",
+ "sha": "c68487d721e419ec87af1ae6412a842978eab785"
+}

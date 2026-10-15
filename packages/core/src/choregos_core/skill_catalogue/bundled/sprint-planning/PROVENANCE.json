@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "c078d3f838c783e9ab53ca1a4b4c04dcd7930a55a995731b8c020cd656cb1edd"
+ },
+ "id": "sprint-planning",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "product-management/skills/sprint-planning",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

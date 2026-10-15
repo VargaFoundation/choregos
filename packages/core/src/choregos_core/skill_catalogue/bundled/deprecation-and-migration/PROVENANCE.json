@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "6a624f942e09c69863a4219b9bd5d56975026b67b0c70bc83385ffd2120b6142"
+ },
+ "id": "deprecation-and-migration",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/deprecation-and-migration",
+ "repo": "https://github.com/addyosmani/agent-skills",
+ "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+}

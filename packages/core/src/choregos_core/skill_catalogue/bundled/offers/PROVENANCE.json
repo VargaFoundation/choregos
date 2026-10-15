@@ -1,0 +1,25 @@
+{
+ "files": {
+  "SKILL.md": "40f4fa702b982dbda83c2592e2546afe6d919e95384eedc0ac8b211c728e05b2",
+  "evals/evals.json": "abfd1e7a6040a7bd09440d2cda7410a20e20a67a40cb562953d62a0f1c467ece",
+  "references/bonus-stacking.md": "872abbfd14501fd0b097f5ae62b9931571152d43b6690b57df5e65ab48aedfbd",
+  "references/examples.md": "f1033e181845effe8c659800aaf68523686be6bdcb1c5e256c87008e8ea638af",
+  "references/guarantee-design.md": "daa421558b664fe5a335c6cb764d47755799662c79606551a848bba864255c29",
+  "references/offer-anatomy.md": "0810080788bedc9b40dc0aba53109991aa816397f4b45e813289985eb8a64cad",
+  "references/offer-formats.md": "667d87198dcd3b5892151d33a917919141bc718822a2a4add3e9c100891755bb",
+  "references/saas-offers.md": "1b21638f0fd2e623f638c13f4b82e2d8c8ecb79d1324f0183f8322db5f5ceea3",
+  "references/scarcity-urgency.md": "4abe51a54188e6c93feb6cface92abc5c8e03212b8ade5bd9366ed159ad3f8f8",
+  "references/value-equation.md": "4610ff358be2be643e7783884e628f01e1e0c56915a7924e5ccb92c096121eff"
+ },
+ "id": "offers",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/offers",
+ "repo": "https://github.com/coreyhaines31/marketingskills",
+ "sha": "365b412152b9542499ca1439426f7fc3cc92bb65"
+}

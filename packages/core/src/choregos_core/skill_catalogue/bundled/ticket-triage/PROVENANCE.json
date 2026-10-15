@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "d0e5e95443e358ad2a74811b196071d10807ca95aa20351ab5760feeecee1294"
+ },
+ "id": "ticket-triage",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "customer-support/skills/ticket-triage",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

@@ -1,0 +1,17 @@
+{
+ "files": {
+  "SKILL.md": "33fbc28568e3146f20fd908b12998bc0ab30aa4f4c87288199a40793efa94696",
+  "agents/openai.yaml": "cb6fb9d7e6b4be5975f41f6def1dd00a1255bad5d9b02696b124c924a8b8745c"
+ },
+ "id": "retro",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/engineering/retro",
+ "repo": "https://github.com/mattpocock/skills",
+ "sha": "49dd158d1076134a641b33efb035946536778336"
+}

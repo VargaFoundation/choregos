@@ -1,0 +1,157 @@
+# The reviewed list behind the skills catalogue (ADR 0065). A line names a skill by its SKILL.md
+# `name` (and a `path` when a repository holds two of that name); `make catalogues` resolves it at
+# the commit `ref` points to, records that commit, and applies the publisher allowlist, the licence
+# rule and the gate. `delivery: bundled` is a request: the skill is vendored in the image only when
+# its licence is permissive and the gate calls it low or medium risk; otherwise it is `git`, fetched
+# at its pinned commit when installed. Default: `git`.
+#
+# Left out on purpose: Anthropic's docx, pdf, pptx and xlsx (proprietary), skills without a licence
+# file, and repositories that are not on the publisher list. They stay importable by hand through
+# the git import, where a person decides.
+#
+# Categories: engineering, review, testing, security, documentation, product, design, data, finance,
+# legal, hr, sales, marketing, operations, support, cloud, research.
+
+- repo: obra/superpowers
+  ref: main
+  skills:
+    - { name: writing-plans, categories: [engineering], delivery: bundled }
+    - { name: verification-before-completion, categories: [engineering, review], delivery: bundled }
+    - { name: requesting-code-review, categories: [review], delivery: bundled }
+    - { name: receiving-code-review, categories: [review], delivery: bundled }
+    - { name: finishing-a-development-branch, categories: [engineering], delivery: bundled }
+    - { name: systematic-debugging, categories: [engineering] }
+    - { name: brainstorming, categories: [product, engineering] }
+    - { name: executing-plans, categories: [engineering], delivery: bundled }
+    - { name: subagent-driven-development, categories: [engineering] }
+    # `test-driven-development` exists here and in addyosmani/agent-skills: the catalogue keeps one.
+
+- repo: addyosmani/agent-skills
+  ref: main
+  skills:
+    - { name: spec-driven-development, categories: [engineering, documentation], delivery: bundled }
+    - { name: planning-and-task-breakdown, categories: [engineering], delivery: bundled }
+    - { name: code-review-and-quality, categories: [review], delivery: bundled }
+    - { name: debugging-and-error-recovery, categories: [engineering], delivery: bundled }
+    - { name: api-and-interface-design, categories: [engineering], delivery: bundled }
+    - { name: ci-cd-and-automation, categories: [engineering, operations], delivery: bundled }
+    - { name: test-driven-development, categories: [testing], delivery: bundled }
+    - { name: documentation-and-adrs, categories: [documentation], delivery: bundled }
+    - { name: git-workflow-and-versioning, categories: [engineering], delivery: bundled }
+    - { name: incremental-implementation, categories: [engineering], delivery: bundled }
+    - { name: shipping-and-launch, categories: [operations], delivery: bundled }
+    - { name: performance-optimization, categories: [engineering], delivery: bundled }
+    - { name: observability-and-instrumentation, categories: [operations], delivery: bundled }
+    - { name: deprecation-and-migration, categories: [engineering], delivery: bundled }
+    - { name: context-engineering, categories: [engineering], delivery: bundled }
+    - { name: frontend-ui-engineering, categories: [design, engineering], delivery: bundled }
+    - { name: interview-me, categories: [product], delivery: bundled }
+    - { name: doubt-driven-development, categories: [review], delivery: bundled }
+    - { name: security-and-hardening, categories: [security], delivery: bundled }
+    - { name: source-driven-development, categories: [engineering] }
+    - { name: browser-testing-with-devtools, categories: [testing] }
+    - { name: code-simplification, categories: [review] }
+
+- repo: mattpocock/skills
+  ref: main
+  skills:
+    - { name: grill-me, categories: [product], delivery: bundled }
+    - { name: triage, categories: [engineering, support], delivery: bundled }
+    - { name: domain-modeling, categories: [engineering], delivery: bundled }
+    - { name: handoff, categories: [engineering], delivery: bundled }
+    - { name: research, categories: [research], delivery: bundled }
+    - { name: to-spec, categories: [product], delivery: bundled }
+    - { name: retro, categories: [operations], delivery: bundled }
+    - { name: tdd, categories: [testing], delivery: bundled }
+    - { name: codebase-design, categories: [engineering], delivery: bundled }
+    - { name: prototype, categories: [engineering], delivery: bundled }
+    - { name: improve-codebase-architecture, categories: [engineering], delivery: bundled }
+
+- repo: anthropics/knowledge-work-plugins
+  ref: main
+  skills:
+    - { name: write-spec, categories: [product], delivery: bundled }
+    - { name: incident-response, categories: [operations], delivery: bundled }
+    - { name: runbook, categories: [operations], delivery: bundled }
+    - { name: review-contract, categories: [legal], delivery: bundled }
+    - { name: triage-nda, categories: [legal], delivery: bundled }
+    - { name: compliance-check, categories: [legal], delivery: bundled }
+    - { name: reconciliation, categories: [finance], delivery: bundled }
+    - { name: variance-analysis, categories: [finance], delivery: bundled }
+    - { name: ticket-triage, categories: [support], delivery: bundled }
+    - { name: kb-article, categories: [support, documentation], delivery: bundled }
+    - { name: customer-escalation, categories: [support], delivery: bundled }
+    - { name: sql-queries, categories: [data], delivery: bundled }
+    - { name: status-report, categories: [operations], delivery: bundled }
+    - { name: risk-assessment, categories: [operations], delivery: bundled }
+    - { name: sprint-planning, categories: [product], delivery: bundled }
+    - { name: user-research, categories: [design, product], delivery: bundled }
+    - { name: design-critique, categories: [design], delivery: bundled }
+    - { name: interview-prep, categories: [hr], delivery: bundled }
+
+- repo: getsentry/skills
+  ref: main
+  skills:
+    - { name: find-bugs, categories: [review, security], delivery: bundled }
+    - { name: commit, categories: [engineering], delivery: bundled }
+    - { name: pr-writer, categories: [engineering, documentation], delivery: bundled }
+    - { name: code-simplifier, categories: [review] }
+    - { name: iterate-pr, categories: [engineering] }
+    - { name: create-branch, categories: [engineering] }
+
+- repo: cloudflare/skills
+  ref: main
+  skills:
+    - { name: workers-best-practices, categories: [cloud, engineering] }
+    - { name: wrangler, categories: [cloud] }
+    - { name: durable-objects, categories: [cloud] }
+    - { name: workers-profiling, categories: [cloud, engineering] }
+    - { name: web-perf, categories: [engineering] }
+
+- repo: huggingface/skills
+  ref: main
+  skills:
+    - { name: huggingface-datasets, categories: [data] }
+    - { name: trl-training, categories: [data, research] }
+    - { name: huggingface-papers, categories: [research] }
+    - { name: huggingface-gradio, categories: [engineering] }
+
+- repo: anthropics/skills
+  ref: main
+  skills:
+    - { name: skill-creator, categories: [engineering] }
+    - { name: mcp-builder, categories: [engineering] }
+    - { name: webapp-testing, categories: [testing] }
+    - { name: frontend-design, categories: [design], delivery: bundled }
+    - { name: internal-comms, categories: [operations], delivery: bundled }
+    - { name: brand-guidelines, categories: [design] }
+    - { name: claude-api, categories: [engineering] }
+    # docx, pdf, pptx, xlsx are proprietary and doc-coauthoring has no licence file: not listed.
+
+- repo: hashicorp/agent-skills
+  ref: main
+  skills:
+    - { name: terraform-test, categories: [cloud, testing] }
+    - { name: terraform-style-guide, categories: [cloud] }
+    - { name: refactor-module, categories: [cloud] }
+    - { name: run-acceptance-tests, categories: [cloud, testing], delivery: bundled }
+
+- repo: coreyhaines31/marketingskills
+  ref: main
+  skills:
+    - { name: copywriting, categories: [marketing] }
+    - { name: content-strategy, categories: [marketing] }
+    - { name: cold-email, categories: [marketing, sales] }
+    - { name: pricing, categories: [marketing, product] }
+    - { name: marketing-psychology, categories: [marketing], delivery: bundled }
+    - { name: marketing-ideas, categories: [marketing], delivery: bundled }
+    - { name: offers, categories: [marketing, sales], delivery: bundled }
+
+- repo: phuryn/pm-skills
+  ref: main
+  skills:
+    - { name: release-notes, categories: [product, documentation], delivery: bundled }
+    - { name: summarize-meeting, categories: [operations], delivery: bundled }
+    - { name: test-scenarios, categories: [testing, product], delivery: bundled }
+    - { name: swot-analysis, categories: [product], delivery: bundled }
+    - { name: grammar-check, categories: [documentation], delivery: bundled }

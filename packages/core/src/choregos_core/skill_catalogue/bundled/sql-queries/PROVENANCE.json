@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "dbd5a5e2d563d83ca6d4d033206f285f503296eabff4a35545cdb4cb5302bd9a"
+ },
+ "id": "sql-queries",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "data/skills/sql-queries",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

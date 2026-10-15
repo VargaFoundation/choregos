@@ -1,7 +1,7 @@
 # Refreshing the shipped catalogues
 
-The MCP server catalogue (and, from S39-12, the skills catalogue) are files in the image,
-generated from a reviewed seed and **recorded** answers of the official MCP Registry and GitHub
+The MCP server catalogue and the skills catalogue are files in the image,
+generated from a reviewed seed and **recorded** answers of the official MCP Registry and GitHub (and, for skills, reduced tarballs of pinned commits)
 ([ADR 0065](../adr/0065-catalogues-of-mcp-servers-and-skills.md)). Vendors move fast: nine of the
 first hundred seed repositories were archived within months. Refresh when a server is added,
 when `make catalogues-check` turns red after a seed change, and about once a month.
@@ -50,3 +50,24 @@ promoting it.
 ```bash
 make catalogues-check && uv run pytest -q tests/tools packages/core/tests/test_mcp_catalogue.py
 ```
+
+## The skills catalogue
+
+`make catalogues-record` also re-pins the skills: each repository's `ref` in
+`tools/catalogues/skills/seed.yaml` is resolved to a commit, GitHub's stars and archived flag are
+recorded, and a reduced tarball of the commit (only the seed's skill folders and the licence files)
+is kept under `tests/fixtures/catalogues/skills/`. Then read:
+
+- `dropped <id>: <reason>`: a skill refused by the publisher list, the licence rule, the gate
+  (a binary file, `allowed-tools`) or the exclusions. Fix the seed or delete the line.
+- `note <id>: asked bundled, delivered by git`: the skill is not eligible to be vendored (a
+  copyleft licence, or a high risk: a script, an executable bit, or any outbound URL).
+- The diff of `catalogue.yaml` per skill: a new `sha` means upstream changed. **Read the diff of
+  the bundled files** (`git diff packages/core/src/choregos_core/skill_catalogue/bundled/`): they
+  are what the image will redistribute and what an agent will read. A new finding or a risk change is
+  a reason to drop the skill, not to merge.
+- `THIRD_PARTY_NOTICES.md` is regenerated with the bundled set.
+
+To add a skill, add a line (`name`, `categories`, `delivery`), plus a `path` when a repository holds
+two skills of that name; the publisher must already be in `publishers.yaml` (a new publisher is a
+decision, with its reason, in the same pull request).

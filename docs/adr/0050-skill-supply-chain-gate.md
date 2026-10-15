@@ -69,3 +69,14 @@ update applied by itself, hands the agents to whoever controls that branch.
   last lines (ADR 0033).
 - Outbound URLs make a skill `high`: many honest skills link to documentation and will need a
   second reviewer. Accepted: an URL in a skill is an instruction an agent may follow.
+
+## Amendment — the skills catalogue (ADR 0065, 2026-10-15)
+
+The platform now ships a catalogue of default skills ([ADR 0065](0065-catalogues-of-mcp-servers-and-skills.md)).
+It adds no way around this gate: an entry is a pinned commit and a folder from a publisher on a
+reviewed list, under an open licence, and **installing it runs the gate again** (the risk the
+catalogue carries is information). A `git` entry is an ordinary import: a `high` one waits for a
+second administrator, and an update is a new catalogue release plus a person clicking. A `bundled`
+entry, vendored in the image with its licence and a sha256 provenance, is shipped by the platform and
+approved as such (§7) only when its licence is permissive and the gate calls it low or medium; its
+files are verified against the provenance at install, and a mismatch is refused.

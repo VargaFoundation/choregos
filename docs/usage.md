@@ -571,6 +571,35 @@ owner (`skill:import`) imports new skills from the organisation's **allowlist**
 owners of your connected repositories); another source, or the next version of an existing skill,
 needs an administrator. Checking for an update never applies it: importing the proposed SHA does.
 
+**The skills catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) offers the
+most used skills of public repositories, so `/skills` is not empty on day one:
+`choregos_core/skill_catalogue/catalogue.yaml`, generated from a reviewed seed at **pinned commits**.
+An entry is an offer: nothing is installed by default and nothing follows upstream. Each says its
+publisher, repository, pinned SHA and folder, **licence** (`permissive` or `copyleft`), size, the
+supply-chain gate's **risk** at generation time, and its **delivery**:
+
+- `bundled`: the skill's files are vendored in the image under `bundled/<id>/`, with their licence
+  text and a `PROVENANCE.json` of sha256s, so installing needs no network. Only permissive licences
+  (MIT, Apache-2.0, BSD, ISC, CC0, CC-BY-4.0) and a low or medium risk are bundled; the image's
+  [third-party notices](https://github.com/VargaFoundation/choregos/blob/main/THIRD_PARTY_NOTICES.md)
+  list what it redistributes.
+- `git`: everything else (copyleft licences such as MPL-2.0, anything high risk — an outbound URL is
+  enough — and large skills): the entry holds the pin, and the install fetches that commit.
+
+What is **not** listed, on purpose: Anthropic's `docx`, `pdf`, `pptx` and `xlsx` (governed by an
+agreement with Anthropic, not an open licence), skills without a licence file, skills that declare
+`allowed-tools`, skills that carry binary files, repositories whose owner is not on the publisher list
+(`tools/catalogues/skills/publishers.yaml`: a vendor, or a maintainer with at least 1 000 stars and a
+repository that is not archived), and a few that only make sense inside one coding assistant. A
+person with the right to use a skill that is not listed can still import it by hand, above, where
+the gate flags its licence and a person decides.
+
+The file is **generated, not typed**: `make catalogues` replays the recorded commits over the seed in
+`tools/catalogues/skills/seed.yaml`, runs the platform's own reader, licence detection, gate and
+digest on each skill, and writes the catalogue, the bundled tree and `THIRD_PARTY_NOTICES.md`
+byte for byte; `make catalogues-check` fails when one differs. A line asking for `delivery: bundled`
+is a request: a skill that is not eligible is delivered by `git` and the generator says so.
+
 A workflow actor **names** an agent — `{type: agent, role: implement, agent: onboarding-coordinator}`,
 or `…@2` for a given version. The run then takes the project's pinned version (else the latest),
 overrides applied: its model, its limits and its budget, which only tighten the actor's own. Its

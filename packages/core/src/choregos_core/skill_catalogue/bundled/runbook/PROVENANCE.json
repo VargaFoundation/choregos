@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "c5c3eaa4c22fff96ec7239ce67eb3e100661b20a2818749e2f7ee21787233185"
+ },
+ "id": "runbook",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "operations/skills/runbook",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

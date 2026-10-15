@@ -44,6 +44,8 @@ EXCLUDED = (
     "docs/fr/",  # the archived French documentation, no longer maintained
     "docs/cli.md",  # generated from the CLI's help strings, which are read at their source
     "packages/contracts/ts/",  # generated from the schemas, which are read at their source
+    # Third-party skills, redistributed verbatim under their own licence (ADR 0065): their text is theirs.
+    "packages/core/src/choregos_core/skill_catalogue/bundled/",
     # The injection guard's patterns also recognise an injection written in French.
     "packages/core/src/choregos_core/injection.py",
 )

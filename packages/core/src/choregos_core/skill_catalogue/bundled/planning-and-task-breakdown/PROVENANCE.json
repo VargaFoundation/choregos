@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "ed0f90cc5951ddd4bcab7f871f64efec93a49af9279ef93bc470da77ad8da3f7"
+ },
+ "id": "planning-and-task-breakdown",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/planning-and-task-breakdown",
+ "repo": "https://github.com/addyosmani/agent-skills",
+ "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+}

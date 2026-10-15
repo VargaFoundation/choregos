@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "aa17e90539f4d4d84130c910c7f527236bfaa71977c4c03493c8e8e515ddeea6"
+ },
+ "id": "reconciliation",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "finance/skills/reconciliation",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}
