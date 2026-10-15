@@ -18,6 +18,8 @@ from dataclasses import asdict
 from functools import partial
 from typing import Annotated
 
+import httpx
+from choregos_adapters.registry import fakes_enabled
 from fastapi import APIRouter, Path, Request, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -733,11 +735,21 @@ def _confluence_config(config: dict[str, object]) -> dict[str, object]:
 
 def _web_config(config: dict[str, object]) -> dict[str, object]:
     url = _https_url(config, "web")
-    return {
+    exclude = config.get("exclude") or []
+    if (
+        not isinstance(exclude, list)
+        or len(exclude) > 50
+        or not all(isinstance(p, str) and p.startswith("/") and len(p) <= 200 for p in exclude)
+    ):
+        raise unprocessable("`exclude` is a list of at most 50 path globs, each starting with `/`")
+    checked: dict[str, object] = {
         "url": url,
         "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
         "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
     }
+    if exclude:
+        checked["exclude"] = exclude
+    return checked
 
 
 def _git_config(config: dict[str, object]) -> dict[str, object]:
@@ -781,7 +793,32 @@ async def _checked_source_config(
         if not connector:
             raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
         await _documents_connector(session, organisation, connector, kind)
-    return _SOURCE_VALIDATORS[kind](config)
+    checked = _SOURCE_VALIDATORS[kind](config)
+    if kind == "web" and not fakes_enabled():
+        exclude = checked.get("exclude") or []
+        assert isinstance(exclude, list)
+        await _check_web_start(str(checked["url"]), exclude)
+    return checked
+
+
+async def _check_web_start(url: str, exclude: list[str]) -> None:
+    """A start URL that redirects outside the allow-list yields no page: say so now, with the target."""
+    from choregos_adapters.documents import web
+    from choregos_adapters.documents.base import SourceRefusedError
+
+    async def resolver(host: str) -> list[str]:
+        return await web.resolve(host)
+
+    try:
+        crawl = web.WebCrawlSource(url=url, exclude=exclude, resolver=resolver)
+        try:
+            await crawl.check_start()
+        finally:
+            await crawl.aclose()
+    except SourceRefusedError as exc:
+        raise unprocessable(str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise unprocessable(f"`{url}` is not reachable: {exc}") from exc
 
 
 async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) -> KnowledgeSource:

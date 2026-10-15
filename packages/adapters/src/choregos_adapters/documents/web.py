@@ -5,7 +5,10 @@ Same scheme and host as the start URL, under its path prefix; `robots.txt` obeye
 `ChoregosKnowledge` agent; depth and page caps; HTML pages only. The host must not resolve to a
 private, loopback or link-local address: a knowledge base is not a way into the cluster's network.
 
-A crawl sees the whole site each time (`full=True`): a page it no longer reaches was deleted.
+A crawl sees the whole site each time (`full=True`): a page it no longer reaches was deleted. A crawl
+that lists nothing at all is not such a case (a moved site, a redirect, a wall): it reports its start
+URL as unreadable, so it deletes nothing. Redirects are followed only inside the allow-list; `exclude`
+holds path globs that are neither fetched nor followed.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ import hashlib
 import ipaddress
 import socket
 from collections.abc import Awaitable, Callable
+from fnmatch import fnmatchcase
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urldefrag, urljoin, urlsplit
@@ -28,6 +32,7 @@ USER_AGENT = "ChoregosKnowledge/1.0 (+https://choregos.dev)"
 MAX_DEPTH = 5
 MAX_PAGES = 500
 MAX_PAGE_BYTES = 5 * 1024 * 1024
+MAX_REDIRECTS = 5
 
 Resolver = Callable[[str], Awaitable[list[str]]]
 
@@ -40,6 +45,12 @@ async def resolve(host: str) -> list[str]:
 def _private(address: str) -> bool:
     ip = ipaddress.ip_address(address)
     return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
+
+
+def page_name(url: str) -> str:
+    """A page is named by its whole path, so `/en/about` and `/fr/about` do not collide."""
+    name = "-".join(part for part in urlsplit(url).path.split("/") if part) or "index"
+    return name if name.endswith((".html", ".htm")) else f"{name}.html"
 
 
 class _Links(HTMLParser):
@@ -64,6 +75,7 @@ class WebCrawlSource:
         transport: httpx.AsyncBaseTransport | None = None,
         resolver: Resolver = resolve,
         allow_http: bool = False,
+        exclude: list[str] | None = None,
     ) -> None:
         parts = urlsplit(url)
         if parts.scheme != "https" and not (allow_http and parts.scheme == "http"):
@@ -74,6 +86,7 @@ class WebCrawlSource:
         self.origin = f"{parts.scheme}://{parts.netloc}"
         self.prefix = parts.path.rsplit("/", 1)[0] + "/" if parts.path else "/"
         self.host = parts.hostname
+        self.exclude = list(exclude or [])
         self.max_depth = max(0, min(max_depth, MAX_DEPTH))
         self.max_pages = max(1, min(max_pages, MAX_PAGES))
         self._resolver = resolver
@@ -92,9 +105,36 @@ class WebCrawlSource:
 
     def _inside(self, url: str) -> bool:
         parts = urlsplit(url)
-        return f"{parts.scheme}://{parts.netloc}" == self.origin and (parts.path or "/").startswith(
-            self.prefix
+        path = parts.path or "/"
+        return (
+            f"{parts.scheme}://{parts.netloc}" == self.origin
+            and path.startswith(self.prefix)
+            and not any(fnmatchcase(path, pattern) for pattern in self.exclude)
         )
+
+    async def _get(self, url: str, robots: RobotFileParser | None = None) -> tuple[str, httpx.Response]:
+        """One GET, following redirects that stay inside the allow-list. Anything else is returned as is."""
+        for _ in range(MAX_REDIRECTS + 1):
+            response = await self._http.get(url)
+            location = response.headers.get("location")
+            if not (300 <= response.status_code < 400 and location):
+                return url, response
+            target = urldefrag(urljoin(url, location))[0]
+            if not self._inside(target) or (robots is not None and not robots.can_fetch(USER_AGENT, target)):
+                return url, response
+            url = target
+        return url, response
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
+    async def check_start(self) -> None:
+        """Refuses, with its reason, a start URL that leaves the allow-list (`www` to apex, another host)."""
+        await self._check_host()
+        url, response = await self._get(self.start)
+        location = response.headers.get("location")
+        if 300 <= response.status_code < 400 and location:
+            raise SourceRefusedError(f"`{self.start}` redirects to `{urljoin(url, location)}`: start there")
 
     async def _robots(self) -> RobotFileParser:
         robots = RobotFileParser()
@@ -115,7 +155,7 @@ class WebCrawlSource:
                 continue
             seen.add(url)
             try:
-                response = await self._http.get(url)
+                final, response = await self._get(url, robots)
             except httpx.HTTPError:
                 unreadable.append(url)
                 continue
@@ -126,9 +166,13 @@ class WebCrawlSource:
             kind = response.headers.get("content-type", "")
             if response.status_code != 200 or "html" not in kind or len(response.content) > MAX_PAGE_BYTES:
                 continue
+            if final != url:
+                if final in seen:
+                    continue
+                seen.add(final)
+                url = final
+            name = page_name(url)
             self._pages[url] = response.content
-            path = urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1] or "index"
-            name = path if path.endswith((".html", ".htm")) else f"{path}.html"
             items.append(
                 SourceItem(ref=url, name=name, version=hashlib.sha256(response.content).hexdigest(), url=url)
             )
@@ -139,11 +183,14 @@ class WebCrawlSource:
                     target = urldefrag(urljoin(url, link))[0]
                     if target not in seen:
                         frontier.append((target, depth + 1))
+        if not items:
+            # Nothing listed is never "everything was deleted": the start moved, or the site is walled.
+            return Changes(items=[], full=True, cursor=cursor, unreadable=[self.start])
         return Changes(items=items, full=True, cursor={"pages": len(items)}, unreadable=unreadable)
 
     async def fetch(self, item: SourceItem) -> bytes:
         if item.ref in self._pages:
             return self._pages[item.ref]
-        response = await self._http.get(item.ref)
+        _, response = await self._get(item.ref)
         response.raise_for_status()
         return response.content

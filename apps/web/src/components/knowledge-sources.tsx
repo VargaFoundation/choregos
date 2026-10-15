@@ -33,7 +33,7 @@ export function KnowledgeSources({
   onChange: () => void;
 }) {
   const [kind, setKind] = useState<Kind>("sharepoint");
-  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", ref: "main", paths: "*.md" });
+  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", exclude: "", ref: "main", paths: "*.md" });
   const [refresh, setRefresh] = useState<RefreshDraft>(draftOf());
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<RefreshDraft>(draftOf());
@@ -190,6 +190,9 @@ export function KnowledgeSources({
             </>
           ) : (
             <Input aria-label="url" placeholder="https://…" value={fields.url} onChange={set("url")} className="sm:col-span-2" />
+          )}
+          {kind === "web" && (
+            <Input aria-label="excluded paths" placeholder="excluded paths, e.g. /es/*, /pt/*" value={fields.exclude} onChange={set("exclude")} className="sm:col-span-2" />
           )}
           {kind === "git" && (
             <>

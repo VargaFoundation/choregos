@@ -89,7 +89,7 @@ export function syncSummary(summary: Record<string, unknown> | null | undefined)
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
   kind: "sharepoint" | "confluence" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean },
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean; exclude?: string },
 ): Record<string, unknown> {
   if (kind === "confluence") {
     const page = (fields.pageId ?? "").trim();
@@ -100,7 +100,10 @@ export function sourceConfig(
     const key = site.startsWith("b!") ? "drive_id" : "site_id";
     return { [key]: site, ...(fields.folder.trim() ? { folder: fields.folder.trim() } : {}) };
   }
-  if (kind === "web") return { url: fields.url.trim(), max_depth: 2, max_pages: 50 };
+  if (kind === "web") {
+    const exclude = (fields.exclude ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+    return { url: fields.url.trim(), max_depth: 2, max_pages: 50, ...(exclude.length ? { exclude } : {}) };
+  }
   return {
     url: fields.url.trim(),
     ref: fields.ref.trim() || "main",
