@@ -631,6 +631,11 @@ A base also **syncs from sources** (`POST …/sources`), each on its own Tempora
   holding the application permission **`Sites.Selected`** — and have a tenant administrator grant it
   `read` on the chosen sites (`POST /sites/{site-id}/permissions`). Never `Files.Read.All`. The
   source names a `site_id` (or a OneDrive's `drive_id`) and optionally a `folder`; sync is delta.
+  The console form **picks** the connector from a list of the organisation's `documents/sharepoint`
+  connectors (it is never typed); with none, it links to `/admin/connectors?type=documents/sharepoint`
+  to declare one. The API refuses a wrong name and says why: names are lowercase (the message
+  suggests the right one), the connector is of another kind (`identity/entra`) or another type, or
+  no `documents` connector exists yet (then an organisation administrator declares one).
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
   `max_pages` ≤ 500; a host that resolves to a private address is refused.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs

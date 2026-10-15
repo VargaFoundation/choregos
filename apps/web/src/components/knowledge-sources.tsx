@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { Badge, Card, ErrorNote, Input, Select, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -31,6 +33,9 @@ export function KnowledgeSources({
   const [kind, setKind] = useState<Kind>("sharepoint");
   const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", url: "", ref: "main", paths: "*.md", interval: "60" });
   const [error, setError] = useState<string | null>(null);
+  // A SharePoint source picks one of the organisation's `documents/sharepoint` connectors: never typed.
+  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  const pickable = (connectors.data ?? []).filter((c) => c.kind === "documents" && c.type === "sharepoint");
   const set = (key: keyof typeof fields) => (e: { target: { value: string } }) => setFields({ ...fields, [key]: e.target.value });
   async function act(gesture: () => Promise<unknown>) {
     setError(null);
@@ -94,7 +99,23 @@ export function KnowledgeSources({
           <Input aria-label="interval in minutes" placeholder="every … minutes" value={fields.interval} onChange={set("interval")} />
           {kind === "sharepoint" ? (
             <>
-              <Input aria-label="documents connector" placeholder="documents connector" value={fields.connector} onChange={set("connector")} />
+              {pickable.length > 0 || !connectors.data ? (
+                <Select aria-label="documents connector" value={fields.connector} onChange={set("connector")}>
+                  <option value="">documents connector…</option>
+                  {pickable.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <p className="text-xs text-ink-muted" data-testid="no-documents-connector">
+                  No SharePoint connector in this organisation.{" "}
+                  <Link className="underline" href="/admin/connectors?type=documents/sharepoint">
+                    declare a SharePoint connector
+                  </Link>
+                </p>
+              )}
               <Input aria-label="site or drive id" placeholder="site id, or drive id (b!…)" value={fields.site} onChange={set("site")} />
               <Input aria-label="folder" placeholder="folder (optional)" value={fields.folder} onChange={set("folder")} />
             </>
