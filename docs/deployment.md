@@ -80,6 +80,7 @@ The chart never writes production secrets. It expects them to exist:
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
 | `global.gateway.secretRef` | `master-key` | orchestrator |
+| `global.gateway.type` | `litellm` (default), `openai-compatible`, `direct`: the gateway adapter, as `CHOREGOS_GATEWAY_TYPE` | API, orchestrator |
 | `global.memory.tokenSecret` | `token` | orchestrator |
 | `global.objectStore.secretRef` | `access-key`, `secret-key` | API |
 
@@ -693,3 +694,23 @@ The proxy is the honest part of "egress allowlist": before 2026-09-25 the Networ
 opened a `choregos-egress` namespace that no chart delivered, and the allowlist was an
 annotation. It is verified on a cluster (`tests/cluster/test_egress_proxy.py`: an
 allowed domain answers 200 through the proxy, any other gets 403 from Squid).
+
+## Gateways and what each can do
+
+`/platform/models` and a project that declares no `gateway` connector use the deployment's gateway
+adapter (`global.gateway.type`, env `CHOREGOS_GATEWAY_TYPE`), not LiteLLM by default whatever was
+configured. Each adapter declares its `capabilities`:
+
+| Capability | Meaning | `litellm` | `openai-compatible` | `direct` |
+|---|---|---|---|---|
+| `list_models` | discovers the models it routes | yes | yes (`GET {base_url}/models`) | no (static list) |
+| `virtual_keys` | one key per run, limited to its models | yes | no | no |
+| `hard_budget` | the key's budget is a cap enforced at the source | yes | no | no |
+| `spend_readback` | the spend of a key is read back | yes | no | no |
+| `teams` | a project's day budget held by the gateway | yes | no | no |
+| `pricing` | the catalogue carries prices | yes | no | no |
+
+With `openai-compatible` (Portkey, Kong AI Gateway, Envoy AI Gateway, OpenRouter, a vLLM router...)
+the budget is enforced by Choregos only (the reservation, turns and minutes): there is no cap at
+the source and no measured cost. Configure two secrets, `api_key` (discovery) and `run_key` (what
+runs receive, the same for every run: scope it at the gateway with its own rate limit).

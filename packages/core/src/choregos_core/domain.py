@@ -351,6 +351,9 @@ class GatewayModel(Model):
     supports_tool_calling: bool = True
     supports_vision: bool = False
     internal_price: bool = False
+    #: Where the entry comes from: what the gateway lists, or what an admin added by hand.
+    source: Literal["gateway", "manual"] = "gateway"
+    owned_by: str = ""
 
 
 # ───────────────────────────── mémoire ─────────────────────────────

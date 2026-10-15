@@ -24,6 +24,9 @@ from choregos_core.domain import GatewayModel, Spend, VirtualKey
 class DirectGateway:
     """Rend la clé qu'on lui a donnée, ou rien du tout."""
 
+    #: Nothing is discovered, capped or measured: the platform's own reservation is all there is.
+    capabilities: frozenset[str] = frozenset()
+
     def __init__(self, key: str = "", *, models: list[str] | None = None) -> None:
         self.key = key
         self.models = list(models or [])
@@ -64,3 +67,6 @@ class DirectGateway:
 
     async def list_models(self) -> list[GatewayModel]:
         return [GatewayModel(model_name=name, litellm_model=name) for name in self.models]
+
+    async def test(self) -> dict[str, Any]:
+        return {"ok": True, "models": len(self.models)}

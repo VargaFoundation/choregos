@@ -4,5 +4,6 @@
 from __future__ import annotations
 
 from .litellm import LiteLlmGateway
+from .openai_compatible import OpenAiCompatibleGateway
 
-__all__ = ["LiteLlmGateway"]
+__all__ = ["LiteLlmGateway", "OpenAiCompatibleGateway"]

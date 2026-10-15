@@ -27,10 +27,12 @@ router = APIRouter(tags=["models"])
 
 async def _gateway_models() -> list[GatewayModelDto]:
     from choregos_adapters import build
+    from choregos_adapters.registry import default_gateway_type
 
-    gateway = build("gateway", "litellm", {})
+    # The deployment's gateway (`CHOREGOS_GATEWAY_TYPE`), not LiteLLM whatever was configured.
+    gateway = build("gateway", default_gateway_type(), {})
     models = await gateway.list_models()
-    return [GatewayModelDto.model_validate(m.model_dump()) for m in models]
+    return [GatewayModelDto.model_validate(m.model_dump(exclude={"source", "owned_by"})) for m in models]
 
 
 @router.get("/platform/models", response_model=list[GatewayModelDto], operation_id="listPlatformModels")

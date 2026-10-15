@@ -371,6 +371,10 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
+| S39-07a | S39 | 🟡 | — | gateway capabilities (`GatewayAdapter.capabilities`, `test()`, alias `LlmGateway`), an OpenAI-compatible adapter (discovery only), `CHOREGOS_GATEWAY_TYPE` (chart `global.gateway.type`), and `/platform/models` asks the configured gateway instead of a hard-coded LiteLLM. Proves: the router on a scripted gateway and on an OpenAI-compatible one over a mocked transport (red with the hard-coded `litellm`), the declarations of every registered gateway, the chart value. Does not prove: a real non-LiteLLM gateway; the organisation catalogue, per-org gateway connector and the admin page (7b/7c, not built here). |
+
+
+
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

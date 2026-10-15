@@ -52,6 +52,8 @@ only its `image.digest` or its tag count.
   value: {{ include "choregos.temporalAddress" . | quote }}
 - name: CHOREGOS_TEMPORAL_NAMESPACE
   value: {{ .Values.global.temporal.namespace | quote }}
+- name: CHOREGOS_GATEWAY_TYPE
+  value: {{ .Values.global.gateway.type | default "litellm" | quote }}
 - name: CHOREGOS_GATEWAY_URL
   value: {{ include "choregos.gatewayUrl" . | quote }}
 - name: CHOREGOS_MEMORY_URL
