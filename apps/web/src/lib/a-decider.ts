@@ -13,8 +13,9 @@
 "use client";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { scopeOf } from "@/components/coquille/navigation";
 import { api } from "./api";
-import type { BudgetAlert, HumanRequest, WorkItemDto } from "./types";
+import type { Action, BudgetAlert, HumanRequest, WorkItemDto } from "./types";
 
 export interface Attente {
   item: WorkItemDto;
@@ -65,10 +66,34 @@ export function ticketsEnAttente(items: WorkItemDto[], maintenant: number = Date
     );
 }
 
-/** Les lectures de la boîte : partagées par la page et par le compteur de l'en-tête. */
-export function useADecider(org: string) {
-  const projets = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org), staleTime: 30_000 });
-  const slugs = (projets.data?.items ?? []).map((projet) => projet.slug);
+/**
+ * What waits in ONE project (S39-04): its actions, and the budget alerts of the project itself. An
+ * agent's alert stays organisation-level: an agent serves several projects. Pure, so it is tested
+ * without React Query.
+ */
+export function waitingInProject(
+  actions: Action[],
+  budgets: BudgetAlert[],
+  slug: string,
+): { actions: Action[]; budgets: BudgetAlert[] } {
+  return {
+    actions: actions.filter((action) => action.project_slug === slug),
+    budgets: budgets.filter((alert) => alert.scope === "project" && alert.subject === slug),
+  };
+}
+
+/**
+ * The inbox's reads, shared by the page and the counters. With `project`,
+ * only that project's tickets are read (same query key as its board), and the lists are narrowed.
+ */
+export function useADecider(org: string, project?: string) {
+  const projets = useQuery({
+    queryKey: ["projects", org],
+    queryFn: () => api.projects(org),
+    staleTime: 30_000,
+    enabled: !project,
+  });
+  const slugs = project ? [project] : (projets.data?.items ?? []).map((projet) => projet.slug);
   const tickets = useQueries({
     queries: slugs.map((slug) => ({
       queryKey: ["items", slug],
@@ -89,16 +114,25 @@ export function useADecider(org: string) {
   });
   const lus = tickets.flatMap((lecture) => lecture.data?.items ?? []);
   const enAttente = ticketsEnAttente(lus);
+  const narrowed = project
+    ? waitingInProject(actions.data ?? [], budgets.data ?? [], project)
+    : { actions: actions.data ?? [], budgets: budgets.data ?? [] };
   return {
     tickets: enAttente,
-    actions: actions.data ?? [],
-    budgets: budgets.data ?? [],
+    actions: narrowed.actions,
+    budgets: narrowed.budgets,
     /** Les projets dont les tickets n'ont pas pu se lire : ils ne sont pas comptés, et on le dit. */
     projetsIllisibles: slugs.filter((_, index) => tickets[index]?.error),
     erreur: projets.error ?? actions.error ?? budgets.error ?? null,
-    pret: !!projets.data && tickets.every((lecture) => !lecture.isPending) && !!actions.data && !!budgets.data,
-    total: enAttente.length + (actions.data?.length ?? 0) + (budgets.data?.length ?? 0),
+    pret: (!!project || !!projets.data) && tickets.every((lecture) => !lecture.isPending) && !!actions.data && !!budgets.data,
+    total: enAttente.length + narrowed.actions.length + narrowed.budgets.length,
   };
+}
+
+/** The inbox count of the scope the path is in: the project's inside a project, the organisation's elsewhere. */
+export function useInboxCount(org: string, pathname: string): number {
+  const scope = scopeOf(pathname);
+  return useADecider(org, scope.kind === "project" ? scope.slug : undefined).total;
 }
 
 /** What a budget alert says, in a sentence: whose budget, how far, how much of how much. */

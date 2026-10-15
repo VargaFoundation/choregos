@@ -10,7 +10,7 @@ import { ChoixDuTheme } from "@/components/choix-du-theme";
 import { Compte, ListeDeNavigation } from "@/components/coquille/navigation";
 import { EditionBadge } from "@/components/edition";
 import { Select } from "@/components/ui";
-import { useADecider } from "@/lib/a-decider";
+import { useADecider, useInboxCount } from "@/lib/a-decider";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -29,6 +29,8 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   // Ce qui attend une personne se compte dans l'en-tête, sur chaque page (S23-02).
   const aDecider = useADecider(org).total;
+  // The panel lists the current scope's entries: inside a project, its Inbox counts the project only.
+  const scopedCount = useInboxCount(org, pathname);
   const [ouvert, setOuvert] = useState(false);
   const bouton = useRef<HTMLButtonElement>(null);
   // Changer de page referme le menu — ajusté pendant le rendu, comme la session : un effet le
@@ -125,7 +127,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
             id="menu-principal"
             className="raised absolute inset-x-0 top-full max-h-[calc(100dvh-3rem)] overflow-y-auto border-b border-line px-4 pb-6 sm:px-6"
           >
-            <ListeDeNavigation pathname={pathname} aDecider={aDecider} variante="panneau" />
+            <ListeDeNavigation pathname={pathname} aDecider={scopedCount} variante="panneau" />
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-line pt-4 text-xs">
               {edition.data && <EditionBadge edition={edition.data.edition} />}
               {choixOrg}

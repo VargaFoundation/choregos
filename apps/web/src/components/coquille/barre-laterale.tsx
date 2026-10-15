@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useSyncExternalStore } from "react";
 import { Wordmark } from "@/components/ui";
-import { useADecider } from "@/lib/a-decider";
+import { useInboxCount } from "@/lib/a-decider";
 import { appliquerLaBarre, choisirLaBarre, CLE_DE_LA_BARRE, lireLaBarre, type Barre } from "@/lib/preferences";
 import { useSession } from "@/lib/session";
 import { ListeDeNavigation } from "./navigation";
@@ -56,7 +56,7 @@ export function useBarre(): [Barre, () => void] {
 export function BarreLaterale() {
   const pathname = usePathname();
   const { org } = useSession();
-  const aDecider = useADecider(org).total;
+  const aDecider = useInboxCount(org, pathname);
   const [barre, basculer] = useBarre();
   return (
     <aside

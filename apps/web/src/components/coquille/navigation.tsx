@@ -135,7 +135,7 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
         section("", "Overview", LayoutDashboard),
         // A ticket and its runs belong to the board (S23-12).
         section("/board", "Board", SquareKanban, ["/items", "/runs"]),
-        { href: "/inbox", label: "Inbox", icon: Inbox, counts: true, active: () => false },
+        { ...section("/inbox", "Inbox", Inbox), counts: true },
         ...(trains ? [section("/trains", "Trains", TrainFront)] : []),
         section("/findings", "Findings", TriangleAlert),
       ],
