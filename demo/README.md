@@ -1,47 +1,47 @@
-# La démonstration : deux projets, un seul moteur
+# The demonstration: two projects, one engine
 
-Un cluster **mono-nœud**, la plateforme et toutes ses dépendances déployées par le chart,
-et deux projets qui n'ont rien en commun :
+A **single-node** cluster, the platform and all its dependencies deployed by the chart,
+and two projects that have nothing in common:
 
-| Projet | Ce que fait l'agent | Ce que ça prouve |
+| Project | What the agent does | What it proves |
 |---|---|---|
-| `panier` | Lit un ticket, écrit du code et son test dans un dépôt git, pousse une branche | La chaîne complète : ticket → agent → diff → garanties → état suivant |
-| `staffing` | Lit un besoin RH, propose des profils, les qualifie | Le moteur ne parle pas de logiciel : mêmes états, mêmes budgets, mêmes garanties, playbooks et sorties du métier. **Ce projet n'a aucun dépôt** — l'agent travaille dans un répertoire vide |
+| `panier` | Reads a ticket, writes code and its test in a git repository, pushes a branch | The whole chain: ticket → agent → diff → guarantees → next state |
+| `staffing` | Reads an HR need, proposes profiles, qualifies them | The engine does not speak software: same states, same budgets, same guarantees, with the business's playbooks and outputs. **This project has no repository** — the agent works in an empty directory |
 
-Tout ce qui tourne ici est le vrai chemin de la plateforme. **Une seule chose est simulée** :
-le tracker (pas de GitHub ni de Jira sur un banc), donc les tickets sont posés en base par
-`seed.py`. Les agents, eux, travaillent pour de bon.
+Everything that runs here is the platform's real path. **Only one thing is simulated**:
+the tracker (no GitHub or Jira on a bench), so the tickets are put in the database by
+`seed.py`. The agents, for their part, do real work.
 
-## Monter le banc
+## Bringing up the bench
 
-Compter **une vingtaine de minutes** la première fois (construction des images), un
-nœud avec 8 Go et 4 CPU libres, et Docker, kind, kubectl, helm.
+Allow **about twenty minutes** the first time (building the images), a node with 8 GB and
+4 free CPUs, and Docker, kind, kubectl, helm.
 
 ```bash
-make demo-up        # cluster kind mono-nœud, namespace, dépôt git, ConfigMaps, chart
-make demo-images    # construit local/choregos-*:demo et les CHARGE dans le nœud kind
+make demo-up        # single-node kind cluster, namespace, git repository, ConfigMaps, chart
+make demo-images    # builds local/choregos-*:demo and LOADS them into the kind node
 ```
 
-Le chart de la démonstration attend des images locales (`imagePullPolicy: Never`) : sans
-`make demo-images`, chaque pod reste en `ErrImageNeverPull`. Le chart embarque PostgreSQL,
-Temporal, la mémoire (Ecphoria) et la passerelle LLM (LiteLLM) — c'est le sens de
-`global.<dépendance>.embedded`.
+The demonstration chart expects local images (`imagePullPolicy: Never`): without
+`make demo-images`, every pod stays in `ErrImageNeverPull`. The chart embeds PostgreSQL,
+Temporal, memory (Ecphoria) and the LLM gateway (LiteLLM) — that is what
+`global.<dependency>.embedded` means.
 
-## Donner un accès modèle aux agents
+## Giving the agents model access
 
-La démonstration passe par **la passerelle embarquée** : la plateforme frappe une clé par
-run, plafonnée, et compte la dépense au registre — c'est le seul mode où le coût par ticket
-est un chiffre mesuré et pas une case vide. La passerelle a besoin d'une clé de
-fournisseur, qu'elle seule voit :
+The demonstration goes through **the embedded gateway**: the platform mints a key per run,
+capped, and counts the spend in the ledger — it is the only mode where the cost per ticket
+is a measured figure and not an empty cell. The gateway needs a provider key, which only
+it sees:
 
 ```bash
 kubectl -n choregos create secret generic platform-llm-key --from-literal=api-key=sk-ant-…
 kubectl -n choregos rollout restart deploy/choregos-litellm
 ```
 
-Sans clé de fournisseur (un abonnement Claude Code seulement), le banc tourne en mode
-**direct** : l'agent apporte ses identifiants, et **rien n'est compté ni plafonné** hors
-tours et minutes. À dire quand on montre le tableau de bord.
+Without a provider key (a Claude Code subscription only), the bench runs in **direct**
+mode: the agent brings its own credentials, and **nothing is counted or capped** beyond
+turns and minutes. Say so when showing the dashboard.
 
 ```bash
 kubectl -n choregos create secret generic agent-creds \
@@ -51,69 +51,70 @@ helm upgrade choregos charts/choregos -n choregos -f charts/choregos/values/loca
 make demo-seed GATEWAY=direct
 ```
 
-Dans les deux cas le secret est monté **par référence** dans les pods, jamais recopié dans
-une spécification.
+In both cases the secret is mounted **by reference** in the pods, never copied into a
+specification.
 
-## Poser les projets et les tickets
+## Setting up the projects and the tickets
 
 ```bash
 make demo-seed
 ```
 
-Le Job pose l'organisation, les deux projets, leurs workflows et leurs tickets, puis
-démarre chaque ticket — l'équivalent de `mark_agent_ready` dans l'API : un workflow
-Temporal par ticket, qui lit l'état, choisit la transition et lance l'agent.
+The Job sets up the organisation, the two projects, their workflows and their tickets,
+then starts each ticket — the equivalent of `mark_agent_ready` in the API: one Temporal
+workflow per ticket, which reads the state, picks the transition and launches the agent.
 
-## Savoir que ça a marché
+## Knowing it worked
 
 ```bash
 make demo-status
 ```
 
-Ce qu'on doit voir, et dans quel délai :
+What you should see, and how soon:
 
-| Quoi | Attendu | Quand |
+| What | Expected | When |
 |---|---|---|
 | `DEMO-1..3` | `done` | ~10 min |
-| `RH-1`, `RH-2` | `a_valider` (en attente du manager) | ~5 min |
-| registre, `kind=model` | des jetons et des euros **non nuls** | dès le premier run |
-| registre, `kind=tool` | au moins une ligne (`verifier_adresse`, gratuit) | au premier sourcing |
+| `RH-1`, `RH-2` | `a_valider` (waiting for the manager) | ~5 min |
+| ledger, `kind=model` | **non-zero** tokens and euros | from the first run |
+| ledger, `kind=tool` | at least one row (`verifier_adresse`, free) | at the first sourcing |
 
-Un ticket qui reste dans son état de départ plus de 15 minutes n'attend pas : il est mort.
-`kubectl -n choregos exec deploy/choregos-temporal -- temporal workflow describe -w
-wi-staffing-RH-1` dit pourquoi. (Ce que l'interface devrait dire elle-même — chantier P0-2
-de l'état des lieux du 2026-09-24.)
+A ticket that stays in its starting state for more than 15 minutes is not waiting: it is
+dead. `kubectl -n choregos exec deploy/choregos-temporal -- temporal workflow describe -w
+wi-staffing-RH-1` says why. (What the interface should say itself — workstream P0-2 of the
+2026-09-24 state of the project.)
 
-## Ce que ce banc ne prouve pas
+## What this bench does not prove
 
-Le connecteur SCM est un `fake` : il ne sait pas comparer deux branches. Les garanties qui
-lisent le diff — périmètre respecté, taille du diff, absence de secrets — **refusent donc
-de se prononcer** plutôt que de passer à vide, et le workflow de démonstration ne les
-déclare pas. Sur un vrai dépôt (GitHub), elles se remettent : c'est une limite du banc,
-pas du moteur. Le reste est réel, y compris la vérification des preuves d'exécution.
+The SCM connector is a `fake`: it cannot compare two branches. The guarantees that read the
+diff — scope respected, diff size, absence of secrets — therefore **refuse to give a
+verdict** rather than pass vacuously, and the demonstration workflow does not declare them.
+On a real repository (GitHub) they come back: it is a limit of the bench, not of the
+engine. The rest is real, including the verification of the execution evidence.
 
-## Rejouer la démonstration
+## Replaying the demonstration
 
-Un ticket n'a **qu'un** interpréteur : Temporal refuse de redémarrer un workflow déjà
-terminé sous le même identifiant (`ALLOW_DUPLICATE_FAILED_ONLY`). C'est voulu — c'est ce
-qui empêche de traiter deux fois le même ticket. Rejouer demande donc de **nouveaux
-tickets** : `make demo-seed SERIE=b` pose `DEMO-1b`, `RH-1b`… à côté des précédents.
+A ticket has **only one** interpreter: Temporal refuses to restart a workflow that has
+already finished under the same identifier (`ALLOW_DUPLICATE_FAILED_ONLY`). That is
+intended — it is what stops the same ticket being handled twice. Replaying therefore takes
+**new tickets**: `make demo-seed SERIE=b` puts down `DEMO-1b`, `RH-1b`… next to the
+previous ones.
 
-Remettre le dépôt de démonstration à zéro entre deux essais :
+Reset the demonstration repository between two attempts:
 
 ```bash
 kubectl -n choregos exec deploy/demo-git -- sh -c \
   'cd /srv/git/app.git && for b in $(git for-each-ref --format="%(refname:short)" refs/heads | grep choregos/); do git branch -D $b; done'
 ```
 
-## Regarder
+## Watching
 
 ```bash
-kubectl -n choregos logs -l choregos/run-id --tail=50 -f         # les agents au travail
-kubectl -n choregos port-forward deploy/choregos-web 3000:3000   # le front
+kubectl -n choregos logs -l choregos/run-id --tail=50 -f         # the agents at work
+kubectl -n choregos port-forward deploy/choregos-web 3000:3000   # the front end
 ```
 
-Le dépôt de la démonstration se relit depuis le cluster :
+The demonstration repository can be read back from the cluster:
 
 ```bash
 kubectl -n choregos exec deploy/demo-git -- git -C /srv/git/app.git log --oneline --all

@@ -189,7 +189,7 @@ def test_makefile_reads_comments_only() -> None:
         ("apps/web/pnpm-lock.yaml", False),
         ("packages/core/src/choregos_core/injection.py", False),
         ("apps/web/public/logo.png", False),
-        ("demo/README.txt", False),
+        ("demo/seed.py", True),
         ("charts/choregos/values.yaml", True),
         ("charts/choregos/templates/_helpers.tpl", True),
         ("charts/choregos/templates/NOTES.txt", True),

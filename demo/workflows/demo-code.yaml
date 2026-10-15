@@ -1,9 +1,9 @@
-# Workflow de la DÉMO logicielle : le plus court chemin qui prouve quelque chose.
+# Workflow of the SOFTWARE demo: the shortest path that proves something.
 #
-# Trois états de travail, deux agents, aucun humain — un banc doit tourner sans qu'on
-# l'attende. Le workflow par défaut de la plateforme (`default-simple`) fait relire le
-# cadrage par un humain et passe par une PR ; ici on s'arrête à la branche poussée, parce
-# que la démo tourne sur un git local et que la revue n'ajouterait rien à la preuve.
+# Three working states, two agents, no human — a bench must run without anyone waiting
+# for it. The platform's default workflow (`default-simple`) has a human review the
+# scoping and goes through a PR; here we stop at the pushed branch, because the demo runs
+# on a local git and a review would add nothing to the proof.
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -27,17 +27,17 @@ transitions:
     from: inbox
     to: in_progress
     by: dev
-    # Pas d'`outputs:` : une branche et des commits sont des ARTEFACTS, que le runner
-    # remplit lui-même. Les déclarer ici faisait échouer `outputs_present` à chaque
-    # première tentative — l'agent n'a aucune raison de les recopier dans ses sorties.
-    # Les garanties qui LISENT LE DIFF (`scope_respected`, `diff_size_max`, `no_secrets`)
-    # ne figurent pas ici, et c'est délibéré : sur ce banc le connecteur SCM est un
-    # `fake`, il ne sait pas comparer deux branches, et depuis ce changement une garantie
-    # qui ne peut pas être évaluée REFUSE au lieu de passer à vide. Les déclarer ici
-    # ferait échouer chaque étape pour une bonne raison, et la démonstration ne montrerait
-    # plus rien. Sur un vrai dépôt (GitHub), elles se remettent et c'est tout l'intérêt.
-    # `evidence_present` : les tests ont tourné et ils passent. C'est la garantie qui a un
-    # sens ici, et elle ne dépend pas du connecteur SCM.
+    # No `outputs:`: a branch and commits are ARTIFACTS, which the runner fills in itself.
+    # Declaring them here made `outputs_present` fail on every first attempt — the agent
+    # has no reason to copy them into its outputs.
+    # The guarantees that READ THE DIFF (`scope_respected`, `diff_size_max`, `no_secrets`)
+    # are absent here, and deliberately: on this bench the SCM connector is a `fake`, it
+    # cannot compare two branches, and since that change a guarantee that cannot be
+    # evaluated REFUSES instead of passing vacuously. Declaring them here would fail every
+    # step for a good reason, and the demonstration would show nothing any more. On a real
+    # repository (GitHub) they come back, which is the whole point.
+    # `evidence_present`: the tests ran and they pass. It is the guarantee that makes sense
+    # here, and it does not depend on the SCM connector.
     gates: [evidence_present]
     on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
   - id: t-verify
@@ -46,21 +46,21 @@ transitions:
     by: checker
     gates: [evidence_present]
     on_fail: { to: in_progress, max_attempts: 2, escalate_to: needs_human }
-  # Portée par le SYSTÈME : il n'y a plus rien à faire réfléchir. Lancer un troisième agent
-  # pour déplacer une carte coûte un run entier, et il échoue pour la seule raison qu'on ne
-  # lui a rien donné à produire. Les garanties, elles, restent : c'est la vérification de
-  # l'étape précédente qui est relue ici.
+  # Carried by the SYSTEM: there is nothing left to think about. Launching a third agent
+  # to move a card costs a whole run, and it fails for the sole reason that it was given
+  # nothing to produce. The guarantees stay, though: it is the previous step's
+  # verification that is re-read here.
   - id: t-done
     from: verifying
     to: done
     by: journal
     gates: [evidence_present]
     on_fail: { to: in_progress, max_attempts: 1, escalate_to: needs_human }
-  # Portée par un HUMAIN, et c'est structurel : une transition qui sort de `needs_human`
-  # et qu'un agent porte est rejouée aussitôt, échoue de la même façon, et la plateforme
-  # relance un agent indéfiniment. L'escalade vers un humain n'a de sens que si la sortie
-  # attend vraiment quelqu'un. Sur ce banc, personne ne répond : le ticket reste visible
-  # en « intervention humaine », ce qui est exactement ce qu'on veut montrer.
+  # Carried by a HUMAN, and that is structural: a transition out of `needs_human` that an
+  # agent carries is replayed at once, fails the same way, and the platform relaunches an
+  # agent indefinitely. Escalating to a human only makes sense if the way out really waits
+  # for someone. On this bench nobody answers: the ticket stays visible under "human
+  # intervention", which is exactly what we want to show.
   - id: t-abandon
     from: needs_human
     to: abandoned

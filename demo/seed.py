@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Met en place la démonstration : une organisation, deux projets, leurs tickets.
+"""Sets up the demonstration: one organisation, two projects, their tickets.
 
-Écrit directement en base, comme `dev/scripts/seed.py` : la plateforme reçoit normalement
-ses tickets d'un tracker (GitHub, Jira), et la démonstration n'en a pas — c'est la seule
-chose qu'elle simule. Tout le reste est le vrai chemin : workflow, agents, garanties.
+Writes straight to the database, like `dev/scripts/seed.py`: the platform normally receives
+its tickets from a tracker (GitHub, Jira), and the demonstration has none — it is the only
+thing it simulates. Everything else is the real path: workflow, agents, guarantees.
 
-    python demo/seed.py            # crée ce qui manque, ne touche pas à l'existant
+    python demo/seed.py            # creates what is missing, leaves what exists alone
 """
 
 from __future__ import annotations
@@ -17,19 +17,19 @@ import sys
 
 RACINE = pathlib.Path(__file__).resolve().parent
 
-# Deux façons de donner un modèle aux agents, choisies par DEMO_GATEWAY :
+# Two ways of giving the agents a model, chosen by DEMO_GATEWAY:
 #
-# - `litellm` (défaut) : la passerelle embarquée frappe une clé PAR RUN, plafonnée, et compte
-#   la dépense. Les projets nomment alors des ALIAS de passerelle (`platform/standard`), et
-#   le resolver lit derrière le modèle réel pour vérifier que `claude-code` reçoit bien un
-#   Claude. C'est le seul mode où le registre de coûts porte un chiffre.
-# - `direct` : l'agent apporte ses identifiants (abonnement Claude Code dans `agent-creds`).
-#   Il parle DIRECTEMENT au fournisseur, donc le nom doit être l'identifiant du modèle chez
-#   lui (`claude-sonnet-5`), pas la forme préfixée que LiteLLM attend pour router. Rien
-#   n'est compté, rien n'est plafonné hors tours et minutes.
+# - `litellm` (default): the embedded gateway mints a key PER RUN, capped, and counts the
+#   spend. The projects then name gateway ALIASES (`platform/standard`), and the resolver
+#   reads the real model behind them to check that `claude-code` really gets a Claude. It is
+#   the only mode where the cost ledger carries a figure.
+# - `direct`: the agent brings its own credentials (a Claude Code subscription in
+#   `agent-creds`). It talks to the provider DIRECTLY, so the name must be the model's
+#   identifier at the provider (`claude-sonnet-5`), not the prefixed form LiteLLM expects
+#   for routing. Nothing is counted, nothing is capped beyond turns and minutes.
 PASSERELLE = os.environ.get("DEMO_GATEWAY", "litellm")
 if PASSERELLE not in {"litellm", "direct"}:
-    raise SystemExit(f"DEMO_GATEWAY={PASSERELLE!r} : attendu `litellm` ou `direct`")
+    raise SystemExit(f"DEMO_GATEWAY={PASSERELLE!r}: expected `litellm` or `direct`")
 MODELES = (
     {
         "standard": "platform/standard",
@@ -45,37 +45,37 @@ MODELES = (
         "by_size": "claude-sonnet-5",
     }
 )
-# Un ticket n'a qu'un interpréteur (Temporal refuse un id terminé) : rejouer la
-# démonstration demande de NOUVEAUX tickets. `DEMO_SERIE=b` suffixe les clés (`DEMO-1b`).
+# A ticket has only one interpreter (Temporal refuses a finished id): replaying the
+# demonstration takes NEW tickets. `DEMO_SERIE=b` suffixes the keys (`DEMO-1b`).
 SERIE = os.environ.get("DEMO_SERIE", "")
 
 
 def chemin_workflow(nom: str) -> pathlib.Path:
-    """`demo/workflows/<nom>` en local, `<nom>` à plat quand un ConfigMap les monte."""
+    """`demo/workflows/<nom>` locally, `<nom>` flat when a ConfigMap mounts them."""
     for candidat in (RACINE / "workflows" / nom, RACINE / nom):
         if candidat.exists():
             return candidat
-    raise FileNotFoundError(f"workflow introuvable : {nom}")
+    raise FileNotFoundError(f"workflow not found: {nom}")
 
 
 PROJETS = {
     "panier": {
-        "nom": "Panier (démo logicielle)",
+        "nom": "Cart (software demo)",
         "workflow": "demo-code.yaml",
         "etat_initial": "inbox",
         "config": {
             "slug": "panier",
             "org": "demo",
             "repo": {
-                # Le git du cluster : la démonstration n'emprunte aucun identifiant dehors.
+                # The cluster's own git: the demonstration borrows no credentials from outside.
                 "url": "git://demo-git:9418/app.git",
                 "default_branch": "main",
                 "language": "python",
             },
             "models": {"profiles": MODELES},
         },
-        # Les connecteurs sont des lignes à part (table `connectors`), pas de la config.
-        # `fake` pour le tracker et le SCM : pas de GitHub sur un banc. Le reste est réel.
+        # Connectors are separate rows (table `connectors`), not configuration.
+        # `fake` for the tracker and the SCM: no GitHub on a bench. The rest is real.
         "connecteurs": {
             "tracker": ("internal", {}),
             "scm": ("fake", {}),
@@ -89,38 +89,38 @@ PROJETS = {
         "tickets": [
             (
                 "DEMO-1",
-                "Le total du panier ignore la TVA",
-                "`Panier.total_ht()` existe, mais rien ne calcule le total TTC.\n\n"
-                "Ajouter `total_ttc(taux)` avec un taux par défaut de 20 %, et son test.",
+                "The cart total ignores VAT",
+                "`Panier.total_ht()` exists, but nothing computes the total including VAT.\n\n"
+                "Add `total_ttc(taux)` with a default rate of 20 %, and its test.",
                 "S",
             ),
             (
                 "DEMO-2",
-                "Impossible de retirer un article du panier",
-                "Ajouter `Panier.retirer(libelle)` qui retire la première occurrence et "
-                "lève `KeyError` si l'article est absent. Avec ses tests.",
+                "Cannot remove an item from the cart",
+                "Add `Panier.retirer(libelle)`, which removes the first occurrence and "
+                "raises `KeyError` if the item is absent. With its tests.",
                 "S",
             ),
             (
                 "DEMO-3",
-                "Appliquer une remise en pourcentage",
-                "Ajouter `Panier.appliquer_remise(pourcentage)` qui borne la remise à "
-                "[0, 100] et refuse le reste par `ValueError`. Avec ses tests.",
+                "Apply a percentage discount",
+                "Add `Panier.appliquer_remise(pourcentage)`, which clamps the discount to "
+                "[0, 100] and rejects anything else with `ValueError`. With its tests.",
                 "M",
             ),
         ],
     },
     "staffing": {
-        "nom": "Staffing (démo métier)",
+        "nom": "Staffing (business demo)",
         "workflow": "staffing.yaml",
         "etat_initial": "demande",
         "config": {
             "slug": "staffing",
             "org": "demo",
-            # PAS DE DÉPÔT. Ce métier n'en a pas l'usage, et depuis le 2026-09-24 il n'est
-            # plus obligé d'en déclarer un (ADR 0012, limite n°1 — levée). L'agent travaille
-            # dans un répertoire vide : rien à cloner, rien à pousser, et les garanties qui
-            # lisent un diff refusent parce qu'elles n'ont rien à lire.
+            # NO REPOSITORY. This line of business has no use for one, and since 2026-09-24 it
+            # is no longer obliged to declare one (ADR 0012, limit no. 1 — lifted). The agent
+            # works in an empty directory: nothing to clone, nothing to push, and the
+            # guarantees that read a diff refuse because they have nothing to read.
             "models": {"profiles": MODELES},
         },
         "connecteurs": {
@@ -136,17 +136,17 @@ PROJETS = {
         "tickets": [
             (
                 "RH-1",
-                "Chef de projet data pour une mission de 6 mois",
-                "Client : industrie. Démarrage sous 4 semaines, 3 jours sur site à Lille.\n"
-                "Attendu : pilotage d'un chantier de migration analytique, interlocuteurs "
-                "métier, connaissance dbt appréciée. TJM cible 650 €.",
+                "Data project manager for a 6-month engagement",
+                "Client: industry. Start within 4 weeks, 3 days on site in Lille.\n"
+                "Expected: leading an analytics migration programme, business "
+                "stakeholders, dbt knowledge appreciated. Target daily rate 650 EUR.",
                 "M",
             ),
             (
                 "RH-2",
-                "Deux développeurs Python en renfort",
-                "Renfort de 3 mois sur une API FastAPI existante. Autonomie attendue, "
-                "revue de code exigeante, télétravail complet possible.",
+                "Two Python developers as reinforcements",
+                "3-month reinforcement on an existing FastAPI API. Autonomy expected, "
+                "demanding code review, full remote work possible.",
                 "M",
             ),
         ],
@@ -166,7 +166,7 @@ async def main() -> int:
             await session.execute(select(Organization).where(Organization.slug == "demo"))
         ).scalar_one_or_none()
         if org is None:
-            org = Organization(slug="demo", name="Démonstration")
+            org = Organization(slug="demo", name="Demonstration")
             session.add(org)
             await session.flush()
 
@@ -182,10 +182,10 @@ async def main() -> int:
                 )
                 session.add(projet)
                 await session.flush()
-                print(f"projet {slug} créé")
+                print(f"project {slug} created")
             else:
                 projet.config = spec["config"]
-                print(f"projet {slug} mis à jour")
+                print(f"project {slug} updated")
 
             for kind, (type_, config) in spec["connecteurs"].items():
                 ligne = (
@@ -204,10 +204,10 @@ async def main() -> int:
             source = chemin_workflow(str(spec["workflow"])).read_text(encoding="utf-8")
             workflow, rapport = parse_workflow(source, strict=False)
             if not rapport.valid:
-                print(f"workflow invalide pour {slug} : {rapport.errors}", file=sys.stderr)
+                print(f"invalid workflow for {slug}: {rapport.errors}", file=sys.stderr)
                 return 1
-            # Le projet reçoit d'abord ses défauts (politique, workflow du produit), puis
-            # on installe SON workflow à la place — c'est ce que fait `PUT /workflow`.
+            # The project first gets its defaults (policy, the product's workflow), then
+            # THIS workflow is installed in their place — which is what `PUT /workflow` does.
             await ensure_defaults(session, projet)
             for ancien in (
                 await session.execute(
@@ -217,9 +217,9 @@ async def main() -> int:
                 )
             ).scalars():
                 ancien.is_active = False
-            # Rejouable : (projet, nom, version) est unique. On met à jour celui qui existe
-            # plutôt que d'en insérer un second — sinon un second passage casse sur la
-            # contrainte, et le script cesserait d'être rejouable.
+            # Replayable: (project, name, version) is unique. The existing one is updated
+            # rather than a second inserted — otherwise a second run breaks on the
+            # constraint, and the script would stop being replayable.
             defini = (
                 await session.execute(
                     select(WorkflowDef).where(
@@ -250,7 +250,7 @@ async def main() -> int:
                     await session.execute(select(WorkItem).where(WorkItem.tracker_key == cle))
                 ).scalar_one_or_none()
                 if deja is not None:
-                    print(f"  ticket {cle} déjà là ({deja.state})")
+                    print(f"  ticket {cle} already there ({deja.state})")
                     continue
                 session.add(
                     WorkItem(
@@ -260,26 +260,26 @@ async def main() -> int:
                         body_snapshot=corps,
                         state=spec["etat_initial"],
                         size=taille,
-                        # Un périmètre de CHEMINS n'a de sens que là où il y a des
-                        # fichiers de projet. Le seed l'imposait à tous les tickets, RH
-                        # compris : l'agent RH, dans son répertoire vide, s'est arrêté sur
-                        # « src/ et tests/ inexistants » — et il avait raison de refuser
-                        # plutôt que d'écrire hors de ce qu'on lui avait déclaré.
+                        # A scope of PATHS only makes sense where there are project
+                        # files. The seed used to impose it on every ticket, HR included:
+                        # the HR agent, in its empty directory, stopped on "src/ and tests/
+                        # do not exist" — and it was right to refuse rather than write
+                        # outside what it had been told.
                         allowed_paths=["src/**", "tests/**"] if spec["config"].get("repo") else [],
                     )
                 )
-                print(f"  ticket {cle} créé")
+                print(f"  ticket {cle} created")
     if "--demarrer" in sys.argv:
         await demarrer()
     return 0
 
 
 async def demarrer() -> None:
-    """Démarre l'interpréteur de chaque ticket — ce que fait `mark_agent_ready` dans l'API.
+    """Starts each ticket's interpreter — what `mark_agent_ready` does in the API.
 
-    Un ticket posé en base ne bouge pas tout seul : c'est un workflow Temporal, par ticket,
-    qui lit l'état, choisit la transition et lance l'agent. Le démarrer ici évite d'inventer
-    une porte d'entrée que la plateforme n'a pas.
+    A ticket put in the database does not move by itself: it is a Temporal workflow, one per
+    ticket, that reads the state, picks the transition and launches the agent. Starting it
+    here avoids inventing an entry point the platform does not have.
     """
     from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
@@ -292,7 +292,7 @@ async def demarrer() -> None:
         ).all()
         for item, projet in rows:
             if item.temporal_wf_id:
-                print(f"  {item.tracker_key} déjà démarré")
+                print(f"  {item.tracker_key} already started")
                 continue
             workflow_id = interpreter_id(projet.slug, item.tracker_key)
             charge = {
@@ -303,14 +303,14 @@ async def demarrer() -> None:
             }
             try:
                 await get_temporal().start_interpreter(workflow_id, charge)
-                print(f"  {item.tracker_key} démarré ({workflow_id})")
+                print(f"  {item.tracker_key} started ({workflow_id})")
             except Exception as exc:
-                # Un workflow de ce nom tourne déjà : un ticket n'a qu'un interpréteur, et
-                # c'est la garantie qu'on ne le traite pas deux fois. Le script est rejouable,
-                # il ne doit pas s'arrêter là-dessus.
+                # A workflow of that name is already running: a ticket has only one
+                # interpreter, and that is what guarantees it is not handled twice. The
+                # script is replayable, it must not stop on this.
                 if "already started" not in str(exc).lower():
                     raise
-                print(f"  {item.tracker_key} : un interpréteur tourne déjà")
+                print(f"  {item.tracker_key}: an interpreter is already running")
             item.temporal_wf_id = workflow_id
 
 

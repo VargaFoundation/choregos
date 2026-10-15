@@ -1,36 +1,35 @@
-# Un serveur git DANS le cluster : la démo n'emprunte aucun identifiant à l'extérieur.
+# A git server INSIDE the cluster: the demo borrows no credentials from outside.
 #
-# `git http-backend` derrière un nginx-less lighttpd serait plus léger, mais l'image
-# `alpine/git` suffit : un dépôt nu, servi en HTTP par le démon git (port 9418 → ici 8080
-# via `git daemon`). Le démon git autorise la POUSSÉE anonyme quand on le lui demande —
-# c'est inacceptable sur un réseau, et parfaitement adapté à un banc jetable dont le
-# namespace est fermé par défaut.
+# `git http-backend` behind a nginx-less lighttpd would be lighter, but the `alpine/git`
+# image is enough: a bare repository, served over HTTP by the git daemon (port 9418 → here
+# 8080 via `git daemon`). The git daemon allows anonymous PUSH when asked to — which is
+# unacceptable on a network, and perfectly suited to a disposable bench whose namespace is
+# closed by default.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: demo-depot
 data:
-  # Le projet sur lequel les agents vont travailler : minuscule, mais réel — il a des
-  # tests, et c'est ce que la vérification lira.
+  # The project the agents will work on: tiny, but real — it has tests, and that is what
+  # the verification will read.
   init.sh: |
     set -eu
-    # `alpine/git` n'embarque pas le démon : il vit dans un paquet à part.
+    # `alpine/git` does not ship the daemon: it lives in a separate package.
     command -v git-daemon >/dev/null 2>&1 || apk add --no-cache git-daemon >/dev/null
     mkdir -p /srv/git && cd /srv/git
     if [ ! -d app.git ]; then
       mkdir -p /tmp/app && cd /tmp/app
       git init -q -b main
       git config user.email "demo@choregos.local"
-      git config user.name "Démo Choregos"
+      git config user.name "Choregos Demo"
       mkdir -p src tests
       cat > README.md <<'EOT'
-    # panier — le projet de démonstration
+    # panier — the demonstration project
 
-    Une bibliothèque minuscule : un panier, des articles, un total. Les tickets de la
-    démonstration portent sur elle.
+    A tiny library: a cart, items, a total. The demonstration's tickets are about it.
     EOT
       cat > src/panier.py <<'EOT'
-    """Un panier d'achat minimal."""
+    """A minimal shopping cart."""
 
     from dataclasses import dataclass, field
 
@@ -63,7 +62,7 @@ data:
         assert panier.total_ht() == 6.0
     EOT
       printf 'pytest\n' > requirements-dev.txt
-      git add -A && git commit -q -m "chore: le projet de démonstration"
+      git add -A && git commit -q -m "chore: the demonstration project"
       cd /srv/git && git clone -q --bare /tmp/app app.git
       cd app.git && git config http.receivepack true && git config daemon.receivepack true
     fi

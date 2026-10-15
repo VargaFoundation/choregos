@@ -1,15 +1,15 @@
-# Workflow RH — la MÊME machine, sans une ligne de logiciel.
+# HR workflow — the SAME machine, without a line of software.
 #
-# Ce fichier n'existe que pour montrer une chose : états, transitions, acteurs, budgets,
-# garanties, mémoire et reprise après panne ne parlent pas de code. Ce qui, dans la
-# plateforme, parlait de code — les playbooks, la garantie `evidence_present`, les sorties
-# typées — est ici remplacé par son équivalent métier :
-#   · les playbooks viennent du déploiement (`CHOREGOS_PLAYBOOKS_DIR`), pas du paquet ;
-#   · la garantie est `outputs_present` : l'étape a produit ce que la transition déclare ;
-#   · les sorties portent des noms de métier (`profils`, `evaluation`) ;
-#   · les RÔLES aussi : `sourcing`, `qualification`. Avant le 2026-09-24 il fallait
-#     écrire `role: custom` + `playbook: sourcing`, et le board affichait « custom »
-#     partout (ADR 0012, limite n°4).
+# This file exists to show one thing: states, transitions, actors, budgets, guarantees,
+# memory and recovery after a crash do not talk about code. What, in the platform, did talk
+# about code — the playbooks, the `evidence_present` guarantee, the typed outputs — is
+# replaced here by its business equivalent:
+#   · the playbooks come from the deployment (`CHOREGOS_PLAYBOOKS_DIR`), not the package;
+#   · the guarantee is `outputs_present`: the step produced what the transition declares;
+#   · the outputs carry business names (`profils`, `evaluation`);
+#   · the ROLES too: `sourcing`, `qualification`. Before 2026-09-24 one had to write
+#     `role: custom` + `playbook: sourcing`, and the board showed "custom" everywhere
+#     (ADR 0012, limit no. 4).
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -36,16 +36,16 @@ transitions:
     outputs: [profils]
     gates:
       - name: outputs_present
-      # Une sortie est ce que l'agent RACONTE. `evidence_facts` vérifie ce qu'il a COMPTÉ,
-      # et `min` refuse le zéro poli : ne trouver personne se dit en échouant l'étape.
+      # An output is what the agent TELLS. `evidence_facts` checks what it COUNTED, and
+      # `min` refuses the polite zero: finding nobody is said by failing the step.
       - name: evidence_facts
         params: { keys: [profils_retenus, lieu_verifie], min: { profils_retenus: 1 } }
-      # `lieu_verifie: true` est ce que l'agent RACONTE. Ce que la plateforme a COMPTÉ, c'est
-      # l'appel au catalogue : sur le banc du 2026-09-24, dix listages, zéro appel, et le fait
-      # consigné quand même. Un outil annoncé dans un playbook n'est pas un outil employé.
+      # `lieu_verifie: true` is what the agent TELLS. What the platform COUNTED is the call
+      # to the catalogue: on the 2026-09-24 bench, ten listings, zero calls, and the fact
+      # recorded all the same. A tool announced in a playbook is not a tool used.
       - name: tool_called
         params: { tools: [verifier_adresse] }
-    on_fail: { to: demande, max_attempts: 2, escalate_to: needs_human }
+    on_fail: { to: demande, max_attempts: 2, escalate_to: needs_human }  # lang: fr-ok (state id `demande`)
   - id: t-qualification
     from: sourcing
     to: qualification

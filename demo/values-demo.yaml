@@ -1,36 +1,36 @@
-# La démonstration : le banc local, plus ce qui lui est propre.
+# The demonstration: the local bench, plus what is specific to it.
 #   helm upgrade --install choregos charts/choregos -n choregos \
 #     -f charts/choregos/values/local.yaml -f demo/values-demo.yaml
 #
-# Ce fichier S'AJOUTE à `values/local.yaml` (tout embarqué) : il ne redit que ce qui change.
+# This file is ADDED to `values/local.yaml` (everything embedded): it only restates what changes.
 global:
   imageRegistry: local
   imageTag: demo
   imagePullPolicy: Never
-  # Les playbooks métier (sourcing, qualification) viennent du déploiement.
+  # The business playbooks (sourcing, qualification) come from the deployment.
   playbooks:
     configMap: demo-playbooks
-  # Le catalogue d'outils (ADR 0014). Sans cette ligne, l'API n'a AUCUN catalogue et les
-  # agents n'ont aucun outil — c'est exactement l'état dans lequel le banc du 2026-09-24
-  # a tourné sans que personne s'en aperçoive. La ConfigMap vient de `demo/manifests`.
+  # The tool catalogue (ADR 0014). Without this line, the API has NO catalogue and the
+  # agents have no tool — which is exactly the state the 2026-09-24 bench ran in without
+  # anyone noticing. The ConfigMap comes from `demo/manifests`.
   toolCatalog:
     configMap: demo-outils
-  # La passerelle LLM reste EMBARQUÉE (héritée de local.yaml) : c'est elle qui frappe une
-  # clé par run, plafonne la dépense et la compte. Sans elle, le registre de coûts reste à
-  # zéro — 12 runs à 0 € sur le banc du 2026-09-24, présentés comme un plafond tenu.
-  # Elle a besoin d'une clé de fournisseur, posée à la main (voir demo/README.md) :
+  # The LLM gateway stays EMBEDDED (inherited from local.yaml): it is what mints a key per
+  # run, caps the spend and counts it. Without it, the cost ledger stays at zero — 12 runs
+  # at 0 EUR on the 2026-09-24 bench, presented as a cap that held.
+  # It needs a provider key, set by hand (see demo/README.md):
   #   kubectl -n choregos create secret generic platform-llm-key --from-literal=api-key=sk-ant-…
-  # Sans clé de fournisseur : `--set global.gateway.embedded=false` et DEMO_GATEWAY=direct
-  # dans le Job de seed — et on ne parle plus de coût.
+  # Without a provider key: `--set global.gateway.embedded=false` and DEMO_GATEWAY=direct
+  # in the seed Job — and we stop talking about cost.
   memory:
     embedded: true
 
 choregos-litellm:
   upstream:
     apiKeySecret: platform-llm-key
-  # Les alias que les projets demandent (`profile:standard` → `platform/standard`) et le
-  # modèle réel derrière. Le backend `claude-code` exige un modèle Claude : le resolver le
-  # vérifie sur `provider_model`, lu ici.
+  # The aliases the projects ask for (`profile:standard` → `platform/standard`) and the real
+  # model behind them. The `claude-code` backend requires a Claude model: the resolver
+  # checks it on `provider_model`, read here.
   models:
     - alias: platform/standard
       model: anthropic/claude-sonnet-5
@@ -43,21 +43,21 @@ choregos-litellm:
 
 choregos-ecphoria:
   embedding:
-    # Anthropic ne sert pas d'embeddings : la mémoire garde les faits, la recherche
-    # sémantique retombe sur du lexical. Un fournisseur qui en a → `provider: gateway`.
+    # Anthropic does not serve embeddings: memory keeps the facts, semantic search falls
+    # back to lexical. A provider that has them → `provider: gateway`.
     provider: none
 
 choregos-orchestrator:
   runner:
-    # Un seul nœud : trois agents qui démarrent ensemble, c'est trois conteneurs de 2 CPU
-    # et une image de plusieurs gigaoctets tirée trois fois. Au-delà de deux, le Job
-    # attend SANS pod, dans l'ordre d'arrivée (ADR 0013).
+    # A single node: three agents starting together means three 2-CPU containers and an
+    # image of several gigabytes pulled three times. Beyond two, the Job waits WITHOUT a
+    # pod, in order of arrival (ADR 0013).
     maxActive: 2
     env:
-      # Les agents parlent au dépôt du cluster, en clair : rien de secret ici.
+      # The agents talk to the cluster's repository in the clear: nothing secret here.
       GIT_TERMINAL_PROMPT: "0"
     envFromSecrets:
-      # Facultatif, et seulement en mode direct (DEMO_GATEWAY=direct) : le secret
-      # `agent-creds` porte alors CLAUDE_CODE_OAUTH_TOKEN ou ANTHROPIC_API_KEY. Avec la
-      # passerelle, l'agent reçoit une clé DE RUN et n'a besoin de rien d'autre.
+      # Optional, and only in direct mode (DEMO_GATEWAY=direct): the `agent-creds` secret
+      # then carries CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY. With the gateway, the
+      # agent receives a PER-RUN key and needs nothing else.
       - agent-creds
