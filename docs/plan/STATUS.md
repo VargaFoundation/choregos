@@ -372,7 +372,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
-**Total** : 247 livrées, 85 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+**Total** : 247 livrées, 86 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
