@@ -192,5 +192,21 @@ describe("the sources of a base (S33-04)", () => {
     const base = { site: "", folder: "", url: "", ref: "", paths: "" };
     expect(sourceConfig("confluence", { ...base, space: "ENG", pageId: "" })).toEqual({ space_key: "ENG", include_attachments: false });
     expect(sourceConfig("confluence", { ...base, space: "ENG", attachments: true })).toEqual({ space_key: "ENG", include_attachments: true });
+
+  it("adds a git source, through a git connector when the repository is private", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    render(<KnowledgeSources org="varga" slug="framework" sources={[]} onChange={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "git" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://github.com/acme/private.git" } });
+    await screen.findByRole("option", { name: "acme-github" });
+    fireEvent.change(screen.getByLabelText("git connector"), { target: { value: "acme-github" } });
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ kind: "git", connector: "acme-github" }),
+      ),
+    );
   });
 });

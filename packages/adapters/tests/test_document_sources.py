@@ -275,3 +275,145 @@ def test_a_documents_connector_opens_a_source_from_its_configuration() -> None:
 
     fake: DocumentsConnector = FakeDocumentsConnector({})
     assert fake.source({"anything": 1}, key="src3") is fake_source("src3")
+
+
+class _Process:
+    """What `asyncio.create_subprocess_exec` returns, scripted."""
+
+    def __init__(self, out: bytes = b"", err: bytes = b"", code: int = 0) -> None:
+        self.out, self.err, self.returncode = out, err, code
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        return self.out, self.err
+
+
+def _spy(monkeypatch: pytest.MonkeyPatch, answer: _Process) -> list[tuple[tuple[str, ...], dict[str, str]]]:
+    calls: list[tuple[tuple[str, ...], dict[str, str]]] = []
+
+    async def fake_exec(*args: str, **kwargs: Any) -> _Process:
+        calls.append((args, kwargs["env"]))
+        return answer if "fetch" in args else _Process()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    return calls
+
+
+def _secret() -> str:
+    return "tok" + "en-" + "value-123"  # built at runtime: not a literal that looks like a credential
+
+
+async def test_a_git_credential_goes_through_the_environment_never_argv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import base64
+
+    token = _secret()
+    calls = _spy(monkeypatch, _Process(err=f"fatal: denied for {token}".encode(), code=128))
+    source = GitSource(url="https://github.com/acme/handbook.git", credential=token)
+    with pytest.raises(RuntimeError) as failure:
+        await source.changes(None)
+    source.close()
+    fetch_args, fetch_env = next(c for c in calls if "fetch" in c[0])
+    assert all(token not in part for part in fetch_args), "never in argv"
+    assert fetch_env["GIT_CONFIG_COUNT"] == "1"
+    assert fetch_env["GIT_CONFIG_KEY_0"] == "http.https://github.com/.extraHeader"
+    assert (
+        fetch_env["GIT_CONFIG_VALUE_0"]
+        == "Authorization: Basic " + base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    )
+    assert token not in str(failure.value), "nor in an error message"
+    init_env = next(c for c in calls if "init" in c[0])[1]
+    assert "GIT_CONFIG_COUNT" not in init_env, "only the fetch carries it"
+
+
+@pytest.mark.parametrize(
+    "url", ["https://evil.example.com/acme/handbook.git", "https://github.com.evil.test/a/b.git"]
+)
+def test_a_credential_is_never_sent_to_another_host(url: str) -> None:
+    with pytest.raises(SourceRefusedError, match="never sent to another host"):
+        GitSource(url=url, credential=_secret(), host="github.com")
+
+
+def test_a_git_url_carries_no_credentials() -> None:
+    with pytest.raises(SourceRefusedError, match="no credentials"):
+        GitSource(url="https://user:pw@github.com/a/b.git")
+
+
+async def test_a_repository_that_matches_no_file_is_unreadable_not_empty(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "app.py").write_text("print(1)\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "one")
+    source = GitSource(url=f"file://{repo}", paths=["docs/*.md"], allow_file=True)
+    changes = await source.changes({"commit": "older"})
+    source.close()
+    assert changes.items == [] and changes.unreadable == [f"file://{repo}"]
+
+
+async def test_two_files_of_the_same_name_in_two_folders_are_two_documents(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "assets").mkdir(parents=True)
+    (repo / "README.md").write_text("# Root\n")
+    (repo / "assets" / "README.md").write_text("# Assets\n")
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "one")
+    source = GitSource(url=f"file://{repo}", allow_file=True)
+    changes = await source.changes(None)
+    source.close()
+    assert sorted(i.name for i in changes.items) == ["README.md", "assets-README.md"]
+
+
+def test_the_git_connector_takes_a_token_or_a_github_app() -> None:
+    from choregos_adapters.documents.git import GitDocumentsConnector
+
+    token = _secret()
+    opened = GitDocumentsConnector({"token": token}).source({"url": "https://github.com/a/b.git"}, key="k")
+    assert isinstance(opened, GitSource) and opened.host == "github.com"
+    with pytest.raises(SourceRefusedError, match="no `token`"):
+        GitDocumentsConnector({}).source({"url": "https://github.com/a/b.git"}, key="k")
+    with pytest.raises(SourceRefusedError, match="private_key"):
+        GitDocumentsConnector({"auth": "github_app", "app_id": "1"}).source(
+            {"url": "https://github.com/a/b.git"}, key="k"
+        )
+    with pytest.raises(SourceRefusedError, match="never sent"):
+        GitDocumentsConnector({"token": token, "host": "git.corp.test"}).source(
+            {"url": "https://github.com/a/b.git"}, key="k"
+        )
+
+
+async def test_a_github_app_mints_a_read_only_token_for_the_repository(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import base64
+
+    import respx
+    from choregos_adapters.documents.git import GitDocumentsConnector
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048).private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    minted = _secret()
+    calls = _spy(monkeypatch, _Process(err=b"stop here", code=128))
+    connector = GitDocumentsConnector(
+        {"auth": "github_app", "app_id": "42", "private_key": key.decode(), "installation_id": 7}
+    )
+    source = connector.source({"url": "https://github.com/acme/handbook.git"}, key="k")
+    with respx.mock(assert_all_called=True) as mock:
+        route = mock.post("https://api.github.com/app/installations/7/access_tokens").respond(
+            201, json={"token": minted}
+        )
+        with pytest.raises(RuntimeError):
+            await source.changes(None)
+    source.close()
+    sent = route.calls.last.request
+    assert b'"repositories":["handbook"]' in sent.content.replace(b" ", b"")
+    assert b'"contents":"read"' in sent.content.replace(b" ", b"")
+    fetch_env = next(c for c in calls if "fetch" in c[0])[1]
+    assert fetch_env["GIT_CONFIG_VALUE_0"].endswith(
+        base64.b64encode(f"x-access-token:{minted}".encode()).decode()
+    )

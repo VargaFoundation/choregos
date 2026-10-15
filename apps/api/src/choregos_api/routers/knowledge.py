@@ -44,7 +44,7 @@ from ..knowledge.access import can_curate, can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
-from ..knowledge.sync import CONNECTED_KINDS, SOURCE_CONNECTOR_TYPES
+from ..knowledge.sync import CONNECTED_KINDS, OPTIONALLY_CONNECTED, SOURCE_CONNECTOR_TYPES
 from ..rbac import Permission
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
@@ -778,7 +778,7 @@ _SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] 
     "git": _git_config,
 }
 
-_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive", "confluence": "Confluence"}
+_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive", "confluence": "Confluence", "git": "private git"}
 
 
 async def _checked_source_config(
@@ -789,7 +789,7 @@ async def _checked_source_config(
     config: dict[str, object],
 ) -> dict[str, object]:
     """What a source may be: refused here, with its reason, rather than at its first sync."""
-    if kind in CONNECTED_KINDS:
+    if kind in CONNECTED_KINDS or (kind in OPTIONALLY_CONNECTED and connector):
         if not connector:
             raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
         await _documents_connector(session, organisation, connector, kind)
@@ -894,7 +894,7 @@ async def create_knowledge_source(
         knowledge_base_id=base.id,
         kind=body.kind,
         name=body.name,
-        connector=body.connector if body.kind in CONNECTED_KINDS else None,
+        connector=body.connector if body.kind in CONNECTED_KINDS | OPTIONALLY_CONNECTED else None,
         config=config,
         interval_minutes=body.interval_minutes,
         refresh_mode=body.refresh_mode,
