@@ -155,6 +155,24 @@ jobs:
           echo "$HELM_TOKEN" | helm registry login ghcr.io -u "$ACTOR" --password-stdin
           helm push "choregos-$version.tgz" oci://ghcr.io/vargafoundation/charts
 
+  pypi:
+    # `choregos-agent-sdk` and the `choregos-contracts` it depends on (ADR 0063). OFF until the two
+    # projects exist on pypi.org with this repository, this workflow and the `pypi` environment as
+    # their trusted publisher: set the repository variable PUBLISH_TO_PYPI=true to turn it on.
+    if: vars.PUBLISH_TO_PYPI == 'true'
+    needs: chart
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build --package choregos-contracts --package choregos-agent-sdk --out-dir dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with: { packages-dir: dist }
+
   changelog:
     needs: chart
     runs-on: ubuntu-latest
