@@ -83,7 +83,7 @@ export function waitingInProject(
 }
 
 /**
- * Les lectures de la boîte : partagées par la page et par le compteur de l'en-tête. With `project`,
+ * The inbox's reads, shared by the page and the counters. With `project`,
  * only that project's tickets are read (same query key as its board), and the lists are narrowed.
  */
 export function useADecider(org: string, project?: string) {
