@@ -6,10 +6,13 @@ The pod volume belongs to root and the agent runs as 1000: without `safe.directo
 
 from __future__ import annotations
 
+import functools
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
+import pytest
 from choregos_contracts import StageInput
 from choregos_runner.exits import Exit
 from choregos_runner.runner import Runner
@@ -63,18 +66,36 @@ def test_the_environment_carries_nothing_else(tmp_path: Path) -> None:
     assert all(key.startswith("GIT_CONFIG_") for key in added)
 
 
-def test_git_hook_reproduces_the_refusal(tmp_path: Path) -> None:
-    """The control: without `safe.directory`, the hook is enough to have the repository refused."""
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    refused = subprocess.run(
+def _refused(path: Path) -> subprocess.CompletedProcess[str]:
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    return subprocess.run(
         ["git", "status"],
-        cwd=tmp_path,
+        cwd=path,
         env={"PATH": "/usr/bin:/bin", **FOREIGN_OWNER},
         capture_output=True,
         text=True,
         check=False,
     )
-    assert "dubious ownership" in refused.stderr
+
+
+@functools.cache
+def _hook_works() -> bool:
+    """Whether this machine's git honours the hook. CI's does not (an older git, or a root user,
+    whom git trusts): there the end-to-end runs below cannot reproduce the refusal and are skipped,
+    and the unit tests of `agent_git_env` above remain the guard."""
+    with tempfile.TemporaryDirectory() as path:
+        return "dubious ownership" in _refused(Path(path)).stderr
+
+
+needs_the_hook = pytest.mark.skipif(
+    not _hook_works(), reason="this git does not honour GIT_TEST_ASSUME_DIFFERENT_OWNER"
+)
+
+
+@needs_the_hook
+def test_git_hook_reproduces_the_refusal(tmp_path: Path) -> None:
+    """The control: without `safe.directory`, the hook is enough to have the repository refused."""
+    assert "dubious ownership" in _refused(tmp_path).stderr
 
 
 async def _agent_run(stage_input: StageInput, runner_settings: Any, env: dict[str, str]) -> str:
@@ -101,12 +122,14 @@ async def _agent_run(stage_input: StageInput, runner_settings: Any, env: dict[st
     return client.results[0].summary
 
 
+@needs_the_hook
 async def test_the_agent_reads_its_repository(stage_input: StageInput, runner_settings: Any) -> None:
     seen = await _agent_run(stage_input, runner_settings, {})
     assert "dubious ownership" not in seen, seen
     assert "## " in seen, f"git status answered: {seen}"
 
 
+@needs_the_hook
 async def test_the_agent_keeps_its_own_configuration(stage_input: StageInput, runner_settings: Any) -> None:
     seen = await _agent_run(
         stage_input,
