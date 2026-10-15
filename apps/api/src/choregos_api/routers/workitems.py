@@ -109,13 +109,11 @@ async def list_work_items(
     operation_id="createWorkItem",
 )
 async def create_work_item(ctx: ProjectCtx, body: WorkItemCreate, session: Db) -> WorkItemDto:
-    """Pose une demande dans Choregos — seulement quand le tracker est interne.
+    """Files a work item, whatever the project's tracker (ADR 0059).
 
-    `tracker: internal` était documenté comme la façon de faire tourner un métier sans
-    GitHub ni Jira, et rien ne permettait de créer une demande (état des lieux du
-    2026-09-24) : ni route, ni commande, ni écran. La clé est frappée par la plateforme
-    (`<PRÉFIXE>-<n>`), l'état initial est celui du workflow du projet, et l'interpréteur
-    démarre tout de suite sauf `start: false`.
+    Internal tracker: the platform mints the key. External tracker: the issue is created there
+    first (labelled `source:choregos`, never `agent-ready`), and the work item is recorded under
+    its key; a tracker that refuses gives a 502 and nothing is created.
     """
     ctx.require(Permission.ITEM_CONTROL)
     item = await creer_un_ticket(session, ctx.principal, ctx.project, body)

@@ -6,7 +6,12 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
+import structlog
+from choregos_adapters.errors import AdapterError
 from choregos_contracts import EventType
+from choregos_core.domain import NewItem
+from choregos_core.secrets import SecretIntrouvable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +26,7 @@ from ..db.models import (
     Run,
     WorkItem,
 )
-from ..errors import conflict
+from ..errors import upstream
 from ..rbac import Principal
 from ..schemas import (
     HumanRequestDto,
@@ -39,7 +44,7 @@ from ..temporal import get_temporal, interpreter_id
 from .couts import estimate_cost
 from .definitions import workflow_du_ticket, workflow_model
 from .evenements import persist_event
-from .routage import Naissance, nouveau_ticket
+from .routage import Naissance, nouveau_ticket, verifier_la_naissance
 
 
 def _detail_de_la_decision(decision: dict[str, Any]) -> str:
@@ -244,6 +249,32 @@ async def le_tracker_est_interne(session: AsyncSession, project: Project) -> boo
     return connecteur is None or connecteur.type in {"internal", "fake"}
 
 
+async def tracker_du_projet(session: AsyncSession, project: Project) -> tuple[Connector | None, Any]:
+    """The project's tracker connector and, when the tracker is external, its adapter.
+
+    Returns `(row, None)` for an internal tracker (no row, `internal`, `fake`): the platform mints
+    the keys itself. Kept apart so a test can replace it with a `FakeTracker`.
+    """
+    row = (
+        await session.execute(
+            select(Connector).where(Connector.project_id == project.id, Connector.kind == "tracker")
+        )
+    ).scalar_one_or_none()
+    if row is None or row.type in {"internal", "fake"}:
+        return row, None
+    from choregos_adapters import build, configuration_resolue
+
+    try:
+        config = configuration_resolue("tracker", row.type, row.config, row.secret_refs, row.secret_ref)
+        return row, build("tracker", row.type, config)
+    except (AdapterError, SecretIntrouvable, ValueError, KeyError) as erreur:
+        raise upstream(row.type, f"the tracker connector cannot be built: {erreur}") from erreur
+
+
+ORIGIN_MARKER = "<!-- choregos:origin -->"
+FILED_LABEL = "source:choregos"
+
+
 DOCUMENTS_LOGICIELS = ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown")
 
 
@@ -284,18 +315,37 @@ async def creer_un_ticket(
     *,
     canal: str = "api",
 ) -> WorkItem:
-    """Pose une demande dans Choregos — seulement quand le tracker est interne.
+    """Files a work item in Choregos, whatever the project's tracker (ADR 0059).
 
-    Le seul chemin de création d'un ticket interne : la route REST et la porte MCP (ADR 0030)
-    l'empruntent toutes deux, pour qu'un ticket créé depuis Claude ne diffère en rien d'un ticket
-    créé depuis la console. La clé est frappée par la plateforme (`<PRÉFIXE>-<n>`), l'état initial
-    est celui du workflow du projet, et l'interpréteur démarre tout de suite sauf `start=False`.
+    The only creation path of a person's request: the REST route and the MCP door (ADR 0030) both
+    use it, so a work item created from Claude differs in nothing from one created in the console.
+    With an internal tracker the platform mints the key (`<PREFIX>-<n>`). With an external one
+    (GitHub, Jira, GitLab) it first creates the issue there, labelled `source:choregos` and NOT
+    `agent-ready` (the webhook must not race this transaction), and records the work item under
+    the issue's key. The initial state is the chosen workflow's, and the interpreter starts at once
+    unless `start=False`.
     """
-    if not await le_tracker_est_interne(session, project):
-        raise conflict(
-            "this project receives its work items from an external tracker: create the request there"
+    row, adapter = await tracker_du_projet(session, project)
+    url: str | None = None
+    if adapter is None:
+        key = await cle_de_ticket_interne(session, project)
+    else:
+        # Validate first: a refused field or budget must not leave an issue behind.
+        await verifier_la_naissance(
+            session,
+            project,
+            Naissance(
+                tracker_key="-",
+                title=demande.title,
+                size=demande.size,
+                workflow=demande.workflow,
+                labels=tuple(demande.labels),
+                fields=dict(demande.fields),
+                budget_usd=demande.budget_usd,
+            ),
         )
-    key = await cle_de_ticket_interne(session, project)
+        assert row is not None
+        key, url = await _classer_dans_le_tracker(row.type, adapter, principal, demande)
     item = await nouveau_ticket(
         session,
         project,
@@ -303,6 +353,7 @@ async def creer_un_ticket(
             tracker_key=key,
             title=demande.title,
             body=demande.body,
+            url=url,
             size=demande.size,
             risk=demande.risk,
             created_by=principal.email,
@@ -343,8 +394,29 @@ async def creer_un_ticket(
         target_id=item.id,
         key=key,
         canal=canal,
+        tracker=row.type if row is not None else "internal",
     )
     return item
+
+
+async def _classer_dans_le_tracker(
+    tracker_type: str, adapter: Any, principal: Principal, demande: WorkItemCreate
+) -> tuple[str, str | None]:
+    """Creates the issue in the external tracker; returns its key and, best effort, its URL."""
+    body = f"{demande.body or ''}\n\n{ORIGIN_MARKER}Filed from Choregos by {principal.email}".strip()
+    labels = [*dict.fromkeys([*demande.labels, FILED_LABEL])]
+    try:
+        key = str(await adapter.create_item(NewItem(title=demande.title, body=body, labels=labels)))
+    except (AdapterError, SecretIntrouvable, httpx.HTTPError) as erreur:
+        raise upstream(
+            tracker_type,
+            f"the tracker {tracker_type} refused the issue: {erreur}. Nothing was created in Choregos.",
+        ) from erreur
+    try:
+        return key, (await adapter.fetch_item(key)).url
+    except Exception as erreur:
+        structlog.get_logger().warning("issue_url_unavailable", key=key, error=str(erreur))
+        return key, None
 
 
 async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]:

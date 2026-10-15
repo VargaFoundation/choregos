@@ -485,8 +485,9 @@ def outils(ctx: Contexte) -> list[Outil]:
         Outil(
             "create_work_item",
             "Open a work item",
-            "Open a work item (a request) in a project whose tracker is Choregos itself. It enters the "
-            "project's workflow at its first state and, unless start is false, agents start working.",
+            "Open a work item (a request) in a project. When the project's tracker is external (GitHub, "
+            "Jira, GitLab) the issue is created there first and the work item carries its key. It enters "
+            "the project's workflow at its first state and, unless start is false, agents start working.",
             {
                 "type": "object",
                 "properties": {

@@ -15,7 +15,8 @@ notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 `tracker: internal` means there is no outside tracker: Choregos' own database holds the
 tickets, assigns their keys and discovers them. Use it for work that exists nowhere else —
-an HR request, a file to process — or for a bench.
+an HR request, a file to process — or for a bench. A work item filed from the console or MCP on
+a project with an external tracker is created in that tracker first, then mirrored (ADR 0059).
 
 ## Workflow
 
