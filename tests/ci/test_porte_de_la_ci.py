@@ -1,10 +1,10 @@
-"""La porte de la CI (`ci-ok`) : la seule que la protection de branche regarde.
+"""The CI gate (`ci-ok`): the only one branch protection looks at.
 
-Elle refusait ce qu'elle connaissait — `failure`, `cancelled` — et laissait passer le reste. Le
-2026-10-05, les runners hébergés de GitHub n'acquéraient plus les jobs (« not acquired by Runner of
-type hosted even after multiple attempts ») : `python` et `conformance-backends` sont revenus
-`abandoned`, et la porte d'une PR était verte sans qu'un test Python ait tourné. On joue ici le
-script de la porte lui-même, contre les résultats que GitHub peut rendre.
+It refused what it knew about — `failure`, `cancelled` — and let the rest through. On 2026-10-05,
+GitHub's hosted runners stopped acquiring jobs ("not acquired by Runner of type hosted even after
+multiple attempts"): `python` and `conformance-backends` came back `abandoned`, and a PR's gate was
+green although no Python test had run. Here the gate's own script is played, against the results
+GitHub can return.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def _workflow() -> dict:
 
 
 def _porte(resultats: dict[str, str]) -> int:
-    """Le script de `ci-ok`, joué avec `needs` tel que GitHub le rend : le code de sortie."""
+    """The `ci-ok` script, played with `needs` as GitHub renders it: the exit code."""
     (etape,) = [e for e in _workflow()["jobs"]["ci-ok"]["steps"] if "run" in e]
     needs = {job: {"result": resultat, "outputs": {}} for job, resultat in resultats.items()}
     script = etape["run"].replace("${{ toJSON(needs) }}", json.dumps(needs, indent=2))
@@ -36,7 +36,7 @@ def _tous(resultat: str) -> dict[str, str]:
 
 
 def test_la_porte_attend_chaque_job_de_la_ci() -> None:
-    """Un job que la porte n'attend pas, elle ne le juge pas."""
+    """A job the gate does not wait for, it does not judge."""
     jobs = set(_workflow()["jobs"]) - {"ci-ok"}
     assert set(_workflow()["jobs"]["ci-ok"]["needs"]) == jobs
 
@@ -51,4 +51,4 @@ def test_reussis_ou_sautes_la_porte_s_ouvre() -> None:
 def test_tout_autre_resultat_ferme_la_porte(resultat: str) -> None:
     resultats = _tous("success")
     resultats["python"] = resultat
-    assert _porte(resultats) == 1, f"un job `{resultat}` passait la porte"
+    assert _porte(resultats) == 1, f"a `{resultat}` job got through the gate"

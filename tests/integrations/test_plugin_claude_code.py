@@ -1,9 +1,9 @@
-"""Le plugin Claude Code de Choregos : installable depuis le dépôt, sans secret, à la version du dépôt.
+"""The Choregos Claude Code plugin: installable from the repository, secret-free, at the repository's version.
 
-`/plugin marketplace add VargaFoundation/choregos` lit `.claude-plugin/marketplace.json` à la racine,
-puis `/plugin install choregos@choregos` installe `integrations/claude-code` : sa porte MCP (ADR 0030)
-et sa skill. Le jeton de l'utilisateur ne vit jamais dans le dépôt : c'est une valeur sensible de sa
-configuration, gardée par Claude Code dans le coffre de sa machine.
+`/plugin marketplace add VargaFoundation/choregos` reads `.claude-plugin/marketplace.json` at the
+root, then `/plugin install choregos@choregos` installs `integrations/claude-code`: its MCP gate
+(ADR 0030) and its skill. The user's token never lives in the repository: it is a sensitive value
+of their configuration, kept by Claude Code in their machine's vault.
 """
 
 from __future__ import annotations
@@ -62,10 +62,10 @@ def test_la_skill_a_un_nom_et_une_description() -> None:
     champs = dict(ligne.split(": ", 1) for ligne in entete.group(1).splitlines())
     assert champs["name"] == "choregos"
     assert len(champs["description"]) > 50
-    assert "decision_url" in texte, "la skill dit la règle : jamais de décision par MCP"
+    assert "decision_url" in texte, "the skill states the rule: never a decision through MCP"
 
 
-@pytest.mark.skipif(shutil.which("claude") is None, reason="Claude Code absent")
+@pytest.mark.skipif(shutil.which("claude") is None, reason="Claude Code is absent")
 def test_claude_code_valide_le_plugin() -> None:
     for cible in (RACINE, PLUGIN):
         commande = ["claude", "plugin", "validate", "--strict", str(cible)]
