@@ -46,6 +46,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "no_secrets",
             "markdown_sections",
             "adr_number_free",
+            "docs_updated",
         }
         needs_diff = any(g["name"] in lisent_le_diff for g in gates)
         # Sans dépôt, il n'y a pas de diff — et pas d'erreur non plus : la garantie refusera

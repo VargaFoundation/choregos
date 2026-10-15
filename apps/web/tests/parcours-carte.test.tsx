@@ -72,7 +72,7 @@ describe("la carte animée du parcours (S22-02)", () => {
     vi.useFakeTimers();
     rendre();
     fireEvent.click(screen.getByRole("button", { name: "Replay the journey" }));
-    expect(screen.getByTestId("parcours-moment")).toHaveTextContent("1 / 30");
+    expect(screen.getByTestId("parcours-moment")).toHaveTextContent("1 / 34");
     expect(statut("t-triage")).toBe("en_cours");
     expect(statut("t-security-review")).toBe("a_venir");
     expect(screen.getByTestId("parcours-recit")).toHaveTextContent("The work item arrives in To triage.");
@@ -80,13 +80,13 @@ describe("la carte animée du parcours (S22-02)", () => {
     act(() => {
       vi.advanceTimersByTime(550 * 4);
     });
-    expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 30");
+    expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 34");
     expect(statut("t-triage")).toBe("fait");
     fireEvent.click(screen.getByRole("button", { name: "Pause the replay" }));
     act(() => {
       vi.advanceTimersByTime(5000);
     });
-    expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 30");
+    expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 34");
     // Le direct revient où en est le ticket.
     fireEvent.click(screen.getByRole("button", { name: /^Live/ }));
     expect(statut("t-security-review")).toBe("en_cours");

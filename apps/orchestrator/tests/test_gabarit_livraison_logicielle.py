@@ -299,16 +299,34 @@ async def test_dev_complex_attend_trois_decisions_humaines_et_le_capitaine(
     encore : ce qui a changé n'a pas été vu. Puis staging sans approbation, la prod sous le capitaine."""
     projet_id = await _projet_dev(setup)
     item_id, cle = await _ticket(setup, projet_id, 9, "dev-complex")
-    setup.adapters.scm.set_diff(DEPOT, "main", "choregos/9", [("src/billing/queue.py", 120, 4)])
+    setup.adapters.scm.set_diff(
+        DEPOT,
+        "main",
+        "choregos/9",
+        [
+            ("src/billing/queue.py", 120, 4),
+            ("docs/billing/queue.md", 14, 0, "@@ -0,0 +1 @@\n+Invoices are queued."),
+            ("CHANGELOG.md", 1, 0, "@@ -0,0 +1 @@\n+- Invoices are queued."),
+        ],
+    )
     setup.adapters.executor.handler = _agents(
         {
             "t-triage": lambda: stage_result("medium", outputs={"size": "M", "risk": "medium"}),
             "t-specify": lambda: stage_result(
-                "spec", outputs={"spec_markdown": "## Spec", "allowed_paths": ["src/**", "tests/**"]}
+                "spec",
+                outputs={
+                    "spec_markdown": "## Spec",
+                    "allowed_paths": ["src/**", "tests/**", "docs/**", "CHANGELOG.md"],
+                },
             ),
             "t-plan": lambda: stage_result("plan", outputs={"plan_markdown": "1. queue"}),
             "t-implement": lambda: stage_result("done", artifacts={"branch": "choregos/9"}),
             "t-test": lambda: stage_result("tests pass", outputs={"test_report": "420 passed"}),
+            "t-document": lambda: stage_result(
+                "documented",
+                outputs={"docs_report": "- docs/billing/queue.md: queued sending"},
+                artifacts={"branch": "choregos/9"},
+            ),
             "t-review": _verdict("review", review_markdown="Fine."),
             "t-security-review": _verdict("security", security_review_markdown="No exposure."),
             "t-release-notes": lambda: stage_result(
@@ -352,8 +370,45 @@ async def test_dev_complex_attend_trois_decisions_humaines_et_le_capitaine(
     assert staging_release.approved_by is None
     transitions = [t for t, _ in await _runs(item_id)]
     assert transitions.count("t-fix-ci") == 1, transitions
+    assert "t-document" in transitions, transitions
     corps = next(iter(setup.adapters.scm.prs.values())).body
+    assert "## Documentation\n- docs/billing/queue.md" in corps, "the documentation report is in the PR"
     assert "## Release notes\n- Invoices are queued." in corps, "les notes de version sont dans la PR"
+
+
+async def test_dev_complex_without_documentation_waits_for_a_person(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """A change that touches code and no documentation never reaches the review: `docs_updated` sends
+    it back to the writer twice, then to a person (S39-15)."""
+    projet_id = await _projet_dev(setup)
+    item_id, cle = await _ticket(setup, projet_id, 15, "dev-complex")
+    setup.adapters.scm.set_diff(DEPOT, "main", "choregos/15", [("src/billing/queue.py", 120, 4)])
+    setup.adapters.executor.handler = _agents(
+        {
+            "t-triage": lambda: stage_result("medium", outputs={"size": "M", "risk": "medium"}),
+            "t-specify": lambda: stage_result(
+                "spec", outputs={"spec_markdown": "## Spec", "allowed_paths": ["src/**", "docs/**"]}
+            ),
+            "t-plan": lambda: stage_result("plan", outputs={"plan_markdown": "1. queue"}),
+            "t-implement": lambda: stage_result("done", artifacts={"branch": "choregos/15"}),
+            "t-test": lambda: stage_result("tests pass", outputs={"test_report": "420 passed"}),
+            "t-document": lambda: stage_result(
+                "nothing to say", outputs={"docs_report": "no documentation needed"}
+            ),
+            "t-review": _verdict("review", review_markdown="Fine."),
+        }
+    )
+    with temporal_env.auto_time_skipping_disabled():
+        async with worker_factory():
+            ticket = await _demarrer(temporal_env, setup, projet_id, item_id, cle)
+            await _etat(ticket, "awaiting_spec_approval")
+            await _decider(ticket)
+            await _etat(ticket, "needs_human")
+            await ticket.cancel()
+    transitions = [t for t, _ in await _runs(item_id)]
+    assert transitions.count("t-document") == 2, transitions
+    assert "t-review" not in transitions, transitions
 
 
 # ───────────────────────── study ─────────────────────────

@@ -9,7 +9,7 @@ const termine = parcoursTermine(MAINTENANT);
 const modele = modeler(enCours);
 
 describe("le modèle d'un parcours (S22-02)", () => {
-  it("le chemin de dev-complex : quinze étapes, chacune portée par qui la fait avancer", () => {
+  it("the dev-complex path: sixteen steps, each carried by whoever moves it forward", () => {
     expect(modele.etapes.map((e) => e.id)).toEqual([
       "t-triage",
       "t-specify",
@@ -17,6 +17,7 @@ describe("le modèle d'un parcours (S22-02)", () => {
       "t-plan",
       "t-implement",
       "t-test",
+      "t-document",
       "t-review",
       "t-security-review",
       "t-release-notes",
@@ -49,7 +50,7 @@ describe("le modèle d'un parcours (S22-02)", () => {
     expect(modele.arcs.map((a) => `${a.genre} ${a.depuis}: ${a.de} → ${a.vers}`)).toEqual([
       "renvoi t-approve-spec: awaiting_spec_approval → triaged",
       "renvoi t-test: implemented → planned",
-      "detour t-review: tested → addressing_review",
+      "detour t-review: documented → addressing_review",
       "detour t-security-review: reviewed → addressing_review",
       "detour t-approve-pr: awaiting_pr_approval → addressing_review",
       "detour t-merge: pr_approved → fixing_ci",
@@ -64,7 +65,7 @@ describe("le modèle d'un parcours (S22-02)", () => {
       "Triaged (1)",
       "Needs review (1)",
       "Ready (2)",
-      "In progress (5)",
+      "In progress (6)",
       "In review (2)",
       "Merged (1)",
       "Staging (1)",
@@ -78,15 +79,15 @@ describe("le modèle d'un parcours (S22-02)", () => {
     const statut = (id: string) => maintenant.etapes.get(id)!.statut;
     expect(maintenant.etat).toBe("reviewed");
     expect(statut("t-security-review")).toBe("en_cours");
-    expect(["t-triage", "t-specify", "t-approve-spec", "t-plan", "t-implement", "t-test", "t-review"].map(statut)).toEqual(
-      Array(7).fill("fait"),
+    expect(["t-triage", "t-specify", "t-approve-spec", "t-plan", "t-implement", "t-test", "t-document", "t-review"].map(statut)).toEqual(
+      Array(8).fill("fait"),
     );
     expect(["t-release-notes", "t-open-pr", "t-merge", "t-release"].map(statut)).toEqual(Array(4).fill("a_venir"));
     expect(maintenant.etapes.get("t-test")!.tours).toBe(3);
     expect(maintenant.etapes.get("t-review")!.verdict).toBe("approve");
     expect(maintenant.etapes.get("t-approve-spec")!.tours).toBe(2);
     expect(maintenant.arcs.get("implemented->planned")).toEqual({ fois: 1, dernier: false });
-    expect(maintenant.arcs.get("tested->addressing_review")!.fois).toBe(1);
+    expect(maintenant.arcs.get("documented->addressing_review")!.fois).toBe(1);
     expect(maintenant.arcs.get("addressing_review->implemented")!.fois).toBe(1);
     expect(maintenant.arcs.get("pr_approved->fixing_ci")!.fois).toBe(0);
     expect(modele.phases[maintenant.phase!]!.libelle).toBe("In progress");
@@ -94,7 +95,7 @@ describe("le modèle d'un parcours (S22-02)", () => {
 
   it("en relecture : à chaque instant, la case qui bouge est celle que l'histoire dit", () => {
     const images = instants(enCours);
-    expect(images).toHaveLength(30);
+    expect(images).toHaveLength(34);
     expect(images).toEqual([...images].sort((a, b) => a - b));
     // Juste après le refus de la spécification : la personne a renvoyé, le rédacteur repart.
     const refus = Date.parse(enCours.moves.find((m) => m.kind === "reject")!.at);

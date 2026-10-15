@@ -700,6 +700,7 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
         "refine": "docs",
         "plan": "docs",
         "release_notes": "docs",
+        "document": "docs",
     }.get(stage_input.transition.role, "chore")
     scope = stage_input.work_item.key.rsplit("#", 1)[-1]
     summary = result.summary.strip().splitlines()[0][:100] if result.summary else "Choregos step"
