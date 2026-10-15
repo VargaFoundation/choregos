@@ -869,6 +869,24 @@ export type WorkflowBudget = {
   on_exceeded?: WorkflowIdentifier;
 };
 
+export type WorkflowSpawn = {
+  /** the children's workflow, in the same project */
+  workflow: string;
+  /** the list walked: `fields.symbols`, `outputs.metrics.relevant` */
+  for_each: string;
+  /** the child's title, in sandboxed Jinja with `item`, `rank`, `fields`, `outputs`, `parent` */
+  title: string;
+  /** the child's fields, rendered like the title; a single `{{ … }}` keeps its type */
+  fields?: {
+    [key: string]: unknown;
+  };
+  max_children?: number;
+  /** the children's states that count as a success */
+  succeeded?: Array<string>;
+  /** fewer successful children fails the transition */
+  min_succeeded?: number;
+};
+
 /** Choregos workflow DSL: a declarative state machine per project (docs/plan/01 §1.4). */
 export type Workflow = {
   apiVersion: "choregos/v1";

@@ -1027,6 +1027,34 @@ late. With an external tracker, or with the reconciliation loop off
 (`reconcile_interval_seconds: 0`), nothing fires. Fields the workflow refuses are logged and the
 pass reports the schedule under `refused`; the other schedules still fire.
 
+### One child work item per element, then a join
+
+A system transition can open one child work item per element of a list and pass once every child
+is settled (S38-12, ADR 0057):
+
+```yaml
+- id: t-review-each
+  from: screened
+  to: decided
+  by: platform                       # a `system` actor; the transition does nothing else
+  spawn:
+    workflow: review                 # the children's workflow, in the same project
+    for_each: outputs.metrics.relevant   # or fields.<name>
+    title: "Review {{ item.symbol }}"
+    fields: { symbol: "{{ item.symbol }}", dsr: "{{ item.dsr }}" }   # one expression keeps its type
+    max_children: 20                 # a longer list is refused
+    succeeded: [adopted]             # the children's states that count as a success
+    min_succeeded: 1                 # fewer fails the join
+  on_fail: { to: screened, max_attempts: 1, escalate_to: nothing_adopted }   # required
+```
+
+The children are keyed by the parent's key and their rank (`RESEARCH-12.1`): a retry or a replay
+finds them and opens none twice. Each child signals its parent as it closes, and the parent
+re-reads its children every 30 minutes in case a signal is lost; its status says how many are still
+open. The join writes `documents.children` on the parent: the count per state, and each child's key,
+title, final state and fields. A list that cannot be read, too long, or a child its workflow refuses,
+follows `on_fail`. Children need the internal tracker; the local mode stops at a fan-out.
+
 ## 6. Read what came out
 
 In the UI, a run shows its cost, its duration, its **evidence**, its scope, its full ACP

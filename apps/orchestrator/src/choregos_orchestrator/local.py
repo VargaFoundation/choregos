@@ -100,6 +100,10 @@ async def run_local(
         kind = engine.actor_kind(transition)
         key = transition.key
         attempt = attempts.get(key, 0)
+        if transition.spawn is not None:
+            # Treated as gates, a fan-out would pass without opening a child (S38-12): stop and say so.
+            trace.stopped_reason = f"`{key}` opens child work items: the local mode does not run a fan-out"
+            break
 
         if kind in ("agent", "job"):
             decision, cost, run_id = await _run_stage(project_id, work_item_id, engine, transition, attempt)
