@@ -79,7 +79,8 @@ class FakeMcpServer:
             return {"tools": page, **({"nextCursor": str(suite)} if suite < len(self.outils) else {})}
         if methode == "tools/call":
             nom = str(params.get("name"))
-            if not any(o["name"] == nom for o in self.outils):
+            # A gesture is callable even when not announced: a tool kept under its former name.
+            if nom not in self.gestes and not any(o["name"] == nom for o in self.outils):
                 return (-32602, f"outil inconnu : {nom}")
             arguments = dict(params.get("arguments") or {})
             self.appels.append((nom, arguments))

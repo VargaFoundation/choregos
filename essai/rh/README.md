@@ -16,8 +16,8 @@ vraies décisions. Le même scénario, en temps accéléré et sur des faux en m
 
 ## Le déroulé
 
-1. `preparer` : les cinq connecteurs de l'organisation (`annuaire` → le faux Graph, `parc`,
-   `transporteur`, `lecteurs`, `fournisseur` → les faux servis), les outils du fournisseur
+1. `preparer` : les cinq connecteurs de l'organisation (`directory` → le faux Graph, `devices`,
+   `carrier`, `badge-readers`, `supplier` → les faux servis ; noms du gabarit 2.0.0, avant : `annuaire`…), les outils du fournisseur
    découverts — fermés —, ce que l'organisation permet sans décision humaine, et le projet `rh`.
 2. `arrivee` : la demande, par la porte MCP, comme le Claude d'une RH. La date d'arrivée est hier :
    le dev ne saute pas le temps, J-10 et J-7 sont passés, J+1 est aujourd'hui. `arrivee --dans 30`

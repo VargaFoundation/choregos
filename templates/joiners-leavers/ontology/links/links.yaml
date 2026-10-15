@@ -1,0 +1,31 @@
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: employee_contracts}
+spec:
+  from: {objectType: employee, name: contracts, cardinality: many}
+  to: {objectType: contract, name: employee, cardinality: one}
+  foreignKey: {side: to, property: employee_id}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: employee_accounts}
+spec:
+  from: {objectType: employee, name: accounts, cardinality: many}
+  to: {objectType: account, name: holder, cardinality: one}
+  foreignKey: {side: to, property: employee_id}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: employee_devices}
+spec:
+  from: {objectType: employee, name: devices, cardinality: many}
+  to: {objectType: device, name: holder, cardinality: one}
+  foreignKey: {side: to, property: employee_id}
+---
+apiVersion: choregos.dev/v1alpha1
+kind: LinkType
+metadata: {name: employee_badges}
+spec:
+  from: {objectType: employee, name: badges, cardinality: many}
+  to: {objectType: badge, name: holder, cardinality: one}
+  foreignKey: {side: to, property: employee_id}

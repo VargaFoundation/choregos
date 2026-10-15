@@ -43,17 +43,17 @@ test("an onboarding ticket is filed from its input form, and its fields reach th
     workflow: "onboarding",
     start: true,
     fields: {
-      nom: "Nora Benali",
+      full_name: "Nora Benali",
       upn: "nora.benali@acme.test",
-      date_arrivee: "2026-11-02",
-      poste: "Payroll specialist",
-      groupe: "grp-payroll",
-      groupe_sensible: "grp-payroll-admin",
-      adresse: "4 Quay Road, Nantes",
+      start_date: "2026-11-02",
+      job: "Payroll specialist",
+      group: "grp-payroll",
+      sensitive_group: "grp-payroll-admin",
+      address: "4 Quay Road, Nantes",
     },
   });
   // An optional field left empty is not sent.
-  expect(created?.body.fields).not.toHaveProperty("modele");
+  expect(created?.body.fields).not.toHaveProperty("model");
 });
 
 test("the badge task: its form and its attestation reach the decision", async ({ page }) => {

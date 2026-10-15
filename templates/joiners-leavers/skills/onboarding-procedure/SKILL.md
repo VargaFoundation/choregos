@@ -1,5 +1,5 @@
 ---
-name: procedure-onboarding
+name: onboarding-procedure
 description: What an onboarding requires, in which order, and what needs a stronger approval.
 ---
 
@@ -19,7 +19,7 @@ An onboarding is prepared in five steps; each has its date, counted from the **s
 ## What the access plan must say
 
 - the sign-in name (UPN) and the name, as the directory will receive them;
-- the access group and the sensitive group, and whether they match the job (skill `profils-d-acces`);
+- the access group and the sensitive group, and whether they match the job (skill `access-profiles`);
 - the laptop model and the delivery address;
 - **the mismatches**: a group that does not match the job, a sign-in name already taken, a start
   date too close to keep the ten-day lead. A mismatch is reported; it is never corrected silently.

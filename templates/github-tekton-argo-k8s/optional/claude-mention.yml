@@ -15,5 +15,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Répondre à la mention
-        run: echo "Activez ce workflow en connaissance de cause (voir README.md)."
+      - name: Answer the mention
+        run: echo "Enable this workflow knowingly (see README.md)."

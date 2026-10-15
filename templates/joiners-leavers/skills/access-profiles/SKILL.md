@@ -1,5 +1,5 @@
 ---
-name: profils-d-acces
+name: access-profiles
 description: The access groups of each job, and the sensitive groups that need a stronger approval.
 ---
 
@@ -10,11 +10,11 @@ re-authenticated approval.
 
 | Job | Access group | Sensitive group |
 |:--|:--|:--|
-| Developer | `devs` | `prod-lecture` |
+| Developer | `devs` | `prod-read` |
 | Operations engineer | `ops` | `prod-admin` |
-| Accountant | `finance` | `paie` |
-| Recruiter | `rh` | `dossiers-salaries` |
-| Sales | `ventes` | `crm-export` |
+| Accountant | `finance` | `payroll` |
+| Recruiter | `hr` | `employee-files` |
+| Sales | `sales` | `crm-export` |
 
 ## Rules
 

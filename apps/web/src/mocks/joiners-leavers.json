@@ -1,6 +1,6 @@
 {
  "onboarding": {
-  "yaml": "apiVersion: choregos/v1\nkind: Workflow\nmetadata:\n  name: onboarding\n  version: 1\n  description: A joiner — access plan, account and groups ten days before, laptop seven days before, badge handed over, check the day after.\n  inputs:\n    type: object\n    required: [nom, upn, date_arrivee, poste, groupe, groupe_sensible, adresse]\n    properties:\n      nom: { type: string, title: Full name }\n      upn: { type: string, title: Sign-in name (UPN) }\n      date_arrivee: { type: string, format: date, title: Start date }\n      poste: { type: string, title: Job title }\n      groupe: { type: string, title: Access group of the role }\n      groupe_sensible: { type: string, title: Sensitive group (stronger approval) }\n      adresse: { type: string, title: Laptop delivery address }\n      modele: { type: string, title: Laptop model, default: portable-14 }\n      badge_uid: { type: string, title: Badge UID }\ninitial: demande\nactors:\n  coordinateur: { type: agent, role: coordination, agent: coordinateur-onboarding, max_turns: 40, max_minutes: 20 }\n  rh: { type: human, group: rh, sla_hours: 24 }\n  accueil: { type: human, group: accueil, sla_hours: 8 }\n  plateforme: { type: system }\nstates:\n  demande: { display: Request received, kind: wait }\n  plan: { display: Access plan proposed, kind: wait }\n  valide: { display: Plan approved, kind: wait }\n  comptes: { display: Account and group created, kind: wait }\n  sensible: { display: Sensitive group decided, kind: wait }\n  poste: { display: \"Laptop ordered, enrolled, shipped\", kind: wait }\n  badge: { display: Badge handed over, kind: wait }\n  actif: { display: Badge active, kind: wait }\n  a_revoir: { display: To review, kind: wait }\n  pret: { display: Joiner ready, terminal: true }\ntransitions:\n  - id: t-plan\n    from: demande\n    to: plan\n    by: coordinateur\n    outputs: [plan_d_acces]\n    gates: [outputs_present]\n    on_fail: { to: demande, max_attempts: 2, escalate_to: a_revoir }\n\n  - id: t-validation\n    from: plan\n    to: valide\n    by: rh\n    on_reject: a_revoir\n\n  - id: t-comptes\n    from: valide\n    to: comptes\n    by: plateforme\n    action:\n      kind: arrivee.comptes\n      title: \"Account and group of {{ fields.nom }}\"\n      justification: \"starts on {{ fields.date_arrivee }} as {{ fields.poste }}\"\n      params: { upn: \"{{ fields.upn }}\", nom: \"{{ fields.nom }}\", groupe: \"{{ fields.groupe }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: annuaire\n            operation: create_user\n            arguments: { upn: \"{{ params.upn }}\", display_name: \"{{ params.nom }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: annuaire, operation: disable_user, arguments: { upn: \"{{ params.upn }}\" } }\n        - effect: connector.call\n          with:\n            connector: annuaire\n            operation: add_to_group\n            arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.groupe }}\" }\n          compensate:\n            effect: connector.call\n            with:\n              connector: annuaire\n              operation: remove_from_group\n              arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.groupe }}\" }\n      not_before: fields.date_arrivee - 10d\n    on_fail: { to: valide, max_attempts: 2, escalate_to: a_revoir }\n\n  - id: t-sensible\n    from: comptes\n    to: sensible\n    by: plateforme\n    action:\n      kind: arrivee.groupe_sensible\n      title: \"{{ fields.nom }} in {{ fields.groupe_sensible }}\"\n      params: { upn: \"{{ fields.upn }}\", groupe: \"{{ fields.groupe_sensible }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: annuaire\n            operation: add_to_group\n            arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.groupe }}\" }\n      approval:\n        approvers: [{ role: project_owner, min: 1 }]\n        step_up_minutes: 5\n    on_fail: { to: comptes, max_attempts: 1, escalate_to: a_revoir }\n    on_reject: sensible\n\n  - id: t-poste\n    from: sensible\n    to: poste\n    by: plateforme\n    action:\n      kind: arrivee.poste\n      title: \"Laptop of {{ fields.nom }} ({{ fields.modele | default('portable-14') }})\"\n      params:\n        reference: \"{{ work_item.key }}\"\n        upn: \"{{ fields.upn }}\"\n        modele: \"{{ fields.modele | default('portable-14') }}\"\n        adresse: \"{{ fields.adresse }}\"\n      effects:\n        - effect: connector.call\n          with:\n            connector: fournisseur\n            operation: commander_poste\n            arguments: { reference: \"{{ params.reference }}\", modele: \"{{ params.modele }}\", upn: \"{{ params.upn }}\" }\n        - effect: connector.call\n          with:\n            connector: parc\n            operation: enroll_device\n            arguments: { serial: \"{{ effects[0].serial }}\", upn: \"{{ params.upn }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: parc, operation: wipe_device, arguments: { serial: \"{{ result.serial }}\" } }\n        - effect: connector.call\n          with:\n            connector: transporteur\n            operation: create_shipment\n            arguments:\n              reference: \"{{ params.reference }}-poste\"\n              address: \"{{ params.adresse }}\"\n              items: [\"{{ effects[0].serial }}\"]\n      not_before: fields.date_arrivee - 7d\n    on_fail: { to: sensible, max_attempts: 2, escalate_to: a_revoir }\n\n  - id: t-badge\n    from: poste\n    to: badge\n    by: accueil\n    task:\n      title: Hand over the badge\n      instructions: Hand the badge to its holder in person, then hold it to the reader to read its UID.\n      form:\n        type: object\n        required: [badge_uid]\n        properties:\n          badge_uid: { type: string, title: Badge UID, minLength: 8 }\n      attest: I handed the badge to its holder in person\n    on_reject: a_revoir\n\n  - id: t-activer\n    from: badge\n    to: actif\n    by: plateforme\n    action:\n      kind: arrivee.badge\n      title: \"Activate badge {{ fields.badge_uid }}\"\n      params: { uid: \"{{ fields.badge_uid }}\", porteur: \"{{ fields.upn }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: lecteurs\n            operation: activate_badge\n            arguments: { uid: \"{{ params.uid }}\", holder: \"{{ params.porteur }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: lecteurs, operation: deactivate_badge, arguments: { uid: \"{{ params.uid }}\" } }\n    on_fail: { to: badge, max_attempts: 1, escalate_to: a_revoir }\n\n  - id: t-controle\n    from: actif\n    to: pret\n    by: plateforme\n    action:\n      kind: arrivee.controle\n      title: \"Check the onboarding of {{ fields.nom }}\"\n      params: { upn: \"{{ fields.upn }}\", uid: \"{{ fields.badge_uid }}\", reference: \"{{ work_item.key }}-poste\" }\n      effects:\n        - effect: connector.call\n          with: { connector: annuaire, operation: get_user, arguments: { upn: \"{{ params.upn }}\" } }\n        - effect: connector.call\n          with: { connector: lecteurs, operation: badge_status, arguments: { uid: \"{{ params.uid }}\" } }\n        - effect: connector.call\n          with: { connector: transporteur, operation: shipment_status, arguments: { reference: \"{{ params.reference }}\" } }\n        - effect: verifier\n          with:\n            condition: \"{{ effects[0].user is not none and effects[1].active and effects[2].state != 'unknown' }}\"\n            motif: the account, the active badge and the laptop shipment\n      not_before: fields.date_arrivee + 1d\n    on_fail: { to: actif, max_attempts: 2, escalate_to: a_revoir }\n",
+  "yaml": "apiVersion: choregos/v1\nkind: Workflow\nmetadata:\n  name: onboarding\n  version: 1\n  description: A joiner — access plan, account and groups ten days before, laptop seven days before, badge handed over, check the day after.\n  inputs:\n    type: object\n    required: [full_name, upn, start_date, job, group, sensitive_group, address]\n    properties:\n      full_name: { type: string, title: Full name }\n      upn: { type: string, title: Sign-in name (UPN) }\n      start_date: { type: string, format: date, title: Start date }\n      job: { type: string, title: Job title }\n      group: { type: string, title: Access group of the role }\n      sensitive_group: { type: string, title: Sensitive group (stronger approval) }\n      address: { type: string, title: Laptop delivery address }\n      model: { type: string, title: Laptop model, default: laptop-14 }\n      badge_uid: { type: string, title: Badge UID }\ninitial: requested\nactors:\n  coordinator: { type: agent, role: coordination, agent: onboarding-coordinator, max_turns: 40, max_minutes: 20 }\n  hr: { type: human, group: hr, sla_hours: 24 }\n  reception: { type: human, group: reception, sla_hours: 8 }\n  platform: { type: system }\nstates:\n  requested: { display: Request received, kind: wait }\n  planned: { display: Access plan proposed, kind: wait }\n  approved: { display: Plan approved, kind: wait }\n  accounts_created: { display: Account and group created, kind: wait }\n  sensitive_granted: { display: Sensitive group decided, kind: wait }\n  laptop_shipped: { display: \"Laptop ordered, enrolled, shipped\", kind: wait }\n  badge_issued: { display: Badge handed over, kind: wait }\n  active: { display: Badge active, kind: wait }\n  needs_review: { display: To review, kind: wait }\n  ready: { display: Joiner ready, terminal: true }\ntransitions:\n  - id: t-plan\n    from: requested\n    to: planned\n    by: coordinator\n    outputs: [access_plan]\n    gates: [outputs_present]\n    on_fail: { to: requested, max_attempts: 2, escalate_to: needs_review }\n\n  - id: t-approve\n    from: planned\n    to: approved\n    by: hr\n    on_reject: needs_review\n\n  - id: t-create-accounts\n    from: approved\n    to: accounts_created\n    by: platform\n    action:\n      kind: onboarding.accounts\n      title: \"Account and group of {{ fields.full_name }}\"\n      justification: \"starts on {{ fields.start_date }} as {{ fields.job }}\"\n      params: { upn: \"{{ fields.upn }}\", full_name: \"{{ fields.full_name }}\", group: \"{{ fields.group }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: directory\n            operation: create_user\n            arguments: { upn: \"{{ params.upn }}\", display_name: \"{{ params.full_name }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: directory, operation: disable_user, arguments: { upn: \"{{ params.upn }}\" } }\n        - effect: connector.call\n          with:\n            connector: directory\n            operation: add_to_group\n            arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.group }}\" }\n          compensate:\n            effect: connector.call\n            with:\n              connector: directory\n              operation: remove_from_group\n              arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.group }}\" }\n      not_before: fields.start_date - 10d\n    on_fail: { to: approved, max_attempts: 2, escalate_to: needs_review }\n\n  - id: t-grant-sensitive\n    from: accounts_created\n    to: sensitive_granted\n    by: platform\n    action:\n      kind: onboarding.sensitive_group\n      title: \"{{ fields.full_name }} in {{ fields.sensitive_group }}\"\n      params: { upn: \"{{ fields.upn }}\", group: \"{{ fields.sensitive_group }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: directory\n            operation: add_to_group\n            arguments: { upn: \"{{ params.upn }}\", group_id: \"{{ params.group }}\" }\n      approval:\n        approvers: [{ role: project_owner, min: 1 }]\n        step_up_minutes: 5\n    on_fail: { to: accounts_created, max_attempts: 1, escalate_to: needs_review }\n    on_reject: sensitive_granted\n\n  - id: t-ship-laptop\n    from: sensitive_granted\n    to: laptop_shipped\n    by: platform\n    action:\n      kind: onboarding.laptop\n      title: \"Laptop of {{ fields.full_name }} ({{ fields.model | default('laptop-14') }})\"\n      params:\n        reference: \"{{ work_item.key }}\"\n        upn: \"{{ fields.upn }}\"\n        model: \"{{ fields.model | default('laptop-14') }}\"\n        address: \"{{ fields.address }}\"\n      effects:\n        - effect: connector.call\n          with:\n            connector: supplier\n            operation: order_laptop\n            arguments: { reference: \"{{ params.reference }}\", model: \"{{ params.model }}\", upn: \"{{ params.upn }}\" }\n        - effect: connector.call\n          with:\n            connector: devices\n            operation: enroll_device\n            arguments: { serial: \"{{ effects[0].serial }}\", upn: \"{{ params.upn }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: devices, operation: wipe_device, arguments: { serial: \"{{ result.serial }}\" } }\n        - effect: connector.call\n          with:\n            connector: carrier\n            operation: create_shipment\n            arguments:\n              reference: \"{{ params.reference }}-laptop\"\n              address: \"{{ params.address }}\"\n              items: [\"{{ effects[0].serial }}\"]\n      not_before: fields.start_date - 7d\n    on_fail: { to: sensitive_granted, max_attempts: 2, escalate_to: needs_review }\n\n  - id: t-hand-over-badge\n    from: laptop_shipped\n    to: badge_issued\n    by: reception\n    task:\n      title: Hand over the badge\n      instructions: Hand the badge to its holder in person, then hold it to the reader to read its UID.\n      form:\n        type: object\n        required: [badge_uid]\n        properties:\n          badge_uid: { type: string, title: Badge UID, minLength: 8 }\n      attest: I handed the badge to its holder in person\n    on_reject: needs_review\n\n  - id: t-activate-badge\n    from: badge_issued\n    to: active\n    by: platform\n    action:\n      kind: onboarding.badge\n      title: \"Activate badge {{ fields.badge_uid }}\"\n      params: { uid: \"{{ fields.badge_uid }}\", holder: \"{{ fields.upn }}\" }\n      effects:\n        - effect: connector.call\n          with:\n            connector: badge-readers\n            operation: activate_badge\n            arguments: { uid: \"{{ params.uid }}\", holder: \"{{ params.holder }}\" }\n          compensate:\n            effect: connector.call\n            with: { connector: badge-readers, operation: deactivate_badge, arguments: { uid: \"{{ params.uid }}\" } }\n    on_fail: { to: badge_issued, max_attempts: 1, escalate_to: needs_review }\n\n  - id: t-check\n    from: active\n    to: ready\n    by: platform\n    action:\n      kind: onboarding.check\n      title: \"Check the onboarding of {{ fields.full_name }}\"\n      params: { upn: \"{{ fields.upn }}\", uid: \"{{ fields.badge_uid }}\", reference: \"{{ work_item.key }}-laptop\" }\n      effects:\n        - effect: connector.call\n          with: { connector: directory, operation: get_user, arguments: { upn: \"{{ params.upn }}\" } }\n        - effect: connector.call\n          with: { connector: badge-readers, operation: badge_status, arguments: { uid: \"{{ params.uid }}\" } }\n        - effect: connector.call\n          with: { connector: carrier, operation: shipment_status, arguments: { reference: \"{{ params.reference }}\" } }\n        - effect: check\n          with:\n            condition: \"{{ effects[0].user is not none and effects[1].active and effects[2].state != 'unknown' }}\"\n            reason: the account, the active badge and the laptop shipment\n      not_before: fields.start_date + 1d\n    on_fail: { to: active, max_attempts: 2, escalate_to: needs_review }\n",
   "json": {
    "apiVersion": "choregos/v1",
    "kind": "Workflow",
@@ -11,16 +11,16 @@
     "inputs": {
      "type": "object",
      "required": [
-      "nom",
+      "full_name",
       "upn",
-      "date_arrivee",
-      "poste",
-      "groupe",
-      "groupe_sensible",
-      "adresse"
+      "start_date",
+      "job",
+      "group",
+      "sensitive_group",
+      "address"
      ],
      "properties": {
-      "nom": {
+      "full_name": {
        "type": "string",
        "title": "Full name"
       },
@@ -28,31 +28,31 @@
        "type": "string",
        "title": "Sign-in name (UPN)"
       },
-      "date_arrivee": {
+      "start_date": {
        "type": "string",
        "format": "date",
        "title": "Start date"
       },
-      "poste": {
+      "job": {
        "type": "string",
        "title": "Job title"
       },
-      "groupe": {
+      "group": {
        "type": "string",
        "title": "Access group of the role"
       },
-      "groupe_sensible": {
+      "sensitive_group": {
        "type": "string",
        "title": "Sensitive group (stronger approval)"
       },
-      "adresse": {
+      "address": {
        "type": "string",
        "title": "Laptop delivery address"
       },
-      "modele": {
+      "model": {
        "type": "string",
        "title": "Laptop model",
-       "default": "portable-14"
+       "default": "laptop-14"
       },
       "badge_uid": {
        "type": "string",
@@ -62,26 +62,26 @@
     }
    },
    "actors": {
-    "coordinateur": {
+    "coordinator": {
      "type": "agent",
      "role": "coordination",
      "model": "profile:by_size",
      "fresh_context": false,
      "max_turns": 40,
      "max_minutes": 20,
-     "agent": "coordinateur-onboarding"
+     "agent": "onboarding-coordinator"
     },
-    "rh": {
+    "hr": {
      "type": "human",
-     "group": "rh",
+     "group": "hr",
      "sla_hours": 24
     },
-    "accueil": {
+    "reception": {
      "type": "human",
-     "group": "accueil",
+     "group": "reception",
      "sla_hours": 8
     },
-    "plateforme": {
+    "platform": {
      "type": "system"
     }
    }
@@ -111,7 +111,7 @@
    "graph": {
     "nodes": [
      {
-      "id": "demande",
+      "id": "requested",
       "display": "Request received",
       "kind": "wait",
       "terminal": false,
@@ -119,7 +119,7 @@
       "tracker_status": null
      },
      {
-      "id": "plan",
+      "id": "planned",
       "display": "Access plan proposed",
       "kind": "wait",
       "terminal": false,
@@ -127,7 +127,7 @@
       "tracker_status": null
      },
      {
-      "id": "valide",
+      "id": "approved",
       "display": "Plan approved",
       "kind": "wait",
       "terminal": false,
@@ -135,7 +135,7 @@
       "tracker_status": null
      },
      {
-      "id": "comptes",
+      "id": "accounts_created",
       "display": "Account and group created",
       "kind": "wait",
       "terminal": false,
@@ -143,7 +143,7 @@
       "tracker_status": null
      },
      {
-      "id": "sensible",
+      "id": "sensitive_granted",
       "display": "Sensitive group decided",
       "kind": "wait",
       "terminal": false,
@@ -151,7 +151,7 @@
       "tracker_status": null
      },
      {
-      "id": "poste",
+      "id": "laptop_shipped",
       "display": "Laptop ordered, enrolled, shipped",
       "kind": "wait",
       "terminal": false,
@@ -159,7 +159,7 @@
       "tracker_status": null
      },
      {
-      "id": "badge",
+      "id": "badge_issued",
       "display": "Badge handed over",
       "kind": "wait",
       "terminal": false,
@@ -167,7 +167,7 @@
       "tracker_status": null
      },
      {
-      "id": "actif",
+      "id": "active",
       "display": "Badge active",
       "kind": "wait",
       "terminal": false,
@@ -175,7 +175,7 @@
       "tracker_status": null
      },
      {
-      "id": "a_revoir",
+      "id": "needs_review",
       "display": "To review",
       "kind": "wait",
       "terminal": false,
@@ -183,7 +183,7 @@
       "tracker_status": null
      },
      {
-      "id": "pret",
+      "id": "ready",
       "display": "Joiner ready",
       "kind": "terminal",
       "terminal": true,
@@ -193,7 +193,7 @@
     ],
     "edges": [
      {
-      "actor": "coordinateur",
+      "actor": "coordinator",
       "actor_type": "agent",
       "role": "coordination",
       "gates": [
@@ -202,16 +202,16 @@
       "via": null,
       "timeout_hours": null,
       "id": "t-plan",
-      "from": "demande",
-      "to": "plan",
+      "from": "requested",
+      "to": "planned",
       "kind": "nominal",
-      "label": "coordinateur",
+      "label": "coordinator",
       "wildcard": false
      },
      {
-      "id": "demande->demande:retry:on failure (≤2)",
-      "from": "demande",
-      "to": "demande",
+      "id": "requested->requested:retry:on failure (≤2)",
+      "from": "requested",
+      "to": "requested",
       "kind": "retry",
       "label": "on failure (≤2)",
       "wildcard": false,
@@ -223,9 +223,9 @@
       "timeout_hours": null
      },
      {
-      "id": "demande->a_revoir:escalate:when retries run out",
-      "from": "demande",
-      "to": "a_revoir",
+      "id": "requested->needs_review:escalate:when retries run out",
+      "from": "requested",
+      "to": "needs_review",
       "kind": "escalate",
       "label": "when retries run out",
       "wildcard": false,
@@ -237,27 +237,27 @@
       "timeout_hours": null
      },
      {
-      "actor": "rh",
+      "actor": "hr",
       "actor_type": "human",
       "role": null,
       "gates": [],
       "via": null,
       "timeout_hours": null,
-      "id": "t-validation",
-      "from": "plan",
-      "to": "valide",
+      "id": "t-approve",
+      "from": "planned",
+      "to": "approved",
       "kind": "nominal",
-      "label": "rh",
+      "label": "hr",
       "wildcard": false
      },
      {
-      "id": "plan->a_revoir:reject:if rejected",
-      "from": "plan",
-      "to": "a_revoir",
+      "id": "planned->needs_review:reject:if rejected",
+      "from": "planned",
+      "to": "needs_review",
       "kind": "reject",
       "label": "if rejected",
       "wildcard": false,
-      "actor": "rh",
+      "actor": "hr",
       "actor_type": null,
       "role": null,
       "gates": [],
@@ -265,23 +265,23 @@
       "timeout_hours": null
      },
      {
-      "actor": "plateforme",
+      "actor": "platform",
       "actor_type": "system",
       "role": null,
       "gates": [],
       "via": null,
       "timeout_hours": null,
-      "id": "t-comptes",
-      "from": "valide",
-      "to": "comptes",
+      "id": "t-create-accounts",
+      "from": "approved",
+      "to": "accounts_created",
       "kind": "nominal",
-      "label": "plateforme",
+      "label": "platform",
       "wildcard": false
      },
      {
-      "id": "valide->valide:retry:on failure (≤2)",
-      "from": "valide",
-      "to": "valide",
+      "id": "approved->approved:retry:on failure (≤2)",
+      "from": "approved",
+      "to": "approved",
       "kind": "retry",
       "label": "on failure (≤2)",
       "wildcard": false,
@@ -293,9 +293,9 @@
       "timeout_hours": null
      },
      {
-      "id": "valide->a_revoir:escalate:when retries run out",
-      "from": "valide",
-      "to": "a_revoir",
+      "id": "approved->needs_review:escalate:when retries run out",
+      "from": "approved",
+      "to": "needs_review",
       "kind": "escalate",
       "label": "when retries run out",
       "wildcard": false,
@@ -307,27 +307,27 @@
       "timeout_hours": null
      },
      {
-      "actor": "plateforme",
+      "actor": "platform",
       "actor_type": "system",
       "role": null,
       "gates": [],
       "via": null,
       "timeout_hours": null,
-      "id": "t-sensible",
-      "from": "comptes",
-      "to": "sensible",
+      "id": "t-grant-sensitive",
+      "from": "accounts_created",
+      "to": "sensitive_granted",
       "kind": "nominal",
-      "label": "plateforme",
+      "label": "platform",
       "wildcard": false
      },
      {
-      "id": "comptes->sensible:reject:if rejected",
-      "from": "comptes",
-      "to": "sensible",
+      "id": "accounts_created->sensitive_granted:reject:if rejected",
+      "from": "accounts_created",
+      "to": "sensitive_granted",
       "kind": "reject",
       "label": "if rejected",
       "wildcard": false,
-      "actor": "plateforme",
+      "actor": "platform",
       "actor_type": null,
       "role": null,
       "gates": [],
@@ -335,9 +335,9 @@
       "timeout_hours": null
      },
      {
-      "id": "comptes->comptes:retry:on failure (≤1)",
-      "from": "comptes",
-      "to": "comptes",
+      "id": "accounts_created->accounts_created:retry:on failure (≤1)",
+      "from": "accounts_created",
+      "to": "accounts_created",
       "kind": "retry",
       "label": "on failure (≤1)",
       "wildcard": false,
@@ -349,9 +349,9 @@
       "timeout_hours": null
      },
      {
-      "id": "comptes->a_revoir:escalate:when retries run out",
-      "from": "comptes",
-      "to": "a_revoir",
+      "id": "accounts_created->needs_review:escalate:when retries run out",
+      "from": "accounts_created",
+      "to": "needs_review",
       "kind": "escalate",
       "label": "when retries run out",
       "wildcard": false,
@@ -363,23 +363,23 @@
       "timeout_hours": null
      },
      {
-      "actor": "plateforme",
+      "actor": "platform",
       "actor_type": "system",
       "role": null,
       "gates": [],
       "via": null,
       "timeout_hours": null,
-      "id": "t-poste",
-      "from": "sensible",
-      "to": "poste",
+      "id": "t-ship-laptop",
+      "from": "sensitive_granted",
+      "to": "laptop_shipped",
       "kind": "nominal",
-      "label": "plateforme",
+      "label": "platform",
       "wildcard": false
      },
      {
-      "id": "sensible->sensible:retry:on failure (≤2)",
-      "from": "sensible",
-      "to": "sensible",
+      "id": "sensitive_granted->sensitive_granted:retry:on failure (≤2)",
+      "from": "sensitive_granted",
+      "to": "sensitive_granted",
       "kind": "retry",
       "label": "on failure (≤2)",
       "wildcard": false,
@@ -391,9 +391,9 @@
       "timeout_hours": null
      },
      {
-      "id": "sensible->a_revoir:escalate:when retries run out",
-      "from": "sensible",
-      "to": "a_revoir",
+      "id": "sensitive_granted->needs_review:escalate:when retries run out",
+      "from": "sensitive_granted",
+      "to": "needs_review",
       "kind": "escalate",
       "label": "when retries run out",
       "wildcard": false,
@@ -405,27 +405,27 @@
       "timeout_hours": null
      },
      {
-      "actor": "accueil",
+      "actor": "reception",
       "actor_type": "human",
       "role": null,
       "gates": [],
       "via": null,
       "timeout_hours": null,
-      "id": "t-badge",
-      "from": "poste",
-      "to": "badge",
+      "id": "t-hand-over-badge",
+      "from": "laptop_shipped",
+      "to": "badge_issued",
       "kind": "nominal",
-      "label": "accueil",
+      "label": "reception",
       "wildcard": false
      },
      {
-      "id": "poste->a_revoir:reject:if rejected",
-      "from": "poste",
-      "to": "a_revoir",
+      "id": "laptop_shipped->needs_review:reject:if rejected",
+      "from": "laptop_shipped",
+      "to": "needs_review",
       "kind": "reject",
       "label": "if rejected",
       "wildcard": false,
-      "actor": "accueil",
+      "actor": "reception",
       "actor_type": null,
       "role": null,
       "gates": [],
@@ -433,23 +433,23 @@
       "timeout_hours": null
      },
      {
-      "actor": "plateforme",
+      "actor": "platform",
       "actor_type": "system",
       "role": null,
       "gates": [],
       "via": null,
       "timeout_hours": null,
-      "id": "t-activer",
-      "from": "badge",
-      "to": "actif",
+      "id": "t-activate-badge",
+      "from": "badge_issued",
+      "to": "active",
       "kind": "nominal",
-      "label": "plateforme",
+      "label": "platform",
       "wildcard": false
      },
      {
-      "id": "badge->badge:retry:on failure (≤1)",
-      "from": "badge",
-      "to": "badge",
+      "id": "badge_issued->badge_issued:retry:on failure (≤1)",
+      "from": "badge_issued",
+      "to": "badge_issued",
       "kind": "retry",
       "label": "on failure (≤1)",
       "wildcard": false,
@@ -461,9 +461,9 @@
       "timeout_hours": null
      },
      {
-      "id": "badge->a_revoir:escalate:when retries run out",
-      "from": "badge",
-      "to": "a_revoir",
+      "id": "badge_issued->needs_review:escalate:when retries run out",
+      "from": "badge_issued",
+      "to": "needs_review",
       "kind": "escalate",
       "label": "when retries run out",
       "wildcard": false,
@@ -475,23 +475,23 @@
       "timeout_hours": null
      },
      {
-      "actor": "plateforme",
+      "actor": "platform",
       "actor_type": "system",
       "role": null,
       "gates": [],
       "via": null,
       "timeout_hours": null,
-      "id": "t-controle",
-      "from": "actif",
-      "to": "pret",
+      "id": "t-check",
+      "from": "active",
+      "to": "ready",
       "kind": "nominal",
-      "label": "plateforme",
+      "label": "platform",
       "wildcard": false
      },
      {
-      "id": "actif->actif:retry:on failure (≤2)",
-      "from": "actif",
-      "to": "actif",
+      "id": "active->active:retry:on failure (≤2)",
+      "from": "active",
+      "to": "active",
       "kind": "retry",
       "label": "on failure (≤2)",
       "wildcard": false,
@@ -503,9 +503,9 @@
       "timeout_hours": null
      },
      {
-      "id": "actif->a_revoir:escalate:when retries run out",
-      "from": "actif",
-      "to": "a_revoir",
+      "id": "active->needs_review:escalate:when retries run out",
+      "from": "active",
+      "to": "needs_review",
       "kind": "escalate",
       "label": "when retries run out",
       "wildcard": false,

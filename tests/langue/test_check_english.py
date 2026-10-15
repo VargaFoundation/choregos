@@ -303,3 +303,8 @@ def test_ci_runs_the_guard_on_every_pull_request_with_history() -> None:
     assert "--range" in run
     assert "pull_request.base.sha" in run
     assert "english" in workflow["jobs"]["ci-ok"]["needs"]
+
+
+def test_templates_are_scanned() -> None:
+    """S39-11: a shipped template is read by every user, its prose is read like the rest."""
+    assert ce.is_scanned("templates/x/workflows/a.yaml")

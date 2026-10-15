@@ -1,7 +1,7 @@
-"""Le gabarit `joiners-leavers` (S20-07) : un projet RH naît avec ses deux workflows, leur défaut et
-leur routage, et l'organisation reçoit ses deux agents et ses deux skills — en version 1 quand ils
-n'y sont pas, jamais réécrits quand ils y sont. Les effets du cœur que ses workflows appellent :
-`connector.call`, dont un serveur MCP rend ce qu'il a structuré, et `verifier`, un contrôle.
+"""The `joiners-leavers` template (S20-07): an HR project is born with its two workflows, their default
+and their routing, and the organisation receives its two agents and its two skills — in version 1 when
+they are not there, never rewritten when they are. The core effects its workflows call:
+`connector.call`, of which an MCP server returns what it structured, and `check`, a control.
 """
 
 from __future__ import annotations
@@ -36,33 +36,33 @@ async def test_un_projet_rh_nait_avec_ses_workflows_et_l_organisation_recoit_ses
     }
     routage = (await client.get(f"/api/v1/projects/{pid}/workflow-routing")).json()
     assert routage["default"] == "onboarding"
-    assert routage["rules"][0]["when"]["labels_any"] == ["offboarding", "depart"]
+    assert routage["rules"][0]["when"]["labels_any"] == ["offboarding", "leaver"]
     agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()}
-    assert {"coordinateur-onboarding", "coordinateur-offboarding"} <= set(agents)
-    detail = (await client.get(f"{ORG}/agents/coordinateur-onboarding")).json()
+    assert {"onboarding-coordinator", "offboarding-coordinator"} <= set(agents)
+    detail = (await client.get(f"{ORG}/agents/onboarding-coordinator")).json()
     (version,) = detail["versions"]
     assert version["created_by"] == "template:joiners-leavers"
-    assert [s["slug"] for s in version["spec"]["skills"]] == ["procedure-onboarding", "profils-d-acces"]
+    assert [s["slug"] for s in version["spec"]["skills"]] == ["onboarding-procedure", "access-profiles"]
     skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
-    assert skills["profils-d-acces"]["latest_version"] == 1
-    assert skills["procedure-onboarding"]["latest_version"] == 1
+    assert skills["access-profiles"]["latest_version"] == 1
+    assert skills["onboarding-procedure"]["latest_version"] == 1
 
 
 async def test_un_second_projet_ne_reecrit_pas_ce_que_l_organisation_a_fait_evoluer(
     client: AsyncClient, admin: str
 ) -> None:
     await _projet(client)
-    lue = (await client.get(f"{ORG}/skills/profils-d-acces/versions/1")).json()
+    lue = (await client.get(f"{ORG}/skills/access-profiles/versions/1")).json()
     fichiers = {
         **lue["files"],
-        "SKILL.md": lue["files"]["SKILL.md"] + "\n| Juriste | `juridique` | `contentieux` |\n",
+        "SKILL.md": lue["files"]["SKILL.md"] + "\n| Lawyer | `legal` | `litigation` |\n",
     }
-    publiee = await client.post(f"{ORG}/skills/profils-d-acces/versions", json={"files": fichiers})
+    publiee = await client.post(f"{ORG}/skills/access-profiles/versions", json={"files": fichiers})
     assert publiee.status_code == 201, publiee.text
     await _projet(client, slug="rh-lyon")
     skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
-    assert skills["profils-d-acces"]["latest_version"] == 2, "la version de l'organisation tient"
-    detail = (await client.get(f"{ORG}/agents/coordinateur-onboarding")).json()
+    assert skills["access-profiles"]["latest_version"] == 2, "the organisation's version stands"
+    detail = (await client.get(f"{ORG}/agents/onboarding-coordinator")).json()
     assert len(detail["versions"]) == 1, "l'agent n'est pas réinstallé"
 
 
@@ -75,22 +75,22 @@ async def test_un_depart_nait_dans_son_workflow_et_ses_champs_sont_ceux_du_depar
     )
     assert tracker.status_code == 200, tracker.text
     champs = {
-        "nom": "Paul Martin",
+        "full_name": "Paul Martin",
         "upn": "paul@acme.test",
-        "date_depart": "2026-11-30",
+        "last_day": "2026-11-30",
         "badge_uid": "04A1B2C3",
         "serial": "PC-0042",
-        "adresse": "12 rue de la Paix, Paris",
+        "address": "12 Peace Street, Paris",
     }
     depart = await client.post(
         f"/api/v1/projects/{pid}/work-items",
-        json={"title": "Départ de Paul", "labels": ["depart"], "fields": champs, "start": False},
+        json={"title": "Departure of Paul", "labels": ["leaver"], "fields": champs, "start": False},
     )
     assert depart.status_code == 201, depart.text
-    assert depart.json()["state"] == "demande" and depart.json()["workflow_name"] == "offboarding"
+    assert depart.json()["state"] == "announced" and depart.json()["workflow_name"] == "offboarding"
     incomplet = await client.post(
         f"/api/v1/projects/{pid}/work-items",
-        json={"title": "Départ", "labels": ["depart"], "fields": {"nom": "x"}, "start": False},
+        json={"title": "Departure", "labels": ["leaver"], "fields": {"full_name": "x"}, "start": False},
     )
     assert incomplet.status_code == 422 and "upn" in incomplet.text
 
@@ -100,7 +100,7 @@ async def test_une_skill_du_gabarit_ne_lit_rien_hors_d_elle(
 ) -> None:
     copie = tmp_path / "joiners-leavers"
     shutil.copytree(GABARIT, copie)
-    (copie / "skills" / "profils-d-acces" / "fuite.md").symlink_to("/etc/hostname")
+    (copie / "skills" / "access-profiles" / "fuite.md").symlink_to("/etc/hostname")
     monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(tmp_path))
     refus = await client.post(
         f"{ORG}/projects",
@@ -123,20 +123,20 @@ async def test_verifier_tient_ou_refuse_et_un_serveur_mcp_rend_ce_qu_il_a_struct
     from choregos_api.db.session import session_scope
     from choregos_api.effets import ContexteEffet, EffetRefuse, effet, politique_de_l_effet
 
-    assert politique_de_l_effet("verifier") == "allowed", "un contrôle ne touche rien au-dehors"
+    assert politique_de_l_effet("check") == "allowed", "a check touches nothing outside"
     monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur_mcp(FakeFournisseur()))
     async with session_scope() as session:
         projet = await session.get(Project, project["id"])
         assert projet is not None
-        fournisseur = OrgConnector(org_id=projet.org_id, name="fournisseur", kind="mcp", type="mcp",
-                                   config={"url": "https://fournisseur.test/mcp"})  # fmt: skip
+        fournisseur = OrgConnector(org_id=projet.org_id, name="supplier", kind="mcp", type="mcp",
+                                   config={"url": "https://supplier.test/mcp"})  # fmt: skip
         session.add(fournisseur)
         await session.flush()
         session.add(
             ConnectorOperation(
                 org_id=projet.org_id,
                 connector_id=fournisseur.id,
-                name="commander_poste",
+                name="order_laptop",
                 access="write",
                 policy="approval",
                 groups=[],
@@ -160,10 +160,10 @@ async def test_verifier_tient_ou_refuse_et_un_serveur_mcp_rend_ce_qu_il_a_struct
         ctx = ContexteEffet(session, action, projet)
         commande = await effet("connector.call")(
             ctx,
-            {"connector": "fournisseur", "operation": "commander_poste",
-             "arguments": {"reference": "RH-1", "modele": "p14", "upn": "lea"}},
+            {"connector": "supplier", "operation": "order_laptop",
+             "arguments": {"reference": "RH-1", "model": "p14", "upn": "lea"}},
         )  # fmt: skip
         assert commande["serial"].startswith("PC-"), "l'objet structuré, pas l'enveloppe du protocole"
-        assert (await effet("verifier")(ctx, {"condition": "True", "motif": "tout tient"}))["ok"] is True
-        with pytest.raises(EffetRefuse, match="check failed: le badge actif"):
-            await effet("verifier")(ctx, {"condition": "False", "motif": "le badge actif"})
+        assert (await effet("check")(ctx, {"condition": "True", "reason": "everything holds"}))["ok"] is True
+        with pytest.raises(EffetRefuse, match="check failed: the active badge"):
+            await effet("check")(ctx, {"condition": "False", "reason": "the active badge"})

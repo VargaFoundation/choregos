@@ -1,15 +1,16 @@
-# Une arrivée, gouvernée de bout en bout — aucune ligne de logiciel.
+# A joiner, governed from end to end: no line of software.
 #
-# L'agent prépare le plan d'accès avec ses skills ; une personne des RH le valide. À J-10, la
-# plateforme crée le compte et l'ajoute à son groupe ; le groupe sensible attend une validation
-# ré-authentifiée. À J-7, le poste est commandé à l'agent du fournisseur (MCP), inscrit au parc et
-# expédié. Le badge est une TÂCHE : remis en main propre, son UID saisi et attesté. À J+1, la
-# plateforme vérifie que tout tient. Chaque écriture est une action gouvernée (ADR 0035) : proposée,
-# décidée — par la politique quand l'organisation l'a permise, par une personne sinon —, jouée par
-# Temporal, compensée si la suite échoue.
+# The agent prepares the access plan with its skills; a person from HR approves it. Ten days before
+# the start date the platform creates the account and adds it to its group; the sensitive group
+# waits for a re-authenticated approval. Seven days before, the laptop is ordered from the
+# supplier's agent (MCP), enrolled in the fleet and shipped. The badge is a TASK: handed over in
+# person, its UID entered and attested. The day after, the platform checks that everything holds.
+# Every write is a governed action (ADR 0035): proposed, decided — by the policy when the
+# organisation allowed it, by a person otherwise —, played by Temporal, compensated if a later step
+# fails.
 #
-# Les connecteurs sont ceux de l'ORGANISATION, par leur nom : `annuaire` (identity), `parc` (mdm),
-# `transporteur` (shipping), `lecteurs` (access_control), `fournisseur` (mcp).
+# The connectors are the ORGANISATION's, by name: `directory` (identity), `devices` (mdm),
+# `carrier` (shipping), `badge-readers` (access_control), `supplier` (mcp).
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -18,146 +19,146 @@ metadata:
   description: A joiner — access plan, account and groups ten days before, laptop seven days before, badge handed over, check the day after.
   inputs:
     type: object
-    required: [nom, upn, date_arrivee, poste, groupe, groupe_sensible, adresse]
+    required: [full_name, upn, start_date, job, group, sensitive_group, address]
     properties:
-      nom: { type: string, title: Full name }
+      full_name: { type: string, title: Full name }
       upn: { type: string, title: Sign-in name (UPN) }
-      date_arrivee: { type: string, format: date, title: Start date }
-      poste: { type: string, title: Job title }
-      groupe: { type: string, title: Access group of the role }
-      groupe_sensible: { type: string, title: Sensitive group (stronger approval) }
-      adresse: { type: string, title: Laptop delivery address }
-      modele: { type: string, title: Laptop model, default: portable-14 }
+      start_date: { type: string, format: date, title: Start date }
+      job: { type: string, title: Job title }
+      group: { type: string, title: Access group of the role }
+      sensitive_group: { type: string, title: Sensitive group (stronger approval) }
+      address: { type: string, title: Laptop delivery address }
+      model: { type: string, title: Laptop model, default: laptop-14 }
       badge_uid: { type: string, title: Badge UID }
-initial: demande
+initial: requested
 actors:
-  coordinateur: { type: agent, role: coordination, agent: coordinateur-onboarding, max_turns: 40, max_minutes: 20 }
-  rh: { type: human, group: rh, sla_hours: 24 }
-  accueil: { type: human, group: accueil, sla_hours: 8 }
-  plateforme: { type: system }
+  coordinator: { type: agent, role: coordination, agent: onboarding-coordinator, max_turns: 40, max_minutes: 20 }
+  hr: { type: human, group: hr, sla_hours: 24 }
+  reception: { type: human, group: reception, sla_hours: 8 }
+  platform: { type: system }
 states:
-  demande: { display: Request received, kind: wait }
-  plan: { display: Access plan proposed, kind: wait }
-  valide: { display: Plan approved, kind: wait }
-  comptes: { display: Account and group created, kind: wait }
-  sensible: { display: Sensitive group decided, kind: wait }
-  poste: { display: "Laptop ordered, enrolled, shipped", kind: wait }
-  badge: { display: Badge handed over, kind: wait }
-  actif: { display: Badge active, kind: wait }
-  a_revoir: { display: To review, kind: wait }
-  pret: { display: Joiner ready, terminal: true }
+  requested: { display: Request received, kind: wait }
+  planned: { display: Access plan proposed, kind: wait }
+  approved: { display: Plan approved, kind: wait }
+  accounts_created: { display: Account and group created, kind: wait }
+  sensitive_granted: { display: Sensitive group decided, kind: wait }
+  laptop_shipped: { display: "Laptop ordered, enrolled, shipped", kind: wait }
+  badge_issued: { display: Badge handed over, kind: wait }
+  active: { display: Badge active, kind: wait }
+  needs_review: { display: To review, kind: wait }
+  ready: { display: Joiner ready, terminal: true }
 transitions:
   - id: t-plan
-    from: demande
-    to: plan
-    by: coordinateur
-    outputs: [plan_d_acces]
+    from: requested
+    to: planned
+    by: coordinator
+    outputs: [access_plan]
     gates: [outputs_present]
-    on_fail: { to: demande, max_attempts: 2, escalate_to: a_revoir }
+    on_fail: { to: requested, max_attempts: 2, escalate_to: needs_review }
 
-  - id: t-validation
-    from: plan
-    to: valide
-    by: rh
-    on_reject: a_revoir
+  - id: t-approve
+    from: planned
+    to: approved
+    by: hr
+    on_reject: needs_review
 
-  - id: t-comptes
-    from: valide
-    to: comptes
-    by: plateforme
+  - id: t-create-accounts
+    from: approved
+    to: accounts_created
+    by: platform
     action:
-      kind: arrivee.comptes
-      title: "Account and group of {{ fields.nom }}"
-      justification: "starts on {{ fields.date_arrivee }} as {{ fields.poste }}"
-      params: { upn: "{{ fields.upn }}", nom: "{{ fields.nom }}", groupe: "{{ fields.groupe }}" }
+      kind: onboarding.accounts
+      title: "Account and group of {{ fields.full_name }}"
+      justification: "starts on {{ fields.start_date }} as {{ fields.job }}"
+      params: { upn: "{{ fields.upn }}", full_name: "{{ fields.full_name }}", group: "{{ fields.group }}" }
       effects:
         - effect: connector.call
           with:
-            connector: annuaire
+            connector: directory
             operation: create_user
-            arguments: { upn: "{{ params.upn }}", display_name: "{{ params.nom }}" }
+            arguments: { upn: "{{ params.upn }}", display_name: "{{ params.full_name }}" }
           compensate:
             effect: connector.call
-            with: { connector: annuaire, operation: disable_user, arguments: { upn: "{{ params.upn }}" } }
+            with: { connector: directory, operation: disable_user, arguments: { upn: "{{ params.upn }}" } }
         - effect: connector.call
           with:
-            connector: annuaire
+            connector: directory
             operation: add_to_group
-            arguments: { upn: "{{ params.upn }}", group_id: "{{ params.groupe }}" }
+            arguments: { upn: "{{ params.upn }}", group_id: "{{ params.group }}" }
           compensate:
             effect: connector.call
             with:
-              connector: annuaire
+              connector: directory
               operation: remove_from_group
-              arguments: { upn: "{{ params.upn }}", group_id: "{{ params.groupe }}" }
-      not_before: fields.date_arrivee - 10d
-    on_fail: { to: valide, max_attempts: 2, escalate_to: a_revoir }
+              arguments: { upn: "{{ params.upn }}", group_id: "{{ params.group }}" }
+      not_before: fields.start_date - 10d
+    on_fail: { to: approved, max_attempts: 2, escalate_to: needs_review }
 
-  # Le groupe sensible : une validation ré-authentifiée, quoi que permette l'organisation. Rejetée,
-  # l'arrivée continue sans lui.
-  - id: t-sensible
-    from: comptes
-    to: sensible
-    by: plateforme
+  # The sensitive group: a re-authenticated approval, whatever the organisation allows. Rejected,
+  # the onboarding goes on without it.
+  - id: t-grant-sensitive
+    from: accounts_created
+    to: sensitive_granted
+    by: platform
     action:
-      kind: arrivee.groupe_sensible
-      title: "{{ fields.nom }} in {{ fields.groupe_sensible }}"
-      params: { upn: "{{ fields.upn }}", groupe: "{{ fields.groupe_sensible }}" }
+      kind: onboarding.sensitive_group
+      title: "{{ fields.full_name }} in {{ fields.sensitive_group }}"
+      params: { upn: "{{ fields.upn }}", group: "{{ fields.sensitive_group }}" }
       effects:
         - effect: connector.call
           with:
-            connector: annuaire
+            connector: directory
             operation: add_to_group
-            arguments: { upn: "{{ params.upn }}", group_id: "{{ params.groupe }}" }
+            arguments: { upn: "{{ params.upn }}", group_id: "{{ params.group }}" }
       approval:
         approvers: [{ role: project_owner, min: 1 }]
         step_up_minutes: 5
-    on_fail: { to: comptes, max_attempts: 1, escalate_to: a_revoir }
-    on_reject: sensible
+    on_fail: { to: accounts_created, max_attempts: 1, escalate_to: needs_review }
+    on_reject: sensitive_granted
 
-  # Le poste : commandé à l'agent du fournisseur, inscrit au parc sous le numéro de série qu'il a
-  # attribué, expédié à l'adresse de l'arrivant. La preuve est le suivi du colis.
-  - id: t-poste
-    from: sensible
-    to: poste
-    by: plateforme
+  # The laptop: ordered from the supplier's agent, enrolled in the fleet under the serial number it
+  # assigned, shipped to the joiner's address. The proof is the parcel's tracking.
+  - id: t-ship-laptop
+    from: sensitive_granted
+    to: laptop_shipped
+    by: platform
     action:
-      kind: arrivee.poste
-      title: "Laptop of {{ fields.nom }} ({{ fields.modele | default('portable-14') }})"
+      kind: onboarding.laptop
+      title: "Laptop of {{ fields.full_name }} ({{ fields.model | default('laptop-14') }})"
       params:
         reference: "{{ work_item.key }}"
         upn: "{{ fields.upn }}"
-        modele: "{{ fields.modele | default('portable-14') }}"
-        adresse: "{{ fields.adresse }}"
+        model: "{{ fields.model | default('laptop-14') }}"
+        address: "{{ fields.address }}"
       effects:
         - effect: connector.call
           with:
-            connector: fournisseur
-            operation: commander_poste
-            arguments: { reference: "{{ params.reference }}", modele: "{{ params.modele }}", upn: "{{ params.upn }}" }
+            connector: supplier
+            operation: order_laptop
+            arguments: { reference: "{{ params.reference }}", model: "{{ params.model }}", upn: "{{ params.upn }}" }
         - effect: connector.call
           with:
-            connector: parc
+            connector: devices
             operation: enroll_device
             arguments: { serial: "{{ effects[0].serial }}", upn: "{{ params.upn }}" }
           compensate:
             effect: connector.call
-            with: { connector: parc, operation: wipe_device, arguments: { serial: "{{ result.serial }}" } }
+            with: { connector: devices, operation: wipe_device, arguments: { serial: "{{ result.serial }}" } }
         - effect: connector.call
           with:
-            connector: transporteur
+            connector: carrier
             operation: create_shipment
             arguments:
-              reference: "{{ params.reference }}-poste"
-              address: "{{ params.adresse }}"
+              reference: "{{ params.reference }}-laptop"
+              address: "{{ params.address }}"
               items: ["{{ effects[0].serial }}"]
-      not_before: fields.date_arrivee - 7d
-    on_fail: { to: sensible, max_attempts: 2, escalate_to: a_revoir }
+      not_before: fields.start_date - 7d
+    on_fail: { to: sensitive_granted, max_attempts: 2, escalate_to: needs_review }
 
-  - id: t-badge
-    from: poste
-    to: badge
-    by: accueil
+  - id: t-hand-over-badge
+    from: laptop_shipped
+    to: badge_issued
+    by: reception
     task:
       title: Hand over the badge
       instructions: Hand the badge to its holder in person, then hold it to the reader to read its UID.
@@ -167,46 +168,46 @@ transitions:
         properties:
           badge_uid: { type: string, title: Badge UID, minLength: 8 }
       attest: I handed the badge to its holder in person
-    on_reject: a_revoir
+    on_reject: needs_review
 
-  - id: t-activer
-    from: badge
-    to: actif
-    by: plateforme
+  - id: t-activate-badge
+    from: badge_issued
+    to: active
+    by: platform
     action:
-      kind: arrivee.badge
+      kind: onboarding.badge
       title: "Activate badge {{ fields.badge_uid }}"
-      params: { uid: "{{ fields.badge_uid }}", porteur: "{{ fields.upn }}" }
+      params: { uid: "{{ fields.badge_uid }}", holder: "{{ fields.upn }}" }
       effects:
         - effect: connector.call
           with:
-            connector: lecteurs
+            connector: badge-readers
             operation: activate_badge
-            arguments: { uid: "{{ params.uid }}", holder: "{{ params.porteur }}" }
+            arguments: { uid: "{{ params.uid }}", holder: "{{ params.holder }}" }
           compensate:
             effect: connector.call
-            with: { connector: lecteurs, operation: deactivate_badge, arguments: { uid: "{{ params.uid }}" } }
-    on_fail: { to: badge, max_attempts: 1, escalate_to: a_revoir }
+            with: { connector: badge-readers, operation: deactivate_badge, arguments: { uid: "{{ params.uid }}" } }
+    on_fail: { to: badge_issued, max_attempts: 1, escalate_to: needs_review }
 
-  # J+1 : la plateforme relit ce qu'elle a fait, et le vérifie. Des lectures, puis un contrôle.
-  - id: t-controle
-    from: actif
-    to: pret
-    by: plateforme
+  # The day after: the platform reads back what it did, and checks it. Reads, then a check.
+  - id: t-check
+    from: active
+    to: ready
+    by: platform
     action:
-      kind: arrivee.controle
-      title: "Check the onboarding of {{ fields.nom }}"
-      params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}", reference: "{{ work_item.key }}-poste" }
+      kind: onboarding.check
+      title: "Check the onboarding of {{ fields.full_name }}"
+      params: { upn: "{{ fields.upn }}", uid: "{{ fields.badge_uid }}", reference: "{{ work_item.key }}-laptop" }
       effects:
         - effect: connector.call
-          with: { connector: annuaire, operation: get_user, arguments: { upn: "{{ params.upn }}" } }
+          with: { connector: directory, operation: get_user, arguments: { upn: "{{ params.upn }}" } }
         - effect: connector.call
-          with: { connector: lecteurs, operation: badge_status, arguments: { uid: "{{ params.uid }}" } }
+          with: { connector: badge-readers, operation: badge_status, arguments: { uid: "{{ params.uid }}" } }
         - effect: connector.call
-          with: { connector: transporteur, operation: shipment_status, arguments: { reference: "{{ params.reference }}" } }
-        - effect: verifier
+          with: { connector: carrier, operation: shipment_status, arguments: { reference: "{{ params.reference }}" } }
+        - effect: check
           with:
             condition: "{{ effects[0].user is not none and effects[1].active and effects[2].state != 'unknown' }}"
-            motif: the account, the active badge and the laptop shipment
-      not_before: fields.date_arrivee + 1d
-    on_fail: { to: actif, max_attempts: 2, escalate_to: a_revoir }
+            reason: the account, the active badge and the laptop shipment
+      not_before: fields.start_date + 1d
+    on_fail: { to: active, max_attempts: 2, escalate_to: needs_review }
