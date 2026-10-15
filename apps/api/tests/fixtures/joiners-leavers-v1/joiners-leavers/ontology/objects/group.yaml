@@ -1,0 +1,11 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: group, displayName: Group, description: "A directory group; a sensitive group opens on a re-authenticated approval.", owner: it}
+spec:
+  datasource: groupes
+  primaryKey: nom
+  titleProperty: nom
+  properties:
+    nom: {type: string, required: true}
+    sensible: {type: boolean, required: true}
+    description: {type: string}

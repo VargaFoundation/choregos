@@ -55,6 +55,8 @@ EXCLUDED = (
     "docs/fr/",  # the archived French documentation, no longer maintained
     "docs/cli.md",  # generated from the CLI's help strings, which are read at their source
     "packages/contracts/ts/",  # generated from the schemas, which are read at their source
+    # The 1.x joiners-leavers template, French on purpose: what S39-11c's script migrates (S39-11).
+    "apps/api/tests/fixtures/joiners-leavers-v1/",
     # The injection guard's patterns also recognise an injection written in French.
     "packages/core/src/choregos_core/injection.py",
 )
