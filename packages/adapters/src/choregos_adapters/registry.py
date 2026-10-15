@@ -165,9 +165,9 @@ def configuration_resolue(
     secret_ref: str | None = None,
     preresolved: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """La configuration, ses secrets RÉSOLUS : de quoi construire l'adaptateur — jamais de quoi
-    enregistrer ni rendre. Une référence irrésoluble lève `SecretIntrouvable` : mieux vaut un
-    connecteur en erreur qu'un adaptateur qui retombe en silence sur sa valeur par défaut.
+    """The configuration with its secrets RESOLVED: enough to build the adapter, never to save or
+    return. An unresolvable reference raises `SecretIntrouvable`: a connector in error beats an
+    adapter that silently falls back to its default value.
 
     `preresolved` (field -> value): the fields the platform already read with the organisation's
     context — the sealed `store:` values (ADR 0058). They are not resolved again."""
