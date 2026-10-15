@@ -1,64 +1,64 @@
-# Valeurs par défaut de la plateforme. Chaque environnement surcharge ce qui le concerne
-# dans `choregos-infra/platform/overlays/<env>/values.yaml`.
+# Platform default values. Each environment overrides what concerns it
+# in `choregos-infra/platform/overlays/<env>/values.yaml`.
 
 global:
   domain: choregos.local
-  # Surcharges quand les hôtes ne suivent pas `app.<domain>` / `api.<domain>` en HTTPS
-  # (ex. un ingress HTTP interne derrière un VPN). Vides : dérivés de `domain`.
+  # Overrides when the hosts do not follow `app.<domain>` / `api.<domain>` over HTTPS
+  # (e.g. an internal HTTP ingress behind a VPN). Empty: derived from `domain`.
   publicUrl: ""
   apiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
   imageTag: "0.17.12"
   imagePullPolicy: IfNotPresent
-  # Les images sont référencées par digest en staging et en prod (politique Kyverno).
+  # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
-  # Secrets de tirage d'image, pour un registre privé — une édition entreprise, un miroir
-  # Harbor fermé, une image maison. Vide : toutes les images sont publiques. Le secret doit
-  # exister dans le namespace ; sur une plateforme mutualisée, c'est en général le socle du
-  # locataire qui le pose (par exemple depuis un magasin de secrets), pas ce chart.
+  # Image pull secrets, for a private registry — an enterprise edition, a closed
+  # Harbor mirror, a home-made image. Empty: all the images are public. The secret must
+  # exist in the namespace; on a shared platform, it is usually the tenant's
+  # base layer that sets it (for example from a secret store), not this chart.
   imagePullSecrets: []
   environment: dev
-  # Édition annoncée par ce déploiement (ADR 0024). `community` est le défaut, et le plus
-  # restrictif : une seule organisation. `enterprise` exige des images de l'édition entreprise —
-  # l'API REFUSE de démarrer si aucun greffon entreprise ne s'est déclaré, plutôt que de paraître
-  # saine et de refuser la seconde organisation des semaines plus tard.
+  # Edition announced by this deployment (ADR 0024). `community` is the default, and the most
+  # restrictive: a single organization. `enterprise` requires enterprise edition images —
+  # the API REFUSES to start if no enterprise plugin has declared itself, rather than looking
+  # healthy and refusing the second organization weeks later.
   edition: community
   fakes: false
-  # Variables d'environnement supplémentaires, données à l'API, à chaque worker et au Job de
-  # migration (par `choregos.commonEnv`). Pour activer un réglage que le chart ne connaît pas
-  # encore — par exemple un greffon livré inactif (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — sans fork du
-  # chart. Une variable déjà posée par le chart est REFUSÉE au rendu : deux valeurs pour un même
-  # nom, Kubernetes garde la dernière sans rien dire, et le réglage du chart serait remplacé en
-  # silence. Valeurs en clair seulement : un secret passe par un `Secret`, jamais par ici.
+  # Additional environment variables, given to the API, to each worker and to the migration Job
+  # (through `choregos.commonEnv`). To enable a setting the chart does not know
+  # yet — for example a plugin shipped inactive (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — without forking the
+  # chart. A variable already set by the chart is REFUSED at render time: two values for the same
+  # name, Kubernetes keeps the last one without saying anything, and the chart's setting would be replaced
+  # silently. Plain values only: a secret goes through a `Secret`, never through here.
   extraEnv: []
   #   - name: CHOREGOS_ESSAI_ONTOLOGIE
   #     value: "1"
-  # Canary de la plateforme (S7-08). Désactivé par défaut : il exige Argo Rollouts dans le
-  # cluster, et un chart qui suppose un opérateur absent est un chart qui ne s'installe pas.
-  # Les environnements qui l'activent le font dans `values/staging.yaml` et `values/prod.yaml`.
+  # Platform canary (S7-08). Disabled by default: it requires Argo Rollouts in the
+  # cluster, and a chart that assumes an absent operator is a chart that does not install.
+  # Environments that enable it do so in `values/staging.yaml` and `values/prod.yaml`.
   canary:
     enabled: false
     steps:
       - { weight: 10, pause: 5m }
       - { weight: 50, pause: 10m }
       - { weight: 100 }
-    # `AnalysisTemplate` qui décide d'abandonner : sans lui, le canary ne fait qu'attendre.
+    # `AnalysisTemplate` that decides to abort: without it, the canary just waits.
     analysis: ""
-  # Playbooks apportés par le DÉPLOIEMENT (un ConfigMap, une clé par rôle : `<rôle>.md`),
-  # montés dans les workers et lus avant ceux du paquet. C'est ce qui permet d'employer le
-  # moteur hors logiciel — un rôle `sourcing`, `instruction_dossier` — ou d'adapter un rôle
-  # existant à une maison, sans toucher à la plateforme.
+  # Playbooks brought by the DEPLOYMENT (a ConfigMap, one key per role: `<role>.md`),
+  # mounted in the workers and read before those of the package. This is what allows using the
+  # engine outside software — a `sourcing`, `instruction_dossier` role — or adapting an existing
+  # role to a house, without touching the platform.
   playbooks:
     configMap: ""
     mountPath: /etc/choregos/playbooks
-  # Catalogue d'outils : des API tierces que la PLATEFORME appelle pour un agent, clé
-  # côté serveur. Un ConfigMap (le catalogue, lisible en PR) et un Secret (les clés des
-  # fournisseurs, injecté dans l'API). Vide = aucun outil, et c'est le défaut.
-  # Un projet déclare ensuite ce qu'il a le droit d'appeler (`tools` de sa configuration).
-  # Templates de workflow apportés par le déploiement, en plus des trois du paquet. Un
-  # template du déploiement l'emporte sur celui du paquet, comme pour les playbooks ; c'est
-  # ainsi qu'un métier apporte ses enchaînements d'états sans réécrire la plateforme. Vide :
-  # seuls les trois livrés existent.
+  # Tool catalog: third-party APIs that the PLATFORM calls for an agent, key
+  # kept server-side. A ConfigMap (the catalog, readable in PRs) and a Secret (the
+  # providers' keys, injected into the API). Empty = no tool, and that is the default.
+  # A project then declares what it is allowed to call (`tools` in its configuration).
+  # Workflow templates brought by the deployment, in addition to the package's three. A
+  # deployment template takes precedence over the package's, as with playbooks; this is
+  # how a trade brings its state sequences without rewriting the platform. Empty:
+  # only the three shipped ones exist.
   workflowTemplates:
     configMap: ""
     mountPath: /etc/choregos/workflow-templates
@@ -66,21 +66,21 @@ global:
     configMap: ""
     mountPath: /etc/choregos/outils
     fileName: catalogue.yaml
-    #: Secret dont TOUTES les clés deviennent des variables d'environnement de l'API :
-    #: c'est là que vivent les clés des fournisseurs, jamais dans le catalogue.
+    #: Secret whose ALL keys become environment variables of the API:
+    #: this is where the providers' keys live, never in the catalog.
     credentialsSecret: ""
-  # Ce que CE déploiement sait faire tourner : un projet neuf en hérite quand sa demande n'en dit
-  # rien (#245). Vide : le contrat décide (`claude-code`, aucun profil de modèle). Un locataire qui
-  # sert opencode derrière la passerelle de la plateforme le dit ici, sans quoi les agents d'un
-  # gabarit n'y atteignent jamais leur modèle.
+  # What THIS deployment can run: a new project inherits it when its request says
+  # nothing (#245). Empty: the contract decides (`claude-code`, no model profile). A tenant that
+  # serves opencode behind the platform's gateway says so here, without which the agents of a
+  # template never reach their model.
   agents:
     defaultBackend: ""
     allowedBackends: []
-    # profil → modèle de la passerelle : `{ standard: platform/standard }`
+    # profile → gateway model: `{ standard: platform/standard }`
     modelProfiles: {}
   logLevel: INFO
-  # Anti-affinité entre les répliques d'un même composant : `soft` (préférée), `hard`
-  # (une réplique par nœud, sinon pas de pod) ou `none`.
+  # Anti-affinity between the replicas of a same component: `soft` (preferred), `hard`
+  # (one replica per node, otherwise no pod) or `none`.
   antiAffinity: soft
   serviceAccount:
     annotations: {}
@@ -94,26 +94,26 @@ global:
     readOnlyRootFilesystem: true
     capabilities: { drop: ["ALL"] }
   database:
-    # `true` : le chart déploie un PostgreSQL à une instance (banc, démo). `false` : il
-    # consomme celui décrit ci-dessous. Même logique pour les trois dépendances suivantes.
+    # `true`: the chart deploys a single-instance PostgreSQL (bench, demo). `false`: it
+    # consumes the one described below. Same logic for the next three dependencies.
     embedded: false
     host: choregos-pg-rw.choregos-data.svc
     port: 5432
     name: choregos
-    # Rôle d'administration du PostgreSQL embarqué (POSTGRES_USER, superutilisateur).
+    # Administration role of the embedded PostgreSQL (POSTGRES_USER, superuser).
     user: choregos
-    # Rôle avec lequel l'API et l'orchestrateur se connectent au PostgreSQL EMBARQUÉ : créé
-    # sans SUPERUSER à l'initdb, parce qu'un superutilisateur ignore la RLS et que
-    # l'isolation des organisations n'existe alors pas. L'API refuse un superutilisateur en
-    # staging/prod. Avec une base externe (`secretRef`, clé `url`), c'est l'URL qui décide.
+    # Role the API and the orchestrator connect to the EMBEDDED PostgreSQL with: created
+    # without SUPERUSER at initdb, because a superuser ignores RLS and
+    # organization isolation then does not exist. The API refuses a superuser in
+    # staging/prod. With an external database (`secretRef`, key `url`), the URL decides.
     appUser: choregos_app
     secretRef: choregos-db
-    # À la place de `secretRef` (clé `url`) : le secret d'un opérateur qui ne porte que le
-    # mot de passe (Zalando : `<user>.<cluster>.credentials.postgresql.acid.zalan.do`).
+    # Instead of `secretRef` (key `url`): the secret of an operator that carries only the
+    # password (Zalando: `<user>.<cluster>.credentials.postgresql.acid.zalan.do`).
     passwordSecret: ""
-    # Pool de connexions de CHAQUE processus (réplique d'API, worker) : au plus
-    # size + maxOverflow connexions, une attente bornée au-delà. Dimensionner
-    # `max_connections` de PostgreSQL en conséquence : (répliques API + workers) × (size + maxOverflow).
+    # Connection pool of EACH process (API replica, worker): at most
+    # size + maxOverflow connections, a bounded wait beyond that. Size PostgreSQL's
+    # `max_connections` accordingly: (API replicas + workers) × (size + maxOverflow).
     pool:
       size: 10
       maxOverflow: 5
@@ -125,13 +125,13 @@ global:
   gateway:
     embedded: false
     url: http://litellm.choregos-gateway.svc:4000
-    # Secret (clé `master-key`) de la passerelle. Vide avec `embedded: true` : le chart en
-    # génère un, stable d'une mise à jour à l'autre.
+    # Gateway secret (key `master-key`). Empty with `embedded: true`: the chart
+    # generates one, stable from one update to the next.
     secretRef: choregos-gateway-secrets
   memory:
     embedded: false
     url: http://ecphoria.choregos-memory.svc:8432
-    # Secret (clé `token`) d'une mémoire qui exige une clé d'API. Vide : aucun en-tête.
+    # Secret (key `token`) of a memory that requires an API key. Empty: no header.
     tokenSecret: ""
   objectStore:
     url: s3://choregos
@@ -145,49 +145,49 @@ global:
     issuer: https://keycloak.choregos.local/realms/choregos
     clientId: choregos
     secretRef: choregos-oidc
-    # Organisation à laquelle rattacher les groupes OIDC NON préfixés (`developers`,
-    # `org-admins`…). Vide : seuls les groupes `choregos:<org>:<groupe>` donnent un rôle.
+    # Organization to attach the NON-prefixed OIDC groups to (`developers`,
+    # `org-admins`…). Empty: only `choregos:<org>:<group>` groups give a role.
     defaultOrg: ""
-  # La porte MCP en serveur de ressources OAuth (ADR 0030, RFC 9728) : l'IdP de la console émet les
-  # jetons de Claude Code et de claude.ai, sans jeton à coller. Ce que l'IdP doit porter (portée
-  # `choregos-mcp`, clients) : docs/runbooks/keycloak-mcp.md.
+  # The MCP gateway as an OAuth resource server (ADR 0030, RFC 9728): the console's IdP issues the
+  # tokens of Claude Code and claude.ai, with no token to paste. What the IdP must carry (scope
+  # `choregos-mcp`, clients): docs/runbooks/keycloak-mcp.md.
   mcp:
     oauth:
       enabled: false
-      # Vide : l'émetteur de la console (`global.oidc.issuer`). À poser pour un AUTRE IdP seulement.
+      # Empty: the console's issuer (`global.oidc.issuer`). Set only for ANOTHER IdP.
       issuer: ""
-      # L'audience obligatoire des jetons de la porte.
+      # The required audience of the gateway's tokens.
       audience: choregos-mcp
-      # Les clients que l'IdP a enregistrés, par client de la page Integrations — la page en tire
-      # la commande exacte. `callbackPort` : le port de `http://localhost:PORT/callback` enregistré.
+      # The clients the IdP has registered, per client of the Integrations page — the page derives
+      # the exact command from them. `callbackPort`: the port of the registered `http://localhost:PORT/callback`.
       #   claude-code: { clientId: choregos-claude-code, callbackPort: 33418 }
       #   claude-ai: { clientId: choregos-claude-ai }
       clients: {}
-  # Amorçage d'une installation neuve : l'organisation créée au premier démarrage si elle
-  # manque, et les e-mails qui y reçoivent org_admin. Idempotent. Sans cela, aucune route
-  # ni aucun écran ne peut créer la première organisation.
+  # Bootstrap of a new installation: the organization created at first start if it
+  # is missing, and the e-mails that receive org_admin there. Idempotent. Without this, no route
+  # nor any screen can create the first organization.
   bootstrap:
     org: ""
     orgName: ""
     admins: ""
-  # Connexion de développement (`/auth/login?as=<email>`), sans IdP. JAMAIS en production :
-  # l'API la refuse d'elle-même en staging/prod. `adminEmails` : qui reçoit ORG_ADMIN.
+  # Development login (`/auth/login?as=<email>`), without an IdP. NEVER in production:
+  # the API refuses it by itself in staging/prod. `adminEmails`: who receives ORG_ADMIN.
   devLogin:
     enabled: false
     adminEmails: ""
-  # `false` pour un locataire qui n'a droit à aucune ressource cluster-scoped (AppProject
-  # `clusterResourceWhitelist: []`) : le ClusterRole de lecture des PipelineRun n'est pas rendu.
+  # `false` for a tenant that has no right to any cluster-scoped resource (AppProject
+  # `clusterResourceWhitelist: []`): the PipelineRun read ClusterRole is not rendered.
   rbac:
     clusterScoped: true
-    # Role + RoleBinding (namespace) autorisant l'orchestrateur à lancer ses Jobs d'agent.
-    # Sur une plateforme mutualisée, c'est la plateforme qui le pose : laisser `false`.
+    # Role + RoleBinding (namespace) allowing the orchestrator to launch its agent Jobs.
+    # On a shared platform, it is the platform that lays it down: leave `false`.
     jobRunner: false
-  # Le secret qui porte les valeurs de l'API : secret de session, clé de signature des
-  # jetons de run, App GitHub. L'orchestrateur y lit la MÊME clé de signature — c'est lui
-  # qui émet les jetons, l'API ne fait que les vérifier.
+  # The secret that carries the API's values: session secret, run-token signing
+  # key, GitHub App. The orchestrator reads the SAME signing key there — it is the one
+  # that issues the tokens, the API only verifies them.
   apiSecretRef: choregos-api-secrets
-  # Banc local seulement : le chart écrit lui-même les secrets applicatifs (voir
-  # templates/secrets-embarques.yaml). Jamais vrai en production.
+  # Local bench only: the chart itself writes the application secrets (see
+  # templates/secrets-embarques.yaml). Never true in production.
   devSecrets: false
   externalSecrets:
     enabled: true
@@ -211,14 +211,14 @@ choregos-api:
     targetCPUUtilizationPercentage: 70
   migrations:
     enabled: true
-    # `post-install,post-upgrade` quand la base est embarquée (elle n'existe pas avant).
+    # `post-install,post-upgrade` when the database is embedded (it does not exist before).
     hook: pre-install,pre-upgrade
-    # Attente de la base avant de migrer (init container).
+    # Wait for the database before migrating (init container).
     waitForDatabaseSeconds: 300
   ingress:
     enabled: true
-    # `httproute` (Gateway API) ou `ingress` (networking.k8s.io) quand le cluster n'a pas
-    # de Gateway API — `className` ne sert qu'à `ingress`.
+    # `httproute` (Gateway API) or `ingress` (networking.k8s.io) when the cluster has no
+    # Gateway API — `className` only serves `ingress`.
     kind: httproute
     className: ""
     hostnames: ["api.choregos.local", "hooks.choregos.local"]
@@ -246,10 +246,10 @@ choregos-orchestrator:
   enabled: true
   image:
     repository: choregos-orchestrator
-  # Après la perte d'un nœud, un worker attend ce délai avant d'être évincé (défaut Kubernetes :
-  # 300 s, soit ~6 minutes d'immobilité — voir `tests/cluster/test_node_loss.py`).
+  # After losing a node, a worker waits this delay before being evicted (Kubernetes default:
+  # 300 s, i.e. ~6 minutes of immobility — see `tests/cluster/test_node_loss.py`).
   unreachableTolerationSeconds: 20
-  # Un déploiement par task queue : les appels externes lents n'étouffent pas la boucle de décision.
+  # One deployment per task queue: slow external calls do not choke the decision loop.
   queues:
     - name: orchestrator
       replicas: 2
@@ -265,29 +265,29 @@ choregos-orchestrator:
       resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
   runner:
     image: choregos-runner
-    # Vide : le tag suit `global.imageTag`. NE PAS RETIRER cette ligne — sans elle, le défaut du
-    # sous-chart reprend la main et l'image des agents repart sur `1.0.0`, absente de toute
-    # installation. C'est arrivé le 2026-09-27 : une coupe un peu large en retirant un réglage
-    # voisin, et `helm-unittest` l'a attrapé sur `global.imageTag: 9.9.9` → `…-runner:1.0.0`.
+    # Empty: the tag follows `global.imageTag`. DO NOT REMOVE this line — without it, the
+    # sub-chart's default takes over again and the agents' image goes back to `1.0.0`, absent from every
+    # installation. It happened on 2026-09-27: a slightly broad cut removing a
+    # neighboring setting, and `helm-unittest` caught it on `global.imageTag: 9.9.9` → `…-runner:1.0.0`.
     tag: ""
     namespacePattern: "proj-{slug}-runners"
-    # Runs simultanés par namespace. Au-delà, le Job attend SANS pod (`spec.suspend`),
-    # dans l'ordre d'arrivée : une pointe de tickets ne se transforme plus en pointe de
-    # pods qui tirent tous la même image. 0 = sans plafond.
+    # Simultaneous runs per namespace. Beyond that, the Job waits WITHOUT a pod (`spec.suspend`),
+    # in order of arrival: a spike of tickets no longer turns into a spike of
+    # pods all pulling the same image. 0 = no ceiling.
     maxActive: 0
     executor: tekton
-    # Ce que chaque pod d'agent reçoit en plus. `env` porte des valeurs en clair (jamais un
-    # secret) ; `envFromSecrets` liste des Secrets du namespace, montés par référence —
-    # c'est par là que passent un jeton de backend ou des identifiants git.
+    # What each agent pod receives in addition. `env` carries plain values (never a
+    # secret); `envFromSecrets` lists the namespace's Secrets, mounted by reference —
+    # this is how a backend token or git credentials get through.
     env: {}
     envFromSecrets: []
-    # Plafond de chaque pod runner (exécuteur `k8s_job`). À garder sous le LimitRange du
-    # namespace : au-delà, le pod est refusé et le Job attend sans message.
+    # Ceiling of each runner pod (`k8s_job` executor). Keep it under the namespace's
+    # LimitRange: beyond it, the pod is refused and the Job waits without a message.
     limits:
       cpu: "2"
       memory: 6Gi
-    # La RuntimeClass (gVisor, Kata) de chaque pod d'agent quand la politique du projet
-    # n'en impose pas (`sandbox.runtime: gvisor` l'emporte). Vide : la runtime du cluster.
+    # The RuntimeClass (gVisor, Kata) of each agent pod when the project's policy
+    # imposes none (`sandbox.runtime: gvisor` takes precedence). Empty: the cluster's runtime.
     runtimeClass: ""
     # `executor: agent_sandbox` only (ADR 0016; needs the agent-sandbox operator and a
     # `namespacePattern` naming this namespace). `warmPool.size` sandboxes wait, made from the
@@ -307,14 +307,14 @@ choregos-orchestrator:
     # policy without `context` reduces nothing.
     contextReduction:
       enabled: true
-    # Le proxy d'egress par lequel CHAQUE pod d'agent sort (`HTTP_PROXY`/`HTTPS_PROXY`),
-    # `{namespace}` = celui des runners. Le provisioning y déploie un Squid dont
-    # l'allowlist est `policy.sandbox.network.allow_domains` ; sans domaine autorisé,
-    # pas de proxy et pas de sortie. Vide : aucun proxy (banc local).
+    # The egress proxy through which EACH agent pod gets out (`HTTP_PROXY`/`HTTPS_PROXY`),
+    # `{namespace}` = the runners'. The provisioning deploys a Squid there whose
+    # allowlist is `policy.sandbox.network.allow_domains`; without an allowed domain,
+    # no proxy and no egress. Empty: no proxy (local bench).
     egressProxy: "http://choregos-egress.{namespace}.svc:3128"
-    # Son image, à épingler par digest là où Kyverno l'exige. Vide : celle de `gitops.py`.
+    # Its image, to be pinned by digest where Kyverno requires it. Empty: the one from `gitops.py`.
     egressImage: ""
-  # Un budget par file d'attente comptant plus d'une réplique.
+  # One budget per queue with more than one replica.
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
@@ -323,33 +323,33 @@ choregos-tools:
   enabled: true
   image:
     repository: choregos-tools
-  # L'image du sidecar est publiée ici ; la Task Tekton la référence dans chaque projet.
+  # The sidecar image is published here; the Tekton Task references it in each project.
   publishTask: true
 
 monitoring:
-  # `prometheus` rend des objets `monitoring.coreos.com` ; `victoriametrics` rend des
-  # `operator.victoriametrics.com/v1beta1`. Un opérateur qui ne connaît pas le type ne le voit
-  # pas : sur une plateforme VictoriaMetrics, un ServiceMonitor est un objet INERTE — le
-  # déploiement paraît surveillé et ne l'est pas. Constaté sur un locataire réel le 2026-09-26.
+  # `prometheus` renders `monitoring.coreos.com` objects; `victoriametrics` renders
+  # `operator.victoriametrics.com/v1beta1` ones. An operator that does not know the type does not see
+  # it: on a VictoriaMetrics platform, a ServiceMonitor is an INERT object — the
+  # deployment looks monitored and is not. Observed on a real tenant on 2026-09-26.
   flavour: prometheus
   serviceMonitor: true
   dashboards: true
-  # Annotations posées sur chaque ConfigMap de dashboard. Le sidecar Grafana range un
-  # dashboard dans le dossier que nomme son `folderAnnotation` (souvent `grafana_folder`) ;
-  # sans annotation, il atterrit dans `General`, mêlé à ceux de la plateforme.
+  # Annotations set on each dashboard ConfigMap. The Grafana sidecar files a
+  # dashboard in the folder named by its `folderAnnotation` (often `grafana_folder`);
+  # without an annotation, it lands in `General`, mixed with the platform's own.
   # Ex. `{grafana_folder: choregos}`.
   dashboardAnnotations: {}
   alerts: true
 
-# Les faux du scénario RH servis par un seul processus (S20-07) : MCP pour le parc, le transporteur,
-# les lecteurs de badges et l'agent du fournisseur, et un faux Microsoft Graph. Une démonstration :
-# refusé en staging et en prod. Les connecteurs de l'organisation les désignent par
-# `http://choregos-demo-fakes:<port>/{mdm,shipping,access_control,fournisseur}/mcp` et, pour `entra`,
-# `graph_url: …/graph/v1.0` et `login_url: …/login`.
+# The HR scenario fakes served by a single process (S20-07): MCP for the fleet, the carrier,
+# the badge readers and the supplier's agent, and a fake Microsoft Graph. A demonstration:
+# refused in staging and prod. The organization's connectors designate them by
+# `http://choregos-demo-fakes:<port>/{mdm,shipping,access_control,fournisseur}/mcp` and, for `entra`,
+# `graph_url: …/graph/v1.0` and `login_url: …/login`.
 demoFakes:
   enabled: false
   port: 8090
-  # { name: <secret>, key: <clé> } : le jeton des serveurs MCP et le secret du faux Graph.
+  # { name: <secret>, key: <key> }: the MCP servers' token and the fake Graph's secret.
   tokenSecret: null
   resources:
     requests: { cpu: 20m, memory: 96Mi }

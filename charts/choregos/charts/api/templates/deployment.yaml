@@ -1,8 +1,8 @@
 {{- if .Values.enabled }}
 {{- $canary := .Values.global.canary | default dict }}
 {{- if $canary.enabled }}
-# Canary de la plateforme : Argo Rollouts remplace le Deployment. Le pod est le même — c'est la
-# façon d'y arriver qui change. Sans Rollouts installé, laisser `global.canary.enabled: false`.
+# Platform canary: Argo Rollouts replaces the Deployment. The pod is the same — it is the
+# way of getting there that changes. Without Rollouts installed, leave `global.canary.enabled: false`.
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 {{- else }}
@@ -20,8 +20,8 @@ spec:
   {{- if $canary.enabled }}
   strategy:
     canary:
-      # Les paliers et leur durée viennent des valeurs : un environnement prudent allonge la
-      # pause, il ne réécrit pas le chart.
+      # The steps and their duration come from the values: a cautious environment lengthens the
+      # pause, it does not rewrite the chart.
       steps:
         {{- range $canary.steps }}
         - setWeight: {{ .weight }}
@@ -49,16 +49,16 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: api
       annotations:
-        # Une rotation de secret redéploie les pods : sinon la clé tourne sans effet.
+        # A secret rotation redeploys the pods: otherwise the key rotates to no effect.
         checksum/config: {{ toJson .Values | sha256sum }}
     spec:
       serviceAccountName: choregos-api
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       {{- include "choregos.antiAffinity" (dict "global" .Values.global "labels" (dict "app.kubernetes.io/name" "choregos-api" "app.kubernetes.io/instance" .Release.Name)) | nindent 6 }}
       {{- with .Values.hostAliases }}
-      # Un fournisseur OIDC dont le nom ne résout pas depuis le cluster (split-horizon) :
-      # épinglé ici plutôt que résolu — une politique réseau par FQDN ne verrait jamais
-      # ce trafic, elle ne voit que ce qui passe par le DNS.
+      # An OIDC provider whose name does not resolve from inside the cluster (split-horizon):
+      # pinned here rather than resolved — a network policy by FQDN would never see
+      # this traffic, it only sees what goes through DNS.
       hostAliases: {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
@@ -71,8 +71,8 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
           {{- with .Values.global.toolCatalog.credentialsSecret }}
-          # Les clés des fournisseurs du catalogue. En bloc et PAR RÉFÉRENCE : une clé
-          # recopiée dans la spec du déploiement serait lisible par qui peut lire un pod.
+          # The catalog providers' keys. As a block and BY REFERENCE: a key
+          # copied into the deployment spec would be readable by whoever can read a pod.
           envFrom:
             - secretRef: { name: {{ . }} }
           {{- end }}
@@ -86,15 +86,15 @@ spec:
               value: {{ $.Values.global.workflowTemplates.mountPath | quote }}
             {{- end }}
             {{- with .Values.global.playbooks.configMap }}
-            # L'API valide un workflow, donc elle doit voir les playbooks : sans eux elle
-            # avertit `role.playbook_introuvable` sur des rôles que le déploiement fournit
-            # bel et bien, et l'avertissement apprend à ignorer les avertissements.
+            # The API validates a workflow, so it must see the playbooks: without them it
+            # warns `role.playbook_introuvable` about roles the deployment does provide,
+            # and the warning teaches people to ignore warnings.
             - name: CHOREGOS_PLAYBOOKS_DIR
               value: {{ $.Values.global.playbooks.mountPath | quote }}
             {{- end }}
             {{- with .Values.global.agents }}
             {{- if .defaultBackend }}
-            # Le backend et les profils dont un projet neuf hérite (#245).
+            # The backend and the profiles a new project inherits (#245).
             - name: CHOREGOS_DEFAULT_AGENT_BACKEND
               value: {{ .defaultBackend | quote }}
             {{- end }}
@@ -111,11 +111,11 @@ spec:
             {{- if .enabled }}
             {{- range ($.Values.global.extraEnv | default list) }}
             {{- if hasPrefix "CHOREGOS_MCP_OAUTH_" .name }}
-            {{- fail (printf "global.extraEnv : %s est posé par global.mcp.oauth ; deux valeurs pour un même nom, Kubernetes garderait la dernière sans rien dire" .name) }}
+            {{- fail (printf "global.extraEnv: %s is set by global.mcp.oauth; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
             {{- end }}
             {{- end }}
-            # La porte MCP accepte les jetons de l'IdP (ADR 0030) : Claude s'y connecte par
-            # l'authentification unique ; la page Integrations dit avec quel client.
+            # The MCP gateway accepts the IdP's tokens (ADR 0030): Claude connects to it through
+            # single sign-on; the Integrations page says with which client.
             - name: CHOREGOS_MCP_OAUTH_ENABLED
               value: "true"
             {{- with .issuer }}
@@ -145,8 +145,8 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ .Values.global.oidc.secretRef }}, key: client-secret } }
             - name: CHOREGOS_OIDC_DEFAULT_ORG
               value: {{ .Values.global.oidc.defaultOrg | default "" | quote }}
-            # Toujours posée, même à `false` : une valeur absente laisserait le défaut du
-            # code décider, et c'est précisément ce qui a ouvert l'API en production.
+            # Always set, even to `false`: a missing value would leave the code's default
+            # to decide, and that is precisely what left the API open in production.
             - name: CHOREGOS_BOOTSTRAP_ORG
               value: {{ .Values.global.bootstrap.org | default "" | quote }}
             - name: CHOREGOS_BOOTSTRAP_ORG_NAME
@@ -157,32 +157,32 @@ spec:
               value: {{ .Values.global.devLogin.enabled | default false | quote }}
             - name: CHOREGOS_DEV_ADMIN_EMAILS
               value: {{ .Values.global.devLogin.adminEmails | default "" | quote }}
-            # STRUCTURELLES, jamais optionnelles : une API qui démarre sans secret de
-            # session signe des cookies avec une valeur vide, et une clé de jeton de run
-            # absente fait repartir chaque processus sur une paire éphémère — l'agent reçoit
-            # alors « Signature verification failed », un message qui accuse le jeton.
-            # Les autres clés de ce secret sont optionnelles : leur absence est une
-            # fonctionnalité éteinte, pas un déploiement cassé. Le locataire dev l'a payé le
-            # 2026-09-26 : `generic-webhook-secret` absent du modèle InfisicalSecret, et
-            # TOUTE l'API en CreateContainerConfigError.
+            # STRUCTURAL, never optional: an API that starts without a session
+            # secret signs cookies with an empty value, and a missing run-token key
+            # sends every process back to an ephemeral pair — the agent then receives
+            # "Signature verification failed", a message that blames the token.
+            # The other keys of this secret are optional: their absence is a
+            # feature switched off, not a broken deployment. The dev tenant paid for it on
+            # 2026-09-26: `generic-webhook-secret` missing from the InfisicalSecret template, and
+            # the WHOLE API in CreateContainerConfigError.
             - name: CHOREGOS_SESSION_SECRET
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: session-secret } }
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-private-key } }
             - name: CHOREGOS_RUN_TOKEN_PUBLIC_KEY
-              # Optionnelle : elle se DÉDUIT de la privée (`public_from_private`).
+              # Optional: it is DERIVED from the private one (`public_from_private`).
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-public-key, optional: true } }
             - name: CHOREGOS_GITHUB_WEBHOOK_SECRET
-              # Optionnelle : pas de GitHub, pas de secret — et vide, l'API refuse en staging/prod.
+              # Optional: no GitHub, no secret — and when empty, the API refuses in staging/prod.
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-webhook-secret, optional: true } }
             - name: CHOREGOS_GENERIC_WEBHOOK_SECRET
-              # Optionnelle : vide, `verify_shared_secret` rend False : Jira, GitLab et le webhook générique refusent.
+              # Optional: when empty, `verify_shared_secret` returns False: Jira, GitLab and the generic webhook refuse.
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: generic-webhook-secret, optional: true } }
             - name: CHOREGOS_GITHUB_APP_ID
-              # Optionnelle : un locataire sans App GitHub n'en a pas.
+              # Optional: a tenant without a GitHub App has none.
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-id, optional: true } }
             - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
-              # Optionnelle : un locataire sans App GitHub n'en a pas.
+              # Optional: a tenant without a GitHub App has none.
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-app-private-key, optional: true } }
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: master-key } }

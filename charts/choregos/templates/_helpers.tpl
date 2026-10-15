@@ -1,4 +1,4 @@
-{{/* Nom court et labels communs à tous les objets de la plateforme. */}}
+{{/* Short name and labels common to all the platform's objects. */}}
 {{- define "choregos.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
@@ -12,12 +12,12 @@ app.kubernetes.io/part-of: choregos
 {{- end -}}
 
 {{/*
-Référence d'image : par digest dès que `global.imageDigest` est fourni (exigence Kyverno).
+Image reference: by digest as soon as `global.imageDigest` is provided (Kyverno requirement).
 
-Un composant peut venir d'un AUTRE registre (`image.registry`) : l'édition entreprise sert ses
-images de l'API et de l'orchestrateur depuis un projet privé, le reste vient du cœur (ADR 0032,
-S17-03). Une image d'un autre registre est une autre image : le digest global ne la désigne pas,
-seuls son `image.digest` ou son étiquette comptent.
+A component can come from ANOTHER registry (`image.registry`): the enterprise edition serves its
+API and orchestrator images from a private project, the rest comes from the core (ADR 0032,
+S17-03). An image from another registry is another image: the global digest does not designate it,
+only its `image.digest` or its tag count.
 */}}
 {{- define "choregos.image" -}}
 {{- $global := .global -}}
@@ -32,12 +32,12 @@ seuls son `image.digest` ou son étiquette comptent.
 {{- end -}}
 {{- end -}}
 
-{{/* Variables d'environnement communes : configuration 12-factor, secrets par référence. */}}
+{{/* Common environment variables: 12-factor configuration, secrets by reference. */}}
 {{- define "choregos.commonEnv" -}}
 {{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" }}
 {{- range (.Values.global.extraEnv | default list) }}
 {{- if has .name $poses }}
-{{- fail (printf "global.extraEnv : %s est déjà posé par le chart ; deux valeurs pour un même nom, Kubernetes garderait la dernière sans rien dire" .name) }}
+{{- fail (printf "global.extraEnv: %s is already set by the chart; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
 {{- end }}
 {{- end }}
 - name: CHOREGOS_ENV
@@ -85,10 +85,10 @@ seuls son `image.digest` ou son étiquette comptent.
   value: {{ .Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain) | quote }}
 - name: CHOREGOS_API_URL
   value: {{ .Values.global.apiUrl | default (printf "https://api.%s" .Values.global.domain) | quote }}
-{{- /* Le pool de connexions, BORNÉ : `pool_size` seul laissait SQLAlchemy ouvrir dix
-       connexions de débordement par processus sans limite de temps d'attente (état des lieux
-       du 2026-09-24). Chaque réplique de l'API et chaque worker tient au plus size+maxOverflow
-       connexions ; à multiplier par les répliques pour dimensionner `max_connections`. */}}
+{{- /* The connection pool, BOUNDED: `pool_size` alone let SQLAlchemy open ten
+       overflow connections per process with no wait-time limit (status review
+       of 2026-09-24). Each API replica and each worker holds at most size+maxOverflow
+       connections; multiply by the replicas to size `max_connections`. */}}
 - name: CHOREGOS_DB_POOL_SIZE
   value: {{ .Values.global.database.pool.size | quote }}
 - name: CHOREGOS_DB_MAX_OVERFLOW
@@ -96,16 +96,16 @@ seuls son `image.digest` ou son étiquette comptent.
 - name: CHOREGOS_DB_POOL_TIMEOUT_S
   value: {{ .Values.global.database.pool.timeoutSeconds | quote }}
 {{- with (include "choregos.databasePasswordSecret" .) }}
-{{- /* Le mot de passe vient d'un secret posé par un opérateur (Zalando : clé `password`),
-       l'URL est composée ici — Kubernetes développe `$(VAR)` d'une variable déclarée avant. */}}
+{{- /* The password comes from a secret laid down by an operator (Zalando: `password` key),
+       the URL is composed here — Kubernetes expands `$(VAR)` of a variable declared earlier. */}}
 - name: CHOREGOS_DATABASE_PASSWORD
   valueFrom:
     secretKeyRef:
       name: {{ . }}
       key: password
 - name: CHOREGOS_DATABASE_URL
-  {{- /* Embarqué : le rôle applicatif sans SUPERUSER créé à l'initdb. Externe : le rôle que
-         l'opérateur a créé (Zalando, CNPG), déjà sans SUPERUSER — `choregos_app` n'y existe pas. */}}
+  {{- /* Embedded: the application role without SUPERUSER created at initdb. External: the role
+         the operator created (Zalando, CNPG), already without SUPERUSER — `choregos_app` does not exist there. */}}
   value: {{ printf "postgresql+asyncpg://%s:$(CHOREGOS_DATABASE_PASSWORD)@%s:%v/%s" (ternary ($.Values.global.database.appUser | default $.Values.global.database.user) $.Values.global.database.user $.Values.global.database.embedded) (include "choregos.databaseHost" $) $.Values.global.database.port $.Values.global.database.name | quote }}
 {{- else }}
 - name: CHOREGOS_DATABASE_URL
@@ -121,12 +121,12 @@ seuls son `image.digest` ou son étiquette comptent.
 {{- end -}}
 
 {{/*
-Les dépendances : embarquées par ce chart, ou fournies par l'extérieur.
+Dependencies: embedded by this chart, or provided from outside.
 
-`global.<dep>.embedded` est la condition du sous-chart ET ce que lisent ces helpers. Le
-drapeau vit sous `global` parce qu'un sous-chart ne voit QUE `global` du parent : posé
-ailleurs, `charts/litellm` ne saurait pas quel hôte de base employer, et le rendu serait
-juste — dans le chart parent seulement.
+`global.<dep>.embedded` is the sub-chart's condition AND what these helpers read. The
+flag lives under `global` because a sub-chart sees ONLY the parent's `global`: set
+elsewhere, `charts/litellm` would not know which database host to use, and the rendering would be
+right — in the parent chart only.
 */}}
 {{- define "choregos.databaseHost" -}}
 {{- if .Values.global.database.embedded -}}
@@ -168,7 +168,7 @@ http://{{ .Release.Name }}-ecphoria:8432
 {{- end -}}
 {{- end -}}
 
-{{/* Secrets : ceux qu'on fournit, ou ceux que le chart génère quand il embarque la dépendance. */}}
+{{/* Secrets: the ones you provide, or the ones the chart generates when it embeds the dependency. */}}
 {{- define "choregos.gatewaySecret" -}}
 {{- if .Values.global.gateway.secretRef -}}
 {{ .Values.global.gateway.secretRef }}
@@ -186,10 +186,10 @@ http://{{ .Release.Name }}-ecphoria:8432
 {{- end -}}
 
 {{/*
-Anti-affinité entre les répliques d'un même composant. `global.antiAffinity` : `soft`
-(préférée, le défaut — un mono-nœud place quand même ses pods), `hard` (exigée : une
-réplique par nœud, ou pas de pod) ou `none`. Un PodDisruptionBudget sans anti-affinité
-protège d'un drain, pas d'une panne : deux répliques sur le même nœud tombent ensemble.
+Anti-affinity between the replicas of a same component. `global.antiAffinity`: `soft`
+(preferred, the default — a single node still places its pods), `hard` (required: one
+replica per node, or no pod) or `none`. A PodDisruptionBudget without anti-affinity
+protects against a drain, not a failure: two replicas on the same node go down together.
 */}}
 {{- define "choregos.antiAffinity" -}}
 {{- $mode := .global.antiAffinity | default "soft" -}}
@@ -213,8 +213,8 @@ affinity:
 {{- end -}}
 
 {{/*
-Les règles d'alerte, écrites une fois et servies aux deux saveurs (PrometheusRule et VMRule).
-Le PromQL est le même ; seul l'emballage change.
+The alert rules, written once and served in both flavours (PrometheusRule and VMRule).
+The PromQL is the same; only the packaging changes.
 */}}
 {{- define "choregos.reglesDAlerte" -}}
 - alert: ChoregosApiErreurs5xx
@@ -224,45 +224,45 @@ Le PromQL est le même ; seul l'emballage change.
   for: 10m
   labels: { severity: critical }
   annotations:
-    summary: "Plus de 1 % de 5xx sur l'API Choregos"
+    summary: "More than 1 % of 5xx on the Choregos API"
     runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/api-5xx.md"
 - alert: ChoregosBacklogTemporal
   expr: sum(temporal_task_queue_backlog{namespace="default"}) > 100
   for: 10m
   labels: { severity: warning }
   annotations:
-    summary: "File Temporal saturée : les étapes attendent"
+    summary: "Temporal queue saturated: stages are waiting"
 - alert: ChoregosRunEnAttente
   expr: sum(kube_pod_status_phase{phase="Pending",namespace=~"proj-.*-runners"}) > 0
   for: 15m
   labels: { severity: warning }
   annotations:
-    summary: "Un PipelineRun attend depuis 15 min (autoscaling en panne ?)"
+    summary: "A PipelineRun has been waiting for 15 min (autoscaling down?)"
 - alert: ChoregosBudgetJournalier
   expr: choregos_project_daily_cost_usd / choregos_project_daily_budget_usd > 0.8
   for: 5m
   labels: { severity: warning }
   annotations:
-    summary: "Budget journalier d'un projet consommé à plus de 80 %"
+    summary: "A project's daily budget is more than 80 % consumed"
 - alert: ChoregosTrainGele
   expr: choregos_train_frozen == 1
   for: 2h
   labels: { severity: warning }
   annotations:
-    summary: "Un release train est gelé depuis 2 heures"
+    summary: "A release train has been frozen for 2 hours"
     runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-gele.md"
 {{- end }}
 
 {{/*
-Les secrets de tirage d'image, pour les registres privés.
+Image pull secrets, for private registries.
 
-Le chart n'en déclarait aucun (`rg imagePullSecrets charts/` : zéro). Tant que toutes les images
-sont publiques, personne ne le voit. Dès qu'une ne l'est plus — une édition entreprise, un miroir
-Harbor privé, une image maison — le déploiement échoue en `ImagePullBackOff`, et la seule issue
-était de patcher le compte de service à la main, hors GitOps.
+The chart declared none (`rg imagePullSecrets charts/`: zero). As long as all the images
+are public, nobody sees it. As soon as one no longer is — an enterprise edition, a private
+Harbor mirror, a home-made image — the deployment fails with `ImagePullBackOff`, and the only way out
+was to patch the service account by hand, outside GitOps.
 
-Le nom est global (`global.imagePullSecrets`) parce que la question se pose pour TOUS les pods du
-chart, et qu'un locataire qui pose un secret en pose un pour l'ensemble.
+The name is global (`global.imagePullSecrets`) because the question arises for ALL the chart's pods,
+and a tenant that sets one secret sets one for the whole set.
 */}}
 {{- define "choregos.imagePullSecrets" -}}
 {{- with .Values.global.imagePullSecrets }}

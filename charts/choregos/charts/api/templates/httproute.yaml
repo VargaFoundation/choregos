@@ -17,8 +17,8 @@ spec:
     - host: {{ . | quote }}
       http:
         paths:
-          {{- /* `/mcp` : la porte des clients MCP externes (ADR 0030), servie par l'API, et ses
-               métadonnées OAuth (RFC 9728) que claude.ai lit avant de se connecter. */}}
+          {{- /* `/mcp`: the gateway for external MCP clients (ADR 0030), served by the API, and its
+               OAuth metadata (RFC 9728) that claude.ai reads before connecting. */}}
           {{- range list "/api" "/mcp" "/healthz" "/readyz" "/.well-known/oauth-protected-resource" }}
           - path: {{ . }}
             pathType: Prefix

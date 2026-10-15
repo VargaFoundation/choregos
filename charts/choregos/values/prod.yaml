@@ -1,4 +1,4 @@
-# Production : HA, images par digest (Kyverno l'exige), sandbox gVisor pour les runners.
+# Production: HA, images by digest (Kyverno requires it), gVisor sandbox for the runners.
 global:
   domain: choregos.dev
   environment: prod

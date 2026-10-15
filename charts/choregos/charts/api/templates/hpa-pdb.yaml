@@ -6,7 +6,7 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   {{- if (.Values.global.canary | default dict).enabled }}
-  # Rollouts implémente l'échelle pour l'HPA : cibler le Deployment ici le rendrait inerte.
+  # Rollouts implements scaling for the HPA: targeting the Deployment here would make it inert.
   scaleTargetRef: { apiVersion: argoproj.io/v1alpha1, kind: Rollout, name: choregos-api }
   {{- else }}
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: choregos-api }

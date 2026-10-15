@@ -1,15 +1,15 @@
 {{- if and .Values.enabled .Values.global.rbac.jobRunner }}
 {{- /*
-Le droit, pour l'orchestrateur, de lancer ses agents dans SON namespace — et rien d'autre.
+The right, for the orchestrator, to launch its agents in ITS namespace — and nothing else.
 
-Éteint par défaut, et ce n'est pas de la prudence décorative : sur une plateforme mutualisée,
-ce Role est posé par l'équipe plateforme (chez Diametral, `tenant-base`), parce qu'un
-locataire qui écrit son propre RBAC n'a pas de plafond qu'un relecteur puisse voir. Sur un
-banc local, personne ne le pose — d'où cette option, qui rend le chart autonome là où il a le
-droit de l'être.
+Off by default, and this is not decorative caution: on a shared platform,
+this Role is laid down by the platform team (at Diametral, `tenant-base`), because a
+tenant that writes its own RBAC has no ceiling a reviewer can see. On a
+local bench, nobody lays it down — hence this option, which makes the chart self-sufficient where it is
+allowed to be.
 
-`get` sur `secrets` vaut pour TOUS les secrets du namespace : Kubernetes ne sait pas
-restreindre un `create` par nom, et l'exécuteur relit le secret de jeton qu'il vient d'écrire.
+`get` on `secrets` applies to ALL the secrets of the namespace: Kubernetes cannot
+restrict a `create` by name, and the executor re-reads the token secret it has just written.
 */}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -18,23 +18,23 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 rules:
   - apiGroups: ["batch"]
-    # `patch` sert à UNE chose : lever le `suspend` d'un Job mis en file d'attente. Sans
-    # lui, le plafond de simultanéité crée des Jobs que personne ne peut plus réveiller —
-    # l'API répond 403, l'activité échoue, et le workflow du ticket meurt. Vu sur le banc
-    # du 2026-09-24 : trois tickets perdus, dont un qui a expiré sans tourner une seconde.
+    # `patch` serves ONE thing: lifting the `suspend` of a queued Job. Without
+    # it, the concurrency ceiling creates Jobs nobody can wake up any more —
+    # the API answers 403, the activity fails, and the ticket's workflow dies. Seen on the bench
+    # of 2026-09-24: three tickets lost, one of which expired without running for a second.
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete", "patch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    # `update` sert à REMPLACER le jeton d'un run : celui d'un run rejoué (sinon l'agent
-    # tourne avec un jeton périmé) et celui d'un run qui attend en file (son jeton vieillit
-    # pendant l'attente). Sans ce verbe, l'API répond 403 et le ticket meurt — deux fois le
-    # même scénario que `patch` sur les Jobs, sur le banc du 2026-09-24.
+    # `update` serves to REPLACE a run's token: that of a replayed run (otherwise the agent
+    # runs with a stale token) and that of a run waiting in the queue (its token ages
+    # during the wait). Without this verb, the API answers 403 and the ticket dies — twice the
+    # same scenario as `patch` on Jobs, on the bench of 2026-09-24.
     #
-    # La règle qu'on en tire : tout verbe que l'exécuteur EMPLOIE doit figurer ici, et le
-    # test de chart le vérifie désormais plutôt que de compter sur la relecture.
-    # `patch` rattache le secret à son Job (`ownerReferences`) : le ramasse-miettes
-    # l'emporte avec le Job fini, au lieu de laisser un jeton par run dans le namespace.
+    # The rule drawn from it: every verb the executor USES must appear here, and the
+    # chart test now checks it rather than relying on review.
+    # `patch` attaches the secret to its Job (`ownerReferences`): the garbage collector
+    # takes it away with the finished Job, instead of leaving one token per run in the namespace.
     verbs: ["get", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["pods"]

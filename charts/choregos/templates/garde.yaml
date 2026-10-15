@@ -1,23 +1,23 @@
 {{- /*
-La garde des environnements sérieux. Les dépendances embarquées (un PostgreSQL à une
-instance sans sauvegarde, un Temporal sur SQLite, une passerelle à une réplique), les
-secrets écrits par le chart et la connexion de développement sont faits pour un banc.
-Ce fichier ne rend rien ; en `staging` et `prod`, il ARRÊTE le rendu si l'une de ces
-valeurs est allumée, et nomme laquelle. Avant : rien ne l'interdisait, et l'API ne refusait
-que la connexion de développement.
+The guard of serious environments. The embedded dependencies (a single-instance PostgreSQL
+without backup, a Temporal on SQLite, a single-replica gateway), the
+secrets written by the chart and the development login are made for a bench.
+This file renders nothing; in `staging` and `prod`, it STOPS the rendering if one of these
+values is on, and names which one. Before: nothing forbade it, and the API only refused
+the development login.
 */ -}}
 {{- $g := .Values.global }}
 {{- /*
-L'édition entreprise est distribuée par un registre PRIVÉ : c'est tout le contrôle d'accès
-(ADR 0024, décision 5 — pas de clé de licence en phase 1). L'annoncer sans secret de tirage
-donne un `ImagePullBackOff` qui ne nomme jamais la cause, et un exploitant cherche du côté du
-réseau. On le dit ici, où la valeur est écrite.
+The enterprise edition is distributed through a PRIVATE registry: that is the whole access control
+(ADR 0024, decision 5 — no license key in phase 1). Announcing it without a pull secret
+gives an `ImagePullBackOff` that never names the cause, and an operator looks on the
+network side. It is said here, where the value is written.
 */ -}}
 {{- if and (eq ($g.edition | default "community") "enterprise") (not $g.imagePullSecrets) }}
-{{- fail "global.edition=enterprise exige global.imagePullSecrets : les images de l'édition entreprise sont dans un registre privé. Sans secret de tirage, les pods restent en ImagePullBackOff sans dire pourquoi." }}
+{{- fail "global.edition=enterprise requires global.imagePullSecrets: the enterprise edition images are in a private registry. Without a pull secret, the pods stay in ImagePullBackOff without saying why." }}
 {{- end }}
 {{- if not (has ($g.edition | default "community") (list "community" "enterprise")) }}
-{{- fail (printf "global.edition=%s inconnue : `community` ou `enterprise`." $g.edition) }}
+{{- fail (printf "global.edition=%s unknown: `community` or `enterprise`." $g.edition) }}
 {{- end }}
 {{- if has $g.environment (list "staging" "prod") }}
 {{- $fautes := list }}
@@ -29,6 +29,6 @@ réseau. On le dit ici, où la valeur est écrite.
 {{- if ($g.devLogin | default dict).enabled }}{{ $fautes = append $fautes "global.devLogin.enabled" }}{{ end }}
 {{- if ($.Values.demoFakes | default dict).enabled }}{{ $fautes = append $fautes "demoFakes.enabled" }}{{ end }}
 {{- if $fautes }}
-{{- fail (printf "global.environment=%s refuse : %s. Ces valeurs sont celles d'un banc (values/local.yaml) ; un environnement sérieux apporte ses dépendances et ses secrets." $g.environment (join ", " $fautes)) }}
+{{- fail (printf "global.environment=%s refused: %s. These values are those of a bench (values/local.yaml); a serious environment brings its own dependencies and secrets." $g.environment (join ", " $fautes)) }}
 {{- end }}
 {{- end }}

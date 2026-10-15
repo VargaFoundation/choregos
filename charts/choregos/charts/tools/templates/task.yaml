@@ -1,6 +1,6 @@
 {{- if and .Values.enabled .Values.publishTask }}
-# La Task est publiée ici pour référence ; elle est **copiée dans chaque namespace projet**
-# par le provisioning (Kustomize), car Tekton ne partage plus les ClusterTask.
+# The Task is published here for reference; it is **copied into each project namespace**
+# by the provisioning (Kustomize), because Tekton no longer shares ClusterTasks.
 apiVersion: v1
 kind: ConfigMap
 metadata:

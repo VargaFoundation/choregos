@@ -1,12 +1,12 @@
 image:
-  # `litellm-database` : la variante qui sait tenir des clés virtuelles (donc une base).
+  # `litellm-database`: the variant that can hold virtual keys (hence a database).
   repository: ghcr.io/berriai/litellm-database
   tag: "v1.95.0"
-# Les alias que Choregos demande (`profile:*` → `platform/*`), et ce qu'ils deviennent en
+# The aliases Choregos asks for (`profile:*` → `platform/*`), and what they become in
 # amont. Deux formes possibles :
-#   - amont = une autre passerelle (Diametral) : api_base + clé virtuelle ;
-#   - amont = un fournisseur : model `openai/gpt-…` ou `anthropic/claude-…` + sa clé.
-# `upstream.apiKeySecret` nomme le secret (clé `api-key`) injecté sous $UPSTREAM_API_KEY.
+#   - upstream = another gateway (Diametral): api_base + virtual key;
+#   - upstream = a provider: model `openai/gpt-…` or `anthropic/claude-…` + its key.
+# `upstream.apiKeySecret` names the secret (key `api-key`) injected as $UPSTREAM_API_KEY.
 upstream:
   apiKeySecret: ""
   apiBase: ""
@@ -23,7 +23,7 @@ models:
     model: openai/text-embedding-3-small
     mode: embedding
 database:
-  # Base dédiée sur le même serveur (créée à l'initdb par le sous-chart postgresql).
+  # Dedicated database on the same server (created at initdb by the postgresql subchart).
   name: litellm
 resources:
   requests: { cpu: 200m, memory: 512Mi }

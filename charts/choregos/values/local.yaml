@@ -1,9 +1,9 @@
-# Banc LOCAL mono-nœud (kind, k3d, Docker Desktop) : tout est embarqué, rien à fournir.
+# LOCAL single-node bench (kind, k3d, Docker Desktop): everything is embedded, nothing to provide.
 #
 #   helm install choregos charts/choregos -f charts/choregos/values/local.yaml
 #
-# Ce que ça n'est pas : une installation de production. Un PostgreSQL à une instance sans
-# sauvegarde, un Temporal de développement sur SQLite, une passerelle à une réplique.
+# What it is not: a production installation. A single-instance PostgreSQL without
+# backup, a development Temporal on SQLite, a single-replica gateway.
 global:
   domain: choregos.localtest.me
   publicUrl: http://choregos.localtest.me
@@ -15,29 +15,29 @@ global:
     embedded: true
   gateway:
     embedded: true
-    # Vide : le chart génère la clé maître et la garde d'une mise à jour à l'autre.
+    # Empty: the chart generates the master key and keeps it from one update to the next.
     secretRef: ""
   memory:
     embedded: true
   devSecrets: true
-  # Un banc sans IdP : `/auth/login?as=<email>`. Les deux admins nommés reçoivent ORG_ADMIN,
-  # n'importe quel autre e-mail est développeur.
+  # A bench without an IdP: `/auth/login?as=<email>`. The two named admins receive ORG_ADMIN,
+  # any other e-mail is a developer.
   devLogin:
     enabled: true
     adminEmails: "admin@varga.dev,admin@demo.dev"
   externalSecrets:
     enabled: false
   rbac:
-    # Un banc local n'a pas Tekton : rien à lire à l'échelle du cluster.
+    # A local bench has no Tekton: nothing to read at cluster scale.
     clusterScoped: false
-    # Personne d'autre ne pose ce droit ici : le chart le fait.
+    # Nobody else sets this right here: the chart does.
     jobRunner: true
 
 choregos-api:
   replicaCount: 1
   migrations:
-    # La base est embarquée : elle n'existe pas avant l'installation. Les pods de l'API
-    # redémarrent quelques fois en attendant le schéma, puis se stabilisent.
+    # The database is embedded: it does not exist before the installation. The API pods
+    # restart a few times while waiting for the schema, then stabilize.
     hook: post-install,post-upgrade
   autoscaling: { enabled: false }
   podDisruptionBudget: { enabled: false }
@@ -62,19 +62,19 @@ choregos-orchestrator:
     - { name: tracker, replicas: 1, resources: { requests: { cpu: 50m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } } }
     - { name: memory, replicas: 1, resources: { requests: { cpu: 50m, memory: 192Mi }, limits: { cpu: 500m, memory: 512Mi } } }
   runner:
-    # Chaque étape d'agent est un Job de ce namespace.
+    # Each agent stage is a Job of this namespace.
     executor: k8s_job
-    # Un seul namespace sur un banc : les agents tournent à côté de la plateforme.
+    # A single namespace on a bench: the agents run next to the platform.
     namespacePattern: choregos
-    # Ni NetworkPolicy ni proxy dans ce namespace : les agents sortent en direct.
+    # Neither NetworkPolicy nor proxy in this namespace: the agents exit directly.
     egressProxy: ""
     limits: { cpu: "2", memory: 4Gi }
 
-# Sidecar d'outils : une Task Tekton, donc sans objet sur un banc local.
+# Tools sidecar: a Tekton Task, hence not applicable on a local bench.
 choregos-tools:
   enabled: false
 
-# Sur un mono-nœud sans opérateur Prometheus ni Cilium, ces objets n'ont pas de lecteur.
+# On a single node without Prometheus operator or Cilium, these objects have no reader.
 monitoring:
   serviceMonitor: false
   alerts: false

@@ -1,4 +1,4 @@
-# Rendu seulement quand `global.database.embedded` vaut true (condition du chart parent).
+# Rendered only when `global.database.embedded` is true (condition of the parent chart).
 # PostgreSQL 16 with pgvector (ADR 0051): the knowledge index ranks with embeddings when it can,
 # and serves full-text only on an image without the extension.
 image:

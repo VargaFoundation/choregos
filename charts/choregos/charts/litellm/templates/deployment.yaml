@@ -22,8 +22,8 @@ data:
         {{- end }}
     {{- end }}
     litellm_settings:
-      # Retire d'un appel les paramètres que le fournisseur cible ne connaît pas, au lieu
-      # d'échouer — les générations de modèles ne s'accordent pas sur `temperature`.
+      # Drops from a call the parameters the target provider does not know, instead of
+      # failing — model generations do not agree on `temperature`.
       drop_params: true
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY
@@ -51,10 +51,10 @@ spec:
         checksum/config: {{ toJson .Values.models | sha256sum }}
     spec:
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
-      # La règle Kyverno `non-root` est stricte depuis le 2026-09-25 : le contexte du pod est
-      # exigé. L'image tourne en uid 1000 (vérifié : `python -c "import litellm"` sous
-      # `--user 1000`) ; le proxy en service n'a pas encore été vu sous ce contexte sur le
-      # banc, faute de clé de fournisseur.
+      # The Kyverno `non-root` rule has been strict since 2026-09-25: the pod context is
+      # required. The image runs as uid 1000 (verified: `python -c "import litellm"` under
+      # `--user 1000`); the proxy in service has not yet been seen under this context on the
+      # bench, for lack of a provider key.
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -77,9 +77,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "choregos.databasePasswordSecret" . }}
                   key: password
-            # Base DÉDIÉE : les clés virtuelles et leur consommation n'ont rien à faire dans
-            # le schéma de Choregos. `sslmode=prefer` chiffre quand le serveur sait le faire,
-            # sans exiger un certificat que le PostgreSQL du banc n'a pas.
+            # DEDICATED database: virtual keys and their consumption have no business in
+            # Choregos' schema. `sslmode=prefer` encrypts when the server can,
+            # without requiring a certificate the bench's PostgreSQL does not have.
             - name: DATABASE_URL
               value: "postgresql://{{ .Values.global.database.user }}:$(DATABASE_PASSWORD)@{{ include "choregos.databaseHost" . }}:{{ .Values.global.database.port }}/{{ .Values.database.name }}?sslmode=prefer"
           ports:
