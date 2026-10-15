@@ -100,6 +100,15 @@ filtered to names that exist, and a draft is never saved or run.
   the Secret, and removes from the row, a key an older `prepare_stage` stored there. A runner
   image older than #523 behind a newer orchestrator gets no key: the orchestrator and its
   `runner_image` ship together.
+- Connector secrets typed in the console ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)):
+  sealed in `org_secrets` (forced RLS) with an AES-256-GCM envelope — a random data key per value,
+  wrapped under a key-encryption key that the **deployment** holds (`CHOREGOS_SECRETS_KEKS`, never the
+  database), the organisation, name and version bound as authenticated data. No plaintext, no hash.
+  An organisation administrator can set, replace and clear a secret but **cannot read it back**: no
+  response, audit entry or `last_error` carries the value, and the platform reads it only to build an
+  adapter (values it resolved are masked in logs and error texts). A `store:` reference is derived by
+  the platform and refused when written by hand, so a connector cannot point at another's secret.
+  A database dump or backup alone reveals nothing; losing the KEK loses the values.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
 - Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).

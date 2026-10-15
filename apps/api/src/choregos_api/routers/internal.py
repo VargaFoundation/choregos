@@ -812,7 +812,7 @@ async def _par_le_courtier(
         verifier_les_arguments(outil, arguments)
     except ArgumentsRefuses as refus:
         raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
-    code, corps = await appeler(outil, arguments)
+    code, corps = await appeler(session, outil, arguments)
     return await _garde_contre_l_injection(session, run, project, outil, code, corps)
 
 

@@ -27,10 +27,19 @@ from ..schemas import (
     OperationPatch,
     OrgConnectorCreate,
     OrgConnectorDto,
+    OrgConnectorUpdate,
     ProjectOperationDto,
     ProjectOperationPut,
+    SecretValue,
 )
+from ..secret_store import resolved_configuration, secret_states
 from ..services.connecteurs import RANG, plus_stricte, spec_du_type, verifier_les_secrets
+from ..services.connector_secrets import (
+    drop_replaced_store_values,
+    put_values,
+    refs_with_values,
+    require_store,
+)
 
 router = APIRouter(tags=["connectors"])
 
@@ -74,7 +83,31 @@ async def _dto(session: AsyncSession, instance: OrgConnector) -> OrgConnectorDto
     ).scalars()
     dto = OrgConnectorDto.model_validate(instance)
     dto.operations = [OperationDto.model_validate(o) for o in operations]
+    dto.secrets = await secret_states(session, instance.org_id, instance.secret_refs or {})
     return dto
+
+
+async def _audit_secrets(
+    session: AsyncSession,
+    principal: Me,
+    organisation: Organization,
+    instance: OrgConnector,
+    action: str,
+    fields_versions: dict[str, int | None],
+) -> None:
+    """Who set or cleared which field, at which version — never the value."""
+    for field, version in fields_versions.items():
+        await record(
+            session,
+            principal,
+            action,
+            org_id=organisation.id,
+            target_type="org_connector",
+            target_id=instance.id,
+            connector=instance.name,
+            field=field,
+            version=version,
+        )
 
 
 @router.get("/orgs/{org}/connectors", response_model=list[OrgConnectorDto], operation_id="listOrgConnectors")
@@ -112,7 +145,16 @@ async def create_org_connector(
             raise unprocessable(f"`{body.type}`: specify the capability (`kind`) among {sortes or 'none'}")
         kind = sortes[0]
     spec = spec_du_type(kind, body.type)
-    verifier_les_secrets(spec, body.type, body.config, body.secret_refs)
+    prefix = f"connector/{body.name}"
+    verifier_les_secrets(
+        spec,
+        body.type,
+        body.config,
+        body.secret_refs,
+        secret_values=body.secret_values,
+        store_prefix=prefix,
+    )
+    store = require_store(body.secret_values)
     deja = (
         await session.execute(
             select(OrgConnector.id).where(
@@ -128,11 +170,12 @@ async def create_org_connector(
         kind=kind,
         type=body.type,
         config=body.config,
-        secret_refs=dict(body.secret_refs) or None,
+        secret_refs=refs_with_values(body.secret_refs, prefix, body.secret_values) or None,
         created_by=principal.email,
     )
     session.add(instance)
     await session.flush()
+    metas = await put_values(session, store, organisation.id, prefix, body.secret_values, principal.email)
     for operation in spec.operations:
         session.add(
             ConnectorOperation(
@@ -157,6 +200,14 @@ async def create_org_connector(
         name=body.name,
         type=body.type,
     )
+    await _audit_secrets(
+        session,
+        principal,
+        organisation,
+        instance,
+        "connector.secret.set",
+        {f: m.version for f, m in metas.items()},
+    )
     return await _dto(session, instance)
 
 
@@ -167,6 +218,122 @@ async def get_org_connector(org: str, name: Nom, session: Db, principal: Me) -> 
     return await _dto(session, await _instance(session, await _organisation(session, org), name))
 
 
+@router.patch(
+    "/orgs/{org}/connectors/{name}", response_model=OrgConnectorDto, operation_id="updateOrgConnector"
+)
+async def update_org_connector(
+    org: str, name: Nom, body: OrgConnectorUpdate, session: Db, principal: Me
+) -> OrgConnectorDto:
+    """Edit what an administrator declared: the configuration, and the secrets. `secret_refs` and
+    `secret_values` merge into the connector's; a field given as a reference after being a stored
+    value drops the stored value. The operations are not touched (their own route)."""
+    _administrer(principal, org)
+    organisation = await _organisation(session, org)
+    instance = await _instance(session, organisation, name)
+    spec = spec_du_type(instance.kind, instance.type)
+    prefix = f"connector/{name}"
+    config = body.config if body.config is not None else dict(instance.config or {})
+    refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
+    verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
+    store = require_store(values)
+    before = dict(instance.secret_refs or {})
+    after = refs_with_values({**before, **refs_in}, prefix, values)
+    metas = await put_values(session, store, organisation.id, prefix, values, principal.email)
+    cleared = await drop_replaced_store_values(session, store, organisation.id, before, after)
+    instance.config = config
+    instance.secret_refs = after or None
+    instance.status = "unknown"
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "org.connector.update",
+        org_id=organisation.id,
+        target_type="org_connector",
+        target_id=instance.id,
+        name=name,
+        config_changed=body.config is not None,
+    )
+    await _audit_secrets(
+        session,
+        principal,
+        organisation,
+        instance,
+        "connector.secret.set",
+        {f: m.version for f, m in metas.items()},
+    )
+    await _audit_secrets(
+        session, principal, organisation, instance, "connector.secret.clear", dict.fromkeys(cleared)
+    )
+    return await _dto(session, instance)
+
+
+@router.put(
+    "/orgs/{org}/connectors/{name}/secrets/{field}",
+    response_model=OrgConnectorDto,
+    operation_id="setOrgConnectorSecret",
+)
+async def set_org_connector_secret(
+    org: str,
+    name: Nom,
+    field: Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")],
+    body: SecretValue,
+    session: Db,
+    principal: Me,
+) -> OrgConnectorDto:
+    """Type a secret once (or replace it): sealed, never returned. The response says it is set."""
+    _administrer(principal, org)
+    organisation = await _organisation(session, org)
+    instance = await _instance(session, organisation, name)
+    verifier_les_secrets(
+        spec_du_type(instance.kind, instance.type),
+        instance.type,
+        {},
+        {},
+        secret_values={field: body.value},
+        store_prefix=f"connector/{name}",
+    )
+    store = require_store({field: body.value})
+    prefix = f"connector/{name}"
+    before = dict(instance.secret_refs or {})
+    metas = await put_values(session, store, organisation.id, prefix, {field: body.value}, principal.email)
+    instance.secret_refs = refs_with_values(before, prefix, {field: body.value})
+    instance.status = "unknown"
+    await session.flush()
+    await _audit_secrets(
+        session, principal, organisation, instance, "connector.secret.set", {field: metas[field].version}
+    )
+    return await _dto(session, instance)
+
+
+@router.delete(
+    "/orgs/{org}/connectors/{name}/secrets/{field}",
+    response_model=OrgConnectorDto,
+    operation_id="clearOrgConnectorSecret",
+)
+async def clear_org_connector_secret(
+    org: str,
+    name: Nom,
+    field: Annotated[str, Path(pattern=r"^[a-z][a-z0-9_]{0,63}$")],
+    session: Db,
+    principal: Me,
+) -> OrgConnectorDto:
+    """Remove a secret field's value or reference: the connector no longer holds it."""
+    _administrer(principal, org)
+    organisation = await _organisation(session, org)
+    instance = await _instance(session, organisation, name)
+    before = dict(instance.secret_refs or {})
+    if field not in before:
+        raise not_found("Secret", field)
+    after = {f: r for f, r in before.items() if f != field}
+    await drop_replaced_store_values(session, require_store(None), organisation.id, before, after)
+    instance.secret_refs = after or None
+    instance.status = "unknown"
+    await session.flush()
+    await _audit_secrets(session, principal, organisation, instance, "connector.secret.clear", {field: None})
+    return await _dto(session, instance)
+
+
 @router.delete(
     "/orgs/{org}/connectors/{name}", status_code=status.HTTP_204_NO_CONTENT, operation_id="deleteOrgConnector"
 )
@@ -174,6 +341,8 @@ async def delete_org_connector(org: str, name: Nom, session: Db, principal: Me) 
     _administrer(principal, org)
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
+    # Its sealed secrets go with it: a value nothing points to is a value nobody can see or remove.
+    await drop_replaced_store_values(session, require_store(None), organisation.id, instance.secret_refs, {})
     await session.delete(instance)
     await record(
         session,
@@ -254,26 +423,30 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     qui accepte soudain une quantité n'est plus l'opération qu'on avait ouverte. Un outil que le
     serveur ne propose plus disparaît, avec ce que les projets en resserraient."""
     import httpx
-    from choregos_adapters import build, configuration_resolue
+    from choregos_adapters import build
     from choregos_adapters.mcp import ErreurMcp, empreinte_du_schema
     from choregos_core import utcnow
+    from choregos_core.redaction import redact
     from choregos_core.secrets import SecretIntrouvable
 
     _administrer(principal, org)
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
     try:
-        config = configuration_resolue(instance.kind, instance.type, instance.config, instance.secret_refs)
+        config = await resolved_configuration(
+            session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        )
         lister = getattr(build(instance.kind, instance.type, config), "list_tools", None)
         if lister is None:
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
         outils = await lister()
     except (ErreurMcp, SecretIntrouvable, httpx.HTTPError) as panne:
-        instance.status, instance.last_check_at, instance.last_error = "error", utcnow(), str(panne)[:1000]
+        instance.status, instance.last_check_at = "error", utcnow()
+        instance.last_error = redact(str(panne))[:1000]
         # La réponse est une erreur, et la requête serait annulée avec elle : l'état du connecteur,
         # lui, doit rester — l'écran dit pourquoi il est en panne. Rien ne suit cette validation.
         await session.commit()
-        raise upstream(instance.name, str(panne)[:500]) from panne
+        raise upstream(instance.name, redact(str(panne))[:500]) from panne
     existantes = {
         op.name: op
         for op in (

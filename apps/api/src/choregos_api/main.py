@@ -64,6 +64,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("démarrage de l'API", env=settings.env, fakes=settings.fakes)
     if not settings.is_sqlite:
         await _refuser_le_superutilisateur()
+    _warn_without_secrets_key(settings.fakes)
     rafraichissement = asyncio.create_task(boucle_de_rafraichissement(settings.metrics_refresh_seconds))
     relais = None if settings.is_sqlite else RelaisPostgres(settings.database_url)
     if relais is not None:
@@ -90,6 +91,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await rafraichissement
     await dispose_engine()
     logger.info("arrêt de l'API")
+
+
+def _warn_without_secrets_key(fakes: bool) -> None:
+    """Connector secrets typed in the console need a key from the deployment (ADR 0058). Without
+    one the API still runs — references (`env:`) keep working — but a write of a value answers 409:
+    say it once, at start-up, rather than at the first administrator who tries."""
+    from .secret_store import ENV_KEKS, keyring_from_env
+
+    if fakes:
+        return
+    if keyring_from_env() is None:
+        logger.warning(
+            "secrets.key_missing", detail=f"{ENV_KEKS} is not set: connector secrets cannot be typed"
+        )
 
 
 async def _refuser_le_superutilisateur() -> None:

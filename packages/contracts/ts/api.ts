@@ -246,13 +246,35 @@ export type Connector = {
     [key: string]: unknown;
   };
   secret_ref?: string | null;
-  /** the secrets, field by field, as references (`env:NAME`) — never their value (ADR 0034) */
+  /** the secrets, field by field, as references (`env:NAME`, or `store:...` for a sealed value) — never their value (ADR 0034, ADR 0058) */
   secret_refs?: {
     [key: string]: string;
   };
+  /** one state per configured secret field: where it comes from and when it was last set */
+  secrets?: Array<ConnectorSecretState>;
   status: "unknown" | "ok" | "degraded" | "error";
   last_check_at?: string | null;
   last_error?: string | null;
+};
+
+/** What the console may know of one secret field. Never its value (ADR 0058). */
+export type ConnectorSecretState = {
+  field: string;
+  source: "store" | "reference";
+  /** only for source=reference: the reference itself (`env:NAME`) */
+  reference?: string | null;
+  /** only for source=store: +1 at every set; null when the sealed value is gone */
+  version?: number | null;
+  rotated_at?: string | null;
+  rotated_by?: string | null;
+};
+
+export type SecretValue = {
+  value: string;
+};
+
+export type SecretsRewrap = {
+  rewrapped: number;
 };
 
 export type ConnectorUpsert = {
@@ -263,6 +285,10 @@ export type ConnectorUpsert = {
   };
   secret_ref?: string | null;
   secret_refs?: {
+    [key: string]: string;
+  };
+  /** secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). */
+  secret_values?: {
     [key: string]: string;
   };
 };
@@ -324,6 +350,7 @@ export type OrgConnector = {
   secret_refs?: {
     [key: string]: string;
   };
+  secrets?: Array<ConnectorSecretState>;
   status: string;
   last_check_at?: string | null;
   last_error?: string | null;
@@ -341,6 +368,23 @@ export type OrgConnectorCreate = {
   secret_refs?: {
     [key: string]: string;
   };
+  /** secret values typed in the console, field -> value: sealed, never returned (ADR 0058) */
+  secret_values?: {
+    [key: string]: string;
+  };
+};
+
+/** Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's. */
+export type OrgConnectorUpdate = {
+  config?: {
+    [key: string]: unknown;
+  } | null;
+  secret_refs?: {
+    [key: string]: string;
+  } | null;
+  secret_values?: {
+    [key: string]: string;
+  } | null;
 };
 
 export type OperationPatch = {
@@ -2147,6 +2191,8 @@ export interface Operations {
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
   checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
+  clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
+  clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
@@ -2401,10 +2447,13 @@ export interface Operations {
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
+  rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
+  setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
+  setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
@@ -2422,6 +2471,7 @@ export interface Operations {
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
+  updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };

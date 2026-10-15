@@ -48,3 +48,19 @@ def test_the_key_stays_visible_so_the_reader_knows_what_was_masked() -> None:
 def test_masking_twice_changes_nothing() -> None:
     once = redact("api_key=abc123 and Bearer zzzzzzzzzz")
     assert redact(once) == once
+
+
+def test_a_remembered_secret_is_masked_whatever_its_shape() -> None:
+    """A resolved connector secret has no known shape (ADR 0058): only remembering it masks it."""
+    from choregos_core.redaction import forget_secrets, redact_known, remember_secret
+
+    forget_secrets()
+    value = "plain-vendor-key-9f8e7d"
+    assert redact(f"refused {value}") == f"refused {value}", "unknown before it is remembered"
+    remember_secret(value)
+    assert redact(f"refused {value} twice {value}") == f"refused {REDACTED} twice {REDACTED}"
+    assert redact_known(f"k={value}") == f"k={REDACTED}"
+    remember_secret("abc")  # too short to remember: it would shred every line
+    assert redact_known("abc is kept") == "abc is kept"
+    forget_secrets()
+    assert redact_known(value) == value

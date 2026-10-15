@@ -540,6 +540,35 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class OrgSecret(Base, PkMixin, TimestampMixin):
+    """A secret value typed in the console, sealed at rest (ADR 0058).
+
+    Envelope encryption: the value is encrypted with a random data key (AES-256-GCM); the data key
+    is wrapped under a key-encryption key (KEK) the DEPLOYMENT holds (`CHOREGOS_SECRETS_KEKS`), never
+    the database. The additional authenticated data binds a row to its organisation, name and
+    version, so it cannot be moved. No plaintext, no hash, no fingerprint: the hash of a
+    low-entropy secret leaks it."""
+
+    __tablename__ = "org_secrets"
+    __table_args__ = (UniqueConstraint("org_id", "name", name="uq_org_secrets_org_name"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    #: `connector/<name>/<field>` or `project/<slug>/<kind>/<field>`
+    name: Mapped[str] = mapped_column(String(200))
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    wrapped_dek: Mapped[bytes] = mapped_column(LargeBinary)
+    dek_nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    kek_id: Mapped[str] = mapped_column(String(32))
+    algorithm: Mapped[str] = mapped_column(String(16), default="A256GCM")
+    #: +1 at every set
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: The time of the last set.
+    rotated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ConnectorOperation(Base, PkMixin, TimestampMixin):
     """Une opération d'une instance, et sa politique dans l'organisation : `allowed`, `approval`
     (une action gouvernée, ADR 0035) ou `forbidden` ; les groupes de projets qui y ont droit

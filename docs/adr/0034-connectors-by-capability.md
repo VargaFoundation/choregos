@@ -29,9 +29,10 @@ a device manager, a carrier, badge readers, a supplier's agent — would do with
 2. **A project shows what its workflows require.** `GET /projects/{id}/requirements` is derived
    from the workflows (a train needs `cd`, an `identity` action needs an identity connector): a
    project without a repository or a train shows neither `scm` nor `ci` nor `cd`.
-3. **Secrets are references, resolved by a seam.** `secret_ref` is read through `SecretResolver`
-   (`env:` in the core; a vault in a plugin). A secret written in clear in a configuration is
-   refused (422).
+3. **Secrets are references, resolved by a seam — or sealed values (ADR 0058).** `secret_ref` is read
+   through `SecretResolver` (`env:` in the core; a vault in a plugin). A secret written in clear in a
+   configuration is refused (422). A value typed in the console is sealed in the database and replaced
+   by a derived `store:` reference ([ADR 0058](0058-connector-secrets-are-write-only-values.md)).
 4. **Every operation carries a policy**, in `connector_operations`: read or write; `allowed`,
    `approval` or `forbidden`; the groups that may use it; a price; the digest of its schema. A
    project can only **tighten** an operation (an `approval` never becomes `allowed` below the

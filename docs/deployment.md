@@ -77,6 +77,7 @@ The chart never writes production secrets. It expects them to exist:
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
 | `global.apiSecretRef` (default `choregos-api-secrets`) | `session-secret`, `run-token-private-key`, `run-token-public-key`, `github-app-id`, `github-app-private-key`, `github-webhook-secret` | API **and** orchestrator |
+| `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
 | `global.gateway.secretRef` | `master-key` | orchestrator |
@@ -95,7 +96,25 @@ openssl ecparam -name prime256v1 -genkey -noout    # ES256 private key
 
 The public key is derived from the private one when it is absent.
 
-`global.devSecrets: true` makes the chart generate all of the above itself. It exists for a
+**The secrets key** (`secrets-keks`, [ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) seals
+the connector secrets typed in the console. It is a list `id:base64`, the first entry sealing and the
+others only opening: `k2:<base64 of 32 bytes>,k1:<...>`. Generate one:
+
+```bash
+python -c "import os,base64;print('k1:'+base64.b64encode(os.urandom(32)).decode())"
+```
+
+Both the API and the orchestrator read it (`global.secrets.keksSecretRef`, default `apiSecretRef`;
+`global.secrets.keksKey`, default `secrets-keks`; the entry is optional in the pod spec). Without
+it, `env:` references keep working, the API logs `secrets.key_missing` at start-up, and typing a
+secret answers 409. Keep it in the vault: **losing it loses every sealed value**. To rotate, put the
+new key first, redeploy, then run `choregos admin secrets rewrap` (see
+[the runbook](runbooks/rotation-secrets.md#connector-secrets-key-secrets-keks)) before dropping the
+old key. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
+(turn it on once the key exists in the store: a missing remote property fails the whole object).
+
+`global.devSecrets: true` makes the chart generate all of the above itself, the secrets key
+included (drawn once, then re-read). It exists for a
 bench and says so; never use it in production.
 
 **Connector secrets by `env:NAME`.** A secret a connector references (`secret_refs: {api_token:

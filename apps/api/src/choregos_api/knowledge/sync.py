@@ -18,14 +18,16 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from choregos_adapters.documents.base import Changes, DocumentSource, SourceItem
-from choregos_adapters.registry import build, configuration_resolue, fakes_enabled
+from choregos_adapters.registry import build, fakes_enabled
 from choregos_core import utcnow
+from choregos_core.redaction import redact
 from sqlalchemy import delete, func, select
 
 from ..config import get_settings
 from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, OrgConnector
 from ..db.session import session_scope
 from ..logging import get_logger
+from ..secret_store import resolved_configuration
 from .conversion import PENDING, convert_document
 from .formats import FORMATS, DocumentRefusedError, accept
 
@@ -61,8 +63,8 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
                 f"the connector `{source.connector}` is a documents/{connector.type} connector: "
                 f"a sharepoint source needs {' or '.join(sorted(SOURCE_CONNECTOR_TYPES['sharepoint']))}"
             )
-        resolved = configuration_resolue(
-            connector.kind, connector.type, connector.config, connector.secret_refs
+        resolved = await resolved_configuration(
+            session, source.org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
         return build("documents", connector.type, resolved).source(  # type: ignore[no-any-return]
             site_id=config.get("site_id"),
@@ -220,8 +222,10 @@ async def sync_source(org: str, source_id: str, *, adapter: DocumentSource | Non
         async with session_scope(orgs=[org]) as session:
             failed = await session.get(KnowledgeSource, source_id)
             if failed is not None:
-                failed.status, failed.last_error = "failed", f"{type(exc).__name__}: {exc}"[:2000]
-        logger.warning("knowledge.source.sync_failed", org=org, source=source_id, error=str(exc)[:300])
+                failed.status, failed.last_error = "failed", redact(f"{type(exc).__name__}: {exc}")[:2000]
+        logger.warning(
+            "knowledge.source.sync_failed", org=org, source=source_id, error=redact(str(exc))[:300]
+        )
         raise
     finally:
         close = getattr(adapter, "close", None)

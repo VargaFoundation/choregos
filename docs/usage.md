@@ -52,6 +52,17 @@ and *add a connector* for the rest. `GET /connectors/types` reads the adapter re
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
 draws the form from it) and its **secret fields**.
 
+**Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
+SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
+([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
+console shows `set · rotated 3 d ago by x`, with *Replace* (type a new value) and *Clear*. An
+operator who prefers a vault can instead give a **reference** (`env:NAME`, or a plugin scheme) behind
+*use a reference instead*. The API: `secret_values` on create or update, `PUT|DELETE
+/orgs/{org}/connectors/{name}/secrets/{field}` (the organisation's administrator) and
+`PUT|DELETE /projects/{id}/connectors/{kind}/secrets/{field}` (`connector:write`). If the deployment
+holds no secrets key, typing a value answers 409 and says so ([deployment](deployment.md#secrets)).
+An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
+
 Until a project can run, its overview opens on a **getting started** list: provisioned, a workflow
 published, each required capability covered (by the project's connector, tested, or by the
 platform's default), no configured connector failing its last test, and a first request — each
