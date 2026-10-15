@@ -28,6 +28,7 @@ import {
   type ThHTMLAttributes,
 } from "react";
 import { cn } from "@/lib/cn";
+import { useServedTheme } from "@/components/served-theme";
 import { toSentenceCase, libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
 
 // ───────────────────────────── tons ─────────────────────────────
@@ -149,12 +150,14 @@ export function Eyebrow({ children, tone, className }: { children: ReactNode; to
 // ───────────────────────────── titres ─────────────────────────────
 
 const TITRE = {
-  hero: "text-3xl md:text-4xl leading-tight font-semibold",
+  hero: "font-(family-name:--choregos-font-title) text-3xl md:text-4xl leading-tight font-(--choregos-font-title-weight)",
+  // The title role (family and weight) is the theme's (ADR 0064): Geist at 600 unless it says otherwise;
+  // `lg` stays regular.
   // A page's title: 24 px, semibold, sans — it was 36 to 48 px of bold Space Mono.
-  xl: "text-2xl leading-tight font-semibold",
-  lg: "text-xl leading-snug font-normal",
-  md: "text-base leading-snug font-semibold",
-  sm: "text-sm leading-snug font-semibold",
+  xl: "font-(family-name:--choregos-font-title) text-2xl leading-tight font-(--choregos-font-title-weight)",
+  lg: "font-(family-name:--choregos-font-title) text-xl leading-snug font-normal",
+  md: "font-(family-name:--choregos-font-title) text-base leading-snug font-(--choregos-font-title-weight)",
+  sm: "font-(family-name:--choregos-font-title) text-sm leading-snug font-(--choregos-font-title-weight)",
 } as const;
 
 export function Heading({
@@ -623,14 +626,40 @@ export function StepNumber({ value, className }: { value: number | string; class
  * 0048). The glyph is a plain geometric figure (a stage and its next step), drawn here.
  */
 export function Wordmark({ className, compact = false }: { className?: string; compact?: boolean }) {
+  const theme = useServedTheme();
+  // `logo` is drawn on the light mode, `logo_dark` on the dark one; one alone serves both.
+  const light = theme.logo ?? theme.logo_dark;
+  const dark = theme.logo_dark ?? theme.logo;
   return (
     <span className={cn("inline-flex items-center gap-2 text-ink", className)}>
-      <svg aria-hidden viewBox="0 0 20 20" className="size-5 shrink-0" fill="none">
-        <rect x="1.5" y="1.5" width="17" height="17" rx="4" stroke="currentColor" strokeOpacity="0.35" />
-        <circle cx="7" cy="10" r="2.5" fill="var(--choregos-accent)" />
-        <path d="M10.5 10h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-      <span className={cn("text-[15px] font-semibold tracking-tight", compact && "sr-only")}>Choregos</span>
+      {light && dark ? (
+        <>
+          {/* A served file: `next/image` would add an optimiser in front of a same-origin asset. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            data-testid="wordmark-logo-dark"
+            src={dark}
+            alt=""
+            className="block h-5 w-auto max-w-32 shrink-0 [:root[data-theme=light]_&]:hidden"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            data-testid="wordmark-logo-light"
+            src={light}
+            alt=""
+            className="hidden h-5 w-auto max-w-32 shrink-0 [:root[data-theme=light]_&]:block"
+          />
+        </>
+      ) : (
+        <svg aria-hidden viewBox="0 0 20 20" className="size-5 shrink-0" fill="none">
+          <rect x="1.5" y="1.5" width="17" height="17" rx="4" stroke="currentColor" strokeOpacity="0.35" />
+          <circle cx="7" cy="10" r="2.5" fill="var(--choregos-accent)" />
+          <path d="M10.5 10h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      )}
+      <span className={cn("text-[15px] font-semibold tracking-tight", compact && "sr-only")}>
+        {theme.product_name}
+      </span>
     </span>
   );
 }

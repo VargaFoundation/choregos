@@ -23,6 +23,7 @@ export const FONCTIONS_ENTREPRISE: ReadonlyArray<readonly [string, string]> = [
   ["export", "exporting an organisation"],
   ["suppression", "deleting an organisation"],
   ["admins_plateforme", "platform administrators"],
+  ["theme", "a custom look per instance and organisation"],
 ];
 
 const LIBELLES = new Map(FONCTIONS_ENTREPRISE);

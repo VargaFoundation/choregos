@@ -127,6 +127,9 @@
 
   /* Type: Geist to read, Geist Mono for what is compared — ids, code, numbers, timestamps (ADR 0048). */
   --choregos-font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Titles (h1 to h3): the sans font at 600 unless a served theme says otherwise (ADR 0064). */
+  --choregos-font-title: var(--choregos-font-sans);
+  --choregos-font-title-weight: 600;
   --choregos-font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   --choregos-leading-body: 1.5;
   --choregos-easing: cubic-bezier(0.4, 0, 0.2, 1);
@@ -242,7 +245,8 @@
   h1,
   h2,
   h3 {
-    font-weight: 600;
+    font-family: var(--choregos-font-title);
+    font-weight: var(--choregos-font-title-weight);
     letter-spacing: -0.01em;
     line-height: 1.25;
   }
