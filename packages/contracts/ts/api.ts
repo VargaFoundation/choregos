@@ -422,8 +422,12 @@ export type McpCatalogueEntry = {
 export type McpCatalogueInstall = {
   /** defaults to the entry id */
   name?: string | null;
-  /** by reference; a value is refused */
+  /** by reference; a literal is refused */
   secret_refs?: {
+    [key: string]: string;
+  };
+  /** the credential typed once, sealed at rest and never returned (ADR 0058); give this or `secret_refs.token` */
+  secret_values?: {
     [key: string]: string;
   };
   /** for an entry whose auth is header:<Name>, the header's name; defaults to the entry's */

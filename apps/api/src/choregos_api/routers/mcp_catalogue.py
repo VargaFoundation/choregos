@@ -162,19 +162,24 @@ async def install_mcp_catalogue_entry(
     config: dict[str, object] = {"url": entry.remote.url}
     secret_refs = dict(body.secret_refs)
     if entry.auth == "none":
-        if secret_refs:
+        if secret_refs or body.secret_values:
             raise unprocessable(f"`{entry_id}` takes no credential: `secret_refs` must be empty")
     else:
-        if "token" not in secret_refs:
+        if "token" not in secret_refs and "token" not in body.secret_values:
             raise unprocessable(
                 f"`{entry_id}` needs a credential: give a reference in `secret_refs.token` "
-                "(a reference, never the value)"
+                "or the value in `secret_values.token`"
             )
         header = entry.auth_header or body.auth_header
         if header and header.lower() != "authorization":
             config["auth_header"] = header
     declaration = OrgConnectorCreate(
-        name=body.name or entry.id, type="mcp", kind="mcp", config=config, secret_refs=secret_refs
+        name=body.name or entry.id,
+        type="mcp",
+        kind="mcp",
+        config=config,
+        secret_refs=secret_refs,
+        secret_values=body.secret_values,
     )
     return await declare_org_connector(
         session,

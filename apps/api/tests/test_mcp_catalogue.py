@@ -178,6 +178,30 @@ async def test_a_secret_in_clear_or_a_missing_one_is_refused(client: AsyncClient
     assert (await client.get("/api/v1/orgs/varga/connectors")).json() == []
 
 
+async def test_a_credential_typed_at_install_is_sealed_and_never_returned(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sealed secrets (ADR 0058) and the catalogue meet: the value is typed once, a reference still works."""
+    import base64
+    import os
+
+    from choregos_core.redaction import forget_secrets
+
+    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
+    forget_secrets()
+    typed = "vendor-key-" + "AAAA-1111"
+    created = await client.post(f"{BASE}/github/install", json={"secret_values": {"token": typed}})
+    assert created.status_code == 201, created.text
+    assert typed not in created.text
+    assert created.json()["catalogue_entry"].startswith("github@")
+    assert [s["field"] for s in created.json()["secrets"]] == ["token"]
+    both = await client.post(
+        f"{BASE}/github/install",
+        json={"name": "github-two", "secret_refs": {"token": "env:CONNECTOR_X"}},
+    )
+    assert both.status_code == 201, both.text
+
+
 async def test_a_new_catalogue_version_shows_as_an_update(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

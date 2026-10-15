@@ -3116,7 +3116,8 @@ components:
       type: object
       properties:
         name: { type: [string, "null"], pattern: "^[a-z][a-z0-9-]{1,62}$", description: "defaults to the entry id" }
-        secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a value is refused" }
+        secret_refs: { type: object, additionalProperties: { type: string }, description: "by reference; a literal is refused" }
+        secret_values: { type: object, additionalProperties: { type: string }, description: "the credential typed once, sealed at rest and never returned (ADR 0058); give this or `secret_refs.token`" }
         auth_header: { type: [string, "null"], description: "for an entry whose auth is header:<Name>, the header's name; defaults to the entry's" }
     SkillCatalogueSignals:
       type: object
