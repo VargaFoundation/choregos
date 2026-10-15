@@ -18,6 +18,9 @@ import type {
   AgentSpec,
   AgentTrialCreate,
   ConnectorType,
+  McpCatalogue,
+  McpCatalogueEntry,
+  McpCatalogueInstall,
   OrgConnector,
   ProjectOperation,
   ProjectRequirement,
@@ -60,6 +63,7 @@ import type {
 import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
+import mcpCatalogueFile from "./mcp-catalogue.json";
 
 export { peopleOpsFixtures };
 
@@ -1531,6 +1535,24 @@ export const connectorTypes: ConnectorType[] = [
   { kind: "identity", type: "entra", display: "Microsoft Entra ID", config_schema: objet({ tenant: { type: "string" } }, ["tenant"]), capabilities: ["identity"], secret_fields: ["client_secret"] },
 ];
 
+/**
+ * The MCP catalogue (ADR 0065): the real shipped entries, generated into `mcp-catalogue.json` by
+ * `make catalogues`, with the state this demo organisation gives them — an entry is installed once a
+ * connector of the demo carries it.
+ */
+export function mcpCatalogue(): McpCatalogue {
+  const file = mcpCatalogueFile as unknown as McpCatalogue;
+  return {
+    ...file,
+    entries: file.entries.map((entry: McpCatalogueEntry) => {
+      const installed = orgConnectors.filter((c) => c.catalogue_entry?.startsWith(`${entry.id}@`));
+      return installed.length
+        ? { ...entry, state: "installed" as const, installed_as: installed.map((c) => c.name) }
+        : entry;
+    }),
+  };
+}
+
 /** Un annuaire de l'organisation (ADR 0034) : chaque opération porte sa politique. */
 export const orgConnectors: OrgConnector[] = [
   {
@@ -1823,6 +1845,26 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       temporal_wf_id: `action-${action.id}`,
     } as T;
   }
+  const catalogueInstall = /^\/orgs\/[^/]+\/mcp-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
+  if (method === "POST" && catalogueInstall) {
+    // As the API does: a connector declared with the entry's URL, no operation until a discovery.
+    const entry = mcpCatalogue().entries.find((e) => e.id === catalogueInstall[1]);
+    const corps = JSON.parse(String(init.body ?? "{}")) as McpCatalogueInstall;
+    if (!entry || entry.install !== "installable") throw new ApiError(422, { title: "Unprocessable", detail: "not installable" });
+    const connector: OrgConnector = {
+      name: corps.name || entry.id,
+      kind: "mcp",
+      type: "mcp",
+      config: { url: entry.remote?.url },
+      secret_refs: corps.secret_refs ?? {},
+      status: "unknown",
+      created_by: me.email,
+      catalogue_entry: `${entry.id}@${mcpCatalogueFile.meta.catalogue_version}`,
+      operations: [],
+    };
+    orgConnectors.push(connector);
+    return connector as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
@@ -1884,6 +1926,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/connectors\/types$/, connectorTypes],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
+    [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
     [/^\/projects\/[^/]+\/actions$/, actions],
     [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, platformModels],

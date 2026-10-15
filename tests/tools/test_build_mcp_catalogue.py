@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
+from choregos_core import mcp_catalogue
 
 from tools.catalogues import _github, _recording
 from tools.catalogues import build_mcp_catalogue as gen
@@ -272,3 +273,16 @@ def test_the_graphql_query_is_batched_and_a_missing_repository_is_none(tmp_path:
     assert facts["a/b"] == _github.RepoFacts("a/b", 7, False, None)
     assert facts["a/gone"] is None
     assert len(seen) == 1
+
+
+def test_the_console_demo_data_is_the_shipped_catalogue_as_the_api_shows_it() -> None:
+    """`apps/web/src/mocks/mcp-catalogue.json` is generated, never typed: the e2e runs on the real entries."""
+    mock = json.loads(gen.WEB_MOCK.read_text("utf-8"))
+    shipped = mcp_catalogue.load()
+    assert mock["meta"]["catalogue_version"] == shipped.meta.catalogue_version
+    assert [e["id"] for e in mock["entries"]] == [e.id for e in shipped.entries]
+    by_id = {e["id"]: e for e in mock["entries"]}
+    assert by_id["github"]["install"] == "installable" and by_id["notion"]["install"] == "needs_oauth"
+    assert {e["state"] for e in mock["entries"]} == {"available"} and {
+        e["egress"] for e in mock["entries"]
+    } == {"unknown"}

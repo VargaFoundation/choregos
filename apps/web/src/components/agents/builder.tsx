@@ -11,6 +11,7 @@
  * and most visits never open it.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 import { Button, ErrorNote, Input, Select, Textarea } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
@@ -561,7 +562,13 @@ function McpSection({
         </Button>
       </div>
       {connectors.length === 0 && (
-        <p className="text-xs text-ink-muted">No MCP connector in the organisation yet: an administrator declares one.</p>
+        <p className="text-xs text-ink-muted">
+          No MCP connector in the organisation yet: an administrator declares one, or installs one from{" "}
+          <Link href="/admin/connectors/catalogue" className="underline">
+            the MCP catalogue
+          </Link>
+          .
+        </p>
       )}
     </Section>
   );

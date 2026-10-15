@@ -122,7 +122,7 @@ that runs as a local process: running a third party's code is the operator's dec
 listed with what to run and nothing more).
 
 **Installing an entry** is `POST /orgs/{org}/mcp-catalogue/{entry_id}/install` (the organisation's
-administrator only; *Administration → connectors → catalogue* in the console). It declares an
+administrator only; *Administration → connectors → MCP catalogue* in the console: search, category, *official only*, *installable only*; an install opens a panel for the name and the secret reference, then discovers the tools and lands on the connector). It declares an
 ordinary `mcp` connector through the same door as `POST /orgs/{org}/connectors`: `{"name": "notion",
 "secret_refs": {"token": "env:CONNECTOR_NOTION"}}` (the name defaults to the entry id; the
 credential is a reference, never a value, and an entry that needs none refuses one). The connector

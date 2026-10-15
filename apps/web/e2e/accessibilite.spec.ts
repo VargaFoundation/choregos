@@ -20,6 +20,7 @@ const PAGES = [
   "/login",
   "/admin",
   "/admin/connectors",
+  "/admin/connectors/catalogue",
   "/admin/members",
   "/admin/audit",
   "/admin/platform",

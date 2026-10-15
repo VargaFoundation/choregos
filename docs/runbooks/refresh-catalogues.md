@@ -28,7 +28,8 @@ GITHUB_TOKEN=$(gh auth token) make catalogues-record
 
 3. Read the lines `dropped <id>: <reason>`. A dropped line is the rules working; fix the seed or
    delete the line.
-4. Review `git diff` of `catalogue.yaml`: new versions, stars, and above all entries that changed
+4. Review `git diff` of `catalogue.yaml` (the console's demo data, `apps/web/src/mocks/mcp-catalogue.json`, is
+   regenerated with it and checked by `make catalogues-check`): new versions, stars, and above all entries that changed
    from installable to not, or lost `official`. Bump `catalogue_version` in `overrides.yaml`
    (CalVer, `2026.11.0`) when the refresh is meant to be released.
 5. Open a pull request with the seed, the recordings under `tests/fixtures/catalogues/` and the

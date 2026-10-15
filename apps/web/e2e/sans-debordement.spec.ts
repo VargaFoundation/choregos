@@ -38,6 +38,7 @@ const PAGES = [
   "/integrations/claude-code",
   "/admin",
   "/admin/connectors",
+  "/admin/connectors/catalogue",
   "/admin/members",
   "/admin/audit",
   "/admin/platform",
