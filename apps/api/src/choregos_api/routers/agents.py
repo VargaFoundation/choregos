@@ -328,7 +328,8 @@ async def draft_agent(org: str, body: AgentDraftRequest, session: Db, principal:
     console fills the builder with the draft, and a person creates the agent."""
     from ..services import agent_drafts
 
-    _gerer(principal, org)
+    if not principal.can(Permission.AGENT_MANAGE, org):
+        raise forbidden("drafting an agent needs the agent:manage permission")
     admitted, wait = agent_drafts.limiter.admet(f"{org}:{principal.user_id}")
     if not admitted:
         raise ApiError(
