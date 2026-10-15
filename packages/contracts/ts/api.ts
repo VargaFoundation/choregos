@@ -683,6 +683,52 @@ export type AgentCreate = {
   spec?: AgentSpec;
   /** a draft is neither pinned nor run until it is activated */
   lifecycle?: "draft" | "active";
+  /** who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue */
+  scope?: "org" | "project" | "personal";
+  /** the project's slug: required for, and only for, a `project` agent */
+  project?: string | null;
+};
+
+export type AgentFork = {
+  /** slugs are unique per organisation: a fork takes a new one */
+  slug: string;
+  display_name?: string | null;
+  scope: "org" | "project" | "personal";
+  /** required for, and only for, a `project` fork */
+  project?: string | null;
+  /** the source version to copy; absent, its latest */
+  version?: number | null;
+};
+
+export type AgentScopeChange = {
+  scope: "org" | "project" | "personal";
+  /** required for, and only for, a move to a `project` */
+  project?: string | null;
+};
+
+/** What a fork was copied from, and whether the source moved on since (ADR 0061). */
+export type AgentUpstream = {
+  slug: string;
+  /** the version the fork copied */
+  version: number;
+  /** absent when the source is no longer visible to the caller */
+  scope?: "platform" | "org" | "project" | "personal" | null;
+  latest_version?: number | null;
+  /** the source published a version newer than the one copied */
+  behind?: boolean;
+  /** false when the source is deleted or not visible to the caller */
+  available?: boolean;
+};
+
+/** What the caller may do with an agent, decided by the server (ADR 0061). */
+export type AgentPermissions = {
+  /** publish a version, edit it, move it through its life */
+  publish?: boolean;
+  /** suspend, revoke, change its owner, attach clients */
+  manage?: boolean;
+  /** pin it on a project the caller owns */
+  pin?: boolean;
+  fork_scopes?: Array<"org" | "project" | "personal">;
 };
 
 /** An agent the platform's catalogue offers (ADR 0040), and its state in the organisation. */
@@ -705,6 +751,8 @@ export type AgentCatalogueEntry = {
   installed_version?: number | null;
   /** an agent of the organisation has this name and does not come from the catalogue */
   own_agent?: boolean;
+  /** the scope of the agent of this name in the organisation, if any (ADR 0061) */
+  scope?: "platform" | "org" | "project" | "personal" | null;
   update_available?: boolean;
   /** false for a client the door does not accept yet (OAuth, registered client, https) */
   offered?: boolean;
@@ -762,6 +810,15 @@ export type Agent = {
   last_run_at?: string | null;
   /** no run for 60 days (since its creation if it never ran) */
   unused?: boolean;
+  /** who owns it (ADR 0061) */
+  scope?: "platform" | "org" | "project" | "personal";
+  /** the slug of its project, for a `project` agent */
+  project?: string | null;
+  /** set on a fork */
+  forked_from?: AgentUpstream | null;
+  can?: AgentPermissions;
+  /** the server's sentence for what the caller may not do: shown as is, never guessed from roles */
+  cannot_reason?: string | null;
 };
 
 export type AgentLifecycleChange = {
@@ -2068,6 +2125,7 @@ export interface Operations {
   remaining?: number;
 } };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
+  changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
   checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
@@ -2100,6 +2158,7 @@ export interface Operations {
 } };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
+  forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
 }; response: void };

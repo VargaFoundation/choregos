@@ -1,5 +1,9 @@
 # 0033 — Agents are registered, versioned objects; skills are a library they carry
 
+> **Amended by [ADR 0061](0061-agent-ownership-scopes-and-forks.md)**: an agent has a scope (common,
+> organisation, project, personal) and a fork records its origin; `agent:manage` now concerns the
+> organisation and common agents only.
+
 - **Status**: accepted, 2026-10-05
 - **Concerns**: new tables `agents`, `agent_versions`, `project_agents`, `agent_credentials`,
   `skills`, `skill_versions`; the workflow DSL (`AgentActor.agent`); `prepare_stage`; the runner's

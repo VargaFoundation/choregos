@@ -102,6 +102,20 @@ def _verifier_les_effets(workflow: Any) -> None:
         raise unprocessable("invalid workflow", erreurs)
 
 
+async def _verifier_les_agents_nommes(session: AsyncSession, project: Project, workflow: Workflow) -> None:
+    """A workflow may not name a personal agent, nor another project's agent (ADR 0061): 422, and the
+    message names the agent, its scope and the fix."""
+    from .agent_governance import refusals_for_named_agents
+    from .catalogue_d_agents import agents_nommes
+
+    refus = await refusals_for_named_agents(session, project.org_id, project.id, agents_nommes(workflow))
+    if refus:
+        raise unprocessable(
+            "the workflow names an agent that cannot run in this project: " + "; ".join(refus),
+            [{"loc": ["actors"], "msg": message} for message in refus],
+        )
+
+
 async def derniere_version(session: AsyncSession, project_id: Any, nom: str) -> int | None:
     """La plus haute version d'un workflow de ce nom, active ou non ; `None` s'il n'a jamais existé."""
     return (
@@ -154,6 +168,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
             f"the YAML is named `{nom}`, the route `{nom_attendu}`: `metadata.name` must match"
         )
     _verifier_les_effets(workflow)
+    await _verifier_les_agents_nommes(session, project, workflow)
     actuelle = await workflow_actif(session, project.id, nom)
     if base_version is not None and (actuelle is None or actuelle.version != base_version):
         lue = actuelle.version if actuelle is not None else "none"

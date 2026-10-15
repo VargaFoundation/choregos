@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -739,11 +740,27 @@ class Agent(Base, PkMixin, TimestampMixin):
     état — actif, suspendu, révoqué, expiré."""
 
     __tablename__ = "agents"
-    __table_args__ = (UniqueConstraint("org_id", "slug", name="uq_agents_org_slug"),)
+    __table_args__ = (
+        UniqueConstraint("org_id", "slug", name="uq_agents_org_slug"),
+        # A project agent has a project, and only a project agent has one (S39-09, ADR 0061).
+        CheckConstraint("(scope = 'project') = (project_id IS NOT NULL)", name="scope_project"),
+    )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     slug: Mapped[str] = mapped_column(String(64))
     kind: Mapped[str] = mapped_column(String(16), default="internal")
+    #: Who owns the agent (ADR 0061): `platform` (a common agent installed from the catalogue), `org`,
+    #: `project` (see `project_id`) or `personal` (see `owner_id`). The slug stays unique per organisation.
+    scope: Mapped[str] = mapped_column(String(16), default="org", server_default="org", index=True)
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: The agent this one was forked from, and the version it copied; the slug survives the source's deletion.
+    forked_from_agent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL"), nullable=True
+    )
+    forked_from_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    forked_from_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     display_name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     owner_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

@@ -8,7 +8,7 @@ peut que la resserrer : un budget plus bas, moins d'outils. Une surcharge qui é
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from choregos_core import utcnow
 from fastapi import APIRouter, Path, Query, Response, status
@@ -24,6 +24,7 @@ from ..db.models import (
     ApiToken,
     Membership,
     Organization,
+    Project,
     ProjectAgent,
     User,
     WorkflowDef,
@@ -40,6 +41,7 @@ from ..schemas import (
     AgentCredentialCreate,
     AgentCredentialDto,
     AgentDto,
+    AgentFork,
     AgentLifecycleChange,
     AgentLifecycleResult,
     AgentMetrics,
@@ -49,9 +51,11 @@ from ..schemas import (
     AgentPatch,
     AgentProjectMetrics,
     AgentResolution,
+    AgentScopeChange,
     AgentSpec,
     AgentTrial,
     AgentTrialCreate,
+    AgentUpstream,
     AgentVersionDto,
     ApiTokenCreated,
     ImplicitAgent,
@@ -60,6 +64,17 @@ from ..schemas import (
     RunDto,
 )
 from ..services.agent_evals import evaluate, gate, suite_for
+from ..services.agent_governance import (
+    Action,
+    Decision,
+    Subject,
+    decide,
+    is_admin,
+    is_member,
+    permissions_of,
+    subject_of,
+    visible_clause,
+)
 from ..services.agent_lifecycle import (
     TransitionRefused,
     check_transition,
@@ -121,11 +136,41 @@ def _version_dto(ligne: AgentVersion) -> AgentVersionDto:
     )
 
 
-async def _dto(session: AsyncSession, agent: Agent, *, avec_versions: bool = False) -> AgentDto:
+async def _upstream(session: AsyncSession, agent: Agent, principal: Me, org: str) -> AgentUpstream | None:
+    """What the fork was copied from; the source's state only when the caller may see it (ADR 0061)."""
+    if agent.forked_from_slug is None or agent.forked_from_version is None:
+        return None
+    source = await session.get(Agent, agent.forked_from_agent_id) if agent.forked_from_agent_id else None
+    if source is None or not decide(principal, org, await subject_of(session, source), Action.SEE).allowed:
+        return AgentUpstream(slug=agent.forked_from_slug, version=agent.forked_from_version, available=False)
+    derniere = (
+        await session.execute(
+            select(func.max(AgentVersion.version)).where(AgentVersion.agent_id == source.id)
+        )
+    ).scalar() or 0
+    return AgentUpstream(
+        slug=source.slug,
+        version=agent.forked_from_version,
+        scope=source.scope,
+        latest_version=derniere,
+        behind=derniere > agent.forked_from_version,
+    )
+
+
+async def _dto(
+    session: AsyncSession, agent: Agent, principal: Me, org: str, *, avec_versions: bool = False
+) -> AgentDto:
     versions = await _versions(session, agent)
     proprietaire = await session.get(User, agent.owner_id) if agent.owner_id else None
     dernier = await last_run_at(session, agent.org_id, agent.slug)
+    sujet = await subject_of(session, agent)
+    droits, raison = permissions_of(principal, org, sujet)
     return AgentDto(
+        scope=agent.scope,
+        project=sujet.project_slug,
+        forked_from=await _upstream(session, agent, principal, org),
+        can=droits,
+        cannot_reason=raison,
         slug=agent.slug,
         kind=agent.kind,
         display_name=agent.display_name,
@@ -152,23 +197,66 @@ async def _skills_usable(session: AsyncSession, organisation: Organization, spec
 
 
 def _lire(principal: Me, org: str) -> None:
-    if not principal.can(Permission.PROJECT_READ, org):
+    if not is_member(principal, org):
         raise forbidden(f"reading the agents of {org} requires being a member of it")
 
 
-def _gerer(principal: Me, org: str) -> None:
-    if not principal.can(Permission.AGENT_MANAGE, org):
-        raise forbidden("creating, publishing or revoking an agent needs the org_admin role")
+def _admin(principal: Me, org: str) -> None:
+    if not is_admin(principal, org):
+        raise forbidden("this needs the org_admin role")
+
+
+def _exiger(decision: Decision) -> None:
+    """A refusal says why: 403 for the caller's rights, 422 for a request that cannot be."""
+    if decision.allowed:
+        return
+    reason = decision.reason or "insufficient rights"
+    raise unprocessable(reason) if decision.unprocessable else forbidden(reason)
+
+
+async def _charger(
+    session: AsyncSession, principal: Me, org: str, slug: str
+) -> tuple[Organization, Agent, Subject]:
+    """The agent, for a caller who may see it: a personal agent of someone else, or a project's agent
+    the caller does not belong to, is a 404 — never a 403 that would reveal it exists."""
+    _lire(principal, org)
+    organisation = await _organisation(session, org)
+    agent = await _agent(session, organisation, slug)
+    sujet = await subject_of(session, agent)
+    if not decide(principal, org, sujet, Action.SEE).allowed:
+        raise not_found("Agent", f"{org}/{slug}")
+    return organisation, agent, sujet
+
+
+async def _projet(session: AsyncSession, organisation: Organization, slug: str) -> Project:
+    projet = (
+        await session.execute(select(Project).where(Project.org_id == organisation.id, Project.slug == slug))
+    ).scalar_one_or_none()
+    if projet is None:
+        raise not_found("Project", f"{organisation.slug}/{slug}")
+    return projet
 
 
 @router.get("/orgs/{org}/agents", response_model=list[AgentDto], operation_id="listAgents")
-async def list_agents(org: str, session: Db, principal: Me) -> list[AgentDto]:
+async def list_agents(
+    org: str,
+    session: Db,
+    principal: Me,
+    scope: Annotated[Literal["platform", "org", "project", "personal"] | None, Query()] = None,
+    project: Annotated[str | None, Query()] = None,
+) -> list[AgentDto]:
+    """The agents the caller may see (ADR 0061), optionally of one scope or one project."""
     _lire(principal, org)
     organisation = await _organisation(session, org)
-    agents = (
-        await session.execute(select(Agent).where(Agent.org_id == organisation.id).order_by(Agent.slug))
-    ).scalars()
-    return [await _dto(session, agent) for agent in agents]
+    requete = select(Agent).where(
+        Agent.org_id == organisation.id, await visible_clause(session, principal, organisation)
+    )
+    if scope is not None:
+        requete = requete.where(Agent.scope == scope)
+    if project is not None:
+        requete = requete.where(Agent.project_id == (await _projet(session, organisation, project)).id)
+    agents = (await session.execute(requete.order_by(Agent.slug))).scalars()
+    return [await _dto(session, agent, principal, org) for agent in agents]
 
 
 @router.post(
@@ -178,11 +266,14 @@ async def list_agents(org: str, session: Db, principal: Me) -> list[AgentDto]:
     operation_id="createAgent",
 )
 async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) -> AgentDto:
-    _gerer(principal, org)
+    _exiger(decide(principal, org, None, Action.CREATE, project_slug=body.project, target_scope=body.scope))
+    if body.kind == "external" and body.scope != "org":
+        raise unprocessable("an external agent carries an organisation credential: it is an `org` agent")
     erreurs_d_une_version(body.spec)
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
     organisation = await _organisation(session, org)
+    projet = await _projet(session, organisation, body.project) if body.project else None
     await _skills_usable(session, organisation, body.spec)
     existant = (
         await session.execute(
@@ -200,6 +291,8 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
         owner_id=principal.user_id,
         status="active",
         lifecycle=body.lifecycle,
+        scope=body.scope,
+        project_id=projet.id if projet else None,
     )
     session.add(agent)
     await session.flush()
@@ -215,17 +308,22 @@ async def create_agent(org: str, body: AgentCreate, session: Db, principal: Me) 
     )
     await session.flush()
     await record(
-        session, principal, "agent.create", org_id=organisation.id, target_type="agent", target_id=agent.id
+        session,
+        principal,
+        "agent.create",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=agent.id,
+        scope=agent.scope,
+        project=body.project,
     )
-    return await _dto(session, agent, avec_versions=True)
+    return await _dto(session, agent, principal, org, avec_versions=True)
 
 
 @router.get("/orgs/{org}/agents/{slug}", response_model=AgentDto, operation_id="getAgent")
 async def get_agent(org: str, slug: Slug, session: Db, principal: Me) -> AgentDto:
-    _lire(principal, org)
-    return await _dto(
-        session, await _agent(session, await _organisation(session, org), slug), avec_versions=True
-    )
+    _, agent, _ = await _charger(session, principal, org, slug)
+    return await _dto(session, agent, principal, org, avec_versions=True)
 
 
 @router.post(
@@ -238,11 +336,10 @@ async def publish_version(
     org: str, slug: Slug, body: AgentSpec, session: Db, principal: Me
 ) -> AgentVersionDto:
     """La version suivante ; aucune n'est jamais réécrite."""
-    _gerer(principal, org)
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.PUBLISH))
     erreurs_d_une_version(body)
-    organisation = await _organisation(session, org)
     await _skills_usable(session, organisation, body)
-    agent = await _agent(session, organisation, slug)
     if agent.status == "revoked":
         raise conflict(f"agent `{slug}` is revoked: it can no longer publish")
     if agent.lifecycle == "retired":
@@ -281,8 +378,7 @@ async def publish_version(
     operation_id="getAgentVersion",
 )
 async def get_version(org: str, slug: Slug, version: int, session: Db, principal: Me) -> AgentVersionDto:
-    _lire(principal, org)
-    agent = await _agent(session, await _organisation(session, org), slug)
+    _, agent, _ = await _charger(session, principal, org, slug)
     ligne = (
         await session.execute(
             select(AgentVersion).where(AgentVersion.agent_id == agent.id, AgentVersion.version == version)
@@ -305,9 +401,7 @@ async def agent_metrics(
 
     from ..db.models import CostLedger, Project, Run
 
-    _lire(principal, org)
-    organisation = await _organisation(session, org)
-    agent = await _agent(session, organisation, slug)
+    organisation, agent, _ = await _charger(session, principal, org, slug)
     depuis = utcnow() - timedelta(days=days)
     runs = (
         await session.execute(
@@ -378,7 +472,11 @@ async def list_agent_metrics(
     slugs = list(
         (
             await session.execute(
-                select(Agent.slug).where(Agent.org_id == organisation.id).order_by(Agent.slug)
+                select(Agent.slug)
+                .where(
+                    Agent.org_id == organisation.id, await visible_clause(session, principal, organisation)
+                )
+                .order_by(Agent.slug)
             )
         ).scalars()
     )
@@ -431,9 +529,7 @@ async def list_agent_runs(
     from ..db.models import Project, Run
     from ..services.tickets import run_dto
 
-    _lire(principal, org)
-    organisation = await _organisation(session, org)
-    await _agent(session, organisation, slug)
+    organisation, _, _ = await _charger(session, principal, org, slug)
     lignes = (
         await session.execute(
             select(Run, Project.slug)
@@ -451,9 +547,10 @@ async def list_agent_runs(
 @router.patch("/orgs/{org}/agents/{slug}", response_model=AgentDto, operation_id="updateAgent")
 async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, principal: Me) -> AgentDto:
     """Son nom, sa description, son expiration, son état. `revoked` est définitif."""
-    _gerer(principal, org)
-    organisation = await _organisation(session, org)
-    agent = await _agent(session, organisation, slug)
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.PUBLISH))
+    if body.status is not None:
+        _exiger(decide(principal, org, sujet, Action.MANAGE))
     if agent.status == "revoked" and body.status not in {None, "revoked"}:
         raise conflict(f"agent `{slug}` is revoked: revocation is final")
     for champ in ("display_name", "description", "expires_at"):
@@ -472,7 +569,7 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
         target_id=agent.id,
         status=agent.status,
     )
-    return await _dto(session, agent)
+    return await _dto(session, agent, principal, org)
 
 
 # ───────────────────────────── its life (S32-04) ─────────────────────────────
@@ -489,15 +586,14 @@ async def change_agent_lifecycle(
     """Activate a draft, deprecate, reactivate, or retire. Retiring runs its checklist — credentials
     revoked, project pins removed, new runs refused — and is refused while a run of the agent is in
     flight, unless `force` (audited)."""
-    _gerer(principal, org)
-    organisation = await _organisation(session, org)
-    agent = await _agent(session, organisation, slug)
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.PUBLISH))
     avant = agent.lifecycle or "active"
     try:
         check_transition(avant, body.to)
     except TransitionRefused as refus:
         raise conflict(str(refus)) from refus
-    resultat = AgentLifecycleResult(agent=await _dto(session, agent), forced=body.force)
+    resultat = AgentLifecycleResult(agent=await _dto(session, agent, principal, org), forced=body.force)
     if body.to == "retired":
         en_vol = await running_work_items(session, organisation.id, slug)
         if en_vol and not body.force:
@@ -527,7 +623,7 @@ async def change_agent_lifecycle(
         unpinned_projects=resultat.unpinned_projects,
         running_work_items=resultat.running_work_items,
     )
-    resultat.agent = await _dto(session, agent)
+    resultat.agent = await _dto(session, agent, principal, org)
     return resultat
 
 
@@ -539,9 +635,8 @@ async def transfer_agent_ownership(
 ) -> AgentDto:
     """A new owner, a member of the organisation. The agent keeps its credentials: they belong to
     the agent, not to the person who owned it."""
-    _gerer(principal, org)
-    organisation = await _organisation(session, org)
-    agent = await _agent(session, organisation, slug)
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.MANAGE))
     if agent.lifecycle == "retired":
         raise conflict(f"agent `{slug}` is retired: it has no owner to change")
     nouveau = (
@@ -581,7 +676,136 @@ async def transfer_agent_ownership(
         after=nouveau.email,
         credentials_kept=int(accreditations),
     )
-    return await _dto(session, agent)
+    return await _dto(session, agent, principal, org)
+
+
+# ───────────────────────────── forks and promotion (ADR 0061) ─────────────────────────────
+
+
+@router.post(
+    "/orgs/{org}/agents/{slug}/fork",
+    response_model=AgentDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="forkAgent",
+)
+async def fork_agent(org: str, slug: Slug, body: AgentFork, session: Db, principal: Me) -> AgentDto:
+    """A new agent, in the scope asked, whose version 1 is a byte-for-byte copy of one of the source's
+    versions (its latest by default) — same spec, same checksum. It records where it came from and
+    inherits nothing else: no pin, no client, no metrics. The source is never touched."""
+    organisation, source, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.FORK, project_slug=body.project, target_scope=body.scope))
+    projet = await _projet(session, organisation, body.project) if body.project else None
+    versions = await _versions(session, source)
+    if body.version is None:
+        copiee = versions[0] if versions else None
+    else:
+        copiee = next((v for v in versions if v.version == body.version), None)
+    if copiee is None:
+        raise not_found("Agent version", f"{slug}@{body.version or 'latest'}")
+    if (
+        await session.execute(
+            select(Agent.id).where(Agent.org_id == organisation.id, Agent.slug == body.slug)
+        )
+    ).first() is not None:
+        raise conflict(f"agent `{body.slug}` already exists in {org}")
+    fork = Agent(
+        org_id=organisation.id,
+        slug=body.slug,
+        kind=source.kind,
+        display_name=body.display_name or f"{source.display_name} (fork)",
+        description=source.description,
+        owner_id=principal.user_id,
+        status="active",
+        scope=body.scope,
+        project_id=projet.id if projet else None,
+        forked_from_agent_id=source.id,
+        forked_from_slug=source.slug,
+        forked_from_version=copiee.version,
+    )
+    session.add(fork)
+    await session.flush()
+    session.add(
+        AgentVersion(
+            agent_id=fork.id,
+            org_id=organisation.id,
+            version=1,
+            spec=copiee.spec,
+            checksum=copiee.checksum,
+            created_by=principal.email,
+        )
+    )
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "agent.fork",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=fork.id,
+        source=source.slug,
+        source_version=copiee.version,
+        scope=fork.scope,
+        project=body.project,
+    )
+    return await _dto(session, fork, principal, org, avec_versions=True)
+
+
+async def _named_outside(session: AsyncSession, agent: Agent, project: Project) -> list[str]:
+    """The other projects of the organisation that pin the agent or name it in an active workflow."""
+    dehors: set[str] = set()
+    epingles = await session.execute(
+        select(Project.slug)
+        .join(ProjectAgent, ProjectAgent.project_id == Project.id)
+        .where(ProjectAgent.agent_id == agent.id, Project.id != project.id)
+    )
+    dehors.update(epingles.scalars())
+    workflows = await session.execute(
+        select(Project.slug, WorkflowDef.json_doc)
+        .join(Project, Project.id == WorkflowDef.project_id)
+        .where(Project.org_id == agent.org_id, Project.id != project.id, WorkflowDef.is_active.is_(True))
+    )
+    for slug_du_projet, document in workflows.all():
+        for acteur in ((document or {}).get("actors") or {}).values():
+            nomme = str(acteur.get("agent") or "") if isinstance(acteur, dict) else ""
+            if nomme.split("@")[0] == agent.slug:
+                dehors.add(slug_du_projet)
+    return sorted(dehors)
+
+
+@router.post("/orgs/{org}/agents/{slug}/scope", response_model=AgentDto, operation_id="changeAgentScope")
+async def change_agent_scope(
+    org: str, slug: Slug, body: AgentScopeChange, session: Db, principal: Me
+) -> AgentDto:
+    """Promote an agent (ADR 0061): a personal agent to a project (its owner AND that project's owner,
+    or an org_admin) or to the organisation (an org_admin); a project's agent to the organisation; an
+    organisation agent into one project (an org_admin; refused while another project pins or names
+    it). A common agent never moves."""
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.MOVE, project_slug=body.project, target_scope=body.scope))
+    projet = await _projet(session, organisation, body.project) if body.project else None
+    if projet is not None:
+        dehors = await _named_outside(session, agent, projet)
+        if dehors:
+            raise conflict(
+                f"`{slug}` is pinned or named by {', '.join(dehors)}: it would stop running there. Fork it "
+                "into those projects, or unpin it, first"
+            )
+    avant = agent.scope
+    agent.scope = body.scope
+    agent.project_id = projet.id if projet else None
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "agent.scope",
+        org_id=organisation.id,
+        target_type="agent",
+        target_id=agent.id,
+        before=avant,
+        after=agent.scope,
+        project=body.project,
+    )
+    return await _dto(session, agent, principal, org)
 
 
 # ───────────────────────────── l'épingle d'un projet ─────────────────────────────
@@ -732,6 +956,10 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
     organisation = await session.get(Organization, ctx.project.org_id)
     assert organisation is not None
     agent = await _agent(session, organisation, slug)
+    sujet = await subject_of(session, agent)
+    if not decide(ctx.principal, organisation.slug, sujet, Action.SEE).allowed:
+        raise not_found("Agent", f"{organisation.slug}/{slug}")
+    _exiger(decide(ctx.principal, organisation.slug, sujet, Action.PIN, project_slug=ctx.project.slug))
     if agent.status != "active":
         raise conflict(f"agent `{slug}` is {agent.status}: it cannot be pinned")
     if agent.lifecycle in {"draft", "retired"}:
@@ -838,21 +1066,18 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     0.50 $ and at the draft's budget per run; the orchestrator tightens it further to the project's
     budget for the role (policy). The gateway key is minted at that amount: the trial cannot spend more.
     """
-    from ..db.models import Project
     from ..temporal import get_temporal, trial_run_id, trial_workflow_id
 
-    _gerer(principal, org)
+    _lire(principal, org)
     if not principal.can(Permission.PROJECT_READ, org, body.project):
         raise forbidden(f"trying an agent in {org}/{body.project} requires being a member of it")
-    erreurs_d_une_version(body.spec)
     organisation = await _organisation(session, org)
-    projet = (
-        await session.execute(
-            select(Project).where(Project.org_id == organisation.id, Project.slug == body.project)
-        )
-    ).scalar_one_or_none()
-    if projet is None:
-        raise not_found("Project", f"{org}/{body.project}")
+    sujet = None
+    if body.agent:
+        _, _, sujet = await _charger(session, principal, org, body.agent)
+    _exiger(decide(principal, org, sujet, Action.TRIAL, project_slug=body.project))
+    erreurs_d_une_version(body.spec)
+    projet = await _projet(session, organisation, body.project)
     publiee = None
     if body.agent:
         agent = await _agent(session, organisation, body.agent)
@@ -909,7 +1134,7 @@ async def list_org_credentials(org: str, session: Db, principal: Me) -> list[Age
     clients' page read one list per external agent."""
     from ..db.session import en_portee_de_plateforme
 
-    _gerer(principal, org)
+    _admin(principal, org)
     organisation = await _organisation(session, org)
     lignes = (
         await session.execute(
@@ -939,8 +1164,8 @@ async def list_org_credentials(org: str, session: Db, principal: Me) -> list[Age
 async def list_credentials(org: str, slug: Slug, session: Db, principal: Me) -> list[AgentCredentialDto]:
     from ..db.session import en_portee_de_plateforme
 
-    _gerer(principal, org)
-    agent = await _agent(session, await _organisation(session, org), slug)
+    _, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.MANAGE))
     lignes = list(
         (await session.execute(select(AgentCredential).where(AgentCredential.agent_id == agent.id))).scalars()
     )
@@ -968,9 +1193,8 @@ async def attach_credential(
     et ses droits sont ceux de l'humain intersectés avec ceux de la version de l'agent."""
     from ..db.session import en_portee_de_plateforme
 
-    _gerer(principal, org)
-    organisation = await _organisation(session, org)
-    agent = await _agent(session, organisation, slug)
+    organisation, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.MANAGE))
     if agent.kind != "external":
         raise unprocessable(f"`{slug}` is an internal agent: only an `external` agent carries an MCP client")
     if body.kind == "token":
@@ -1022,8 +1246,8 @@ async def attach_credential(
     operation_id="detachAgentCredential",
 )
 async def detach_credential(org: str, slug: Slug, credential_id: str, session: Db, principal: Me) -> Response:
-    _gerer(principal, org)
-    agent = await _agent(session, await _organisation(session, org), slug)
+    _, agent, sujet = await _charger(session, principal, org, slug)
+    _exiger(decide(principal, org, sujet, Action.MANAGE))
     ligne = await session.get(AgentCredential, credential_id)
     if ligne is None or ligne.agent_id != agent.id:
         raise not_found("Agent client", credential_id)
@@ -1075,6 +1299,7 @@ async def list_agent_catalogue(
                 installed=etat.installe,
                 installed_version=etat.version_installee,
                 own_agent=etat.installe and not etat.du_catalogue,
+                scope=etat.scope,
                 update_available=etat.mise_a_jour,
                 offered=offert,
                 unavailable_reason=raison,
@@ -1102,7 +1327,7 @@ async def install_catalogue_agent(
 
     from ..services import catalogue_d_agents as catalogue
 
-    _gerer(principal, org)
+    _admin(principal, org)
     organisation = await _organisation(session, org)
     proposition = entree(slug)
     if proposition is None:
@@ -1119,7 +1344,7 @@ async def install_catalogue_agent(
         raise conflict(f"`{slug}` is already installed: ask for `upgrade` to publish the catalogue's version")
     else:
         await catalogue.mettre_a_jour(session, organisation.id, proposition, principal)
-    return await _dto(session, await _agent(session, organisation, slug), avec_versions=True)
+    return await _dto(session, await _agent(session, organisation, slug), principal, org, avec_versions=True)
 
 
 @router.post(
@@ -1163,7 +1388,7 @@ async def connect_catalogue_client(
         await session.execute(select(Agent).where(Agent.org_id == organisation.id, Agent.slug == slug))
     ).scalar_one_or_none()
     if agent is None:
-        _gerer(principal, org)
+        _admin(principal, org)
         await catalogue.installer(session, organisation.id, proposition, principal)
         agent = await _agent(session, organisation, slug)
     elif agent.kind != "external":
@@ -1202,5 +1427,7 @@ async def connect_catalogue_client(
     await record(session, principal, "agent.credential.attach", org_id=organisation.id, target_type="agent",
                  target_id=agent.id, via="catalogue")  # fmt: skip
     return AgentCatalogueConnection(
-        agent=await _dto(session, agent, avec_versions=True), token=jeton, oauth_client_id=client_oauth
+        agent=await _dto(session, agent, principal, org, avec_versions=True),
+        token=jeton,
+        oauth_client_id=client_oauth,
     )

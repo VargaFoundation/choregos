@@ -1,5 +1,8 @@
 # 0040 — A built-in agent catalogue: installed on demand, or when a workflow names one
 
+> **Amended by [ADR 0061](0061-agent-ownership-scopes-and-forks.md)**: an agent installed from the
+> catalogue is a common (`platform`) agent, changed by an `org_admin` only; to extend it, fork it.
+
 - **Status**: accepted, 2026-10-07
 - **Concerns**: `packages/core` (`choregos_core.catalogue_d_agents`), the agent registry API, the
   console's `/agents`, the shipped templates; amends [ADR 0033](0033-agent-registry-and-skill-library.md)

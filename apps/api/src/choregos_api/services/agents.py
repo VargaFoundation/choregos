@@ -18,6 +18,7 @@ from ..db.models import Agent, AgentVersion, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
 from ..schemas import AgentOverrides, AgentSpec
+from .agent_governance import usable_in_project
 
 
 def empreinte(spec: AgentSpec) -> str:
@@ -106,6 +107,10 @@ async def resoudre_l_agent(
     ).scalar_one_or_none()
     if agent is None:
         raise AgentIndisponible(f"agent `{slug}` does not exist in the project's organisation")
+    # A personal agent never runs in a workflow, a project's agent only in its project (ADR 0061).
+    refus = usable_in_project(agent.scope, agent.project_id, agent.slug, project_id)
+    if refus is not None:
+        raise AgentIndisponible(refus)
     if agent.status != "active":
         raise AgentIndisponible(f"agent `{slug}` is {agent.status}: the run does not start")
     if agent.lifecycle == "retired":
