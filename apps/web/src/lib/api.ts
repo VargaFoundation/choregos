@@ -68,6 +68,14 @@ import type {
   ConnectorType,
   ExecutorInfo,
   GatewayModel,
+  ModelCatalogue,
+  ModelCatalogueEntry,
+  ModelCatalogueEntryCreate,
+  ModelCataloguePatch,
+  ModelCatalogueSettings,
+  ModelCuratePreview,
+  ModelSyncResult,
+  UsableModel,
   HandOff,
   Membership,
   MembershipUpsert,
@@ -437,6 +445,25 @@ export const api = {
   templates: () => request<TemplateSummary[]>("/templates"),
   connectorTypes: () => request<ConnectorType[]>("/connectors/types"),
   platformModels: () => request<GatewayModel[]>("/platform/models"),
+  /** The organisation's model catalogue and what an agent may use of it (ADR 0060). */
+  modelCatalogue: (org: string) => request<ModelCatalogue>(`/orgs/${org}/models`),
+  usableModels: (org: string, query: { role?: string; usage?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (query.role) params.set("role", query.role);
+    if (query.usage) params.set("usage", query.usage);
+    const suffix = params.toString();
+    return request<UsableModel[]>(`/orgs/${org}/models/usable${suffix ? `?${suffix}` : ""}`);
+  },
+  putModelCatalogueSettings: (org: string, body: ModelCatalogueSettings) =>
+    request<ModelCatalogueSettings>(`/orgs/${org}/models/settings`, { method: "PUT", body: JSON.stringify(body) }),
+  syncModelCatalogue: (org: string) => request<ModelSyncResult>(`/orgs/${org}/models/sync`, { method: "POST" }),
+  addModelCatalogueEntry: (org: string, body: ModelCatalogueEntryCreate) =>
+    request<ModelCatalogueEntry>(`/orgs/${org}/models`, { method: "POST", body: JSON.stringify(body) }),
+  updateModelCatalogueEntry: (org: string, id: string, body: ModelCataloguePatch) =>
+    request<ModelCatalogueEntry>(`/orgs/${org}/models/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteModelCatalogueEntry: (org: string, id: string) =>
+    request<void>(`/orgs/${org}/models/${id}`, { method: "DELETE" }),
+  previewModelCuration: (org: string) => request<ModelCuratePreview>(`/orgs/${org}/models/curate-preview`),
   backends: () => request<AgentBackendInfo[]>("/platform/backends"),
   executors: () => request<ExecutorInfo[]>("/platform/executors"),
   models: (id: string) => request<ProjectModels>(`/projects/${qualify(id)}/models`),

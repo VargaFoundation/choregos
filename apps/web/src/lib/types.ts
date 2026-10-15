@@ -128,6 +128,19 @@ export type {
   SkillVersion,
 } from "@choregos/contracts/api";
 
+/** The organisation's model catalogue (ADR 0060). */
+export type {
+  ModelCatalogue,
+  ModelCatalogueEntry,
+  ModelCatalogueEntryCreate,
+  ModelCataloguePatch,
+  ModelCatalogueSettings,
+  ModelCuratePreview,
+  ModelSyncResult,
+  ModelTiers,
+  UsableModel,
+} from "@choregos/contracts/api";
+
 /** One revision of a named output of a work item (ADR 0049). */
 export type { Artifact } from "@choregos/contracts/schemas";
 /** Knowledge bases (ADR 0051). */
