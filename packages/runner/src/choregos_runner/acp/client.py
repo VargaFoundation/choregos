@@ -35,6 +35,12 @@ from .protocol import (
 #: How many of the agent's last text chunks a `PromptOutcome` keeps.
 SAID_KEPT = 20
 
+#: The longest ACP message (one JSON line on the agent's stdout) the runner reads (#498).
+#: asyncio's default is 64 KiB; one `tool_call_update` carrying a file the agent read (a
+#: transcript, a log) is longer, and the read loop died on it: the agent's answer was then
+#: never read, and the run waited its whole budget before exiting 1.
+MAX_MESSAGE_BYTES = 64 * 1024 * 1024
+
 PermissionHandler = Callable[[dict[str, Any]], Awaitable[tuple[bool, str]]]
 UpdateHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -104,6 +110,7 @@ class AcpClient:
         on_permission: PermissionHandler | None = None,
         read_timeout: float = 120.0,
         guard: TurnGuard | None = None,
+        max_message_bytes: int = MAX_MESSAGE_BYTES,
     ) -> None:
         self.command = command
         self.cwd = cwd
@@ -111,6 +118,11 @@ class AcpClient:
         self.on_update = on_update
         self.on_permission = on_permission
         self.read_timeout = read_timeout
+        self.max_message_bytes = max_message_bytes
+        #: Messages longer than `max_message_bytes`, dropped unread (#498): how many.
+        self.dropped_messages = 0
+        #: Why the read loop stopped, when it died of an error rather than of the agent's EOF.
+        self.reader_error: str | None = None
         self.process: asyncio.subprocess.Process | None = None
         self.session_id: str | None = None
         self.capabilities: dict[str, Any] = {}
@@ -137,6 +149,7 @@ class AcpClient:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=self.max_message_bytes,
             )
         except (FileNotFoundError, PermissionError) as exc:
             raise AgentUnreachableError(f"cannot start {self.command[0]}: {exc}") from exc
@@ -147,7 +160,10 @@ class AcpClient:
         for task in (self._reader_task, self._stderr_task):
             if task is not None:
                 task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                # A reader that died of an error already said so (`reader_error`, the pending
+                # requests failed with it): raising it again here replaced the run's readable
+                # error with a bare traceback and exit 1 (#498).
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
         if self.process is not None and self.process.returncode is None:
             self.process.terminate()
@@ -290,6 +306,8 @@ class AcpClient:
     async def request(self, method: str, params: dict[str, Any], *, timeout: float = 60.0) -> Response:
         if self.process is None or self.process.stdin is None:
             raise AgentUnreachableError("agent process missing")
+        if self.reader_error is not None:
+            raise AgentUnreachableError(f"the runner stopped reading the agent: {self.reader_error}")
         self._next_id += 1
         request = Request(id=self._next_id, method=method, params=params)
         future: asyncio.Future[Response] = asyncio.get_running_loop().create_future()
@@ -323,6 +341,12 @@ class AcpClient:
             morceaux.append("process: alive (so it did not crash; it wrote nothing)")
         else:
             morceaux.append(f"process: exited, code {self.process.returncode}")
+        if self.reader_error:
+            morceaux.append(f"the runner stopped reading the agent: {self.reader_error}")
+        if self.dropped_messages:
+            morceaux.append(
+                f"{self.dropped_messages} message(s) longer than {self.max_message_bytes} bytes dropped"
+            )
         if self.stderr_tail:
             dernieres = " / ".join(ligne.strip() for ligne in self.stderr_tail[-5:] if ligne.strip())
             morceaux.append(f"agent's error output: {dernieres[:600]}")
@@ -345,9 +369,31 @@ class AcpClient:
     # ───────────────────────── boucle de lecture ─────────────────────────
 
     async def _read_loop(self) -> None:
+        try:
+            await self._read_messages()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # Nobody reads the agent any more: every request in flight would wait out its whole
+            # timeout for an answer that can no longer arrive. They fail now, saying why.
+            self.reader_error = f"{type(exc).__name__}: {exc}"[:500]
+            command = " ".join(self.command)
+            reason = f"the runner stopped reading the agent: {self.reader_error} — command: {command}"
+            for future in list(self._pending.values()):
+                if not future.done():
+                    future.set_exception(AgentUnreachableError(reason))
+            raise
+
+    async def _read_messages(self) -> None:
         assert self.process is not None and self.process.stdout is not None
         while True:
-            line = await self.process.stdout.readline()
+            try:
+                line = await self.process.stdout.readline()
+            except ValueError:
+                # Longer than `max_message_bytes`: asyncio has already discarded it, and the
+                # stream reads on from the next line. One update lost beats a deaf runner.
+                self.dropped_messages += 1
+                continue
             if not line:
                 break
             message = decode(line)
