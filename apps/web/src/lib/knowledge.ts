@@ -50,3 +50,30 @@ export function formatEvalSet(cases: KnowledgeEvalCase[] | undefined): string {
 export function recallLabel(recall: number | null | undefined): string {
   return recall === null || recall === undefined ? "not measured" : `${Math.round(recall * 100)} %`;
 }
+
+/** What a sync did, in words: `2 added · 1 deleted`; nothing to say → `no change`. */
+export function syncSummary(summary: Record<string, unknown> | null | undefined): string {
+  if (!summary) return "never synced";
+  const parts = ["added", "updated", "deleted", "skipped"]
+    .filter((k) => Number(summary[k] ?? 0) > 0)
+    .map((k) => `${Number(summary[k])} ${k}`);
+  return parts.length ? parts.join(" · ") : "no change";
+}
+
+/** The configuration a source form sends, by kind. */
+export function sourceConfig(
+  kind: "sharepoint" | "web" | "git",
+  fields: { site: string; folder: string; url: string; ref: string; paths: string },
+): Record<string, unknown> {
+  if (kind === "sharepoint") {
+    const site = fields.site.trim();
+    const key = site.startsWith("b!") ? "drive_id" : "site_id";
+    return { [key]: site, ...(fields.folder.trim() ? { folder: fields.folder.trim() } : {}) };
+  }
+  if (kind === "web") return { url: fields.url.trim(), max_depth: 2, max_pages: 50 };
+  return {
+    url: fields.url.trim(),
+    ref: fields.ref.trim() || "main",
+    paths: fields.paths.split(",").map((p) => p.trim()).filter(Boolean),
+  };
+}

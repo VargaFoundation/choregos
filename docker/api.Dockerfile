@@ -99,5 +99,10 @@ CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,e
 # déclarait `unhealthy` en permanence, et tout ce qui lit ce drapeau (docker, compose, un
 # ordonnanceur qui n'utilise pas les sondes Kubernetes) le croyait.
 FROM commun AS worker
+# `git`: a knowledge base synced from a repository fetches it here (S33-04, ADR 0051).
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/*
+USER 1000
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 

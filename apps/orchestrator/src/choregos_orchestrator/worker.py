@@ -73,6 +73,38 @@ async def start_reconciliation_loops() -> list[str]:
     return started
 
 
+async def start_knowledge_sync_loops() -> list[str]:
+    """One sync loop per knowledge source (S33-04). Idempotent like the tracker loops: the API
+    starts a source's loop when it creates it; the worker restarts the ones a failure ended."""
+    from choregos_api.db.models import KnowledgeSource, Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.temporal import knowledge_sync_id
+    from sqlalchemy import select
+
+    from .train_client import start_workflow_once
+
+    async with session_scope(orgs="*") as session:
+        rows = (
+            await session.execute(
+                select(Organization.slug, KnowledgeSource.id, KnowledgeSource.interval_minutes).join(
+                    Organization, Organization.id == KnowledgeSource.org_id
+                )
+            )
+        ).tuples()
+        sources = list(rows)
+    started: list[str] = []
+    for org, source_id, minutes in sources:
+        if await start_workflow_once(
+            "KnowledgeSync",
+            knowledge_sync_id(source_id),
+            {"org": org, "source_id": source_id, "interval_seconds": minutes * 60},
+            relancer_si_echoue=True,
+        ):
+            started.append(source_id)
+    logger.info("knowledge sync loops", sources=len(sources), started=len(started))
+    return started
+
+
 async def run_worker(queues: list[str]) -> None:
     from choregos_adapters import charger_les_greffons
     from temporalio.client import Client
@@ -100,6 +132,7 @@ async def run_worker(queues: list[str]) -> None:
             await stack.enter_async_context(worker)
         if "orchestrator" in queues:
             await start_reconciliation_loops()
+            await start_knowledge_sync_loops()
         await asyncio.Future()
 
 

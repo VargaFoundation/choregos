@@ -9,20 +9,29 @@ scope (`knowledge.access`).
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from dataclasses import asdict
 from functools import partial
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Request, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 from starlette.datastructures import UploadFile
 
 from ..audit import record
 from ..config import get_settings
-from ..db.models import KnowledgeBase, KnowledgeChunk, KnowledgeDocument, Organization, Project
+from ..db.models import (
+    KnowledgeBase,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    KnowledgeSource,
+    Organization,
+    OrgConnector,
+    Project,
+)
 from ..deps import Db, Me
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..knowledge.access import can_manage, visible_to
@@ -37,7 +46,11 @@ from ..schemas.knowledge import (
     KnowledgeEvalSet,
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
+    KnowledgeSourceCreate,
+    KnowledgeSourceDto,
+    KnowledgeSourcePatch,
 )
+from ..temporal import get_temporal, knowledge_sync_id
 
 router = APIRouter(tags=["knowledge"])
 
@@ -109,6 +122,8 @@ def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -
         created_at=document.created_at,
         converted_at=document.converted_at,
         markdown=document.markdown if with_markdown else None,
+        source_id=document.source_id,
+        source_url=document.source_url,
     )
 
 
@@ -155,6 +170,40 @@ async def _dto(
         index=await _index_state(session, base) if base.serving_mode == "index" else None,
         eval_set=list(base.eval_set or []),
         eval_result=base.eval_result,
+        sources=[await _source_dto(session, source) for source in await _sources(session, base)]
+        if with_documents
+        else None,
+    )
+
+
+async def _sources(session: AsyncSession, base: KnowledgeBase) -> list[KnowledgeSource]:
+    return list(
+        (
+            await session.execute(
+                select(KnowledgeSource)
+                .where(KnowledgeSource.knowledge_base_id == base.id)
+                .order_by(KnowledgeSource.created_at, KnowledgeSource.id)
+            )
+        ).scalars()
+    )
+
+
+async def _source_dto(session: AsyncSession, source: KnowledgeSource) -> KnowledgeSourceDto:
+    count = (
+        await session.execute(select(func.count()).where(KnowledgeDocument.source_id == source.id))
+    ).scalar_one()
+    return KnowledgeSourceDto(
+        id=source.id,
+        kind=source.kind,
+        name=source.name,
+        connector=source.connector,
+        config=dict(source.config or {}),
+        interval_minutes=source.interval_minutes,
+        status=source.status,
+        last_synced_at=source.last_synced_at,
+        last_error=source.last_error,
+        last_summary=source.last_summary,
+        document_count=int(count),
     )
 
 
@@ -517,3 +566,185 @@ async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -
         recall=base.eval_result["recall"],
     )
     return await _dto(session, base)
+
+
+# ───────────────────────────── sources (S33-04) ─────────────────────────────
+
+_HTTPS = ("https://",)
+
+
+async def _checked_source_config(
+    session: AsyncSession,
+    organisation: Organization,
+    kind: str,
+    connector: str | None,
+    config: dict[str, object],
+) -> dict[str, object]:
+    """What a source may be: refused here, with its reason, rather than at its first sync."""
+    if kind == "sharepoint":
+        if not connector:
+            raise unprocessable("a SharePoint or OneDrive source names its `documents` connector")
+        found = (
+            await session.execute(
+                select(OrgConnector.id).where(
+                    OrgConnector.org_id == organisation.id,
+                    OrgConnector.name == connector,
+                    OrgConnector.kind == "documents",
+                )
+            )
+        ).first()
+        if found is None:
+            raise unprocessable(f"no `documents` connector `{connector}` in {organisation.slug}")
+        if not (config.get("site_id") or config.get("drive_id")):
+            raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
+        return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
+    url = str(config.get("url") or "")
+    if not url.startswith(_HTTPS):
+        raise unprocessable(f"a {kind} source is reached over https: `{url}`")
+    if kind == "web":
+        return {
+            "url": url,
+            "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
+            "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
+        }
+    ref = str(config.get("ref") or "main")
+    if ref.startswith("-"):
+        raise unprocessable(f"not a git ref: `{ref}`")
+    paths = config.get("paths") or ["*.md"]
+    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+        raise unprocessable("`paths` is a list of glob patterns")
+    return {"url": url, "ref": ref, "paths": paths}
+
+
+async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) -> KnowledgeSource:
+    source = (
+        await session.execute(
+            select(KnowledgeSource).where(
+                KnowledgeSource.knowledge_base_id == base.id, KnowledgeSource.id == source_id
+            )
+        )
+    ).scalar_one_or_none()
+    if source is None:
+        raise not_found("Knowledge source", source_id)
+    return source
+
+
+async def _start_sync_loop(org: str, source: KnowledgeSource) -> None:
+    await get_temporal().start_knowledge_sync(
+        knowledge_sync_id(source.id),
+        {"org": org, "source_id": source.id, "interval_seconds": source.interval_minutes * 60},
+    )
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/sources",
+    response_model=KnowledgeSourceDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="createKnowledgeSource",
+)
+async def create_knowledge_source(
+    org: str, slug: Slug, body: KnowledgeSourceCreate, session: Db, principal: Me
+) -> KnowledgeSourceDto:
+    """SharePoint/OneDrive (through a `documents` connector), an allow-listed web site, or a git
+    repository; synced at once, then every `interval_minutes`. `agent:manage`."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    organisation = await _organisation(session, org)
+    config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
+    source = KnowledgeSource(
+        org_id=base.org_id,
+        knowledge_base_id=base.id,
+        kind=body.kind,
+        name=body.name,
+        connector=body.connector if body.kind == "sharepoint" else None,
+        config=config,
+        interval_minutes=body.interval_minutes,
+        status="idle",
+        created_by=principal.email,
+    )
+    session.add(source)
+    await session.flush()
+    await record(
+        session,
+        principal,
+        "knowledge.source.create",
+        org_id=base.org_id,
+        target_type="knowledge_source",
+        target_id=source.id,
+        kind=source.kind,
+    )
+    dto = await _source_dto(session, source)
+    await session.commit()
+    await _start_sync_loop(org, source)
+    return dto
+
+
+@router.patch(
+    "/orgs/{org}/knowledge/{slug}/sources/{source_id}",
+    response_model=KnowledgeSourceDto,
+    operation_id="updateKnowledgeSource",
+)
+async def update_knowledge_source(
+    org: str, slug: Slug, source_id: str, body: KnowledgeSourcePatch, session: Db, principal: Me
+) -> KnowledgeSourceDto:
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    source = await _source(session, base, source_id)
+    if body.name is not None:
+        source.name = body.name
+    if body.interval_minutes is not None:
+        source.interval_minutes = body.interval_minutes
+    if body.config is not None:
+        source.config = await _checked_source_config(
+            session, await _organisation(session, org), source.kind, source.connector, body.config
+        )
+        # Another site, URL or ref: the next sync starts from scratch.
+        source.cursor = None
+    await session.flush()
+    return await _source_dto(session, source)
+
+
+@router.delete(
+    "/orgs/{org}/knowledge/{slug}/sources/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="deleteKnowledgeSource",
+)
+async def delete_knowledge_source(org: str, slug: Slug, source_id: str, session: Db, principal: Me) -> None:
+    """The source and the documents it brought (and their chunks) leave the base."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    source = await _source(session, base, source_id)
+    await session.execute(delete(KnowledgeDocument).where(KnowledgeDocument.source_id == source.id))
+    await session.delete(source)
+    await record(
+        session,
+        principal,
+        "knowledge.source.delete",
+        org_id=base.org_id,
+        target_type="knowledge_source",
+        target_id=source_id,
+    )
+    await session.commit()
+    # The loop finds its source gone at its next pass and stops; told now, it stops at once.
+    with contextlib.suppress(Exception):  # a loop that does not run any more has nothing to stop
+        await get_temporal().signal(knowledge_sync_id(source_id), "stop", {})
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync",
+    response_model=KnowledgeSourceDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="syncKnowledgeSource",
+)
+async def sync_knowledge_source(
+    org: str, slug: Slug, source_id: str, session: Db, principal: Me
+) -> KnowledgeSourceDto:
+    """Syncs now rather than at the end of the interval. `agent:manage`."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    source = await _source(session, base, source_id)
+    dto = await _source_dto(session, source)
+    await session.commit()
+    await _start_sync_loop(org, source)
+    await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
+    return dto

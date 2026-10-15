@@ -912,6 +912,43 @@ class KnowledgeDocument(Base, PkMixin, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: the connector source it was synced from (S33-04); none for an upload
+    source_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_sources.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: its identity at the source (a Graph item id, a URL, a path) and its version there
+    source_ref: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_version: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+
+
+class KnowledgeSource(Base, PkMixin, TimestampMixin):
+    """Where a knowledge base's documents are synced from (S33-04, ADR 0051): `sharepoint` (a site or
+    drive through the organisation's `documents` connector, delta sync), `web` (one allow-listed
+    site, crawled) or `git` (a repository's documentation). A document deleted at the source leaves
+    the base and its index at the next sync."""
+
+    __tablename__ = "knowledge_sources"
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str] = mapped_column(String(200))
+    #: the org connector (`documents` capability) holding the credentials, for `sharepoint`
+    connector: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: where the next sync starts: a Graph deltaLink, a commit
+    cursor: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    #: idle | syncing | failed
+    status: Mapped[str] = mapped_column(String(16), default="idle")
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: what the last sync did: added, updated, deleted, unchanged, skipped
+    last_summary: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class KnowledgeChunk(Base, PkMixin, TimestampMixin):
@@ -974,6 +1011,7 @@ ALL_TABLES = [
     KnowledgeBase,
     KnowledgeDocument,
     KnowledgeChunk,
+    KnowledgeSource,
 ]
 
 

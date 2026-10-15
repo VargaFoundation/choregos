@@ -302,6 +302,22 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("master_key",),
     ),
+    # Knowledge base sources (S33-04, ADR 0051): one Entra application holding `Sites.Selected`,
+    # granted `read` on the chosen sites only — never `Files.Read.All` nor `Sites.Read.All`.
+    ("documents", "sharepoint"): ConnectorTypeSpec(
+        "Microsoft SharePoint and OneDrive (Graph, Sites.Selected)",
+        ("documents",),
+        _objet(
+            {
+                "tenant_id": _TEXTE,
+                "client_id": _TEXTE,
+                "graph_url": {"type": "string", "default": "https://graph.microsoft.com/v1.0"},
+                "login_url": {"type": "string", "default": "https://login.microsoftonline.com"},
+            },
+            ("tenant_id", "client_id"),
+        ),
+        ("client_secret",),
+    ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
         ("identity",),
@@ -644,6 +660,9 @@ def _register_builtins() -> None:
     register("notify", "fake")(lambda cfg: FakeNotifier())
     register("mcp", "fake")(_client_du_faux_mcp)
     register("identity", "fake")(_annuaire_du_faux_entra)
+    from .fakes.documents import FakeDocumentsConnector
+
+    register("documents", "fake")(FakeDocumentsConnector)
     for famille in _FAMILLES:
         register(famille, "fake")(_guichet_de_demo(famille, en_production=False))
     register("firewall", "fake")(_fake_pfsense)
@@ -809,6 +828,9 @@ def _register_builtins() -> None:
             enterprise_tags=cfg.get("enterprise_tags", False),
         )
     )
+    from .documents.graph import GraphDocumentsConnector
+
+    register("documents", "sharepoint", _SPECS_LIVREES[("documents", "sharepoint")])(GraphDocumentsConnector)
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(

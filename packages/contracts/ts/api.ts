@@ -898,6 +898,10 @@ export type KnowledgeDocument = {
   converted_at?: string | null;
   /** returned by the reading of one document */
   markdown?: string | null;
+  /** the source it was synced from; none for an upload */
+  source_id?: string | null;
+  /** where to open the original */
+  source_url?: string | null;
 };
 
 export type KnowledgeBase = {
@@ -924,6 +928,8 @@ export type KnowledgeBase = {
     mode?: string;
   } | null;
   eval_set?: Array<KnowledgeEvalCase>;
+  /** returned by the reading of one base */
+  sources?: Array<KnowledgeSource> | null;
   /** the last run of the eval set */
   eval_result?: {
     k?: number;
@@ -938,6 +944,50 @@ export type KnowledgeBase = {
       returned?: Array<string>;
     }>;
   } | null;
+};
+
+export type KnowledgeSourceCreate = {
+  kind: "sharepoint" | "web" | "git";
+  name: string;
+  /** `sharepoint`: the organisation connector of capability `documents` */
+  connector?: string | null;
+  /** `sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
+  config?: {
+    [key: string]: unknown;
+  };
+  interval_minutes?: number;
+};
+
+export type KnowledgeSourcePatch = {
+  name?: string | null;
+  config?: {
+    [key: string]: unknown;
+  } | null;
+  interval_minutes?: number | null;
+};
+
+export type KnowledgeSource = {
+  id: string;
+  kind: "sharepoint" | "web" | "git";
+  name: string;
+  connector?: string | null;
+  config?: {
+    [key: string]: unknown;
+  };
+  interval_minutes: number;
+  status: "idle" | "syncing" | "failed";
+  last_synced_at?: string | null;
+  last_error?: string | null;
+  /** what the last sync did */
+  last_summary?: {
+    added?: number;
+    updated?: number;
+    deleted?: number;
+    unchanged?: number;
+    skipped?: number;
+    skipped_reasons?: Array<string>;
+  } | null;
+  document_count?: number;
 };
 
 export type KnowledgeEvalCase = {
@@ -1855,6 +1905,7 @@ export interface Operations {
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
   createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
+  createKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources"; body: KnowledgeSourceCreate; response: KnowledgeSource };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
@@ -1866,6 +1917,7 @@ export interface Operations {
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
+  deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
@@ -2105,6 +2157,7 @@ export interface Operations {
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
+  syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2116,6 +2169,7 @@ export interface Operations {
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
+  updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };

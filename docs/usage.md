@@ -602,6 +602,23 @@ rebuilds the chunks. Each base keeps an **eval set** (`PUT …/eval`: questions 
 by file name or title, expected to answer them); `POST …/eval/run` measures **recall@5** and the
 base's page shows it, per question.
 
+A base also **syncs from sources** (`POST …/sources`), each on its own Temporal loop
+(`KnowledgeSync`, every `interval_minutes`, or now with `POST …/sources/{id}/sync`):
+
+- **SharePoint or OneDrive**: create an organisation connector of capability `documents`, type
+  `sharepoint` (`tenant_id`, `client_id`, `secret_refs.client_secret`), for an Entra application
+  holding the application permission **`Sites.Selected`** — and have a tenant administrator grant it
+  `read` on the chosen sites (`POST /sites/{site-id}/permissions`). Never `Files.Read.All`. The
+  source names a `site_id` (or a OneDrive's `drive_id`) and optionally a `folder`; sync is delta.
+- **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
+  `max_pages` ≤ 500; a host that resolves to a private address is refused.
+- **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
+  (`*.md` by default).
+
+A document deleted at the source leaves the base **and its index** at the next sync. Each source
+shows when it last synced, what it did (added, updated, deleted, skipped and why) and its last
+error; each document links back to where it lives.
+
 ## 4. Write the policy
 
 ```yaml
