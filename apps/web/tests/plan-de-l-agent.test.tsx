@@ -103,3 +103,44 @@ describe("le journal brut d'un run", () => {
   });
 });
 
+describe("opencode's plan, published through its todowrite tool (S25-05)", () => {
+  const todowrite = (seq: number, todos: unknown[]): RunEventDto => ({
+    seq,
+    type: "session/update",
+    ts: `2026-10-15T08:${String(seq).padStart(2, "0")}:00Z`,
+    payload: {
+      sessionId: "s",
+      update: { sessionUpdate: "tool_call_update", toolCallId: `c${seq}`, title: "todowrite", kind: "other", rawInput: { todos } },
+    },
+  });
+
+  it("reads each todowrite call as a plan revision, with the same rules as an ACP plan", () => {
+    const plan = planDeLAgent([
+      todowrite(1, [t("Inspect the code", "in_progress", "high"), t("Fix the total", "pending", "high")]),
+      todowrite(2, [t("Inspect the code", "completed", "high"), t("Fix the total", "completed", "high")]),
+    ])!;
+    expect(plan.revisions).toHaveLength(2);
+    expect([plan.faites, plan.total]).toEqual([2, 2]);
+  });
+
+  it("a cancelled todo is removed, never counted as done", () => {
+    const plan = planDeLAgent([
+      todowrite(1, [t("Inspect the code", "completed"), t("Update the docs", "pending")]),
+      todowrite(2, [t("Inspect the code", "completed"), t("Update the docs", "cancelled")]),
+    ])!;
+    expect([plan.faites, plan.total]).toEqual([1, 1]);
+    expect(plan.taches.at(-1)).toMatchObject({ contenu: "Update the docs", retiree: true });
+  });
+
+  it("ignores the call without input and any other tool that happens to carry a list", () => {
+    const sansEntree: RunEventDto = { ...todowrite(1, []), payload: { sessionId: "s", update: { sessionUpdate: "tool_call", toolCallId: "c1", title: "todowrite", rawInput: {} } } };
+    const autre: RunEventDto = {
+      seq: 2,
+      type: "session/update",
+      ts: "2026-10-15T08:02:00Z",
+      payload: { sessionId: "s", update: { sessionUpdate: "tool_call_update", toolCallId: "c2", title: "Read a.py", rawInput: { todos: [t("x", "pending")] } } },
+    };
+    expect(planDeLAgent([sansEntree, autre])).toBeNull();
+  });
+});
+
