@@ -960,6 +960,12 @@ export type KnowledgeSourceCreate = {
     [key: string]: unknown;
   };
   interval_minutes?: number;
+  /** `interval`: every `interval_minutes`; `cron`: `refresh_cron` in `refresh_timezone`; `manual`: only on demand (S39-19) */
+  refresh_mode?: "interval" | "cron" | "manual";
+  /** five fields (minute hour day month weekday); at least 5 minutes between two fires */
+  refresh_cron?: string | null;
+  /** IANA name */
+  refresh_timezone?: string;
 };
 
 export type KnowledgeSourcePatch = {
@@ -968,6 +974,9 @@ export type KnowledgeSourcePatch = {
     [key: string]: unknown;
   } | null;
   interval_minutes?: number | null;
+  refresh_mode?: "interval" | "cron" | "manual" | null;
+  refresh_cron?: string | null;
+  refresh_timezone?: string | null;
 };
 
 export type KnowledgeSource = {
@@ -979,6 +988,12 @@ export type KnowledgeSource = {
     [key: string]: unknown;
   };
   interval_minutes: number;
+  refresh_mode?: "interval" | "cron" | "manual";
+  refresh_cron?: string | null;
+  refresh_timezone?: string;
+  /** an estimate (the worker may be down); null in manual mode or when due */
+  next_sync_at?: string | null;
+  sync_requested_at?: string | null;
   status: "idle" | "syncing" | "failed";
   last_synced_at?: string | null;
   last_error?: string | null;
@@ -2162,6 +2177,7 @@ export interface Operations {
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
+  syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;

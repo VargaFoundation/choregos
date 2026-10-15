@@ -624,7 +624,8 @@ by file name or title, expected to answer them); `POST …/eval/run` measures **
 base's page shows it, per question.
 
 A base also **syncs from sources** (`POST …/sources`), each on its own Temporal loop
-(`KnowledgeSync`, every `interval_minutes`, or now with `POST …/sources/{id}/sync`):
+(`KnowledgeSync`; the refresh is set per source, see below; now with `POST …/sources/{id}/sync`, or
+for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on the page):
 
 - **SharePoint or OneDrive**: create an organisation connector of capability `documents`, type
   `sharepoint` (`tenant_id`, `client_id`, `secret_refs.client_secret`), for an Entra application
@@ -635,6 +636,14 @@ A base also **syncs from sources** (`POST …/sources`), each on its own Tempora
   `max_pages` ≤ 500; a host that resolves to a private address is refused.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
   (`*.md` by default).
+
+**Refresh schedule.** A source refreshes in one of three modes (`refresh_mode`): `interval` (every
+`interval_minutes`, 5 minutes to 7 days; the default), `cron` (`refresh_cron` with five fields, for
+example `0 6 * * 1-5`, read in `refresh_timezone`, for example `Europe/Paris`; at least 5 minutes
+between two fires) or `manual` (only when someone syncs). The page shows `next sync` beside each
+source (an estimate: a worker that is down at the cron minute syncs at its next pass), and **edit
+refresh** changes the mode, with **apply to all sources** to set the same schedule everywhere; the
+change takes effect at once, not at the end of the current wait. A manual sync always runs.
 
 A document deleted at the source leaves the base **and its index** at the next sync. Each source
 shows when it last synced, what it did (added, updated, deleted, skipped and why) and its last

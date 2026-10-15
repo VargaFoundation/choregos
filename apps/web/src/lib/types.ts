@@ -124,6 +124,7 @@ export type {
   KnowledgeSearchResult,
   KnowledgeSource,
   KnowledgeSourceCreate,
+  KnowledgeSourcePatch,
 } from "@choregos/contracts/api";
 
 /** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */

@@ -944,6 +944,15 @@ class KnowledgeSource(Base, PkMixin, TimestampMixin):
     #: where the next sync starts: a Graph deltaLink, a commit
     cursor: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    #: interval | cron | manual (S39-19): what decides when the loop syncs
+    refresh_mode: Mapped[str] = mapped_column(String(8), default="interval", server_default="interval")
+    #: five fields, minute resolution, read in `refresh_timezone`; set in `cron` mode
+    refresh_cron: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    refresh_timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
+    #: when the source syncs next (an estimate: the worker may be down); null = due, or manual
+    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: set by "sync now": a request later than `last_synced_at` makes the next pass sync
+    sync_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: idle | syncing | failed
     status: Mapped[str] = mapped_column(String(16), default="idle")
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

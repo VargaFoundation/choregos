@@ -130,6 +130,8 @@ class KnowledgeSearchResult(Dto):
 
 
 SourceKind = Literal["sharepoint", "web", "git"]
+#: interval: every `interval_minutes`; cron: `refresh_cron` in `refresh_timezone`; manual: on demand only
+RefreshMode = Literal["interval", "cron", "manual"]
 
 
 class KnowledgeSourceCreate(Dto):
@@ -141,12 +143,20 @@ class KnowledgeSourceCreate(Dto):
     #: `git`: `url`, `ref`, `paths`
     config: dict[str, Any] = Field(default_factory=dict)
     interval_minutes: int = Field(default=60, ge=5, le=7 * 24 * 60)
+    refresh_mode: RefreshMode = "interval"
+    #: five fields (minute hour day month weekday), at least 5 minutes between two fires
+    refresh_cron: str | None = Field(default=None, max_length=100)
+    #: an IANA name, for example `Europe/Paris`
+    refresh_timezone: str = Field(default="UTC", max_length=64)
 
 
 class KnowledgeSourcePatch(Dto):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     config: dict[str, Any] | None = None
     interval_minutes: int | None = Field(default=None, ge=5, le=7 * 24 * 60)
+    refresh_mode: RefreshMode | None = None
+    refresh_cron: str | None = Field(default=None, max_length=100)
+    refresh_timezone: str | None = Field(default=None, max_length=64)
 
 
 class KnowledgeSourceDto(Dto):
@@ -156,6 +166,12 @@ class KnowledgeSourceDto(Dto):
     connector: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     interval_minutes: int
+    refresh_mode: RefreshMode = "interval"
+    refresh_cron: str | None = None
+    refresh_timezone: str = "UTC"
+    #: an estimate: the worker may be down at that moment; absent in manual mode
+    next_sync_at: datetime | None = None
+    sync_requested_at: datetime | None = None
     status: str
     last_synced_at: datetime | None = None
     last_error: str | None = None

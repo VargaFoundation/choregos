@@ -5,7 +5,8 @@ import { useState } from "react";
 import { Badge, Card, ErrorNote, Input, Select, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
-import { sourceConfig, syncSummary } from "@/lib/knowledge";
+import { RefreshFields } from "@/components/knowledge-refresh";
+import { draftOf, nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary, type RefreshDraft } from "@/lib/knowledge";
 import type { KnowledgeSource } from "@/lib/types";
 
 type Kind = "sharepoint" | "web" | "git";
@@ -29,7 +30,11 @@ export function KnowledgeSources({
   onChange: () => void;
 }) {
   const [kind, setKind] = useState<Kind>("sharepoint");
-  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", url: "", ref: "main", paths: "*.md", interval: "60" });
+  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", url: "", ref: "main", paths: "*.md" });
+  const [refresh, setRefresh] = useState<RefreshDraft>(draftOf());
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState<RefreshDraft>(draftOf());
+  const [applyAll, setApplyAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (key: keyof typeof fields) => (e: { target: { value: string } }) => setFields({ ...fields, [key]: e.target.value });
   async function act(gesture: () => Promise<unknown>) {
@@ -42,7 +47,16 @@ export function KnowledgeSources({
     onChange();
   }
   return (
-    <Card title="sources">
+    <Card
+      title="sources"
+      action={
+        sources.length > 0 ? (
+          <button type="button" className="text-xs underline" onClick={() => void act(() => api.syncKnowledgeBase(org, slug))}>
+            sync all now
+          </button>
+        ) : undefined
+      }
+    >
       <div className="space-y-3 text-sm">
         {sources.length === 0 ? (
           <p className="text-ink-muted">No source: uploads only.</p>
@@ -55,17 +69,56 @@ export function KnowledgeSources({
                 <Badge tone={TONE[source.status] ?? "neutral"}>{source.status}</Badge>
                 <span className="text-xs">
                   {source.last_synced_at ? `synced ${relative(source.last_synced_at)}` : "not synced yet"} ·{" "}
-                  {syncSummary(source.last_summary)} · {source.document_count ?? 0} document(s) · every {source.interval_minutes} min
+                  {syncSummary(source.last_summary)} · {source.document_count ?? 0} document(s) · {refreshLabel(source)} · {nextSyncLabel(source)}
                 </span>
                 {source.last_error && <span className="w-full text-xs text-danger">{source.last_error}</span>}
                 <span className="ml-auto space-x-2 text-xs">
                   <button type="button" className="underline" onClick={() => void act(() => api.syncKnowledgeSource(org, slug, source.id))}>
                     sync now
                   </button>
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => {
+                      setDraft(draftOf(source));
+                      setApplyAll(false);
+                      setEditing(editing === source.id ? null : source.id);
+                    }}
+                  >
+                    edit refresh
+                  </button>
                   <button type="button" className="underline" onClick={() => void act(() => api.deleteKnowledgeSource(org, slug, source.id))}>
                     remove
                   </button>
                 </span>
+                {editing === source.id && (
+                  <form
+                    className="grid w-full gap-2 sm:grid-cols-3"
+                    aria-label="edit refresh"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const targets = applyAll ? sources : [source];
+                      void act(async () => {
+                        for (const target of targets) await api.updateKnowledgeSource(org, slug, target.id, refreshBody(draft));
+                        setEditing(null);
+                      });
+                    }}
+                  >
+                    <RefreshFields value={draft} onChange={setDraft} />
+                    <label className="flex items-center gap-1 text-xs">
+                      <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} />
+                      apply to all sources
+                    </label>
+                    <div className="space-x-2">
+                      <button type="submit" className={buttonClasses("secondary", "sm")}>
+                        save refresh
+                      </button>
+                      <button type="button" className="text-xs underline" onClick={() => setEditing(null)}>
+                        cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </li>
             ))}
           </ul>
@@ -80,7 +133,7 @@ export function KnowledgeSources({
                 name: fields.name || KIND[kind],
                 connector: kind === "sharepoint" ? fields.connector : null,
                 config: sourceConfig(kind, fields),
-                interval_minutes: Number(fields.interval) || 60,
+                ...refreshBody(refresh),
               }),
             );
           }}
@@ -91,7 +144,7 @@ export function KnowledgeSources({
             <option value="git">git repository (https)</option>
           </Select>
           <Input aria-label="source name" placeholder="name" value={fields.name} onChange={set("name")} />
-          <Input aria-label="interval in minutes" placeholder="every … minutes" value={fields.interval} onChange={set("interval")} />
+          <RefreshFields value={refresh} onChange={setRefresh} />
           {kind === "sharepoint" ? (
             <>
               <Input aria-label="documents connector" placeholder="documents connector" value={fields.connector} onChange={set("connector")} />

@@ -1,13 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { api } from "@/lib/api";
-import { sourceConfig, syncSummary } from "@/lib/knowledge";
+import { nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
 import type { KnowledgeSource } from "@/lib/types";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
-  return { ...real, api: { ...real.api, createKnowledgeSource: vi.fn(), syncKnowledgeSource: vi.fn(), deleteKnowledgeSource: vi.fn() } };
+  return { ...real, api: { ...real.api, createKnowledgeSource: vi.fn(), updateKnowledgeSource: vi.fn(), syncKnowledgeBase: vi.fn(), syncKnowledgeSource: vi.fn(), deleteKnowledgeSource: vi.fn() } };
 });
 
 const source: KnowledgeSource = {
@@ -61,8 +61,61 @@ describe("the sources of a base (S33-04)", () => {
         name: "SharePoint / OneDrive",
         connector: "sharepoint",
         config: { site_id: "acme.sharepoint.com,1,2" },
+        refresh_mode: "interval",
         interval_minutes: 60,
       }),
     );
+  });
+
+  it("says how each source refreshes and when it syncs next", () => {
+    const cron: KnowledgeSource = {
+      ...source,
+      refresh_mode: "cron",
+      refresh_cron: "0 6 * * 1-5",
+      refresh_timezone: "Europe/Paris",
+      next_sync_at: new Date(Date.now() + 23 * 60_000).toISOString(),
+    };
+    render(<KnowledgeSources org="varga" slug="framework" sources={[cron]} onChange={vi.fn()} />);
+    expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("cron 0 6 * * 1-5 (Europe/Paris) · next in 23 minutes");
+    expect(refreshLabel({ ...source, refresh_mode: "manual" })).toBe("manual");
+    expect(nextSyncLabel({ refresh_mode: "manual" })).toBe("—");
+    expect(refreshBody({ mode: "manual", interval: "5", cron: "", timezone: "UTC" })).toEqual({ refresh_mode: "manual" });
+  });
+
+  it("edits the refresh of a source, or of all of them", async () => {
+    vi.mocked(api.updateKnowledgeSource).mockResolvedValue(source);
+    const other = { ...source, id: "src-2", name: "Other" };
+    render(<KnowledgeSources org="varga" slug="framework" sources={[source, other]} onChange={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "edit refresh" })[0]!);
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
+    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    await waitFor(() =>
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1", { refresh_mode: "manual" }),
+    );
+    expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(1);
+
+    vi.mocked(api.updateKnowledgeSource).mockClear();
+    fireEvent.click(screen.getAllByRole("button", { name: "edit refresh" })[0]!);
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
+    fireEvent.click(screen.getByLabelText("apply to all sources"));
+    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    await waitFor(() => expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows the API's reason when a cron is refused", async () => {
+    vi.mocked(api.updateKnowledgeSource).mockRejectedValue(new Error("`*/1 * * * *` fires every 1 min: the minimum is 5"));
+    render(<KnowledgeSources org="varga" slug="framework" sources={[source]} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "edit refresh" }));
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "cron" } });
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("cron expression"), { target: { value: "*/1 * * * *" } });
+    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    expect(await screen.findByText(/the minimum is 5/)).toBeInTheDocument();
+  });
+
+  it("syncs a whole base at once", async () => {
+    vi.mocked(api.syncKnowledgeBase).mockResolvedValue({} as never);
+    render(<KnowledgeSources org="varga" slug="framework" sources={[source]} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "sync all now" }));
+    await waitFor(() => expect(api.syncKnowledgeBase).toHaveBeenCalledWith("varga", "framework"));
   });
 });

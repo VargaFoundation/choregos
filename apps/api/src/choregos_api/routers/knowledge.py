@@ -34,6 +34,7 @@ from ..db.models import (
 )
 from ..deps import Db, Me
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
+from ..knowledge import refresh
 from ..knowledge.access import can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
@@ -200,6 +201,11 @@ async def _source_dto(session: AsyncSession, source: KnowledgeSource) -> Knowled
         connector=source.connector,
         config=dict(source.config or {}),
         interval_minutes=source.interval_minutes,
+        refresh_mode=source.refresh_mode,
+        refresh_cron=source.refresh_cron,
+        refresh_timezone=source.refresh_timezone,
+        next_sync_at=source.next_sync_at,
+        sync_requested_at=source.sync_requested_at,
         status=source.status,
         last_synced_at=source.last_synced_at,
         last_error=source.last_error,
@@ -630,6 +636,36 @@ async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) ->
     return source
 
 
+def _checked_refresh(mode: str, cron: str | None, timezone: str) -> tuple[str | None, str]:
+    """The refresh of a source: refused here, with its reason (a bad cron, a gap under 5 minutes, an
+    unknown time zone). `interval` and `manual` keep no cron."""
+    from ..knowledge.refresh import check_cron
+
+    if mode != "cron":
+        return None, timezone if _zone_known(timezone) else _refuse_zone(timezone)
+    if not cron:
+        raise unprocessable("a `cron` refresh needs a `refresh_cron`")
+    try:
+        check_cron(cron, timezone)
+    except ValueError as error:
+        raise unprocessable(str(error)) from error
+    return " ".join(cron.split()), timezone
+
+
+def _zone_known(name: str) -> bool:
+    from zoneinfo import ZoneInfo
+
+    try:
+        ZoneInfo(name)
+    except Exception:
+        return False
+    return True
+
+
+def _refuse_zone(name: str) -> str:
+    raise unprocessable(f"unknown time zone `{name}`")
+
+
 async def _start_sync_loop(org: str, source: KnowledgeSource) -> None:
     await get_temporal().start_knowledge_sync(
         knowledge_sync_id(source.id),
@@ -652,6 +688,9 @@ async def create_knowledge_source(
     base = await _base(session, principal, org, slug)
     organisation = await _organisation(session, org)
     config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
+    refresh_cron, refresh_timezone = _checked_refresh(
+        body.refresh_mode, body.refresh_cron, body.refresh_timezone
+    )
     source = KnowledgeSource(
         org_id=base.org_id,
         knowledge_base_id=base.id,
@@ -660,6 +699,10 @@ async def create_knowledge_source(
         connector=body.connector if body.kind == "sharepoint" else None,
         config=config,
         interval_minutes=body.interval_minutes,
+        refresh_mode=body.refresh_mode,
+        refresh_cron=refresh_cron,
+        refresh_timezone=refresh_timezone,
+        next_sync_at=None,  # due: the first pass syncs
         status="idle",
         created_by=principal.email,
     )
@@ -693,16 +736,51 @@ async def update_knowledge_source(
     source = await _source(session, base, source_id)
     if body.name is not None:
         source.name = body.name
-    if body.interval_minutes is not None:
-        source.interval_minutes = body.interval_minutes
+    refresh_changed = any(
+        value is not None
+        for value in (body.interval_minutes, body.refresh_mode, body.refresh_cron, body.refresh_timezone)
+    )
+    if refresh_changed:
+        if body.interval_minutes is not None:
+            source.interval_minutes = body.interval_minutes
+        mode = body.refresh_mode or source.refresh_mode
+        cron = body.refresh_cron if body.refresh_cron is not None else source.refresh_cron
+        zone = body.refresh_timezone or source.refresh_timezone
+        source.refresh_cron, source.refresh_timezone = _checked_refresh(mode, cron, zone)
+        source.refresh_mode = mode
+        # A schedule never synced has no "last": it stays due. Otherwise the next sync moves now.
+        now = refresh.utcnow()
+        source.next_sync_at = (
+            None
+            if source.last_synced_at is None
+            else refresh.next_sync_after(source, now if mode == "cron" else source.last_synced_at)
+        )
     if body.config is not None:
         source.config = await _checked_source_config(
             session, await _organisation(session, org), source.kind, source.connector, body.config
         )
         # Another site, URL or ref: the next sync starts from scratch.
         source.cursor = None
+    if refresh_changed:
+        await record(
+            session,
+            principal,
+            "knowledge.source.refresh",
+            org_id=base.org_id,
+            target_type="knowledge_source",
+            target_id=source.id,
+            mode=source.refresh_mode,
+        )
     await session.flush()
-    return await _source_dto(session, source)
+    dto = await _source_dto(session, source)
+    if refresh_changed:
+        # Takes effect now, not at the end of the current sleep: the woken pass is "not due" (a
+        # reschedule) unless a sync was requested.
+        await session.commit()
+        await _start_sync_loop(org, source)
+        with contextlib.suppress(Exception):
+            await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
+    return dto
 
 
 @router.delete(
@@ -744,10 +822,46 @@ async def sync_knowledge_source(
     _manage(principal, org)
     base = await _base(session, principal, org, slug)
     source = await _source(session, base, source_id)
+    source.sync_requested_at = refresh.utcnow()
     dto = await _source_dto(session, source)
     await session.commit()
     await _start_sync_loop(org, source)
     await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
+    return dto
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/sync",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="syncKnowledgeBase",
+)
+async def sync_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+    """Syncs every source of the base now: one gesture for the whole base. `agent:manage`."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    sources = (
+        (await session.execute(select(KnowledgeSource).where(KnowledgeSource.knowledge_base_id == base.id)))
+        .scalars()
+        .all()
+    )
+    now = refresh.utcnow()
+    for source in sources:
+        source.sync_requested_at = now
+    await record(
+        session,
+        principal,
+        "knowledge.sync",
+        org_id=base.org_id,
+        target_type="knowledge_base",
+        target_id=base.id,
+        sources=len(sources),
+    )
+    dto = await _dto(session, base)
+    await session.commit()
+    for source in sources:
+        await _start_sync_loop(org, source)
+        await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
     return dto
 
 

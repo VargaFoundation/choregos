@@ -1689,6 +1689,17 @@ paths:
       responses:
         "202": { description: Reindexing, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/sync:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: syncKnowledgeBase
+      description: Syncs every source of the base now, rather than at their next scheduled time (S39-19). `agent:manage`.
+      responses:
+        "202": { description: Sync requested for every source, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/knowledge/{slug}/distill:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3167,6 +3178,9 @@ components:
           type: object
           description: "`sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`)"
         interval_minutes: { type: integer, minimum: 5, maximum: 10080, default: 60 }
+        refresh_mode: { type: string, enum: [interval, cron, manual], default: interval, description: "`interval`: every `interval_minutes`; `cron`: `refresh_cron` in `refresh_timezone`; `manual`: only on demand (S39-19)" }
+        refresh_cron: { type: [string, "null"], maxLength: 100, description: "five fields (minute hour day month weekday); at least 5 minutes between two fires" }
+        refresh_timezone: { type: string, maxLength: 64, default: UTC, description: IANA name, for example `Europe/Paris` }
     KnowledgeSourcePatch:
       type: object
       additionalProperties: false
@@ -3174,6 +3188,9 @@ components:
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
         config: { type: [object, "null"] }
         interval_minutes: { type: [integer, "null"], minimum: 5, maximum: 10080 }
+        refresh_mode: { type: [string, "null"], enum: [interval, cron, manual, null] }
+        refresh_cron: { type: [string, "null"], maxLength: 100 }
+        refresh_timezone: { type: [string, "null"], maxLength: 64 }
     KnowledgeSource:
       type: object
       required: [id, kind, name, interval_minutes, status]
@@ -3184,6 +3201,11 @@ components:
         connector: { type: [string, "null"] }
         config: { type: object }
         interval_minutes: { type: integer }
+        refresh_mode: { type: string, enum: [interval, cron, manual] }
+        refresh_cron: { type: [string, "null"] }
+        refresh_timezone: { type: string }
+        next_sync_at: { type: [string, "null"], format: date-time, description: an estimate (the worker may be down); null in manual mode or when due }
+        sync_requested_at: { type: [string, "null"], format: date-time }
         status: { type: string, enum: [idle, syncing, failed] }
         last_synced_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
