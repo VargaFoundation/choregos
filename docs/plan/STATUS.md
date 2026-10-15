@@ -378,7 +378,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S39-14b | S39 | 🟡 | #582 | a project owns the knowledge bases created from it (ADR 0051 amendment, migration `c3e5a7b9d1f2` `knowledge_bases.owner_project`): its owners (`project:write`) create (`POST /projects/{id}/knowledge`), feed, sync, distil and archive them, never widen their scope; an org admin who widens one makes it an organisation base. The console offers the creation to project owners, and lists the project's own bases apart from the ones it is only served. Proved by API tests on the RBAC (owner creates and curates, 403 on widening, developer and another project's owner refused, org admin keeps every right), the RBAC matrix, the migration test and vitest/Playwright. Does not prove: a real SharePoint source added by a project owner (S39-14 sources limits apply), or the migration on a populated PostgreSQL. |
 | S39-17a | S39 | ✅ | #556 | the `agent_sandbox` executor refuses a run whose image is not the warm pool's (`pool_image`, from `CHOREGOS_RUNNER_IMAGE`) with a `ConfigurationError` naming `k8s_job`, instead of silently running a `job` with `image:` in the runner image (ADR 0056 decision 1). Proves: the refusal and the factory wiring (tests fail without the guard). Does not prove: a cluster run; an executor built without a known pool image cannot tell an override from the default and checks nothing. |
 
-**Total** : 249 livrées, 104 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+**Total** : 250 livrées, 104 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 
 
