@@ -185,7 +185,7 @@ def test_a_manifest_that_is_wrong_fails_before_any_call(tmp_path: Path) -> None:
         result = _run("knowledge", "apply", "-f", str(bad))
         assert result.exit_code == 1
         assert mock.calls.call_count == 0
-    assert "is not a valid knowledge base manifest" in result.output
+    assert "is not a valid knowledge base manifest" in " ".join(result.output.split())
 
 
 def test_an_upload_pattern_that_matches_nothing_fails_before_any_call(tmp_path: Path) -> None:
@@ -194,7 +194,7 @@ def test_an_upload_pattern_that_matches_nothing_fails_before_any_call(tmp_path: 
     with respx.mock(assert_all_called=False) as mock:
         result = _run("knowledge", "apply", "-f", str(lonely))
         assert result.exit_code == 1 and mock.calls.call_count == 0
-    assert "matches no file" in result.output
+    assert "matches no file" in " ".join(result.output.split())
 
 
 def test_a_url_upload_is_downloaded_over_https_with_a_cap(tmp_path: Path) -> None:
