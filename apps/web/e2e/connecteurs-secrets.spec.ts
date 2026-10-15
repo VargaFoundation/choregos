@@ -39,6 +39,6 @@ test("declare a SharePoint connector with a typed secret, then replace it", asyn
 
 test("a reference written by an operator shows as a reference, a typed value as set", async ({ page }) => {
   await page.goto("/admin/connectors");
-  await expect(page.getByTestId("secret-state-client_secret").first()).toContainText("reference env:ENTRA_CLIENT_SECRET");
+  await expect(page.getByTestId("secret-state-client_secret").first()).toContainText("reference env:CONNECTOR_ENTRA_CLIENT_SECRET");
   await expect(page.getByTestId("secret-state-token")).toContainText("set · rotated 3 days ago by");
 });
