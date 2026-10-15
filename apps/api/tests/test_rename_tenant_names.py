@@ -44,14 +44,14 @@ async def tenant(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur_mcp(FakeFournisseur()))
     monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(FIXTURES))
-    monkeypatch.setenv("RENAME_TEST_SECRET", "s3cret")
+    monkeypatch.setenv("CONNECTOR_RENAME_TEST_SECRET", "s3cret")
     for body in (
         {
             "name": "annuaire",
             "kind": "identity",
             "type": "entra",
             "config": {"tenant_id": "acme", "client_id": "choregos"},
-            "secret_refs": {"client_secret": "env:RENAME_TEST_SECRET"},
+            "secret_refs": {"client_secret": "env:CONNECTOR_RENAME_TEST_SECRET"},
         },
         {"name": "parc", "kind": "mdm", "type": "demo"},
         {"name": "transporteur", "kind": "shipping", "type": "demo"},
@@ -126,7 +126,9 @@ async def test_apply_republishes_in_english_and_a_second_run_finds_nothing(
     assert (directory["kind"], directory["type"]) == ("identity", "entra")
     ops = {o["name"]: o for o in directory["operations"]}
     assert (ops["get_user"]["policy"], ops["get_user"]["groups"]) == ("allowed", ["it"])
-    assert directory["secret_refs"] == {"client_secret": "env:RENAME_TEST_SECRET"}, "references, verbatim"
+    assert directory["secret_refs"] == {"client_secret": "env:CONNECTOR_RENAME_TEST_SECRET"}, (
+        "references, verbatim"
+    )
     devices = {
         o["name"]: o["policy"] for o in (await client.get(f"{ORG}/connectors/devices")).json()["operations"]
     }
