@@ -21,6 +21,8 @@ from choregos_contracts.workflow import (
     effet_de_la_transition,
 )
 
+from choregos_core.gates import DIFF_GATES
+
 #: Ce que vérifie chaque garantie, en une phrase. Un test exige un résumé pour chaque garantie
 #: connue : une garantie nouvelle sans résumé ferait parler la vue processus dans le vide.
 RESUMES: dict[str, str] = {
@@ -134,6 +136,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
             phrase += " " + rejet
         if t.timeout_hours:
             phrase += f" It times out after {t.timeout_hours} h."
+        acteur = wf.actors.get(t.by) if t.by else None
         etapes.append(
             {
                 "id": t.key,
@@ -152,6 +155,20 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "action": action,
                 "task": tache,
                 "sentence": phrase,
+                # What the step names, structured, so the console need not parse the sentence.
+                "agent": acteur.agent if isinstance(acteur, AgentActor) else None,
+                "role": str(acteur.role) if isinstance(acteur, AgentActor | JobActor) else None,
+                "model": acteur.model if isinstance(acteur, AgentActor) else None,
+                "group": acteur.group if isinstance(acteur, HumanActor) else None,
+                "sla_hours": acteur.sla_hours if isinstance(acteur, HumanActor) else None,
+                "command": list(acteur.command) if isinstance(acteur, JobActor) else None,
+                "image": (str(acteur.image) if acteur.image else None)
+                if isinstance(acteur, JobActor)
+                else None,
+                "inputs": list(t.inputs),
+                "output_types": dict(t.output_types),
+                "writes_branch": isinstance(acteur, AgentActor | JobActor)
+                and bool(set(t.gate_names()) & DIFF_GATES),
             }
         )
     return etapes

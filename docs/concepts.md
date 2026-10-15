@@ -38,6 +38,14 @@ version). Markdown and JSON values stay in the platform's database; files go to 
 The digest is checked again on every read: content altered behind the platform is not served. The
 same content produced again makes no new version.
 
+A workflow also says, from its YAML alone, how documents travel between its steps (the artifact
+flow, `graph.artifacts`): for each name, the transitions that output it, the ones that list it in
+`inputs`, and where it comes from. `step`: some transition outputs it; `feedback`: `human_feedback`,
+written by a person's rejection; `field`: a property of the work item's fields
+(`metadata.inputs`); `missing`: read, but nothing produces it. It also marks the documents the
+platform hands every agent stage (`spec_markdown`, `plan_markdown`, `allowed_paths`) and those the
+pull request body carries. Only declared outputs and inputs count.
+
 ## Actor
 
 Three kinds:

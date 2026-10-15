@@ -1798,6 +1798,29 @@ paths:
       description: The `agent` actors of the project's active workflows that name no agent of the registry — computed by the API, not by one read per workflow (S30-04).
       responses:
         "200": { description: The implicit agents, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ImplicitAgent" } } } } }
+  /projects/{id}/agent-resolution:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [agents]
+      operationId: resolveProjectAgents
+      description: >-
+        Which agent version a run would load for each reference (`slug` or `slug@N`), through the
+        runtime's own resolver: an explicit `@N`, else the project's pin, else the latest version
+        (ADR 0033). Read only. The console builds the list from the `agent` of the process steps,
+        so it works on a draft too (S39-13).
+      parameters:
+        - name: ref
+          in: query
+          required: true
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 64
+            items: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$" }
+      responses:
+        "200": { description: One answer per reference, in the order asked, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentResolution" } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -2664,14 +2687,26 @@ components:
         to: { type: string }
         to_display: { type: string }
         actor: { type: string }
-        actor_type: { type: string, enum: [agent, human, system, release_train] }
+        actor_type: { type: string, enum: [agent, human, system, job, release_train] }
         who: { type: string }
         outputs: { type: array, items: { type: string } }
         gates: { type: array, items: { type: object, properties: { name: { type: string }, summary: { type: string } } } }
         on_fail: { type: [string, "null"] }
         on_reject: { type: [string, "null"] }
         timeout_hours: { type: [integer, "null"] }
+        action: { type: [string, "null"], description: The governed action the transition proposes, in plain words. }
+        task: { type: [string, "null"], description: The task a person does, in plain words. }
         sentence: { type: string }
+        agent: { type: [string, "null"], description: "The registry agent the actor names, `slug` or `slug@N` (ADR 0033); null for an implicit playbook actor and for any actor that is not an agent." }
+        role: { type: [string, "null"], description: The role of an agent or job actor. }
+        model: { type: [string, "null"], description: "The model or profile of an agent actor, as written (`profile:standard`)." }
+        group: { type: [string, "null"], description: The group of a human actor. }
+        sla_hours: { type: [integer, "null"], description: The SLA of a human actor. }
+        command: { type: [array, "null"], items: { type: string }, description: The argv of a job actor. }
+        image: { type: [string, "null"], description: The image name of a job actor. }
+        inputs: { type: array, items: { type: string }, description: The documents the step reads (`inputs:` of the transition). }
+        output_types: { type: object, additionalProperties: { type: string }, description: "The declared file type of an output (ADR 0049); an output not listed is inline, markdown or JSON." }
+        writes_branch: { type: boolean, description: "True for an agent or job step whose transition carries a gate that reads the diff: it changes the work item's branch." }
     WorkflowOperation:
       type: object
       required: [op]
@@ -2899,6 +2934,26 @@ components:
         runs: { type: integer }
         success_rate: { type: [number, "null"] }
         cost_usd: { type: number }
+    AgentResolution:
+      type: object
+      required: [ref, slug, status, pinned, in_catalogue]
+      properties:
+        ref: { type: string, description: The reference as asked (`slug` or `slug@N`). }
+        slug: { type: string }
+        status:
+          type: string
+          enum: [resolved, not_installed, unavailable]
+          description: >-
+            `resolved`: a run would load `version`. `not_installed`: the organisation has no such
+            agent (`in_catalogue` says whether publishing the workflow installs it, ADR 0040).
+            `unavailable`: it exists but a run would not start (`reason`: draft, retired, expired,
+            disabled, no such version).
+        version: { type: [integer, "null"] }
+        pinned: { type: boolean, description: True when the version comes from the project's pin rather than from the reference or the latest. }
+        display_name: { type: [string, "null"] }
+        lifecycle: { type: [string, "null"] }
+        in_catalogue: { type: boolean }
+        reason: { type: [string, "null"] }
     ImplicitAgent:
       type: object
       description: A workflow actor that runs as an agent without naming one of the registry.
@@ -3287,6 +3342,27 @@ components:
               gates: { type: array, items: { type: string } }
               via: { type: [string, "null"] }
               timeout_hours: { type: [integer, "null"] }
+        artifacts:
+          type: array
+          description: "The artifact flow (S39-13), one entry per document the workflow produces or reads."
+          items: { $ref: "#/components/schemas/ArtifactFlow" }
+    ArtifactFlow:
+      type: object
+      required: [name, produced_by, read_by, origin]
+      properties:
+        name: { type: string }
+        type: { type: [string, "null"], description: The declared file type of the first producer's output; null for an inline value. }
+        produced_by: { type: array, items: { type: string }, description: The ids of the transitions that output it. }
+        read_by: { type: array, items: { type: string }, description: The ids of the transitions that list it in `inputs`. }
+        origin:
+          type: string
+          enum: [step, feedback, field, missing]
+          description: >-
+            `step`: some transition outputs it. `feedback`: `human_feedback`, written by a person's
+            rejection (`produced_by` lists the human transitions with `on_reject`). `field`: a
+            property of `metadata.inputs`. `missing`: read, but nothing produces it.
+        context: { type: boolean, description: True when the platform gives it to every agent stage. }
+        in_pull_request: { type: boolean, description: True when the pull request body carries it. }
     WorkflowTemplate:
       type: object
       required: [name, version, display, yaml]
