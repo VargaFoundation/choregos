@@ -16,7 +16,7 @@ import { Button, ErrorNote, Input, Select, Textarea } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usd } from "@/lib/format";
-import type { Agent, AgentSpec, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
+import type { Agent, AgentSpec, CodeRuntime, GatewayModel, KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
 
 /** The model profiles a project maps to models (its settings, `models.yaml`). */
 export const MODEL_PROFILES = ["standard", "strong", "cheap", "by_size"] as const;
@@ -67,13 +67,38 @@ function numberOrNull(text: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** How a version runs: a coding agent of the runner (`acp`) or code in an operator-named image (ADR 0063). */
+export type RuntimeKind = "acp" | "code";
+
+export const RUNTIME_LABELS: Record<RuntimeKind, string> = {
+  acp: "Coding agent (ACP backend)",
+  code: "Code (image)",
+};
+
+export function runtimeKind(spec: AgentSpec): RuntimeKind {
+  return spec.runtime?.kind === "code" ? "code" : "acp";
+}
+
 /** The spec as the API takes it: empty fields left out, so the project's defaults apply. */
 export function cleanSpec(spec: AgentSpec): AgentSpec {
+  const { runtime: drafted, ...rest } = spec;
+  // A code agent runs as the `code` backend: the API refuses a `backend` beside it.
+  const code = drafted?.kind === "code";
   return {
-    ...spec,
+    ...rest,
+    ...(drafted?.kind === "code"
+      ? {
+          runtime: {
+            kind: "code" as const,
+            image: drafted.image.trim(),
+            command: (drafted.command ?? []).map((a) => a.trim()).filter(Boolean),
+            api_format: drafted.api_format ?? "openai",
+          },
+        }
+      : {}),
     instructions: spec.instructions ?? "",
     model: spec.model || null,
-    backend: spec.backend || null,
+    backend: code ? null : spec.backend || null,
     limits: { max_turns: spec.limits?.max_turns ?? null, max_minutes: spec.limits?.max_minutes ?? null },
     budget: {
       ...spec.budget,
@@ -124,6 +149,7 @@ export function AgentBuilder({
 
   const models = useQuery({ queryKey: ["platform-models"], queryFn: () => api.platformModels(), retry: false });
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
+  const images = useQuery({ queryKey: ["platform-agent-images"], queryFn: () => api.agentImages(), retry: false });
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
   const library = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
   const bases = useQuery({ queryKey: ["knowledge", org], queryFn: () => api.knowledgeBases(org), retry: false });
@@ -131,10 +157,28 @@ export function AgentBuilder({
   const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
   const set = (patch: Partial<AgentSpec>) => setSpec((s) => ({ ...s, ...patch }));
   const creating = mode.kind === "create";
+  const kind = runtimeKind(spec);
+  const code = spec.runtime?.kind === "code" ? spec.runtime : null;
+  const setCode = (patch: Partial<CodeRuntime>) =>
+    setSpec((s) =>
+      s.runtime?.kind === "code" ? { ...s, runtime: { ...s.runtime, ...patch } } : s,
+    );
+  const setKind = (next: RuntimeKind) =>
+    setSpec((s) => {
+      const { runtime: _previous, ...rest } = s;
+      void _previous;
+      return next === "code"
+        ? { ...rest, backend: null, runtime: { kind: "code", image: "", command: [], api_format: "openai" } }
+        : rest;
+    });
 
   async function submit() {
     setError(null);
     setFailing([]);
+    if (kind === "code" && (!code?.image || !(code.command ?? []).some((a) => a.trim()))) {
+      setError("A code agent needs an image and a command.");
+      return;
+    }
     setBusy(true);
     try {
       if (mode.kind === "create") {
@@ -212,7 +256,7 @@ export function AgentBuilder({
           </Field>
         </Section>
 
-        <Section title="Model and backend">
+        <Section title="Model and runtime">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Model" hint="A profile follows the project's mapping; a model is fixed.">
               {(id) => (
@@ -240,23 +284,82 @@ export function AgentBuilder({
                 </Select>
               )}
             </Field>
-            <Field label="Backend" hint="The agent runtime; empty: the project's default.">
-              {(id) =>
-                (backends.data ?? []).length > 0 ? (
-                  <Select id={id} value={spec.backend ?? ""} onChange={(e) => set({ backend: e.target.value || null })}>
-                    <option value="">The project&apos;s default</option>
-                    {(backends.data ?? []).map((b) => (
-                      <option key={b.name} value={b.name} disabled={!b.enabled}>
-                        {b.name}
-                        {b.enabled ? "" : " (disabled)"}
-                      </option>
-                    ))}
-                  </Select>
-                ) : (
-                  <Input id={id} value={spec.backend ?? ""} onChange={(e) => set({ backend: e.target.value || null })} placeholder="claude-code" />
-                )
-              }
+            <Field label="Runtime" hint="A coding agent of the runner, or an agent you wrote in code, shipped as an image your operator named.">
+              {(id) => (
+                <Select id={id} value={kind} onChange={(e) => setKind(e.target.value as RuntimeKind)}>
+                  {(Object.keys(RUNTIME_LABELS) as RuntimeKind[]).map((k) => (
+                    <option key={k} value={k}>
+                      {RUNTIME_LABELS[k]}
+                    </option>
+                  ))}
+                </Select>
+              )}
             </Field>
+            {kind === "acp" ? (
+              <Field label="Backend" hint="The agent runtime; empty: the project's default.">
+                {(id) =>
+                  (backends.data ?? []).length > 0 ? (
+                    <Select id={id} value={spec.backend ?? ""} onChange={(e) => set({ backend: e.target.value || null })}>
+                      <option value="">The project&apos;s default</option>
+                      {(backends.data ?? []).map((b) => (
+                        <option key={b.name} value={b.name} disabled={!b.enabled}>
+                          {b.name}
+                          {b.enabled ? "" : " (disabled)"}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input id={id} value={spec.backend ?? ""} onChange={(e) => set({ backend: e.target.value || null })} placeholder="claude-code" />
+                  )
+                }
+              </Field>
+            ) : (
+              <>
+                <Field
+                  label="Image"
+                  hint={
+                    (images.data ?? []).length > 0
+                      ? "An image your operator named and pinned; the platform pulls only those."
+                      : "Your operator has not named any image yet (the chart's global.images.agents)."
+                  }
+                >
+                  {(id) => (
+                    <Select id={id} value={code?.image ?? ""} onChange={(e) => setCode({ image: e.target.value })}>
+                      <option value="">Choose an image</option>
+                      {(images.data ?? []).map((img) => (
+                        <option key={img.name} value={img.name}>
+                          {img.name}
+                          {img.digest_pinned ? "" : " (not pinned by digest)"}
+                        </option>
+                      ))}
+                      {code?.image && !(images.data ?? []).some((img) => img.name === code.image) && (
+                        <option value={code.image}>{code.image} (unknown)</option>
+                      )}
+                    </Select>
+                  )}
+                </Field>
+                <Field label="Command" hint="The program the runner starts in the image, one argument per line. It speaks ACP on standard input and output: the choregos-agent-sdk does it.">
+                  {(id) => (
+                    <Textarea
+                      id={id}
+                      className="font-mono text-xs"
+                      rows={3}
+                      placeholder={"python\n-m\nmy_agent"}
+                      value={(code?.command ?? []).join("\n")}
+                      onChange={(e) => setCode({ command: e.target.value.split("\n") })}
+                    />
+                  )}
+                </Field>
+                <Field label="Model API" hint="The API the code calls through the gateway, with the run's own key.">
+                  {(id) => (
+                    <Select id={id} value={code?.api_format ?? "openai"} onChange={(e) => setCode({ api_format: e.target.value as "openai" | "anthropic" })}>
+                      <option value="openai">OpenAI-compatible</option>
+                      <option value="anthropic">Anthropic</option>
+                    </Select>
+                  )}
+                </Field>
+              </>
+            )}
           </div>
         </Section>
 
@@ -669,6 +772,15 @@ export function BuilderSummary({
           </p>
         )}
       </div>
+      {spec.runtime?.kind === "code" && (
+        <div className="space-y-1" data-testid="runtime-resolu">
+          <h4 className="text-xs font-medium text-ink-muted">Runtime</h4>
+          <p>
+            Your code runs in the image <span className="font-mono">{spec.runtime.image || "…"}</span>, started by the runner.
+            Tool calls and writes made through the SDK still ask the runner&apos;s guard first, and count as turns.
+          </p>
+        </div>
+      )}
       <div className="space-y-1">
         <h4 className="text-xs font-medium text-ink-muted">Spending</h4>
         <p>

@@ -5,6 +5,8 @@
  */
 export type {
   AgentBackendInfo,
+  AgentImageInfo,
+  CodeRuntime,
   ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,

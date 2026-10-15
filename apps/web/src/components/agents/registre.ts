@@ -26,7 +26,8 @@ export function resumeDeLaVersion(spec: AgentSpec | undefined | null): string {
   if (!spec) return "—";
   const morceaux: string[] = [];
   if (spec.model) morceaux.push(spec.model);
-  if (spec.backend) morceaux.push(spec.backend);
+  if (spec.runtime?.kind === "code") morceaux.push(`code · ${spec.runtime.image}`);
+  else if (spec.backend) morceaux.push(spec.backend);
   const skills = spec.skills?.length ?? 0;
   if (skills) morceaux.push(`${skills} skill${skills > 1 ? "s" : ""}`);
   const outils = (spec.mcp_servers ?? []).reduce((total, serveur) => total + (serveur.tools?.length ?? 0), 0);
