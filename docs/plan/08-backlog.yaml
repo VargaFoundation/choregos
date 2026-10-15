@@ -2545,6 +2545,15 @@ stories:
     depends_on: [S35-02]
     acceptance:
       - "A capability announced without its cluster test fails CI"
+  - id: S35-05
+    title: "The assignment NetworkPolicy can be left to a platform that owns the namespace's NetworkPolicies"
+    stream: S35
+    sprint: 18
+    priority: 5
+    size: S
+    depends_on: [S35-02]
+    acceptance:
+      - "runner.sandbox.assignmentNetworkPolicy=false drops that one object from the render, and only it"
   # S36 — Agent logs
   - id: S36-01
     title: "The run transcript is really stored, or the field is removed"

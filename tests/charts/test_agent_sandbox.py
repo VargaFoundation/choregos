@@ -230,3 +230,14 @@ def test_no_other_policy_reopens_the_sandbox_pods() -> None:
         and _selects(doc["spec"]["podSelector"], sandbox_pod)
     )
     assert ingress_on_sandbox == ["NetworkPolicy/choregos-runner-assignment"], ingress_on_sandbox
+
+
+@needs_helm
+def test_a_platform_that_owns_network_policies_can_leave_the_assignment_one_out() -> None:
+    """S35-05 — where an Argo CD AppProject blacklists NetworkPolicy (Diametral's tenants), one
+    in the chart makes the whole sync fail. The switch drops that one object, and only it."""
+    kept = _objects()
+    dropped = _objects("choregos-orchestrator.runner.sandbox.assignmentNetworkPolicy=false")
+    assert "NetworkPolicy/choregos-runner-assignment" in kept, "rendered by default"
+    assert "NetworkPolicy/choregos-runner-assignment" not in dropped
+    assert set(kept) - set(dropped) == {"NetworkPolicy/choregos-runner-assignment"}

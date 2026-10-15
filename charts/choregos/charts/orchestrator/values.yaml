@@ -37,6 +37,7 @@ runner:
     storage: 10Gi
     storageClassName: ""
     assignmentPort: 8765
+    assignmentNetworkPolicy: true
   egressProxy: "http://choregos-egress.{namespace}.svc:3128"
   egressImage: ""
 podDisruptionBudget:
