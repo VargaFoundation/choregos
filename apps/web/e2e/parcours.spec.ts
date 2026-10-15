@@ -288,8 +288,8 @@ test("historique d'un workflow : deux versions se comparent, une ancienne se rep
 test("board par workflow : la demande choisit son workflow, et ses champs en viennent", async ({ page }) => {
   await page.goto("/p/billing-api/board");
   await expect(page.getByText("Credit notes are not deducted from the total")).toBeVisible();
-  await page.getByRole("button", { name: "New request" }).click();
-  await page.getByLabel("Workflow of the request").selectOption("hotfix");
+  await page.getByRole("button", { name: "New work item" }).click();
+  await page.getByLabel("Workflow", { exact: true }).selectOption("hotfix");
   const champs = page.getByTestId("request-fields");
   await expect(champs.getByLabel("incident id (required)")).toBeVisible();
   await expect(champs.getByLabel("severity (required)")).toBeVisible();
