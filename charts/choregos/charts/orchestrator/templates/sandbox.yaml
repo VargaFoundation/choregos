@@ -110,12 +110,15 @@ spec:
   replicas: {{ int (.Values.runner.warmPool.size | default 0) }}
   sandboxTemplateRef:
     name: choregos-runner
+{{- if ne $sandbox.assignmentNetworkPolicy false }}
 ---
 # Who may push an assignment to a warm sandbox: the orchestrator's `executor` workers, and no one
 # else (ADR 0053). The assignment is sealed to the pod's key, so another pod could not READ a run
 # token; without this policy it could still push first, with a token of its own, and occupy the
 # sandbox until the real run fails on 409. Rendered with the template, whatever
-# `networkPolicies.enabled` says: it is part of how this executor holds its promise.
+# `networkPolicies.enabled` says: it is part of how this executor holds its promise. Only
+# `runner.sandbox.assignmentNetworkPolicy: false` leaves it out, where the platform lays the
+# namespace's NetworkPolicies and refuses a tenant's: the platform then holds the promise.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -137,4 +140,5 @@ spec:
               choregos/queue: executor
       ports:
         - { protocol: TCP, port: {{ $port }} }
+{{- end }}
 {{- end }}
