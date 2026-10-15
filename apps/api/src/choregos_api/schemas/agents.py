@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from .base import Dto
 from .identite import ApiTokenCreated
@@ -113,6 +113,10 @@ class AgentTrial(Dto):
     evals: list[AgentEvalResult] = Field(default_factory=list)
 
 
+#: Slugs no agent may take: `/agents/new` is a static page of the console and would shadow it (S39-05).
+RESERVED_SLUGS = frozenset({"new"})
+
+
 class AgentCreate(Dto):
     slug: str = Field(pattern=SLUG)
     kind: Literal["internal", "external"] = "internal"
@@ -188,6 +192,35 @@ class AgentPermissions(Dto):
     pin: bool = False
     #: The scopes the caller may fork it into.
     fork_scopes: list[CreatableScope] = Field(default_factory=list)
+
+    @field_validator("slug")
+    @classmethod
+    def _slug_is_not_reserved(cls, value: str) -> str:
+        if value in RESERVED_SLUGS:
+            raise ValueError(f"`{value}` is reserved: the console's `/agents/{value}` page is not an agent")
+        return value
+
+
+class AgentDraftRequest(Dto):
+    """What a person wants an agent for (S39-05): the description is DATA for the drafting model."""
+
+    display_name: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=10, max_length=4000)
+
+
+class AgentDraft(Dto):
+    """A proposal, never saved: the console pre-fills the builder with it and a person creates the agent."""
+
+    display_name: str
+    slug: str = Field(pattern=SLUG)
+    description: str
+    spec: AgentSpec
+    #: An input to try the agent on (the builder's "Try it").
+    sample: AgentSampleInput
+    #: What the platform changed or dropped in the model's answer, in words.
+    notes: list[str] = Field(default_factory=list)
+    #: The model that drafted it.
+    model: str
 
 
 class AgentCatalogueEntry(Dto):
