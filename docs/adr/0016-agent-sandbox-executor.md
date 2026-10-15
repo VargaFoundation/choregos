@@ -1,6 +1,7 @@
 # 0016 — An `agent-sandbox` executor: warm pools, suspend across a human gate, snapshots
 
 - **Status**: accepted, 2026-10-12 (proposed 2026-09-25) — not implemented, stream S35; proved on the dev cluster; revisits ADR 0013
+- **Superseded in part by [0072](0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)**: `agent_sandbox` is no longer opt-in, it is the default of a real deployment.
 - **Concerns**: the `Executor` protocol, the chart, ADR 0013 (density)
 
 ## Context

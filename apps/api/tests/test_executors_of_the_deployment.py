@@ -22,10 +22,28 @@ async def test_the_local_install_reports_its_docker_executor_as_enabled(
     assert (await _enabled(client))["local_docker"] is True
 
 
-async def test_elsewhere_the_docker_executor_stays_off(
+async def test_only_the_deployment_s_executors_are_enabled(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0072: with no row, the list is the deployment's, not a hand-written one (it said
+    Tekton was on while the workers ran Jobs)."""
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "agent_sandbox")
+    monkeypatch.setenv("CHOREGOS_EXECUTORS_ALLOWED", "agent_sandbox,k8s_job")
+    enabled = await _enabled(client)
+    assert enabled == {
+        "agent_sandbox": True,
+        "k8s_job": True,
+        "tekton": False,
+        "aca": False,
+        "local_docker": False,
+    }
+
+
+async def test_a_bare_server_runs_agent_sandbox(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND", raising=False)
+    monkeypatch.delenv("CHOREGOS_EXECUTORS_ALLOWED", raising=False)
     enabled = await _enabled(client)
-    assert enabled["local_docker"] is False
-    assert enabled["tekton"] is True and enabled["k8s_job"] is True
+    assert enabled["agent_sandbox"] is True
+    assert enabled["tekton"] is False and enabled["local_docker"] is False

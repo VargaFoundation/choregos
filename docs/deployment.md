@@ -127,20 +127,28 @@ rename its variable or widen the pattern.
 
 ## Running agent stages
 
-Agent stages run as disposable sandboxes. Which kind is `runner.executor`:
+Agent stages run as disposable sandboxes. Which kind is `global.runner.executor`
+([ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)): the API and the
+workers read the same setting, and `agent_sandbox` is the default.
 
 | Executor | Where it runs | Notes |
 | :-- | :-- | :-- |
-| `tekton` | A `PipelineRun` per stage | The default when Tekton is present |
+| `tekton` | A `PipelineRun` per stage | Only where written: `global.runner.executor: tekton` |
 | `k8s_job` | A `Job` per stage | Fewest moving parts; supports queueing |
 | `aca` | Azure Container Apps job | Verified against a real subscription |
 | `local_docker` | A container on the host | Development only |
-| `agent_sandbox` | A claimed sandbox from a warm pool (`kubernetes-sigs/agent-sandbox`) | Opt-in, needs the operator; supports queueing |
+| `agent_sandbox` | A claimed sandbox from a warm pool (`kubernetes-sigs/agent-sandbox`) | **The default**; needs the operator (the chart fails at render without it); supports queueing |
 
 ```yaml
-choregos-orchestrator:
+global:
   runner:
     executor: k8s_job
+    # What a project may pick as its `runtime` connector. Empty: only `executor`.
+    allowedExecutors: []
+choregos-orchestrator:
+  runner:
+    # Empty follows the executor: the release namespace for agent_sandbox,
+    # `proj-{slug}-runners` for the others.
     namespacePattern: "proj-{slug}-runners"
     # Concurrent runs per namespace. Beyond it, the Job is created SUSPENDED: no pod,
     # no image pull, no quota taken, and it is admitted in arrival order. 0 = no cap.
@@ -151,18 +159,35 @@ choregos-orchestrator:
 
 `maxActive` is the knob that keeps a burst of tickets from becoming a burst of pods. It is a
 **soft** cap: two runs can admit themselves in the same window and exceed it by one. See
-[ADR 0013](adr/0013-agent-task-density.md) for why there is no warm pool.
+[ADR 0013](adr/0013-agent-task-density.md) for the density reasoning (its "no warm pool" is
+superseded by [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)).
+
+**What a project may pick.** The API knows the executor (`CHOREGOS_EXECUTOR_KIND`) and the
+allowed list (`CHOREGOS_EXECUTORS_ALLOWED`, from `global.runner.allowedExecutors`). `GET
+/platform/executors` answers from them, and `PUT /projects/{id}/connectors/runtime` refuses (422)
+a type outside the list and names the allowed ones.
+
+**Upgrading from 0.17 or earlier**, which defaulted to Tekton: set
+`global.runner.executor: tekton` to keep it. An override of only
+`choregos-orchestrator.runner.executor` fails the render and names the global setting.
 
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
 
-### The `agent_sandbox` executor (opt-in)
+### The `agent_sandbox` executor (the default)
 
 [ADR 0016](adr/0016-agent-sandbox-executor.md) adds an executor on
 [`kubernetes-sigs/agent-sandbox`](https://github.com/kubernetes-sigs/agent-sandbox): a warm pool
 of sandboxes that have never run anything, and a sandbox that can be suspended across a human
 question. It needs the operator, whose CRDs are **cluster-scoped**: a platform team installs it,
-a tenant of a shared cluster cannot. `tekton` and `k8s_job` remain the defaults.
+a tenant of a shared cluster cannot. It is the default executor
+([ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deployment.md)): the chart checks at
+render that `extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` is among the cluster's API
+versions (Argo CD and `helm install` pass them) and fails, naming the operator and
+`global.runner.executor: k8s_job`, when it is not. An offline rendering passes
+`--api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` or sets
+`runner.skipOperatorCheck: true`. The namespace's volume quota must cover
+`sandbox.storage × (maxActive + warmPool.size + runs finished within the volume's lifetime)`.
 
 1. **The operator**, pinned to v1.0.6 (API `agents.x-k8s.io/v1beta1` and
    `extensions.agents.x-k8s.io/v1beta1`): `infra/bootstrap/agent-sandbox.yaml` is the Argo CD
@@ -175,10 +200,12 @@ a tenant of a shared cluster cannot. `tekton` and `k8s_job` remain the defaults.
 3. **The chart**:
 
 ```yaml
+global:
+  runner:
+    executor: agent_sandbox           # the default, written here to make the choice visible
 choregos-orchestrator:
   runner:
-    executor: agent_sandbox
-    namespacePattern: choregos        # the release namespace: the template lives there
+    # namespacePattern empty = the release namespace: the template lives there
     warmPool: { size: 2 }             # sandboxes made in advance, never used, holding nothing
     runtimeClass: gvisor              # the template's RuntimeClass; "" = the cluster's
     sandbox: { storage: 10Gi, storageClassName: "", assignmentPort: 8765 }

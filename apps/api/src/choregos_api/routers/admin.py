@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import os
 from typing import Annotated
 
-from choregos_adapters.registry import default_executor_kind
+from choregos_adapters.registry import allowed_executor_kinds
 from choregos_contracts import Role
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
@@ -135,14 +136,18 @@ async def list_executors(session: Db, principal: Me) -> list[ExecutorInfo]:
             )
             for row in rows
         ]
+    # No row: the deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`),
+    # not a list written by hand. This used to claim Tekton was on everywhere, and a project
+    # that picked it on a cluster without Tekton died at its first run (ADR 0072).
+    allowed = allowed_executor_kinds()
+    pattern = os.environ.get("CHOREGOS_RUNNER_NAMESPACE_PATTERN", "") or None
     return [
-        ExecutorInfo(kind="tekton", enabled=True, namespace_pattern="proj-{slug}-runners"),
-        ExecutorInfo(kind="k8s_job", enabled=True, namespace_pattern="proj-{slug}-runners"),
-        # On when the deployment runs its agents through it (the local install, `compose.yaml`).
-        ExecutorInfo(kind="local_docker", enabled=default_executor_kind() == "local_docker"),
-        ExecutorInfo(kind="aca", enabled=False),
-        # Opt-in: needs the agent-sandbox operator, installed by a platform team (ADR 0016).
-        ExecutorInfo(kind="agent_sandbox", enabled=False),
+        ExecutorInfo(
+            kind=kind,
+            enabled=kind in allowed,
+            namespace_pattern=pattern if kind in {"tekton", "k8s_job", "agent_sandbox"} else None,
+        )
+        for kind in ("agent_sandbox", "k8s_job", "tekton", "aca", "local_docker")
     ]
 
 

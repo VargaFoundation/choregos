@@ -9,8 +9,8 @@ in an organisation. Its configuration (`ProjectConfig`) names the repository, th
 profiles and the labels; its **connectors** say which outside systems it talks to.
 
 Connectors ship for: trackers (`github-issues`, `jira`, `gitlab-issues`, `internal`), source
-control (`github`), CI (`tekton`), CD (`argocd`), execution (`tekton`, `k8s_job`, `aca`,
-`local_docker`), model gateway (`litellm`, `direct`), memory (`ecphoria`, `lexical`) and
+control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, the deployment's default; `tekton`, `k8s_job`, `aca`,
+`local_docker`, each chosen by name), model gateway (`litellm`, `direct`), memory (`ecphoria`, `lexical`) and
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 `tracker: internal` means there is no outside tracker: Choregos' own database holds the

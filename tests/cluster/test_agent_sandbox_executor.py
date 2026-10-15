@@ -61,6 +61,7 @@ def _render(ns: str, image: str) -> str:
         [
             "helm", "template", "choregos", "charts/choregos", "--namespace", ns,
             "--set", "choregos-orchestrator.runner.executor=agent_sandbox",
+            "--set", "choregos-orchestrator.runner.skipOperatorCheck=true",
             "--set", f"choregos-orchestrator.runner.namespacePattern={ns}",
             "--set", "choregos-orchestrator.runner.warmPool.size=1",
             "--set", f"global.imageRegistry={registry}",
