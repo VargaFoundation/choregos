@@ -11,6 +11,7 @@ import type {
   Action,
   Agent,
   AgentBackendInfo,
+  AgentImageInfo,
   GatewayModel,
   ModelCatalogue,
   UsableModel,
@@ -1531,6 +1532,12 @@ export const platformBackends: AgentBackendInfo[] = [
   { name: "codex", enabled: false, capabilities: ["mcp"], disabled_reason: "conformance below threshold" },
 ];
 
+/** The images an operator named for agents written in code: names only, never references (ADR 0063). */
+export const platformAgentImages: AgentImageInfo[] = [
+  { name: "ticket-triager", digest_pinned: true },
+  { name: "scratch-bench", digest_pinned: false },
+];
+
 /** The memberships the API returns: the organisation's, or one project's with `?project=` (S30-06). */
 function membersOf(path: string): Membership[] {
   const project = new URLSearchParams(path.split("?")[1] ?? "").get("project");
@@ -2394,6 +2401,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
+    [/^\/platform\/agent-images$/, platformAgentImages],
     [/^\/platform\/executors$/, []],
     [/^\/projects\/[^/]+\/models$/, { profiles: {}, allow_unvalidated: false, inherited: {} }],
     [/^\/projects\/[^/]+\/provision$/, { project_id: "p1", status: "succeeded", steps: [] }],

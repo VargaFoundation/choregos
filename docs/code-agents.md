@@ -95,6 +95,11 @@ what your code can reach, exactly as it bounds the shell of a coding agent.
                             "api_format": "openai" } } }
    ```
 
+   In the console, the agent builder's **Runtime** selector offers "Coding agent (ACP backend)" or
+   "Code (image)": the second swaps the backend for an image picker (the names your operator gave;
+   one that is not pinned by digest is flagged), a command editor (one argument per line) and the
+   model API. The agent's page says `Code · <image>` and whether the image is pinned.
+
    An unknown image name is refused when the version is published (the known names are in the error);
    `GET /platform/agent-images` lists them for the console. `runtime: code` with `backend` is refused.
 5. **Run it** from a workflow like any registry agent (`{type: agent, role: ..., agent: ticket-triager}`).
