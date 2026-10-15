@@ -58,8 +58,9 @@ from .execution import (
 )
 from .garde import garde_contre_l_injection
 from .images import named_image
-from .job import prepare_job
+from .job import NO_MODEL, prepare_job
 from .plan import StagePlan
+from .remote import A2A_BACKEND, a2a_runtime, check_remote_agent, remote_budget, remote_call
 from .run_key import reserve_key
 
 __all__ = [
@@ -154,22 +155,30 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
         code_runtime = _code_runtime(agent)
+        remote_runtime = a2a_runtime(agent)
+        # Before any budget is reserved: a remote agent the project cannot reach, or whose
+        # credential is gone, never gets a reservation or a pod (ADR 0062).
+        await check_remote_agent(session, bundle, remote_runtime)
         # Before any budget is reserved: an image the operator did not name never reaches a pod.
         agent_image = named_image(settings, "agent", code_runtime.image) if code_runtime else None
         resolver = ModelResolver(
             gateway_url=settings.gateway_url, gateway_models=await _gateway_catalogue(bundle)
         )
         backend = plan.backend or bundle.config.agent.default_backend
-        if code_runtime is None and plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
-            backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
-        resolved = _resolve_model(resolver, plan, bundle, item, backend)
-        if code_runtime is not None:
-            resolved.api_format = ApiFormat(code_runtime.api_format)
-        budget = engine.budget_for(plan.role, item.size, turns_factor=resolved.turns_factor)
-        if plan.max_turns:
-            budget = Budget(usd=budget.usd, max_turns=plan.max_turns, max_minutes=budget.max_minutes)
-        if plan.max_minutes:
-            budget = Budget(usd=budget.usd, max_turns=budget.max_turns, max_minutes=plan.max_minutes)
+        if remote_runtime is not None:
+            # A remote agent brings its own model: nothing to resolve, no model catalogue to consult
+            # (S39-07), no gateway key (ADR 0062).
+            backend = A2A_BACKEND
+            resolved = None
+            budget, reserved_usd = remote_budget(remote_runtime, plan.max_minutes)
+        else:
+            if code_runtime is None and plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
+                backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
+            resolved = _resolve_model(resolver, plan, bundle, item, backend)
+            if code_runtime is not None:
+                resolved.api_format = ApiFormat(code_runtime.api_format)
+            budget = _stage_budget(engine, plan, item, resolved)
+            reserved_usd = budget.usd
         if plan.trial_budget_usd is not None:
             # A trial's cap only tightens: the gateway key is minted at this amount (S32-03).
             budget = Budget(
@@ -177,22 +186,40 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 max_turns=budget.max_turns,
                 max_minutes=budget.max_minutes,
             )
+            reserved_usd = min(reserved_usd, plan.trial_budget_usd)
         reservation = await _reservation(
-            session, bundle, item, run_id, agent, budget.usd, trial=plan.trial_spec is not None
+            session, bundle, item, run_id, agent, reserved_usd, trial=plan.trial_spec is not None
         )
-        if reservation.below(settings.min_run_reservation_usd):
+        # A remote agent's declared cost must fit under every cap (a free one always starts); any
+        # other run needs the floor, and its budget becomes what is left.
+        if remote_runtime is not None and reservation.usd < reserved_usd:
             return await _refuse_on_budget(session, bundle, item, run_id, plan, reservation)
-        budget = Budget(usd=reservation.usd, max_turns=budget.max_turns, max_minutes=budget.max_minutes)
+        if remote_runtime is None:
+            if reservation.below(settings.min_run_reservation_usd):
+                return await _refuse_on_budget(session, bundle, item, run_id, plan, reservation)
+            budget = Budget(usd=reservation.usd, max_turns=budget.max_turns, max_minutes=budget.max_minutes)
 
-        await _admettre(bundle, item, run_id, plan, backend, budget.usd)
+        await _admettre(bundle, item, run_id, plan, backend, reserved_usd)
 
         # The key itself is minted by `start_run`, which hands it to the run's Secret: no row and
         # no Temporal payload ever holds it (#523). Its cap is reserved here, where the budget
         # is decided, so that another run cannot take it in between; `start_run` turns this row
         # into the key's. Replayable: the row is found again by its run (ADR 0008).
-        await reserve_key(session, bundle, run_id, budget)
+        # A remote agent mints none, but the reservation row is what holds its declared cost against
+        # the ticket and the day, and `release_run_key` closes it like any other.
+        await reserve_key(
+            session,
+            bundle,
+            run_id,
+            Budget.model_construct(
+                usd=reserved_usd, max_turns=budget.max_turns, max_minutes=budget.max_minutes
+            )
+            if remote_runtime is not None
+            else budget,
+        )
 
-        memory_scope = _memory_scope(agent)
+        # A remote agent is sent what the step is about, never the project's memory (ADR 0062 §4).
+        memory_scope = "none" if remote_runtime is not None else _memory_scope(agent)
         context_pack = await _context_pack(bundle, item, plan, memory_scope, agent)
         await garde_contre_l_injection(session, bundle, item, run_id, plan, context_pack)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
@@ -248,24 +275,28 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 work_branch=bundle.config.branch_for(item.tracker_key),
                 clone_depth=depot.clone_depth,
             )
-            if depot
+            # A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062).
+            if depot and remote_runtime is None
             else None,
             agent=AgentRef(
                 backend=backend,
                 launch=LaunchSpec(command=list(code_runtime.command)) if code_runtime else LaunchSpec(),
                 image=agent_image,
             ),
-            model=resolved.to_ref(),
+            model=resolved.to_ref() if resolved is not None else NO_MODEL,
+            remote=remote_call(remote_runtime, agent.agent.slug, budget)
+            if remote_runtime is not None
+            else None,
             # In the run's Secret, never here (#523): see `start_run`.
             gateway_key=None,
             budget=budget,
             allowed_paths=allowed_paths,
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
-            tools=ToolsRef(mcp=_serveurs_mcp(settings, memory_scope)),
+            tools=ToolsRef(mcp={} if remote_runtime is not None else _serveurs_mcp(settings, memory_scope)),
             memory_scope=memory_scope,
-            skills=await _skills_de_l_agent(session, bundle, agent),
-            knowledge=await _knowledge_of_agent(session, bundle, agent),
+            skills=[] if remote_runtime is not None else await _skills_de_l_agent(session, bundle, agent),
+            knowledge=[] if remote_runtime is not None else await _knowledge_of_agent(session, bundle, agent),
             permissions=Permissions(
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
@@ -291,7 +322,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         run.attempt = plan.attempt
         run.actor = plan.actor
         run.backend = backend
-        run.model = resolved.litellm_model
+        run.model = resolved.litellm_model if resolved is not None else f"a2a:{agent.agent.slug}"
         run.status = "queued"
         run.stage_input = payload
         run.context_pack = context_pack.model_dump(mode="json", by_alias=True)
@@ -326,13 +357,23 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             run_id=run_id,
             stage=plan.role,
             backend=backend,
-            model=resolved.litellm_model,
+            model=resolved.litellm_model if resolved is not None else f"a2a:{agent.agent.slug}",
         )
         return {
             "run_id": run_id,
             "stage_input": without_secrets(payload, keep_gateway_key=False),
             "reused": False,
         }
+
+
+def _stage_budget(engine: Any, plan: StagePlan, item: Any, resolved: Any) -> Budget:
+    """The stage's budget: the role's, tightened by what the actor says of turns and minutes."""
+    budget: Budget = engine.budget_for(plan.role, item.size, turns_factor=resolved.turns_factor)
+    if plan.max_turns:
+        budget = Budget(usd=budget.usd, max_turns=plan.max_turns, max_minutes=budget.max_minutes)
+    if plan.max_minutes:
+        budget = Budget(usd=budget.usd, max_turns=budget.max_turns, max_minutes=plan.max_minutes)
+    return budget
 
 
 def _resolve_model(resolver: ModelResolver, plan: StagePlan, bundle: Any, item: Any, backend: str) -> Any:
@@ -726,6 +767,16 @@ def _plan_de_l_agent(plan: StagePlan, spec: Any) -> StagePlan:
                 non_retryable=True,
             )
         backend = CODE_BACKEND
+    elif runtime is not None and runtime.kind == "a2a":
+        # A remote agent runs as no local backend (ADR 0062); an actor naming one contradicts it.
+        if plan.backend and plan.backend != A2A_BACKEND:
+            raise ApplicationError(
+                f"the actor asks for the backend `{plan.backend}`, but the agent is remote (runtime "
+                f"`a2a`): drop `backend:` from the actor",
+                type="AgentIndisponible",
+                non_retryable=True,
+            )
+        backend = A2A_BACKEND
     elif runtime is not None and runtime.backend:
         backend = runtime.backend
 

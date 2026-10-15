@@ -665,6 +665,27 @@ is the library: import a zip or a repository (preview, pick, import at the resol
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).
 
+### Registering a remote agent (A2A)
+
+An agent that runs elsewhere — Atlassian's Rovo, or any A2A agent — is registered as kind `remote`
+([ADR 0062](adr/0062-remote-agents-over-a2a.md), set-up in [integrations](integrations.md)). Read its
+card first: `POST /orgs/acme/agents/discover {"card_url": "https://…/.well-known/agent.json"}` lists its
+skills, the credential types it accepts and suggests the entry (nothing is created). Then:
+
+```bash
+curl -X POST $API/orgs/acme/agents -d '{"slug": "rovo", "kind": "remote", "display_name": "Atlassian Rovo",
+  "spec": {"instructions": "Answer from the team'"'"'s Jira and Confluence.",
+           "runtime": {"kind": "a2a", "card_url": "https://a2a.atlassian.com/.well-known/agent.json",
+                       "skill": "work-in-jira", "credential": "atlassian-rovo", "timeout_minutes": 10,
+                       "declared_cost": {"per_task_usd": 0.05, "per_minute_usd": 0.0}}}}'
+```
+
+Publication reads the card and pins its digest; a skill the card does not have, or a credential of a
+type the card does not accept, is a 422. A step names the agent as any other (`agent: rovo`). Declare
+what the agent costs (`declared_cost`): the platform cannot measure it, so the ledger books your
+declaration, apart from model spend, and says `unmeasured` when you declared nothing. A project that
+uses it must allow the agent's host in `sandbox.network.allow_domains`.
+
 ### Knowledge bases
 
 A **knowledge base** is a corpus you curate — an architecture framework, a security policy,

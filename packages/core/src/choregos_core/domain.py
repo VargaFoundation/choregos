@@ -239,6 +239,8 @@ class Window(Model):
 
 #: The variable through which an executor gives the runner its run's gateway key (#523).
 RUN_GATEWAY_KEY_ENV = "CHOREGOS_RUN_GATEWAY_KEY"
+#: The variable through which an executor gives the runner the access token of its remote agent (ADR 0062).
+RUN_REMOTE_TOKEN_ENV = "CHOREGOS_RUN_REMOTE_TOKEN"  # noqa: S105 - a variable name, not a secret
 
 
 class StageJobSpec(Model):
@@ -254,6 +256,9 @@ class StageJobSpec(Model):
     #: hands it to the runner as `CHOREGOS_RUN_GATEWAY_KEY`. Never stored on the `runs` row, never
     #: in a Temporal payload; `stage_input.gateway_key` stays empty.
     gateway_key: str | None = None
+    #: The access token of the run's remote agent (ADR 0062), for the run's Secret only, like the
+    #: gateway key: short-lived, exchanged by `start_run`, never in a payload or on the `runs` row.
+    remote_token: str | None = None
     stage_input: StageInput | None = None
     timeout_minutes: int = 120
     runtime_class: str | None = None

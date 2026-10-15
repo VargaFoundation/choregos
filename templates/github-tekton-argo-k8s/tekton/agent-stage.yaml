@@ -46,6 +46,10 @@ spec:
         - name: CHOREGOS_RUN_GATEWAY_KEY
           valueFrom:
             secretKeyRef: { name: run-$(params.run-id), key: gateway-key, optional: true }
+        # The access token of a remote agent (ADR 0062), same Secret.
+        - name: CHOREGOS_RUN_REMOTE_TOKEN
+          valueFrom:
+            secretKeyRef: { name: run-$(params.run-id), key: remote-token, optional: true }
       script: |
         #!/usr/bin/env bash
         set -euo pipefail

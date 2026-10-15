@@ -500,6 +500,28 @@ export type StageInput = {
       [key: string]: Array<string>;
     };
   } | null;
+  /** Set for a step a remote agent carries over A2A (ADR 0062): `agent.backend` is `a2a`, `model` a placeholder, no gateway key exists. The access token is NOT here: it travels in the run's Secret. */
+  remote?: {
+    protocol?: "a2a";
+    /** the JSON-RPC endpoint messages are posted to (pinned at publication) */
+    endpoint: string;
+    /** where the card lives; the runner fetches it again and refuses on drift */
+    card_url: string;
+    protocol_version: string;
+    skill?: string | null;
+    /** sha256:<hex> of the card as it was when the version was published */
+    card_digest: string;
+    timeout_s: number;
+    input?: "text" | "text+files";
+    /** what the registry entry declares: A2A reports no figure */
+    declared_cost?: {
+      per_task_usd?: number | null;
+      per_minute_usd?: number | null;
+    };
+    agent_slug: string;
+    /** the name of the organisation credential the access token comes from (never the token) */
+    credential?: string | null;
+  } | null;
 };
 
 /** Runner → orchestrator contract (docs/plan/01 §1.6). The agent writes .choregos/result.json; the runner completes artifacts/evidence/diagnostics. */

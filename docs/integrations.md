@@ -199,6 +199,85 @@ with the agent's**: a `choregos` entry in the version's `mcp_servers` names the 
 call (patterns allowed); a person without a right gives an agent without it. The agent's state is
 read on **every call**: revoked, suspended or expired, the next call answers `401`.
 
+## A remote agent: Atlassian Rovo over A2A
+
+The reverse of the door: instead of a client calling Choregos, a **workflow step calls an agent that
+runs elsewhere**, over the A2A protocol ([ADR 0062](adr/0062-remote-agents-over-a2a.md)). Atlassian's
+Rovo is the first one; any A2A agent is the same entry with another card.
+
+What Rovo exposes, and what it does not (checked on 2026-10-15):
+
+- **One agent**, "Atlassian Rovo", with two skills: `work-in-jira` and `work-in-confluence`. Custom
+  agents built in Rovo Studio are **not** individually addressable; no public document says how.
+- **A2A 0.3.0**, JSON-RPC at `https://a2a.atlassian.com/v1/rovo`, card at
+  `https://a2a.atlassian.com/.well-known/agent.json`. No push notifications. A synchronous call is cut
+  at about 30 s by Atlassian's CDN, so Choregos streams (or polls); nothing is lost.
+- **Authentication is OAuth 2.0 authorization code with PKCE and Dynamic Client Registration, and
+  nothing else**: no API token, no service account. The agent therefore acts **as the Atlassian user
+  who authorised it**, within that user's permissions. Use a dedicated account (for example
+  `choregos-bot@your-domain`) licensed for Rovo, with exactly the Jira and Confluence access the agent
+  should have.
+- No cost or token figure comes back; Rovo usage counts against the Atlassian subscription.
+
+Two different things, both useful: Rovo's **tools** (search, create and update issues and pages) reach
+your governed agents through an `mcp` connector on `https://mcp.atlassian.com/v1/mcp` and are live
+queries under per-operation policy; the **A2A agent** below is Rovo itself, answering as a person.
+Neither is a knowledge source: a Confluence knowledge base ingests documents, this asks questions.
+
+### Set it up (an organisation administrator)
+
+1. In Atlassian Administration, **allow A2A connections** (Security, AI settings).
+2. In the console, **Administration → Remote agents → Connect**: the card URL
+   `https://a2a.atlassian.com/.well-known/agent.json`. Choregos registers itself at the DCR endpoint
+   the card advertises, then opens Atlassian's consent page: sign in **as the dedicated account** and
+   accept. The credential shows `connected`, and who it is `authorised as`. The refresh token is sealed
+   in the secret store and never shown again; reconnecting replaces it.
+   The same, by API: `POST /orgs/{org}/remote-credentials` with `{"name": "atlassian-rovo", "type":
+   "oauth2_authorization_code", "card_url": "https://a2a.atlassian.com/.well-known/agent.json"}`, then
+   `POST …/atlassian-rovo/authorize` and open the `redirect_url` it returns.
+3. **Agents → New → Remote agent (A2A)**: paste the card URL, pick the skill and the credential, set the
+   timeout and the declared cost, publish. Publication reads the card and pins its digest.
+4. Allow the host in each project that uses it: `sandbox.network.allow_domains: [a2a.atlassian.com]`
+   (the stage is refused otherwise, naming the fix). On a platform with an egress allow-list, the
+   runner pods must be allowed to reach `a2a.atlassian.com`, and the API and the orchestrator
+   `auth.atlassian.com` (registration and token refresh).
+
+```yaml
+# a step of a workflow
+- id: ask-rovo
+  type: agent
+  agent: rovo        # the registry entry; no `backend:`, no model
+```
+
+### What a step does
+
+The pod re-reads the card and **refuses a card that changed** since publication (`remote_card_changed`:
+publish a new version to accept it). It sends the agent's instructions and the task as one message,
+and the declared inputs as files for an agent registered with `text+files`. The project's memory is not
+sent. The answer is `response.md`, an artifact of the step; artifacts the agent returns become files
+or, when named like a declared output, that output. Facts the agent states are recorded as **declared,
+never measured**. The transition's gates read the result like any other.
+
+A step ends `failed` with a reason a person can read: `remote_failed`, `remote_timeout` (the remote task
+is cancelled), `remote_card_changed`, `remote_auth_required` (reconnect the credential),
+`remote_input_required` (the agent asked a question: it is shown, and answering it is not supported
+yet).
+
+### Cost
+
+A2A reports none. The registry entry **declares** `per_task_usd` and `per_minute_usd`; the stage reserves
+that against the ticket and the day and books it as a ledger line of kind `external` (the costs page
+shows it apart). With nothing declared the line says `unmeasured`: Choregos does not know what Rovo
+costs.
+
+### Limits, said plainly
+
+Not built: Choregos **as** a Rovo agent inside Jira (it needs a Forge app and an A2A server); an agent
+answering `input-required` from the console and resuming; push notifications; verification of signed
+cards (A2A 1.0). The A2A 1.0 spelling is implemented from secondary sources and exercised against a
+fake only; so is the Dynamic Client Registration exchange with Atlassian: neither has run against the
+real service yet (`tests/live/test_rovo_a2a.py`, run by hand once the consent is given).
+
 ## Limits
 
 - 120 calls a minute per token, per API replica (HTTP 429 with `Retry-After` beyond).

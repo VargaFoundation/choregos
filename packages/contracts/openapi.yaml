@@ -1289,6 +1289,77 @@ paths:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/discover:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: discoverRemoteAgent
+      description: Reads an A2A Agent Card (https only, no redirect to another host) and suggests the registry entry; creates nothing. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RemoteAgentDiscover" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RemoteAgentDiscovery" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { description: The card cannot be used, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/remote-credentials:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listRemoteCredentials
+      description: The organisation's credentials for remote agents (ADR 0062). `agent:manage`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RemoteCredential" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [agents]
+      operationId: createRemoteCredential
+      description: "OAuth: registers the platform at the card's DCR endpoint (the credential is `pending` until authorised). Bearer: seals the token. `agent:manage`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RemoteCredentialCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/RemoteCredential" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: The card or the request cannot be used, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /orgs/{org}/remote-credentials/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } }
+    delete:
+      tags: [agents]
+      operationId: revokeRemoteCredential
+      description: Revokes the credential and deletes its sealed values. `agent:manage`.
+      responses:
+        "204": { description: Revoked }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/remote-credentials/{name}/authorize:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } }
+    post:
+      tags: [agents]
+      operationId: authorizeRemoteCredential
+      description: Starts the OAuth authorization-code flow with PKCE; sets a signed handshake cookie. `agent:manage`.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RemoteCredentialAuthorization" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Not an OAuth credential, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /remote-credentials/oauth/callback:
+    get:
+      tags: [agents]
+      operationId: remoteCredentialCallback
+      summary: The provider's redirect after the administrator authorised the credential
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "303": { description: Redirect to the administration page }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { description: The provider refused the exchange, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /orgs/{org}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3013,13 +3084,14 @@ components:
         model: { type: [string, "null"] }
         backend: { type: [string, "null"], description: "the ACP coding agent that carries the version; set only with an `acp` runtime (or none)" }
         runtime:
-          description: "How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. Later runtimes (remote agents) add a `kind` to this union."
+          description: "How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062)."
           oneOf:
             - { $ref: "#/components/schemas/AcpRuntime" }
             - { $ref: "#/components/schemas/CodeRuntime" }
+            - { $ref: "#/components/schemas/A2aRuntime" }
           discriminator:
             propertyName: kind
-            mapping: { acp: "#/components/schemas/AcpRuntime", code: "#/components/schemas/CodeRuntime" }
+            mapping: { acp: "#/components/schemas/AcpRuntime", code: "#/components/schemas/CodeRuntime", a2a: "#/components/schemas/A2aRuntime" }
         limits: { $ref: "#/components/schemas/AgentLimits" }
         budget: { $ref: "#/components/schemas/AgentBudget" }
         skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
@@ -3043,6 +3115,99 @@ components:
         image: { type: string, pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the NAME of an image of the operator's `CHOREGOS_AGENT_IMAGES` map, never an image reference" }
         command: { type: array, minItems: 1, maxItems: 64, items: { type: string, minLength: 1, maxLength: 1024 }, description: "the argv the runner starts in the image; it speaks ACP on stdio" }
         api_format: { type: string, enum: [openai, anthropic], default: openai, description: "the model API the code calls through the gateway" }
+    A2aRuntime:
+      type: object
+      description: "An agent that runs elsewhere and is reached over A2A (ADR 0062), e.g. Atlassian's Rovo. The step runs in the runner pod. `model` and `backend` of the spec must be empty, and so must skills, knowledge and MCP servers."
+      required: [kind, card_url]
+      properties:
+        kind: { type: string, enum: [a2a] }
+        card_url: { type: string, pattern: "^https://", maxLength: 2048 }
+        skill: { type: [string, "null"], description: "one skill of the card the step asks for" }
+        credential: { type: [string, "null"], pattern: "^[a-z][a-z0-9-]{1,62}$", description: "the organisation's remote credential; absent only for a card that asks for none" }
+        timeout_minutes: { type: integer, minimum: 1, maximum: 480, default: 30 }
+        declared_cost: { $ref: "#/components/schemas/A2aDeclaredCost" }
+        input: { type: string, enum: [text, text+files], default: text }
+        pinned_card: { oneOf: [{ $ref: "#/components/schemas/A2aPinnedCard" }, { type: "null" }], description: "filled by the API at publication: the card as it was read; the runner refuses a card that changed" }
+    A2aDeclaredCost:
+      type: object
+      description: What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`.
+      properties:
+        per_task_usd: { type: [number, "null"], minimum: 0 }
+        per_minute_usd: { type: [number, "null"], minimum: 0 }
+    A2aPinnedCard:
+      type: object
+      required: [url, protocol_version, digest]
+      properties:
+        url: { type: string }
+        protocol_version: { type: string }
+        digest: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        skills: { type: array, items: { type: string } }
+    RemoteCredential:
+      type: object
+      description: What the organisation holds to call remote agents. No secret is ever returned - the refresh token lives sealed in the secret store.
+      required: [name, type, status]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [oauth2_authorization_code, bearer, none] }
+        status: { type: string, enum: [pending, connected, error, revoked] }
+        authorised_as: { type: [string, "null"], description: "whose permissions a remote agent acts with: the person who authorised it" }
+        scopes: { type: array, items: { type: string } }
+        card_url: { type: [string, "null"] }
+        host: { type: [string, "null"] }
+        created_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        last_refresh_at: { type: [string, "null"], format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        last_error: { type: [string, "null"] }
+    RemoteCredentialCreate:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        type: { type: string, enum: [oauth2_authorization_code, bearer, none] }
+        card_url: { type: [string, "null"], pattern: "^https://", description: "OAuth: the card whose Dynamic Client Registration endpoint the platform registers itself at" }
+        token: { type: [string, "null"], writeOnly: true, description: "bearer: the token, write-only, sealed in the secret store" }
+    RemoteCredentialAuthorization:
+      type: object
+      required: [redirect_url]
+      properties:
+        redirect_url: { type: string, description: "where to send the administrator's browser (authorization code + PKCE)" }
+    RemoteAgentDiscover:
+      type: object
+      required: [card_url]
+      properties:
+        card_url: { type: string, pattern: "^https://" }
+    RemoteSkillInfo:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+    RemoteCardSummary:
+      type: object
+      required: [name, endpoint, host, protocol_version, digest]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        endpoint: { type: string }
+        host: { type: string }
+        protocol_version: { type: string }
+        digest: { type: string }
+        skills: { type: array, items: { $ref: "#/components/schemas/RemoteSkillInfo" } }
+        auth_types: { type: array, items: { type: string }, description: "oauth2_authorization_code, bearer, none: what the card accepts" }
+        scopes: { type: array, items: { type: string } }
+        streaming: { type: boolean }
+        dcr_available: { type: boolean, description: "the card advertises Dynamic Client Registration" }
+    RemoteAgentDiscovery:
+      type: object
+      description: What a card says and the registry entry it suggests - nothing is created.
+      required: [card, proposed]
+      properties:
+        card: { $ref: "#/components/schemas/RemoteCardSummary" }
+        proposed: { $ref: "#/components/schemas/AgentCreate" }
+        credentials: { type: array, items: { type: string }, description: "the organisation's credentials of a type the card accepts" }
+        domains: { type: array, items: { type: string }, description: "hosts the project policy must allow (sandbox.network.allow_domains)" }
     AgentImageInfo:
       type: object
       description: An image an operator named for code agents. The reference itself is never returned.
@@ -3099,7 +3264,7 @@ components:
       required: [slug, display_name]
       properties:
         slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
-        kind: { type: string, enum: [internal, external], default: internal }
+        kind: { type: string, enum: [internal, external, remote], default: internal, description: "`remote`: an agent the platform calls over A2A (ADR 0062); it needs an `a2a` runtime" }
         display_name: { type: string }
         description: { type: [string, "null"] }
         spec: { $ref: "#/components/schemas/AgentSpec" }
@@ -3110,7 +3275,7 @@ components:
       required: [slug, kind, display_name, role, summary, version, installed]
       properties:
         slug: { type: string }
-        kind: { type: string, enum: [internal, external] }
+        kind: { type: string, enum: [internal, external, remote] }
         display_name: { type: string }
         description: { type: [string, "null"] }
         role: { type: string, description: "the package role it plays (`implement`, `review`…), or `external` for a client" }
@@ -3162,7 +3327,7 @@ components:
       required: [slug, kind, display_name, status, latest_version]
       properties:
         slug: { type: string }
-        kind: { type: string, enum: [internal, external] }
+        kind: { type: string, enum: [internal, external, remote] }
         display_name: { type: string }
         description: { type: [string, "null"] }
         status: { type: string }

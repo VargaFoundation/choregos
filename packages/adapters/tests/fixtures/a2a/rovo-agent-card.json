@@ -1,0 +1,118 @@
+{
+  "name": "Atlassian Rovo",
+  "description": "Chat with Rovo, Atlassian's AI teammate that helps you get things done across all your work tools.",
+  "url": "https://a2a.atlassian.com/v1/rovo",
+  "version": "1.0.0",
+  "documentationUrl": "https://www.atlassian.com/platform/remote-mcp-server",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": false,
+    "extensions": [
+      {
+        "uri": "https://cloud.google.com/marketplace/docs/partners/ai-agents/setup-dcr",
+        "params": {
+          "target_url": "https://auth.atlassian.com/rIh7rYbkJiQdDle1kZAShJjyflKVUdtV/dcr/register"
+        }
+      }
+    ]
+  },
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "work-in-jira",
+      "name": "Work in Jira",
+      "description": "Get Jira context like project status, work item details, or sprint data right where you’re doing analysis. You can also create, edit, delete, and update work items in your Jira spaces.",
+      "tags": [
+        "Jira work item",
+        "sprint backlog",
+        "sprint planning",
+        "kanban",
+        "scrum",
+        "project planning",
+        "project management"
+      ],
+      "examples": [
+        "Summarize the status of all open Jira work items assigned to me. Include ticket links and context ordered by priority and deadline, highlighting any critical details.",
+        "List my Jira issues in \"Blocked\" status, ordered by due date. Include the reason they are blocked, the last update made, and their project links.",
+        "Create a new Jira work item in the project [project name] based on this project brief [project brief link]. The work item should include a summary, description, acceptance criteria, and priority.",
+        "Provide a list of tips to maximize productivity when using Jira across different Atlassian apps. Include detailed examples and prompts, ensuring each one specifies a clear goal, relevant context, and expected outcome."
+      ],
+      "inputModes": [
+        "text/plain"
+      ],
+      "outputModes": [
+        "text/plain"
+      ]
+    },
+    {
+      "id": "work-in-confluence",
+      "name": "Work in Confluence",
+      "description": "Find answers from Confluence and create pages. Turn meeting notes, specs, or drafts into team documentation instantly. You can also edit, delete, and update existing Confluence pages.",
+      "tags": [
+        "Confluence space",
+        "knowledge base",
+        "release notes",
+        "meeting notes",
+        "product specs",
+        "documentation"
+      ],
+      "examples": [
+        "Draft a report for Confluence summarizing the key updates and additions I made over the past week. For each significant update or addition, create a subsection with a brief explanation, focusing only on the essential information",
+        "Create a Confluence page with all open Jira tickets assigned to me, ordered by priority and deadline. For each ticket, include a direct link, priority level (High, Medium, Low), deadline, and any relevant context or updates.",
+        "Find Confluence pages related to [customer name]. Summarize each of the pages, highlighting the main ideas and key points that would be important for my upcoming conversation."
+      ],
+      "inputModes": [
+        "text/plain"
+      ],
+      "outputModes": [
+        "text/plain"
+      ]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": false,
+  "iconUrl": "https://product-integrations-cdn.atl-paas.net/atlassian-logo-light.svg",
+  "additionalInterfaces": [
+    {
+      "transport": "JSONRPC",
+      "url": "https://a2a.atlassian.com/v1/rovo"
+    }
+  ],
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3.0",
+  "securitySchemes": {
+    "oauth2": {
+      "type": "oauth2",
+      "flows": {
+        "authorizationCode": {
+          "authorizationUrl": "https://auth.atlassian.com/authorize",
+          "tokenUrl": "https://auth.atlassian.com/oauth/token",
+          "refreshUrl": "https://auth.atlassian.com/oauth/token",
+          "scopes": {
+            "read:me": "Read the current user profile",
+            "offline_access": "Maintain access when the user is offline",
+            "full_access:chat:rovo": "Access the MVP Rovo A2A chat capability"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "oauth2": [
+        "read:me",
+        "offline_access",
+        "full_access:chat:rovo"
+      ]
+    }
+  ],
+  "provider": {
+    "organization": "Atlassian",
+    "url": "https://www.atlassian.com"
+  }
+}

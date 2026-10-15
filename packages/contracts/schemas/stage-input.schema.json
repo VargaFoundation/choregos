@@ -170,7 +170,9 @@
         "output_types": {
           "type": "object",
           "description": "The declared type of each output (ADR 0049); a file type is written in .choregos/outputs/.",
-          "additionalProperties": { "type": "string" },
+          "additionalProperties": {
+            "type": "string"
+          },
           "default": {}
         }
       }
@@ -478,7 +480,11 @@
     },
     "memory_scope": {
       "type": "string",
-      "enum": ["none", "project", "agent"],
+      "enum": [
+        "none",
+        "project",
+        "agent"
+      ],
       "default": "project",
       "description": "Whose memory the run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none."
     },
@@ -575,6 +581,100 @@
               "type": "string"
             }
           }
+        }
+      }
+    },
+    "remote": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "endpoint",
+        "card_url",
+        "protocol_version",
+        "card_digest",
+        "timeout_s",
+        "agent_slug"
+      ],
+      "additionalProperties": false,
+      "description": "Set for a step a remote agent carries over A2A (ADR 0062): `agent.backend` is `a2a`, `model` a placeholder, no gateway key exists. The access token is NOT here: it travels in the run's Secret.",
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "a2a"
+          ],
+          "default": "a2a"
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the JSON-RPC endpoint messages are posted to (pinned at publication)"
+        },
+        "card_url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "where the card lives; the runner fetches it again and refuses on drift"
+        },
+        "protocol_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "skill": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "card_digest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "sha256:<hex> of the card as it was when the version was published"
+        },
+        "timeout_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "input": {
+          "type": "string",
+          "enum": [
+            "text",
+            "text+files"
+          ],
+          "default": "text"
+        },
+        "declared_cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "what the registry entry declares: A2A reports no figure",
+          "properties": {
+            "per_task_usd": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "per_minute_usd": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        },
+        "agent_slug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "the name of the organisation credential the access token comes from (never the token)"
         }
       }
     }

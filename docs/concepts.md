@@ -57,6 +57,14 @@ Three kinds:
 - **`human`** — a group, an SLA in hours, a reminder and an escalation.
 - **`system`** — a transition the platform performs itself, with no agent and no cost.
 
+## Agent kinds and runtimes
+
+An agent of the registry has a **kind**: `internal` (the platform runs it), `external` (a client of the
+MCP door, ADR 0033) or `remote` (the platform calls it over A2A, ADR 0062 — for example Atlassian's
+Rovo). A version's **runtime** says how it runs: `acp` (a coding agent the runner ships), `code` (an
+agent written in code, ADR 0063) or `a2a` (a remote agent: the runner pod calls it, a declared cost
+is booked, the same gates read its outputs).
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,

@@ -24,10 +24,17 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, ExecStatus, StageJobSpec
+from choregos_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 from choregos_core.sorties import explication
 
-from .tekton import CORE_API, GATEWAY_KEY_FIELD, KubernetesClient, _parse_time, run_secret_data
+from .tekton import (
+    CORE_API,
+    GATEWAY_KEY_FIELD,
+    REMOTE_TOKEN_FIELD,
+    KubernetesClient,
+    _parse_time,
+    run_secret_data,
+)
 
 BATCH_API = "/apis/batch/v1"
 RUNNER_POD_LABELS = {"app.kubernetes.io/name": "choregos-runner", "app.kubernetes.io/component": "runner"}
@@ -248,6 +255,13 @@ class KubernetesJobExecutor:
                             "name": RUN_GATEWAY_KEY_ENV,
                             "valueFrom": {
                                 "secretKeyRef": {"name": name, "key": GATEWAY_KEY_FIELD, "optional": True}
+                            },
+                        },
+                        # The access token of a remote agent (ADR 0062), same Secret, same rule.
+                        {
+                            "name": RUN_REMOTE_TOKEN_ENV,
+                            "valueFrom": {
+                                "secretKeyRef": {"name": name, "key": REMOTE_TOKEN_FIELD, "optional": True}
                             },
                         },
                         *[{"name": key, "value": value} for key, value in spec.env.items()],
