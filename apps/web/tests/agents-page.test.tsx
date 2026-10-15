@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AgentsPage from "@/app/agents/page";
 import { ClientsMcp } from "@/components/agents/clients-mcp";
@@ -11,6 +11,8 @@ import type { Agent, ApiToken } from "@/lib/types";
  * registry and the metrics of every agent; the AI clients' attachments in one list too.
  */
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
+const query = vi.hoisted(() => ({ current: new URLSearchParams() }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => query.current, useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -63,19 +65,26 @@ describe("the agents' page", () => {
     expect(api.agentCredentials).not.toHaveBeenCalled();
   });
 
-  it("opens the new agent's form and the catalogue in a drawer", async () => {
+  it("sends a new agent to its own full page, and opens the catalogue in a drawer", async () => {
     vi.mocked(api.agents).mockResolvedValue([]);
     vi.mocked(api.agentMetricsList).mockResolvedValue([]);
+    query.current = new URLSearchParams();
     wrap(<AgentsPage />);
-    expect(screen.queryByLabelText("Slug")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "New agent" }));
-    const dialogue = await screen.findByRole("dialog", { name: "New agent" });
-    // The builder is loaded when the drawer opens (S32-01).
-    expect(await within(dialogue).findByLabelText("Slug")).toBeInTheDocument();
-    fireEvent.click(within(dialogue).getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("dialog", { name: "New agent" })).toBeNull();
+    // S39-05: a link to a page, not a button opening a 672 px drawer.
+    expect(screen.getByRole("link", { name: "New agent" })).toHaveAttribute("href", "/agents/new");
+    expect(screen.queryByRole("button", { name: "New agent" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add from catalogue" }));
     expect(await screen.findByRole("dialog", { name: "Add from catalogue" })).toBeInTheDocument();
+  });
+
+  it("opens the catalogue at once when the address says so", async () => {
+    vi.mocked(api.agents).mockResolvedValue([]);
+    vi.mocked(api.agentMetricsList).mockResolvedValue([]);
+    query.current = new URLSearchParams("catalogue=1");
+    wrap(<AgentsPage />);
+    expect(await screen.findByRole("dialog", { name: "Add from catalogue" })).toBeInTheDocument();
+    query.current = new URLSearchParams();
   });
 });
 

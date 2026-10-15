@@ -30,6 +30,7 @@ const PAGES = [
   "/p/billing-api/runs/r3",
   "/inbox",
   "/agents",
+  "/agents/new",
   "/agents/onboarding-coordinator",
   "/skills",
   "/costs",

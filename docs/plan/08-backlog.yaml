@@ -1968,6 +1968,16 @@ stories:
 
   # ───────────── Plan 2026-10-12 (docs/plan/PLAN-2026-10-12.md) — written in English (S34) ─────────────
   # S26 — P0 fixes
+  - id: S25-05
+    title: "The agent's plan also reads opencode's todo list (its todowrite tool)"
+    stream: S25
+    sprint: 15
+    priority: 5
+    size: S
+    depends_on: [S25-01]
+    acceptance:
+      - "A todowrite call is a plan revision; a cancelled todo is removed, never counted as done"
+
   - id: S26-01
     title: "Train status answers from the database when the train workflow does not exist or does not answer in 3 s"
     stream: S26

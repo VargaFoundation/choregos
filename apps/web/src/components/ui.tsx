@@ -582,6 +582,40 @@ export function Alert({
 }
 
 /**
+ * A section that folds (S39-05): a native `<details>`, so the keyboard and assistive technology
+ * work without a script. The `summary` says the current value in one line, so a closed section
+ * still tells what it holds. Closed unless `defaultOpen`.
+ */
+export function Disclosure({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+  id,
+  className,
+}: {
+  title: ReactNode;
+  summary?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+  id?: string;
+  className?: string;
+}) {
+  return (
+    <details id={id} open={defaultOpen} className={cn("group rounded-md border border-line", className)}>
+      <summary className="flex cursor-pointer list-none flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-md px-4 py-3 text-sm marker:hidden [&::-webkit-details-marker]:hidden pointer-coarse:min-h-11">
+        <span aria-hidden className="text-ink-muted transition-transform duration-200 group-open:rotate-90">
+          ›
+        </span>
+        <span className="font-semibold text-ink">{title}</span>
+        {summary != null && <span className="min-w-0 text-xs text-ink-muted">{summary}</span>}
+      </summary>
+      <div className="space-y-3 border-t border-line p-4">{children}</div>
+    </details>
+  );
+}
+
+/**
  * A box that is ticked or not — a step done, a criterion met. It shows a state; it is not a control
  * (a form's checkbox is a native `<input type="checkbox">`).
  */
