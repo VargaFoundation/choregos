@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Sidecar HTTP du serveur MCP `choregos-tools` (endpoint `/mcp`)."""
+"""The HTTP sidecar of the `choregos-tools` MCP server (endpoint `/mcp`)."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ _state: dict[str, Any] = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if "server" in _state:
-        # Déjà injecté : le runner sert ces outils lui-même quand aucun sidecar ne le fait
-        # (l'exécuteur `k8s_job` n'a qu'un conteneur). Il apporte alors SON client, déjà
-        # authentifié par le jeton du run — en créer un second serait une seconde identité.
+        # Already injected: the runner serves these tools itself when no sidecar does (the
+        # `k8s_job` executor has a single container). It then brings ITS client, already
+        # authenticated with the run's token; creating a second one would be a second identity.
         yield
         return
     client = InternalClient(
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app(server: McpServer | None = None) -> FastAPI:
-    """L'application du sidecar. `server` injecté : le runner la sert lui-même."""
+    """The sidecar's application. With `server` injected, the runner serves it itself."""
     if server is not None:
         _state["server"] = server
     app = FastAPI(title="choregos-tools", version="1.0.0", lifespan=lifespan)
@@ -51,14 +51,14 @@ def create_app(server: McpServer | None = None) -> FastAPI:
 
     @app.post("/mcp")
     async def mcp(request: Request) -> Response:
-        """Un message JSON-RPC par requête ; une notification est acceptée sans corps (202).
+        """One JSON-RPC message per request; a notification is accepted without a body (202).
 
-        Le transport Streamable HTTP veut 202 pour une notification ; le side-car rendait 204,
-        que les clients tolèrent sans que le protocole le permette.
+        The Streamable HTTP transport wants 202 for a notification; the sidecar used to answer
+        204, which clients tolerate although the protocol does not allow it.
         """
         server: McpServer = _state["server"]
         message = await request.json()
-        if isinstance(message, list):  # lot JSON-RPC
+        if isinstance(message, list):  # JSON-RPC batch
             responses = [r for r in [await server.handle(m) for m in message] if r is not None]
             return JSONResponse(responses)
         response = await server.handle(message)
@@ -77,7 +77,7 @@ def main() -> None:
 
     uvicorn.run(
         app,
-        host="127.0.0.1",  # le sidecar n'écoute que sur la boucle locale du pod
+        host="127.0.0.1",  # the sidecar listens on the pod's loopback only
         port=int(os.environ.get("CHOREGOS_TOOLS_PORT", "7777")),
         log_level="warning",
     )

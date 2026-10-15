@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Serveur MCP `choregos-tools` : HTTP (JSON-RPC) exposé au backend agent en localhost.
+"""The `choregos-tools` MCP server: HTTP (JSON-RPC) served to the agent backend on localhost.
 
-Il tient dans un sidecar, ne détient que le jeton du run, et relaie tout à l'API interne.
+It lives in a sidecar, holds only the run's token, and relays everything to the internal API.
 """
 
 from __future__ import annotations
@@ -16,21 +16,21 @@ from choregos_core.mcp import ok as _ok
 from .client import InternalClient
 from .tools import TOOL_SCHEMAS, ToolContext, finding_from, text_result
 
-#: La version que le side-car annonçait seule ; il répond désormais celle que le client demande,
-#: si elle est comprise (`choregos_core.mcp.VERSIONS`).
+#: The only version the sidecar used to announce; it now answers the one the client asks for,
+#: when it is understood (`choregos_core.mcp.VERSIONS`).
 PROTOCOL_VERSION = "2025-06-18"
 SERVER_INFO = {"name": "choregos-tools", "version": "1.0.0"}
 
 
 class McpServer:
-    """Implémentation minimale et explicite du protocole MCP (initialize, tools/*)."""
+    """A minimal, explicit implementation of the MCP protocol (initialize, tools/*)."""
 
     def __init__(self, client: InternalClient, context: ToolContext | None = None) -> None:
         self.client = client
         self.context = context or ToolContext()
-        # Les outils du CATALOGUE, s'il y en a : des API tierces que la plateforme appelle
-        # pour l'agent, clé côté serveur. Chargés paresseusement — un déploiement sans
-        # catalogue ne doit pas payer un aller-retour à chaque session.
+        # The CATALOGUE tools, if any: third-party APIs the platform calls for the agent,
+        # with the key on the server side. Loaded lazily: a deployment without a catalogue
+        # must not pay a round trip on every session.
         self._catalogue: list[dict[str, Any]] | None = None
 
     async def handle(self, message: dict[str, Any]) -> dict[str, Any] | None:
@@ -49,7 +49,7 @@ class McpServer:
         if method in {"notifications/initialized", "initialized"}:
             return None
         if method == "tools/list":
-            return _ok(request_id, {"tools": [*TOOL_SCHEMAS, *await self._outils_du_catalogue()]})
+            return _ok(request_id, {"tools": [*TOOL_SCHEMAS, *await self._catalogue_tools()]})
         if method == "tools/call":
             name = str(params.get("name", ""))
             arguments = params.get("arguments") or {}
@@ -57,83 +57,83 @@ class McpServer:
                 result = await self.call(name, arguments)
             except KeyError as exc:
                 return _error(request_id, PARAMETRES_INVALIDES, f"missing argument: {exc}")
-            except Exception as exc:  # une panne d'API ne doit pas tuer la session de l'agent
+            except Exception as exc:  # an API outage must not kill the agent's session
                 return _ok(request_id, text_result(f"tool `{name}` failed: {exc}", is_error=True))
             return _ok(request_id, result)
         if method == "ping":
             return _ok(request_id, {})
         return _error(request_id, METHODE_INCONNUE, f"unknown method: {method}")
 
-    async def _outils_du_catalogue(self) -> list[dict[str, Any]]:
+    async def _catalogue_tools(self) -> list[dict[str, Any]]:
         if self._catalogue is None:
             try:
                 self._catalogue = await self.client.fetch_tools()
             except Exception:
-                # Un catalogue injoignable ne doit pas priver l'agent de SES outils : il
-                # perd les API tierces, il garde `report_finding` et les autres.
+                # An unreachable catalogue must not deprive the agent of ITS tools: it loses
+                # the third-party APIs, it keeps `report_finding` and the others.
                 self._catalogue = []
         return self._catalogue
 
     async def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         handler = getattr(self, f"_tool_{name}", None)
         if handler is None:
-            if any(o.get("name") == name for o in await self._outils_du_catalogue()):
-                reponse = await self.client.call_tool(name, arguments)
-                code = int(reponse.get("status_code", 0))
-                corps = json.dumps(reponse.get("result"), ensure_ascii=False, indent=2)[:20_000]
-                # Un 4xx du fournisseur est une réponse, pas une panne : l'agent doit la
-                # lire et décider. On la marque en erreur pour qu'il ne la prenne pas
-                # pour un succès, mais on lui rend le corps.
-                return text_result(corps, is_error=code >= 400)
+            if any(o.get("name") == name for o in await self._catalogue_tools()):
+                answer = await self.client.call_tool(name, arguments)
+                code = int(answer.get("status_code", 0))
+                body = json.dumps(answer.get("result"), ensure_ascii=False, indent=2)[:20_000]
+                # A provider's 4xx is an answer, not an outage: the agent must read it and
+                # decide. It is flagged as an error so the agent does not take it for a
+                # success, but the body is handed back.
+                return text_result(body, is_error=code >= 400)
             return text_result(f"unknown tool: {name}", is_error=True)
         return await handler(arguments)  # type: ignore[no-any-return]
 
-    # ───────────────────────── outils ─────────────────────────
+    # ───────────────────────── tools ─────────────────────────
 
     async def _tool_validate_result(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Le contrat, vérifié par l'agent lui-même, avant de finir.
+        """The contract, checked by the agent itself before it finishes.
 
-        Cinq `result.repair` sur huit runs au banc du 2026-09-24 : `questions` en chaînes,
-        `findings` sans `title`. Le même validateur que le runner, exposé comme un outil, pour
-        que l'erreur se lise AVANT le dépôt du résultat et non dans une boucle de réparation.
+        Five `result.repair` in eight runs on the 2026-09-24 bench: `questions` as strings,
+        `findings` without a `title`. The runner's own validator, exposed as a tool, so the
+        error is read BEFORE the result is handed in, not in a repair loop.
         """
         from choregos_contracts import StageResult, StageStatus
         from pydantic import ValidationError
 
-        brut = arguments.get("result")
+        raw = arguments.get("result")
         try:
-            donnees = json.loads(brut) if isinstance(brut, str) else brut
+            data = json.loads(raw) if isinstance(raw, str) else raw
         except json.JSONDecodeError as exc:
             return text_result(f"this is not JSON: {exc}", is_error=True)
-        if not isinstance(donnees, dict):
+        if not isinstance(data, dict):
             return text_result("expected: a JSON object (`{…}`)", is_error=True)
         try:
-            resultat = StageResult.model_validate(donnees)
+            result = StageResult.model_validate(data)
         except ValidationError as exc:
-            lignes = [f"- `{'.'.join(str(p) for p in e['loc'])}`: {e['msg']}" for e in exc.errors()]
-            return text_result("result does NOT conform:\n" + "\n".join(lignes), is_error=True)
-        # Ce que le runner refusera après (S22-12) se dit ici AVANT : une étape qui finit rend
-        # chacune des sorties que sa transition déclare, à la racine de `outputs` (S22-15).
-        declarees = await self._sorties_declarees()
-        if resultat.status is StageStatus.DONE and declarees:
-            ecrites = resultat.outputs.model_dump(exclude_none=True)
-            manquantes = [nom for nom in declarees if ecrites.get(nom) in (None, "", [], {})]
-            if manquantes:
+            lines = [f"- `{'.'.join(str(p) for p in e['loc'])}`: {e['msg']}" for e in exc.errors()]
+            return text_result("result does NOT conform:\n" + "\n".join(lines), is_error=True)
+        # What the runner will refuse afterwards (S22-12) is said here BEFORE: a step that
+        # finishes hands in each output its transition declares, at the root of `outputs` (S22-15).
+        declared = await self._declared_outputs()
+        if result.status is StageStatus.DONE and declared:
+            written = result.outputs.model_dump(exclude_none=True)
+            missing = [name for name in declared if written.get(name) in (None, "", [], {})]
+            if missing:
                 return text_result(
-                    f"`outputs` lacks {', '.join(f'`{n}`' for n in manquantes)}: this step declares "
-                    f"{', '.join(f'`{n}`' for n in declarees)}, each a key of `outputs` of its own — "
+                    f"`outputs` lacks {', '.join(f'`{n}`' for n in missing)}: this step declares "
+                    f"{', '.join(f'`{n}`' for n in declared)}, each a key of `outputs` of its own — "
                     "not nested in another output.",
                     is_error=True,
                 )
         return text_result("ok: the result conforms to choregos/StageResult/v1")
 
-    async def _sorties_declarees(self) -> list[str]:
-        """Les sorties de la transition, lues une fois dans l'entrée du run. Illisible — un client
-        sans `fetch_input`, l'API injoignable — : rien à exiger, le runner tranchera."""
+    async def _declared_outputs(self) -> list[str]:
+        """The transition's outputs, read once from the run's input. Unreadable (a client without
+        `fetch_input`, the API unreachable): nothing to require, the runner will decide."""
         if self.context.declared_outputs is None:
             try:
-                entree = await self.client.fetch_input()
-                self.context.declared_outputs = list(entree.transition.outputs)
+                stage_input = await self.client.fetch_input()
+                self.context.declared_outputs = list(stage_input.transition.outputs)
             except Exception:
                 return []
         return self.context.declared_outputs
@@ -253,8 +253,8 @@ class McpServer:
         )
 
     async def _tool_propose_fact(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        # La proposition passe par l'API interne comme un finding de type `docs`,
-        # que `MemoryIngestion` route vers la file `pending`.
+        # The proposal goes through the internal API as a finding of type `docs`,
+        # which `MemoryIngestion` routes to the `pending` queue.
         await self.client.report_finding(
             finding_from(
                 {

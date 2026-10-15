@@ -1,7 +1,7 @@
 [project]
 name = "choregos-tools-mcp"
 version = "0.17.12"
-description = "Sidecar MCP choregos-tools"
+description = "The choregos-tools MCP sidecar"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = ["choregos-core", "choregos-contracts", "httpx>=0.27", "pydantic>=2.9", "structlog>=24.4", "typer>=0.15", "fastapi>=0.115", "uvicorn>=0.32"]
