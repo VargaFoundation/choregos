@@ -189,6 +189,10 @@ def test_makefile_reads_comments_only() -> None:
         ("packages/core/src/choregos_core/injection.py", False),
         ("apps/web/public/logo.png", False),
         ("demo/README.txt", False),
+        ("charts/choregos/values.yaml", True),
+        ("charts/choregos/templates/_helpers.tpl", True),
+        ("charts/choregos/templates/NOTES.txt", True),
+        ("charts/choregos/dashboards/runs.json", False),
     ],
 )
 def test_what_is_scanned(path: str, scanned: bool) -> None:

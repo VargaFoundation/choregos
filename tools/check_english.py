@@ -36,8 +36,9 @@ DEFAULT_RANGE = "origin/main...HEAD"
 ESCAPE = "lang: fr-ok"
 
 #: Where prose lives. Root-level Markdown (AGENTS.md, README.md) and the Makefile are read too.
-SCANNED_DIRS = ("packages/", "apps/", "tools/", "tests/", "docs/", ".github/")
-SUFFIXES = {".py", ".ts", ".tsx", ".md", ".yaml", ".yml"}
+SCANNED_DIRS = ("packages/", "apps/", "tools/", "tests/", "docs/", ".github/", "charts/")
+#: `.tpl` and `.txt`: a Helm chart's helpers and its NOTES, read line by line as YAML is.
+SUFFIXES = {".py", ".ts", ".tsx", ".md", ".yaml", ".yml", ".tpl", ".txt"}
 #: Paths never read, and why. A line here is a decision, not an oversight.
 EXCLUDED = (
     "docs/fr/",  # the archived French documentation, no longer maintained
@@ -228,7 +229,7 @@ def prose_lines(path: str, content: str) -> Iterator[tuple[int, str]]:
         return _ts_prose(content, jsx=suffix == ".tsx")
     if suffix == ".md":
         return _markdown_prose(content)
-    if suffix in (".yaml", ".yml"):
+    if suffix in (".yaml", ".yml", ".tpl", ".txt"):
         return _yaml_prose(content)
     return _makefile_prose(content)
 

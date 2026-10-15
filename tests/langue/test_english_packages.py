@@ -25,6 +25,7 @@ ENGLISH = (
     "packages/playbooks/",
     "packages/tools-mcp/",  # #529
     "tools/",  # #530
+    "charts/",  # #534
 )
 
 #: (file, start of the line) — French that stays, each with its reason.
