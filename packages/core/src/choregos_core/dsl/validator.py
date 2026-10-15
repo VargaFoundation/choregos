@@ -13,6 +13,7 @@ from typing import Any
 from choregos_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    RUN_ACTORS,
     AgentActor,
     HumanActor,
     SystemActor,
@@ -485,7 +486,7 @@ def _check_retries(wf: Workflow, report: ValidationReport, source: Any) -> None:
         backwards = position.get(t.to, 0) < position.get(t.from_, 0)
         if backwards and t.on_fail is None and t.on_changes_requested is None:
             actor = wf.actors.get(t.by) if t.by else None
-            if isinstance(actor, AgentActor):
+            if isinstance(actor, RUN_ACTORS):
                 report.error(
                     "transition.unbounded_retry",
                     f"return transition {t.from_} → {t.to} without `on_fail.max_attempts`",

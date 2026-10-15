@@ -385,6 +385,27 @@ from skills run in the sandbox, images and video from models behind the gateway 
 the ledger like any model call) or from MCP connectors. Files are limited to
 `CHOREGOS_ARTIFACT_MAX_BYTES` (200 MiB by default) and are never committed.
 
+**Deterministic steps** (ADR 0056). A computation — a backtest, a data snapshot, a conversion — is
+code, not judgement: give it to a `job`, not to an agent.
+
+```yaml
+actors:
+  engine: { type: job, role: backtest, command: [choregos-quant, backtest, --out, out], image: quant, max_minutes: 20 }
+```
+
+`command` is an argv, never a shell line. `image` names an image the operator mapped in
+`CHOREGOS_JOB_IMAGES` (`{"quant": "registry/…@sha256:…"}`), built from the runner image; without it
+the job runs in the runner image, and an unknown name stops the step. A job gets no model and no
+gateway key. The runner writes the work item's fields in `.choregos/fields.json`, runs the command
+with `CHOREGOS_WORKSPACE`, `CHOREGOS_RUN_ID`, `CHOREGOS_API_URL` and the run's own token
+`CHOREGOS_RUN_TOKEN` (to call a connector through the internal API), and reads back
+`.choregos/job.json` = `{"summary": …, "facts": {…}, "outputs": {…}}` and the files in
+`.choregos/outputs/`. A non-zero exit fails the step; the facts are **measured**, so
+`evidence_facts` gates on what the code computed, not on what an agent said. Retries, `on_fail` and
+the `*agent` wildcard treat a job like an agent step. A job reaches the outside only through the
+connector operations its actor names, `tools: [{connector: marketdata, tools: [get_bars]}]`, called
+through the internal API with that token; a job that names none sees no tool.
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated

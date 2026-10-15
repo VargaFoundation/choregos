@@ -101,7 +101,7 @@ async def run_local(
         key = transition.key
         attempt = attempts.get(key, 0)
 
-        if kind == "agent":
+        if kind in ("agent", "job"):
             decision, cost, run_id = await _run_stage(project_id, work_item_id, engine, transition, attempt)
             attempts[key] = attempt + 1
             last_run = run_id
@@ -173,24 +173,21 @@ async def run_local(
 async def _run_stage(
     project_id: str, work_item_id: str, engine: WorkflowEngine, transition: Any, attempt: int
 ) -> tuple[Any, float, str]:
-    actor = engine.agent_of(transition)
-    assert actor is not None
+    request = engine.run_request(transition)
+    assert request, "an agent or a job"
     prepared = await stage_activities.prepare_stage(
         {
             "project_id": project_id,
             "work_item_id": work_item_id,
             "transition_id": transition.key,
-            "role": str(actor.role),
             "from_state": transition.from_,
             "to_state": transition.to,
             "actor": transition.by or "",
             "attempt": attempt + 1,
-            "backend": actor.backend,
-            "model_request": actor.model,
-            "playbook": actor.playbook,
             "outputs": list(transition.outputs),
             "inputs": list(transition.inputs),
             "output_types": dict(transition.output_types),
+            **request,
         }
     )
     run_id = prepared["run_id"]

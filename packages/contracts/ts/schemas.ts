@@ -489,6 +489,15 @@ export type StageInput = {
     documents?: Array<string>;
     digest?: string;
   }>;
+  /** Set for a job step (ADR 0056): the runner runs `command` and starts no agent; `agent`, `model` and `playbook` are placeholders. */
+  job?: {
+    command: Array<string>;
+    image?: string | null;
+    /** The connector operations the job may call through the internal API, by connector: the job's only access to the outside. */
+    tools?: {
+      [key: string]: Array<string>;
+    };
+  } | null;
 };
 
 /** Runner → orchestrator contract (docs/plan/01 §1.6). The agent writes .choregos/result.json; the runner completes artifacts/evidence/diagnostics. */
@@ -713,7 +722,7 @@ export type WorkflowSlug = string;
 
 export type WorkflowIdentifier = string;
 
-export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSystemActor;
+export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSystemActor | WorkflowJobActor;
 
 export type WorkflowAgentActor = {
   type: "agent";
@@ -741,6 +750,17 @@ export type WorkflowHumanActor = {
 
 export type WorkflowSystemActor = {
   type: "system";
+};
+
+/** A deterministic step (ADR 0056): a command run by the runner in the step's sandbox — no model, no gateway key. The facts it writes in `.choregos/facts.json` are measured. */
+export type WorkflowJobActor = {
+  type: "job";
+  role: string;
+  /** argv, never a shell line. */
+  command: Array<string>;
+  /** A job image's name, as the platform maps it (CHOREGOS_JOB_IMAGES); absent: the runner image. */
+  image?: string;
+  max_minutes?: number;
 };
 
 export type WorkflowState = {

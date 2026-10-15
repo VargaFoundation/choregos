@@ -228,6 +228,16 @@ def knowledge_digest(files: list[dict[str, str]]) -> str:
     return "sha256:" + condense.hexdigest()
 
 
+class JobSpec(Strict):
+    """A deterministic step (ADR 0056): the runner runs `command`, starts no agent, holds no model key."""
+
+    command: list[str] = Field(min_length=1)
+    #: The image the orchestrator resolved from the actor's image name, `None` for the runner image.
+    image: str | None = None
+    #: `{connector: [operation patterns]}` the internal API lets this run call (the actor's `tools`).
+    tools: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class StageInput(Strict):
     """Ce que l'orchestrateur remet au runner (docs/plan/01 §1.5)."""
 
@@ -260,6 +270,8 @@ class StageInput(Strict):
     permissions: Permissions = Field(default_factory=Permissions)
     context: StageContext = Field(default_factory=StageContext)
     callbacks: Callbacks
+    #: Set for a job step (ADR 0056): `agent`, `model` and `playbook` are then placeholders.
+    job: JobSpec | None = None
 
     model_config = Strict.model_config | {"populate_by_name": True}
 

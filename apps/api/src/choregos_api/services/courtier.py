@@ -73,6 +73,11 @@ class OutilDuCourtier:
 
 async def _selection(session: AsyncSession, run: Run) -> dict[str, list[str]]:
     """{connecteur: motifs} que la version de l'agent du run nomme ; rien sans agent du registre."""
+    job = (run.stage_input or {}).get("job") if run.backend == "job" else None
+    if isinstance(job, dict):
+        # A job (ADR 0056) names its operations in the workflow (`tools:`), reviewed with it; the
+        # orchestrator copied them into the run's StageInput, which the run cannot rewrite.
+        return {str(c): [str(m) for m in motifs or []] for c, motifs in (job.get("tools") or {}).items()}
     if not run.agent_slug or not run.agent_version:
         return {}
     from ..db.models import Agent

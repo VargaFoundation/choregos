@@ -353,7 +353,8 @@ class WorkflowInterpreter:
                 continue
 
             kind = engine.actor_kind(transition)
-            if kind == "agent":
+            # A job (ADR 0056) runs in a run like an agent; no history holds one before it existed.
+            if kind in ("agent", "job"):
                 decision = await self._run_stage(params, engine, transition, context)
             elif kind == "human":
                 decision = await self._wait_human(params, engine, transition)
@@ -404,8 +405,7 @@ class WorkflowInterpreter:
     async def _run_stage(
         self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, context: dict[str, Any]
     ) -> Any:
-        actor = engine.agent_of(transition)
-        if actor is None:
+        if engine.agent_of(transition) is None and engine.job_of(transition) is None:
             return engine.retry_or_escalate(
                 transition, self._essais(transition.key), "acteur agent introuvable"
             )
@@ -420,28 +420,22 @@ class WorkflowInterpreter:
             attempt = self.attempts[key]
             self.attempts[key] = attempt + 1
 
+            stage = {
+                "project_id": params.project_id,
+                "work_item_id": params.work_item_id,
+                "transition_id": key,
+                "from_state": transition.from_,
+                "to_state": transition.to,
+                "actor": transition.by or "",
+                "attempt": attempt + 1,
+                "outputs": list(transition.outputs),
+                "inputs": list(transition.inputs),
+                "output_types": dict(transition.output_types),
+            }
+            stage |= engine.run_request(transition)
             prepared = await executer_activite(
                 stage_activities.prepare_stage,
-                {
-                    "project_id": params.project_id,
-                    "work_item_id": params.work_item_id,
-                    "transition_id": key,
-                    "role": str(actor.role),
-                    "from_state": transition.from_,
-                    "to_state": transition.to,
-                    "actor": transition.by or "",
-                    "attempt": attempt + 1,
-                    "backend": actor.backend,
-                    "model_request": actor.model,
-                    "fresh_context": actor.fresh_context,
-                    "max_turns": actor.max_turns,
-                    "max_minutes": actor.max_minutes,
-                    "playbook": actor.playbook,
-                    "agent": actor.agent,
-                    "outputs": list(transition.outputs),
-                    "inputs": list(transition.inputs),
-                    "output_types": dict(transition.output_types),
-                },
+                stage,
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=DEFAULT_RETRY,
             )
@@ -541,7 +535,7 @@ class WorkflowInterpreter:
                 self._essais(key),
                 outcomes,
                 require_outputs=workflow.patched(DECLARED_OUTPUTS_REQUIRED),
-                ceiling=_attempts_ceiling(context, actor),
+                ceiling=_attempts_ceiling(context, engine.agent_of(transition)),
             )
             decision = self._identical_failure(engine, transition, result, decision)
         if decision.next_state == engine.question_state() and result.status is StageStatus.NEEDS_HUMAN:
@@ -1321,10 +1315,10 @@ def _de_cet_environnement(event: dict[str, Any], env: str) -> bool:
 
 def _attempts_ceiling(context: dict[str, Any], actor: Any) -> int | None:
     """The policy's ceiling on this transition's attempts (`attempts.by_role`, S27-08); `None`
-    when the policy names none for the role, or for a history recorded before
-    `POLICY_ATTEMPTS_CEILING`."""
+    when the policy names none for the role, for a job (no role: ADR 0056), or for a history
+    recorded before `POLICY_ATTEMPTS_CEILING`."""
     ceilings = context.get("attempts_ceilings")
-    if not ceilings or not workflow.patched(POLICY_ATTEMPTS_CEILING):
+    if not ceilings or actor is None or not workflow.patched(POLICY_ATTEMPTS_CEILING):
         return None
     ceiling = ceilings.get(str(actor.role))
     return int(ceiling) if ceiling else None

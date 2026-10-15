@@ -14,6 +14,7 @@ from typing import Any
 from choregos_contracts import (
     AgentActor,
     HumanActor,
+    JobActor,
     StageResult,
     StageStatus,
     SystemActor,
@@ -99,6 +100,8 @@ class WorkflowEngine:
         actor = self.wf.actor_of(transition)
         if isinstance(actor, AgentActor):
             return "agent"
+        if isinstance(actor, JobActor):
+            return "job"
         if isinstance(actor, HumanActor):
             return "human"
         if isinstance(actor, SystemActor):
@@ -108,6 +111,38 @@ class WorkflowEngine:
     def agent_of(self, transition: Transition) -> AgentActor | None:
         actor = self.wf.actor_of(transition)
         return actor if isinstance(actor, AgentActor) else None
+
+    def job_of(self, transition: Transition) -> JobActor | None:
+        actor = self.wf.actor_of(transition)
+        return actor if isinstance(actor, JobActor) else None
+
+    def run_request(self, transition: Transition) -> dict[str, Any]:
+        """What `prepare_stage` needs from the actor of a step a runner executes: an agent's role,
+        model and limits, or a job's role and command (ADR 0056). Empty for any other actor."""
+        agent = self.agent_of(transition)
+        if agent is not None:
+            return {
+                "role": str(agent.role),
+                "backend": agent.backend,
+                "model_request": agent.model,
+                "fresh_context": agent.fresh_context,
+                "max_turns": agent.max_turns,
+                "max_minutes": agent.max_minutes,
+                "playbook": agent.playbook,
+                "agent": agent.agent,
+            }
+        job = self.job_of(transition)
+        if job is not None:
+            return {
+                "role": str(job.role),
+                "max_minutes": job.max_minutes,
+                "job": {
+                    "command": list(job.command),
+                    "image": job.image,
+                    "tools": {t.connector: list(t.tools) for t in job.tools},
+                },
+            }
+        return {}
 
     def human_of(self, transition: Transition) -> HumanActor | None:
         actor = self.wf.actor_of(transition)

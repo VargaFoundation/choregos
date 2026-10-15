@@ -63,6 +63,9 @@ class _Raisons:
 def _acteurs(workflow: Workflow, raisons: _Raisons) -> None:
     nom = workflow.metadata.name
     for acteur, spec in workflow.actors.items():
+        if spec.type == ActorType.JOB:
+            raisons.exiger("runtime", f"{nom}: the job {acteur} runs somewhere")
+            continue
         if spec.type != ActorType.AGENT:
             continue
         raisons.exiger("runtime", f"{nom}: the agent {acteur} runs somewhere")

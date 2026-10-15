@@ -71,7 +71,44 @@ class SystemActor(Strict):
     type: Literal[ActorType.SYSTEM] = ActorType.SYSTEM
 
 
-Actor = Annotated[AgentActor | HumanActor | SystemActor, Field(discriminator="type")]
+#: The name of a job image the platform knows (`CHOREGOS_JOB_IMAGES`), never a free image reference:
+#: what runs in a pod is chosen by whoever operates the platform, not by whoever writes a workflow.
+JobImage = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")]
+
+
+class JobTools(Strict):
+    """The operations of an organisation connector a job may call through the internal API, like an
+    agent's `mcp_servers`: a connector named without operations opens nothing, everything is `*`."""
+
+    connector: Annotated[str, Field(min_length=1, max_length=64)]
+    tools: list[Annotated[str, Field(min_length=1, max_length=128)]] = Field(min_length=1, max_length=32)
+
+
+class JobActor(Strict):
+    """A deterministic step (ADR 0056): a command, run by the runner in the step's sandbox, with no
+    model, no gateway key and no agent loop.
+
+    A backtest, a data snapshot or a conversion is code, not judgement: an agent asked to compute a
+    Sharpe ratio narrates one. The job runs the same pod, the same declared inputs and outputs and the
+    same gates as an agent step; what it writes in `.choregos/job.json` is *measured*, because the
+    platform ran the code that produced it — whereas an agent's facts are what it says.
+    """
+
+    type: Literal[ActorType.JOB] = ActorType.JOB
+    role: Role
+    #: argv, never a shell line: no word splitting, no expansion, no injection from a ticket field.
+    command: list[Annotated[str, Field(min_length=1, max_length=4096)]] = Field(min_length=1, max_length=64)
+    #: The job image's name; `None` runs in the runner image.
+    image: JobImage | None = None
+    max_minutes: int | None = Field(default=None, ge=1, le=480)
+    #: The connector operations the command may call with the run's token (`marketdata: [get_bars]`):
+    #: the only way out of the sandbox, metered and recorded like an agent's tool calls.
+    tools: list[JobTools] = Field(default_factory=list, max_length=16)
+
+
+Actor = Annotated[AgentActor | HumanActor | SystemActor | JobActor, Field(discriminator="type")]
+#: The actors whose step a runner executes: they share the run's lifecycle (start, await, result).
+RUN_ACTORS = (AgentActor, JobActor)
 
 
 class TrackerMapping(Strict):
@@ -315,13 +352,14 @@ class Workflow(Strict):
         return out
 
     def agent_driven_states(self) -> set[str]:
-        """États dont au moins une transition sortante est portée par un acteur agent."""
+        """States with at least one outgoing transition carried by an agent — or a job (ADR 0056): it
+        runs in a run like an agent, and `*agent` (failure, cancellation) covers it."""
         result: set[str] = set()
         for t in self.transitions:
             if t.by is None or t.from_ == AGENT_WILDCARD:
                 continue
             actor = self.actors.get(t.by)
-            if isinstance(actor, AgentActor):
+            if isinstance(actor, RUN_ACTORS):
                 result.add(t.from_)
         return result
 

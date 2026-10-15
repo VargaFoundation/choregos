@@ -43,6 +43,10 @@ class OrchestratorSettings(BaseSettings):
     #: ailleurs (`runner/outils_locaux.py`, qui démarre le serveur si rien ne répond).
     tools_mcp_url: str = "http://localhost:7777/mcp"
     runner_image: str = "ghcr.io/vargafoundation/choregos-runner:1.0.0"
+    #: The images a job step may name (ADR 0056), as JSON in `CHOREGOS_JOB_IMAGES`: name → reference,
+    #: pinned by digest. A workflow names an image, never pulls one: the operator decides what runs.
+    #: Each is built FROM the runner image — the runner is what runs the job's command.
+    job_images: dict[str, str] = {}
     executor_kind: str = "tekton"
     # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
     # secret n'a rien à faire ici : `CHOREGOS_RUNNER_ENV_SECRETS` liste des secrets, que

@@ -24,6 +24,7 @@ from choregos_contracts import (
     StageResult,
     StageStatus,
 )
+from choregos_core.redaction import REDACTED, redact
 
 from . import compression
 from .acp import AcpClient, AgentUnreachableError
@@ -37,6 +38,7 @@ from .dod import run_checks
 from .exits import Exit
 from .guardrails import GuardRails
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
+from .job import REPORT_COMMAND, REPORT_IMAGE, command_digest, job_result, run_job, write_fields
 from .knowledge import KnowledgeInvalidError, lay_out
 from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
@@ -47,6 +49,8 @@ from .skills import SkillInvalide, poser
 from .workspace import Workspace, agent_git_env, agent_home, inline_outputs, workspace_env
 
 MAX_RESULT_REPAIRS = 2
+#: What the journal keeps of a job's stdout and stderr: the tail, enough to see why it failed.
+JOB_LOG_TAIL = 4000
 MAX_SCOPE_REMINDERS = 1
 
 #: La clé, dans `artifacts.reports`, du commit où le run commence (S22-11).
@@ -180,19 +184,7 @@ class Runner:
             "run.started", {"run_id": stage_input.run_id, "role": stage_input.transition.role}
         )
 
-        # Les outils de la plateforme sont servis en localhost. Avec Tekton c'est un
-        # sidecar ; avec `k8s_job` le pod n'a QU'UN conteneur, et personne n'écoutait —
-        # l'agent se retrouvait sans aucun outil tout en croyant en avoir, son StageInput
-        # lui promettant l'adresse. On la sert donc nous-mêmes quand elle est muette.
-        annonce = stage_input.tools.mcp.get("choregos")
-        outils = None
-        try:
-            outils = await demarrer_si_absent(
-                (annonce.url if annonce else "") or self.settings.tools_url, client
-            )
-            await journal.record("tools.local", {"demarre": outils is not None})
-        except Exception as exc:  # perdre ses outils ne doit pas empêcher l'étape
-            await journal.record("tools.local", {"demarre": False, "error": str(exc)[:300]})
+        outils = await self._start_tools(client, journal, stage_input)
 
         # 2. clone et branche — avec le jeton git du run (S22-07) : sans lui, un dépôt privé rendait
         # « Repository not found ». Il reste en mémoire, jamais dans le workspace ni dans le journal.
@@ -216,6 +208,8 @@ class Runner:
         context = await self._context(client)
         if (refus := await self._write_context(client, journal, stage_input, workspace, context)) is not None:
             return refus
+        if stage_input.job is not None:
+            return await self._execute_job(client, journal, stage_input, workspace, base, depart)
 
         # The agent reaches its model through the run's proxy, if the run asks for one.
         if (refusal := await self._compress(stage_input, journal)) is not None:
@@ -389,6 +383,95 @@ class Runner:
         )
         stage_input.model = compression.through(stage_input.model, self.compressor)
         return None
+
+    async def _start_tools(
+        self, client: InternalClient, journal: EventJournal, stage_input: StageInput
+    ) -> Any:
+        """The platform's tools are served on localhost. Under Tekton that is a sidecar; under
+        `k8s_job` the pod has ONE container and nobody was listening — the agent had no tool while
+        believing it had some, its StageInput promising the address. So we serve it ourselves when
+        it is silent. A job (ADR 0056) speaks MCP to no one: it calls the internal API with its run
+        token."""
+        if stage_input.job is not None:
+            return None
+        announced = stage_input.tools.mcp.get("choregos")
+        try:
+            tools = await demarrer_si_absent(
+                (announced.url if announced else "") or self.settings.tools_url, client
+            )
+            await journal.record("tools.local", {"demarre": tools is not None})
+            return tools
+        except Exception as exc:  # losing its tools must not stop the step
+            await journal.record("tools.local", {"demarre": False, "error": str(exc)[:300]})
+            return None
+
+    async def _execute_job(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        base: str,
+        depart: str,
+    ) -> RunOutcome:
+        """A job step (ADR 0056): the command instead of an agent, then the same publication.
+
+        No agent, no gateway key, no repair loop: the command's exit code is its status, and what it
+        writes in `.choregos/job.json` is checked, not negotiated."""
+        assert stage_input.job is not None
+        try:
+            ticket = await client.fetch_ticket()
+        except Exception as exc:  # a job without its parameters would compute on nothing
+            await journal.record("run.failed", {"phase": "fields", "error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.INPUT_NOT_FOUND, detail=f"work item fields: {exc}")
+        write_fields(workspace.path, dict(ticket.get("fields") or {}))
+        command = list(stage_input.job.command)
+        image = stage_input.job.image or "runner"
+        await journal.record("job.started", {"command": command, "image": image})
+        # The run's Secret carries the token (#519); a StageInput only ever holds it redacted now.
+        token = self.settings.run_token or (
+            "" if stage_input.callbacks.run_token == REDACTED else stage_input.callbacks.run_token
+        )
+        env = {
+            **workspace_env(stage_input),
+            # The run token is the run's, scoped to it and short-lived: what a job uses to call a
+            # connector through the internal API (`POST /runs/{id}/tools/{name}`), never a provider key.
+            "CHOREGOS_RUN_ID": stage_input.run_id,
+            "CHOREGOS_API_URL": stage_input.callbacks.api_url,
+            "CHOREGOS_RUN_TOKEN": token,
+            "CHOREGOS_WORKSPACE": str(workspace.path),
+        }
+        ran = await run_job(stage_input, workspace.path, env)
+        await journal.record(
+            "job.finished",
+            {
+                "exit_code": ran.exit_code,
+                "duration_s": ran.duration_s,
+                # What the job printed goes to the run page: never its token, nor a secret it echoed.
+                "stdout": _mask(ran.stdout[-JOB_LOG_TAIL:], token),
+                "stderr": _mask(ran.stderr[-JOB_LOG_TAIL:], token),
+            },
+        )
+        result, job_evidence = job_result(stage_input, workspace.path, ran)
+        report = await run_checks(stage_input, workspace.path)
+        measured = report.evidence()
+        # The project's `dod.facts` commands win over the job on a fact both name.
+        measured.facts = {**(job_evidence.facts or {}), **(measured.facts or {})} or None
+        final = complete_result(
+            result,
+            measured=measured,
+            artifacts=Artifacts(
+                branch=stage_input.repo.work_branch if stage_input.repo else None,
+                reports={REPORT_IMAGE: image, REPORT_COMMAND: command_digest(command)},
+            ),
+            diagnostics=Diagnostics(
+                duration_s=round(time.monotonic() - self.started, 2),
+                agent_exit="timeout" if ran.timed_out else ("normal" if ran.exit_code == 0 else "crashed"),
+            ),
+        )
+        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     async def _poser_les_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any
@@ -764,3 +847,8 @@ async def run_stage(settings: RunnerSettings | None = None) -> RunOutcome:
 
 def main_async(settings: RunnerSettings | None = None) -> RunOutcome:
     return asyncio.run(run_stage(settings))
+
+
+def _mask(text: str, token: str) -> str:
+    """`text` without the run token and without any secret `redact` recognises."""
+    return redact(text.replace(token, REDACTED) if token else text)
