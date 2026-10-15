@@ -4,8 +4,8 @@
 A knowledge base is a curated corpus a human chose; its documents are uploaded here, answered 202
 `pending`, and converted to markdown in the background (`knowledge.conversion`), never inside the
 request. Curating is the organisation administrator's (`agent:manage`), or the owners' of the project that
-owns the base (`project:write`, S39-14); widening a base's scope stays the administrator's; reading follows the base's
-scope (`knowledge.access`).
+owns the base (`project:write`, S39-14); widening a base's scope stays the administrator's. Reading
+follows the base's scope (`knowledge.access`).
 """
 
 from __future__ import annotations

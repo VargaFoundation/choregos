@@ -34,6 +34,9 @@ test("a base created from the project is scoped to it, with no scope to choose",
   await form.getByRole("textbox", { name: "Name" }).fill("Handbook");
   await form.getByRole("button", { name: "Create" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api\/knowledge\/handbook$/);
-  const [write] = await writes(page, /\/knowledge$/);
-  expect(write?.body).toMatchObject({ slug: "handbook", scope: "projects", projects: ["billing-api"] });
+  // Sent to the project's own route: the API scopes it and records the project as its owner.
+  const [write] = await writes(page, /^\/projects\/[^/]+\/knowledge$/);
+  expect(write?.path).toBe("/projects/billing-api/knowledge");
+  expect(write?.body).toMatchObject({ slug: "handbook" });
+  expect(write?.body).not.toHaveProperty("scope");
 });

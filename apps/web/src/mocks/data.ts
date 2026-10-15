@@ -1478,6 +1478,7 @@ export const projectKnowledgeBase: KnowledgeBase = {
   scope: "projects",
   projects: ["billing-api"],
   groups: [],
+  owner_project: "billing-api",
   serving_mode: "files",
   status: "active",
   document_count: 0,
@@ -1701,6 +1702,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && /^\/orgs\/[^/]+\/knowledge$/.test(path)) {
     // The base created, as the body says it (its slug, scope and projects): the page opens it next.
     return { ...knowledgeBase, documents: [], document_count: 0, documents_by_status: {}, ...(body as object) } as T;
+  }
+  if (method === "POST" && /^\/projects\/[^/]+\/knowledge$/.test(path)) {
+    // A base owned by the project: scoped to it by the API, not by the body.
+    const slug = decodeURIComponent(path.split("/")[2] ?? "");
+    return {
+      ...knowledgeBase,
+      documents: [],
+      document_count: 0,
+      documents_by_status: {},
+      ...(body as object),
+      scope: "projects",
+      projects: [slug],
+      owner_project: slug,
+    } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
