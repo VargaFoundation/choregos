@@ -72,13 +72,14 @@ class AgentSandboxExecutor:
     kind = ExecutorKind.AGENT_SANDBOX
     capabilities: frozenset[str] = frozenset({"queue", "renew", "snapshot", "suspend", "resume"})
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one option per deployment knob
         self,
         client: KubernetesClient | None = None,
         *,
         warm_pool: str = "choregos-runner",
         assignment_port: int = 8765,
         runtime_class: str | None = None,
+        pool_image: str | None = None,
         ttl_seconds: int = 3600,
         max_active: int = 0,
         env_from_secrets: list[str] | None = None,
@@ -90,6 +91,9 @@ class AgentSandboxExecutor:
         # The template's RuntimeClass. A claim cannot choose another one: the pool's pods are
         # already made. A run whose policy asks for a different one is refused, not run.
         self.runtime_class = runtime_class or None
+        # The image the warm pool's pods are made from. A claim cannot choose another one either.
+        # Unknown (None): the executor cannot tell an override from the default, so it checks nothing.
+        self.pool_image = pool_image or None
         self.ttl_seconds = int(ttl_seconds)
         self.max_active = max(0, int(max_active))
         # Deployment-wide Secrets (git identity, backend key) a `k8s_job` pod mounts with
@@ -118,6 +122,13 @@ class AgentSandboxExecutor:
                 f"the run asks for RuntimeClass `{spec.runtime_class}`, the warm pool "
                 f"`{self.warm_pool}` runs `{self.runtime_class or 'the cluster default'}`: a sandbox "
                 "cannot change runtime once made; set `runner.runtimeClass` to match the policy"
+            )
+        if self.pool_image and spec.runner_image and spec.runner_image != self.pool_image:
+            raise ConfigurationError(
+                f"the run asks for image `{spec.runner_image}`, the warm pool `{self.warm_pool}` runs "
+                f"`{self.pool_image}`: a sandbox cannot change image once made, and running the step "
+                "in the pool's image would silently substitute it; use `runner.executor: k8s_job` "
+                "for steps that name their own image"
             )
         name = self._name(spec.run_id)
         ref = self._ref(name, spec.namespace, spec.run_id)

@@ -480,3 +480,30 @@ async def test_the_role_grants_every_verb_the_executor_uses() -> None:
     granted = _granted()
     missing = sorted((r, v) for r, v in used if v not in granted.get(r, set()))
     assert missing == [], f"the executor does {missing}; the Role does not grant it: a 403 kills the ticket"
+
+
+async def test_a_run_with_an_image_the_pool_was_not_made_from_is_refused() -> None:
+    """A job naming its own image must not silently run in the pool's image (ADR 0056)."""
+    cluster = FakeSandboxCluster()
+    pool = "harbor.example/choregos-runner:0.17.12"
+    executor = _executor(cluster, pool_image=pool)
+    with pytest.raises(ConfigurationError, match="image"):
+        await executor.start(
+            _spec("r-1").model_copy(update={"runner_image": "harbor.example/jobs/etl@sha256:abc"})
+        )
+    assert cluster.claims == {} and cluster.secrets == {}
+    await executor.start(_spec("r-2"))  # the pool's own image: honoured
+    assert "run-r-2" in cluster.claims
+
+
+def test_the_factory_reads_the_pool_image_from_the_runner_image_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from choregos_adapters import build
+
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE", "harbor.example/choregos-runner:0.17.12")
+    executor = build(
+        "runtime",
+        "agent_sandbox",
+        {"kubernetes": {"base_url": "https://k8s.test", "token": "t", "verify": False}},
+    )
+    assert executor.pool_image == "harbor.example/choregos-runner:0.17.12"

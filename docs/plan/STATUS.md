@@ -367,6 +367,10 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S39-14 | S39 | 🟡 | #570 | a project's knowledge is in the project: a sidebar "Knowledge" section (`/p/<slug>/knowledge`) lists the bases its runs are served (its own, then the organisation-wide ones, never a group's) and creates a base scoped to the project by construction (no scope picker), then opens it inside the project (`/p/<slug>/knowledge/<kb>`); the organisation's registry (`/knowledge`) filters by scope, says who uses each base, and picks projects from a list instead of typed slugs. Proved by vitest (navigation, helpers, both pages) and Playwright on the mock API. Does not prove: anything on the API (unchanged); only an org admin can create or curate, so a project owner still cannot (S39-14b). |
 
 **Total** : 247 livrées, 95 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+| S39-17a | S39 | ✅ | — | the `agent_sandbox` executor refuses a run whose image is not the warm pool's (`pool_image`, from `CHOREGOS_RUNNER_IMAGE`) with a `ConfigurationError` naming `k8s_job`, instead of silently running a `job` with `image:` in the runner image (ADR 0056 decision 1). Proves: the refusal and the factory wiring (tests fail without the guard). Does not prove: a cluster run; an executor built without a known pool image cannot tell an override from the default and checks nothing. |
+
+
+
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

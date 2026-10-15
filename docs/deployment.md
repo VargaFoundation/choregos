@@ -173,7 +173,10 @@ executor reads the public key the pod printed at boot (through the API server, `
 the token and the run's environment to it, and pushes only that ciphertext; the pod opens it,
 drops its key, and serves that one run for its whole life. Beyond `maxActive`, a run waits as its Secret alone, with no claim and no pod, and
 is admitted in arrival order. A policy that asks for a RuntimeClass the pool was not made with
-is refused, never run without it.
+is refused, never run without it. The same goes for the image: a pool's pods are made from one
+image (`CHOREGOS_RUNNER_IMAGE`, or `pool_image` in the connector), so a step that names its own
+image (a `job` with `image:`) is refused with a `ConfigurationError` instead of running in the
+pool's image; use `runner.executor: k8s_job` for such steps.
 
 When an agent asks a question, its sandbox is **suspended** (pod gone, workspace volume kept)
 and the answer resumes the same run in it: one run, not two. The policy bounds the wait:
