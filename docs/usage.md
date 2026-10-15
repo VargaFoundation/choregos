@@ -889,7 +889,7 @@ Label a ticket `agent-ready` in your tracker (or create it in Choregos with
 so a webhook delivered twice starts nothing twice. If a webhook is lost, a reconciliation
 pass every 60 seconds catches up.
 
-You can also file a work item yourself, from the console or through MCP (`create_work_item`). With
+You can also file a work item yourself. On a project's board, **New work item** opens a drawer: the workflow, the inputs that workflow declares, a title, a description, a size and an optional budget (which only tightens the workflow's). MCP does the same with `create_work_item`. With
 an internal tracker (or none) the platform mints the key. With GitHub, Jira or GitLab it creates
 the issue there first, labelled `source:choregos` and never `agent-ready`, and records the work
 item under the issue's key, with its creation inputs, workflow and budget (ADR 0059). The tracker's

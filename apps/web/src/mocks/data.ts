@@ -54,6 +54,7 @@ import type {
   WorkflowRouting,
   WorkflowSummary,
   WorkflowValidation,
+  WorkItemCreate,
   WorkItemDto,
   WorkItemPage,
 } from "@/lib/types";
@@ -1662,6 +1663,9 @@ function recordWrite(method: string, path: string, body: unknown): void {
   (target.__mockWrites ??= []).push({ method, path, body });
 }
 
+/** The work items filed on Checkout Web (Jira) during this page's life, so the board shows them. */
+const filedOnTheMock: WorkItemDto[] = [];
+
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
@@ -1670,6 +1674,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method !== "GET") recordWrite(method, path, body);
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
+  const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
+  if (method === "POST" && filed) {
+    // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
+    const corps = (body ?? {}) as WorkItemCreate;
+    const jira = /checkout-web$/.test(decodeURIComponent(filed[1]!));
+    const made = {
+      ...item(`w-new-${filedOnTheMock.length + 1}`, jira ? `CHK-${101 + filedOnTheMock.length}` : `BILL-${900 + filedOnTheMock.length}`, corps.title, "inbox", "Inbox", { size: corps.size ?? undefined }),
+      url: jira ? `https://jira.example/browse/CHK-${101 + filedOnTheMock.length}` : null,
+    } as WorkItemDto;
+    if (jira) filedOnTheMock.push(made);
+    return made as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]*checkout-web\/work-items$/.test(path.split("?")[0] ?? path) && filedOnTheMock.length)
+    return { items: filedOnTheMock, meta: { has_more: false } } as T;
   if (method === "POST" && path === "/workflows/validate") {
     // Comme l'API : un texte sans `states:` n'est pas un workflow, et ne se dessine pas.
     const texte = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
