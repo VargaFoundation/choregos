@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { jetonsDuMode } from "./jetons";
 import {
   Alert,
   Badge,
@@ -40,7 +41,9 @@ describe("les primitives de la console", () => {
       </Heading>,
     );
     const titre = screen.getByRole("heading", { level: 1, name: "Projects" });
-    expect(titre).toHaveClass("text-2xl", "font-semibold");
+    // The weight is the title role of the theme (ADR 0064), 600 (semibold) by default (`theme.css`).
+    expect(titre).toHaveClass("text-2xl", "font-(--choregos-font-title-weight)");
+    expect(jetonsDuMode("dark").get("--choregos-font-title-weight")).toBe("600");
     expect(titre.className).not.toMatch(/font-bold|font-mono|font-display|text-4xl|text-5xl/);
   });
 

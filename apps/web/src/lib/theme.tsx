@@ -8,6 +8,7 @@ import {
   CLE_DU_THEME,
   lirePreference,
   THEME_PAR_DEFAUT,
+  themeParDefaut,
   themeResolu,
   type PreferenceDeTheme,
   type Theme,
@@ -50,7 +51,7 @@ function abonner(rappel: () => void): () => void {
 
 /** L'instantané : la préférence gardée et le mode du système — une chaîne, comparable par valeur. */
 function instantane(): string {
-  return `${lirePreference() ?? THEME_PAR_DEFAUT}|${systeme()?.matches ? "light" : "dark"}`;
+  return `${lirePreference() ?? themeParDefaut()}|${systeme()?.matches ? "light" : "dark"}`;
 }
 
 /** Côté serveur : la préférence n'est pas connue, le script d'en-tête a déjà posé le bon thème. */
@@ -68,7 +69,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const etat = useSyncExternalStore(abonner, instantane, instantaneServeur);
   const [lue, mode] = etat.split("|");
   const preference = (lue ?? THEME_PAR_DEFAUT) as PreferenceDeTheme;
-  const theme = themeResolu(preference, mode === "light");
+  const theme = themeResolu(preference, mode === "light", themeParDefaut());
 
   // Le DOM suit : React ne rend jamais `data-theme`, seuls le script d'en-tête et cet effet l'écrivent.
   useEffect(() => {

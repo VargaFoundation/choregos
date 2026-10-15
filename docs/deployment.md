@@ -228,7 +228,11 @@ console's contrast budget on the effective colours). An invalid theme is replace
 (`X-Choregos-Theme: fallback`, with the violations in the API log); a plugin can check a theme
 itself with `choregos_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
 the attribution line. Fonts and images are served by the API under `/api/v1/` so that the console's
-CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes`. See
+CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes` (S39-03c).
+The console reads the instance theme on the server before drawing anything (`CHOREGOS_API_URL`,
+1.5 s timeout, cached 60 s; any failure gives the default look) and applies it as CSS variables in
+the page, so the first paint is already themed; the person's organisation theme replaces it right
+after hydration. A person's own light/dark choice always wins over the theme's default mode. See
 [ADR 0064](adr/0064-a-theme-is-data-the-console-applies.md).
 
 ## Playbooks and the tool catalogue

@@ -29,11 +29,25 @@ export function estUnePreference(valeur: unknown): valeur is PreferenceDeTheme {
   return valeur === "dark" || valeur === "light" || valeur === "system";
 }
 
+/**
+ * The mode a person without a preference gets: the served theme's `default_mode`, which the layout
+ * writes on <html> as `data-default-theme` (ADR 0064); dark without it.
+ */
+export function themeParDefaut(): Theme {
+  return typeof document !== "undefined" && document.documentElement.dataset.defaultTheme === "light"
+    ? "light"
+    : THEME_PAR_DEFAUT;
+}
+
 /** Le thème qui s'affiche, pour une préférence lue (ou absente) et ce que demande le système. */
-export function themeResolu(preference: string | null | undefined, systemeEnClair: boolean): Theme {
+export function themeResolu(
+  preference: string | null | undefined,
+  systemeEnClair: boolean,
+  parDefaut: Theme = THEME_PAR_DEFAUT,
+): Theme {
   if (preference === "light" || preference === "dark") return preference;
   if (preference === "system") return systemeEnClair ? "light" : "dark";
-  return THEME_PAR_DEFAUT;
+  return parDefaut;
 }
 
 /** La clé de la barre latérale : « rail » la replie ; toute autre valeur, ou aucune, la laisse pleine. */
@@ -46,11 +60,11 @@ export type Barre = "full" | "rail";
  * sans module, avant React. Un stockage refusé (navigation privée stricte) donne les défauts, sans
  * erreur. `tests/preferences.test.tsx` l'exécute pour chaque valeur stockée et le compare aux deux.
  */
-export const SCRIPT_DES_PREFERENCES = `(function(){var d=document.documentElement;try{var p=localStorage.getItem(${JSON.stringify(
+export const SCRIPT_DES_PREFERENCES = `(function(){var d=document.documentElement;var f=d.dataset.defaultTheme==="light"?"light":"dark";try{var p=localStorage.getItem(${JSON.stringify(
   CLE_DU_THEME,
-)});var t=p==="light"||p==="dark"?p:p==="system"&&window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";d.dataset.theme=t;if(localStorage.getItem(${JSON.stringify(
+)});var t=p==="light"||p==="dark"?p:p==="system"?window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark":f;d.dataset.theme=t;if(localStorage.getItem(${JSON.stringify(
   CLE_DE_LA_BARRE,
-)})==="rail")d.dataset.sidebar="rail";}catch(e){d.dataset.theme="dark";}})();`;
+)})==="rail")d.dataset.sidebar="rail";}catch(e){d.dataset.theme=f;}})();`;
 
 function systemeEnClair(): boolean {
   return typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -70,7 +84,7 @@ export function lirePreference(): PreferenceDeTheme | null {
 
 /** Pose sur <html> le thème que donne une préférence, et le rend. */
 export function appliquerLeTheme(preference: PreferenceDeTheme | null): Theme {
-  const theme = themeResolu(preference, systemeEnClair());
+  const theme = themeResolu(preference, systemeEnClair(), themeParDefaut());
   document.documentElement.dataset.theme = theme;
   return theme;
 }
