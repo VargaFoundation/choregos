@@ -632,7 +632,13 @@ A base also **syncs from sources** (`POST …/sources`), each on its own Tempora
   `read` on the chosen sites (`POST /sites/{site-id}/permissions`). Never `Files.Read.All`. The
   source names a `site_id` (or a OneDrive's `drive_id`) and optionally a `folder`; sync is delta.
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
-  `max_pages` ≤ 500; a host that resolves to a private address is refused.
+  `max_pages` ≤ 500; a host that resolves to a private address is refused. `exclude` is a list of
+  path globs (at most 50, each starting with `/`, for example `["/es", "/es/*"]`) that are neither
+  fetched nor followed. Redirects are followed inside the allow-list only; a start URL that
+  redirects off it (`www.example.com` to `example.com`) is refused when the source is created, with
+  the target to use instead. Pages are named by their whole path (`/en/about` is `en-about.html`).
+  A crawl that lists no page at all (a moved site, a wall) is reported as unreadable and **deletes
+  nothing**.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
   (`*.md` by default).
 

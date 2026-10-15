@@ -73,6 +73,7 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             url=str(config["url"]),
             max_depth=int(config.get("max_depth", 2)),
             max_pages=int(config.get("max_pages", 50)),
+            exclude=config.get("exclude"),
         )
     if source.kind == "git":
         from choregos_adapters.documents.git import GitSource

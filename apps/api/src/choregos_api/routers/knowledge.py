@@ -15,6 +15,8 @@ from dataclasses import asdict
 from functools import partial
 from typing import Annotated
 
+import httpx
+from choregos_adapters.registry import fakes_enabled
 from fastapi import APIRouter, Path, Request, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -603,11 +605,23 @@ async def _checked_source_config(
     if not url.startswith(_HTTPS):
         raise unprocessable(f"a {kind} source is reached over https: `{url}`")
     if kind == "web":
-        return {
+        exclude = config.get("exclude") or []
+        if (
+            not isinstance(exclude, list)
+            or len(exclude) > 50
+            or not all(isinstance(p, str) and p.startswith("/") and len(p) <= 200 for p in exclude)
+        ):
+            raise unprocessable("`exclude` is a list of at most 50 path globs, each starting with `/`")
+        checked: dict[str, object] = {
             "url": url,
             "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
             "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
         }
+        if exclude:
+            checked["exclude"] = exclude
+        if not fakes_enabled():
+            await _check_web_start(url, exclude)
+        return checked
     ref = str(config.get("ref") or "main")
     if ref.startswith("-"):
         raise unprocessable(f"not a git ref: `{ref}`")
@@ -615,6 +629,26 @@ async def _checked_source_config(
     if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
         raise unprocessable("`paths` is a list of glob patterns")
     return {"url": url, "ref": ref, "paths": paths}
+
+
+async def _check_web_start(url: str, exclude: list[str]) -> None:
+    """A start URL that redirects outside the allow-list yields no page: say so now, with the target."""
+    from choregos_adapters.documents import web
+    from choregos_adapters.documents.base import SourceRefusedError
+
+    async def resolver(host: str) -> list[str]:
+        return await web.resolve(host)
+
+    try:
+        crawl = web.WebCrawlSource(url=url, exclude=exclude, resolver=resolver)
+        try:
+            await crawl.check_start()
+        finally:
+            await crawl.aclose()
+    except SourceRefusedError as exc:
+        raise unprocessable(str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise unprocessable(f"`{url}` is not reachable: {exc}") from exc
 
 
 async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) -> KnowledgeSource:

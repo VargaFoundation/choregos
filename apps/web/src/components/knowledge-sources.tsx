@@ -29,7 +29,7 @@ export function KnowledgeSources({
   onChange: () => void;
 }) {
   const [kind, setKind] = useState<Kind>("sharepoint");
-  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", url: "", ref: "main", paths: "*.md", interval: "60" });
+  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", url: "", ref: "main", paths: "*.md", exclude: "", interval: "60" });
   const [error, setError] = useState<string | null>(null);
   const set = (key: keyof typeof fields) => (e: { target: { value: string } }) => setFields({ ...fields, [key]: e.target.value });
   async function act(gesture: () => Promise<unknown>) {
@@ -100,6 +100,9 @@ export function KnowledgeSources({
             </>
           ) : (
             <Input aria-label="url" placeholder="https://…" value={fields.url} onChange={set("url")} className="sm:col-span-2" />
+          )}
+          {kind === "web" && (
+            <Input aria-label="excluded paths" placeholder="excluded paths, e.g. /es/*, /pt/*" value={fields.exclude} onChange={set("exclude")} className="sm:col-span-2" />
           )}
           {kind === "git" && (
             <>

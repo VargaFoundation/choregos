@@ -63,14 +63,17 @@ export function syncSummary(summary: Record<string, unknown> | null | undefined)
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
   kind: "sharepoint" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string },
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; exclude?: string },
 ): Record<string, unknown> {
   if (kind === "sharepoint") {
     const site = fields.site.trim();
     const key = site.startsWith("b!") ? "drive_id" : "site_id";
     return { [key]: site, ...(fields.folder.trim() ? { folder: fields.folder.trim() } : {}) };
   }
-  if (kind === "web") return { url: fields.url.trim(), max_depth: 2, max_pages: 50 };
+  if (kind === "web") {
+    const exclude = (fields.exclude ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+    return { url: fields.url.trim(), max_depth: 2, max_pages: 50, ...(exclude.length ? { exclude } : {}) };
+  }
   return {
     url: fields.url.trim(),
     ref: fields.ref.trim() || "main",
