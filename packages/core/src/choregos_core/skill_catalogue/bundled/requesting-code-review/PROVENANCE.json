@@ -1,0 +1,17 @@
+{
+ "files": {
+  "SKILL.md": "2180e14a448e9410bec88e6646a2d1f0ce7fdd58de27388c1e052e929679d2bc",
+  "code-reviewer.md": "82e370be6b3447523816286195571e4216ba56ba1ad6ad0e87862294c4c78dcb"
+ },
+ "id": "requesting-code-review",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/requesting-code-review",
+ "repo": "https://github.com/obra/superpowers",
+ "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3"
+}

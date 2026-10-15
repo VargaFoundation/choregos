@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "a6ed8ed56456b01ff8314c44eefc69897d9905ae4e06bb2b7036286efb79b5f0"
+ },
+ "id": "ci-cd-and-automation",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/ci-cd-and-automation",
+ "repo": "https://github.com/addyosmani/agent-skills",
+ "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d"
+}

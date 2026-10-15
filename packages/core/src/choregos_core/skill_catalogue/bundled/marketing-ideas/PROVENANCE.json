@@ -1,0 +1,19 @@
+{
+ "files": {
+  "SKILL.md": "d5ea46d2d2eb2fb039494e8b545550a6bd5b5b9aedc5e65a228ac514deb018ff",
+  "evals/evals.json": "f97f2bd1c755e6ca85ab75c500db681bd19559fb070ac249bba135ed7d8ecf60",
+  "references/guerrilla-marketing.md": "07b0534b579ce1916a60e79ab426cd936e78b4b261802d6486ad145f7bf552ae",
+  "references/ideas-by-category.md": "8b6aa55b3255616ea80c0ea45eca8f2bb70e528510ed76f6392e71475dd0c09b"
+ },
+ "id": "marketing-ideas",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/marketing-ideas",
+ "repo": "https://github.com/coreyhaines31/marketingskills",
+ "sha": "365b412152b9542499ca1439426f7fc3cc92bb65"
+}

@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "767a8f6759268e003ee882af8dfb56579aca2121b9dc49a2c65c4e77de93f768"
+ },
+ "id": "triage-nda",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "legal/skills/triage-nda",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

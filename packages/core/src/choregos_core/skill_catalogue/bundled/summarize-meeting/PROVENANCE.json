@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "4deabdd7f99c692ee800a80a4eaf6a688fb8873cdaaaea44b7f472499205f8e7"
+ },
+ "id": "summarize-meeting",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a2c922f9b81b4f40347ddfa79c38eda0f1278b5a6d108bd4099b4da254c774ee",
+  "stored_as": "LICENSE"
+ },
+ "path": "pm-execution/skills/summarize-meeting",
+ "repo": "https://github.com/phuryn/pm-skills",
+ "sha": "c68487d721e419ec87af1ae6412a842978eab785"
+}

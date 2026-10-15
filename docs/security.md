@@ -132,6 +132,19 @@ signed, digest references enforced by Kyverno, Tekton Chains signing `PipelineRu
 Renovate proposes bumps; every agent bump goes through conformance. A nightly CRITICAL in
 the dependency scan fails the night and opens an issue.
 
+## Default skills and MCP servers
+
+The platform ships two catalogues ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)):
+well-known MCP servers and default skills. They are files in the image, generated from a reviewed seed
+and recorded sources; **an entry enables nothing**. Installing one goes through the gate that already
+exists: an MCP entry becomes an ordinary organisation connector (administrator only, secret by
+reference, tools born closed); a skill is assessed by the supply-chain gate again at install, a
+high-risk one waits for a second administrator, and a bundled one is checked against its sha256
+provenance. A skill enters the catalogue only from a listed publisher, under an open licence, at a pinned
+commit; Anthropic's proprietary document skills and anything unlicensed are never listed or bundled.
+A changed upstream reaches an organisation only when a catalogue release is merged **and** an
+administrator updates the skill: two people, as ADR 0050 asks against bait-and-switch.
+
 ## Reporting a vulnerability
 
 [`SECURITY.md`](../SECURITY.md) at the root — including the list of what we do **not**

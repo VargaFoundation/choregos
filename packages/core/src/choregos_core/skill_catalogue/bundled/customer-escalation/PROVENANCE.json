@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "90c33574a41371e8e116aaf40237141adcd6075ef8bcb9de993de2b543867b3e"
+ },
+ "id": "customer-escalation",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "customer-support/skills/customer-escalation",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

@@ -1,0 +1,19 @@
+{
+ "files": {
+  "ADR-FORMAT.md": "944c92aa790e8fbdc9199640b170979abb8a34ba8d0fe18c2a01a63bce140ca0",
+  "GLOSSARY-FORMAT.md": "21dcc40cdec8e151a829b98ab1517c1867bc444e3665134a98c6983411996801",
+  "SKILL.md": "7b925d7b1e341a2eeae33ad68a8a8c0ab889a38ddd22a7598e4c240e5a7556a3",
+  "agents/openai.yaml": "f6bf2aa996c6e6f53fdd0708e18a0d16a56aed8322cca59fedbe3c0d2c75f06b"
+ },
+ "id": "domain-modeling",
+ "licence": "MIT",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f22ad07dbb5",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/engineering/domain-modeling",
+ "repo": "https://github.com/mattpocock/skills",
+ "sha": "49dd158d1076134a641b33efb035946536778336"
+}

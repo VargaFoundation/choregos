@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "cfc300f5ecc5128910a8ff04514d565a45ca9178bf1dc2a40cc40e2ce4db9292"
+ },
+ "id": "kb-article",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "customer-support/skills/kb-article",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}

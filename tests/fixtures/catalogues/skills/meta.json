@@ -1,0 +1,463 @@
+{
+ "recorded_at": "2026-10-15",
+ "repos": {
+  "addyosmani/agent-skills": {
+   "ref": "main",
+   "sha": "aeac41d4d005999432bb7312f7ff06383a91d59d",
+   "skills": {
+    "api-and-interface-design": {
+     "path": "skills/api-and-interface-design",
+     "problem": null
+    },
+    "browser-testing-with-devtools": {
+     "path": "skills/browser-testing-with-devtools",
+     "problem": null
+    },
+    "ci-cd-and-automation": {
+     "path": "skills/ci-cd-and-automation",
+     "problem": null
+    },
+    "code-review-and-quality": {
+     "path": "skills/code-review-and-quality",
+     "problem": null
+    },
+    "code-simplification": {
+     "path": "skills/code-simplification",
+     "problem": null
+    },
+    "context-engineering": {
+     "path": "skills/context-engineering",
+     "problem": null
+    },
+    "debugging-and-error-recovery": {
+     "path": "skills/debugging-and-error-recovery",
+     "problem": null
+    },
+    "deprecation-and-migration": {
+     "path": "skills/deprecation-and-migration",
+     "problem": null
+    },
+    "documentation-and-adrs": {
+     "path": "skills/documentation-and-adrs",
+     "problem": null
+    },
+    "doubt-driven-development": {
+     "path": "skills/doubt-driven-development",
+     "problem": null
+    },
+    "frontend-ui-engineering": {
+     "path": "skills/frontend-ui-engineering",
+     "problem": null
+    },
+    "git-workflow-and-versioning": {
+     "path": "skills/git-workflow-and-versioning",
+     "problem": null
+    },
+    "incremental-implementation": {
+     "path": "skills/incremental-implementation",
+     "problem": null
+    },
+    "interview-me": {
+     "path": "skills/interview-me",
+     "problem": null
+    },
+    "observability-and-instrumentation": {
+     "path": "skills/observability-and-instrumentation",
+     "problem": null
+    },
+    "performance-optimization": {
+     "path": "skills/performance-optimization",
+     "problem": null
+    },
+    "planning-and-task-breakdown": {
+     "path": "skills/planning-and-task-breakdown",
+     "problem": null
+    },
+    "security-and-hardening": {
+     "path": "skills/security-and-hardening",
+     "problem": null
+    },
+    "shipping-and-launch": {
+     "path": "skills/shipping-and-launch",
+     "problem": null
+    },
+    "source-driven-development": {
+     "path": "skills/source-driven-development",
+     "problem": null
+    },
+    "spec-driven-development": {
+     "path": "skills/spec-driven-development",
+     "problem": null
+    },
+    "test-driven-development": {
+     "path": "skills/test-driven-development",
+     "problem": null
+    }
+   }
+  },
+  "anthropics/knowledge-work-plugins": {
+   "ref": "main",
+   "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676",
+   "skills": {
+    "compliance-check": {
+     "path": "legal/skills/compliance-check",
+     "problem": null
+    },
+    "customer-escalation": {
+     "path": "customer-support/skills/customer-escalation",
+     "problem": null
+    },
+    "design-critique": {
+     "path": "design/skills/design-critique",
+     "problem": null
+    },
+    "incident-response": {
+     "path": "engineering/skills/incident-response",
+     "problem": null
+    },
+    "interview-prep": {
+     "path": "human-resources/skills/interview-prep",
+     "problem": null
+    },
+    "kb-article": {
+     "path": "customer-support/skills/kb-article",
+     "problem": null
+    },
+    "reconciliation": {
+     "path": "finance/skills/reconciliation",
+     "problem": null
+    },
+    "review-contract": {
+     "path": "legal/skills/review-contract",
+     "problem": null
+    },
+    "risk-assessment": {
+     "path": "operations/skills/risk-assessment",
+     "problem": null
+    },
+    "runbook": {
+     "path": "operations/skills/runbook",
+     "problem": null
+    },
+    "sprint-planning": {
+     "path": "product-management/skills/sprint-planning",
+     "problem": null
+    },
+    "sql-queries": {
+     "path": "data/skills/sql-queries",
+     "problem": null
+    },
+    "status-report": {
+     "path": "operations/skills/status-report",
+     "problem": null
+    },
+    "ticket-triage": {
+     "path": "customer-support/skills/ticket-triage",
+     "problem": null
+    },
+    "triage-nda": {
+     "path": "legal/skills/triage-nda",
+     "problem": null
+    },
+    "user-research": {
+     "path": "design/skills/user-research",
+     "problem": null
+    },
+    "variance-analysis": {
+     "path": "finance/skills/variance-analysis",
+     "problem": null
+    },
+    "write-spec": {
+     "path": "product-management/skills/write-spec",
+     "problem": null
+    }
+   }
+  },
+  "anthropics/skills": {
+   "ref": "main",
+   "sha": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+   "skills": {
+    "brand-guidelines": {
+     "path": "skills/brand-guidelines",
+     "problem": null
+    },
+    "claude-api": {
+     "path": "skills/claude-api",
+     "problem": null
+    },
+    "frontend-design": {
+     "path": "skills/frontend-design",
+     "problem": null
+    },
+    "internal-comms": {
+     "path": "skills/internal-comms",
+     "problem": null
+    },
+    "mcp-builder": {
+     "path": "skills/mcp-builder",
+     "problem": null
+    },
+    "skill-creator": {
+     "path": "skills/skill-creator",
+     "problem": null
+    },
+    "webapp-testing": {
+     "path": "skills/webapp-testing",
+     "problem": null
+    }
+   }
+  },
+  "cloudflare/skills": {
+   "ref": "main",
+   "sha": "be9f5e1e940fcf8567ff723cc03b8a8448c4082f",
+   "skills": {
+    "durable-objects": {
+     "path": "skills/durable-objects",
+     "problem": null
+    },
+    "web-perf": {
+     "path": "skills/web-perf",
+     "problem": null
+    },
+    "workers-best-practices": {
+     "path": "skills/workers-best-practices",
+     "problem": null
+    },
+    "workers-profiling": {
+     "path": "skills/workers-profiling",
+     "problem": null
+    },
+    "wrangler": {
+     "path": "skills/wrangler",
+     "problem": null
+    }
+   }
+  },
+  "coreyhaines31/marketingskills": {
+   "ref": "main",
+   "sha": "365b412152b9542499ca1439426f7fc3cc92bb65",
+   "skills": {
+    "cold-email": {
+     "path": "skills/cold-email",
+     "problem": null
+    },
+    "content-strategy": {
+     "path": "skills/content-strategy",
+     "problem": null
+    },
+    "copywriting": {
+     "path": "skills/copywriting",
+     "problem": null
+    },
+    "marketing-ideas": {
+     "path": "skills/marketing-ideas",
+     "problem": null
+    },
+    "marketing-psychology": {
+     "path": "skills/marketing-psychology",
+     "problem": null
+    },
+    "offers": {
+     "path": "skills/offers",
+     "problem": null
+    },
+    "pricing": {
+     "path": "skills/pricing",
+     "problem": null
+    }
+   }
+  },
+  "getsentry/skills": {
+   "ref": "main",
+   "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b",
+   "skills": {
+    "code-simplifier": {
+     "path": "skills/code-simplifier",
+     "problem": null
+    },
+    "commit": {
+     "path": "skills/commit",
+     "problem": null
+    },
+    "create-branch": {
+     "path": "skills/create-branch",
+     "problem": null
+    },
+    "find-bugs": {
+     "path": "skills/find-bugs",
+     "problem": null
+    },
+    "iterate-pr": {
+     "path": "skills/iterate-pr",
+     "problem": null
+    },
+    "pr-writer": {
+     "path": "skills/pr-writer",
+     "problem": null
+    }
+   }
+  },
+  "hashicorp/agent-skills": {
+   "ref": "main",
+   "sha": "f706481af9b8fedb66de909f6243ad29601afa0c",
+   "skills": {
+    "refactor-module": {
+     "path": "plugins/terraform/skills/refactor-module",
+     "problem": null
+    },
+    "run-acceptance-tests": {
+     "path": "plugins/terraform/skills/run-acceptance-tests",
+     "problem": null
+    },
+    "terraform-style-guide": {
+     "path": "plugins/terraform/skills/terraform-style-guide",
+     "problem": null
+    },
+    "terraform-test": {
+     "path": "plugins/terraform/skills/terraform-test",
+     "problem": null
+    }
+   }
+  },
+  "huggingface/skills": {
+   "ref": "main",
+   "sha": "c3ff942be3e07116b475253f0a8fc4f54682c1a8",
+   "skills": {
+    "huggingface-datasets": {
+     "path": "skills/huggingface-datasets",
+     "problem": null
+    },
+    "huggingface-gradio": {
+     "path": "skills/huggingface-gradio",
+     "problem": null
+    },
+    "huggingface-papers": {
+     "path": "skills/huggingface-papers",
+     "problem": null
+    },
+    "trl-training": {
+     "path": "skills/trl-training",
+     "problem": null
+    }
+   }
+  },
+  "mattpocock/skills": {
+   "ref": "main",
+   "sha": "49dd158d1076134a641b33efb035946536778336",
+   "skills": {
+    "codebase-design": {
+     "path": "skills/engineering/codebase-design",
+     "problem": null
+    },
+    "domain-modeling": {
+     "path": "skills/engineering/domain-modeling",
+     "problem": null
+    },
+    "grill-me": {
+     "path": "skills/productivity/grill-me",
+     "problem": null
+    },
+    "handoff": {
+     "path": "skills/productivity/handoff",
+     "problem": null
+    },
+    "improve-codebase-architecture": {
+     "path": "skills/engineering/improve-codebase-architecture",
+     "problem": null
+    },
+    "prototype": {
+     "path": "skills/engineering/prototype",
+     "problem": null
+    },
+    "research": {
+     "path": "skills/engineering/research",
+     "problem": null
+    },
+    "retro": {
+     "path": "skills/engineering/retro",
+     "problem": null
+    },
+    "tdd": {
+     "path": "skills/engineering/tdd",
+     "problem": null
+    },
+    "to-spec": {
+     "path": "skills/engineering/to-spec",
+     "problem": null
+    },
+    "triage": {
+     "path": "skills/engineering/triage",
+     "problem": null
+    }
+   }
+  },
+  "obra/superpowers": {
+   "ref": "main",
+   "sha": "bb92a77741419a4ab5f06e711a283343f1ada0c3",
+   "skills": {
+    "brainstorming": {
+     "path": "skills/brainstorming",
+     "problem": null
+    },
+    "executing-plans": {
+     "path": "skills/executing-plans",
+     "problem": null
+    },
+    "finishing-a-development-branch": {
+     "path": "skills/finishing-a-development-branch",
+     "problem": null
+    },
+    "receiving-code-review": {
+     "path": "skills/receiving-code-review",
+     "problem": null
+    },
+    "requesting-code-review": {
+     "path": "skills/requesting-code-review",
+     "problem": null
+    },
+    "subagent-driven-development": {
+     "path": "skills/subagent-driven-development",
+     "problem": null
+    },
+    "systematic-debugging": {
+     "path": "skills/systematic-debugging",
+     "problem": null
+    },
+    "verification-before-completion": {
+     "path": "skills/verification-before-completion",
+     "problem": null
+    },
+    "writing-plans": {
+     "path": "skills/writing-plans",
+     "problem": null
+    }
+   }
+  },
+  "phuryn/pm-skills": {
+   "ref": "main",
+   "sha": "c68487d721e419ec87af1ae6412a842978eab785",
+   "skills": {
+    "grammar-check": {
+     "path": "pm-toolkit/skills/grammar-check",
+     "problem": null
+    },
+    "release-notes": {
+     "path": "pm-execution/skills/release-notes",
+     "problem": null
+    },
+    "summarize-meeting": {
+     "path": "pm-execution/skills/summarize-meeting",
+     "problem": null
+    },
+    "swot-analysis": {
+     "path": "pm-product-strategy/skills/swot-analysis",
+     "problem": null
+    },
+    "test-scenarios": {
+     "path": "pm-execution/skills/test-scenarios",
+     "problem": null
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "0307d3ecfe3b3e70246cbd88b19dc5853340b624b6ee3cd935c7bffc45b64279"
+ },
+ "id": "commit",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "96e78a9ce85795b117c8929887bdb78f88bf23f7b85a31f0872cde4dff7e92cd",
+  "stored_as": "LICENSE"
+ },
+ "path": "skills/commit",
+ "repo": "https://github.com/getsentry/skills",
+ "sha": "f57ada2d0b640406ea7e25b11d636c530e77c58b"
+}

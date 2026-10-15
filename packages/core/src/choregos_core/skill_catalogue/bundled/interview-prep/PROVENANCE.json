@@ -1,0 +1,16 @@
+{
+ "files": {
+  "SKILL.md": "c687311babdeccf086aa5f6d86dcbfc3a9d1b8bb7124f072450ffa4315d98c4c"
+ },
+ "id": "interview-prep",
+ "licence": "Apache-2.0",
+ "licence_file": {
+  "name": "LICENSE",
+  "scope": "repository",
+  "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+  "stored_as": "LICENSE"
+ },
+ "path": "human-resources/skills/interview-prep",
+ "repo": "https://github.com/anthropics/knowledge-work-plugins",
+ "sha": "e6b505348c39c6e751a70d52ff407e7b0a6bf676"
+}
