@@ -9,6 +9,111 @@
 
 import type * as S from "./schemas";
 
+/** #rrggbb only: no var(), no name, no alpha, so it is safe to emit as CSS and measurable for contrast */
+export type ThemeColour = string;
+
+/** Sparse overrides of the console's colour roles (the names are the `--choregos-*` custom properties of `theme.css` without the prefix). A role left out keeps the console default. */
+export type ThemeTokens = {
+  accent?: ThemeColour;
+  "accent-hover"?: ThemeColour;
+  "accent-ink"?: ThemeColour;
+  "accent-line"?: ThemeColour;
+  "accent-soft"?: ThemeColour;
+  "accent-strong"?: ThemeColour;
+  "agent-ink"?: ThemeColour;
+  "agent-line"?: ThemeColour;
+  "agent-soft"?: ThemeColour;
+  "agent-solid"?: ThemeColour;
+  danger?: ThemeColour;
+  "failed-ink"?: ThemeColour;
+  "failed-line"?: ThemeColour;
+  "failed-soft"?: ThemeColour;
+  "failed-solid"?: ThemeColour;
+  focus?: ThemeColour;
+  ink?: ThemeColour;
+  "ink-muted"?: ThemeColour;
+  "ink-placeholder"?: ThemeColour;
+  "ink-subtle"?: ThemeColour;
+  inverse?: ThemeColour;
+  "inverse-hover"?: ThemeColour;
+  "inverse-ink"?: ThemeColour;
+  line?: ThemeColour;
+  "line-strong"?: ThemeColour;
+  "neutral-ink"?: ThemeColour;
+  "neutral-line"?: ThemeColour;
+  "neutral-soft"?: ThemeColour;
+  "neutral-solid"?: ThemeColour;
+  ok?: ThemeColour;
+  raised?: ThemeColour;
+  "retrying-ink"?: ThemeColour;
+  "retrying-line"?: ThemeColour;
+  "retrying-soft"?: ThemeColour;
+  "retrying-solid"?: ThemeColour;
+  "running-ink"?: ThemeColour;
+  "running-line"?: ThemeColour;
+  "running-soft"?: ThemeColour;
+  "running-solid"?: ThemeColour;
+  sidebar?: ThemeColour;
+  "succeeded-ink"?: ThemeColour;
+  "succeeded-line"?: ThemeColour;
+  "succeeded-soft"?: ThemeColour;
+  "succeeded-solid"?: ThemeColour;
+  surface?: ThemeColour;
+  "surface-muted"?: ThemeColour;
+  "surface-sunken"?: ThemeColour;
+  "waiting-ink"?: ThemeColour;
+  "waiting-line"?: ThemeColour;
+  "waiting-soft"?: ThemeColour;
+  "waiting-solid"?: ThemeColour;
+  warn?: ThemeColour;
+};
+
+/** A file served by the API under /api/v1 (same origin: the console's CSP allows font-src and img-src 'self' only) */
+export type ThemeAsset = string;
+
+export type ThemeFace = {
+  src: ThemeAsset;
+  weight: number;
+  style: "normal" | "italic";
+};
+
+export type ThemeFont = {
+  family: string;
+  /** The weight titles are set in */
+  weight: number;
+  faces: Array<ThemeFace>;
+};
+
+export type Theme = {
+  /** `default` in the community edition */
+  id: string;
+  /** The wordmark text and the document-title suffix */
+  product_name: string;
+  /** The mode used when the person has no preference */
+  default_mode: "dark" | "light";
+  tokens: {
+    dark: ThemeTokens;
+    light: ThemeTokens;
+  };
+  radius?: {
+    /** px; absent = the console default */
+    control?: number;
+    /** px; absent = the console default */
+    surface?: number;
+  };
+  /** The mono font stays Geist Mono */
+  fonts?: {
+    title?: ThemeFont;
+    sans?: ThemeFont;
+  };
+  logo?: ThemeAsset;
+  logo_dark?: ThemeAsset;
+  favicon?: ThemeAsset;
+  footer?: {
+    text: string;
+  };
+};
+
 /** RFC 9457 */
 export type Problem = {
   type: string;
@@ -2167,6 +2272,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   testConnector: { method: "POST"; path: "/projects/{id}/connectors/{kind}/test"; body: never; response: ConnectorTestResult };
+  theme: { method: "GET"; path: "/theme"; body: never; response: Theme };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
   transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };

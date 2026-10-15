@@ -51,7 +51,8 @@ console; "by Varga Foundation" stays as a footer line.**
    borders stay 1 px. Dark mode keeps no shadows, light mode short cool ones on raised surfaces.
 6. **The colour roles are the console's own**: `--choregos-*`, declared in `src/styles/theme.css`
    and nowhere else; `tests/theme-provenance.test.ts` checks that every role the code reads is
-   declared there.
+   declared there. *Amended by [ADR 0064](0064-a-theme-is-data-the-console-applies.md): a theme served
+   by the API may override the roles listed in the contract, under the same contrast budget.*
 7. **Kept from ADR 0043**: every colour from Radix Colors (§2), the contrast budget per mode (§3),
    Geist and Geist Mono self-hosted (§4, except the type of buttons and table headers), the theme
    the person chooses applied before the first paint (§5), and the shell — sidebar, rail and 48 px

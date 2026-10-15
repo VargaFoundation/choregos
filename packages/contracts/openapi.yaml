@@ -2220,6 +2220,35 @@ paths:
                   edition: { type: string, enum: [community, enterprise] }
                   features: { type: array, items: { type: string } }
                   version: { type: string }
+  /theme:
+    get:
+      tags: [session]
+      security: []
+      operationId: theme
+      summary: The look of the console, as data (ADR 0064)
+      description: >
+        Public: the sign-in page needs it. The community edition serves its default theme; a plugin
+        may provide another through `declare_theme_provider`. A theme that fails validation (schema,
+        or the console's contrast budget) is never served: the response is then the default theme
+        with `X-Choregos-Theme: fallback`.
+      parameters:
+        - name: org
+          in: query
+          required: false
+          description: The organisation whose theme is wanted; absent = the instance theme.
+          schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Choregos-Theme:
+              description: "`default` (no provider, or nothing to provide), `provided`, or `fallback` (the provider failed or returned an invalid theme)"
+              schema: { type: string, enum: [default, provided, fallback] }
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Theme" }
+        "304": { description: Not modified }
   /readyz:
     get: { tags: [session], security: [], operationId: readyz, responses: { "200": { description: OK }, "503": { description: Not ready } } }
 components:
@@ -2256,6 +2285,123 @@ components:
       description: Unprocessable entity
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
   schemas:
+    ThemeColour: { type: string, pattern: "^#[0-9a-fA-F]{6}$", description: "#rrggbb only: no var(), no name, no alpha, so it is safe to emit as CSS and measurable for contrast" }
+    ThemeTokens:
+      type: object
+      description: >
+        Sparse overrides of the console's colour roles (the names are the `--choregos-*` custom
+        properties of `theme.css` without the prefix). A role left out keeps the console default.
+      additionalProperties: false
+      properties:
+        accent: { $ref: "#/components/schemas/ThemeColour" }
+        accent-hover: { $ref: "#/components/schemas/ThemeColour" }
+        accent-ink: { $ref: "#/components/schemas/ThemeColour" }
+        accent-line: { $ref: "#/components/schemas/ThemeColour" }
+        accent-soft: { $ref: "#/components/schemas/ThemeColour" }
+        accent-strong: { $ref: "#/components/schemas/ThemeColour" }
+        agent-ink: { $ref: "#/components/schemas/ThemeColour" }
+        agent-line: { $ref: "#/components/schemas/ThemeColour" }
+        agent-soft: { $ref: "#/components/schemas/ThemeColour" }
+        agent-solid: { $ref: "#/components/schemas/ThemeColour" }
+        danger: { $ref: "#/components/schemas/ThemeColour" }
+        failed-ink: { $ref: "#/components/schemas/ThemeColour" }
+        failed-line: { $ref: "#/components/schemas/ThemeColour" }
+        failed-soft: { $ref: "#/components/schemas/ThemeColour" }
+        failed-solid: { $ref: "#/components/schemas/ThemeColour" }
+        focus: { $ref: "#/components/schemas/ThemeColour" }
+        ink: { $ref: "#/components/schemas/ThemeColour" }
+        ink-muted: { $ref: "#/components/schemas/ThemeColour" }
+        ink-placeholder: { $ref: "#/components/schemas/ThemeColour" }
+        ink-subtle: { $ref: "#/components/schemas/ThemeColour" }
+        inverse: { $ref: "#/components/schemas/ThemeColour" }
+        inverse-hover: { $ref: "#/components/schemas/ThemeColour" }
+        inverse-ink: { $ref: "#/components/schemas/ThemeColour" }
+        line: { $ref: "#/components/schemas/ThemeColour" }
+        line-strong: { $ref: "#/components/schemas/ThemeColour" }
+        neutral-ink: { $ref: "#/components/schemas/ThemeColour" }
+        neutral-line: { $ref: "#/components/schemas/ThemeColour" }
+        neutral-soft: { $ref: "#/components/schemas/ThemeColour" }
+        neutral-solid: { $ref: "#/components/schemas/ThemeColour" }
+        ok: { $ref: "#/components/schemas/ThemeColour" }
+        raised: { $ref: "#/components/schemas/ThemeColour" }
+        retrying-ink: { $ref: "#/components/schemas/ThemeColour" }
+        retrying-line: { $ref: "#/components/schemas/ThemeColour" }
+        retrying-soft: { $ref: "#/components/schemas/ThemeColour" }
+        retrying-solid: { $ref: "#/components/schemas/ThemeColour" }
+        running-ink: { $ref: "#/components/schemas/ThemeColour" }
+        running-line: { $ref: "#/components/schemas/ThemeColour" }
+        running-soft: { $ref: "#/components/schemas/ThemeColour" }
+        running-solid: { $ref: "#/components/schemas/ThemeColour" }
+        sidebar: { $ref: "#/components/schemas/ThemeColour" }
+        succeeded-ink: { $ref: "#/components/schemas/ThemeColour" }
+        succeeded-line: { $ref: "#/components/schemas/ThemeColour" }
+        succeeded-soft: { $ref: "#/components/schemas/ThemeColour" }
+        succeeded-solid: { $ref: "#/components/schemas/ThemeColour" }
+        surface: { $ref: "#/components/schemas/ThemeColour" }
+        surface-muted: { $ref: "#/components/schemas/ThemeColour" }
+        surface-sunken: { $ref: "#/components/schemas/ThemeColour" }
+        waiting-ink: { $ref: "#/components/schemas/ThemeColour" }
+        waiting-line: { $ref: "#/components/schemas/ThemeColour" }
+        waiting-soft: { $ref: "#/components/schemas/ThemeColour" }
+        waiting-solid: { $ref: "#/components/schemas/ThemeColour" }
+        warn: { $ref: "#/components/schemas/ThemeColour" }
+    ThemeAsset:
+      type: string
+      pattern: "^/api/v1/[A-Za-z0-9/_.-]{1,200}$"
+      description: "A file served by the API under /api/v1 (same origin: the console's CSP allows font-src and img-src 'self' only)"
+    ThemeFace:
+      type: object
+      required: [src, weight, style]
+      additionalProperties: false
+      properties:
+        src: { $ref: "#/components/schemas/ThemeAsset" }
+        weight: { type: integer, minimum: 100, maximum: 900 }
+        style: { type: string, enum: [normal, italic] }
+    ThemeFont:
+      type: object
+      required: [family, weight, faces]
+      additionalProperties: false
+      properties:
+        family: { type: string, pattern: "^[A-Za-z0-9 _-]{1,40}$" }
+        weight: { type: integer, minimum: 100, maximum: 900, description: "The weight titles are set in" }
+        faces: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/ThemeFace" } }
+    Theme:
+      type: object
+      required: [id, product_name, default_mode, tokens]
+      additionalProperties: false
+      properties:
+        id: { type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", description: "`default` in the community edition" }
+        product_name: { type: string, minLength: 1, maxLength: 40, description: "The wordmark text and the document-title suffix" }
+        default_mode: { type: string, enum: [dark, light], description: "The mode used when the person has no preference" }
+        tokens:
+          type: object
+          required: [dark, light]
+          additionalProperties: false
+          properties:
+            dark: { $ref: "#/components/schemas/ThemeTokens" }
+            light: { $ref: "#/components/schemas/ThemeTokens" }
+        radius:
+          type: object
+          additionalProperties: false
+          properties:
+            control: { type: integer, minimum: 0, maximum: 8, description: "px; absent = the console default" }
+            surface: { type: integer, minimum: 0, maximum: 12, description: "px; absent = the console default" }
+        fonts:
+          type: object
+          description: The mono font stays Geist Mono
+          additionalProperties: false
+          properties:
+            title: { $ref: "#/components/schemas/ThemeFont" }
+            sans: { $ref: "#/components/schemas/ThemeFont" }
+        logo: { $ref: "#/components/schemas/ThemeAsset" }
+        logo_dark: { $ref: "#/components/schemas/ThemeAsset" }
+        favicon: { $ref: "#/components/schemas/ThemeAsset" }
+        footer:
+          type: object
+          required: [text]
+          additionalProperties: false
+          properties:
+            text: { type: string, maxLength: 200 }
     Problem:
       type: object
       description: RFC 9457
