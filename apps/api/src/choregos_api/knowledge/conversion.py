@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import PurePosixPath
 from typing import Any
@@ -140,6 +141,15 @@ async def convert_document(org: str, document_id: str) -> str:
             .values(status=status, updated_at=utcnow(), **values)
         )
     logger.info("knowledge.document.converted", org=org, document=document_id, status=status)
+    if status == READY:
+        # An `index` base cuts and embeds the document now; a failure leaves it unindexed, which
+        # the base's page shows (indexed documents against ready ones), and a reindex repairs.
+        from .index import index_document
+
+        try:
+            await index_document(org, document_id)
+        except Exception:
+            logger.exception("knowledge.document.index_failed", org=org, document=document_id)
     return status
 
 
@@ -170,6 +180,20 @@ class Conversions:
                 await convert_document(org, document_id)
             except Exception:  # a task that dies silently would leave `converting` forever
                 logger.exception("knowledge.document.conversion_crashed", org=org, document=document_id)
+
+    def spawn(self, label: str, work: Callable[[], Awaitable[Any]]) -> None:
+        """Any other background work of the knowledge bases (a reindex), under the same limit."""
+
+        async def run() -> None:
+            async with self._semaphore():
+                try:
+                    await work()
+                except Exception:
+                    logger.exception("knowledge.background_failed", work=label)
+
+        task = asyncio.get_running_loop().create_task(run())
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     async def drain(self) -> None:
         """Waits for every scheduled conversion (tests, shutdown)."""

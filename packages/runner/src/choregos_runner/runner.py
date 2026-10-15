@@ -399,7 +399,7 @@ class Runner:
     ) -> RunOutcome | None:
         """The `files` knowledge bases (ADR 0051): checked against their digest, laid read-only
         under `.choregos/knowledge/`, out of the diff. A base missing or changed stops the run."""
-        if not any(ref.mode == "files" for ref in stage_input.knowledge):
+        if not stage_input.knowledge:
             return None
         try:
             written, self.knowledge_index = lay_out(

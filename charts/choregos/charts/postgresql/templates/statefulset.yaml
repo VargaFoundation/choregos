@@ -46,6 +46,12 @@ data:
     EOSQL
   01-litellm.sql: |
     CREATE DATABASE litellm OWNER {{ .Values.global.database.user }};
+  # pgvector is not a trusted extension: created here, as the administration role, for the knowledge
+  # index (ADR 0051). An image without it keeps working: the index then serves full-text only.
+  02-pgvector.sh: |
+    #!/bin/sh
+    psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE EXTENSION IF NOT EXISTS vector" \
+      || echo "pgvector unavailable: the knowledge index will serve full-text only"
 ---
 apiVersion: v1
 kind: Service

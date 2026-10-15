@@ -1,7 +1,9 @@
 # Rendu seulement quand `global.database.embedded` vaut true (condition du chart parent).
+# PostgreSQL 16 with pgvector (ADR 0051): the knowledge index ranks with embeddings when it can,
+# and serves full-text only on an image without the extension.
 image:
-  repository: postgres
-  tag: "16-alpine"
+  repository: pgvector/pgvector
+  tag: "0.8.1-pg16"
 persistence:
   enabled: true
   size: 5Gi

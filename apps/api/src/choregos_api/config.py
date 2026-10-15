@@ -147,6 +147,8 @@ class Settings(BaseSettings):
     knowledge_conversion_timeout_s: float = 120.0
     #: How many conversions run at once in one API replica.
     knowledge_conversion_concurrency: int = 2
+    #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.
+    knowledge_embedding_model: str = "platform/embed"
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
 

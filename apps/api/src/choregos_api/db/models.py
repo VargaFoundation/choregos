@@ -878,6 +878,10 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     #: active | archived
     status: Mapped[str] = mapped_column(String(16), default="active")
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: questions and the documents (file names) expected to answer them (S33-03)
+    eval_set: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    #: the last run of the eval set: recall@5, per question, when, in which search mode
+    eval_result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class KnowledgeDocument(Base, PkMixin, TimestampMixin):
@@ -908,6 +912,31 @@ class KnowledgeDocument(Base, PkMixin, TimestampMixin):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     converted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class KnowledgeChunk(Base, PkMixin, TimestampMixin):
+    """A contextual chunk of a document of an `index` knowledge base (S33-03, ADR 0051).
+
+    `text` is what is ranked: the document title and heading path, then the chunk. On PostgreSQL the
+    migration adds what the ORM does not describe: a generated `search_tsv` (full-text, GIN) and,
+    when pgvector is installed, `embedding_vec`. `embedding` (JSON) holds the vector only where
+    there is no pgvector column to hold it (SQLite, development and tests).
+    """
+
+    __tablename__ = "knowledge_chunks"
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_documents.id", ondelete="CASCADE"), index=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer)
+    heading_path: Mapped[list[str]] = mapped_column(Json, default=list)
+    body: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(Json, nullable=True, deferred=True)
 
 
 ALL_TABLES = [
@@ -944,6 +973,7 @@ ALL_TABLES = [
     AgentCredential,
     KnowledgeBase,
     KnowledgeDocument,
+    KnowledgeChunk,
 ]
 
 

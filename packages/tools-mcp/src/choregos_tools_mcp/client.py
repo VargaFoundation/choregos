@@ -119,6 +119,18 @@ class InternalClient:
         """The pinned documents of the run's `files` knowledge bases (ADR 0051); the digest is checked."""
         return list(await self._request("GET", "/knowledge") or [])
 
+    async def search_knowledge(
+        self, query: str, k: int = 5, knowledge_base: str | None = None
+    ) -> dict[str, Any]:
+        """Hybrid search of the run's `index` knowledge bases (ADR 0051): citations and the mode."""
+        return dict(
+            await self._request(
+                "POST",
+                "/knowledge/search",
+                json={"query": query, "k": k, "knowledge_base": knowledge_base},
+            )
+        )
+
     async def fetch_ticket(self) -> dict[str, Any]:
         return dict(await self._request("GET", "/ticket"))
 

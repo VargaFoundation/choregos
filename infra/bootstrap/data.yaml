@@ -21,8 +21,11 @@ spec:
       owner: choregos
       secret: { name: choregos-db }
       postInitSQL:
-        - CREATE EXTENSION IF NOT EXISTS vector;
         - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+      # `postInitSQL` runs in the `postgres` database: the knowledge index (ADR 0051) needs pgvector
+      # in the APPLICATION database, created by a superuser since the extension is not trusted.
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector;
   storage: { size: 100Gi, storageClass: ssd }
   walStorage: { size: 50Gi, storageClass: ssd }
   monitoring: { enablePodMonitor: true }

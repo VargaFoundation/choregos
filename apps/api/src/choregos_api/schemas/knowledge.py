@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
@@ -82,3 +82,41 @@ class KnowledgeBaseDto(Dto):
     updated_at: datetime | None = None
     #: Returned by the reading of ONE knowledge base; a listing does not carry them.
     documents: list[KnowledgeDocumentDto] | None = None
+    #: `index` mode: chunks, documents indexed, and how the search ranks here
+    index: dict[str, Any] | None = None
+    eval_set: list[dict[str, Any]] = Field(default_factory=list)
+    #: the last run of the eval set: `recall` (at `k`), per question, `mode`, `ran_at`
+    eval_result: dict[str, Any] | None = None
+
+
+class KnowledgeEvalCase(Dto):
+    question: str = Field(min_length=1, max_length=2000)
+    #: the documents expected among the first results, by file name or title
+    expected: list[str] = Field(min_length=1, max_length=20)
+
+
+class KnowledgeEvalSet(Dto):
+    cases: list[KnowledgeEvalCase] = Field(default_factory=list, max_length=200)
+
+
+class KnowledgeSearchRequest(Dto):
+    query: str = Field(min_length=1, max_length=2000)
+    k: int = Field(default=5, ge=1, le=20)
+    #: one base of the run (internal search); absent, all of them
+    knowledge_base: str | None = None
+
+
+class KnowledgeCitation(Dto):
+    knowledge_base: str
+    document_id: str
+    document: str
+    filename: str
+    heading_path: list[str] = Field(default_factory=list)
+    excerpt: str
+    score: float
+
+
+class KnowledgeSearchResult(Dto):
+    #: hybrid (full-text + pgvector) | full-text (no pgvector, or no embedder) | in-process (SQLite)
+    mode: str
+    hits: list[KnowledgeCitation] = Field(default_factory=list)

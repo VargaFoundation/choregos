@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /** What the knowledge pages say about a base and its documents (ADR 0051). */
-import type { KnowledgeBase } from "./types";
+import type { KnowledgeBase, KnowledgeEvalCase } from "./types";
 
 /** Where a base is served, said in words: who reads it, which runs get it. */
 export function scopeLabel(base: Pick<KnowledgeBase, "scope" | "projects" | "groups">): string {
@@ -20,4 +20,33 @@ export function statusSummary(counts: Record<string, number> | undefined): strin
 export function stillConverting(base: Pick<KnowledgeBase, "documents_by_status"> | undefined): boolean {
   const counts = base?.documents_by_status ?? {};
   return Boolean(counts.pending || counts.converting);
+}
+
+/** How the index ranks here, in words: the page says when pgvector is missing. */
+export function searchModeLabel(mode: string | undefined): string {
+  if (mode === "hybrid") return "hybrid — full-text and embeddings (pgvector)";
+  if (mode === "full-text") return "full-text only — pgvector is not installed, or no embedding model";
+  if (mode === "in-process") return "in-process (development database)";
+  return mode ?? "—";
+}
+
+/** One question per line: `question | expected.docx, other.pdf`. Lines without `|` are ignored. */
+export function parseEvalSet(text: string): KnowledgeEvalCase[] {
+  return text
+    .split("\n")
+    .map((line) => line.split("|"))
+    .filter((parts) => parts.length === 2 && parts[0]!.trim() && parts[1]!.trim())
+    .map(([question, expected]) => ({
+      question: question!.trim(),
+      expected: expected!.split(",").map((e) => e.trim()).filter(Boolean),
+    }));
+}
+
+export function formatEvalSet(cases: KnowledgeEvalCase[] | undefined): string {
+  return (cases ?? []).map((c) => `${c.question} | ${c.expected.join(", ")}`).join("\n");
+}
+
+/** `0.8` → `80 %`; nothing measured yet → `not measured`. */
+export function recallLabel(recall: number | null | undefined): string {
+  return recall === null || recall === undefined ? "not measured" : `${Math.round(recall * 100)} %`;
 }
