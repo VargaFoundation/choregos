@@ -25,14 +25,14 @@ spec:
       serviceAccountName: choregos-orchestrator
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       {{- include "choregos.antiAffinity" (dict "global" $root.Values.global "labels" (dict "app.kubernetes.io/name" "choregos-orchestrator" "choregos/queue" .name)) | nindent 6 }}
-      # Un nœud qui disparaît (éviction spot, panne matérielle) n'est remarqué qu'au bout d'une
-      # cinquantaine de secondes, et le défaut de Kubernetes laisse ensuite la pod **cinq minutes**
-      # accrochée à ce nœud mort avant de l'évincer. Mesuré sur cluster : 359 s d'immobilité avec
-      # les défauts, 74 s avec ces tolérances (`tests/cluster/test_node_loss.py`).
+      # A node that disappears (spot eviction, hardware failure) is only noticed after about
+      # fifty seconds, and Kubernetes' default then leaves the pod **five minutes**
+      # stuck to that dead node before evicting it. Measured on a cluster: 359 s of immobility with
+      # the defaults, 74 s with these tolerations (`tests/cluster/test_node_loss.py`).
       #
-      # Un worker est remplaçable et son travail est repris par Temporal : rien ne justifie de
-      # l'attendre cinq minutes. Réglable par `choregos-orchestrator.unreachableTolerationSeconds` ; mettre
-      # `0` rend le comportement par défaut de Kubernetes.
+      # A worker is replaceable and its work is picked up by Temporal: nothing justifies
+      # waiting five minutes for it. Adjustable through `choregos-orchestrator.unreachableTolerationSeconds`; setting
+      # `0` restores Kubernetes' default behavior.
       {{- if gt (int $root.Values.unreachableTolerationSeconds) 0 }}
       tolerations:
         - key: node.kubernetes.io/unreachable
@@ -50,18 +50,18 @@ spec:
           image: {{ include "choregos.image" (dict "global" $root.Values.global "image" $root.Values.image) }}
           imagePullPolicy: {{ $root.Values.global.imagePullPolicy }}
           securityContext: {{- toYaml $root.Values.global.securityContext | nindent 12 }}
-          # La commande ENTIÈRE, pas seulement ses arguments : le point d'entrée de l'image
-          # est `tini`, et son `CMD` porte déjà `python -m …`. N'envoyer que `--queues x`
-          # remplaçait ce CMD, et tini tentait d'exécuter « --queues » — « exec --queues
-          # failed: No such file or directory », un message qui n'accuse pas le chart.
+          # The ENTIRE command, not only its arguments: the image's entry point
+          # is `tini`, and its `CMD` already carries `python -m …`. Sending only `--queues x`
+          # replaced that CMD, and tini tried to execute "--queues" — "exec --queues
+          # failed: No such file or directory", a message that does not blame the chart.
           command: ["python", "-m", "choregos_orchestrator.worker"]
           args: ["--queues", {{ .name | quote }}]
           env:
             {{- include "choregos.commonEnv" $root | nindent 12 }}
             - name: CHOREGOS_RUNNER_IMAGE
-              # Le tag du runner suit celui du déploiement quand on ne le fixe pas : figé,
-              # il désignait `1.0.0` dans une installation 0.1.0 — une image absente, et un
-              # pod d'agent en ErrImagePull que rien d'autre n'explique.
+              # The runner tag follows the deployment's when it is not pinned: pinned,
+              # it pointed at `1.0.0` in a 0.1.0 installation — a missing image, and an
+              # agent pod in ErrImagePull that nothing else explains.
               value: {{ $root.Values.global.imageRegistry }}/{{ $root.Values.runner.image }}:{{ $root.Values.runner.tag | default $root.Values.global.imageTag }}
             - name: CHOREGOS_RUNNER_NAMESPACE_PATTERN
               value: {{ $root.Values.runner.namespacePattern | quote }}
@@ -75,22 +75,22 @@ spec:
             - name: CHOREGOS_WORKFLOW_TEMPLATES_DIR
               value: {{ $root.Values.global.workflowTemplates.mountPath | quote }}
             {{- end }}
-            # La clé qui SIGNE les jetons de run. L'orchestrateur émet, l'API vérifie :
-            # sans cette variable il signait avec une paire éphémère, et l'agent recevait
-            # « Signature verification failed » — un message qui accuse le jeton.
+            # The key that SIGNS the run tokens. The orchestrator issues, the API verifies:
+            # without this variable it signed with an ephemeral pair, and the agent received
+            # "Signature verification failed" — a message that blames the token.
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
               valueFrom:
                 secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: run-token-private-key }
-            # L'App GitHub : le tracker lit les issues `agent-ready`, l'exécuteur ouvre et fusionne les
-            # PR. Seule l'API la recevait : le rattrapage échouait en « aucune authentification
-            # configurée » sur un locataire qui avait pourtant son App (S22-04). Optionnelle, comme
-            # dans l'API : un locataire sans GitHub n'en a pas.
+            # The GitHub App: the tracker reads `agent-ready` issues, the executor opens and merges
+            # PRs. Only the API received it: the catch-up failed with "no authentication
+            # configured" on a tenant that did have its App (S22-04). Optional, as
+            # in the API: a tenant without GitHub has none.
             - name: CHOREGOS_GITHUB_APP_ID
               valueFrom: { secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: github-app-id, optional: true } }
             - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
               valueFrom: { secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: github-app-private-key, optional: true } }
-            # Le service interne de l'API : c'est ce que les agents rappellent, jamais
-            # l'URL publique, qu'un pod ne sait pas résoudre.
+            # The API's internal service: this is what agents call back, never
+            # the public URL, which a pod cannot resolve.
             - name: CHOREGOS_INTERNAL_API_URL
               value: {{ $root.Values.global.internalApiUrl | default "http://choregos-api:8000" | quote }}
             - name: CHOREGOS_RUNNER_ENV
@@ -101,20 +101,20 @@ spec:
               value: {{ $root.Values.runner.limits.cpu | quote }}
             - name: CHOREGOS_RUNNER_MEMORY_LIMIT
               value: {{ $root.Values.runner.limits.memory | quote }}
-            # Runs simultanés dans le namespace. Au-delà, le Job est créé SUSPENDU : il
-            # n'a pas de pod, ne tire pas l'image et ne prend pas de place dans le quota.
-            # 0 = sans plafond, le comportement d'avant.
+            # Simultaneous runs in the namespace. Beyond that, the Job is created SUSPENDED: it
+            # has no pod, does not pull the image and takes no room in the quota.
+            # 0 = no ceiling, the previous behavior.
             - name: CHOREGOS_RUNNER_MAX_ACTIVE
               value: {{ $root.Values.runner.maxActive | default 0 | quote }}
-            # Le proxy par lequel un pod d'agent sort : celui que le provisioning déploie
-            # dans le namespace des runners, avec l'allowlist de la politique du projet.
-            # Vide sur un banc dont le namespace n'a ni NetworkPolicy ni proxy.
+            # The proxy through which an agent pod gets out: the one the provisioning deploys
+            # in the runners namespace, with the allowlist of the project's policy.
+            # Empty on a bench whose namespace has neither NetworkPolicy nor proxy.
             - name: CHOREGOS_RUNNER_EGRESS_PROXY
               value: {{ $root.Values.runner.egressProxy | default "" | quote }}
             - name: CHOREGOS_EGRESS_IMAGE
               value: {{ $root.Values.runner.egressImage | default "" | quote }}
-            # La RuntimeClass des pods d'agent quand la politique n'en impose pas : un
-            # cluster qui a gVisor ou Kata le dit ici une fois. Vide : celle du cluster.
+            # The RuntimeClass of agent pods when the policy imposes none: a
+            # cluster that has gVisor or Kata says so here once. Empty: the cluster's.
             - name: CHOREGOS_RUNNER_RUNTIME_CLASS
               value: {{ $root.Values.runner.runtimeClass | default "" | quote }}
             {{- if eq $root.Values.runner.executor "agent_sandbox" }}
@@ -161,9 +161,9 @@ metadata:
 {{- if has .Values.runner.executor (list "k8s_job" "agent_sandbox") }}
 ---
 # Same account for `agent_sandbox`: the SandboxTemplate names it, with no token mounted.
-# L'exécuteur `k8s_job` lance les runners dans CE namespace sous ce compte : sans lui,
-# la création du pod échoue. Aucun droit, aucun jeton monté — un agent n'a rien à
-# demander à l'API Kubernetes. (Avec Tekton, le provisioning le crée par projet.)
+# The `k8s_job` executor launches runners in THIS namespace under this account: without it,
+# pod creation fails. No rights, no token mounted — an agent has nothing to
+# ask of the Kubernetes API. (With Tekton, the provisioning creates it per project.)
 apiVersion: v1
 kind: ServiceAccount
 metadata:

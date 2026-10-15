@@ -1,16 +1,16 @@
 {{- /*
-Deux saveurs d'observabilité, parce que « rendre un ServiceMonitor » n'est pas « être collecté ».
+Two observability flavours, because "rendering a ServiceMonitor" is not "being scraped".
 
-Le 2026-09-26, le locataire dev de Diametral tournait depuis une heure avec un ServiceMonitor et
-une PrometheusRule bien présents dans son namespace — et pas une série collectée, pas une alerte
-évaluée : la plateforme tourne sur VictoriaMetrics, dont l'opérateur ne regarde pas les types
-`monitoring.coreos.com`. Un objet inerte ne dit rien, et c'est pire qu'un objet absent : il donne
-la sensation d'être surveillé.
+On 2026-09-26, Diametral's dev tenant had been running for an hour with a ServiceMonitor and
+a PrometheusRule present in its namespace — and not one series collected, not one alert
+evaluated: the platform runs on VictoriaMetrics, whose operator does not look at the
+`monitoring.coreos.com` types. An inert object says nothing, and that is worse than a missing object: it gives
+the feeling of being monitored.
 
-`monitoring.flavour` tranche. Les règles PromQL sont écrites UNE fois et servies aux deux.
+`monitoring.flavour` decides. The PromQL rules are written ONCE and served to both.
 
-Côté VictoriaMetrics : UN seul `VMRule`. Deux dans la même portée de vmalert font boucler
-l'opérateur, ce que l'exploitant de la plateforme a déjà payé une fois.
+On the VictoriaMetrics side: ONE `VMRule` only. Two in the same vmalert scope make
+the operator loop, which the platform operator has already paid for once.
 */ -}}
 {{- $saveur := .Values.monitoring.flavour | default "prometheus" }}
 {{- if not (has $saveur (list "prometheus" "victoriametrics")) }}
@@ -24,8 +24,8 @@ metadata:
   name: choregos
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
-  # L'API seule : c'est elle qui calcule les séries depuis la base (`metriques.py`). Le
-  # front, scruté aussi avant, répondait 404 toutes les trente secondes.
+  # The API alone: it computes the series from the database (`metriques.py`). The
+  # front end, scraped too before, answered 404 every thirty seconds.
   selector:
     matchLabels:
       app.kubernetes.io/part-of: choregos

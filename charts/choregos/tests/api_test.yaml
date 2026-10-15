@@ -1,18 +1,18 @@
-# helm unittest : ce que le chart doit garantir, quoi qu'il arrive.
+# helm unittest: what the chart must guarantee, whatever happens.
 #
-# Les chemins pointent le **nom** du sous-chart (`charts/choregos-api/...`), pas son
-# répertoire (`charts/api/...`) : le plugin indexe les templates par nom de chart. Avec le
-# répertoire, il répond « template not exists or not selected in test suite » — un message
-# qui ressemble à un fichier manquant alors que le fichier est là.
+# The paths point to the sub-chart's **name** (`charts/choregos-api/...`), not its
+# directory (`charts/api/...`): the plugin indexes templates by chart name. With the
+# directory, it answers "template not exists or not selected in test suite" — a message
+# that looks like a missing file when the file is there.
 #
-# La suite vit dans le chart parent et non dans le sous-chart : les templates de `api`
-# appellent `choregos.labels`, un helper du parent, et ne rendent pas seuls.
+# The suite lives in the parent chart and not in the sub-chart: the `api` templates
+# call `choregos.labels`, a parent helper, and do not render on their own.
 suite: API Choregos
 templates:
   - charts/choregos-api/templates/deployment.yaml
   - charts/choregos-api/templates/migrations-job.yaml
 tests:
-  - it: pose un contexte de sécurité non-root
+  - it: sets a non-root security context
     template: charts/choregos-api/templates/deployment.yaml
     asserts:
       - equal:
@@ -22,7 +22,7 @@ tests:
           path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
           value: true
 
-  - it: expose des sondes de vie et de disponibilité
+  - it: exposes liveness and readiness probes
     template: charts/choregos-api/templates/deployment.yaml
     asserts:
       - isNotNull:
@@ -30,25 +30,25 @@ tests:
       - isNotNull:
           path: spec.template.spec.containers[0].livenessProbe
 
-  - it: ne met jamais un secret en clair dans l'environnement
+  - it: never puts a secret in clear text in the environment
     template: charts/choregos-api/templates/deployment.yaml
     asserts:
       - notMatchRegex:
           path: spec.template.spec.containers[0].env[?(@.name=="CHOREGOS_SESSION_SECRET")].value
           pattern: ".+"
 
-  - it: exécute les migrations avant la mise à jour des pods
+  - it: runs the migrations before the pods are updated
     template: charts/choregos-api/templates/migrations-job.yaml
-    # Le modèle rend deux documents depuis le 2026-09-26 : le compte de service DU HOOK
-    # (index 0) puis le Job (index 1). La garde complète est dans
-    # `tests/charts/test_hook_de_migration.py`, qui rend le chart pour de vrai.
+    # The template has rendered two documents since 2026-09-26: the HOOK's service account
+    # (index 0) then the Job (index 1). The full guard is in
+    # `tests/charts/test_hook_de_migration.py`, which renders the chart for real.
     documentIndex: 1
     asserts:
       - equal:
           path: metadata.annotations["helm.sh/hook"]
           value: pre-install,pre-upgrade
 
-  - it: ne monte le catalogue d'outils que si le déploiement en déclare un
+  - it: mounts the tool catalog only if the deployment declares one
     template: charts/choregos-api/templates/deployment.yaml
     asserts:
       - notContains:
@@ -57,14 +57,14 @@ tests:
       - notExists:
           path: spec.template.spec.containers[0].envFrom
 
-  - it: monte le catalogue et ses clés quand il est déclaré
+  - it: mounts the catalog and its keys when it is declared
     template: charts/choregos-api/templates/deployment.yaml
     set:
       global.toolCatalog.configMap: outils
       global.toolCatalog.credentialsSecret: cles-fournisseurs
     asserts:
-      # Le catalogue est lisible (un ConfigMap, relu en PR) ; les clés des fournisseurs
-      # ne le sont pas — elles arrivent par référence à un Secret, jamais dans la spec.
+      # The catalog is readable (a ConfigMap, reviewed in PRs); the providers' keys
+      # are not — they arrive by reference to a Secret, never in the spec.
       - contains:
           path: spec.template.spec.volumes
           content:
@@ -80,7 +80,7 @@ tests:
             name: CHOREGOS_TOOL_CATALOG
             value: /etc/choregos/outils/catalogue.yaml
 
-  - it: n'active jamais la connexion de développement par défaut
+  - it: never enables the development login by default
     template: charts/choregos-api/templates/deployment.yaml
     asserts:
       - contains:
@@ -89,7 +89,7 @@ tests:
             name: CHOREGOS_DEV_LOGIN_ENABLED
             value: "false"
 
-  - it: active la connexion de développement seulement quand on le demande
+  - it: enables the development login only when asked
     template: charts/choregos-api/templates/deployment.yaml
     set:
       global.devLogin.enabled: true

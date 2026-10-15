@@ -1,7 +1,7 @@
-# Mode locataire : un AppProject qui refuse tout objet cluster-scoped (Diametral :
-# `clusterResourceWhitelist: []`) refuse la synchro **entière** au premier ClusterRole rendu.
-# Ces tests gardent la frontière des deux côtés : rien de cluster-scoped quand on le coupe,
-# et le défaut inchangé pour les autres.
+# Tenant mode: an AppProject that refuses any cluster-scoped object (Diametral:
+# `clusterResourceWhitelist: []`) refuses the **whole** sync at the first ClusterRole rendered.
+# These tests guard the boundary on both sides: nothing cluster-scoped when it is cut off,
+# and the default unchanged for the others.
 suite: mode locataire
 templates:
   - charts/choregos-api/templates/service.yaml
@@ -10,7 +10,7 @@ templates:
   - charts/choregos-web/templates/deployment.yaml
   - charts/choregos-orchestrator/templates/deployments.yaml
 tests:
-  - it: par défaut, l'API lit les PipelineRun par un ClusterRole
+  - it: by default, the API reads PipelineRuns through a ClusterRole
     template: charts/choregos-api/templates/service.yaml
     asserts:
       - containsDocument:
@@ -22,7 +22,7 @@ tests:
           apiVersion: rbac.authorization.k8s.io/v1
           any: true
 
-  - it: sans droit cluster-scoped, ni ClusterRole ni ClusterRoleBinding
+  - it: without cluster-scoped rights, neither ClusterRole nor ClusterRoleBinding
     template: charts/choregos-api/templates/service.yaml
     set:
       global.rbac.clusterScoped: false
@@ -38,7 +38,7 @@ tests:
           apiVersion: rbac.authorization.k8s.io/v1
         not: true
 
-  - it: sans Gateway API, l'API sort par un Ingress qui garde ses trois préfixes
+  - it: without Gateway API, the API exits through an Ingress that keeps its three prefixes
     template: charts/choregos-api/templates/httproute.yaml
     set:
       choregos-api.ingress.kind: ingress
@@ -56,16 +56,16 @@ tests:
       - lengthEqual:
           path: spec.rules[0].http.paths
           count: 5
-      # La porte MCP (ADR 0030) sort par l'API : sans ce chemin, un client MCP tombe sur la console.
+      # The MCP gateway (ADR 0030) exits through the API: without this path, an MCP client lands on the console.
       - equal:
           path: spec.rules[0].http.paths[1].path
           value: /mcp
-      # Ses métadonnées OAuth (RFC 9728) aussi : claude.ai les lit avant de se connecter.
+      # Its OAuth metadata (RFC 9728) too: claude.ai reads it before connecting.
       - equal:
           path: spec.rules[0].http.paths[4].path
           value: /.well-known/oauth-protected-resource
 
-  - it: sans Gateway API, le front sort par un Ingress
+  - it: without Gateway API, the front end exits through an Ingress
     template: charts/choregos-web/templates/deployment.yaml
     set:
       choregos-web.ingress.kind: ingress
@@ -79,7 +79,7 @@ tests:
           apiVersion: gateway.networking.k8s.io/v1
         not: true
 
-  - it: avec l'exécuteur k8s_job, le compte des runners existe et ne monte aucun jeton
+  - it: with the k8s_job executor, the runners' account exists and mounts no token
     template: charts/choregos-orchestrator/templates/deployments.yaml
     set:
       choregos-orchestrator.runner.executor: k8s_job
@@ -96,7 +96,7 @@ tests:
           path: metadata.name
           value: choregos-runner
 
-  - it: avec Tekton, pas de compte runner dans le namespace de la plateforme
+  - it: with Tekton, no runner account in the platform namespace
     template: charts/choregos-orchestrator/templates/deployments.yaml
     asserts:
       - containsDocument:
@@ -105,7 +105,7 @@ tests:
           name: choregos-runner
         not: true
 
-  - it: les URL publiques se surchargent pour un ingress HTTP interne
+  - it: public URLs can be overridden for an internal HTTP ingress
     template: charts/choregos-api/templates/deployment.yaml
     set:
       global.publicUrl: http://choregos.internal.dev.diametral.com
@@ -122,7 +122,7 @@ tests:
             name: CHOREGOS_API_URL
             value: http://choregos-api.internal.dev.diametral.com
 
-  - it: l'URL de la base se compose depuis le secret de l'opérateur Zalando
+  - it: the database URL is composed from the Zalando operator's secret
     template: charts/choregos-api/templates/deployment.yaml
     set:
       global.database.passwordSecret: choregos.choregos-pg.credentials.postgresql.acid.zalan.do
@@ -142,7 +142,7 @@ tests:
             name: CHOREGOS_DATABASE_URL
             value: postgresql+asyncpg://choregos:$(CHOREGOS_DATABASE_PASSWORD)@choregos-pg:5432/choregos
 
-  - it: les dépendances embarquées se câblent toutes seules
+  - it: embedded dependencies wire themselves up
     template: charts/choregos-api/templates/deployment.yaml
     set:
       global.database.embedded: true
@@ -165,10 +165,10 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: CHOREGOS_DATABASE_URL
-            # le rôle applicatif sans SUPERUSER, créé à l'initdb du PostgreSQL embarqué
+            # the application role without SUPERUSER, created at initdb of the embedded PostgreSQL
             value: postgresql+asyncpg://choregos_app:$(CHOREGOS_DATABASE_PASSWORD)@RELEASE-NAME-postgresql:5432/choregos
 
-  - it: sans dépendance embarquée, les adresses restent celles qu'on fournit
+  - it: without an embedded dependency, the addresses stay the ones provided
     template: charts/choregos-api/templates/deployment.yaml
     asserts:
       - contains:
@@ -177,7 +177,7 @@ tests:
             name: CHOREGOS_TEMPORAL_ADDRESS
             value: temporal-frontend.choregos-temporal.svc:7233
 
-  - it: le worker reçoit une commande complète, pas seulement des arguments
+  - it: the worker receives a complete command, not only arguments
     template: charts/choregos-orchestrator/templates/deployments.yaml
     documentIndex: 0
     asserts:
@@ -188,7 +188,7 @@ tests:
           path: spec.template.spec.containers[0].args
           value: ["--queues", "orchestrator"]
 
-  - it: l'image des agents suit la version du déploiement
+  - it: the agents' image follows the deployment's version
     template: charts/choregos-orchestrator/templates/deployments.yaml
     documentIndex: 0
     set:
@@ -200,7 +200,7 @@ tests:
             name: CHOREGOS_RUNNER_IMAGE
             value: ghcr.io/vargafoundation/choregos-runner:9.9.9
 
-  - it: les agents rappellent le service interne, jamais l'URL publique
+  - it: the agents call back the internal service, never the public URL
     template: charts/choregos-orchestrator/templates/deployments.yaml
     documentIndex: 0
     set:
@@ -213,7 +213,7 @@ tests:
             name: CHOREGOS_INTERNAL_API_URL
             value: http://choregos-api:8000
 
-  - it: l'orchestrateur reçoit la clé qui signe les jetons de run
+  - it: the orchestrator receives the key that signs the run tokens
     template: charts/choregos-orchestrator/templates/deployments.yaml
     documentIndex: 0
     asserts:

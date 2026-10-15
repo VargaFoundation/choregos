@@ -7,7 +7,7 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  # DuckDB : un seul écrivain.
+  # DuckDB: a single writer.
   strategy: { type: Recreate }
   selector:
     matchLabels:
@@ -31,13 +31,13 @@ spec:
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           env:
             - { name: ECPHORIA_GATEWAY__LISTEN, value: "0.0.0.0:8432" }
-            # Ecphoria refuse d'écouter hors loopback sans authentification : c'est voulu.
+            # Ecphoria refuses to listen outside loopback without authentication: this is intended.
             - { name: ECPHORIA_GATEWAY__AUTH_ENABLED, value: "true" }
             - name: ECPHORIA_GATEWAY__API_KEYS
               valueFrom: { secretKeyRef: { name: {{ $secret }}, key: api-keys } }
             - { name: ECPHORIA_EMBEDDING__PROVIDER, value: {{ .Values.embedding.provider | quote }} }
-            # `OPENAI_BASE_URL` et pas `BASE_URL` : le champ s'appelle `openai_base_url`, et
-            # le mauvais nom envoie les embeddings chez api.openai.com sans un mot.
+            # `OPENAI_BASE_URL` and not `BASE_URL`: the field is called `openai_base_url`, and
+            # the wrong name sends the embeddings to api.openai.com without a word.
             {{- if eq .Values.embedding.provider "openai_compatible" }}
             - { name: ECPHORIA_EMBEDDING__OPENAI_BASE_URL, value: "{{ include "choregos.gatewayUrl" . }}/v1" }
             - { name: ECPHORIA_EMBEDDING__MODEL, value: {{ .Values.embedding.model | quote }} }

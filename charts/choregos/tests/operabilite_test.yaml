@@ -1,7 +1,7 @@
-# Opérabilité (état des lieux du 2026-09-24) : un drain n'emporte pas le front ni les
-# workers, deux répliques ne partagent pas un nœud par défaut, le pool de connexions est
-# borné par les valeurs, et un environnement sérieux ne peut pas embarquer ses dépendances.
-suite: opérabilité
+# Operability (status review of 2026-09-24): a drain does not take away the front end or the
+# workers, two replicas do not share a node by default, the connection pool is
+# bounded by the values, and a serious environment cannot embed its dependencies.
+suite: operability
 templates:
   - charts/choregos-web/templates/pdb.yaml
   - charts/choregos-web/templates/deployment.yaml
@@ -10,7 +10,7 @@ templates:
   - charts/choregos-api/templates/deployment.yaml
   - templates/garde.yaml
 tests:
-  - it: le front a un budget de disruption dès deux répliques
+  - it: the front end has a disruption budget from two replicas up
     template: charts/choregos-web/templates/pdb.yaml
     asserts:
       - isKind:
@@ -19,7 +19,7 @@ tests:
           path: spec.minAvailable
           value: 1
 
-  - it: une seule réplique de front n'a pas de budget — il bloquerait le drain sans rien protéger
+  - it: a single front-end replica has no budget — it would block the drain while protecting nothing
     template: charts/choregos-web/templates/pdb.yaml
     set:
       choregos-web.replicaCount: 1
@@ -27,7 +27,7 @@ tests:
       - hasDocuments:
           count: 0
 
-  - it: chaque file d'attente à plus d'une réplique a son budget, la file mémoire non
+  - it: each queue with more than one replica has its budget, the memory queue does not
     template: charts/choregos-orchestrator/templates/pdb.yaml
     asserts:
       - hasDocuments:
@@ -43,7 +43,7 @@ tests:
           name: choregos-orchestrator-memory
         not: true
 
-  - it: les répliques se repoussent d'un nœud à l'autre, en préférence par défaut
+  - it: replicas repel each other from node to node, as a preference by default
     template: charts/choregos-api/templates/deployment.yaml
     asserts:
       - equal:
@@ -53,7 +53,7 @@ tests:
           path: spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.labelSelector.matchLabels["app.kubernetes.io/name"]
           value: choregos-api
 
-  - it: en anti-affinité stricte, une réplique par nœud, et chaque file d'attente pour elle-même
+  - it: with strict anti-affinity, one replica per node, and each queue for itself
     template: charts/choregos-orchestrator/templates/deployments.yaml
     documentIndex: 0
     set:
@@ -63,7 +63,7 @@ tests:
           path: spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].labelSelector.matchLabels["choregos/queue"]
           value: orchestrator
 
-  - it: sans anti-affinité, aucune affinité n'est rendue
+  - it: without anti-affinity, no affinity is rendered
     template: charts/choregos-web/templates/deployment.yaml
     documentIndex: 0
     set:
@@ -72,7 +72,7 @@ tests:
       - isNull:
           path: spec.template.spec.affinity
 
-  - it: le pool de connexions est borné par les valeurs, pour l'API et pour les workers
+  - it: the connection pool is bounded by the values, for the API and for the workers
     template: charts/choregos-api/templates/deployment.yaml
     set:
       global.database.pool: { size: 4, maxOverflow: 2, timeoutSeconds: 7 }
@@ -87,7 +87,7 @@ tests:
           path: spec.template.spec.containers[0].env
           content: { name: CHOREGOS_DB_POOL_TIMEOUT_S, value: "7" }
 
-  - it: les workers reçoivent le proxy d'egress des runners, et rien sur un banc
+  - it: the workers receive the runners' egress proxy, and nothing on a bench
     template: charts/choregos-orchestrator/templates/deployments.yaml
     documentIndex: 0
     asserts:
@@ -97,7 +97,7 @@ tests:
             name: CHOREGOS_RUNNER_EGRESS_PROXY
             value: "http://choregos-egress.{namespace}.svc:3128"
 
-  - it: en production, une dépendance embarquée arrête le rendu et se nomme
+  - it: in production, an embedded dependency stops the rendering and is named
     template: templates/garde.yaml
     set:
       global.environment: prod
@@ -107,7 +107,7 @@ tests:
       - failedTemplate:
           errorPattern: "global.database.embedded, global.devLogin.enabled"
 
-  - it: en staging, les secrets écrits par le chart sont refusés
+  - it: in staging, the secrets written by the chart are refused
     template: templates/garde.yaml
     set:
       global.environment: staging
@@ -116,7 +116,7 @@ tests:
       - failedTemplate:
           errorPattern: "global.devSecrets"
 
-  - it: en dev, tout embarquer reste permis
+  - it: in dev, embedding everything stays allowed
     template: templates/garde.yaml
     set:
       global.environment: dev

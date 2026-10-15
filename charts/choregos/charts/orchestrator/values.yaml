@@ -1,7 +1,7 @@
 enabled: true
 image:
-  # Vide : `global.imageRegistry`. Un autre registre — les images `-ee` de l'édition entreprise,
-  # servies par un projet privé — se pose ici, composant par composant.
+  # Empty: `global.imageRegistry`. Another registry — the `-ee` images of the enterprise edition,
+  # served by a private project — is set here, component by component.
   registry: ""
   repository: choregos-orchestrator
   tag: ""
@@ -21,11 +21,11 @@ queues:
     resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
 runner:
   image: choregos-runner
-  # Vide, comme `image.tag` juste au-dessus : le tag suit `global.imageTag`. Il valait `1.0.0`
-  # en dur — une version qui n'existe dans aucune installation — et ne tenait que parce que
-  # l'umbrella le réécrivait à `""`. Le jour où cette réécriture a disparu (2026-09-27, une coupe
-  # un peu large), les pods d'agent ont repointé sur une image absente. Un défaut qui n'est correct
-  # que grâce à un correctif ailleurs n'est pas un défaut, c'est un piège.
+  # Empty, like `image.tag` just above: the tag follows `global.imageTag`. It used to be `1.0.0`
+  # hardcoded — a version that exists in no installation — and only held because
+  # the umbrella rewrote it to `""`. The day that rewrite disappeared (2026-09-27, a slightly
+  # broad cut), the agent pods re-pointed at a missing image. A default that is only correct
+  # thanks to a fix elsewhere is not a default, it is a trap.
   tag: ""
   namespacePattern: "proj-{slug}-runners"
   executor: tekton
@@ -43,8 +43,8 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 1
 
-# Secondes pendant lesquelles un worker reste accroché à un nœud devenu injoignable avant d'être
-# évincé. Le défaut de Kubernetes est 300 : mesuré sur cluster, cela fait 359 s d'immobilité après
-# la perte d'un nœud, contre 74 s ici. Un worker est remplaçable et Temporal reprend son travail.
-# `0` rend le comportement par défaut de Kubernetes.
+# Seconds a worker stays attached to a node that became unreachable before being
+# evicted. Kubernetes' default is 300: measured on a cluster, that makes 359 s of immobility after
+# losing a node, against 74 s here. A worker is replaceable and Temporal picks up its work.
+# `0` restores Kubernetes' default behavior.
 unreachableTolerationSeconds: 20

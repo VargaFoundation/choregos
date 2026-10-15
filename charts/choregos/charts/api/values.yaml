@@ -1,8 +1,8 @@
 enabled: true
 replicaCount: 2
 image:
-  # Vide : `global.imageRegistry`. Un autre registre — les images `-ee` de l'édition entreprise,
-  # servies par un projet privé — se pose ici, composant par composant.
+  # Empty: `global.imageRegistry`. Another registry — the `-ee` images of the enterprise edition,
+  # served by a private project — is set here, component by component.
   registry: ""
   repository: choregos-api
   tag: ""
@@ -21,9 +21,9 @@ migrations:
   enabled: true
 ingress:
   enabled: true
-  # Annotations de l'Ingress (`kind: ingress`). Pour un contrôleur qui refuse deux Ingress sur un même
-  # hôte — NGINX Inc. : « All hosts are taken by other resources » — l'API et la console sur un seul
-  # hôte se déclarent en minions d'un Ingress maître : `nginx.org/mergeable-ingress-type: minion`.
+  # Ingress annotations (`kind: ingress`). For a controller that refuses two Ingresses on the same
+  # host — NGINX Inc.: "All hosts are taken by other resources" — the API and the console on a single
+  # host are declared as minions of a master Ingress: `nginx.org/mergeable-ingress-type: minion`.
   annotations: {}
   hostnames: ["api.choregos.local"]
   gateway: choregos-gateway

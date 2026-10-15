@@ -1,17 +1,17 @@
 {{- if and .Values.enabled .Values.migrations.enabled }}
-# Le compte de service DU HOOK, créé par le MÊME hook et d'un poids plus faible.
+# The hook's OWN service account, created by the SAME hook with a lower weight.
 #
-# Le Job tournait sous `choregos-api`, qui est une ressource ORDINAIRE de la version. En
-# `pre-install` (Helm) comme en PreSync (Argo CD, qui traduit le hook Helm), le Job est créé
-# avant elle : le contrôleur répond « error looking up service account
-# choregos/choregos-api: serviceaccount not found », aucun pod ne naît, et la synchro attend
-# un hook qui ne peut pas démarrer. Le commentaire ci-dessous disait déjà ce piège pour Helm
-# et on l'a « réglé » en passant le locataire kind en `post-install` — donc le défaut est
-# resté cassé, et le locataire dev l'a payé le 2026-09-26 : sept heures, zéro pod, la Sync
-# bloquée derrière un Job sans pod.
+# The Job ran under `choregos-api`, which is an ORDINARY resource of the release. In
+# `pre-install` (Helm) as in PreSync (Argo CD, which translates the Helm hook), the Job is created
+# before it: the controller answers "error looking up service account
+# choregos/choregos-api: serviceaccount not found", no pod is born, and the sync waits for
+# a hook that cannot start. The comment below already described this trap for Helm
+# and it was "fixed" by switching the kind tenant to `post-install` — so the defect
+# stayed broken, and the dev tenant paid for it on 2026-09-26: seven hours, zero pods, the Sync
+# blocked behind a Job with no pod.
 #
-# Un compte à lui casse la dépendance pour de bon, dans les deux moteurs et dans les deux
-# modes : les migrations n'appellent jamais l'API Kubernetes, elles ne parlent qu'à la base.
+# An account of its own breaks the dependency for good, in both engines and in both
+# modes: the migrations never call the Kubernetes API, they only talk to the database.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -19,14 +19,14 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": {{ .Values.migrations.hook }}
-    # Plus léger que le Job (-5) : il existe donc avant lui.
+    # Lighter than the Job (-5): so it exists before it.
     "helm.sh/hook-weight": "-10"
     "helm.sh/hook-delete-policy": before-hook-creation
     {{- with .Values.global.serviceAccount.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-# Rien à appeler dans le cluster, donc aucun jeton monté. Les annotations, elles, sont
-# reprises : c'est par elles qu'une base s'authentifie par identité de charge de travail.
+# Nothing to call in the cluster, so no token mounted. The annotations, however, are
+# kept: it is through them that a database authenticates by workload identity.
 automountServiceAccountToken: false
 ---
 apiVersion: batch/v1
@@ -35,15 +35,15 @@ metadata:
   name: choregos-migrations-{{ .Release.Revision }}
   labels: {{- include "choregos.labels" . | nindent 4 }}
   annotations:
-    # Les migrations passent **avant** les nouveaux pods (expand/contract, compatibles N-1).
+    # The migrations run **before** the new pods (expand/contract, N-1 compatible).
     #
-    # `post-install` existe pour un cas précis : quand le chart embarque lui-même la base et
-    # ses secrets. Un hook `pre-install` s'exécute avant TOUTE ressource ordinaire de la
-    # version — donc avant les secrets du chart et avant le PostgreSQL embarqué ; le Job
-    # attend alors une base et des valeurs qui n'arriveront pas, et l'installation expire sur
-    # un « timed out waiting for the condition » qui n'accuse rien. Quand la base et les
-    # secrets viennent d'ailleurs (opérateur PostgreSQL, opérateur de secrets), `pre-install`
-    # est le bon choix : le compte de service du hook, lui, est désormais créé par le hook.
+    # `post-install` exists for one specific case: when the chart itself ships the database and
+    # its secrets. A `pre-install` hook runs before ANY ordinary resource of the
+    # release — so before the chart's secrets and before the embedded PostgreSQL; the Job
+    # then waits for a database and values that will never arrive, and the installation times out on
+    # a "timed out waiting for the condition" that blames nothing. When the database and
+    # secrets come from elsewhere (PostgreSQL operator, secrets operator), `pre-install`
+    # is the right choice: the hook's service account is now created by the hook.
     "helm.sh/hook": {{ .Values.migrations.hook }}
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
@@ -59,10 +59,10 @@ spec:
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
       initContainers:
-        # La base peut n'être pas encore là — elle démarre dans la même version quand le
-        # chart l'embarque, et une image met le temps qu'elle met à se télécharger. Sans
-        # cette attente, le Job épuise son `backoffLimit` sur un « connection refused » et
-        # l'installation échoue en accusant les migrations.
+        # The database may not be there yet — it starts in the same release when the
+        # chart embeds it, and an image takes as long as it takes to pull. Without
+        # this wait, the Job exhausts its `backoffLimit` on a "connection refused" and
+        # the installation fails blaming the migrations.
         - name: attendre-la-base
           image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
           command:
@@ -77,18 +77,18 @@ spec:
                       socket.create_connection((host, port), timeout=3).close()
                       sys.exit(0)
                   except OSError as exc:
-                      print(f"base indisponible ({exc}) — nouvelle tentative", flush=True)
+                      print(f"database unavailable ({exc}) — retrying", flush=True)
                       time.sleep(3)
-              sys.exit(f"base {host}:{port} toujours injoignable")
+              sys.exit(f"database {host}:{port} still unreachable")
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
       containers:
         - name: migrations
           image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
-          # `migrer` trouve les migrations DANS le paquet, où qu'on le lance, et joue aussi les
-          # branches que déclarent les greffons (`choregos.migrations`) : `upgrade heads`, pas
-          # `head`. L'ancien `alembic -c alembic.ini upgrade head` exigeait `/app/apps/api` comme
-          # répertoire de travail, et ne voyait que le cœur.
+          # `migrer` finds the migrations INSIDE the package, wherever it is launched from, and also runs the
+          # branches declared by plugins (`choregos.migrations`): `upgrade heads`, not
+          # `head`. The former `alembic -c alembic.ini upgrade head` required `/app/apps/api` as the
+          # working directory, and only saw the core.
           command: ["python", "-m", "choregos_api.migrer"]
           env: {{- include "choregos.commonEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}

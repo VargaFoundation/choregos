@@ -1,6 +1,6 @@
 {{- /*
-Un PodDisruptionBudget sur UNE réplique bloque tout drain de nœud sans rien protéger :
-il n'est rendu qu'à partir de deux, quoi que dise `enabled`.
+A PodDisruptionBudget on ONE replica blocks every node drain while protecting nothing:
+it is only rendered from two replicas up, whatever `enabled` says.
 */ -}}
 {{- if and .Values.enabled .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) }}
 apiVersion: policy/v1

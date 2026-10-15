@@ -1,9 +1,9 @@
 {{- if .Values.demoFakes.enabled }}
 {{- /*
-Les faux du scénario RH servis par UN processus (S20-07). L'API (deux répliques) et
-l'orchestrateur sont des processus distincts : un faux en mémoire leur montrerait autant de
-parcs, d'annuaires et de lecteurs de badges qu'il y a de processus. Une seule réplique, c'est tout
-l'objet. Pour une démonstration : `garde.yaml` le refuse en staging et en prod.
+The HR scenario fakes served by ONE process (S20-07). The API (two replicas) and
+the orchestrator are distinct processes: an in-memory fake would show them as many
+fleets, directories and badge readers as there are processes. A single replica is the whole
+point. For a demonstration: `garde.yaml` refuses it in staging and prod.
 */ -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -36,7 +36,7 @@ spec:
       securityContext: {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
       containers:
         - name: demo-fakes
-          # L'image de l'API porte les faux et `uvicorn` : rien de plus à construire.
+          # The API image carries the fakes and `uvicorn`: nothing more to build.
           image: {{ include "choregos.image" (dict "global" .Values.global "image" (index .Values "choregos-api" "image")) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
@@ -48,8 +48,8 @@ spec:
             - name: CHOREGOS_DEMO_PORT
               value: {{ .Values.demoFakes.port | quote }}
             {{- with .Values.demoFakes.tokenSecret }}
-            # Le jeton des serveurs MCP, et le secret d'application du faux Graph : par
-            # référence, comme tout secret ; sans lui, la politique réseau est la seule porte.
+            # The MCP servers' token, and the fake Graph's application secret: by
+            # reference, like any secret; without it, the network policy is the only gate.
             - name: CHOREGOS_DEMO_JETON
               valueFrom: { secretKeyRef: { name: {{ .name }}, key: {{ .key }} } }
             {{- end }}

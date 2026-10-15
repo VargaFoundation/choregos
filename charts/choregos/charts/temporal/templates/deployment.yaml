@@ -1,8 +1,8 @@
 {{- $name := printf "%s-temporal" .Release.Name }}
 {{- /*
-`server start-dev` : un seul processus, SQLite, aucune migration à jouer. C'est le Temporal
-du banc sur cluster de Choregos (tests/cluster) — assez pour dérouler des workflows réels,
-pas pour la production, où Temporal se déploie avec sa propre base et ses quatre services.
+`server start-dev`: a single process, SQLite, no migration to run. This is the Temporal
+of Choregos' cluster bench (tests/cluster) — enough to run real workflows,
+not for production, where Temporal is deployed with its own database and its four services.
 */}}
 apiVersion: apps/v1
 kind: Deployment
@@ -11,7 +11,7 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  # Un seul écrivain sur le fichier SQLite : jamais deux pods en même temps.
+  # A single writer on the SQLite file: never two pods at the same time.
   strategy: { type: Recreate }
   selector:
     matchLabels:

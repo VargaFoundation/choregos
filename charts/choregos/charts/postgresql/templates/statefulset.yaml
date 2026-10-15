@@ -1,8 +1,8 @@
 {{- /*
-Une instance, un volume, un mot de passe tiré au hasard à la première installation et
-**relu** aux suivantes (`lookup`) : sans ce relevé, chaque `helm upgrade` produirait un
-nouveau mot de passe, que PostgreSQL ignorerait — la base garde celui de son initdb — et
-l'application perdrait sa connexion sans qu'aucune ressource paraisse en échec.
+One instance, one volume, a password drawn at random on the first installation and
+**re-read** on later ones (`lookup`): without that lookup, every `helm upgrade` would produce a
+new password, which PostgreSQL would ignore — the database keeps the one from its initdb — and
+the application would lose its connection without any resource appearing to fail.
 */}}
 {{- $secretName := printf "%s-postgresql" .Release.Name }}
 {{- $existing := lookup "v1" "Secret" .Release.Namespace $secretName }}
@@ -29,13 +29,13 @@ metadata:
   name: {{ $secretName }}-init
   labels: {{- include "choregos.labels" . | nindent 4 }}
 data:
-  # Joué UNE SEULE FOIS, à l'initdb du volume. La passerelle LiteLLM garde ses clés
-  # virtuelles et leur consommation dans sa propre base : le schéma de Choregos ne
-  # contient que ce que Choregos écrit.
-  # Le rôle avec lequel l'API se connecte : SANS SUPERUSER. Un superutilisateur ignore la
-  # RLS, et l'isolation des organisations n'existe alors pas, quoi que disent les politiques ;
-  # l'API le détecte au démarrage et refuse en staging/prod. `POSTGRES_USER` reste le rôle
-  # d'administration du conteneur. Même mot de passe : un seul secret sur un banc.
+  # Run ONCE ONLY, at the volume's initdb. The LiteLLM gateway keeps its virtual
+  # keys and their consumption in its own database: Choregos' schema
+  # contains only what Choregos writes.
+  # The role the API connects with: WITHOUT SUPERUSER. A superuser ignores
+  # RLS, and organization isolation then does not exist, whatever the policies say;
+  # the API detects it at startup and refuses in staging/prod. `POSTGRES_USER` remains the
+  # container's administration role. Same password: a single secret on a bench.
   00-app-role.sh: |
     #!/bin/sh
     set -e
@@ -100,8 +100,8 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ $secretName }}, key: password } }
             - name: POSTGRES_DB
               valueFrom: { secretKeyRef: { name: {{ $secretName }}, key: database } }
-            # Le volume est monté sur /var/lib/postgresql/data : initdb refuse un répertoire
-            # non vide (`lost+found`), d'où le sous-répertoire.
+            # The volume is mounted on /var/lib/postgresql/data: initdb refuses a non-empty
+            # directory (`lost+found`), hence the subdirectory.
             - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
           ports:
             - { name: postgres, containerPort: 5432 }

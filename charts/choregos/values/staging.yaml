@@ -1,4 +1,4 @@
-# Staging : données synthétiques, promotion automatique depuis `main`.
+# Staging: synthetic data, automatic promotion from `main`.
 global:
   domain: staging.choregos.dev
   environment: staging

@@ -1,8 +1,8 @@
 apiVersion: v2
 name: choregos
 description: >-
-  Plateforme de delivery agentique de la Varga Foundation : API, front, workers Temporal,
-  sidecar d'outils, et les dépendances qui la font tourner.
+  Agentic delivery platform of the Varga Foundation: API, front end, Temporal workers,
+  tools sidecar, and the dependencies that make it run.
 type: application
 version: 0.17.12
 appVersion: "0.17.12"
@@ -25,9 +25,9 @@ dependencies:
   - name: choregos-tools
     version: 0.17.12
     repository: file://charts/tools
-  # Les dépendances de la plateforme. Éteintes par défaut : une installation sérieuse les
-  # prend à l'extérieur (opérateur PostgreSQL, Temporal de production, passerelle partagée).
-  # Allumées, elles suffisent à un banc mono-nœud — c'est la démo `values/local.yaml`.
+  # The platform's dependencies. Off by default: a serious installation takes them
+  # from outside (PostgreSQL operator, production Temporal, shared gateway).
+  # Switched on, they are enough for a single-node bench — that is the `values/local.yaml` demo.
   - name: choregos-postgresql
     version: 0.17.12
     repository: file://charts/postgresql

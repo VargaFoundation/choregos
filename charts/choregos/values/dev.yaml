@@ -1,4 +1,4 @@
-# Développement local (kind) : une réplique de chaque chose, connecteurs simulés.
+# Local development (kind): one replica of each thing, simulated connectors.
 global:
   domain: choregos.local
   environment: dev
