@@ -20,10 +20,11 @@ from choregos_api.services import default_workflow, policy_model, workflow_model
 from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
 from choregos_api.services.definitions import ceiling_of
 from choregos_contracts import Policy, ProjectConfig, Workflow
-from choregos_core import PolicyEngine
+from choregos_core import Message, PolicyEngine
 from choregos_core.policy_ceiling import clamp
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from temporalio import activity
 
 # L'orchestrateur possède les mêmes tables que l'API : il branche le repli lexical pareil.
 brancher_memoire_lexicale()
@@ -175,3 +176,20 @@ def as_dict(value: Any) -> dict[str, Any]:
     if hasattr(value, "model_dump"):
         return dict(value.model_dump(mode="json", by_alias=True))
     return dict(value or {})
+
+
+async def send_courtesy(notify: Any, channel: str, message: Message) -> bool:
+    """Send a notification that is a courtesy, not the act: never raise, say whether it went out.
+
+    A deployment without a notifier (the dev tenant has no Slack) makes `notify.send` raise
+    the Slack "no `bot_token` nor `webhook_url`" error. Raised from an activity, that killed what
+    sent it: the human request (2026-09-27), the train (S22-26), then the 24 h reminder of a
+    pending human request, which failed the WorkItem interpreter (#497). Every notification an
+    activity sends goes through here, and the silence is logged and returned instead."""
+    try:
+        await notify.send(channel, message)
+    # Deliberately broad: no notifier failure may kill the work that notifies.
+    except Exception as exc:
+        activity.logger.warning("notification NOT sent on %s (%s): %s", channel, message.title, exc)
+        return False
+    return True

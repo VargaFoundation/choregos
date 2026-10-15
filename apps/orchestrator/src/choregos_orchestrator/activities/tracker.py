@@ -16,7 +16,14 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..markdown import STATUS_MARKER, StageLine, StatusComment, render_human_request
-from .base import db, load_work_item, project_bundle, tracker_possede_les_tickets, workflow_du_ticket
+from .base import (
+    db,
+    load_work_item,
+    project_bundle,
+    send_courtesy,
+    tracker_possede_les_tickets,
+    workflow_du_ticket,
+)
 
 logger = get_logger("choregos.tracker")
 
@@ -308,11 +315,19 @@ async def _garder_la_raison(session: Any, demande: HumanRequest, decision: dict[
 
 
 @activity.defn(name="notify")
-async def notify(payload: dict[str, Any]) -> None:
+async def notify(payload: dict[str, Any]) -> dict[str, Any]:
+    """Best-effort notification (the 24 h reminder of a pending human request, #497).
+
+    The interpreter runs it with `NO_RETRY`: raising here failed the whole WorkItem interpreter,
+    which left the work item in `needs_human` with nobody to receive its decision. A reminder is
+    a courtesy; the request it reminds of lives on without it."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         channel = payload.get("channel") or bundle.config.notify.slack_channel or "#choregos"
-        await bundle.adapters.notify.send(channel, Message.model_validate(payload["message"]))
+        sent = await send_courtesy(
+            bundle.adapters.notify, channel, Message.model_validate(payload["message"])
+        )
+        return {"notified": sent}
 
 
 @activity.defn(name="close_out")

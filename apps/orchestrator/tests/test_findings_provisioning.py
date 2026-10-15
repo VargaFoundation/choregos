@@ -161,3 +161,49 @@ async def test_provisioning_dry_run_lists_steps(
         result = await handle.result()
     assert result["dry_run"] is True
     assert isinstance(result["steps"], list)
+
+
+# ──────── a notifier failure never undoes a finding (#497) ────────
+
+NO_SLACK = "[slack] ni `bot_token` ni `webhook_url` configurés"  # lang: fr-ok (the verbatim upstream error)
+
+
+async def test_a_critical_finding_without_a_notifier_is_still_filed(setup: Fixture) -> None:
+    """Raising from the notification rolled back the finding after its ticket was created."""
+    from choregos_api.db.models import Finding
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities import findings as findings_activities
+
+    setup.adapters.notify.panne = NO_SLACK
+    finding_id = await _add_finding(
+        setup, "Secret in a log line", "src/auth/login.py:12 — token logged", severity="critical"
+    )
+
+    outcome = await findings_activities.triage_finding(
+        {"project_slug": setup.project_slug, "finding_id": finding_id}
+    )
+
+    assert outcome["status"] == "created", outcome
+    assert outcome["notified"] is False, "the silence must be said, not guessed"
+    async with session_scope() as session:
+        row = await session.get(Finding, finding_id)
+        assert row is not None and row.status == "created"
+
+
+async def test_the_false_positive_alert_without_a_notifier_still_answers(setup: Fixture) -> None:
+    from choregos_api.db.models import Finding
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities import findings as findings_activities
+
+    for index in range(3):
+        finding_id = await _add_finding(setup, f"Noise {index}", "nothing to act on")
+        async with session_scope() as session:
+            row = await session.get(Finding, finding_id)
+            assert row is not None
+            row.relevant = False
+    setup.adapters.notify.panne = NO_SLACK
+
+    outcome = await findings_activities.finding_quality_ratio({"project_slug": setup.project_slug})
+
+    assert outcome["alert"] is True, outcome
+    assert outcome["notified"] is False, outcome

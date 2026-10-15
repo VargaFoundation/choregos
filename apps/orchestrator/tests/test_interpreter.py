@@ -585,6 +585,46 @@ async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
     )
 
 
+async def test_the_reminder_without_a_notifier_keeps_the_interpreter_alive(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """#497: the 24 h reminder of a pending human request must not kill the interpreter.
+
+    On the dev tenant (no Slack), `_remind` ran the `notify` activity with `NO_RETRY`; it raised
+    the Slack "no `bot_token` nor `webhook_url`" error and the activity failure failed the whole
+    WorkItem interpreter, leaving the work item in its human state with nobody to receive the
+    decision (DiametralGroup/choregos-sandbox-dev#4 and #6, 10/11 and 10/13)."""
+    from datetime import timedelta
+
+    from temporalio.client import WorkflowExecutionStatus
+
+    setup.adapters.notify.panne = (
+        "[slack] ni `bot_token` ni `webhook_url` configurés"  # lang: fr-ok (the verbatim upstream error)
+    )
+    scripted(setup.adapters, refine_result("spec written"))
+
+    async with worker_factory():
+        handle = await start(temporal_env, setup)
+        await _wait_state(handle, "awaiting_spec_approval")
+        # Past the 24 h SLA, short of the 72 h timeout: the reminder fires, the request still waits.
+        await temporal_env.sleep(timedelta(hours=25))
+        await _wait_state(handle, "awaiting_spec_approval")
+        description = await handle.describe()
+        history = await handle.fetch_history()
+
+    reminders = [
+        event
+        for event in history.events
+        if event.activity_task_scheduled_event_attributes.activity_type.name == "notify"
+    ]
+    assert reminders, "the reminder never fired: the test proves nothing"
+    assert description.status == WorkflowExecutionStatus.RUNNING, (
+        f"the interpreter died of a reminder: {description.status}"
+    )
+    item = await _ticket(setup)
+    assert item.failure is None, f"the work item died of a reminder: {item.failure}"
+
+
 async def _refine_attempts(setup: Fixture, attempts: int) -> None:
     """The project's workflow, with `t-refine` retried up to `attempts` times."""
     from choregos_api.db.models import WorkflowDef

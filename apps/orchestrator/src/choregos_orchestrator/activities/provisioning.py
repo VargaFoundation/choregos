@@ -268,6 +268,9 @@ async def _gateway_create_team_and_budget(params: dict[str, Any], bundle: Any, s
 
 
 async def _notify_test_message(params: dict[str, Any], bundle: Any, settings: Any) -> str:
+    # The one notification that is NOT sent as a courtesy (`base.send_courtesy`, #497): this step
+    # exists to prove the notifier works, so a failure is its result. It fails the step, which
+    # `run_provision_step` records as repairable with its remediation.
     await bundle.adapters.notify.send(
         bundle.config.notify.slack_channel or "#choregos",
         Message(title=f"Choregos — project {bundle.slug} provisioned", severity="success"),

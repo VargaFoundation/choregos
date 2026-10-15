@@ -15,7 +15,7 @@ from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
-from .base import cle_de_ticket_interne, db, project_bundle, tracker_possede_les_tickets
+from .base import cle_de_ticket_interne, db, project_bundle, send_courtesy, tracker_possede_les_tickets
 
 TOKEN_RE = re.compile(r"[a-zà-ÿ0-9_]+")
 
@@ -135,8 +135,11 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                 f"<!-- choregos:finding -->\nFinding filed during this work item: {key} "
                 f"({row.type}, {row.severity}).",
             )
+        notified: bool | None = None
         if bundle.engine.notify_finding(row.severity):
-            await bundle.adapters.notify.send(
+            # A courtesy: raising here rolled back the finding after its ticket was created.
+            notified = await send_courtesy(
+                bundle.adapters.notify,
                 bundle.config.notify.slack_channel or "#choregos",
                 Message(
                     title=f"Finding {row.severity} — {row.title}",
@@ -169,7 +172,13 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
             severity=row.severity,
         )
         auto = bundle.engine.auto_agent_ready(row.estimate)
-        return {"status": "created", "work_item_key": key, "work_item_id": created.id, "agent_ready": auto}
+        return {
+            "status": "created",
+            "work_item_key": key,
+            "work_item_id": created.id,
+            "agent_ready": auto,
+            "notified": notified,
+        }
 
 
 def _ticket_body(row: Finding, origin: WorkItem | None, public_url: str, slug: str) -> str:
@@ -220,8 +229,10 @@ async def finding_quality_ratio(payload: dict[str, Any]) -> dict[str, Any]:
         false_positives = sum(1 for row in judged if row.relevant is False)
         ratio = false_positives / len(judged)
         threshold = bundle.policy.findings.false_positive_alert_ratio
+        notified: bool | None = None
         if ratio > threshold:
-            await bundle.adapters.notify.send(
+            notified = await send_courtesy(
+                bundle.adapters.notify,
                 bundle.config.notify.slack_channel or "#choregos",
                 Message(
                     title=f"Findings: {ratio:.0%} false positives over 30 days",
@@ -230,4 +241,4 @@ async def finding_quality_ratio(payload: dict[str, Any]) -> dict[str, Any]:
                     severity="warning",
                 ),
             )
-        return {"ratio": ratio, "sample": len(judged), "alert": ratio > threshold}
+        return {"ratio": ratio, "sample": len(judged), "alert": ratio > threshold, "notified": notified}
