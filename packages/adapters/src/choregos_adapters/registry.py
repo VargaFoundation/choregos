@@ -175,9 +175,16 @@ def configuration_resolue(
     return resolue
 
 
+def default_gateway_type() -> str:
+    """The gateway of a project that declares none: the deployment's (`CHOREGOS_GATEWAY_TYPE`)."""
+    return os.environ.get("CHOREGOS_GATEWAY_TYPE", "") or TYPES_PAR_DEFAUT["gateway"]
+
+
 def type_par_defaut(kind: str) -> str | None:
     if kind == "runtime":
         return default_executor_kind()
+    if kind == "gateway":
+        return default_gateway_type()
     return TYPES_PAR_DEFAUT.get(kind)
 
 
@@ -271,6 +278,6 @@ class AdapterSet:
             cd=get("cd", TYPES_PAR_DEFAUT["cd"]),
             executor=get("runtime", default_executor_kind()),
             memory=get("memory", TYPES_PAR_DEFAUT["memory"]),
-            gateway=get("gateway", TYPES_PAR_DEFAUT["gateway"]),
+            gateway=get("gateway", default_gateway_type()),
             notify=get("notify", TYPES_PAR_DEFAUT["notify"]),
         )

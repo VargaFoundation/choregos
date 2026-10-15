@@ -114,6 +114,8 @@ class Settings(BaseSettings):
     temporal_namespace: str = "default"
     temporal_task_queue: str = "orchestrator"
     gateway_url: str = "http://localhost:4000"
+    #: The gateway adapter the deployment uses (`litellm`, `openai-compatible`, `direct`...).
+    gateway_type: str = "litellm"
     gateway_master_key: str = ""
     # Ce que CE déploiement sait faire tourner (#245) : un projet neuf en hérite quand sa demande
     # n'en dit rien. Sans eux, il part sur `claude-code` et aucun profil de modèle — sur le dev, qui

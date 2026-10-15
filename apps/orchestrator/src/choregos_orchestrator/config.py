@@ -28,6 +28,7 @@ class OrchestratorSettings(BaseSettings):
     # et n'était lue nulle part — les rappels prenaient `api_url`.
     internal_api_url: str = "http://localhost:8000"
     gateway_url: str = "http://localhost:4000"
+    gateway_type: str = "litellm"
     #: La mémoire (Ecphoria). Le chart la passe depuis toujours (`CHOREGOS_MEMORY_URL` de
     #: `commonEnv`) et ce réglage n'existait pas : `extra="ignore"` l'avalait en silence, et
     #: l'URL MCP de la mémoire était fabriquée par `gateway_url.replace("4000", "8432")`.

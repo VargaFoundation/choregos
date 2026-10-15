@@ -123,6 +123,8 @@ global:
     address: temporal-frontend.choregos-temporal.svc:7233
     namespace: default
   gateway:
+    # The gateway adapter: `litellm` (default), `openai-compatible` (discovery only), `direct`.
+    type: litellm
     embedded: false
     url: http://litellm.choregos-gateway.svc:4000
     # Gateway secret (key `master-key`). Empty with `embedded: true`: the chart

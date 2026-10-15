@@ -302,6 +302,18 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("master_key",),
     ),
+    ("gateway", "openai-compatible"): ConnectorTypeSpec(
+        "OpenAI-compatible gateway (discovery only: no virtual keys, no cap, no measured cost)",
+        ("gateway",),
+        _objet(
+            {
+                "base_url": _TEXTE,
+                "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+                "timeout_s": _ENTIER,
+            }
+        ),
+        ("api_key", "run_key"),
+    ),
     # Knowledge base sources (S33-04, ADR 0051): one Entra application holding `Sites.Selected`,
     # granted `read` on the chosen sites only — never `Files.Read.All` nor `Sites.Read.All`.
     ("documents", "sharepoint"): ConnectorTypeSpec(
@@ -826,6 +838,17 @@ def _register_builtins() -> None:
             team_id=cfg.get("team_id"),
             internal_prices=cfg.get("internal_prices", {}),
             enterprise_tags=cfg.get("enterprise_tags", False),
+        )
+    )
+    from .gateway.openai_compatible import OpenAiCompatibleGateway
+
+    register("gateway", "openai-compatible", _SPECS_LIVREES[("gateway", "openai-compatible")])(
+        lambda cfg: OpenAiCompatibleGateway(
+            cfg.get("base_url", _env("CHOREGOS_GATEWAY_URL", "")),
+            api_key=cfg.get("api_key", _env("CHOREGOS_GATEWAY_MASTER_KEY", "")),
+            run_key=cfg.get("run_key", ""),
+            headers=cfg.get("headers", {}),
+            timeout=float(cfg.get("timeout_s", 20)),
         )
     )
     from .documents.graph import GraphDocumentsConnector
