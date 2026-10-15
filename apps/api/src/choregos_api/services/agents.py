@@ -91,6 +91,8 @@ class AgentResolu:
     agent: Agent
     version: int
     spec: AgentSpec
+    #: The version comes from the project's pin, not from the reference nor from the latest.
+    pinned: bool = False
 
 
 async def resoudre_l_agent(
@@ -143,7 +145,12 @@ async def resoudre_l_agent(
     surcharges = (
         AgentOverrides.model_validate(epingle.overrides or {}) if epingle is not None else AgentOverrides()
     )
-    return AgentResolu(agent=agent, version=version, spec=effective(spec, surcharges))
+    return AgentResolu(
+        agent=agent,
+        version=version,
+        spec=effective(spec, surcharges),
+        pinned=epingle is not None and not demandee,
+    )
 
 
 async def depense_depuis(session: AsyncSession, org_id: str, agent_slug: str, since: datetime) -> float:

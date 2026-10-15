@@ -1349,6 +1349,143 @@
     "via": null,
     "timeout_hours": null
    }
+  ],
+  "artifacts": [
+   {
+    "name": "risk",
+    "type": null,
+    "produced_by": [
+     "t-triage"
+    ],
+    "read_by": [],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": false
+   },
+   {
+    "name": "size",
+    "type": null,
+    "produced_by": [
+     "t-triage"
+    ],
+    "read_by": [],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": false
+   },
+   {
+    "name": "allowed_paths",
+    "type": null,
+    "produced_by": [
+     "t-specify"
+    ],
+    "read_by": [],
+    "origin": "step",
+    "context": true,
+    "in_pull_request": false
+   },
+   {
+    "name": "spec_markdown",
+    "type": null,
+    "produced_by": [
+     "t-specify"
+    ],
+    "read_by": [],
+    "origin": "step",
+    "context": true,
+    "in_pull_request": true
+   },
+   {
+    "name": "plan_markdown",
+    "type": null,
+    "produced_by": [
+     "t-plan"
+    ],
+    "read_by": [],
+    "origin": "step",
+    "context": true,
+    "in_pull_request": true
+   },
+   {
+    "name": "test_report",
+    "type": null,
+    "produced_by": [
+     "t-test"
+    ],
+    "read_by": [
+     "t-implement"
+    ],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": false
+   },
+   {
+    "name": "review_markdown",
+    "type": null,
+    "produced_by": [
+     "t-review",
+     "t-address-review"
+    ],
+    "read_by": [
+     "t-address-review"
+    ],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": true
+   },
+   {
+    "name": "verdict",
+    "type": null,
+    "produced_by": [
+     "t-review",
+     "t-security-review",
+     "t-verify-prod"
+    ],
+    "read_by": [],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": false
+   },
+   {
+    "name": "security_review_markdown",
+    "type": null,
+    "produced_by": [
+     "t-security-review"
+    ],
+    "read_by": [
+     "t-address-review"
+    ],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": false
+   },
+   {
+    "name": "release_notes_markdown",
+    "type": null,
+    "produced_by": [
+     "t-release-notes"
+    ],
+    "read_by": [],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": true
+   },
+   {
+    "name": "human_feedback",
+    "type": null,
+    "produced_by": [
+     "t-approve-spec",
+     "t-approve-pr"
+    ],
+    "read_by": [
+     "t-specify",
+     "t-implement",
+     "t-address-review"
+    ],
+    "origin": "feedback",
+    "context": false,
+    "in_pull_request": false
+   }
   ]
  },
  "process": [
@@ -1371,7 +1508,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “To triage”, the agent `triager` (role triage, model profile:cheap) moves the item to “Triaged” once it produced `size`, `risk`. On failure it retries up to 2 time(s) from “To triage”, then goes to “Needs a human”."
+   "sentence": "From “To triage”, the agent `triager` (role triage, model profile:cheap) moves the item to “Triaged” once it produced `size`, `risk`. On failure it retries up to 2 time(s) from “To triage”, then goes to “Needs a human”.",
+   "agent": "triager",
+   "role": "triage",
+   "model": "profile:cheap",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-specify",
@@ -1392,7 +1539,19 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Triaged”, the agent `spec_writer` (role refine, model profile:standard) moves the item to “Specification to approve” once it produced `spec_markdown`, `allowed_paths`. On failure it retries up to 2 time(s) from “Triaged”, then goes to “Needs a human”."
+   "sentence": "From “Triaged”, the agent `spec_writer` (role refine, model profile:standard) moves the item to “Specification to approve” once it produced `spec_markdown`, `allowed_paths`. On failure it retries up to 2 time(s) from “Triaged”, then goes to “Needs a human”.",
+   "agent": "spec-writer",
+   "role": "refine",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [
+    "human_feedback"
+   ],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-approve-spec",
@@ -1410,7 +1569,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Specification to approve”, a person of group `product-owners`, within 24 h moves the item to “Specification approved”. If rejected, back to “Triaged”."
+   "sentence": "From “Specification to approve”, a person of group `product-owners`, within 24 h moves the item to “Specification approved”. If rejected, back to “Triaged”.",
+   "agent": null,
+   "role": null,
+   "model": null,
+   "group": "product-owners",
+   "sla_hours": 24,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-plan",
@@ -1430,7 +1599,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Specification approved”, the agent `planner` (role plan, model profile:standard) moves the item to “Planned” once it produced `plan_markdown`. On failure it retries up to 2 time(s) from “Specification approved”, then goes to “Needs a human”."
+   "sentence": "From “Specification approved”, the agent `planner` (role plan, model profile:standard) moves the item to “Planned” once it produced `plan_markdown`. On failure it retries up to 2 time(s) from “Specification approved”, then goes to “Needs a human”.",
+   "agent": "planner",
+   "role": "plan",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-implement",
@@ -1461,7 +1640,20 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Planned”, the agent `developer` (role implement, model profile:standard) moves the item to “Implemented” once the agent stayed within its allowed paths; no secret leaks into the change; the change stays under the size limit. On failure it retries up to 3 time(s) from “Planned”, then goes to “Needs a human”."
+   "sentence": "From “Planned”, the agent `developer` (role implement, model profile:standard) moves the item to “Implemented” once the agent stayed within its allowed paths; no secret leaks into the change; the change stays under the size limit. On failure it retries up to 3 time(s) from “Planned”, then goes to “Needs a human”.",
+   "agent": "developer",
+   "role": "implement",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [
+    "test_report",
+    "human_feedback"
+   ],
+   "output_types": {},
+   "writes_branch": true
   },
   {
    "id": "t-test",
@@ -1486,7 +1678,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Implemented”, the agent `tester` (role verify, model profile:standard) moves the item to “Tested” once it produced `test_report`; the platform measured the evidence the stage owes. On failure it retries up to 3 time(s) from “Planned”, then goes to “Needs a human”."
+   "sentence": "From “Implemented”, the agent `tester` (role verify, model profile:standard) moves the item to “Tested” once it produced `test_report`; the platform measured the evidence the stage owes. On failure it retries up to 3 time(s) from “Planned”, then goes to “Needs a human”.",
+   "agent": "tester",
+   "role": "verify",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-review",
@@ -1512,7 +1714,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Tested”, the agent `reviewer` (role review, model profile:standard) moves the item to “Reviewed by an agent” once it produced `review_markdown`, `verdict`; the outputs take an allowed value (a review's verdict, a size)."
+   "sentence": "From “Tested”, the agent `reviewer` (role review, model profile:standard) moves the item to “Reviewed by an agent” once it produced `review_markdown`, `verdict`; the outputs take an allowed value (a review's verdict, a size).",
+   "agent": "reviewer",
+   "role": "review",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-security-review",
@@ -1538,7 +1750,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Reviewed by an agent”, the agent `security_reviewer` (role review, model profile:standard) moves the item to “Security reviewed” once it produced `security_review_markdown`, `verdict`; the outputs take an allowed value (a review's verdict, a size)."
+   "sentence": "From “Reviewed by an agent”, the agent `security_reviewer` (role review, model profile:standard) moves the item to “Security reviewed” once it produced `security_review_markdown`, `verdict`; the outputs take an allowed value (a review's verdict, a size).",
+   "agent": "security-reviewer",
+   "role": "review",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-address-review",
@@ -1567,7 +1789,21 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Addressing the review”, the agent `responder` (role address_review, model profile:standard) moves the item to “Implemented” once it produced `review_markdown`; the agent stayed within its allowed paths; no secret leaks into the change. On failure it retries up to 2 time(s) from “Addressing the review”, then goes to “Needs a human”."
+   "sentence": "From “Addressing the review”, the agent `responder` (role address_review, model profile:standard) moves the item to “Implemented” once it produced `review_markdown`; the agent stayed within its allowed paths; no secret leaks into the change. On failure it retries up to 2 time(s) from “Addressing the review”, then goes to “Needs a human”.",
+   "agent": "review-responder",
+   "role": "address_review",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [
+    "review_markdown",
+    "security_review_markdown",
+    "human_feedback"
+   ],
+   "output_types": {},
+   "writes_branch": true
   },
   {
    "id": "t-release-notes",
@@ -1587,7 +1823,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Security reviewed”, the agent `notes_writer` (role release_notes, model profile:cheap) moves the item to “Release notes written” once it produced `release_notes_markdown`. On failure it retries up to 2 time(s) from “Security reviewed”, then goes to “Needs a human”."
+   "sentence": "From “Security reviewed”, the agent `notes_writer` (role release_notes, model profile:cheap) moves the item to “Release notes written” once it produced `release_notes_markdown`. On failure it retries up to 2 time(s) from “Security reviewed”, then goes to “Needs a human”.",
+   "agent": "release-notes-writer",
+   "role": "release_notes",
+   "model": "profile:cheap",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-open-pr",
@@ -1605,7 +1851,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Release notes written”, the platform, which opens the pull request moves the item to “Pull request to approve”. On failure it retries up to 2 time(s) from “Release notes written”, then goes to “Needs a human”."
+   "sentence": "From “Release notes written”, the platform, which opens the pull request moves the item to “Pull request to approve”. On failure it retries up to 2 time(s) from “Release notes written”, then goes to “Needs a human”.",
+   "agent": null,
+   "role": null,
+   "model": null,
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-approve-pr",
@@ -1623,7 +1879,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Pull request to approve”, a person of group `maintainers`, within 24 h moves the item to “Pull request approved”. If rejected, back to “Addressing the review”."
+   "sentence": "From “Pull request to approve”, a person of group `maintainers`, within 24 h moves the item to “Pull request approved”. If rejected, back to “Addressing the review”.",
+   "agent": null,
+   "role": null,
+   "model": null,
+   "group": "maintainers",
+   "sla_hours": 24,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-merge",
@@ -1646,7 +1912,17 @@
    "timeout_hours": 24,
    "action": null,
    "task": null,
-   "sentence": "From “Pull request approved”, the platform, which merges the pull request moves the item to “Merged” once the CI pipeline is green. On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”. It times out after 24 h."
+   "sentence": "From “Pull request approved”, the platform, which merges the pull request moves the item to “Merged” once the CI pipeline is green. On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”. It times out after 24 h.",
+   "agent": null,
+   "role": null,
+   "model": null,
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-fix-ci",
@@ -1673,7 +1949,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Fixing the CI”, the agent `ci_fixer` (role fix_ci, model profile:standard) moves the item to “Pull request to approve” once the agent stayed within its allowed paths; no secret leaks into the change. On failure it retries up to 2 time(s) from “Fixing the CI”, then goes to “Needs a human”."
+   "sentence": "From “Fixing the CI”, the agent `ci_fixer` (role fix_ci, model profile:standard) moves the item to “Pull request to approve” once the agent stayed within its allowed paths; no secret leaks into the change. On failure it retries up to 2 time(s) from “Fixing the CI”, then goes to “Needs a human”.",
+   "agent": "ci-fixer",
+   "role": "fix_ci",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": true
   },
   {
    "id": "t-stage",
@@ -1691,7 +1977,17 @@
    "timeout_hours": 72,
    "action": null,
    "task": null,
-   "sentence": "From “Merged”, the release train to staging moves the item to “In staging”. It times out after 72 h."
+   "sentence": "From “Merged”, the release train to staging moves the item to “In staging”. It times out after 72 h.",
+   "agent": null,
+   "role": null,
+   "model": null,
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-release",
@@ -1709,7 +2005,17 @@
    "timeout_hours": 96,
    "action": null,
    "task": null,
-   "sentence": "From “In staging”, the release train to prod moves the item to “In production”. It times out after 96 h."
+   "sentence": "From “In staging”, the release train to prod moves the item to “In production”. It times out after 96 h.",
+   "agent": null,
+   "role": null,
+   "model": null,
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-verify-prod",
@@ -1738,7 +2044,17 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “In production”, the agent `prod_verifier` (role verify_prod, model profile:standard) moves the item to “Verified in production” once it produced `verdict`; the outputs take an allowed value (a review's verdict, a size); the facts the agent counted meet the declared minimums. On failure it retries up to 1 time(s) from “In production”, then goes to “Needs a human”."
+   "sentence": "From “In production”, the agent `prod_verifier` (role verify_prod, model profile:standard) moves the item to “Verified in production” once it produced `verdict`; the outputs take an allowed value (a review's verdict, a size); the facts the agent counted meet the declared minimums. On failure it retries up to 1 time(s) from “In production”, then goes to “Needs a human”.",
+   "agent": "prod-verifier",
+   "role": "verify_prod",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   },
   {
    "id": "t-abandon",
@@ -1756,7 +2072,17 @@
    "timeout_hours": 168,
    "action": null,
    "task": null,
-   "sentence": "From “Needs a human”, a person of group `maintainers`, within 24 h moves the item to “Abandoned”. It times out after 168 h."
+   "sentence": "From “Needs a human”, a person of group `maintainers`, within 24 h moves the item to “Abandoned”. It times out after 168 h.",
+   "agent": null,
+   "role": null,
+   "model": null,
+   "group": "maintainers",
+   "sla_hours": 24,
+   "command": null,
+   "image": null,
+   "inputs": [],
+   "output_types": {},
+   "writes_branch": false
   }
  ]
 }

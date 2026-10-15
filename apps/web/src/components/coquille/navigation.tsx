@@ -113,8 +113,7 @@ export function orgGroups(): NavGroup[] {
 
 /**
  * A project's sections, grouped: Work, Define, Configure (plan item 11). Only routes that exist
- * are linked: knowledge, costs and members have no page of their own yet — the costs are on the
- * overview, which leads the list.
+ * are linked: costs have no page of their own yet — they are on the overview, which leads the list.
  */
 export function projectGroups(slug: string, features: ProjectFeatures = {}): NavGroup[] {
   const base = `/p/${encodeURIComponent(slug)}`;
@@ -145,6 +144,7 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
       entries: [
         section("/workflows", "Workflows", Workflow, ["/workflow"]),
         section("/agents", "Agents", Bot),
+        section("/knowledge", "Knowledge", Library),
         section("/actions", "Actions", Zap),
         section("/memory", "Memory", Brain),
       ],

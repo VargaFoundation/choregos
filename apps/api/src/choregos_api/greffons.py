@@ -68,6 +68,7 @@ def reinitialiser() -> None:
     _FOURNISSEURS_HUMAINS.clear()
     _SECTIONS.clear()
     _INSTALLATEURS.clear()
+    _THEME_PROVIDER.clear()
     reinitialiser_les_controles()
 
 
@@ -295,3 +296,29 @@ async def controler(session: Any, demande: DemandeDeGeste) -> None:
 def reinitialiser_les_controles() -> None:
     for controles in _CONTROLES.values():
         controles.clear()
+
+
+# ───────────────────────────── the theme provider (S39-03, ADR 0064) ─────────────────────────────
+#
+# The community edition serves its default theme. A plugin that customises the look declares ONE
+# provider: `provider(session, org) -> dict | None` (sync or async), where `org` is the slug the
+# console asked for, or None for the instance. The core validates whatever it returns against the
+# contract and the console's contrast budget (`choregos_api.theme`); an invalid theme is replaced by
+# the default, never served.
+
+_THEME_PROVIDER: list[Any] = []
+
+
+def declare_theme_provider(provider: Any) -> None:
+    """Called by a plugin when it loads. A second declaration stops the start: two plugins
+    deciding the look of the same console would be a silent last-one-wins."""
+    if not callable(provider):
+        raise TypeError("a theme provider is a callable (session, org) -> dict | None")
+    if _THEME_PROVIDER and _THEME_PROVIDER[0] is not provider:
+        raise RuntimeError("a theme provider is already declared; only one is allowed")
+    if not _THEME_PROVIDER:
+        _THEME_PROVIDER.append(provider)
+
+
+def theme_provider() -> Any | None:
+    return _THEME_PROVIDER[0] if _THEME_PROVIDER else None

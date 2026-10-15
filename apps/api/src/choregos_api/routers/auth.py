@@ -190,7 +190,7 @@ def _poser_cookie_oidc(response: Response, cookie: str, settings: Settings) -> N
         max_age=OIDC_HANDSHAKE_S,
         httponly=True,
         samesite="lax",
-        secure=settings.env in {"staging", "prod"},
+        secure=settings.cookies_secure,
     )
 
 
@@ -418,7 +418,7 @@ async def ouvrir_la_session(
         max_age=settings.session_max_age_s,
         httponly=True,
         samesite="lax",
-        secure=settings.env in {"staging", "prod"},
+        secure=settings.cookies_secure,
     )
     return response
 

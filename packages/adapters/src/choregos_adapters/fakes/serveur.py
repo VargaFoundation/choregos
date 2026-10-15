@@ -14,9 +14,9 @@ d'aucun cadriciel — que `uvicorn` sert : `python -m choregos_adapters.fakes.se
   connecteur `entra` dont `graph_url` et `login_url` désignent ce service ;
 - `/healthz`.
 
-Un jeton (`CHOREGOS_DEMO_JETON`) protège les serveurs MCP et sert de secret d'application au faux
-Graph ; vide, ils n'en demandent aucun — la politique réseau du déploiement reste alors la seule
-porte, ce qui ne vaut que pour une démonstration.
+A token (`CONNECTOR_DEMO_JETON`) protects the MCP servers and is the fake Graph's application
+secret; when empty, they ask for none: the deployment's network policy is then the only door, which
+is fine for a demonstration only.
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ class ApplicationDeDemo:
 
 def application() -> ApplicationDeDemo:
     """La fabrique que `uvicorn --factory` appelle."""
-    return ApplicationDeDemo(jeton=os.environ.get("CHOREGOS_DEMO_JETON", ""))
+    return ApplicationDeDemo(jeton=os.environ.get("CONNECTOR_DEMO_JETON", ""))
 
 
 if __name__ == "__main__":  # pragma: no cover - le point d'entrée du conteneur

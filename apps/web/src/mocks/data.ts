@@ -6,6 +6,7 @@
  * attente de validation, un train prêt à partir, un finding à trier. Le flux front
  * avance sans l'API — c'est ce que demande la section 3.4 du plan.
  */
+import devComplex from "./dev-complex.json";
 import type {
   Action,
   Agent,
@@ -1112,6 +1113,44 @@ export const releaseFullValidation: WorkflowValidation = {
   },
   process: [],
 };
+/**
+ * The `dev-complex` template as a project's workflow (S39-13): the map and the process view are the
+ * ones the API renders (`dev-complex.json`, written by `to_graph` and `to_process`). It is not in
+ * `workflowSummaries`: other pages count the project's workflows.
+ */
+export const devComplexValidation = {
+  valid: true,
+  errors: [],
+  warnings: [],
+  graph: devComplex.graph,
+  process: devComplex.process,
+} as unknown as WorkflowValidation;
+const devComplexDef: WorkflowDef = {
+  ...workflow,
+  name: "dev-complex",
+  version: 1,
+  is_default: false,
+  yaml: "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: dev-complex, version: 1 }\nstates: {}\n",
+  json: { metadata: { name: "dev-complex", version: 1 }, initial: devComplex.initial, actors: {} } as unknown as WorkflowDef["json"],
+};
+
+/** The registry agents the demo organisation has installed: everything `dev-complex` names. */
+const AGENTS_INSTALLES = new Set(
+  (devComplex.process as { agent?: string | null }[]).map((s) => (s.agent ?? "").split("@")[0]).filter(Boolean),
+);
+
+/** `GET /projects/{id}/agent-resolution`: the installed ones resolve to v1, the others are in the catalogue. */
+function resolutionDemo(path: string): unknown[] {
+  const refs = new URLSearchParams(path.split("?")[1] ?? "").getAll("ref");
+  return refs.map((ref) => {
+    const slug = ref.split("@")[0]!;
+    const titre = slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+    return AGENTS_INSTALLES.has(slug)
+      ? { ref, slug, status: "resolved", version: Number(ref.split("@")[1] ?? 1), pinned: false, display_name: titre, lifecycle: "active", in_catalogue: true, reason: null }
+      : { ref, slug, status: "not_installed", version: null, pinned: false, display_name: null, lifecycle: null, in_catalogue: true, reason: `agent \`${slug}\` does not exist in the project's organisation` };
+  });
+}
+
 const releaseFull: WorkflowDef = {
   ...workflow,
   name: "release-full",
@@ -1471,6 +1510,25 @@ export const knowledgeBase: KnowledgeBase = {
   ],
 };
 
+/** A base scoped to one project (S39-14): the runs of `billing-api` read it, nobody else's. */
+export const projectKnowledgeBase: KnowledgeBase = {
+  slug: "billing-runbooks",
+  name: "Billing runbooks",
+  scope: "projects",
+  projects: ["billing-api"],
+  groups: [],
+  serving_mode: "files",
+  status: "active",
+  document_count: 0,
+  documents_by_status: {},
+  created_by: "lea@varga.dev",
+  created_at: iso(60 * 24 * 2),
+  documents: [],
+};
+
+/** What `GET /orgs/{org}/knowledge` returns: the organisation's base, then the project's. */
+export const knowledgeBases: KnowledgeBase[] = [knowledgeBase, projectKnowledgeBase];
+
 export const skillVersion: SkillVersion = {
   version: 1,
   digest: "sha256:7f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c",
@@ -1538,7 +1596,7 @@ export const orgConnectors: OrgConnector[] = [
     kind: "identity",
     type: "entra",
     config: { tenant: "acme.onmicrosoft.com" },
-    secret_refs: { client_secret: "env:ENTRA_CLIENT_SECRET" },
+    secret_refs: { client_secret: "env:CONNECTOR_ENTRA_CLIENT_SECRET" },
     status: "ok",
     created_by: "lea@acme.dev",
     operations: [
@@ -1554,7 +1612,7 @@ orgConnectors.push({
   kind: "mcp",
   type: "mcp",
   config: { url: "https://supplier.example/mcp" },
-  secret_refs: { token: "env:SUPPLIER_TOKEN" },
+  secret_refs: { token: "env:CONNECTOR_SUPPLIER_TOKEN" },
   status: "ok",
   operations: [
     { name: "track_order", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
@@ -1674,10 +1732,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     // Comme l'API : un texte sans `states:` n'est pas un workflow, et ne se dessine pas.
     const texte = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
     if (/name: release-full/.test(texte)) return releaseFullValidation as T;
+    if (/name: dev-complex/.test(texte)) return devComplexValidation as T;
     if (!/^states:/m.test(texte)) {
       return { valid: false, errors: [{ code: "workflow.states", message: "a workflow declares its states", line: 1, column: 1 }], warnings: [] } as T;
     }
     return workflowValidation as T;
+  }
+  if (method === "POST" && /^\/orgs\/[^/]+\/knowledge$/.test(path)) {
+    // The base created, as the body says it (its slug, scope and projects): the page opens it next.
+    return { ...knowledgeBase, documents: [], document_count: 0, documents_by_status: {}, ...(body as object) } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
@@ -1744,6 +1807,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       display_name: corps.display_name,
       description: corps.description ?? null,
       status: "active",
+      lifecycle: corps.lifecycle ?? "active",
       owner: me.email,
       latest_version: 1,
       versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
@@ -1849,6 +1913,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   // The runs of an agent, newest first (S30-05).
   if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
   if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
+  if (/^\/projects\/[^/]+\/agent-resolution$/.test(route ?? "")) return resolutionDemo(path) as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   if (method === "GET" && /^\/(orgs|projects)\/[^/]+\/costs$/.test(chemin ?? "") && path.includes("group_by=")) {
@@ -1869,8 +1934,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, projectAgents],
     [/^\/orgs\/[^/]+\/skills$/, skills],
-    [/^\/orgs\/[^/]+\/knowledge$/, [{ ...knowledgeBase, documents: null }]],
+    [/^\/orgs\/[^/]+\/knowledge$/, knowledgeBases.map((b) => ({ ...b, documents: null }))],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
+    [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, projectKnowledgeBase],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...knowledgeBase, documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
     [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
@@ -1925,6 +1991,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
     [/^\/projects\/[^/]+\/workflows\/hotfix$/, hotfix],
     [/^\/projects\/[^/]+\/workflows\/release-full$/, releaseFull],
+    [/^\/projects\/[^/]+\/workflows\/dev-complex$/, devComplexDef],
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],

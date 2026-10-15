@@ -15,3 +15,11 @@ describe("le titre d'une page (S23-05)", () => {
     expect(titreDuChemin("/admin/x/scim")).toBe("scim · section · admin · choregos");
   });
 });
+
+describe("the title suffix follows the product name (S39-03b)", () => {
+  it("keeps the lower-case default and uses another product name as it is", () => {
+    expect(titreDuChemin("/inbox", "Choregos")).toBe("inbox · choregos");
+    expect(titreDuChemin("/inbox", "Sample")).toBe("inbox · Sample");
+    expect(titreDuChemin("/", "Sample")).toBe("projects · Sample");
+  });
+});

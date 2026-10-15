@@ -67,3 +67,13 @@ def test_une_variable_deja_posee_par_le_chart_est_refusee() -> None:
     )
     assert rendu.returncode != 0, "le chart a rendu deux valeurs pour CHOREGOS_DATABASE_URL"
     assert "CHOREGOS_DATABASE_URL" in rendu.stderr
+
+
+def test_the_env_reference_pattern_reaches_every_process_when_set() -> None:
+    """S39-06b: `global.secrets.envPattern` is the allowlist of `env:NAME` references; unset, the
+    code's default (`^CONNECTOR_…`) applies and nothing is rendered."""
+    rendu = _rendre("global.secrets.envPattern=^(CONNECTOR_|JIRA_)[A-Z0-9_]*$")
+    assert rendu.returncode == 0, rendu.stderr[-400:]
+    lecteurs, porteurs = _porteurs(rendu.stdout, "CHOREGOS_SECRET_ENV_PATTERN")
+    assert lecteurs and porteurs == lecteurs, f"without the variable: {sorted(lecteurs - porteurs)}"
+    assert "CHOREGOS_SECRET_ENV_PATTERN" not in _rendre().stdout

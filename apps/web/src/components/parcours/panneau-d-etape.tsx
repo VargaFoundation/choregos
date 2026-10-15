@@ -17,7 +17,7 @@ import { planDeLAgent } from "@/lib/plan-de-l-agent";
 import { provenanceDePreuve } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
 import type { JourneyStep, ProcessStep, RunEventDto } from "@/lib/types";
-import type { Etape, EtatEtape } from "./modele";
+import { type Etape, type EtatEtape, sortiesDe } from "./modele";
 
 const GENRE: Record<Etape["genre"], string> = { agent: "agent", human: "person", platform: "platform", train: "release train" };
 const EN_COURS = new Set(["queued", "running", "waiting", "pending_approval"]);
@@ -81,6 +81,11 @@ export function PanneauDEtape({
           {etape.phrase && (
             <p className="mt-1 text-ink-muted">
               <PhraseDuMoteur texte={etape.phrase} />
+            </p>
+          )}
+          {sortiesDe(etape) && (
+            <p className="mt-1 text-xs text-ink-muted" data-testid="sorties-de-l-etape">
+              Produces {sortiesDe(etape)!.slice(2)}
             </p>
           )}
           {(process?.gates ?? []).length > 0 && (

@@ -12,6 +12,7 @@ from typing import Annotated
 
 from choregos_core import utcnow
 from fastapi import APIRouter, Path, Query, Response, status
+from pydantic import StringConstraints
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +48,7 @@ from ..schemas import (
     AgentOwnerChange,
     AgentPatch,
     AgentProjectMetrics,
+    AgentResolution,
     AgentSpec,
     AgentTrial,
     AgentTrialCreate,
@@ -66,13 +68,22 @@ from ..services.agent_lifecycle import (
     running_work_items,
     unused,
 )
-from ..services.agents import depense_du_jour, effective, elargissements, empreinte, erreurs_d_une_version
+from ..services.agents import (
+    AgentIndisponible,
+    depense_du_jour,
+    effective,
+    elargissements,
+    empreinte,
+    erreurs_d_une_version,
+    resoudre_l_agent,
+)
 from ..services.routage import nouveau_ticket_d_essai
 from ..services.skill_review import unusable_skills
 
 router = APIRouter(tags=["agents"])
 
 Slug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
+AgentRef = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$")]
 
 
 async def _organisation(session: AsyncSession, slug: str) -> Organization:
@@ -651,6 +662,67 @@ async def list_implicit_agents(ctx: ProjectCtx, session: Db) -> list[ImplicitAge
                 )
             )
     return trouves
+
+
+@router.get(
+    "/projects/{id}/agent-resolution",
+    response_model=list[AgentResolution],
+    operation_id="resolveProjectAgents",
+)
+async def resolve_project_agents(
+    ctx: ProjectCtx, session: Db, ref: Annotated[list[AgentRef], Query(min_length=1, max_length=64)]
+) -> list[AgentResolution]:
+    """Which agent version a run of this project would load for each reference (S39-13).
+
+    It delegates to the runtime's own resolver, so the console shows exactly what a run loads: an
+    explicit `@N`, else the project's pin, else the latest version. Read only, no audit record."""
+    from choregos_core.catalogue_d_agents import entree
+
+    reponses: list[AgentResolution] = []
+    for reference in ref:
+        slug = reference.partition("@")[0]
+        try:
+            resolu = await resoudre_l_agent(session, ctx.project.org_id, ctx.project.id, reference)
+        except AgentIndisponible as erreur:
+            agent = (
+                await session.execute(
+                    select(Agent).where(Agent.org_id == ctx.project.org_id, Agent.slug == slug)
+                )
+            ).scalar_one_or_none()
+            if agent is None:
+                reponses.append(
+                    AgentResolution(
+                        ref=reference,
+                        slug=slug,
+                        status="not_installed",
+                        in_catalogue=entree(slug) is not None,
+                        reason=str(erreur),
+                    )
+                )
+            else:
+                reponses.append(
+                    AgentResolution(
+                        ref=reference,
+                        slug=slug,
+                        status="unavailable",
+                        display_name=agent.display_name,
+                        lifecycle=agent.lifecycle,
+                        reason=str(erreur),
+                    )
+                )
+            continue
+        reponses.append(
+            AgentResolution(
+                ref=reference,
+                slug=slug,
+                status="resolved",
+                version=resolu.version,
+                pinned=resolu.pinned,
+                display_name=resolu.agent.display_name,
+                lifecycle=resolu.agent.lifecycle,
+            )
+        )
+    return reponses
 
 
 @router.put("/projects/{id}/agents/{slug}", response_model=ProjectAgentDto, operation_id="pinProjectAgent")

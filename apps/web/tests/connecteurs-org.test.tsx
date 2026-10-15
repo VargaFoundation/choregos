@@ -7,7 +7,8 @@ import { ApiError } from "@/lib/api";
 import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors" }));
+const { params } = vi.hoisted(() => ({ params: new URLSearchParams() }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors", useSearchParams: () => params }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 
 const { annuaire, parc, fournisseur, outil, type } = vi.hoisted(() => ({
@@ -37,7 +38,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
         if (slug === "rh") throw new reel.ApiError(403, { title: "Forbidden" });
         return [outil("cd", "argocd", "error"), outil("tracker", "jira"), outil("notify", "slack")];
       }),
-      connectorTypes: vi.fn().mockResolvedValue([type("tracker", "jira"), type("identity", "entra"), type("mcp", "mcp")]),
+      connectorTypes: vi.fn().mockResolvedValue([type("tracker", "jira"), type("identity", "entra"), type("mcp", "mcp"), type("documents", "sharepoint")]),
     },
   };
 });
@@ -98,5 +99,21 @@ describe("les connecteurs, rangés par ce qu'ils sont (S21-04)", () => {
     const groupes = [...document.querySelectorAll("optgroup")].map((g) => g.getAttribute("label"));
     expect(groupes).toEqual(["Business systems (API)", "MCP servers"]);
     expect(screen.queryByRole("option", { name: /jira/ })).toBeNull();
+  });
+
+  it("?type=documents/sharepoint preselects the type to declare (the knowledge form links here)", async () => {
+    params.set("type", "documents/sharepoint");
+    try {
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <OrgConnectorsPage />
+        </QueryClientProvider>,
+      );
+      await screen.findAllByRole("option", { name: /sharepoint/ });
+      const select = screen.getByDisplayValue(/sharepoint/) as HTMLSelectElement;
+      expect(select.value).toBe("documents/sharepoint");
+    } finally {
+      params.delete("type");
+    }
   });
 });

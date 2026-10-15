@@ -19,9 +19,9 @@ READER_TOKEN = "-".join(("cilium", "reader", "token", "of", "the", "org"))
 
 CONNECTORS: dict[str, dict[str, Any]] = {
     "pfsense": {"type": "pfsense", "config": {"base_url": "https://fw.example.test"},
-                "secret_refs": {"api_key": "env:NETOPS_TEST_PFSENSE_KEY"}},
+                "secret_refs": {"api_key": "env:CONNECTOR_NETOPS_TEST_PFSENSE_KEY"}},
     "cilium": {"type": "cilium", "config": {"kubernetes_url": "https://k8s.example.test"},
-               "secret_refs": {"token": "env:NETOPS_TEST_READER_TOKEN"}},
+               "secret_refs": {"token": "env:CONNECTOR_NETOPS_TEST_READER_TOKEN"}},
     "nginx": {"type": "nginx", "config": {"repo": "acme/gitops"}},
 }  # fmt: skip
 
@@ -38,8 +38,8 @@ def estate(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
         "repo": FakeRepo(),
     }
     monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", fakes)
-    monkeypatch.setenv("NETOPS_TEST_PFSENSE_KEY", PFSENSE_KEY)
-    monkeypatch.setenv("NETOPS_TEST_READER_TOKEN", READER_TOKEN)
+    monkeypatch.setenv("CONNECTOR_NETOPS_TEST_PFSENSE_KEY", PFSENSE_KEY)
+    monkeypatch.setenv("CONNECTOR_NETOPS_TEST_READER_TOKEN", READER_TOKEN)
     yield fakes
 
 

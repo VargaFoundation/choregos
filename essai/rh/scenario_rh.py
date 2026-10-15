@@ -20,7 +20,7 @@ Variables :
     CHOREGOS_DEV_TOKEN   jeton d'API d'un administrateur (`chg_…`), créé dans la console ; jamais écrit ici
     CHOREGOS_DEV_ORG     l'organisation du locataire
     ESSAI_FAUX_URL       (défaut http://choregos-demo-fakes:8090) l'adresse des faux, vue depuis le cluster
-    ESSAI_JETON_REF      (facultatif) la référence du jeton des faux, ex. `env:CHOREGOS_DEMO_JETON`
+    ESSAI_JETON_REF      (facultatif) la référence du jeton des faux, ex. `env:CONNECTOR_DEMO_JETON`
     ESSAI_BACKEND        (défaut opencode) le backend des agents du projet, celui que le dev fait tourner
     ESSAI_MODELE         (défaut platform/standard) le modèle de la passerelle derrière le profil `standard`
 """

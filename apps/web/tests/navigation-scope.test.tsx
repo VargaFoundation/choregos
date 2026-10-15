@@ -58,11 +58,12 @@ describe("the sidebar switches scope", () => {
   it("inside a project, lists its sections in three groups, and no organisation entry", async () => {
     const bar = sidebar("/p/billing-api/board");
     expect(labels(within(bar).getByRole("list", { name: "Work" }))).toEqual(["Overview", "Board", "Inbox", "Trains", "Findings"]);
-    expect(labels(within(bar).getByRole("list", { name: "Define" }))).toEqual(["Workflows", "Agents", "Actions", "Memory"]);
+    expect(labels(within(bar).getByRole("list", { name: "Define" }))).toEqual(["Workflows", "Agents", "Knowledge", "Actions", "Memory"]);
     expect(labels(within(bar).getByRole("list", { name: "Configure" }))).toEqual(["Integrations", "Members", "Settings"]);
     expect(within(bar).queryByRole("link", { name: "Skills" })).toBeNull();
     expect(within(bar).getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
     expect(within(bar).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/p/billing-api/workflows");
+    expect(within(bar).getByRole("link", { name: "Knowledge" })).toHaveAttribute("href", "/p/billing-api/knowledge");
     // The way back to the organisation, and a switcher listing the organisation's projects.
     expect(within(bar).getByRole("link", { name: /All of acme/ })).toHaveAttribute("href", "/");
     const switcher = within(bar).getByTestId("project-switcher");
@@ -81,6 +82,12 @@ describe("the sidebar switches scope", () => {
     expect(within(bar).getByRole("link", { name: "Inbox" })).toHaveAttribute("aria-current", "page");
     expect(bar.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     expect(projectTrail("billing-api", "/p/billing-api/inbox")).toEqual([{ label: "Inbox" }]);
+  });
+
+  it("a project's base, opened inside the project, keeps the Knowledge entry active (S39-14)", () => {
+    const bar = sidebar("/p/billing-api/knowledge/billing-runbooks");
+    expect(within(bar).getByRole("link", { name: "Knowledge" })).toHaveAttribute("aria-current", "page");
+    expect(within(bar).getByRole("link", { name: "Agents" })).not.toHaveAttribute("aria-current");
   });
 
   it("at the organisation's level, lists the organisation's pages", () => {

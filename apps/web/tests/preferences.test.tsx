@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChoixDuTheme } from "@/components/choix-du-theme";
-import { CLE_DE_LA_BARRE, CLE_DU_THEME, lireLaBarre, SCRIPT_DES_PREFERENCES, themeResolu } from "@/lib/preferences";
+import { CLE_DE_LA_BARRE, CLE_DU_THEME, lireLaBarre, SCRIPT_DES_PREFERENCES, themeParDefaut, themeResolu } from "@/lib/preferences";
 import { ThemeProvider } from "@/lib/theme";
 
 type Ecouteur = (evenement: { matches: boolean }) => void;
@@ -51,6 +51,31 @@ describe("le script d'en-tête pose le thème avant la peinture (ADR 0043)", () 
     if (preference !== null) window.localStorage.setItem(CLE_DU_THEME, preference);
     expect(executerLeScript()).toBe(attendu);
     expect(themeResolu(preference, clair)).toBe(attendu);
+  });
+
+  it.each([
+    [null, true, "light"],
+    ["anything else", false, "light"],
+    ["dark", true, "dark"],
+    ["light", false, "light"],
+    ["system", false, "dark"],
+    ["system", true, "light"],
+  ])("with data-default-theme=light, preference %s (system light: %s) → %s, as themeResolu", (preference, clair, attendu) => {
+    systeme(clair);
+    document.documentElement.dataset.defaultTheme = "light";
+    if (preference !== null) window.localStorage.setItem(CLE_DU_THEME, preference);
+    expect(executerLeScript()).toBe(attendu);
+    expect(themeResolu(preference, clair, themeParDefaut())).toBe(attendu);
+    delete document.documentElement.dataset.defaultTheme;
+  });
+
+  it("a refused storage gives the served default mode", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    document.documentElement.dataset.defaultTheme = "light";
+    expect(executerLeScript()).toBe("light");
+    delete document.documentElement.dataset.defaultTheme;
   });
 
   it("un stockage refusé donne le sombre, sans erreur", () => {

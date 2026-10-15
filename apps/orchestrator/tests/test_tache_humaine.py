@@ -79,7 +79,7 @@ def lecteurs(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     faux = FakeBadges(cle_attendue="cle-des-lecteurs")
     monkeypatch.setitem(choregos_adapters.FAUX_METIER, "access_control", faux)
-    monkeypatch.setenv("CHOREGOS_TEST_CLE_LECTEURS", "cle-des-lecteurs")
+    monkeypatch.setenv("CONNECTOR_TEST_CLE_LECTEURS", "cle-des-lecteurs")
     yield faux
 
 
@@ -103,7 +103,7 @@ async def _decor(setup: Fixture) -> None:
             kind="access_control",
             type="demo",
             config={},
-            secret_refs={"api_key": "env:CHOREGOS_TEST_CLE_LECTEURS"},
+            secret_refs={"api_key": "env:CONNECTOR_TEST_CLE_LECTEURS"},
         )
         session.add(lecteurs)
         await session.flush()

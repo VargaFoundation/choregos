@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /** Les cinq parcours clés du plan (§3.4), joués sur les fixtures du mode démo. */
 
@@ -328,13 +328,25 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await expect(page.getByTestId("fichiers")).toContainText("Entra accounts ten days before the start date");
 });
 
-test("an agent is created from the builder alone, every field of its version set (S32-01)", async ({ page }) => {
+/** A new agent's page (S39-05): the short first step, then the builder; a folded section is opened by its summary. */
+async function newAgentBuilder(page: Page, name: string) {
   await page.goto("/agents");
-  await page.getByRole("button", { name: "New agent" }).click();
-  const builder = page.getByRole("dialog", { name: "New agent" }).getByTestId("agent-builder");
-  await builder.getByLabel("Slug").fill("triage");
-  await builder.getByLabel("Name").fill("Triage");
+  await page.getByRole("link", { name: "New agent" }).click();
+  await page.getByLabel("Name").fill(name);
+  await page.getByLabel("What should it do?").fill(`${name}: what it is for, in a sentence.`);
+  await page.getByRole("button", { name: "Start from a blank form" }).click();
+  return page.getByTestId("agent-builder");
+}
+
+async function unfold(builder: Locator, title: string) {
+  await builder.locator("summary", { hasText: title }).click();
+}
+
+test("an agent is created from the builder alone, every field of its version set (S32-01)", async ({ page }) => {
+  const builder = await newAgentBuilder(page, "Triage");
+  await expect(builder.getByLabel("Slug")).toHaveValue("triage");
   await builder.getByLabel("Instructions").fill("Sort {{ ticket.title }} by urgency.");
+  for (const title of ["Model and runtime", "Limits and budget", "Skills", "Tools (MCP servers)"]) await unfold(builder, title);
   await builder.getByLabel("Model").selectOption("platform/cheap");
   await builder.getByLabel("Backend").selectOption("claude-code");
   await builder.getByLabel("Max turns").fill("12");
@@ -345,13 +357,13 @@ test("an agent is created from the builder alone, every field of its version set
   await builder.getByLabel("Add a server").selectOption("supplier-agent");
   await builder.getByRole("button", { name: "Add", exact: true }).click();
   await builder.getByLabel("Tool patterns of supplier-agent").fill("track_*");
+  await page.getByRole("tab", { name: "What it costs and allows" }).click();
   const allows = page.getByTestId("ce-que-ca-permet");
   await expect(allows).toContainText("A run stops at US$0.50");
   await expect(allows.getByTestId("outils-resolus")).toContainText("track_order — called freely");
   await expect(allows.getByTestId("outils-resolus")).not.toContainText("order_laptop");
-  await builder.getByRole("button", { name: "Create the agent" }).click();
-  await expect(page.getByRole("status")).toContainText("Triage registered as v1");
-  await page.getByRole("link", { name: "Triage" }).click();
+  await builder.getByRole("button", { name: "Create and activate" }).click();
+  await expect(page).toHaveURL(/\/agents\/triage$/);
   await page.getByRole("link", { name: "Definition" }).click();
   const version = page.getByTestId("version");
   await expect(version).toContainText("platform/cheap");
@@ -361,12 +373,11 @@ test("an agent is created from the builder alone, every field of its version set
 });
 
 test("the builder sets which knowledge bases an agent reads and whose memory it keeps, and the version holds them (S32-01)", async ({ page }) => {
-  await page.goto("/agents");
-  await page.getByRole("button", { name: "New agent" }).click();
-  const builder = page.getByRole("dialog", { name: "New agent" }).getByTestId("agent-builder");
-  await builder.getByLabel("Slug").fill("zoning-reviewer");
-  await builder.getByLabel("Name").fill("Zoning reviewer");
+  const builder = await newAgentBuilder(page, "Zoning reviewer");
+  await expect(builder.getByLabel("Slug")).toHaveValue("zoning-reviewer");
   await builder.getByLabel("Instructions").fill("Review {{ ticket.title }} against the zoning principles.");
+  await unfold(builder, "Knowledge");
+  await unfold(builder, "Memory");
   const bases = builder.getByTestId("bases-de-la-version");
   await expect(bases).toContainText("None — it reads no knowledge base.");
   await expect(builder.getByRole("button", { name: "Read it" })).toBeDisabled();
@@ -374,18 +385,20 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   await builder.getByRole("button", { name: "Read it" }).click();
   await expect(bases).toContainText("architecture-framework");
   // A base already read is no longer offered.
-  await expect(builder.getByLabel("Add a knowledge base").locator("option")).toHaveCount(1);
+  // (The placeholder and the demo's project-scoped base remain.)
+  await expect(builder.getByLabel("Add a knowledge base").locator("option")).toHaveCount(2);
+  await expect(builder.getByLabel("Add a knowledge base").locator("option[value='architecture-framework']")).toHaveCount(0);
   await builder.getByLabel("Memory scope").selectOption("agent");
+  await page.getByRole("tab", { name: "What it costs and allows" }).click();
   const allows = page.getByTestId("ce-que-ca-permet");
   await expect(allows.getByTestId("connaissances-resolues")).toContainText(
     "architecture-framework — laid read-only in the workspace; served to every project of the organisation.",
   );
   await expect(allows.getByTestId("memoire-resolue")).toContainText("Its own memory within each project");
-  await builder.getByRole("button", { name: "Create the agent" }).click();
-  await expect(page.getByRole("status").first()).toContainText("Zoning reviewer registered as v1");
+  await builder.getByRole("button", { name: "Create and activate" }).click();
+  await expect(page).toHaveURL(/\/agents\/zoning-reviewer$/);
 
   // Its next version starts from what v1 holds, and can drop both.
-  await page.getByRole("link", { name: "Zoning reviewer" }).click();
   await page.getByRole("link", { name: "Definition" }).click();
   const suivante = page.getByTestId("agent-builder");
   await expect(suivante.getByTestId("bases-de-la-version")).toContainText("architecture-framework");
@@ -397,13 +410,11 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
 });
 
 test("an agent made from the form runs on a sample under a capped budget, and a failing eval blocks its next version (S32-03)", async ({ page }) => {
-  await page.goto("/agents");
-  await page.getByRole("button", { name: "New agent" }).click();
-  const dialogue = page.getByRole("dialog", { name: "New agent" });
-  const builder = dialogue.getByTestId("agent-builder");
-  await builder.getByLabel("Slug").fill("escalation");
-  await builder.getByLabel("Name").fill("Escalation");
+  const builder = await newAgentBuilder(page, "Escalation");
+  await expect(builder.getByLabel("Slug")).toHaveValue("escalation");
   await builder.getByLabel("Instructions").fill("Escalate {{ ticket.title }} to the on-call engineer.");
+  await unfold(builder, "Limits and budget");
+  await unfold(builder, "Eval suite");
   await builder.getByLabel("Budget per run (USD)").fill("1");
   // Its eval suite: the instructions rendered on a VIP sample must escalate it.
   await builder.getByRole("button", { name: "Add a case" }).click();
@@ -411,7 +422,7 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   await builder.getByLabel("Case sample title").fill("VIP outage");
   await builder.getByLabel("Must contain (one per line)").fill("Escalate VIP outage");
   // Try it before creating: a project, a sample, a budget of 0.50 $ at most.
-  const banc = dialogue.getByTestId("banc-d-essai");
+  const banc = page.getByTestId("banc-d-essai");
   await banc.getByLabel("Sample title").fill("Checkout down for every customer");
   await banc.getByLabel("Trial budget (USD, 0.50 at most)").fill("2");
   await banc.getByRole("button", { name: "Try it" }).click();
@@ -420,11 +431,10 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   await expect(resultat).toContainText("succeeded");
   await expect(resultat).toContainText("Sorted: urgent");
   await expect(resultat.getByRole("list", { name: "Eval results" })).toContainText("Passed");
-  await builder.getByRole("button", { name: "Create the agent" }).click();
-  await expect(page.getByRole("status").first()).toContainText("Escalation registered as v1");
+  await builder.getByRole("button", { name: "Create and activate" }).click();
+  await expect(page).toHaveURL(/\/agents\/escalation$/);
 
   // Its next version breaks the case: the publication is refused, the case named.
-  await page.getByRole("link", { name: "Escalation" }).click();
   await page.getByRole("link", { name: "Definition" }).click();
   const suivante = page.getByTestId("agent-builder");
   await suivante.getByLabel("Instructions").fill("Handle {{ ticket.title }} calmly.");
@@ -485,7 +495,7 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await page.getByTestId("connecteur-tracker").getByRole("combobox").first().selectOption("jira");
   await page.getByLabel("api token").fill("s3cr3t");
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("a reference is expected");
-  await page.getByLabel("api token").fill("env:JIRA_TOKEN");
+  await page.getByLabel("api token").fill("env:CONNECTOR_JIRA_TOKEN");
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
   await expect(connecteurs).toBeVisible();
 });

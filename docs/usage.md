@@ -64,12 +64,20 @@ A secret is never written in `config` — a secret field there is refused (`422`
 ```bash
 curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
   "config": {"base_url": "https://acme.atlassian.net", "email": "bot@acme.test", "project_key": "RH"},
-  "secret_refs": {"api_token": "env:JIRA_TOKEN"}}'
+  "secret_refs": {"api_token": "env:CONNECTOR_JIRA_TOKEN"}}'
 ```
 
 The core reads `env:NAME`; a plugin declares other schemes (a vault) with
 `choregos_core.secrets.declarer_un_resolveur`. A reference the process cannot resolve fails the
 connector test with its name — never a silent fallback to a default value.
+
+`env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
+`^CONNECTOR_[A-Z0-9_]+$`, chart value `global.secrets.envPattern`); the platform's own variables
+(`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
+pattern. A name outside it is a `422` at write and a connector in error at use. Only the
+organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
+refused. **Breaking:** a reference written before this rule that is outside the pattern stops
+resolving; rename the variable (or widen the pattern) and rewrite the reference.
 
 **The organisation's connectors.** A directory, a device manager, an MCP server is declared once
 by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
@@ -83,7 +91,7 @@ and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operat
 later hardening by the organisation always overrides.
 
 **An MCP server** is a connector of type `mcp`: its URL, and its key by reference
-(`secret_refs: {"token": "env:SUPPLIER_KEY"}`). It declares no operation — they are
+(`secret_refs: {"token": "env:CONNECTOR_SUPPLIER_KEY"}`). It declares no operation — they are
 **discovered**: `POST /orgs/{org}/connectors/{name}/discover` (or *discover* in the console) runs
 `initialize` and `tools/list` over Streamable HTTP — JSON or SSE answers, the session the server
 gives, every page of the list — and returns the diff. **A new tool is born closed**
@@ -320,6 +328,49 @@ read: if someone published meanwhile, the console says so (`409`) instead of ove
 state to an existing or a new one without choosing a state first. The draft survives a detour
 through another page of the console (it is kept for the browser tab), and **discard** asks first.
 
+### What each step shows
+
+The process view describes every step from the workflow's YAML (`process` in the validation
+answer and on the ticket's journey):
+
+- **Who**: for an agent step, the registry agent it names (`agent`, `slug` or `slug@N`, which is
+  not the actor's key), its role and model; for a person, the group and the SLA; for a job, the
+  command and the image.
+- **Reads**: the `inputs` of the transition. The map's artifact flow says where each comes from:
+  another step, a person's rejection reason, a work item field, or nothing (`missing`).
+- **Produces**: the `outputs`, typed when `output_types` declares a file type, and
+  `writes_branch` for an agent or job step whose transition carries a gate that reads the diff
+  (`scope_respected`, `no_secrets`, `diff_size_max`, `markdown_sections`, `adr_number_free`): it
+  changes the work item's branch even though it lists no output.
+
+In the console, the **Process** tab shows this as a card per step: the agent's name (a link to
+`/agents/<slug>`) with a chip, "v1 · pinned", "v3 · latest", "not installed: installs when this
+workflow is published", "unknown agent" or "unavailable: …"; a person's group and SLA; a job's
+command; **Reads** with the source of each document ("from *Tested* (`t-test`)", "a person's
+rejection reason", "a work item field", or "nothing produces it" as a warning); **Produces**, with
+"changes on the work item's branch" for a step that writes code. On the **Map**, each box carries
+one line, "→ spec_markdown, allowed_paths" or "→ branch", and an **Artifacts** table under the
+diagram lists each document with its type, its producers and its readers; hovering or focusing a
+row outlines those boxes. Choosing a box shows the same card above its editor.
+
+`graph.artifacts` is the artifact flow: one entry per document with `produced_by`, `read_by`,
+`origin`, `context` (given to every agent stage) and `in_pull_request`.
+
+Which agent version a run would load for those references, through the runtime's own resolver
+(an explicit `@N`, else the project's pin, else the latest version), is read, without changing
+anything, with:
+
+```bash
+curl "$API/projects/$PROJECT/agent-resolution?ref=developer&ref=spec-writer@2"
+# [{"ref": "developer", "slug": "developer", "status": "resolved", "version": 1, "pinned": true, ...},
+#  {"ref": "spec-writer@2", "status": "not_installed", "in_catalogue": true, ...}]
+```
+
+`status` is `resolved`, `not_installed` (the organisation has no such agent; `in_catalogue` says
+whether publishing the workflow installs it) or `unavailable` (it exists but a run would not
+start: draft, retired, expired, disabled; `reason` has the runtime's own words). One to 64
+`ref` parameters.
+
 ### Workflows outside software
 
 The same engine carries work that has no repository. Name your own roles, bring your own
@@ -484,11 +535,35 @@ curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
   -d '{"version": 2, "overrides": {"budget": {"run_usd": 1}}}'
 ```
 
-In the console, **Agents → New agent** (or **New version** on an agent's page) is the same thing as
-a form: every field of the version — instructions, model, backend, limits, budget, skills, MCP
-servers and their tool patterns, knowledge bases, memory scope, eval suite — with, beside it, what
-each choice costs and allows: the model's price, the operations a tool pattern reaches and their
-policy, and the projects a knowledge base is served to (a run elsewhere stops before it starts).
+In the console, **Agents → New agent** opens a full page (`/agents/new`), in two steps:
+
+1. **Describe.** Two fields: the *name* and *what it should do* (ten characters at least; it becomes the
+   agent's description). **Start from a blank form** goes on; **Or add one from the catalogue** goes
+   back to the catalogue's drawer.
+2. **Configure.** The *basics* are always open: name, slug (derived from the name, editable until the
+   agent exists, then fixed; `new` is refused because `/agents/new` is a page), description and
+   instructions. The seven other sections are folded and each says its value in one line: model and
+   runtime, limits and budget, skills, tools (MCP servers), knowledge, memory, eval suite. A section
+   opens by itself when it holds something other than the default. **Create and activate** registers
+   an active agent; **Save as draft** registers it as a `draft` (nothing pins or runs it until it is
+   activated, see S32-04).
+
+   From 1280 px, a panel stays beside the form with two tabs: **Try it** (a real, capped trial run,
+   see below) and **What it costs and allows** (the model's price, the operations a tool pattern
+   reaches and their policy, and the projects a knowledge base is served to: a run elsewhere stops
+   before it starts). Below 1280 px the panel falls under the form.
+
+**New version**, on an agent's page (Definition tab), is the same form without the first step.
+
+*Why not a clone of Microsoft's Agent Builder or Copilot Studio?* We took what fits and left the rest.
+Kept: a short first step in which the author says what the agent is for, one form for the details with
+the advanced fields folded, a test pane beside it, and draft-then-publish. Not kept: a conversational
+"describe" turn (one round, describe then edit the form, is enough), starter prompts (a Choregos agent
+is a stage worker invoked on a work item, not a chat assistant, so its equivalent is the eval suite
+and the trial's sample input), topics, triggers and channels (workflows are the triggers, and the AI
+clients page is the channel), and a visual canvas (the definition stays data, YAML or JSON, with a
+form on top; OpenAI is retiring its visual Agent Builder on 2026-11-30). Drafting the instructions
+from the description with a model is a later step; until then, step 1 starts a blank form.
 
 An agent carries **skills** — a folder with a `SKILL.md` whose header gives its `name` and
 `description` — from the organisation's library:
@@ -600,8 +675,14 @@ gives its text without headings, and a scanned PDF fails (no OCR). Each document
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
 `groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage`. In the
-console, **knowledge** (top bar) lists the bases; a base's page uploads documents and follows each
-conversion.
+console there are two ways in. **From a project**: its sidebar's **Knowledge** section lists what its
+runs are served (the project's own bases, then the organisation-wide ones, read-only from there;
+a group's base is never served to a run, so it is not listed), and **New knowledge base** creates one
+served to this project's runs only (there is no scope to choose); the base opens inside the project,
+where you upload documents or add a source. **From the organisation**: **Knowledge** (`/knowledge`) is
+the registry of every base, filterable by scope (organisation-wide, project, group), with who uses
+each one; its creation form is where a base is shared with several projects (picked from a list) or
+with groups. A base's page uploads documents and follows each conversion.
 
 An agent version reads a base by naming it: `"knowledge": [{"slug": "architecture"}]` in its spec.
 When a run is prepared, each named base must exist and be served to the run's project — otherwise
@@ -631,6 +712,11 @@ A base also **syncs from sources** (`POST …/sources`), each on its own Tempora
   holding the application permission **`Sites.Selected`** — and have a tenant administrator grant it
   `read` on the chosen sites (`POST /sites/{site-id}/permissions`). Never `Files.Read.All`. The
   source names a `site_id` (or a OneDrive's `drive_id`) and optionally a `folder`; sync is delta.
+  The console form **picks** the connector from a list of the organisation's `documents/sharepoint`
+  connectors (it is never typed); with none, it links to `/admin/connectors?type=documents/sharepoint`
+  to declare one. The API refuses a wrong name and says why: names are lowercase (the message
+  suggests the right one), the connector is of another kind (`identity/entra`) or another type, or
+  no `documents` connector exists yet (then an organisation administrator declares one).
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
   `max_pages` ≤ 500; a host that resolves to a private address is refused.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs

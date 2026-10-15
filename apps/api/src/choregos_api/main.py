@@ -45,6 +45,7 @@ from .routers import (
     runs,
     skills,
     templates,
+    theme,
     trains,
     ui,
     webhooks,
@@ -260,6 +261,7 @@ def create_app() -> FastAPI:
     routeurs_du_coeur = (
         auth.router,
         ui.router,
+        theme.router,
         integrations.router,
         projects.router,
         connectors.router,

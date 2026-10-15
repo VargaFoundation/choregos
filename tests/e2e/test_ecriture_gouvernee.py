@@ -44,11 +44,11 @@ async def _preparer(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> tupl
     ]  # fmt: skip
     serveur = FakeMcpServer(outils=outils, jeton="cle-fournisseur", gestes={"commander_poste": _commander})
     monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur)
-    monkeypatch.setenv("CHOREGOS_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
+    monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     client = platform.client
     await login(client)
     corps = {"name": "fournisseur", "type": "mcp", "config": {"url": "https://fournisseur.test/mcp"},
-             "secret_refs": {"token": "env:CHOREGOS_TEST_CLE_FOURNISSEUR"}}  # fmt: skip
+             "secret_refs": {"token": "env:CONNECTOR_TEST_CLE_FOURNISSEUR"}}  # fmt: skip
     assert (await client.post(f"{ORG}/connectors", json=corps)).status_code == 201
     assert (await client.post(f"{ORG}/connectors/fournisseur/discover")).status_code == 200
     for operation in ("commander_poste", "suivi_commande"):

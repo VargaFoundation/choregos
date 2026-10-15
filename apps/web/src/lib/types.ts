@@ -97,6 +97,8 @@ export type {
   AgentTrial,
   AgentTrialCreate,
   AgentVersion,
+  AgentResolution,
+  ArtifactFlow,
   ImplicitAgent,
   ProjectAgent,
   ProjectAgentPut,

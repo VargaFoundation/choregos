@@ -21,13 +21,13 @@ def graph(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     faux = FakeEntra()
     monkeypatch.setattr(choregos_adapters, "FAUX_ENTRA", faux)
-    monkeypatch.setenv("ENTRA_CLIENT_SECRET", "secret-du-connecteur")
+    monkeypatch.setenv("CONNECTOR_ENTRA_CLIENT_SECRET", "secret-du-connecteur")
     yield faux
 
 
 async def _declarer(client: AsyncClient) -> dict[str, Any]:
     corps = {"name": "entra-acme", "type": "entra", "config": {"tenant_id": "acme", "client_id": "choregos"},
-             "secret_refs": {"client_secret": "env:ENTRA_CLIENT_SECRET"}}  # fmt: skip
+             "secret_refs": {"client_secret": "env:CONNECTOR_ENTRA_CLIENT_SECRET"}}  # fmt: skip
     cree = await client.post(f"{ORG}/connectors", json=corps)
     assert cree.status_code == 201, cree.text
     return {o["name"]: o for o in cree.json()["operations"]}

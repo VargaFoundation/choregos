@@ -19,6 +19,7 @@ import {
   modeler,
   type Modele,
   raconter,
+  sortiesDe,
   type StatutEtape,
   structure,
 } from "./modele";
@@ -134,6 +135,7 @@ export function CarteEnSerpentin({
   choix = null,
   onChoisir,
   largeurInitiale = 1100,
+  highlight,
 }: {
   graph: WorkItemJourney["graph"];
   process: WorkItemJourney["process"];
@@ -141,11 +143,13 @@ export function CarteEnSerpentin({
   choix?: string | null;
   onChoisir?: (transitionId: string) => void;
   largeurInitiale?: number;
+  /** The boxes an artifact row lights up: who produces it, who reads it (S39-13). Decoration only. */
+  highlight?: Map<string, "produces" | "reads"> | null;
 }) {
   const modele = useMemo(() => modeler({ graph, process: process ?? [], initial: initial ?? null }), [graph, process, initial]);
   const instant = useMemo(() => structure(modele), [modele]);
   const [cadre, largeur] = useLargeur(largeurInitiale);
-  const placement = useMemo(() => placer(modele, largeur), [modele, largeur]);
+  const placement = useMemo(() => placer(modele, largeur, true), [modele, largeur]);
   return (
     <section className="space-y-3" data-testid="carte-en-serpentin" aria-label="Workflow diagram">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" aria-label="Who carries each step">
@@ -173,6 +177,7 @@ export function CarteEnSerpentin({
           choix={choix}
           onChoisir={(id) => onChoisir?.(id)}
           statique
+          flux={highlight ?? undefined}
         />
         <Exceptions modele={modele} instant={instant} />
       </div>
@@ -351,6 +356,7 @@ function Carte({
   choix,
   onChoisir,
   statique = false,
+  flux,
 }: {
   modele: Modele;
   placement: Placement;
@@ -360,6 +366,7 @@ function Carte({
   onChoisir: (id: string) => void;
   /** La carte d'un workflow sans ticket : chaque case prend la couleur de qui la porte (S22-05). */
   statique?: boolean;
+  flux?: Map<string, "produces" | "reads">;
 }) {
   const toutes = useMemo(() => [...modele.etapes, ...modele.detours.map((d) => d.etape)], [modele]);
   const fini = instant.etat === modele.chemin.at(-1);
@@ -520,6 +527,7 @@ function Carte({
               choisie={choix === etape.id}
               onChoisir={() => onChoisir(etape.id)}
               statique={statique}
+              flux={flux?.get(etape.id)}
             />
           );
         })}
@@ -698,6 +706,7 @@ function BoutonDEtape({
   choisie,
   onChoisir,
   statique = false,
+  flux,
 }: {
   etape: Etape;
   etat: EtatEtape;
@@ -706,8 +715,10 @@ function BoutonDEtape({
   choisie: boolean;
   onChoisir: () => void;
   statique?: boolean;
+  flux?: "produces" | "reads";
 }) {
   const detail = detailDe(etape, etat);
+  const sorties = statique ? sortiesDe(etape) : null;
   const tour = tourDe(etape, etat);
   const genre = {
     agent: "agent",
@@ -717,6 +728,7 @@ function BoutonDEtape({
   }[etape.genre];
   const etiquette = [
     `${etape.libelle}, ${genre}, ${etape.action}`,
+    sorties ? `produces ${sorties.slice(2)}` : null,
     statique ? null : LIBELLE_DU_STATUT[etat.statut],
     tour,
     detail,
@@ -730,11 +742,16 @@ function BoutonDEtape({
       data-testid={`etape-${etape.id}`}
       data-statut={etat.statut}
       data-donnee
+      data-flow={flux}
       aria-label={etiquette}
       aria-pressed={choisie}
       title={etape.phrase?.replaceAll("`", "") ?? undefined}
       onClick={onChoisir}
-      className="group absolute flex flex-col items-center rounded text-center focus-visible:outline-2 focus-visible:outline-offset-2"
+      className={cn(
+        "group absolute flex flex-col items-center rounded text-center focus-visible:outline-2 focus-visible:outline-offset-2",
+        flux === "produces" && "outline-2 outline-offset-2 outline-agent-line",
+        flux === "reads" && "outline-2 outline-dashed outline-offset-2 outline-line-strong",
+      )}
       style={{ left: point.x - (largeur - 8) / 2, top: point.y - RAYON - 4, width: largeur - 8 }}
     >
       <span aria-hidden className="block" style={{ height: 2 * RAYON + 8 }} />
@@ -744,6 +761,14 @@ function BoutonDEtape({
       <span className="mx-auto mt-0.5 line-clamp-2 block w-fit max-w-full break-words bg-surface px-1 text-xs leading-4 text-ink-muted">
         {etape.action}
       </span>
+      {sorties && (
+        <span
+          data-testid={`sorties-${etape.id}`}
+          className="mx-auto mt-0.5 line-clamp-2 block w-fit max-w-full break-words bg-surface px-1 text-[11px] leading-4 text-ink-muted"
+        >
+          {sorties}
+        </span>
+      )}
       {(tour || detail) && (
         <span className="mx-auto mt-0.5 flex w-fit max-w-full flex-wrap items-center justify-center gap-1 bg-surface px-1 text-xs leading-4">
           {tour && (

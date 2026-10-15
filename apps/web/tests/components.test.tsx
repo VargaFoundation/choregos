@@ -1,11 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Acces } from "@/components/acces";
 import { EditionBadge, EditionCard, FONCTIONS_ENTREPRISE } from "@/components/edition";
 import { Garanties } from "@/components/garanties";
 import { LiveLog } from "@/components/live-log";
 import { Preuves } from "@/components/preuves";
-import { ActorIcon, CostChip, Tabs, StateBadge } from "@/components/ui";
+import { ActorIcon, CostChip, Disclosure, Tabs, StateBadge } from "@/components/ui";
 import type { RunEventDto } from "@/lib/types";
 
 describe("composants transverses", () => {
@@ -168,5 +168,27 @@ describe("édition (ADR 0024)", () => {
   it("le badge nomme l'édition", () => {
     render(<EditionBadge edition="enterprise" />);
     expect(screen.getByTestId("edition-badge")).toHaveTextContent("Enterprise edition");
+  });
+});
+
+describe("Disclosure (S39-05)", () => {
+  it("is closed by default, says its value, opens on a click and honours defaultOpen", () => {
+    const { container } = render(
+      <>
+        <Disclosure title="Skills" summary="none">
+          <p>Add a skill</p>
+        </Disclosure>
+        <Disclosure title="Memory" summary="its own" defaultOpen>
+          <p>Memory scope</p>
+        </Disclosure>
+      </>,
+    );
+    const [skills, memory] = Array.from(container.querySelectorAll("details"));
+    expect(skills).not.toHaveAttribute("open");
+    expect(memory).toHaveAttribute("open");
+    // A native `<summary>`: the keyboard and assistive technology need no script.
+    expect(skills!.querySelector("summary")).toHaveTextContent("Skillsnone");
+    fireEvent.click(screen.getByText("Skills"));
+    expect(skills).toHaveAttribute("open");
   });
 });

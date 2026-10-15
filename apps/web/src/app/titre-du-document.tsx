@@ -2,6 +2,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useServedTheme } from "@/components/served-theme";
 
 const SINGULIERS: Record<string, string> = { items: "ticket", runs: "run", actions: "action" };
 
@@ -9,7 +10,7 @@ const SINGULIERS: Record<string, string> = { items: "ticket", runs: "run", actio
  * Le titre d'une page, depuis son chemin, du plus précis au plus large :
  * `/p/billing-api/items/w1` → « ticket w1 · billing-api · choregos ».
  */
-export function titreDuChemin(pathname: string): string {
+export function titreDuChemin(pathname: string, productName = "Choregos"): string {
   const segments = pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (segments[0] === "p") segments.shift();
   const parties: string[] = [];
@@ -23,7 +24,9 @@ export function titreDuChemin(pathname: string): string {
       parties.push(segment === "x" ? "section" : segment);
     }
   }
-  return [...parties.reverse(), ...(parties.length ? [] : ["projects"]), "choregos"].join(" · ");
+  // The suffix is the product's name; the default stays lower-case so that titles do not change.
+  const suffix = productName === "Choregos" ? "choregos" : productName;
+  return [...parties.reverse(), ...(parties.length ? [] : ["projects"]), suffix].join(" · ");
 }
 
 /**
@@ -32,5 +35,5 @@ export function titreDuChemin(pathname: string): string {
  * (WCAG 2.4.2). React 19 hoists this `<title>` into the `<head>`.
  */
 export function TitreDuDocument() {
-  return <title>{titreDuChemin(usePathname())}</title>;
+  return <title>{titreDuChemin(usePathname(), useServedTheme().product_name)}</title>;
 }

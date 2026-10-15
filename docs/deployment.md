@@ -97,6 +97,14 @@ The public key is derived from the private one when it is absent.
 `global.devSecrets: true` makes the chart generate all of the above itself. It exists for a
 bench and says so; never use it in production.
 
+**Connector secrets by `env:NAME`.** A secret a connector references (`secret_refs: {api_token:
+env:CONNECTOR_JIRA_TOKEN}`) must be mapped into the API and worker pods (`global.extraEnv`, from a
+Secret) under a name matching `global.secrets.envPattern` — by default `^CONNECTOR_[A-Z0-9_]+$`,
+set as `CHOREGOS_SECRET_ENV_PATTERN`. Widen the pattern for your own naming; `CHOREGOS_*`,
+`DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*` and `TEMPORAL_*` stay refused whatever it says. After
+an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
+rename its variable or widen the pattern.
+
 ## Running agent stages
 
 Agent stages run as disposable sandboxes. Which kind is `runner.executor`:
@@ -210,6 +218,23 @@ report — an image it cannot pull, a backend it cannot reach — the run says s
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
 digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start…), or why the container never started.
 
+## Theme
+
+The community edition serves one theme, its default (`GET /api/v1/theme`, public). Customising the
+look (colours per mode, radii, title font, logo, product name, footer, default mode) is an
+enterprise feature: a plugin calls `choregos_api.greffons.declare_theme_provider(fn)` with
+`fn(session, org) -> dict | None` and the core validates what it returns (schema, then the
+console's contrast budget on the effective colours). An invalid theme is replaced by the default
+(`X-Choregos-Theme: fallback`, with the violations in the API log); a plugin can check a theme
+itself with `choregos_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
+the attribution line. Fonts and images are served by the API under `/api/v1/` so that the console's
+CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes` (S39-03c).
+The console reads the instance theme on the server before drawing anything (`CHOREGOS_API_URL`,
+1.5 s timeout, cached 60 s; any failure gives the default look) and applies it as CSS variables in
+the page, so the first paint is already themed; the person's organisation theme replaces it right
+after hydration. A person's own light/dark choice always wins over the theme's default mode. See
+[ADR 0064](adr/0064-a-theme-is-data-the-console-applies.md).
+
 ## Playbooks and the tool catalogue
 
 Both are brought by the deployment, as ConfigMaps, and both are optional.
@@ -308,6 +333,20 @@ A project declares what it calls in its own configuration (`tools: [verifier_adr
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
+## Extra volumes for the API
+
+`choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
+API pod and container, so a deployment can hand files to a plugin without forking the chart:
+
+```yaml
+choregos-api:
+  extraVolumes: [{ name: theme, configMap: { name: my-theme } }]
+  extraVolumeMounts: [{ name: theme, mountPath: /etc/choregos/theme, readOnly: true }]
+```
+
+A volume named like one the chart owns (`tmp`, `catalogue`, `workflow-templates`, `playbooks`)
+fails at render.
+
 ## Multi-tenant installations
 
 For a tenant that may not create cluster-scoped resources:
@@ -405,6 +444,25 @@ A project with no repository takes its requests from Choregos itself:
 choregos projects create staffing --name "Staffing"            # no --repo: tracker `internal`
 choregos items create staffing --title "Data PM for 6 months" --size M
 ```
+
+## HTTPS behind a platform-issued certificate
+
+An instance has **one host**: `global.publicUrl` (the console) and `global.apiUrl` (the API) are
+what the API builds everything from, namely the OIDC `redirect_uri`
+(`<apiUrl>/api/v1/auth/callback`), the MCP OAuth resource metadata, the commands on the
+Integrations page and the links in notifications. Serve it over HTTPS by putting TLS on the
+ingress (the certificate comes from the platform, or from cert-manager) and by setting both
+URLs to `https://…`. Nothing else follows from the chart: the console's CSP and CORS are derived
+from the same two values.
+
+The session cookie and the sign-in handshake cookie are `Secure` when `CHOREGOS_ENV` is
+`staging` or `prod`, **or when `publicUrl` or `apiUrl` starts with `https://`**, in any
+environment. A dev tenant served over HTTPS therefore never sends its session cookie in clear;
+a bench on `http://localhost` keeps working because its cookie is not `Secure`. A browser only
+returns a `Secure` cookie over HTTPS, so a deployment whose URLs say `https` but whose ingress
+still answers on plain HTTP cannot sign in: redirect HTTP to HTTPS at the ingress. When you move
+a deployment to a new host, register the new `<apiUrl>/api/v1/auth/callback` at the identity
+provider before switching, and keep the old one until the old host only redirects.
 
 ## Identity: what the OIDC provider must give us
 

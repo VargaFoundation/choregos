@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aLInstant, debutDePhase, gare, instants, modeler, raconter } from "@/components/parcours/modele";
+import { aLInstant, debutDePhase, gare, instants, modeler, raconter, sortiesDe } from "@/components/parcours/modele";
+import { placer } from "@/components/parcours/disposition";
 import { parcoursEnAttente, parcoursEnCours, parcoursTermine } from "@/mocks/parcours";
 
 // Une horloge fixe : deux lectures du même parcours donnent la même carte.
@@ -39,6 +40,28 @@ describe("le modèle d'un parcours (S22-02)", () => {
     expect([par("t-release").genre, par("t-release").action]).toEqual(["train", "deploys to prod"]);
     expect(par("t-implement").maxTours).toBe(3);
     expect(par("t-test").phrase).toMatch(/tester/);
+  });
+
+  it("a step carries its agent, what it reads and what it produces (S39-13)", () => {
+    const specify = modele.parId.get("t-specify")!;
+    expect(specify.agentRef).toBe("spec-writer");
+    expect(specify.outputs).toEqual(["spec_markdown", "allowed_paths"]);
+    expect(specify.inputs).toEqual(["human_feedback"]);
+    expect(sortiesDe(specify)).toBe("→ spec_markdown, allowed_paths");
+    const implement = modele.parId.get("t-implement")!;
+    expect(implement.writesBranch).toBe(true);
+    expect(sortiesDe(implement)).toBe("→ branch");
+    expect(sortiesDe(modele.parId.get("t-approve-spec")!)).toBeNull();
+    expect(modele.parId.get("t-approve-spec")!.agentRef).toBeNull();
+  });
+
+  it("the workflow map reserves room for the outputs line under each row (S39-13)", () => {
+    const sans = placer(modele, 1100);
+    const avec = placer(modele, 1100, true);
+    expect(avec.hauteur).toBeGreaterThan(sans.hauteur);
+    // One more line (two 16 px rows and a 2 px margin) under every row of boxes: rows move apart by it.
+    const rangees = (p: ReturnType<typeof placer>) => [...new Set([...p.etapes.values()].map((pt) => pt.y))].sort((x, y) => x - y);
+    expect(rangees(avec)[1]! - rangees(avec)[0]!).toBe(rangees(sans)[1]! - rangees(sans)[0]! + 34);
   });
 
   it("les détours d'où l'on revient, et les arcs qui y mènent", () => {
