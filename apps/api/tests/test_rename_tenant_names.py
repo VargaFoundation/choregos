@@ -209,8 +209,8 @@ metadata: {name: preuve-agent, version: 1}
 initial: inbox
 actors: {boss: {type: human, group: it}}
 states:
-  inbox: {display: "À faire", kind: wait}
-  en_cours: {display: "En cours", kind: wait}
+  inbox: {display: "À faire", kind: wait}  # lang: fr-ok
+  en_cours: {display: "En cours", kind: wait}  # lang: fr-ok
   fini: {display: "Fini", terminal: true}
 transitions:
   - {id: t-go, from: inbox, to: en_cours, by: boss}
