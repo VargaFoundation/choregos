@@ -47,6 +47,17 @@ organisations must assume **a member of one will try to read another**.
 - **Development login opens the API** to anyone who can reach it. It exists for benches
   without an identity provider (`values/local.yaml`), nowhere else.
 
+## Who curates a knowledge base
+
+A knowledge base is what agents read as reference: whoever feeds it steers them, so curating is
+a permission, not a convenience ([ADR 0051](adr/0051-knowledge-bases.md)). An organisation
+administrator (`agent:manage`) curates every base and alone decides its **reach** (`scope`,
+`projects`, `groups`). A base created from a project (`POST /projects/{id}/knowledge`) is owned by
+it (`owner_project`): its owners (`project:write` on that project) upload, sync, distil, rename and
+archive it, but cannot widen it to the organisation, to other projects or to groups, so a project
+never decides what *other* projects' runs read. An administrator who widens it makes it the
+organisation's: the owner stops curating. Another project's owners, and developers, read at most.
+
 ## Injection through context
 
 Context packs and tickets contain text written by third parties. Two rules:

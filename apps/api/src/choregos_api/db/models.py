@@ -930,6 +930,8 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     eval_result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     #: the last distillation into a principles skill (S33-05): status, skill, version, dropped, error
     distillation: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: the project this base was created from (S39-14): its owners curate it, never widen it
+    owner_project: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class KnowledgeDocument(Base, PkMixin, TimestampMixin):

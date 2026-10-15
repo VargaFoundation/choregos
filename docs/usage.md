@@ -786,11 +786,14 @@ background**, in a child process that sees none of the API's secrets and is stop
 gives its text without headings, and a scanned PDF fails (no OCR). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
-`groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage`. In the
+`groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage` (an organisation administrator), or, for a base created from a project
+(`POST /projects/{id}/knowledge`, `owner_project`), `project:write` on that project: its owners feed,
+sync, distil and archive it, and only an administrator widens its scope. In the
 console there are two ways in. **From a project**: its sidebar's **Knowledge** section lists what its
 runs are served (the project's own bases, then the organisation-wide ones, read-only from there;
 a group's base is never served to a run, so it is not listed), and **New knowledge base** creates one
-served to this project's runs only (there is no scope to choose); the base opens inside the project,
+served to this project's runs only (there is no scope to choose), owned by the project: its owners
+(and organisation administrators) curate it; the base opens inside the project,
 where you upload documents or add a source. **From the organisation**: **Knowledge** (`/knowledge`) is
 the registry of every base, filterable by scope (organisation-wide, project, group), with who uses
 each one; its creation form is where a base is shared with several projects (picked from a list) or

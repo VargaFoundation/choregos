@@ -14,9 +14,14 @@ export function servedToProject(base: Pick<KnowledgeBase, "scope" | "projects">,
   return base.scope === "org" || (base.scope === "projects" && (base.projects ?? []).includes(slug));
 }
 
-/** Whether a base is the project's own: scoped to projects and naming this one. */
-export function ownedByProject(base: Pick<KnowledgeBase, "scope" | "projects">, slug: string): boolean {
-  return base.scope === "projects" && (base.projects ?? []).includes(slug);
+/** Whether a base is the project's own: created from it, so its owners curate it (`owner_project`). */
+export function ownedByProject(base: Pick<KnowledgeBase, "owner_project">, slug: string): boolean {
+  return base.owner_project === slug;
+}
+
+/** A base the project is served without owning: an organisation's base scoped to several projects. */
+export function alsoServedToProject(base: Pick<KnowledgeBase, "scope" | "projects" | "owner_project">, slug: string): boolean {
+  return base.scope === "projects" && (base.projects ?? []).includes(slug) && !ownedByProject(base, slug);
 }
 
 /** The registry's "Used by", in words: who is served, with the projects' names where known. */

@@ -38,6 +38,15 @@ class KnowledgeBaseCreate(Dto):
         return self
 
 
+class ProjectKnowledgeBaseCreate(Dto):
+    """A base created from a project: scoped to it and owned by it, so there is no scope to give."""
+
+    slug: str = Field(pattern=SLUG)
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    serving_mode: ServingMode = "files"
+
+
 class KnowledgeBasePatch(Dto):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
@@ -94,6 +103,8 @@ class KnowledgeBaseDto(Dto):
     sources: list[KnowledgeSourceDto] | None = None
     #: the last distillation into a principles skill (S33-05)
     distillation: dict[str, Any] | None = None
+    #: the project this base was created from (S39-14): its owners curate it, never widen it
+    owner_project: str | None = None
 
 
 class KnowledgeEvalCase(Dto):

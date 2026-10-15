@@ -44,6 +44,7 @@ import type {
   SkillVersion,
   KnowledgeBase,
   KnowledgeBaseCreate,
+  ProjectKnowledgeBaseCreate,
   KnowledgeBasePatch,
   KnowledgeDocument,
   KnowledgeEvalCase,
@@ -364,6 +365,9 @@ export const api = {
   knowledgeBase: (org: string, slug: string) => request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`),
   createKnowledgeBase: (org: string, body: KnowledgeBaseCreate) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
+  /** A base owned by the project (S39-14): scoped to it, curated by its owners. */
+  createProjectKnowledgeBase: (project: string, body: ProjectKnowledgeBaseCreate) =>
+    request<KnowledgeBase>(`/projects/${encodeURIComponent(project)}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
   updateKnowledgeBase: (org: string, slug: string, body: KnowledgeBasePatch) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
   uploadKnowledgeDocument: (org: string, slug: string, file: File) => {

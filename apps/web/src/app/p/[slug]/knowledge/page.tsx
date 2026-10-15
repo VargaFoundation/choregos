@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import { Button, Card, Drawer, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { ownedByProject, servedToProject, statusSummary } from "@/lib/knowledge";
+import { alsoServedToProject, ownedByProject, servedToProject, statusSummary } from "@/lib/knowledge";
 import { useSession } from "@/lib/session";
 import type { KnowledgeBase } from "@/lib/types";
 
@@ -24,7 +24,12 @@ export default function ProjectKnowledgePage({ params }: { params: Promise<{ slu
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   // Same key as the registry and the agent builder: one request for all three.
   const bases = useQuery({ queryKey: ["knowledge", org], queryFn: () => api.knowledgeBases(org) });
-  const orgAdmin = (me?.memberships ?? []).some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
+  // An organisation administrator, or an owner of this project: both may create a base for it.
+  const canCreate = (me?.memberships ?? []).some(
+    (m) =>
+      m.org === org &&
+      ((!m.project_slug && m.role === "org_admin") || (m.project_slug === slug && m.role === "project_owner")),
+  );
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<{ slug: string; name: string; description: string; serving_mode: "files" | "index" }>({
     slug: "",
@@ -38,13 +43,10 @@ export default function ProjectKnowledgePage({ params }: { params: Promise<{ slu
   async function create() {
     setError(null);
     try {
-      const created = await api.createKnowledgeBase(org, {
+      const created = await api.createProjectKnowledgeBase(slug, {
         slug: form.slug,
         name: form.name || form.slug,
         description: form.description || undefined,
-        scope: "projects",
-        projects: [slug],
-        groups: [],
         serving_mode: form.serving_mode,
       });
       await client.invalidateQueries({ queryKey: ["knowledge", org] });
@@ -58,6 +60,7 @@ export default function ProjectKnowledgePage({ params }: { params: Promise<{ slu
   const served = (bases.data ?? []).filter((b) => servedToProject(b, slug));
   const own = served.filter((b) => ownedByProject(b, slug));
   const shared = served.filter((b) => b.scope === "org");
+  const alsoServed = served.filter((b) => alsoServedToProject(b, slug));
   return (
     <div className="space-y-6">
       <p className="max-w-3xl text-sm text-ink-muted">
@@ -67,7 +70,7 @@ export default function ProjectKnowledgePage({ params }: { params: Promise<{ slu
       <Card
         title="This project's knowledge bases"
         action={
-          orgAdmin ? (
+          canCreate ? (
             <Button tone="primary" onClick={() => setOpen(true)}>
               New knowledge base
             </Button>
@@ -80,14 +83,20 @@ export default function ProjectKnowledgePage({ params }: { params: Promise<{ slu
           <p className="text-sm text-ink-muted">Reading the knowledge bases…</p>
         ) : own.length === 0 ? (
           <Empty title="No knowledge base of its own yet">
-            {orgAdmin
-              ? "Create one: it is served to the runs of this project only."
-              : "Ask an organisation administrator to create one for this project."}
+            {canCreate
+              ? "Create one: it is served to the runs of this project only, and its owners curate it."
+              : "Ask an owner of this project, or an organisation administrator, to create one."}
           </Empty>
         ) : (
           <BaseTable bases={own} slug={slug} testId="project-knowledge-own" />
         )}
       </Card>
+      {alsoServed.length > 0 && (
+        <Card title="Also served here">
+          <BaseTable bases={alsoServed} slug={slug} testId="project-knowledge-also" />
+          <p className="mt-3 text-xs text-ink-muted">Shared with several projects by the organisation: curated from the organisation&apos;s registry.</p>
+        </Card>
+      )}
       <Card title="Shared with every project">
         {!bases.data ? (
           <p className="text-sm text-ink-muted">Reading the knowledge bases…</p>

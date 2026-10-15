@@ -3,8 +3,9 @@
 
 A knowledge base is a curated corpus a human chose; its documents are uploaded here, answered 202
 `pending`, and converted to markdown in the background (`knowledge.conversion`), never inside the
-request. Curating is the organisation administrator's (`agent:manage`); reading follows the base's
-scope (`knowledge.access`).
+request. Curating is the organisation administrator's (`agent:manage`), or the owners' of the project that
+owns the base (`project:write`, S39-14); widening a base's scope stays the administrator's. Reading
+follows the base's scope (`knowledge.access`).
 """
 
 from __future__ import annotations
@@ -32,13 +33,14 @@ from ..db.models import (
     OrgConnector,
     Project,
 )
-from ..deps import Db, Me
+from ..deps import Db, Me, ProjectCtx
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
-from ..knowledge.access import can_manage, visible_to
+from ..knowledge.access import can_curate, can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
 from ..knowledge.sync import SOURCE_CONNECTOR_TYPES
+from ..rbac import Permission
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
@@ -50,6 +52,7 @@ from ..schemas.knowledge import (
     KnowledgeSourceCreate,
     KnowledgeSourceDto,
     KnowledgeSourcePatch,
+    ProjectKnowledgeBaseCreate,
 )
 from ..temporal import get_temporal, knowledge_sync_id
 
@@ -79,6 +82,14 @@ def _member(principal: Me, org: str) -> None:
 def _manage(principal: Me, org: str) -> None:
     if not can_manage(principal, org):
         raise forbidden("curating a knowledge base needs the org_admin role")
+
+
+def _curate(principal: Me, org: str, base: KnowledgeBase) -> None:
+    """Feeding a base: an organisation administrator, or the owner of the project that owns it."""
+    if not can_curate(principal, org, base):
+        raise forbidden(
+            "curating this knowledge base needs the org_admin role, or project_owner of its project"
+        )
 
 
 async def _base(session: AsyncSession, principal: Me, org: str, slug: str) -> KnowledgeBase:
@@ -175,6 +186,7 @@ async def _dto(
         if with_documents
         else None,
         distillation=base.distillation,
+        owner_project=base.owner_project,
     )
 
 
@@ -278,6 +290,55 @@ async def create_knowledge_base(
     return await _dto(session, base, with_documents=True)
 
 
+@router.post(
+    "/projects/{id}/knowledge",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="createProjectKnowledgeBase",
+)
+async def create_project_knowledge_base(
+    ctx: ProjectCtx, body: ProjectKnowledgeBaseCreate, session: Db
+) -> KnowledgeBaseDto:
+    """A base owned by this project (S39-14): served to its runs only, curated by its owners
+    (`project:write`). Its reach is the organisation administrator's to widen."""
+    ctx.require(Permission.PROJECT_WRITE)
+    organisation = await _organisation(session, ctx.org_slug)
+    if (
+        await session.execute(
+            select(KnowledgeBase.id).where(
+                KnowledgeBase.org_id == organisation.id, KnowledgeBase.slug == body.slug
+            )
+        )
+    ).first():
+        raise conflict(f"knowledge base `{body.slug}` already exists")
+    base = KnowledgeBase(
+        org_id=organisation.id,
+        slug=body.slug,
+        name=body.name,
+        description=body.description,
+        scope="projects",
+        projects=[ctx.project.slug],
+        groups=[],
+        owner_project=ctx.project.slug,
+        serving_mode=body.serving_mode,
+        status="active",
+        created_by=ctx.principal.email,
+    )
+    session.add(base)
+    await session.flush()
+    await record(
+        session,
+        ctx.principal,
+        "knowledge.create",
+        org_id=organisation.id,
+        target_type="knowledge_base",
+        target_id=base.id,
+        scope=base.scope,
+        owner_project=ctx.project.slug,
+    )
+    return await _dto(session, base, with_documents=True)
+
+
 @router.get("/orgs/{org}/knowledge/{slug}", response_model=KnowledgeBaseDto, operation_id="getKnowledgeBase")
 async def get_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     _member(principal, org)
@@ -290,9 +351,14 @@ async def get_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -
 async def update_knowledge_base(
     org: str, slug: Slug, body: KnowledgeBasePatch, session: Db, principal: Me
 ) -> KnowledgeBaseDto:
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
     changes = body.model_dump(exclude_unset=True)
+    widens = any(field in changes for field in ("scope", "projects", "groups"))
+    if widens:
+        # Who reads and who is served a base is the organisation's call, not its owning project's.
+        _manage(principal, org)
+    else:
+        _curate(principal, org, base)
     scope = changes.get("scope", base.scope)
     projects = changes.get("projects", base.projects) or []
     groups = changes.get("groups", base.groups) or []
@@ -308,6 +374,9 @@ async def update_knowledge_base(
     base.scope = scope
     base.projects = sorted(set(projects)) if scope == "projects" else []
     base.groups = sorted(set(groups)) if scope == "groups" else []
+    if widens:
+        # An administrator re-scoped it: it is no longer the owning project's to curate.
+        base.owner_project = None
     await session.flush()
     await record(
         session,
@@ -339,13 +408,13 @@ async def upload_knowledge_document(
 
     The same bytes twice are one document: the second upload answers the first (200).
     """
-    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     settings = get_settings()
     cap = settings.knowledge_max_upload_mib * 1024 * 1024
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > cap + ENVELOPE:
         raise _too_large(settings.knowledge_max_upload_mib)
-    base = await _base(session, principal, org, slug)
     if base.status != "active":
         raise conflict(f"knowledge base `{slug}` is archived")
     async with request.form(max_files=1, max_fields=2) as form:
@@ -450,8 +519,8 @@ async def get_knowledge_document(
 async def delete_knowledge_document(
     org: str, slug: Slug, document_id: str, session: Db, principal: Me
 ) -> None:
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     document = await _document(session, base, document_id)
     await session.delete(document)
     await record(
@@ -475,8 +544,8 @@ async def convert_knowledge_document(
     org: str, slug: Slug, document_id: str, session: Db, principal: Me
 ) -> KnowledgeDocumentDto:
     """Converts a document again — after a failure, or a converter upgrade."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     document = await _document(session, base, document_id)
     if document.status in {PENDING, "converting"}:
         raise conflict(f"document `{document_id}` is already being converted")
@@ -516,8 +585,8 @@ async def search_knowledge_base(
 async def reindex_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     """Cuts and embeds every ready document again, in the background (after pgvector was installed,
     or the embedding model changed)."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     if base.serving_mode != "index":
         raise conflict(f"knowledge base `{slug}` is served as files: switch it to `index` first")
     dto = await _dto(session, base, with_documents=True)
@@ -535,8 +604,8 @@ async def put_knowledge_eval_set(
     org: str, slug: Slug, body: KnowledgeEvalSet, session: Db, principal: Me
 ) -> KnowledgeBaseDto:
     """The base's eval set: questions, and the documents expected to answer each."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     base.eval_set = [case.model_dump() for case in body.cases]
     base.eval_result = None
     await session.flush()
@@ -550,8 +619,8 @@ async def put_knowledge_eval_set(
 )
 async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     """Runs the eval set against the index: recall@5, per question. Shown on the base's page."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     if base.serving_mode != "index":
         raise conflict(f"knowledge base `{slug}` is served as files: it has no index to evaluate")
     if not base.eval_set:
@@ -682,8 +751,8 @@ async def create_knowledge_source(
 ) -> KnowledgeSourceDto:
     """SharePoint/OneDrive (through a `documents` connector), an allow-listed web site, or a git
     repository; synced at once, then every `interval_minutes`. `agent:manage`."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     organisation = await _organisation(session, org)
     config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
     source = KnowledgeSource(
@@ -722,8 +791,8 @@ async def create_knowledge_source(
 async def update_knowledge_source(
     org: str, slug: Slug, source_id: str, body: KnowledgeSourcePatch, session: Db, principal: Me
 ) -> KnowledgeSourceDto:
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     source = await _source(session, base, source_id)
     if body.name is not None:
         source.name = body.name
@@ -746,8 +815,8 @@ async def update_knowledge_source(
 )
 async def delete_knowledge_source(org: str, slug: Slug, source_id: str, session: Db, principal: Me) -> None:
     """The source and the documents it brought (and their chunks) leave the base."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     source = await _source(session, base, source_id)
     await session.execute(delete(KnowledgeDocument).where(KnowledgeDocument.source_id == source.id))
     await session.delete(source)
@@ -775,8 +844,8 @@ async def sync_knowledge_source(
     org: str, slug: Slug, source_id: str, session: Db, principal: Me
 ) -> KnowledgeSourceDto:
     """Syncs now rather than at the end of the interval. `agent:manage`."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     source = await _source(session, base, source_id)
     dto = await _source_dto(session, source)
     await session.commit()
@@ -796,8 +865,8 @@ async def distill_knowledge_base(org: str, slug: Slug, session: Db, principal: M
     version waits for a person's approval (`pending_review`). `agent:manage`."""
     from ..knowledge.distill import distill
 
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     if (base.distillation or {}).get("status") == "running":
         raise conflict(f"knowledge base `{slug}` is already being distilled")
     base.distillation = {"status": "running", "requested_by": principal.email}

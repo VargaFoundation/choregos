@@ -124,6 +124,7 @@ export type { Artifact } from "@choregos/contracts/schemas";
 export type {
   KnowledgeBase,
   KnowledgeBaseCreate,
+  ProjectKnowledgeBaseCreate,
   KnowledgeBasePatch,
   KnowledgeDocument,
   KnowledgeEvalCase,
