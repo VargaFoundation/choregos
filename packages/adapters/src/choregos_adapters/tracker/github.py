@@ -220,6 +220,19 @@ class GitHubTracker:
         if state_mapping.status and self.project_number:
             await self._set_board_field(number, "Status", state_mapping.status)
 
+    async def close_item(self, key: str) -> None:
+        """Closes the issue as completed; an issue already closed is left as it is (S22-28)."""
+        number = self._number(key)
+        issue = await self.client.request("GET", f"/repos/{self.repo}/issues/{number}", repo=self.repo)
+        if issue.get("state") == "closed":
+            return
+        await self.client.request(
+            "PATCH",
+            f"/repos/{self.repo}/issues/{number}",
+            repo=self.repo,
+            json={"state": "closed", "state_reason": "completed"},
+        )
+
     async def upsert_status_comment(
         self, key: str, markdown: str, marker: str = STATUS_COMMENT_MARKER
     ) -> None:

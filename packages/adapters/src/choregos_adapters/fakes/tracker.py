@@ -27,6 +27,8 @@ class FakeTracker:
         self.webhook_secret = "fake-secret"
         #: Les champs du board, par nom : un test y met un board d'avant S22-21 (`Taille`…).
         self.board_fields: list[str] = ["Status"]
+        #: An unreachable tracker: `close_item` raises (S22-28).
+        self.failure: str | None = None
 
     # ───────────────────────── scripting ─────────────────────────
 
@@ -100,6 +102,15 @@ class FakeTracker:
         for label in state_mapping.remove_labels:
             if label in item.labels:
                 item.labels.remove(label)
+
+    async def close_item(self, key: str) -> None:
+        """Like GitHub: closing a closed item does nothing. `failure` simulates an unreachable tracker."""
+        self.calls.append(("close_item", key))
+        if self.failure is not None:
+            raise RuntimeError(self.failure)
+        item = self.items[key]
+        if item.closed_at is None:
+            item.closed_at = utcnow()
 
     async def upsert_status_comment(self, key: str, markdown: str, marker: str) -> None:
         """Un seul commentaire de statut par ticket, réécrit à chaque étape."""

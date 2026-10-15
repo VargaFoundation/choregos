@@ -59,6 +59,10 @@ class InternalTracker:
     async def upsert_status_comment(self, key: str, markdown: str, marker: str) -> None:
         return None
 
+    async def close_item(self, key: str) -> None:
+        # The work item lives in the database: `closed_at` already closes it.
+        return None
+
     async def comment(self, key: str, markdown: str) -> str:
         return ""
 

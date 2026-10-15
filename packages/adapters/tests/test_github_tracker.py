@@ -88,6 +88,24 @@ async def test_un_etat_remplace_le_label_scope_et_garde_les_autres() -> None:
     assert fil.corps(-1) == {"labels": ["bug", "choregos:in_progress"]}
 
 
+async def test_closing_an_open_issue_closes_it_as_completed() -> None:
+    fil = Fil(
+        {
+            ("GET", f"/repos/{REPO}/issues/12"): (200, {"state": "open"}),
+            ("PATCH", f"/repos/{REPO}/issues/12"): (200, {}),
+        }
+    )
+    await tracker(fil).close_item(f"{REPO}#12")
+    assert fil.envoyees("PATCH") == [("PATCH", f"/repos/{REPO}/issues/12")]
+    assert fil.corps(-1) == {"state": "closed", "state_reason": "completed"}
+
+
+async def test_closing_a_closed_issue_does_nothing() -> None:
+    fil = Fil({("GET", f"/repos/{REPO}/issues/12"): (200, {"state": "closed"})})
+    await tracker(fil).close_item(f"{REPO}#12")
+    assert fil.envoyees("PATCH") == []
+
+
 async def test_le_commentaire_de_suivi_est_reecrit_et_non_duplique() -> None:
     fil = Fil(
         {
