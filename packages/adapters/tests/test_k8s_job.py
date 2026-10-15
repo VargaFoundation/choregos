@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import base64
-import copy
 from typing import Any
 
 import pytest
-from choregos_adapters.errors import UpstreamError
 from choregos_adapters.executor.k8s_job import RUNNER_POD_LABELS, KubernetesJobExecutor
+from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
 from choregos_adapters.registry import default_executor_kind
 from choregos_contracts import ExecutorKind
 from choregos_core.domain import ExecRef, StageJobSpec
@@ -442,60 +441,7 @@ async def test_an_image_that_does_not_pull_gives_its_reason() -> None:
 # ──────── the run's token never outlives its run (S22-34, dev tenant 2026-10-14) ────────
 
 
-class _ApiServer:
-    """What the API server does to Jobs and Secrets, where it matters for the token's life:
-    every object gets a `uid`; a PUT REPLACES the object (owner references it omits are gone);
-    a merge PATCH merges; deleting a Job collects the Secrets it owns (the garbage collector,
-    after `ttlSecondsAfterFinished`). `refuse` fails the next matching call with its code."""
-
-    def __init__(self) -> None:
-        self.jobs: dict[str, dict[str, Any]] = {}
-        self.secrets: dict[str, dict[str, Any]] = {}
-        self.refuse: dict[tuple[str, str], int] = {}
-        self._uid = 0
-
-    def _new_uid(self) -> str:
-        self._uid += 1
-        return f"uid-{self._uid}"
-
-    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
-        for (m, suffix), code in list(self.refuse.items()):
-            if m == method and path.endswith(suffix):
-                del self.refuse[(m, suffix)]
-                raise UpstreamError("kubernetes", f"{method} {path} -> {code}", status_code=code)
-        body = copy.deepcopy(kwargs.get("json"))
-        store = self.jobs if "/jobs" in path else self.secrets
-        tail = path.rsplit("/", 1)[-1]
-        if method == "POST":
-            body["metadata"]["uid"] = self._new_uid()
-            body.setdefault("status", {})
-            store[body["metadata"]["name"]] = body
-            return copy.deepcopy(body)
-        if method == "GET" and tail in ("jobs", "secrets"):
-            return {"items": [copy.deepcopy(o) for o in store.values()]}
-        if tail not in store:
-            return None
-        if method == "GET":
-            return copy.deepcopy(store[tail])
-        if method == "PUT":
-            body["metadata"]["uid"] = store[tail]["metadata"]["uid"]
-            store[tail] = body
-            return copy.deepcopy(body)
-        if method == "PATCH":
-            for key, value in body.items():
-                store[tail].setdefault(key, {}).update(value)
-            return copy.deepcopy(store[tail])
-        if method == "DELETE":
-            del store[tail]
-            return {}
-        raise AssertionError(f"unexpected {method} {path}")
-
-    def ttl_collects(self, name: str) -> None:
-        """`ttlSecondsAfterFinished` passed: the Job goes, and with it what it owns."""
-        uid = self.jobs.pop(name)["metadata"]["uid"]
-        for key, secret in list(self.secrets.items()):
-            if any(o.get("uid") == uid for o in secret["metadata"].get("ownerReferences") or []):
-                del self.secrets[key]
+_ApiServer = FakeKubernetesApi
 
 
 def _ref_of(run_id: str) -> ExecRef:

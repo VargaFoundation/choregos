@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import base64
+from typing import Any
 
 import pytest
 from choregos_adapters.ci.tekton import TektonCi
 from choregos_adapters.errors import UpstreamError
 from choregos_adapters.executor.tekton import CORE_API, TEKTON_API, KubernetesClient, TektonExecutor
+from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
 from choregos_contracts import InboundEventType
 from choregos_core.domain import ExecRef, StageJobSpec
 
@@ -214,3 +216,63 @@ def test_un_cloudevent_tekton_devient_un_evenement_ci() -> None:
     assert event.type == InboundEventType.CI_FAILED and event.delivery_id == "ev-1"
     assert event.project_slug == "billing" and event.work_item_key == "billing-12"
     assert event.payload == {"pipeline_run": "run-1", "sha": "abc", "run_id": "r-1"}
+
+
+# ──────── the run's Secret never outlives its PipelineRun (S22-39, #501) ────────
+
+
+def _owned_by(secret: dict[str, Any], owner: dict[str, Any]) -> bool:
+    refs = secret["metadata"].get("ownerReferences") or []
+    return any(r["uid"] == owner["metadata"]["uid"] and r["kind"] == "PipelineRun" for r in refs)
+
+
+async def test_the_secret_of_a_run_goes_with_its_pipeline_run() -> None:
+    """#501: the Secret (run token and gateway key) had no owner, so it survived every run,
+    including normal ends. It now belongs to its PipelineRun: when Tekton's pruner (or anyone)
+    deletes the PipelineRun, the garbage collector takes the Secret."""
+    api = FakeKubernetesApi()
+    await TektonExecutor(client=api).start(spec(gateway_key="sk-run"))  # type: ignore[arg-type]
+    name = "run-wi-1-t-implement-1"
+    assert _owned_by(api.secrets[name], api.pipelineruns[name])
+    api.collect("pipelineruns", name)
+    assert api.secrets == {}, "the token outlived its PipelineRun"
+
+
+async def test_a_start_replayed_after_a_refused_handover_still_gives_the_secret_away() -> None:
+    """The handover failed after the PipelineRun was made; the activity retries, finds the
+    PipelineRun, and hands the Secret over then (the same 403 as #499 on `k8s_job`)."""
+    api = FakeKubernetesApi()
+    executor = TektonExecutor(client=api)  # type: ignore[arg-type]
+    api.refuse[("PATCH", "/secrets/run-wi-1-t-implement-1")] = 403
+    with pytest.raises(UpstreamError, match="403"):
+        await executor.start(spec())
+    assert "run-wi-1-t-implement-1" in api.secrets, "the PipelineRun exists and needs its token"
+
+    await executor.start(spec())  # the activity's retry
+    api.collect("pipelineruns", "run-wi-1-t-implement-1")
+    assert api.secrets == {}
+
+
+async def test_a_pipeline_run_that_cannot_be_created_leaves_no_secret_behind() -> None:
+    api = FakeKubernetesApi()
+    api.refuse[("POST", "/pipelineruns")] = 403
+    with pytest.raises(UpstreamError, match="403"):
+        await TektonExecutor(client=api).start(spec())  # type: ignore[arg-type]
+    assert api.pipelineruns == {} and api.secrets == {}
+
+
+async def test_a_pipeline_run_created_despite_a_lost_answer_keeps_its_secret() -> None:
+    """The create reached the cluster, its answer was lost: the Secret is only deleted when the
+    PipelineRun really does not exist."""
+
+    class _LostAnswer(FakeKubernetesApi):
+        async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+            answer = await super().request(method, path, **kwargs)
+            if method == "POST" and path.endswith("/pipelineruns"):
+                raise TimeoutError("answer lost")
+            return answer
+
+    api = _LostAnswer()
+    with pytest.raises(TimeoutError):
+        await TektonExecutor(client=api).start(spec())  # type: ignore[arg-type]
+    assert "run-wi-1-t-implement-1" in api.secrets

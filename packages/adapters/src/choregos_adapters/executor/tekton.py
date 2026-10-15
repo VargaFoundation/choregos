@@ -3,11 +3,15 @@
 
 Le secret du run est créé pour ce run et supprimé à la fin ; le PipelineRun porte les
 labels qui permettent de retrouver le run depuis un événement Tekton.
+
+The run's Secret belongs to its PipelineRun (`ownerReferences`), and goes with it however the
+run ends (#501).
 """
 
 from __future__ import annotations
 
 import base64
+import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -102,11 +106,21 @@ class TektonExecutor:
             "GET", f"{TEKTON_API}/namespaces/{spec.namespace}/pipelineruns/{name}"
         )
         if existing is not None:
+            # A replayed start: what failed the first time may have been handing the Secret over
+            # to the PipelineRun. It is handed over here, as `k8s_job` does (#499).
+            await self._attach_secret(spec.namespace, name, existing)
             return ExecRef(kind=self.kind, name=name, namespace=spec.namespace, run_id=spec.run_id)
 
         await self._ensure_secret(spec, name)
         body = self._pipeline_run(spec, name)
-        await self.client.request("POST", f"{TEKTON_API}/namespaces/{spec.namespace}/pipelineruns", json=body)
+        try:
+            created = await self.client.request(
+                "POST", f"{TEKTON_API}/namespaces/{spec.namespace}/pipelineruns", json=body
+            )
+        except Exception:
+            await self._drop_secret_without_pipeline_run(spec.namespace, name)
+            raise
+        await self._attach_secret(spec.namespace, name, created)
         return ExecRef(
             kind=self.kind,
             name=name,
@@ -114,6 +128,46 @@ class TektonExecutor:
             run_id=spec.run_id,
             url=f"/#/namespaces/{spec.namespace}/pipelineruns/{name}",
         )
+
+    async def _attach_secret(self, namespace: str, name: str, pipeline_run: Any) -> None:
+        """The run's Secret belongs to its PipelineRun: when the PipelineRun is deleted (Tekton's
+        pruner, `cancel`, a person), the garbage collector takes the token and the gateway key with
+        it (#501). Before this, every run left its Secret behind, whatever its end.
+
+        A merge patch of `ownerReferences` alone. Without a `uid` (a client that does not return
+        the object), nothing breaks: the Secret stays ownerless, as before.
+        """
+        uid = (
+            ((pipeline_run or {}).get("metadata") or {}).get("uid")
+            if isinstance(pipeline_run, dict)
+            else None
+        )
+        if not uid:
+            return
+        await self.client.request(
+            "PATCH",
+            f"{CORE_API}/namespaces/{namespace}/secrets/{name}",
+            json={
+                "metadata": {
+                    "ownerReferences": [
+                        {"apiVersion": "tekton.dev/v1", "kind": "PipelineRun", "name": name, "uid": uid}
+                    ]
+                }
+            },
+            headers={"Content-Type": "application/merge-patch+json"},
+        )
+
+    async def _drop_secret_without_pipeline_run(self, namespace: str, name: str) -> None:
+        """The PipelineRun could not be created: the Secret written just before it has no owner.
+
+        Deleted only if the PipelineRun really does not exist: a lost answer after a successful
+        create would otherwise leave the run without its token. In doubt (the API does not
+        answer), it is left: the replayed start hands it over or rewrites it.
+        """
+        with contextlib.suppress(Exception):  # the original error is the one to raise
+            path = f"{TEKTON_API}/namespaces/{namespace}/pipelineruns/{name}"
+            if await self.client.request("GET", path) is None:
+                await self.client.request("DELETE", f"{CORE_API}/namespaces/{namespace}/secrets/{name}")
 
     async def _ensure_secret(self, spec: StageJobSpec, name: str) -> None:
         """The run's token and gateway key (#523), written even if a Secret of this name exists:

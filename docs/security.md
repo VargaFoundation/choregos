@@ -73,6 +73,14 @@ Context packs and tickets contain text written by third parties. Two rules:
   which books the spend of the ticket's runs left uncollected first. A revocation that fails is
   logged and the key dies at its TTL (`max_minutes + 30`). Migration `e7a9c1b3d5f7` scrubbed the
   rows written before #519.
+- The run's Secret (`k8s_job`, `tekton`) is owned by what runs the run, so the garbage collector
+  takes it with that object: the Job, collected by `ttlSecondsAfterFinished` (#499); the
+  PipelineRun, collected when it is deleted — Tekton has no TTL of its own, so a namespace without
+  a pruner keeps PipelineRuns and their Secrets (#501). A queued run is a suspended Job, which
+  never finishes, so its TTL never starts and Kubernetes stops `activeDeadlineSeconds` while it is
+  suspended: `await_run` deletes it at `queue_timeout_minutes`, and `record_workflow_failure`
+  deletes the Job of every queued run of an interpreter that dies (#501). A Temporal termination
+  runs no code: a queued run of a terminated interpreter keeps its Job and Secret.
 - Compatibility, for one release: a runner without `CHOREGOS_RUN_GATEWAY_KEY` (started by an
   orchestrator older than #523) uses the key its input carries, as before; `start_run` hands to
   the Secret, and removes from the row, a key an older `prepare_stage` stored there. A runner

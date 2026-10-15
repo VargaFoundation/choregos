@@ -433,6 +433,35 @@ async def _abandonner(project_id: str, run_id: str, ref: ExecRef) -> None:
                 run.ended_at = utcnow()
 
 
+async def abandon_queued_runs(project_id: str, run_ids: list[str]) -> None:
+    """Removes, at the executor, the runs among these that still wait for a slot (#501).
+
+    A queued run is a suspended Job (`k8s_job`) or a Secret marked `choregos/queued`
+    (`agent_sandbox`). Nothing ends it on its own: a suspended Job never finishes, so its
+    `ttlSecondsAfterFinished` never starts, and Kubernetes stops `activeDeadlineSeconds` while a
+    Job is suspended. Only `await_run` gave it a bound (`queue_timeout_minutes`); once the
+    interpreter dies, nobody polls it, and the Job and its Secret (token, gateway key) stayed
+    forever. Deleting the Job (propagation `Background`) takes the Secret it owns with it.
+
+    Only runs the executor knows (`executor_ref`) and that never ran (`queued`): a running run
+    ends on its own deadline, and its TTL then collects it. Never raises.
+    """
+    for run_id in run_ids:
+        with contextlib.suppress(Exception):
+            async with db() as session:
+                bundle = await project_bundle(session, project_id)
+                run = await session.get(Run, run_id)
+                if run is None or run.status != "queued" or not run.executor_ref:
+                    continue
+                ref = ExecRef(
+                    kind=run.executor_kind or "fake",
+                    name=run.executor_ref,
+                    namespace=_runner_namespace(get_settings(), bundle.slug),
+                    run_id=run.id,
+                )
+            await _abandonner(project_id, run_id, ref)
+
+
 @activity.defn(name="cancel_run")
 async def cancel_run(payload: dict[str, Any]) -> None:
     """Stops a run nobody will wait for — its interpreter was cancelled — and closes its key.
