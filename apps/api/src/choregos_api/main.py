@@ -324,9 +324,15 @@ def create_app() -> FastAPI:
         Sans route, la seule façon de savoir sur quoi on est branché serait de tenter une action
         et de lire le refus. Un exploitant doit pouvoir le demander.
         """
-        from .edition import courante, fonctions
+        from .edition import courante, edition_version, fonctions, publisher
 
-        return {"edition": courante(), "features": sorted(fonctions()), "version": __version__}
+        return {
+            "edition": courante(),
+            "features": sorted(fonctions()),
+            "version": __version__,
+            "publisher": publisher(),
+            "edition_version": edition_version(),
+        }
 
     # Le contrat la place sous `/api/v1` (`servers: /api/v1`) : c'est là que la console la
     # demande, puisque Next ne relaie que ce préfixe. Elle n'était servie qu'à la racine, que

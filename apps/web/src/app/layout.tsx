@@ -7,6 +7,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { OrganisationTheme, ServedThemeProvider, THEME_STYLE_ID } from "@/components/served-theme";
 import { Container, Wordmark } from "@/components/ui";
+import { EditionFooterLine } from "@/components/edition";
 import { BarreLaterale } from "@/components/coquille/barre-laterale";
 import { SCRIPT_DES_PREFERENCES } from "@/lib/preferences";
 import { themeCss } from "@/lib/served-theme";
@@ -91,10 +92,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     </span>
                     {/* The foundation is named here, and only here (ADR 0048). A theme cannot remove this
                         line; a renamed instance says what it is built on (ADR 0064). */}
-                    <span data-testid="footer-foundation">
-                      {theme.product_name === "Choregos" ? "Choregos" : `${theme.product_name}, built on Choregos`} by Varga
-                      Foundation · Apache 2.0
-                    </span>
+                    <EditionFooterLine productName={theme.product_name} />
                   </Container>
                 </footer>
               </div>

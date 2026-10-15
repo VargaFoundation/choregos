@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui";
+import { api } from "@/lib/api";
 import type { Edition } from "@/lib/types";
 
 /**
@@ -33,11 +35,21 @@ export function libelleFonction(cle: string): string {
 }
 
 /** Le badge de la barre du haut : sur quelle édition tourne la plateforme. */
-export function EditionBadge({ edition }: { edition: Edition["edition"] }) {
+export function EditionBadge({
+  edition,
+  publisher,
+}: {
+  edition: Edition["edition"];
+  publisher?: string | null;
+}) {
   return (
     <span
       className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-muted"
-      title="ADR 0024 — two editions"
+      title={
+        edition === "enterprise" && publisher
+          ? `Enterprise edition, published by ${publisher}`
+          : "ADR 0024 — two editions"
+      }
       data-testid="edition-badge"
     >
       {edition === "enterprise" ? "Enterprise edition" : "Community edition"}
@@ -54,7 +66,16 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
       <p className="text-sm">
         {entreprise ? "Enterprise edition" : "Community edition"}{" "}
         <span className="text-xs text-ink-muted">
-          version <span className="font-mono">{edition.version}</span>
+          {entreprise && edition.edition_version ? (
+            <>
+              <span className="font-mono">{edition.edition_version}</span>
+              {edition.publisher ? ` · published by ${edition.publisher}` : null}
+              {" · core "}
+            </>
+          ) : (
+            "version "
+          )}
+          <span className="font-mono">{edition.version}</span>
         </span>
       </p>
       {entreprise ? (
@@ -76,5 +97,25 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
         </>
       )}
     </Card>
+  );
+}
+
+/**
+ * The footer's attribution line. The community text is the foundation's (ADR 0048) and never
+ * changes; an enterprise edition that announces a publisher is named next to it, and the line says
+ * it is built on the community core.
+ */
+export function EditionFooterLine({ productName = "Choregos" }: { productName?: string }) {
+  const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
+  const publisher = edition.data?.edition === "enterprise" ? edition.data.publisher : null;
+  // The foundation is named here, and only here (ADR 0048). A theme cannot remove this line; a renamed
+  // instance says what it is built on (ADR 0064), an enterprise edition who publishes it (ADR 0024).
+  const product = productName === "Choregos" ? "" : `${productName} · `;
+  return (
+    <span data-testid="footer-foundation">
+      {publisher
+        ? `${product}Choregos Enterprise edition by ${publisher} · built on Choregos by Varga Foundation (Apache 2.0)`
+        : `${productName === "Choregos" ? "Choregos" : `${productName}, built on Choregos`} by Varga Foundation · Apache 2.0`}
+    </span>
   );
 }

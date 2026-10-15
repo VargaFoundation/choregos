@@ -100,7 +100,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
       {/* À partir de 1280 px : l'organisation à gauche, la session à droite. */}
       <div className="hidden items-center text-xs xl:flex">{choixOrg}</div>
       <div className="ml-auto hidden items-center gap-4 whitespace-nowrap text-xs xl:flex">
-        {edition.data && <EditionBadge edition={edition.data.edition} />}
+        {edition.data && <EditionBadge edition={edition.data.edition} publisher={edition.data.publisher} />}
         {session}
         {badgeDemo}
         <ChoixDuTheme />
@@ -129,7 +129,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
           >
             <ListeDeNavigation pathname={pathname} aDecider={scopedCount} variante="panneau" />
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-line pt-4 text-xs">
-              {edition.data && <EditionBadge edition={edition.data.edition} />}
+              {edition.data && <EditionBadge edition={edition.data.edition} publisher={edition.data.publisher} />}
               {choixOrg}
               {session}
               {badgeDemo}

@@ -2136,7 +2136,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
-    [/^\/edition$/, { edition: "community", features: [], version: "0.13.1" }],
+    [/^\/edition$/, { edition: "community", features: [], version: "0.13.1", publisher: null, edition_version: null }],
     [
       /^\/integrations$/,
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },

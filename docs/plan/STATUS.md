@@ -378,6 +378,9 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 **Total** : 249 livrées, 103 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
+
+
+
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
 entreprise visible, agents et serveurs MCP invisibles, réglages typés développement, aucune connexion depuis Claude) ;
@@ -1433,3 +1436,4 @@ les 492 tests ne disaient pas :
     change les groupes. La matrice RBAC reste verte.
     **Ce que ça ne prouve pas** : la politique par opération des connecteurs (flux S19), qui
     remplacera ces deux listes.
+| S39-01 | S39 | 🟡 | — | `GET /edition` names its publisher and the edition's version (contract-change): optional nullable `publisher` and `edition_version`, announced by the plugin through `edition.declarer(publisher=…, version=…)` (validated; refused for the community edition); the console shows them in the admin card, the badge tooltip and the footer (community line unchanged); ADR 0024 amendment and `docs/TRADEMARK.md` say the enterprise edition is published by graal.systems. `apps/api/tests/test_edition.py` (declaration, refusals, route on both paths validated against the OpenAPI schema), `packages/contracts/tests/test_contracts.py` (both shapes, malformed refused), `apps/web/tests/edition-publisher.test.tsx` (card, tooltip, both footer texts). Proves: a plugin that declares a publisher gets it served and rendered; the community edition serves null. Does not prove: that the dev tenant runs the enterprise images (deploy, Harbor cache, Vincent's gestures), anything about the EE repository's move, or `choregos_edition_info` carrying the publisher (not added) |

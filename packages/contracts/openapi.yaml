@@ -2388,7 +2388,14 @@ paths:
                 properties:
                   edition: { type: string, enum: [community, enterprise] }
                   features: { type: array, items: { type: string } }
-                  version: { type: string }
+                  version: { type: string, description: "the core's version" }
+                  publisher:
+                    type: [string, "null"]
+                    maxLength: 80
+                    description: who publishes the running edition, as announced by its plugin; null in the community edition
+                  edition_version:
+                    type: [string, "null"]
+                    description: the version of the edition plugin; null in the community edition
   /theme:
     get:
       tags: [session]
