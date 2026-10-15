@@ -157,9 +157,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         backend = plan.backend or bundle.config.agent.default_backend
         if plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
             backend = await _reviewer_backend(session, bundle, item, backend, resolver, plan)
-        resolved = resolver.resolve(
-            plan.model_request, project=bundle.config, size=item.size, backend=backend
-        )
+        resolved = _resolve_model(resolver, plan, bundle, item, backend)
         budget = engine.budget_for(plan.role, item.size, turns_factor=resolved.turns_factor)
         if plan.max_turns:
             budget = Budget(usd=budget.usd, max_turns=plan.max_turns, max_minutes=budget.max_minutes)
@@ -324,6 +322,18 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             "stage_input": without_secrets(payload, keep_gateway_key=False),
             "reused": False,
         }
+
+
+def _resolve_model(resolver: ModelResolver, plan: StagePlan, bundle: Any, item: Any, backend: str) -> Any:
+    """The stage's model, or a refusal that is not retried: a model the resolver refuses — unknown
+    profile, no tool calling, a backend that does not take it — stays refused until an operator
+    changes the configuration. The interpreter escalates the work item on it (#543)."""
+    from temporalio.exceptions import ApplicationError
+
+    try:
+        return resolver.resolve(plan.model_request, project=bundle.config, size=item.size, backend=backend)
+    except ModelResolutionError as refusal:
+        raise ApplicationError(str(refusal), type="ModelResolutionError", non_retryable=True) from refusal
 
 
 async def _admettre(

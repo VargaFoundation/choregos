@@ -17,7 +17,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ActivityError
+from temporalio.exceptions import ActivityError, ApplicationError
 
 from .activity_names import named
 from .planification import executer_activite
@@ -131,6 +131,24 @@ ESCALATION_CONTEXT_STORED = "escalation-context-stored"
 #: request (`-1`, `-2`…): a request the old code dropped, replayed, must answer no without making
 #: every later request answer no — `patched` gives one answer per id for the whole run.
 ESCALATION_CONTEXT_AFTER_RESTART = "escalation-context-after-restart"
+#: `prepare_stage` refusing a stage on its configuration — a model the resolver refuses, an agent,
+#: instructions, a skill or a knowledge base it cannot use — escalates the work item like a failed
+#: attempt, and the interpreter waits for the configuration to be fixed and the stage replayed
+#: (#543). Before this marker the refusal failed the interpreter, and the work item had no workflow.
+STAGE_CONFIG_REFUSAL_ESCALATES = "stage-config-refusal-escalates"
+#: The non-retryable error types `prepare_stage` raises for a configuration an operator can fix.
+#: Any other failure — a bug, an unreachable database once its retries are spent, an admission rule,
+#: a suspected prompt injection — still fails the interpreter, as before.
+CONFIGURATION_REFUSALS = frozenset(
+    {
+        "ModelResolutionError",
+        "AgentIndisponible",  # lang: fr-ok — an error type the activities already raise
+        "InstructionsInvalides",  # lang: fr-ok — an error type the activities already raise
+        "SkillPendingReview",
+        "SkillAbsente",  # lang: fr-ok — an error type the activities already raise
+        "KnowledgeRefused",
+    }
+)
 
 
 @dataclass
@@ -433,12 +451,19 @@ class WorkflowInterpreter:
                 "output_types": dict(transition.output_types),
             }
             stage |= engine.run_request(transition)
-            prepared = await executer_activite(
+            prepare = executer_activite(
                 stage_activities.prepare_stage,
                 stage,
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=DEFAULT_RETRY,
             )
+            try:
+                prepared = await prepare
+            except ActivityError as error:
+                escalated = await self._configuration_refused(params, engine, transition, error)
+                if escalated is None:
+                    raise
+                return escalated
             if prepared.get("refused") and workflow.patched(BUDGET_RESERVATION):
                 refused = prepared["refused"]
                 return await self._refused(
@@ -648,6 +673,42 @@ class WorkflowInterpreter:
                 transition,
                 kind="approval",
                 payload={"question": detail, "options": [], "summary": detail, "reason": reason},
+            )
+        return decision
+
+    async def _configuration_refused(
+        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, error: ActivityError
+    ) -> Any:
+        """`prepare_stage` refused the stage on its configuration (#543): the work item escalates,
+        as after a failed attempt, with the refusal as its reason, and waits for an operator to fix
+        the configuration and replay the stage. `None` — the interpreter fails, as before — for any
+        other error, for a history recorded before the marker, and for a transition with nowhere
+        to escalate to: going back to the state it started from would refuse again, forever."""
+        cause = error.cause
+        if not (
+            isinstance(cause, ApplicationError)
+            and cause.non_retryable
+            and cause.type in CONFIGURATION_REFUSALS
+        ):
+            return None
+        decision = engine.escalate(transition, f"configuration refused: {message_de(error)}"[:300])
+        # The condition first, `patched` next: an older history replayed here answers no without
+        # the marker being asked for an error the old code did not escalate.
+        if decision.next_state == transition.from_ or not workflow.patched(STAGE_CONFIG_REFUSAL_ESCALATES):
+            return None
+        detail = message_de(error)
+        if decision.next_state == engine.question_state():
+            await self._create_request(
+                params,
+                transition,
+                kind="approval",
+                payload={
+                    "question": f"The stage `{transition.key}` cannot start: {detail}. "
+                    "Fix the configuration, then replay the stage.",
+                    "options": [],
+                    "summary": detail,
+                    "reason": "configuration",
+                },
             )
         return decision
 
