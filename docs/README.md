@@ -23,6 +23,8 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [Positioning](positioning.md) | Where Choregos sits against runtimes, agent platforms and tool brokers — and what they do better |
 | [Runbooks](runbooks/README.md) | Operations: how to know it is this, what to do, how to check |
 | [State of the project](plan/STATE-OF-THE-PROJECT-2026-09-24.md) | The critical assessment of 2026-09-24 and the P0 → P3 plan |
+| [Plan of 2026-10-12](plan/PLAN-2026-10-12.md) | Agent builder, cost control, specialist agents, a lighter console (S26–S38) |
+| [Plan of 2026-10-15](plan/PLAN-2026-10-15.md) | The enterprise edition in production, governed agents, catalogues, a project-first console (S39) |
 
 ## What it is, in one paragraph
 
