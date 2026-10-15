@@ -7,10 +7,11 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from choregos_adapters.errors import UpstreamError
 from choregos_api.db.models import CostLedger, Run
 from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
-from choregos_core.domain import PrRef
+from choregos_core.domain import DiffSummary, PrRef
 from choregos_core.gates import MOTIF_ADR
 from temporalio import activity
 
@@ -57,8 +58,10 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             repo = _repo_slug(depot.url)
             try:
                 diff = await bundle.adapters.scm.compare(repo, depot.default_branch, branch)
-            except Exception:  # pas encore de branche : le diff est vide, pas une erreur
-                diff = None
+            except Exception as exc:
+                # A run that changed nothing pushed no branch: its diff is EMPTY, not unreadable
+                # (#536). Any other failure stays "diff unavailable" and the guarantee refuses.
+                diff = empty_diff_of_unchanged_run(exc, result, depot.default_branch, branch)
             if diff is not None:
                 changed = diff.paths()
                 additions, deletions = diff.additions, diff.deletions
@@ -135,6 +138,29 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             }
             for o in outcomes
         ]
+
+
+def empty_diff_of_unchanged_run(
+    exc: Exception, result: StageResult | None, base: str, branch: str
+) -> DiffSummary | None:
+    """The empty diff of a run that changed nothing, or `None` when the diff is truly unreadable.
+
+    On the dev tenant (#536), an implement run found the bug already fixed, changed nothing, and
+    pushed no branch: the SCM answered 404 on the comparison and the three diff guarantees refused
+    with "diff unavailable", three attempts in a row, then `needs_human`. Both conditions are
+    required: the SCM says the branch does not exist (not an outage, a timeout or a 403), AND the
+    runner MEASURED an empty change (git's `diff_files` / `diff_lines`, not the agent's word) with
+    no commit. A run whose push failed has commits and a non-empty diff: it is still refused.
+    """
+    if not (isinstance(exc, UpstreamError) and exc.status_code == 404) or result is None:
+        return None
+    evidence = result.evidence
+    measured = set(evidence.measured or [])
+    if not {"diff_files", "diff_lines"} <= measured:
+        return None  # a runner that does not measure its diff: nothing proves it is empty
+    if evidence.diff_files or evidence.diff_lines or result.artifacts.commits:
+        return None
+    return DiffSummary(base=base, head=branch)
 
 
 async def _diff_du_run(
