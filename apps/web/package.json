@@ -11,6 +11,7 @@
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "theme:defaults": "node scripts/export-theme-defaults.mts",
     "test:watch": "vitest",
     "e2e": "playwright test",
     "mock:api": "prism mock ../../packages/contracts/openapi.yaml -p 4010"

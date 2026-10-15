@@ -210,6 +210,19 @@ report — an image it cannot pull, a backend it cannot reach — the run says s
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
 digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start…), or why the container never started.
 
+## Theme
+
+The community edition serves one theme, its default (`GET /api/v1/theme`, public). Customising the
+look (colours per mode, radii, title font, logo, product name, footer, default mode) is an
+enterprise feature: a plugin calls `choregos_api.greffons.declare_theme_provider(fn)` with
+`fn(session, org) -> dict | None` and the core validates what it returns (schema, then the
+console's contrast budget on the effective colours). An invalid theme is replaced by the default
+(`X-Choregos-Theme: fallback`, with the violations in the API log); a plugin can check a theme
+itself with `choregos_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
+the attribution line. Fonts and images are served by the API under `/api/v1/` so that the console's
+CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes`. See
+[ADR 0064](adr/0064-a-theme-is-data-the-console-applies.md).
+
 ## Playbooks and the tool catalogue
 
 Both are brought by the deployment, as ConfigMaps, and both are optional.
