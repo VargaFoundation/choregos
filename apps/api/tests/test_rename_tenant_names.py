@@ -224,6 +224,10 @@ transitions:
     done = (await client.get(f"/api/v1/projects/{pid}/workflows/preuve-agent")).json()
     states = done["json"]["states"]
     assert set(states) == {"inbox", "en_cours", "fini"}, "ids untouched"  # lang: fr-ok
-    assert [s["display"] for s in states.values()] == ["To do", "In progress", "Done"]
+    assert {k: v["display"] for k, v in states.items()} == {
+        "inbox": "To do",
+        "en_cours": "In progress",  # lang: fr-ok
+        "fini": "Done",  # lang: fr-ok
+    }
     assert done["version"] == 2
     assert "workflow:preuve/preuve-agent" not in _kinds(await tool.plan(api, MAPPING))
