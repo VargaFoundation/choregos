@@ -17,7 +17,7 @@ async def _sharepoint(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, mode: str = "index"
 ) -> dict[str, Any]:
     """An `index` base, a `documents` connector (Sites.Selected app), and a SharePoint source."""
-    monkeypatch.setenv("KB_GRAPH_SECRET", "s3cret")
+    monkeypatch.setenv("CONNECTOR_KB_GRAPH_SECRET", "s3cret")
     created = await client.post(BASE, json={"slug": "framework", "name": "Framework", "serving_mode": mode})
     assert created.status_code == 201, created.text
     connector = await client.post(
@@ -27,7 +27,7 @@ async def _sharepoint(
             "kind": "documents",
             "type": "sharepoint",
             "config": {"tenant_id": "acme", "client_id": "choregos-kb"},
-            "secret_refs": {"client_secret": "env:KB_GRAPH_SECRET"},
+            "secret_refs": {"client_secret": "env:CONNECTOR_KB_GRAPH_SECRET"},
         },
     )
     assert connector.status_code == 201, connector.text

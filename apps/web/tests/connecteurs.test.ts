@@ -23,7 +23,7 @@ describe("les connecteurs d'un projet (ADR 0034, S19-01)", () => {
   });
 
   it("un secret s'écrit en référence, jamais en valeur", () => {
-    expect(estUneReference("env:JIRA_TOKEN")).toBe(true);
+    expect(estUneReference("env:CONNECTOR_JIRA_TOKEN")).toBe(true);
     expect(estUneReference("vault:kv/jira#token")).toBe(true);
     expect(estUneReference("s3cr3t")).toBe(false);
     expect(estUneReference("ghp_0123456789abcdef")).toBe(false);

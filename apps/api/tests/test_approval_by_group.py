@@ -24,7 +24,7 @@ def firewall(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     fake = FakePfSense()
     monkeypatch.setattr(choregos_adapters, "FAKE_NETOPS", {"pfsense": fake})
-    monkeypatch.setenv("APPROVAL_TEST_PFSENSE_KEY", "-".join(("pfsense", "approval", "test")))
+    monkeypatch.setenv("CONNECTOR_APPROVAL_TEST_PFSENSE_KEY", "-".join(("pfsense", "approval", "test")))
     yield fake
 
 
@@ -54,7 +54,7 @@ async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any]) ->
     from choregos_api.security import mint_run_token
 
     body = {"name": "pfsense", "type": "pfsense", "config": {"base_url": "https://fw.example.test"},
-            "secret_refs": {"api_key": "env:APPROVAL_TEST_PFSENSE_KEY"}}  # fmt: skip
+            "secret_refs": {"api_key": "env:CONNECTOR_APPROVAL_TEST_PFSENSE_KEY"}}  # fmt: skip
     assert (await client.post(f"{ORG}/connectors", json=body)).status_code == 201
     named = await client.patch(
         f"{ORG}/connectors/pfsense/operations/update_firewall_rule", json={"approver_group": GROUP}
@@ -121,7 +121,7 @@ async def test_a_read_has_no_approver_and_the_group_can_be_cleared(
     client: AsyncClient, admin: str, firewall: Any
 ) -> None:
     body = {"name": "pfsense", "type": "pfsense", "config": {"base_url": "https://fw.example.test"},
-            "secret_refs": {"api_key": "env:APPROVAL_TEST_PFSENSE_KEY"}}  # fmt: skip
+            "secret_refs": {"api_key": "env:CONNECTOR_APPROVAL_TEST_PFSENSE_KEY"}}  # fmt: skip
     assert (await client.post(f"{ORG}/connectors", json=body)).status_code == 201
     read = await client.patch(
         f"{ORG}/connectors/pfsense/operations/list_aliases", json={"approver_group": GROUP}

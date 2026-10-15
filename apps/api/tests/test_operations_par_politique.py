@@ -41,7 +41,7 @@ def annuaire() -> Iterator[None]:
 
 async def _declarer(client: AsyncClient, **extra: Any) -> Any:
     corps = {"name": "annuaire-acme", "type": "annuaire", "config": {"tenant": "acme"},
-             "secret_refs": {"client_secret": "env:ANNUAIRE_SECRET"}, **extra}  # fmt: skip
+             "secret_refs": {"client_secret": "env:CONNECTOR_ANNUAIRE_SECRET"}, **extra}  # fmt: skip
     return await client.post("/api/v1/orgs/varga/connectors", json=corps)
 
 

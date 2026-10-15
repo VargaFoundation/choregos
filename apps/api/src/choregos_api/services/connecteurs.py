@@ -49,12 +49,17 @@ def verifier_les_secrets(
     config: dict[str, Any],
     secret_refs: dict[str, str],
     secret_ref: str | None = None,
+    *,
+    may_reference: bool = True,
 ) -> None:
     """Un secret écrit en clair, un champ secret inconnu, une référence illisible : 422.
 
     Les champs secrets d'un type (`api_token` de Jira, `token` d'Argo CD…) partaient dans `config`,
     en clair dans la base et dans chaque réponse de l'API. Ils s'écrivent désormais en
-    références (`secret_refs`), résolues quand l'adaptateur est construit."""
+    references (`secret_refs`), resolved when the adapter is built.
+
+    A reference names a variable of the platform's environment (S39-06b): only the organisation's
+    administrator writes one (`may_reference`)."""
     from choregos_core.secrets import ReferenceInvalide, verifier
 
     en_clair = sorted(set(config) & set(spec.secret_fields))
@@ -69,7 +74,13 @@ def verifier_les_secrets(
             f"`{type_name}` has no secret field {', '.join(inconnus)} "
             f"(its own: {', '.join(spec.secret_fields) or 'none'})"
         )
-    for reference in [*secret_refs.values(), *([secret_ref] if secret_ref else [])]:
+    written = [*secret_refs.values(), *([secret_ref] if secret_ref else [])]
+    if written and not may_reference:
+        raise unprocessable(
+            "only the organisation's administrator writes a secret reference (`env:NAME`): a reference "
+            "reads a variable of the platform's environment"
+        )
+    for reference in written:
         try:
             verifier(reference)
         except ReferenceInvalide as refus:

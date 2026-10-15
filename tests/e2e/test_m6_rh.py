@@ -63,9 +63,9 @@ class Faux:
             ("access_control", self.lecteurs),
         ):
             monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, faux)
-        monkeypatch.setenv("E2E_CLE_ANNUAIRE", CLE_ANNUAIRE)
-        monkeypatch.setenv("E2E_CLE_PARC", CLE_PARC)
-        monkeypatch.setenv("E2E_CLE_FOURNISSEUR", CLE_FOURNISSEUR)
+        monkeypatch.setenv("CONNECTOR_E2E_CLE_ANNUAIRE", CLE_ANNUAIRE)
+        monkeypatch.setenv("CONNECTOR_E2E_CLE_PARC", CLE_PARC)
+        monkeypatch.setenv("CONNECTOR_E2E_CLE_FOURNISSEUR", CLE_FOURNISSEUR)
 
 
 @pytest.fixture
@@ -79,14 +79,15 @@ async def _organisation(client: AsyncClient) -> None:
     for corps in (
         {"name": "annuaire", "kind": "identity", "type": "entra",
          "config": {"tenant_id": "acme", "client_id": "choregos"},
-         "secret_refs": {"client_secret": "env:E2E_CLE_ANNUAIRE"}},
-        {"name": "parc", "kind": "mdm", "type": "demo", "secret_refs": {"api_key": "env:E2E_CLE_PARC"}},
+         "secret_refs": {"client_secret": "env:CONNECTOR_E2E_CLE_ANNUAIRE"}},
+        {"name": "parc", "kind": "mdm", "type": "demo",
+         "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
         {"name": "transporteur", "kind": "shipping", "type": "demo",
-         "secret_refs": {"api_key": "env:E2E_CLE_PARC"}},
+         "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
         {"name": "lecteurs", "kind": "access_control", "type": "demo",
-         "secret_refs": {"api_key": "env:E2E_CLE_PARC"}},
+         "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
         {"name": "fournisseur", "kind": "mcp", "type": "mcp", "config": {"url": "https://fournisseur.test/mcp"},
-         "secret_refs": {"token": "env:E2E_CLE_FOURNISSEUR"}},
+         "secret_refs": {"token": "env:CONNECTOR_E2E_CLE_FOURNISSEUR"}},
     ):  # fmt: skip
         cree = await client.post(f"{ORG}/connectors", json=corps)
         assert cree.status_code == 201, cree.text

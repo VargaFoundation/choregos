@@ -50,7 +50,7 @@ spec:
             {{- with .Values.demoFakes.tokenSecret }}
             # The MCP servers' token, and the fake Graph's application secret: by
             # reference, like any secret; without it, the network policy is the only gate.
-            - name: CHOREGOS_DEMO_JETON
+            - name: CONNECTOR_DEMO_JETON
               valueFrom: { secretKeyRef: { name: {{ .name }}, key: {{ .key }} } }
             {{- end }}
           readinessProbe:

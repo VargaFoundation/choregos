@@ -91,18 +91,18 @@ async def test_une_reference_est_resolue_quand_le_connecteur_sert(
     corps = {
         "type": "jira",
         "config": {"base_url": "https://acme.atlassian.net", "email": "a@b.c", "project_key": "RH"},
-        "secret_refs": {"api_token": "env:CHOREGOS_TEST_JIRA_TOKEN"},
+        "secret_refs": {"api_token": "env:CONNECTOR_TEST_JIRA_TOKEN"},
     }
     pose = await client.put(f"/api/v1/projects/{pid}/connectors/tracker", json=corps)
     assert pose.status_code == 200, pose.text
-    assert pose.json()["secret_refs"] == {"api_token": "env:CHOREGOS_TEST_JIRA_TOKEN"}
+    assert pose.json()["secret_refs"] == {"api_token": "env:CONNECTOR_TEST_JIRA_TOKEN"}
 
-    monkeypatch.delenv("CHOREGOS_TEST_JIRA_TOKEN", raising=False)
+    monkeypatch.delenv("CONNECTOR_TEST_JIRA_TOKEN", raising=False)
     absent = (await client.post(f"/api/v1/projects/{pid}/connectors/tracker/test")).json()
     assert absent["ok"] is False
-    assert "CHOREGOS_TEST_JIRA_TOKEN" in str(absent["checks"])
+    assert "CONNECTOR_TEST_JIRA_TOKEN" in str(absent["checks"])
 
-    monkeypatch.setenv("CHOREGOS_TEST_JIRA_TOKEN", "s3cr3t")
+    monkeypatch.setenv("CONNECTOR_TEST_JIRA_TOKEN", "s3cr3t")
     present = (await client.post(f"/api/v1/projects/{pid}/connectors/tracker/test")).json()
     assert present["ok"] is True, present
     assert "s3cr3t" not in str(present)
@@ -124,9 +124,9 @@ async def test_l_adaptateur_teste_recoit_le_secret_resolu_et_la_reponse_ne_le_di
     register("tracker", "sonde", spec)(lambda cfg: recus.append(cfg) or object())
     try:
         pid = project["id"]
-        corps = {"type": "sonde", "config": {}, "secret_refs": {"api_token": "env:CHOREGOS_TEST_SONDE"}}
+        corps = {"type": "sonde", "config": {}, "secret_refs": {"api_token": "env:CONNECTOR_TEST_SONDE"}}
         assert (await client.put(f"/api/v1/projects/{pid}/connectors/tracker", json=corps)).status_code == 200
-        monkeypatch.setenv("CHOREGOS_TEST_SONDE", "v4leur")
+        monkeypatch.setenv("CONNECTOR_TEST_SONDE", "v4leur")
         monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
         resultat = await client.post(f"/api/v1/projects/{pid}/connectors/tracker/test")
     finally:
@@ -134,3 +134,68 @@ async def test_l_adaptateur_teste_recoit_le_secret_resolu_et_la_reponse_ne_le_di
         _SPECS.pop(("tracker", "sonde"), None)
     assert recus == [{"api_token": "v4leur"}]
     assert "v4leur" not in resultat.text
+
+
+# ── S39-06b: a reference reads connector variables only, and only an administrator writes one ──
+
+
+def _jira(host: str, reference: str) -> dict[str, Any]:
+    return {
+        "type": "jira",
+        "config": {"base_url": f"https://{host}", "email": "a@b.c", "project_key": "RH"},
+        "secret_refs": {"api_token": reference},
+    }
+
+
+async def test_a_project_owner_cannot_write_an_env_reference(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import Membership, Organization, User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    from .conftest import login
+
+    url = f"/api/v1/projects/{project['id']}/connectors/tracker"
+    # The organisation's administrator (the fixture's session) may.
+    assert (await client.put(url, json=_jira("acme.atlassian.net", "env:CONNECTOR_X"))).status_code == 200
+    async with session_scope() as session:
+        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+        user = User(email="proprio@varga.dev", display_name="proprio")
+        session.add(user)
+        await session.flush()
+        session.add(Membership(user_id=user.id, org_id=org.id, role="project_owner"))
+    await login(client, "proprio@varga.dev")
+    refused = await client.put(url, json=_jira("acme.atlassian.net", "env:CONNECTOR_X"))
+    assert refused.status_code == 422, refused.text
+    assert "administrator" in refused.json()["detail"]
+
+
+async def test_a_platform_secret_never_leaves_through_a_connector_test(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import httpx
+    import respx
+    from choregos_api.db.models import Connector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "platform-session-secret")
+    url = f"/api/v1/projects/{project['id']}/connectors/tracker"
+    with respx.mock(assert_all_called=False) as mock:
+        host = mock.route(host="evil.test").mock(return_value=httpx.Response(200, json={}))
+        # Refused at write, for the administrator too.
+        refused = await client.put(url, json=_jira("evil.test", "env:CHOREGOS_SESSION_SECRET"))
+        assert refused.status_code == 422, refused.text
+        # A reference stored before the allowlist is never resolved: the connector is in error.
+        await client.put(url, json=_jira("evil.test", "env:CONNECTOR_X"))
+        async with session_scope() as session:
+            row = (
+                await session.execute(select(Connector).where(Connector.project_id == project["id"]))
+            ).scalar_one()
+            row.secret_refs = {"api_token": "env:CHOREGOS_SESSION_SECRET"}
+        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+        tested = await client.post(f"{url}/test")
+        assert "platform-session-secret" not in tested.text
+        assert tested.json()["ok"] is False
+        assert not host.called, "nothing was sent to the connector's host"

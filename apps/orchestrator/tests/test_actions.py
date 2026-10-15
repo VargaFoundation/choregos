@@ -232,7 +232,7 @@ async def test_une_action_approuvee_atteint_le_serveur_avec_la_cle_du_connecteur
         outils=[{"name": "commander_poste", "inputSchema": {"type": "object"}}], jeton="cle-fournisseur"
     )
     monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur)
-    monkeypatch.setenv("CHOREGOS_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
+    monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     async with session_scope() as session:
         projet = await session.get(Project, setup.project_id)
         assert projet is not None
@@ -242,7 +242,7 @@ async def test_une_action_approuvee_atteint_le_serveur_avec_la_cle_du_connecteur
             kind="mcp",
             type="mcp",
             config={"url": "https://fournisseur.test/mcp"},
-            secret_refs={"token": "env:CHOREGOS_TEST_CLE_FOURNISSEUR"},
+            secret_refs={"token": "env:CONNECTOR_TEST_CLE_FOURNISSEUR"},
         )
         session.add(instance)
         await session.flush()

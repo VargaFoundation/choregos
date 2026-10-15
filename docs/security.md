@@ -57,6 +57,14 @@ Context packs and tickets contain text written by third parties. Two rules:
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
+- A connector's `env:NAME` reference is an allowlist, not a free read of the process environment: the
+  API and the orchestrator also hold the platform's own secrets (session key, gateway master key,
+  database password), so a name must match `CHOREGOS_SECRET_ENV_PATTERN` (default
+  `^CONNECTOR_[A-Z0-9_]+$`) and `CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`,
+  `TEMPORAL_*` are refused whatever the pattern. It is checked when the reference is written and
+  again when it is resolved. Only the organisation's administrator writes a reference; a project
+  owner cannot. Before this rule, a role allowed to write a connector could point a secret field at
+  a platform variable and have it sent to a host of its choosing.
 - External Secrets Operator ↔ the provider's vault; one hand-made `ClusterSecretStore`.
 - Git token minted **per run**, repository scope, 1 h TTL, injected in memory.
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while

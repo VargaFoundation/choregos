@@ -22,7 +22,7 @@ def parc(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     faux = FakeMdm(cle_attendue=CLE)
     monkeypatch.setitem(choregos_adapters.FAUX_METIER, "mdm", faux)
-    monkeypatch.setenv("CHOREGOS_TEST_CLE_PARC", CLE)
+    monkeypatch.setenv("CONNECTOR_TEST_CLE_PARC", CLE)
     yield faux
 
 
@@ -31,7 +31,7 @@ async def _declarer(client: AsyncClient, kind: str, nom: str) -> dict[str, Any]:
         "name": nom,
         "kind": kind,
         "type": "demo",
-        "secret_refs": {"api_key": "env:CHOREGOS_TEST_CLE_PARC"},
+        "secret_refs": {"api_key": "env:CONNECTOR_TEST_CLE_PARC"},
     }
     cree = await client.post(f"{ORG}/connectors", json=corps)
     assert cree.status_code == 201, cree.text
@@ -105,7 +105,7 @@ async def test_une_ecriture_approuvee_atteint_le_parc_avec_la_cle_resolue_et_un_
         # Le poste est à Léa : l'inscrire pour Paul est un refus, définitif — Temporal ne retente pas.
         with pytest.raises(EffetRefuse, match="inscrit pour un autre utilisateur"):
             await appel(ctx, inscrire("paul@acme.test"))
-        monkeypatch.setenv("CHOREGOS_TEST_CLE_PARC", "une-cle-revoquee")
+        monkeypatch.setenv("CONNECTOR_TEST_CLE_PARC", "une-cle-revoquee")
         with pytest.raises(EffetRefuse, match="clé refusée"):
             await appel(ctx, inscrire("lea@acme.test"))
     assert parc.postes["PC-1"]["upn"] == "lea@acme.test"

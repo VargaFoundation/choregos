@@ -17,20 +17,47 @@ def resolveurs_propres() -> Iterator[None]:
 
 
 def test_une_reference_d_environnement_se_resout(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JIRA_TOKEN", "s3cr3t")
-    assert secrets.resoudre("env:JIRA_TOKEN") == "s3cr3t"
+    monkeypatch.setenv("CONNECTOR_JIRA_TOKEN", "s3cr3t")
+    assert secrets.resoudre("env:CONNECTOR_JIRA_TOKEN") == "s3cr3t"
 
 
 def test_une_variable_absente_est_nommee(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("JIRA_TOKEN", raising=False)
-    with pytest.raises(SecretIntrouvable, match="env:JIRA_TOKEN"):
-        secrets.resoudre("env:JIRA_TOKEN")
+    monkeypatch.delenv("CONNECTOR_JIRA_TOKEN", raising=False)
+    with pytest.raises(SecretIntrouvable, match="env:CONNECTOR_JIRA_TOKEN"):
+        secrets.resoudre("env:CONNECTOR_JIRA_TOKEN")
 
 
 @pytest.mark.parametrize("valeur", ["s3cr3t", "ghp_abcdef0123456789", "inconnu:x", "env:minuscules"])
 def test_une_valeur_en_clair_ou_illisible_est_refusee(valeur: str) -> None:
     with pytest.raises(ReferenceInvalide):
         secrets.resoudre(valeur)
+
+
+def test_env_reference_reads_only_connector_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """S39-06b: a reference is written by a tenant role; the platform's own secrets stay out of reach."""
+    monkeypatch.delenv("CHOREGOS_SECRET_ENV_PATTERN", raising=False)
+    for platform in (
+        "CHOREGOS_SESSION_SECRET",
+        "CHOREGOS_GATEWAY_MASTER_KEY",
+        "DATABASE_URL",
+        "PGPASSWORD",
+        "HOME",
+    ):
+        monkeypatch.setenv(platform, "platform-secret")
+        with pytest.raises(ReferenceInvalide, match="only variables matching"):
+            secrets.verifier(f"env:{platform}")  # refused at write
+        with pytest.raises(SecretIntrouvable, match="only variables matching"):
+            secrets.resoudre(f"env:{platform}")  # and at resolution, even though it is set
+    monkeypatch.setenv("CONNECTOR_JIRA", "ok")
+    secrets.verifier("env:CONNECTOR_JIRA")
+    assert secrets.resoudre("env:CONNECTOR_JIRA") == "ok"
+    # A deployment widens the pattern: its own variables, never the platform's.
+    monkeypatch.setenv("CHOREGOS_SECRET_ENV_PATTERN", r"^(CONNECTOR_|JIRA_)[A-Z0-9_]*$")
+    monkeypatch.setenv("JIRA_TOKEN", "t0k")
+    assert secrets.resoudre("env:JIRA_TOKEN") == "t0k"
+    monkeypatch.setenv("CHOREGOS_SECRET_ENV_PATTERN", r"^.*$")
+    with pytest.raises(ReferenceInvalide):
+        secrets.verifier("env:CHOREGOS_SESSION_SECRET")
 
 
 def test_un_greffon_declare_son_coffre() -> None:

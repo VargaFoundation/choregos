@@ -24,6 +24,12 @@ global:
   # healthy and refusing the second organization weeks later.
   edition: community
   fakes: false
+  # Secrets by reference (ADR 0034). A connector's `env:NAME` reference reads only the variables
+  # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
+  # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are
+  # refused whatever the pattern says. Given to the API and to each worker.
+  secrets:
+    envPattern: ""
   # Additional environment variables, given to the API, to each worker and to the migration Job
   # (through `choregos.commonEnv`). To enable a setting the chart does not know
   # yet — for example a plugin shipped inactive (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — without forking the
@@ -358,9 +364,9 @@ demoFakes:
 # Netops (ADR 0052): the read-only identity of the `cilium` connector — a service account allowed
 # get/list/watch on CiliumNetworkPolicy and CiliumClusterwideNetworkPolicy, nothing else. Off by
 # default. To use it, map its token into the API and workers and reference it from the connector:
-#   global.extraEnv: [{name: CILIUM_READER_TOKEN, valueFrom: {secretKeyRef:
+#   global.extraEnv: [{name: CONNECTOR_CILIUM_READER_TOKEN, valueFrom: {secretKeyRef:
 #     {name: choregos-netops-cilium-reader-token, key: token}}}]
-#   connector `cilium`: secret_refs: {token: env:CILIUM_READER_TOKEN}
+#   connector `cilium`: secret_refs: {token: env:CONNECTOR_CILIUM_READER_TOKEN}
 netops:
   ciliumReader:
     enabled: false
