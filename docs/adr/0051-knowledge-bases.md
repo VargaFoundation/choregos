@@ -136,3 +136,30 @@ there (D10), with full-text search built in and `pgvector` one extension away.
 13. **The console.** A project's *Knowledge* section lists what its runs are served and creates a
     base owned by the project; the organisation's registry (`/knowledge`) lists every base with its
     scope. The migration adds one nullable column: existing bases have no owner.
+
+## Update — 2026-10-16: refresh schedule (S39-19)
+
+15. **The loop is a timer; the source's row decides.** The `KnowledgeSync` workflow is unchanged: a
+    pass runs `sync_knowledge_source`, then sleeps the `interval_seconds` the activity answers (at
+    least 300 s), or wakes on `sync_now`. The activity reads the row and calls `decide_pass`: it
+    syncs only when the pass is due, and otherwise answers `{"status": "not_due", "interval_seconds": …}`
+    touching nothing. So a worker restart or a `continue_as_new` no longer syncs off-schedule, and
+    the archived histories keep replaying (no `workflow.patched`).
+16. **Three refresh modes per source** (`refresh_mode`): `interval` (every `interval_minutes`, 5
+    minutes to 7 days, the previous behaviour and the default), `cron` (`refresh_cron`, five fields,
+    read in `refresh_timezone`, an IANA name; at least 5 minutes between two fires, checked over the
+    next 50) and `manual` (only on demand, the loop idles). A sync requested by a person
+    (`sync_requested_at` later than `last_synced_at`) runs in every mode. A knowledge base has no
+    refresh of its own: it is the union of its sources, each with its natural cadence (a crawl daily,
+    SharePoint hourly); the console's "apply to all sources" is a convenience, and `POST
+    …/knowledge/{slug}/sync` syncs every source of a base now.
+17. **"Next sync" is stored** (`next_sync_at`), written by the activity after each pass, failed or
+    not, and by the API when the refresh changes. It is an estimate: a worker down at the cron
+    minute syncs at its next pass. Editing the refresh takes effect at once: the API recomputes
+    `next_sync_at`, commits and signals `sync_now`; the woken pass is a reschedule unless a sync
+    was requested.
+18. **Cron is in-house** (`choregos_core.cron`: parse, next fire with `zoneinfo`, minimum gap); a
+    local time skipped by the spring DST change does not fire, one that exists twice fires once.
+    **Temporal Schedules** were rejected (a second mechanism beside the loop, with its own lifecycle
+    on create, patch and delete, for no gain over an activity that reads the row), and so was changing
+    the workflow to sleep until a timestamp (a patch and a new history for the same behaviour).

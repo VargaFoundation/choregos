@@ -298,3 +298,41 @@ async def test_web_and_git_sources_sync_through_their_fakes(client: AsyncClient,
         assert (await _sync(created.json()["id"]))["added"] == 1
     titles = {d["title"] for d in (await client.get(f"{BASE}/framework")).json()["documents"]}
     assert titles == {"Restart", "ADR"}
+
+
+async def test_the_activity_skips_a_pass_that_is_not_due(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S39-19: a restarted worker or a `continue_as_new` pass must not sync off-schedule."""
+    from datetime import UTC, datetime, timedelta
+
+    from choregos_adapters.fakes.documents import fake_source
+    from choregos_api.knowledge import refresh
+    from choregos_orchestrator.activities.knowledge import sync_knowledge_source
+
+    now = [datetime(2026, 10, 16, 8, 0, tzinfo=UTC)]
+    monkeypatch.setattr(refresh, "utcnow", lambda: now[0])
+    await client.post(BASE, json={"slug": "framework", "name": "Framework", "serving_mode": "files"})
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "Docs", "config": {"url": "https://git.example.com/p.git"}},
+    )
+    source_id = created.json()["id"]
+    fake_source(source_id).put("a", "a.md", b"# A\n")
+    payload = {"org": "varga", "source_id": source_id}
+
+    first = await sync_knowledge_source(payload)
+    assert first["added"] == 1
+    assert first["interval_seconds"] == 3600
+    shown = (await client.get(f"{BASE}/framework")).json()["sources"][0]
+    assert datetime.fromisoformat(shown["next_sync_at"]).replace(tzinfo=UTC) == now[0] + timedelta(minutes=60)
+
+    fetched = len(fake_source(source_id).fetched)
+    now[0] += timedelta(minutes=10)
+    second = await sync_knowledge_source(payload)
+    assert second == {"status": "not_due", "interval_seconds": 3000}
+    assert len(fake_source(source_id).fetched) == fetched
+
+    now[0] += timedelta(minutes=51)
+    third = await sync_knowledge_source(payload)
+    assert third["status"] == "synced"
