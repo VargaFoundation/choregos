@@ -1,7 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AgentBuilder, cleanSpec, reachedOperations, servedTo, skillUsable, toolMatches } from "@/components/agents/builder";
+import {
+  AgentBuilder,
+  cleanSpec,
+  openByDefault,
+  reachedOperations,
+  sectionSummaries,
+  servedTo,
+  skillUsable,
+  slugFromName,
+  toolMatches,
+} from "@/components/agents/builder";
 import { api } from "@/lib/api";
 import type { KnowledgeBase, OrgConnector, Skill } from "@/lib/types";
 
@@ -71,6 +81,48 @@ describe("the builder's rules", () => {
   });
 });
 
+describe("the folded sections", () => {
+  it("say their value in one line, and open when it is not the default", () => {
+    expect(sectionSummaries({})).toEqual({
+      model: "the project's profile · the project's backend",
+      limits: "the role's defaults",
+      skills: "none",
+      tools: "none",
+      knowledge: "none",
+      memory: "the project's shared memory",
+      evals: "0 cases",
+    });
+    const spec = {
+      model: "profile:strong",
+      limits: { max_turns: 1, max_minutes: 20 },
+      budget: { run_usd: 0.5 },
+      skills: [{ slug: "a" }, { slug: "b" }],
+      mcp_servers: [{ connector: "supplier", tools: [] }],
+      memory: "none" as const,
+      evals: [{ name: "x" }],
+    };
+    expect(sectionSummaries(spec)).toMatchObject({
+      model: "profile:strong · the project's backend",
+      limits: "1 turn · 20 min · US$0.50 a run",
+      skills: "2 attached",
+      tools: "1 MCP server",
+      memory: "none",
+      evals: "1 case",
+    });
+    expect(Object.values(openByDefault({})).some(Boolean)).toBe(false);
+    expect(Object.values(openByDefault(spec)).filter(Boolean)).toHaveLength(6);
+  });
+
+  it("a slug comes from a name, and `new` is refused", () => {
+    expect(slugFromName("Release Notes  writer!")).toBe("release-notes-writer");
+    expect(slugFromName("Zo\u00eb's agent")).toBe("zoes-agent");
+    expect(slugFromName("3D checker")).toBe("a-3d-checker");
+    expect(slugFromName("new")).toBe("");
+    expect(slugFromName("!")).toBe("");
+    expect(slugFromName("x".repeat(80)).length).toBe(63);
+  });
+});
+
 describe("the builder", () => {
   beforeEach(() => {
     vi.mocked(api.orgConnectors).mockResolvedValue([CONNECTOR, { name: "entra", kind: "identity", type: "entra", status: "ok" }]);
@@ -88,6 +140,7 @@ describe("the builder", () => {
     const builder = screen.getByTestId("agent-builder");
     fireEvent.change(within(builder).getByLabelText("Slug"), { target: { value: "triage" } });
     fireEvent.change(within(builder).getByLabelText("Name"), { target: { value: "Triage" } });
+    fireEvent.change(within(builder).getByLabelText("Description"), { target: { value: "Sorts the incoming tickets by urgency." } });
     fireEvent.change(within(builder).getByLabelText("Instructions"), { target: { value: "Sort {{ ticket.title }}." } });
     const model = within(builder).getByLabelText("Model");
     await within(model).findByRole("option", { name: "platform/cheap" });
@@ -134,12 +187,14 @@ describe("the builder", () => {
     );
     expect(within(summary).getByTestId("memoire-resolue")).toHaveTextContent("Its own memory within each project");
 
-    fireEvent.click(within(builder).getByRole("button", { name: "Create the agent" }));
+    fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
     await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
     expect(api.createAgent).toHaveBeenCalledWith("acme", {
       slug: "triage",
       kind: "internal",
       display_name: "Triage",
+      description: "Sorts the incoming tickets by urgency.",
+      lifecycle: "active",
       spec: {
         instructions: "Sort {{ ticket.title }}.",
         model: "platform/cheap",
@@ -154,5 +209,35 @@ describe("the builder", () => {
       },
     });
     await waitFor(() => expect(done).toHaveBeenCalledWith("Triage registered as v1"));
+  });
+
+  it("derives the slug from the name until the slug is edited by hand", () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder org="acme" mode={{ kind: "create" }} />
+      </QueryClientProvider>,
+    );
+    const builder = screen.getByTestId("agent-builder");
+    fireEvent.change(within(builder).getByLabelText("Name"), { target: { value: "Release Notes writer" } });
+    expect(within(builder).getByLabelText("Slug")).toHaveValue("release-notes-writer");
+    fireEvent.change(within(builder).getByLabelText("Slug"), { target: { value: "notes" } });
+    fireEvent.change(within(builder).getByLabelText("Name"), { target: { value: "Something else" } });
+    expect(within(builder).getByLabelText("Slug")).toHaveValue("notes");
+    // A reserved slug is refused: `/agents/new` is a page.
+    fireEvent.change(within(builder).getByLabelText("Slug"), { target: { value: "new" } });
+    expect(within(builder).getByText(/is reserved/)).toBeInTheDocument();
+    expect(within(builder).getByRole("button", { name: "Create and activate" })).toBeDisabled();
+    expect(within(builder).getByRole("button", { name: "Save as draft" })).toBeDisabled();
+  });
+
+  it("opens the sections that hold something, and leaves the others folded", () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder org="acme" mode={{ kind: "create" }} start={{ skills: [{ slug: "onboarding-procedure" }] }} />
+      </QueryClientProvider>,
+    );
+    const open = screen.getByTestId("agent-builder").querySelectorAll("details[open]");
+    expect(open).toHaveLength(1);
+    expect(open[0]).toHaveTextContent("Add a skill");
   });
 });

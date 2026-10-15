@@ -1744,6 +1744,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       display_name: corps.display_name,
       description: corps.description ?? null,
       status: "active",
+      lifecycle: corps.lifecycle ?? "active",
       owner: me.email,
       latest_version: 1,
       versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
