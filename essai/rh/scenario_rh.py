@@ -40,7 +40,7 @@ URL = os.environ.get("CHOREGOS_DEV_URL", "").rstrip("/")
 FAUX = os.environ.get("ESSAI_FAUX_URL", "http://choregos-demo-fakes:8090").rstrip("/")
 #: Le slug du projet RH ; une démo en anglais à côté d'un `rh` né en français prend un autre nom.
 PROJET = os.environ.get("ESSAI_RH_PROJET", "rh")
-TERMINAUX = {"pret", "clos"}
+TERMINAUX = {"ready", "closed", "pret", "clos"}  # the last two: tickets born from the 1.x template
 #: Ce que les agents du gabarit demandent (`model: profile:standard`), et le backend qui les fait
 #: tourner : un projet neuf reçoit `claude-code` et aucun profil, ce que le dev ne sert pas — le premier
 #: passage, le 06/10, a vu le plan de l'agent échouer deux fois sans un appel au modèle.
@@ -82,19 +82,19 @@ def preparer() -> None:
     org = exiger("CHOREGOS_DEV_ORG")
     reference = os.environ.get("ESSAI_JETON_REF", "")
     connecteurs = [
-        {"name": "annuaire", "kind": "identity", "type": "entra",
+        {"name": "directory", "kind": "identity", "type": "entra",
          "config": {"tenant_id": "demo", "client_id": "choregos",
                     "graph_url": f"{FAUX}/graph/v1.0", "login_url": f"{FAUX}/login"},
          **({"secret_refs": {"client_secret": reference}} if reference else {})},
-        {"name": "parc", "kind": "mdm", "type": "demo", "config": {"url": f"{FAUX}/mdm/mcp"},
+        {"name": "devices", "kind": "mdm", "type": "demo", "config": {"url": f"{FAUX}/mdm/mcp"},
          **({"secret_refs": _references()} if reference else {})},
-        {"name": "transporteur", "kind": "shipping", "type": "demo",
+        {"name": "carrier", "kind": "shipping", "type": "demo",
          "config": {"url": f"{FAUX}/shipping/mcp"},
          **({"secret_refs": _references()} if reference else {})},
-        {"name": "lecteurs", "kind": "access_control", "type": "demo",
+        {"name": "badge-readers", "kind": "access_control", "type": "demo",
          "config": {"url": f"{FAUX}/access_control/mcp"},
          **({"secret_refs": _references()} if reference else {})},
-        {"name": "fournisseur", "kind": "mcp", "type": "mcp", "config": {"url": f"{FAUX}/fournisseur/mcp"},
+        {"name": "supplier", "kind": "mcp", "type": "mcp", "config": {"url": f"{FAUX}/supplier/mcp"},
          **({"secret_refs": {"token": reference}} if reference else {})},
     ]  # fmt: skip
     with client() as http:
@@ -105,19 +105,19 @@ def preparer() -> None:
                 continue
             lire(http.post(f"/orgs/{org}/connectors", json=corps), 201)
             print(f"connecteur {corps['name']} : déclaré")
-        lire(http.post(f"/orgs/{org}/connectors/fournisseur/discover"), 200)
+        lire(http.post(f"/orgs/{org}/connectors/supplier/discover"), 200)
         permises = {
-            "annuaire": [
+            "directory": [
                 "create_user",
                 "add_to_group",
                 "remove_from_group",
                 "disable_user",
                 "revoke_sessions",
             ],
-            "parc": ["enroll_device", "wipe_device"],
-            "transporteur": ["create_shipment", "create_return"],
-            "lecteurs": ["activate_badge", "deactivate_badge"],
-            "fournisseur": ["suivi_commande"],
+            "devices": ["enroll_device", "wipe_device"],
+            "carrier": ["create_shipment", "create_return"],
+            "badge-readers": ["activate_badge", "deactivate_badge"],
+            "supplier": ["order_status"],
         }
         for connecteur, noms in permises.items():
             for nom in noms:
@@ -129,7 +129,7 @@ def preparer() -> None:
                 )
         lire(
             http.patch(
-                f"/orgs/{org}/connectors/fournisseur/operations/commander_poste", json={"policy": "approval"}
+                f"/orgs/{org}/connectors/supplier/operations/order_laptop", json={"policy": "approval"}
             ),
             200,
         )
@@ -170,9 +170,9 @@ def arrivee(dans_jours: int = -1) -> None:
     l'appel, révoqué ensuite."""
     org = exiger("CHOREGOS_DEV_ORG")
     date = (dt.date.today() + dt.timedelta(days=dans_jours)).isoformat()
-    champs = {"nom": "Léa Martin", "upn": f"lea.{int(time.time())}@demo.test", "date_arrivee": date,
-              "poste": "Developer", "groupe": "devs", "groupe_sensible": "prod-lecture",
-              "adresse": "12 rue de la Paix, Paris"}  # fmt: skip
+    champs = {"full_name": "Léa Martin", "upn": f"lea.{int(time.time())}@demo.test", "start_date": date,
+              "job": "Developer", "group": "devs", "sensitive_group": "prod-read",
+              "address": "12 Peace Street, Paris"}  # fmt: skip
     with client() as http:
         jeton = lire(http.post("/me/tokens", json={"name": "essai-rh", "scopes": ["mcp:write"]}), 201)
         try:
@@ -181,7 +181,7 @@ def arrivee(dans_jours: int = -1) -> None:
                 headers={"Authorization": f"Bearer {jeton['token']}"},
                 json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                       "params": {"name": "create_work_item",
-                                 "arguments": {"title": f"Joiner: {champs['nom']}",
+                                 "arguments": {"title": f"Joiner: {champs['full_name']}",
                                                "workflow": "onboarding",
                                                "fields": champs}}},
                 timeout=60,
@@ -234,7 +234,7 @@ def deplacer(cle: str, date: str) -> None:
     """Une date changée réarme le minuteur de l'action qui l'attend."""
     with client() as http:
         ticket = _ticket(http, cle)
-        champ = "date_arrivee" if "date_arrivee" in (ticket.get("fields") or {}) else "date_depart"
+        champ = "start_date" if "start_date" in (ticket.get("fields") or {}) else "last_day"
         lire(http.patch(f"/work-items/{ticket['id']}", json={"fields": {champ: date}}), 200)
     print(f"{cle} : {champ} = {date}")
 
@@ -247,17 +247,17 @@ def depart(cle_arrivee: str) -> None:
         champs = arrivee_["fields"]
         actions = lire(http.get(f"/projects/{projet['id']}/actions"), 200)
         poste = next(
-            a for a in actions if a["work_item_id"] == arrivee_["id"] and a["kind"] == "arrivee.poste"
+            a for a in actions if a["work_item_id"] == arrivee_["id"] and a["kind"] == "onboarding.laptop"
         )
         serie = poste["journal"][0]["result"]["serial"] if poste.get("journal") else None
         if serie is None:
             serie = lire(http.get(f"/projects/{projet['id']}/actions/{poste['id']}"), 200)["journal"][0][
                 "result"
             ]["serial"]
-        corps = {"title": f"Leaver: {champs['nom']}", "labels": ["depart"],
-                 "fields": {"nom": champs["nom"], "upn": champs["upn"],
-                            "date_depart": dt.date.today().isoformat(), "badge_uid": champs["badge_uid"],
-                            "serial": serie, "adresse": champs["adresse"]}}  # fmt: skip
+        corps = {"title": f"Leaver: {champs['full_name']}", "labels": ["leaver"],
+                 "fields": {"full_name": champs["full_name"], "upn": champs["upn"],
+                            "last_day": dt.date.today().isoformat(), "badge_uid": champs["badge_uid"],
+                            "serial": serie, "address": champs["address"]}}  # fmt: skip
         ticket = lire(http.post(f"/projects/{projet['id']}/work-items", json=corps), 201)
     print(f"ticket {ticket['tracker_key']} — départ aujourd'hui — {URL}/p/{PROJET}/items/{ticket['id']}")
 

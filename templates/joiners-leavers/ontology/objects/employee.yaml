@@ -1,0 +1,16 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ObjectType
+metadata: {name: employee, displayName: Employee, description: "A person who is joining, is here, or has left.", owner: hr}
+spec:
+  datasource: employees
+  primaryKey: employee_id
+  titleProperty: full_name
+  properties:
+    employee_id: {type: string, required: true}
+    full_name: {type: string, required: true}
+    email: {type: string}
+    job: {type: string}
+    manager: {type: string}
+    status: {type: string, enum: [upcoming, present, gone], required: true}
+    start_date: {type: date}
+    last_day: {type: date}

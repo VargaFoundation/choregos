@@ -2,7 +2,7 @@ apiVersion: choregos/v1
 kind: Template
 metadata:
   name: joiners-leavers
-  version: 1.0.0
+  version: 2.0.0
   display: Joiners and leavers (HR)
   description: >-
     Two workflows with no repository and no CI. Onboarding: the access plan prepared by an agent and
@@ -13,28 +13,30 @@ metadata:
     and the badge cut; the laptop is collected, received and wiped. Every write to the directory, the
     fleet, the carrier or the badge readers is a governed action.
 requires:
-  # Le projet : ses tickets vivent dans Choregos.
+  # The project: its tickets live in Choregos.
   connectors:
     tracker: internal
-  # L'organisation : les connecteurs que les workflows appellent, par leur NOM, et leur capacité.
+  # The organisation: the connectors the workflows call, by NAME, and their capability.
   org_connectors:
-    annuaire: identity
-    parc: mdm
-    transporteur: shipping
-    lecteurs: access_control
-    fournisseur: mcp
+    directory: identity
+    devices: mdm
+    carrier: shipping
+    badge-readers: access_control
+    supplier: mcp
 defaults:
   workflows: [./workflows/onboarding.yaml, ./workflows/offboarding.yaml]
   default_workflow: onboarding
   routing:
-    - when: { labels_any: [offboarding, depart] }
+    - when: { labels_any: [offboarding, leaver] }
       workflow: offboarding
   policy: preset:solo
-  # Installés dans l'organisation quand un projet naît du gabarit — jamais réécrits s'ils y sont.
-  skills: [./skills/procedure-onboarding, ./skills/profils-d-acces]
-  agents: [./agents/coordinateur-onboarding.yaml, ./agents/coordinateur-offboarding.yaml]
-  # Installée dans le PROJET par le greffon de l'ontologie, quand il est actif : le registre de ce
-  # qu'une arrivée ouvre et de ce qu'un départ ferme. Sans lui, le projet naît sans (l'audit le dit).
+  # Installed in the organisation when a project is born from the template — never rewritten if
+  # they are already there.
+  skills: [./skills/onboarding-procedure, ./skills/access-profiles]
+  agents: [./agents/onboarding-coordinator.yaml, ./agents/offboarding-coordinator.yaml]
+  # Installed in the PROJECT by the ontology plugin, when it is active: the registry of what a
+  # joiner opens and what a leaver closes. Without it the project is born without one (the audit
+  # log says so).
   extensions:
     ontology: ./ontology
 inputs: []

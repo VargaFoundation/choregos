@@ -13,4 +13,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Revue
-        run: echo "La revue de référence passe par le workflow Choregos (rôle review)."
+        run: echo "The reference review runs through the Choregos workflow (review role)."

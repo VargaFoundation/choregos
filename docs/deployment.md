@@ -676,7 +676,7 @@ The migration job follows the API's image. An image from another registry is ano
 `demoFakes.enabled: true` deploys **one** pod — the API image, `python -m
 choregos_adapters.fakes.serveur` — serving the fakes of the HR scenario: MCP endpoints for the device
 manager, the carrier, the badge readers and the supplier's agent
-(`http://choregos-demo-fakes:8090/{mdm,shipping,access_control,fournisseur}/mcp`), and a fake
+(`http://choregos-demo-fakes:8090/{mdm,shipping,access_control,supplier}/mcp`), and a fake
 Microsoft Graph (`…/graph/v1.0`, `…/login`). One replica is the point: the API runs two and the
 orchestrator is apart, and in-memory fakes would show each process its own directory. The network
 policy opens that pod to the platform; `demoFakes.tokenSecret` (a secret reference) protects it

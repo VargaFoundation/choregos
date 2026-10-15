@@ -1,0 +1,37 @@
+apiVersion: choregos.dev/v1alpha1
+kind: ActionType
+metadata:
+  name: record_leaver
+  displayName: Record a leaver
+  description: "Declares the person gone and closes in the registry what the offboarding workflow cut: their account, their badge, and their collected laptop."
+spec:
+  target: {objectType: employee, cardinality: one}
+  parameters:
+    last_day: {type: date, required: true}
+    upn: {type: string, required: true}
+    badge: {type: string, required: true, description: "The UID of the cut badge."}
+    serial_number: {type: string, required: true, description: "The collected laptop."}
+  preconditions:
+    - {name: not_already_gone, expr: "target.status != 'gone'", message: "This person has already left."}
+  permissions:
+    propose: [agent:offboarding-coordinator, role:contributor]
+    approve: policy:hr
+  risk: medium
+  reversibility: reversible  # an update of the registry, which another one undoes
+  effects:
+    - type: object.update
+      with: {objectType: account, id: "${params.upn}", properties: {active: false, closed_at: "${now}"}}
+    - type: object.update
+      with: {objectType: badge, id: "${params.badge}", properties: {active: false, cut_at: "${now}"}}
+    - type: object.update
+      with: {objectType: device, id: "${params.serial_number}", properties: {status: collected}}
+    - type: object.update
+      with:
+        objectType: employee
+        id: "${target.employee_id}"
+        properties: {status: gone, last_day: "${params.last_day}"}
+  evidence:
+    - name: leaver_in_registry
+      collect: {type: object.reread, with: {}}
+      expect: "result.status == 'gone'"
+  idempotencyKey: "${target.employee_id + ':leaver'}"
