@@ -87,6 +87,9 @@ What a step leaves behind, in the result: tests run and passed, lint, typing, co
 diff size — and `facts`, a flat map named by the business for work that has none of those.
 Evidence is what gates read and what the UI shows; it is not prose.
 
+A drafted agent is a proposal: a model can write a first version from a description, and a person
+reads it, edits it and creates the agent.
+
 ## Tools
 
 An agent's own tools are whatever its backend ships. The **platform's** tools reach it over

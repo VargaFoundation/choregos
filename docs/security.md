@@ -54,6 +54,11 @@ Context packs and tickets contain text written by third parties. Two rules:
 2. it grants **no power**: even if an agent follows an injected instruction, the mechanisms
    above apply unchanged. A gate that cannot read what it must check refuses.
 
+Drafting an agent from a description (S39-05) sends the description and the **names and one-line
+descriptions** of the organisation's skills, knowledge bases and connector operations to the
+gateway's model, never documents, files or secrets. The description is marked as data; the answer is
+filtered to names that exist, and a draft is never saved or run.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
