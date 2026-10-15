@@ -55,7 +55,40 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             # Ce que lit une date d'action (`not_before`, S20-05) ; un changement arrive ensuite
             # par le signal `fields_changed`.
             "fields": dict(item.fields or {}),
+            # The attempts each transition already spent, read from its runs (#550).
+            "attempts_spent": await attempts_spent(session, item.id),
         }
+
+
+#: A run in one of these states is over: awaiting it again only reads its old result back.
+FINISHED_RUNS = frozenset({"succeeded", "failed", "cancelled", "timed_out"})
+
+
+async def attempts_spent(session: Any, work_item_id: str) -> dict[str, int]:
+    """The attempts each transition spent, read from its runs that are over (#550).
+
+    A run number names the run (`<work item>-<transition>-<attempt>`): an interpreter started again
+    at attempt 1 got the failed run back from `prepare_stage`, and `await_run` its old result. So an
+    attempt whose run ended without success is spent, and the next one is played. A run still queued
+    or running does not count: a restart awaits it again (ADR 0008). Nor does a SUCCEEDED last run:
+    its decision may never have been recorded, and a restart reads its result back rather than pay
+    for the stage again and push its commits twice.
+    """
+    rows = await session.execute(
+        select(Run.transition_id, Run.attempt, Run.status).where(
+            Run.work_item_id == work_item_id,
+            Run.transition_id.is_not(None),
+            Run.status.in_(FINISHED_RUNS),
+        )
+    )
+    last: dict[str, tuple[int, str]] = {}
+    for transition, attempt, status in rows.all():
+        if attempt and int(attempt) > last.get(str(transition), (0, ""))[0]:
+            last[str(transition)] = (int(attempt), str(status))
+    spent = {
+        key: attempt - 1 if status == "succeeded" else attempt for key, (attempt, status) in last.items()
+    }
+    return {key: count for key, count in spent.items() if count > 0}
 
 
 @activity.defn(name="record_workflow_failure")
