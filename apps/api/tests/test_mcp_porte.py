@@ -214,7 +214,20 @@ async def test_create_work_item_ouvre_un_ticket_au_nom_de_la_personne(
     assert ("workitem.create", resultat["structuredContent"]["work_item"]) in actions
 
 
-async def test_un_tracker_externe_est_un_refus_lisible(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_an_external_tracker_files_the_issue_through_mcp(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_adapters.fakes.tracker import FakeTracker
+    from choregos_api.services import tickets
+
+    fake = FakeTracker("billing-api")
+    real = tickets.tracker_du_projet
+
+    async def with_the_fake(session: Any, projet: Any) -> Any:
+        row, _ = await real(session, projet)
+        return row, fake
+
+    monkeypatch.setattr(tickets, "tracker_du_projet", with_the_fake)
     reponse = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
         json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
@@ -225,8 +238,9 @@ async def test_un_tracker_externe_est_un_refus_lisible(client: AsyncClient, proj
     resultat = (await _outil(client, jeton, "create_work_item", project="varga:billing-api", title="x"))[
         "result"
     ]
-    assert resultat["isError"] is True
-    assert "external tracker" in resultat["content"][0]["text"]
+    assert resultat.get("isError") is not True, resultat
+    assert resultat["structuredContent"]["key"] == "billing-api#1"
+    assert "source:choregos" in fake.items["billing-api#1"].labels
 
 
 async def test_un_jeton_lie_a_un_projet_ne_voit_que_lui(client: AsyncClient, project: dict[str, Any]) -> None:

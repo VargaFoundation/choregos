@@ -27,7 +27,7 @@ and `2025-03-26`.
 | `get_work_item` | A work item's state, recent timeline and pending decision, with its link | `mcp:read` |
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
-| `create_work_item` | Opens a work item in a project whose tracker is Choregos itself | `mcp:write` and the right to control work items |
+| `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
 

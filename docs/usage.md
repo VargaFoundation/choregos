@@ -979,6 +979,13 @@ Label a ticket `agent-ready` in your tracker (or create it in Choregos with
 so a webhook delivered twice starts nothing twice. If a webhook is lost, a reconciliation
 pass every 60 seconds catches up.
 
+You can also file a work item yourself, from the console or through MCP (`create_work_item`). With
+an internal tracker (or none) the platform mints the key. With GitHub, Jira or GitLab it creates
+the issue there first, labelled `source:choregos` and never `agent-ready`, and records the work
+item under the issue's key, with its creation inputs, workflow and budget (ADR 0059). The tracker's
+credentials need the right to create issues (GitHub App: *Issues: read and write*; Jira: create
+issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
+
 ```bash
 choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE
