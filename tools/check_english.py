@@ -57,6 +57,8 @@ EXCLUDED = (
     "packages/contracts/ts/",  # generated from the schemas, which are read at their source
     # Third-party skills, redistributed verbatim under their own licence (ADR 0065): their text is theirs.
     "packages/core/src/choregos_core/skill_catalogue/bundled/",
+    # The 1.x joiners-leavers template, French on purpose: what S39-11c's script migrates (S39-11).
+    "apps/api/tests/fixtures/joiners-leavers-v1/",
     # The injection guard's patterns also recognise an injection written in French.
     "packages/core/src/choregos_core/injection.py",
 )
