@@ -537,6 +537,8 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: `<id>@<catalogue_version>` when installed from the MCP catalogue (ADR 0065); `NULL` otherwise.
+    catalogue_entry: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
 
 class ConnectorOperation(Base, PkMixin, TimestampMixin):

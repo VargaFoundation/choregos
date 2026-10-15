@@ -76,11 +76,15 @@ class ClientMcp:
         url: str,
         *,
         token: str = "",
+        auth_header: str = "Authorization",
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.url = url
         self._token = token
+        #: The header the token travels in. `Authorization` (the default) carries `Bearer <token>`;
+        #: any other name carries the raw token, which is what `X-API-Key`-style servers expect.
+        self._auth_header = auth_header
         self._timeout = timeout_s
         self._transport = transport
         self._session: str | None = None
@@ -94,8 +98,10 @@ class ClientMcp:
             "Accept": "application/json, text/event-stream",
             "MCP-Protocol-Version": self._version,
         }
-        if self._token:
+        if self._token and self._auth_header.lower() == "authorization":
             entetes["Authorization"] = f"Bearer {self._token}"
+        elif self._token:
+            entetes[self._auth_header] = self._token
         if self._session:
             entetes["Mcp-Session-Id"] = self._session
         return entetes

@@ -31,3 +31,11 @@ ingress:
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
+# The MCP server catalogue (ADR 0065).
+# `egressHosts`: the hosts the API pod may reach, as the deployment's network policy lets it, with
+# `*.` wildcards. It restricts nothing (the network policy does): the catalogue uses it to tell an
+# administrator, before a silent timeout, that a server's host is not declared. Empty: unknown.
+egressHosts: []
+# `mcpCatalogueExtra`: the name of a ConfigMap whose `catalogue.yaml` lists the operator's own MCP
+# servers (`entries: [...]`, same fields as the shipped catalogue), merged after it. Empty: none.
+mcpCatalogueExtra: ""

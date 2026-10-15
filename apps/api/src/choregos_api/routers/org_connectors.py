@@ -10,7 +10,7 @@ de l'organisation, et seul l'administrateur change les groupes (le second verrou
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Path, Response, status
 from sqlalchemy import select
@@ -111,25 +111,45 @@ async def create_org_connector(
         if len(sortes) != 1:
             raise unprocessable(f"`{body.type}`: specify the capability (`kind`) among {sortes or 'none'}")
         kind = sortes[0]
-    spec = spec_du_type(kind, body.type)
-    verifier_les_secrets(spec, body.type, body.config, body.secret_refs)
+    return await declare_org_connector(
+        session, principal, organisation, body.model_copy(update={"kind": kind})
+    )
+
+
+async def declare_org_connector(
+    session: AsyncSession,
+    principal: Me,
+    organisation: Organization,
+    body: OrgConnectorCreate,
+    *,
+    catalogue_entry: str | None = None,
+) -> OrgConnectorDto:
+    """Declares a connector of the organisation with the operations its type declares.
+
+    The one door: a connector written by hand and one installed from the MCP catalogue (ADR 0065)
+    both pass through the same checks (secrets by reference only, a free name) and leave the same
+    audit row; the latter also records which catalogue entry it came from. `body.kind` is resolved."""
+    assert body.kind is not None
+    name, kind, type_name = body.name, body.kind, body.type
+    config, secret_refs = body.config, body.secret_refs
+    spec = spec_du_type(kind, type_name)
+    verifier_les_secrets(spec, type_name, config, secret_refs)
     deja = (
         await session.execute(
-            select(OrgConnector.id).where(
-                OrgConnector.org_id == organisation.id, OrgConnector.name == body.name
-            )
+            select(OrgConnector.id).where(OrgConnector.org_id == organisation.id, OrgConnector.name == name)
         )
     ).first()
     if deja is not None:
-        raise conflict(f"a connector `{body.name}` already exists in {org}")
+        raise conflict(f"a connector `{name}` already exists in {organisation.slug}")
     instance = OrgConnector(
         org_id=organisation.id,
-        name=body.name,
+        name=name,
         kind=kind,
-        type=body.type,
-        config=body.config,
-        secret_refs=dict(body.secret_refs) or None,
+        type=type_name,
+        config=config,
+        secret_refs=dict(secret_refs) or None,
         created_by=principal.email,
+        catalogue_entry=catalogue_entry,
     )
     session.add(instance)
     await session.flush()
@@ -147,6 +167,9 @@ async def create_org_connector(
             )
         )
     await session.flush()
+    audit: dict[str, Any] = {"name": name, "type": type_name}
+    if catalogue_entry:
+        audit["catalogue"] = catalogue_entry
     await record(
         session,
         principal,
@@ -154,8 +177,7 @@ async def create_org_connector(
         org_id=organisation.id,
         target_type="org_connector",
         target_id=instance.id,
-        name=body.name,
-        type=body.type,
+        **audit,
     )
     return await _dto(session, instance)
 

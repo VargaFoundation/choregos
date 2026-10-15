@@ -107,6 +107,15 @@ spec:
               value: {{ toJson . | quote }}
             {{- end }}
             {{- end }}
+            {{- with .Values.egressHosts }}
+            # The hosts the API may reach, for the MCP catalogue's egress hint (ADR 0065).
+            - name: CHOREGOS_API_EGRESS_HOSTS
+              value: {{ toJson . | quote }}
+            {{- end }}
+            {{- if .Values.mcpCatalogueExtra }}
+            - name: CHOREGOS_MCP_CATALOGUE_EXTRA
+              value: /etc/choregos/mcp-catalogue/catalogue.yaml
+            {{- end }}
             {{- with (dig "mcp" "oauth" dict .Values.global) }}
             {{- if .enabled }}
             {{- range ($.Values.global.extraEnv | default list) }}
@@ -207,6 +216,9 @@ spec:
             {{- with .Values.global.playbooks.configMap }}
             - { name: playbooks, mountPath: {{ $.Values.global.playbooks.mountPath }}, readOnly: true }
             {{- end }}
+            {{- if .Values.mcpCatalogueExtra }}
+            - { name: mcp-catalogue, mountPath: /etc/choregos/mcp-catalogue, readOnly: true }
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
@@ -221,6 +233,10 @@ spec:
         {{- with .Values.global.playbooks.configMap }}
         - name: playbooks
           configMap: { name: {{ . }} }
+        {{- end }}
+        {{- if .Values.mcpCatalogueExtra }}
+        - name: mcp-catalogue
+          configMap: { name: {{ .Values.mcpCatalogueExtra }} }
         {{- end }}
       topologySpreadConstraints:
         - maxSkew: 1

@@ -308,6 +308,27 @@ A project declares what it calls in its own configuration (`tools: [verifier_adr
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
+### The MCP server catalogue: egress and your own entries
+
+The image ships a catalogue of well-known MCP servers ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md));
+an administrator installs an entry from *Administration → connectors → catalogue*. Two chart values
+belong to the deployment:
+
+- `choregos-api.egressHosts` (a list, `*.` wildcards allowed) declares the hosts the API pod may
+  reach. It becomes `CHOREGOS_API_EGRESS_HOSTS` and **restricts nothing**: your network policy
+  does. The catalogue uses it to tell an administrator, before a silent timeout, that a server's host
+  (`mcp.notion.com`) is `undeclared`. Keep it equal to the egress allowlist of the namespace, and add
+  a host there (an egress rule, then here) before enabling a server that needs it. Empty: the
+  catalogue says `unknown` and warns about nothing.
+- `choregos-api.mcpCatalogueExtra` is the name of a ConfigMap holding a `catalogue.yaml`
+  (`entries: [...]`, the fields of the shipped catalogue) that lists **your own** MCP servers, merged
+  after the shipped ones and shown as `site` entries. An id already in the shipped catalogue is
+  refused, not shadowed, and a malformed file makes the catalogue answer `422` naming the entry.
+
+A server that authenticates per user with OAuth is listed but cannot be installed yet, and a server
+that runs as a local process (stdio) is listed with what to run: neither is something an install
+button can do.
+
 ## Multi-tenant installations
 
 For a tenant that may not create cluster-scoped resources:

@@ -14,13 +14,16 @@ change to the catalogue.
 from __future__ import annotations
 
 import functools
+import json
 from datetime import date
 from pathlib import Path
 from typing import Literal
 
+import yaml
+from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field
 
-from choregos_core.catalogues import CatalogueMeta, meta_of, read_catalogue
+from choregos_core.catalogues import CatalogueError, CatalogueMeta, meta_of, read_catalogue
 
 HERE = Path(__file__).parent
 CATALOGUE_PATH = HERE / "catalogue.yaml"
@@ -70,6 +73,8 @@ class McpEntry(BaseModel):
     stars: int | None = None
     stars_as_of: date | None = None
     hosting: McpHosting | None = None
+    #: Where the entry comes from: the shipped file, or the operator's own (`site`). Not in the file.
+    origin: Literal["catalogue", "site"] = Field(default="catalogue", exclude=True)
 
     @property
     def install(self) -> InstallKind:
@@ -113,3 +118,48 @@ def load() -> McpCatalogue:
 def entry(entry_id: str) -> McpEntry | None:
     """The entry with this id, or `None`."""
     return load().by_id(entry_id)
+
+
+def _read_site_entries(path: Path) -> list[McpEntry]:
+    """The operator's own entries (`{entries: [...]}`), each validated like a shipped one."""
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not isinstance(raw.get("entries"), list):
+        raise CatalogueError(f"{path.name}: expected a mapping with an `entries` list")
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    validator = Draft202012Validator({"$ref": "#/$defs/entry", "$defs": schema["$defs"]})
+    entries: list[McpEntry] = []
+    for index, item in enumerate(raw["entries"]):
+        problems = sorted(validator.iter_errors(item), key=lambda e: list(e.absolute_path))
+        if problems:
+            detail = "; ".join(
+                f"{'/'.join(str(p) for p in e.absolute_path) or '<entry>'}: {e.message}" for e in problems[:5]
+            )
+            raise CatalogueError(f"{path.name}: entry {index} ({item.get('id', '?')}): {detail}")
+        entries.append(McpEntry.model_validate(item).model_copy(update={"origin": "site"}))
+    return entries
+
+
+@functools.lru_cache(maxsize=4)
+def load_with_site(site_path: str | None) -> McpCatalogue:
+    """The shipped catalogue followed by the operator's own file, when there is one.
+
+    An id the shipped catalogue already holds is refused rather than shadowed: an operator entry
+    that silently replaced `github` would be a way to point an installed-by-name server elsewhere.
+    """
+    base = load()
+    if not site_path:
+        return base
+    extra = _read_site_entries(Path(site_path))
+    taken = {e.id for e in base.entries}
+    clash = sorted(e.id for e in extra if e.id in taken)
+    if clash:
+        raise CatalogueError(
+            f"{Path(site_path).name}: ids already in the shipped catalogue: {', '.join(clash)}"
+        )
+    ids = [e.id for e in extra]
+    if len(ids) != len(set(ids)):
+        raise CatalogueError(f"{Path(site_path).name}: duplicate ids")
+    sources = {**base.meta.sources, "site_catalogue": Path(site_path).name}
+    return McpCatalogue(
+        meta=base.meta.model_copy(update={"sources": sources}), entries=[*base.entries, *extra]
+    )
