@@ -207,6 +207,10 @@ compose-down:
 demo:  ## Scénario bout en bout en mémoire (fakes, sans cluster)
 	CHOREGOS_FAKES=1 $(UV) run python -m choregos_orchestrator.demo
 
+.PHONY: demo-investment
+demo-investment:  ## Investment campaigns on fakes with the real runner and engine: adopted, not relevant, refused memo (S38-09)
+	$(UV) run python -m pytest -q -p no:warnings tests/e2e/test_m7_investment.py
+
 .PHONY: api
 api:  ## Lance l'API en local (fakes)
 	CHOREGOS_FAKES=1 $(UV) run uvicorn choregos_api.main:app --reload --port 8000

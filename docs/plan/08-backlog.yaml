@@ -40,6 +40,7 @@ streams:
   S35: "The agent_sandbox executor: warm pool, suspend across a human gate, proved on the dev cluster (ADR 0016, plan 2026-10-12)"
   S36: "Agent logs: transcript stored, pod logs and termination reason archived, a logs tab (plan 2026-10-12)"
   S37: "Fewer tokens per run: rtk and headroom, measured, switchable at every level (ADR 0055)"
+  S38: "Investment research: deterministic steps, market data, gates on measured numbers, a campaign template (plan 2026-10-14)"
 
 stories:
 
@@ -2681,3 +2682,121 @@ stories:
     depends_on: [S37-09]
     acceptance:
       - "The matrix ran on the dev; the decision and its numbers are in ADR 0055"
+  # S38 — Investment research (plan 2026-10-14)
+  - id: S38-01
+    title: "A job actor: a deterministic step, an argv in an operator-named image, no model (ADR 0056)"
+    stream: S38
+    sprint: 19
+    priority: 1
+    size: M
+    depends_on: []
+    acceptance:
+      - "Contract change; the validator accepts a job, refuses a free image reference; a job state is covered by `*agent`"
+  - id: S38-02
+    title: "The runner runs a job: no gateway key, exit code is status, job.json facts recorded as measured, connector operations named by the actor"
+    stream: S38
+    sprint: 19
+    priority: 2
+    size: M
+    depends_on: [S38-01]
+    acceptance:
+      - "A job is prepared without a model or a key; a job that names no tool sees none"
+  - id: S38-03
+    title: "A marketdata connector family: free sources (stooq, yahoo, alphavantage), a composite with cross-check, request and response hashed on tool.called"
+    stream: S38
+    sprint: 19
+    priority: 3
+    size: L
+    depends_on: []
+    acceptance:
+      - "FakeMarketData replays fixtures; a divergence between two sources is a measured fact"
+  - id: S38-04
+    title: "A hashed data snapshot as an artifact, read by every later step instead of the provider"
+    stream: S38
+    sprint: 19
+    priority: 4
+    size: M
+    depends_on: [S38-02, S38-03]
+    acceptance:
+      - "The snapshot job stores bars.csv with its sha256; a replay reads the artifact, never the network"
+  - id: S38-05
+    title: "An output_schema gate and evidence_facts measured_only"
+    stream: S38
+    sprint: 19
+    priority: 5
+    size: S
+    depends_on: []
+    acceptance:
+      - "An invalid output fails the gate; a declared fact under measured_only is refused; an invalid schema fails validation"
+  - id: S38-06
+    title: "packages/quant: a vectorised backtest engine with costs, out-of-sample, Deflated Sharpe Ratio; a hash-locked offline image"
+    stream: S38
+    sprint: 19
+    priority: 6
+    size: L
+    depends_on: [S38-02]
+    acceptance:
+      - "Same snapshot and strategies give byte-identical metrics.json"
+  - id: S38-07
+    title: "A numbers_measured gate: every number an agent writes is found in a measured source"
+    stream: S38
+    sprint: 19
+    priority: 7
+    size: M
+    depends_on: []
+    acceptance:
+      - "An invented number fails the gate; a rounded measured number passes"
+  - id: S38-08
+    title: "The investment-research template"
+    stream: S38
+    sprint: 19
+    priority: 8
+    size: M
+    depends_on: [S38-05, S38-06, S38-07]
+    acceptance:
+      - "The workflow validates; template conformance passes"
+  - id: S38-09
+    title: "End-to-end campaign on fakes, replayed history, demo"
+    stream: S38
+    sprint: 19
+    priority: 9
+    size: L
+    depends_on: [S38-08]
+    acceptance:
+      - "One campaign reaches the owner's decision, one ends not_relevant; removing a gate turns the scenario red"
+  - id: S38-10
+    title: "Evals for the strategist and the analyst"
+    stream: S38
+    sprint: 19
+    priority: 10
+    size: M
+    depends_on: [S38-08]
+    acceptance:
+      - "Strategist: valid grammar, no ticker named; analyst: no invented number"
+  - id: S38-11
+    title: "Scheduled campaigns: a project schedule creates a work item, idempotent per window"
+    stream: S38
+    sprint: 19
+    priority: 11
+    size: M
+    depends_on: []
+    acceptance:
+      - "Two firings in the same window create one work item"
+  - id: S38-12
+    title: "Fan-out and join: one child work item per retained product, the parent waits"
+    stream: S38
+    sprint: 19
+    priority: 12
+    size: L
+    depends_on: []
+    acceptance:
+      - "The parent resumes when every child is terminal"
+  - id: S38-13
+    title: "Proof on the dev tenant: free sources, a real model, a 20-product campaign, cost in the ledger"
+    stream: S38
+    sprint: 19
+    priority: 13
+    size: M
+    depends_on: [S38-09]
+    acceptance:
+      - "Recorded in essai/: non-zero cost, artifact sha256 equals its digest, job replay byte-identical"
