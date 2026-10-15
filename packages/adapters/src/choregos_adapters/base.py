@@ -178,7 +178,7 @@ GATEWAY_CAPABILITIES: frozenset[str] = frozenset(
 
 @runtime_checkable
 class GatewayAdapter(Protocol):
-    """Le gateway de modèles : une clé virtuelle par run, le coût compté à la source.
+    """The model gateway: one virtual key per run, the cost counted at the source.
 
     Documented as `LlmGateway`: nothing in the protocol is specific to LiteLLM."""
 
