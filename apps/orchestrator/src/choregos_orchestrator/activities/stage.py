@@ -44,7 +44,7 @@ from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
-from ..context_reduction import resolve_context, stage_input_payload
+from ..context_reduction import forced_context, resolve_context, stage_input_payload
 from .base import db, load_work_item, project_bundle, without_secrets
 from .bilan import collect_spend, record_run_outcome
 from .execution import (
@@ -208,7 +208,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 typecheck_command=depot.typecheck_command if depot else "",
                 # Les commandes de faits viennent de la RACINE de la configuration, pas de
                 # `repo` : un projet sans dépôt doit pouvoir prouver quelque chose (ADR 0012).
-                fact_commands=dict(bundle.config.dod.facts),
+                fact_commands=dict(bundle.config.dod.facts)
+                if plan.eval_cell is None
+                else dict(plan.eval_cell["facts"]),
             ),
             work_item=WorkItemRef(
                 key=item.tracker_key,
@@ -237,7 +239,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             # qui n'existait pas et promettait une branche que personne ne relirait.
             repo=RepoRef(
                 url=depot.url,
-                base_branch=depot.default_branch,
+                base_branch=depot.default_branch
+                if plan.eval_cell is None
+                else str(plan.eval_cell["base_branch"]),
                 work_branch=bundle.config.branch_for(item.tracker_key),
                 clone_depth=depot.clone_depth,
             )
@@ -263,11 +267,14 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 max_findings=engine.max_findings_per_run(),
                 unknown_requests=bundle.policy.sandbox.unknown_requests,
             ),
+            # An eval cell runs with the reduction it measures (S37-10), never past the kill switch.
             context=resolve_context(
                 bundle.policy.context,
                 plan.role,
                 allowed_by_deployment=settings.context_reduction,
-            ),
+            )
+            if plan.eval_cell is None
+            else forced_context(plan.eval_cell["context"], allowed_by_deployment=settings.context_reduction),
             # The run token is minted by `start_run`, for the run's Secret only: neither this row
             # nor a Temporal payload holds it (#519).
             callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=REDACTED),

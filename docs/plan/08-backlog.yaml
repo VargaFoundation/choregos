@@ -2673,13 +2673,23 @@ stories:
     depends_on: [S37-07]
     acceptance:
       - "A fake matrix renders the four cells with tokens from the ledger"
+  - id: S37-10a
+    title: "Live eval cells: each ticket runs as a real stage on the eval project's executor, judged by facts measured in the run's workspace"
+    stream: S37
+    sprint: 20
+    priority: 9
+    size: L
+    depends_on: [S37-09]
+    acceptance:
+      - "EvalMatrix(live=true) seeds the toy repository and an eval work item, runs prepare_stage, start_run, await_run, record_run_outcome and collect_spend, and judges the run by its facts and its ledger row"
+      - "A run that did not get the cell's reduction is skipped, never counted"
   - id: S37-10
     title: "Real eval matrix on real models, and the default-on decision per backend"
     stream: S37
     sprint: 20
-    priority: 9
+    priority: 10
     size: S
-    depends_on: [S37-09]
+    depends_on: [S37-10a]
     acceptance:
       - "The matrix ran on the dev; the decision and its numbers are in ADR 0055"
   # S38 — Investment research (plan 2026-10-14)

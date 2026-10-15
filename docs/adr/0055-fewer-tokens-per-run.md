@@ -92,10 +92,27 @@ store holds plaintext originals.
   gateway's ledger says those keys spent, over the tickets it has a measure for (`metered`). A
   ticket nothing went through has no measure, never a guess. Turns are not in the ledger: they come
   from the run's diagnostics. In CI the tickets' `scripted_usage` is billed on the fake gateway, so
-  the fake matrix proves the plumbing, not a gain. The matrix still runs no agent, so on a real
-  gateway its ledger stays empty: the real matrix (S37-10) needs cells that start real runs with
-  the context in their stage input. A backend is validated by its cells without reduction only:
-  a run gets none unless its policy says so.
+  the fake matrix proves the plumbing, not a gain. The scripted matrix runs no agent, so on a real
+  gateway its ledger stays empty; the live cells below do. A backend is validated by its cells
+  without reduction only: a run gets none unless its policy says so.
+- Live cells (`EvalMatrix(live=true)`) play each ticket as a real stage on the eval project's
+  executor, the path a work item takes: `seed_eval_ticket` commits the toy repository to
+  `choregos-evals/<repo>-<digest>` in the eval project's repository and files an eval work item
+  (one per matrix run, backend, model, context and ticket, so a retry finds it); the workflow then
+  runs `prepare_stage`, `start_run`, `await_run`, `record_run_outcome` and, whatever the run did,
+  `collect_spend`; `judge_eval_run` gives the verdict. The stage plan carries the cell
+  (`StagePlan.eval_cell`): its reduction replaces the policy's, never the kill switch's; the toy
+  branch is the base branch; the ticket's assertions become the run's fact commands, which the
+  runner measures in its workspace once the agent is done. A case succeeds when every fact is true
+  and the run blocked exactly when the ticket expects it; its tokens and cost are the run's ledger
+  row. A headroom cell asks `on_unavailable: fail`, and a run that did not get the cell's reduction
+  (another reduction in its stage input, `context.degraded`, a shell filter its backend did not
+  wire) is skipped, never counted: it would credit the reduction with a run made without it. A
+  ticket whose tool is missing on the runner (`requires`) is skipped too. The eval project needs a
+  repository, the internal tracker and memory off; `with_memory: true` is skipped (memory is not
+  wired in live cells). A failing fact reaches the agent through the runner's repair loop, as a
+  project's facts do: every context gets the same loop, so the comparison holds, but a live success
+  rate is "with the checks' feedback", not a blind one.
 - A lossy filter can hide the line an agent needed: `rtk_exclude_commands` and `per_role` let a
   policy keep raw output where it matters (a reviewer, a security stage).
 - Not decided here: a context reduction for the other backends' native hooks (after the matrix), and
