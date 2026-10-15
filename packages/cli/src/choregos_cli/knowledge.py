@@ -12,6 +12,7 @@ import glob
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import unquote, urlsplit
@@ -227,7 +228,7 @@ def _plan_sources(
         }
         existing = sources.pop(spec.name, None)
         if existing is None:
-            plan.add("+", f"source {spec.name}", lambda b=body: api.post(f"{base_path}/sources", json=b))
+            plan.add("+", f"source {spec.name}", partial(api.post, f"{base_path}/sources", json=body))
         elif existing["kind"] != spec.kind or _norm(existing.get("connector")) != _norm(spec.connector):
 
             def recreate(sid: str = existing["id"], b: dict[str, Any] = body) -> None:
@@ -241,13 +242,13 @@ def _plan_sources(
         ):
             patch = {"config": spec.config, "interval_minutes": spec.interval_minutes}
             url = f"{base_path}/sources/{existing['id']}"
-            plan.add("~", f"source {spec.name}", lambda u=url, p=patch: api.request("PATCH", u, json=p))
+            plan.add("~", f"source {spec.name}", partial(api.request, "PATCH", url, json=patch))
         else:
             plan.add("=", f"source {spec.name}")
     for name, extra in sources.items():
         if prune:
             url = f"{base_path}/sources/{extra['id']}"
-            plan.add("-", f"source {name}", lambda u=url: api.delete(u))
+            plan.add("-", f"source {name}", partial(api.delete, url))
         else:
             plan.add("!", f"source {name} (not in the manifest, kept: use --prune)")
 
@@ -265,7 +266,7 @@ def _plan_uploads(
             plan.add("=", f"upload {upload.filename}")
             for stale in (d for d in docs if d["digest"] != upload.digest):
                 url = f"{base_path}/documents/{stale['id']}"
-                plan.add("-", f"upload {upload.filename} (older version)", lambda u=url: api.delete(u))
+                plan.add("-", f"upload {upload.filename} (older version)", partial(api.delete, url))
             continue
 
         def replace(up: Upload = upload, old: list[str] = [d["id"] for d in docs]) -> None:  # noqa: B006
@@ -280,7 +281,7 @@ def _plan_uploads(
             continue
         for doc in docs:
             url = f"{base_path}/documents/{doc['id']}"
-            plan.add("-", f"upload {name}", lambda u=url: api.delete(u))
+            plan.add("-", f"upload {name}", partial(api.delete, url))
 
 
 def _plan_eval(plan: Plan, api: Client, base_path: str, manifest: Manifest, current: dict[str, Any]) -> None:
