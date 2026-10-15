@@ -769,8 +769,8 @@ export type AgentSpec = {
   model?: string | null;
   /** the ACP coding agent that carries the version; set only with an `acp` runtime (or none) */
   backend?: string | null;
-  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. Later runtimes (remote agents) add a `kind` to this union. */
-  runtime?: AcpRuntime | CodeRuntime;
+  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. `a2a` is a remote agent (ADR 0062). */
+  runtime?: AcpRuntime | CodeRuntime | A2aRuntime;
   limits?: AgentLimits;
   budget?: AgentBudget;
   skills?: Array<{
@@ -806,6 +806,101 @@ export type CodeRuntime = {
   command: Array<string>;
   /** the model API the code calls through the gateway */
   api_format?: "openai" | "anthropic";
+};
+
+/** An agent that runs elsewhere and is reached over A2A (ADR 0062), e.g. Atlassian's Rovo. The step runs in the runner pod. `model` and `backend` of the spec must be empty, and so must skills, knowledge and MCP servers. */
+export type A2aRuntime = {
+  kind: "a2a";
+  card_url: string;
+  /** one skill of the card the step asks for */
+  skill?: string | null;
+  /** the organisation's remote credential; absent only for a card that asks for none */
+  credential?: string | null;
+  timeout_minutes?: number;
+  declared_cost?: A2aDeclaredCost;
+  input?: "text" | "text+files";
+  /** filled by the API at publication: the card as it was read; the runner refuses a card that changed */
+  pinned_card?: A2aPinnedCard | null;
+};
+
+/** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */
+export type A2aDeclaredCost = {
+  per_task_usd?: number | null;
+  per_minute_usd?: number | null;
+};
+
+export type A2aPinnedCard = {
+  url: string;
+  protocol_version: string;
+  digest: string;
+  skills?: Array<string>;
+};
+
+/** What the organisation holds to call remote agents. No secret is ever returned - the refresh token lives sealed in the secret store. */
+export type RemoteCredential = {
+  name: string;
+  type: "oauth2_authorization_code" | "bearer" | "none";
+  status: "pending" | "connected" | "error" | "revoked";
+  /** whose permissions a remote agent acts with: the person who authorised it */
+  authorised_as?: string | null;
+  scopes?: Array<string>;
+  card_url?: string | null;
+  host?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  last_refresh_at?: string | null;
+  expires_at?: string | null;
+  last_error?: string | null;
+};
+
+export type RemoteCredentialCreate = {
+  name: string;
+  type: "oauth2_authorization_code" | "bearer" | "none";
+  /** OAuth: the card whose Dynamic Client Registration endpoint the platform registers itself at */
+  card_url?: string | null;
+  /** bearer: the token, write-only, sealed in the secret store */
+  token?: string | null;
+};
+
+export type RemoteCredentialAuthorization = {
+  /** where to send the administrator's browser (authorization code + PKCE) */
+  redirect_url: string;
+};
+
+export type RemoteAgentDiscover = {
+  card_url: string;
+};
+
+export type RemoteSkillInfo = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
+export type RemoteCardSummary = {
+  name: string;
+  description?: string;
+  endpoint: string;
+  host: string;
+  protocol_version: string;
+  digest: string;
+  skills?: Array<RemoteSkillInfo>;
+  /** oauth2_authorization_code, bearer, none: what the card accepts */
+  auth_types?: Array<string>;
+  scopes?: Array<string>;
+  streaming?: boolean;
+  /** the card advertises Dynamic Client Registration */
+  dcr_available?: boolean;
+};
+
+/** What a card says and the registry entry it suggests - nothing is created. */
+export type RemoteAgentDiscovery = {
+  card: RemoteCardSummary;
+  proposed: AgentCreate;
+  /** the organisation's credentials of a type the card accepts */
+  credentials?: Array<string>;
+  /** hosts the project policy must allow (sandbox.network.allow_domains) */
+  domains?: Array<string>;
 };
 
 /** An image an operator named for code agents. The reference itself is never returned. */
@@ -863,7 +958,8 @@ export type AgentTrial = {
 export type AgentCreate = {
   /** `new` is reserved: the console's `/agents/new` page would shadow it (422) */
   slug: string;
-  kind?: "internal" | "external";
+  /** `remote`: an agent the platform calls over A2A (ADR 0062); it needs an `a2a` runtime */
+  kind?: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
   spec?: AgentSpec;
@@ -939,7 +1035,7 @@ export type AgentDraft = {
 /** An agent the platform's catalogue offers (ADR 0040), and its state in the organisation. */
 export type AgentCatalogueEntry = {
   slug: string;
-  kind: "internal" | "external";
+  kind: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
   /** the package role it plays (`implement`, `review`…), or `external` for a client */
@@ -999,7 +1095,7 @@ export type AgentVersion = {
 
 export type Agent = {
   slug: string;
-  kind: "internal" | "external";
+  kind: "internal" | "external" | "remote";
   display_name: string;
   description?: string | null;
   status: string;
@@ -2463,6 +2559,7 @@ export interface Operations {
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
+  authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
   [key: string]: unknown;
 }; response: {
@@ -2485,6 +2582,7 @@ export interface Operations {
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
+  createRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials"; body: RemoteCredentialCreate; response: RemoteCredential };
   createSkill: { method: "POST"; path: "/orgs/{org}/skills"; body: SkillFiles; response: Skill };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
@@ -2499,6 +2597,7 @@ export interface Operations {
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
+  discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
   draftAgent: { method: "POST"; path: "/orgs/{org}/agent-drafts"; body: AgentDraftRequest; response: AgentDraft };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
@@ -2688,6 +2787,7 @@ export interface Operations {
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
+  listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
@@ -2741,10 +2841,12 @@ export interface Operations {
 }; response: void };
   reindexKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/reindex"; body: never; response: KnowledgeBase };
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
+  remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
+  revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
