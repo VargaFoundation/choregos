@@ -1,9 +1,9 @@
-"""S8-06 — les manifests d'un template sont acceptés par un vrai Kubernetes.
+"""S8-06 — a template's manifests are accepted by a real Kubernetes.
 
-`helm template` et `kubeconform` disent qu'un YAML est bien formé. Ils ne disent pas qu'un
-`ResourceQuota` est cohérent, qu'un `RuntimeClass` existe, qu'un rôle référence une API
-connue, ni qu'un `PipelineRun` passe la validation d'admission. Seul le serveur d'API le dit,
-et c'est ce que ce test lui demande — en `--dry-run=server`, donc sans rien créer.
+`helm template` and `kubeconform` say that a YAML is well formed. They do not say that a
+`ResourceQuota` is consistent, that a `RuntimeClass` exists, that a role references a known
+API, or that a `PipelineRun` passes admission validation. Only the API server says so, and
+that is what this test asks it — with `--dry-run=server`, so nothing is created.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def server_dry_run(manifest: str) -> subprocess.CompletedProcess[str]:
 
 @pytest.fixture(scope="module", autouse=True)
 def namespaces() -> None:
-    """Les namespaces d'abord : le reste y vit, un dry-run serveur les exige existants."""
+    """Namespaces first: the rest lives in them, a server dry-run requires them to exist."""
     kubectl("apply", "-f", "-", input_text=manifests()["namespaces.yaml"])
     yield
     kubectl("delete", "ns", f"proj-{SLUG}-runners", f"proj-{SLUG}-ci", "--ignore-not-found", check=False)
@@ -52,7 +52,7 @@ def namespaces() -> None:
 )
 def test_le_serveur_accepte_les_manifests_du_projet(name: str) -> None:
     result = server_dry_run(manifests()[name])
-    assert result.returncode == 0, f"{name} refusé :\n{result.stderr[:600]}"
+    assert result.returncode == 0, f"{name} refused:\n{result.stderr[:600]}"
 
 
 def test_les_quotas_sont_ceux_de_la_politique() -> None:
@@ -64,7 +64,7 @@ def test_les_quotas_sont_ceux_de_la_politique() -> None:
 
 
 def test_le_runtimeclass_gvisor_n_est_exige_que_si_la_politique_le_demande() -> None:
-    """`gvisor` n'existe pas sur tous les clusters : le template ne doit pas l'imposer."""
+    """`gvisor` does not exist on every cluster: the template must not impose it."""
     avec = manifests("regulated")
     sans = manifests("solo")
     assert "gvisor" in avec.get("runtimeclass.yaml", "") or "gvisor" in avec.get("tekton.yaml", "")
@@ -72,9 +72,9 @@ def test_le_runtimeclass_gvisor_n_est_exige_que_si_la_politique_le_demande() -> 
 
 
 def test_un_manifest_tekton_sans_operateur_echoue_clairement() -> None:
-    """Sans Tekton installé, le refus doit nommer la ressource inconnue, pas un YAML illisible."""
+    """Without Tekton installed, the refusal must name the unknown resource, not an unreadable YAML."""
     result = server_dry_run(manifests()["tekton.yaml"])
     if result.returncode == 0:
-        pytest.skip("Tekton est installé sur ce cluster : rien à prouver ici")
+        pytest.skip("Tekton is installed on this cluster: nothing to prove here")
     sortie = (result.stderr + result.stdout).lower()
     assert "no matches for kind" in sortie or "not found" in sortie, result.stderr[:400]

@@ -1,11 +1,11 @@
-# tests/ — ce qui prouve que la plateforme tient
+# tests/ — what proves the platform holds
 
-| Dossier | Ce qu'il prouve | Quand |
+| Directory | What it proves | When |
 | :-- | :-- | :-- |
-| `conformance/backends` | un backend ACP respecte le contrat (7 vérifications du §2.2) | CI (Claude Code), nuit (tous) |
-| `conformance/templates` | un template provisionne un projet et fait passer un ticket S | nuit |
-| `e2e` | les scénarios des jalons M1–M6 (M6 : le scénario RH, arrivée et départ, S20-07) | nuit, et à la main avant un jalon |
-| `replay` | les workflows Temporal rejouent les historiques archivés sans casser | CI |
-| `fixtures` | dépôts jouets et tickets de référence pour les évals et la matrice | — |
+| `conformance/backends` | an ACP backend honours the contract (the 7 checks of §2.2) | CI (Claude Code), nightly (all) |
+| `conformance/templates` | a template provisions a project and takes an S ticket through | nightly |
+| `e2e` | the scenarios of milestones M1–M6 (M6: the HR scenario, arrival and departure, S20-07) | nightly, and by hand before a milestone |
+| `replay` | the Temporal workflows replay the archived histories without breaking | CI |
+| `fixtures` | toy repositories and reference tickets for the evals and the matrix | — |
 
-Les tests unitaires vivent à côté du code qu'ils testent (`packages/*/tests`, `apps/*/tests`).
+Unit tests live next to the code they test (`packages/*/tests`, `apps/*/tests`).

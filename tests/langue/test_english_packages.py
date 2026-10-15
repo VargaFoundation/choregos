@@ -29,6 +29,13 @@ ENGLISH = (
     ".github/",  # S34-04f
     "dev/",  # S34-04f
     "demo/",  # S34-04g
+    "tests/cluster/",  # S34-04i
+    "tests/live/",  # S34-04i
+    "tests/licences/",  # S34-04i
+    "tests/ci/",  # S34-04i
+    "tests/dev/",  # S34-04i
+    "tests/integrations/",  # S34-04i
+    "tests/README.md",  # S34-04i
 )
 
 #: (file, start of the line) — French that stays, each with its reason.
@@ -56,7 +63,8 @@ ce = _load()
 
 def _scanned_files(prefix: str) -> list[str]:
     files = []
-    for path in sorted((ROOT / prefix).rglob("*")):
+    # A prefix may name one file (`tests/README.md`): `rglob` finds nothing under a file.
+    for path in sorted([ROOT / prefix] if (ROOT / prefix).is_file() else (ROOT / prefix).rglob("*")):
         relative = path.relative_to(ROOT).as_posix()
         if path.is_file() and not _SKIPPED_PARTS & set(path.parts) and ce.is_scanned(relative):
             files.append(relative)

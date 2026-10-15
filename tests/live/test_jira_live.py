@@ -1,20 +1,20 @@
-"""L'adaptateur Jira contre une vraie instance Jira Cloud (S13-04).
+"""The Jira adapter against a real Jira Cloud instance (S13-04).
 
-Ce que les quatorze tests à transport simulé ne peuvent pas prouver : qu'une instance
-accepte nos requêtes. Celui-ci crée un ticket dans un projet bac à sable, le promène dans
-un cycle Choregos complet — transition, commentaire de suivi réécrit, champs structurés,
-polling de secours — et le referme.
+What the fourteen simulated-transport tests cannot prove: that an instance accepts our
+requests. This one creates a ticket in a sandbox project, takes it through a full Choregos cycle
+— transition, rewritten follow-up comment, structured fields, fallback polling — and closes it
+again.
 
-Il ne touche qu'au projet qu'on lui donne :
+It only touches the project it is given:
 
-    CHOREGOS_LIVE_JIRA_URL=https://votre-site.atlassian.net \\
-    CHOREGOS_LIVE_JIRA_EMAIL=vous@exemple.fr \\
-    CHOREGOS_LIVE_JIRA_TOKEN=<jeton d'API> \\
+    CHOREGOS_LIVE_JIRA_URL=https://your-site.atlassian.net \\
+    CHOREGOS_LIVE_JIRA_EMAIL=you@example.com \\
+    CHOREGOS_LIVE_JIRA_TOKEN=<API token> \\
     CHOREGOS_LIVE_JIRA_PROJECT=SANDBOX \\
       uv run pytest tests/live/test_jira_live.py -m live
 
-Le jeton est un *API token* Atlassian (id.atlassian.com → Security → API tokens), pas un
-mot de passe : Jira Cloud n'accepte plus l'authentification par mot de passe.
+The token is an Atlassian *API token* (id.atlassian.com → Security → API tokens), not a
+password: Jira Cloud no longer accepts password authentication.
 """
 
 from __future__ import annotations
@@ -35,16 +35,16 @@ pytestmark = pytest.mark.live
 
 @pytest.fixture
 async def tracker() -> AsyncIterator[JiraTracker]:
-    """Un client par test : `httpx` lie ses connexions à la boucle qui les a ouvertes."""
+    """One client per test: `httpx` binds its connections to the loop that opened them."""
     env = require(
         "CHOREGOS_LIVE_JIRA_URL",
         "CHOREGOS_LIVE_JIRA_EMAIL",
         "CHOREGOS_LIVE_JIRA_TOKEN",
         "CHOREGOS_LIVE_JIRA_PROJECT",
     )
-    # Jira Cloud : Basic avec `email:token`. Le Bearer ne vaut que pour les jetons OAuth,
-    # et répond `AUTHENTICATED_FAILED` à un API token — un message qui laisse croire à un
-    # jeton révoqué alors que c'est le schéma qui est faux.
+    # Jira Cloud: Basic with `email:token`. Bearer is only valid for OAuth tokens, and answers
+    # `AUTHENTICATED_FAILED` to an API token — a message that suggests a revoked token when it
+    # is the scheme that is wrong.
     credentials = f"{env['CHOREGOS_LIVE_JIRA_EMAIL']}:{env['CHOREGOS_LIVE_JIRA_TOKEN']}"
     token = base64.b64encode(credentials.encode()).decode()
     client = RestClient(
@@ -59,49 +59,52 @@ async def tracker() -> AsyncIterator[JiraTracker]:
 
 
 async def test_cycle_complet_sur_un_vrai_ticket(tracker: JiraTracker) -> None:
-    """Création, lecture, transition, note de suivi réécrite, champs, candidats."""
+    """Creation, read, transition, rewritten follow-up note, fields, candidates."""
     key = await tracker.create_item(
         NewItem(
-            title="[choregos] validation de l'adaptateur",
-            body="Ticket créé par `tests/live`. Fermé à la fin du test.",
+            title="[choregos] adapter validation",
+            body="Ticket created by `tests/live`. Closed at the end of the test.",
             labels=["agent-ready"],
         )
     )
-    assert key.startswith(f"{tracker.project_key}-"), f"clé inattendue : {key}"
+    assert key.startswith(f"{tracker.project_key}-"), f"unexpected key: {key}"
 
     item = await tracker.fetch_item(key)
-    assert item.title == "[choregos] validation de l'adaptateur"
+    assert item.title == "[choregos] adapter validation"
     assert "agent-ready" in item.labels
     assert item.url and item.url.startswith("http")
 
-    # Une transition, choisie par son nom parmi celles que le workflow du projet offre.
-    # C'est le point que le transport simulé ne peut pas vérifier : les transitions
-    # dépendent du schéma de workflow de *votre* projet, pas du nôtre.
+    # A transition, chosen by name among those the project's workflow offers.
+    # This is the point the simulated transport cannot check: the transitions depend on the
+    # workflow scheme of *your* project, not ours.
     await tracker.set_state(key, TrackerStateMapping(status="In Progress"))
     apres = await tracker.fetch_item(key)
-    assert apres.state, "le ticket doit porter un statut après la transition"
+    assert apres.state, "the ticket must carry a status after the transition"
 
-    # Un seul commentaire de suivi, réécrit (§4.3).
+    # A single follow-up comment, rewritten (§4.3).
     def suivi(etape: str) -> str:
-        return f"### Choregos\n\n| Étape | Statut |\n| --- | --- |\n| {etape} | ✅ |"
+        return f"### Choregos\n\n| Step | Status |\n| --- | --- |\n| {etape} | ✅ |"
 
     await tracker.upsert_status_comment(key, suivi("implement"))
     await tracker.upsert_status_comment(key, suivi("verify"))
     relu = await tracker.fetch_item(key)
     suivis = [c for c in relu.comments if c.marker]
-    assert len(suivis) == 1, f"{len(suivis)} commentaires de suivi au lieu d'un"
+    assert len(suivis) == 1, f"{len(suivis)} follow-up comments instead of one"
     assert "verify" in suivis[0].body
 
-    # Les champs structurés : ignorés proprement si le projet ne les a pas.
-    await tracker.set_fields(key, {"Coût (€)": "1,25", "Taille": "M", "Risque": "low"})
+    # The structured fields: cleanly ignored if the project does not have them.
+    await tracker.set_fields(
+        key,
+        {"Coût (€)": "1,25", "Taille": "M", "Risque": "low"},  # lang: fr-ok (legacy field names)
+    )
 
-    # Le polling de secours retrouve le ticket par son étiquette (JQL).
+    # The fallback polling finds the ticket by its label (JQL).
     config = ProjectConfig(
         slug="sandbox", org="varga", repo=RepoConfig(url="https://example.invalid/x/y.git")
     )
     assert key in await tracker.list_candidates(config)
 
-    # Nettoyage : le ticket est fermé, pas laissé ouvert dans le projet.
+    # Cleanup: the ticket is closed, not left open in the project.
     transitions = await tracker.client.request("GET", f"/rest/api/3/issue/{key}/transitions")
     fermeture = next(
         (
@@ -130,10 +133,10 @@ async def test_un_projet_inexistant_donne_une_erreur_lisible(tracker: JiraTracke
 
 
 async def test_le_jeton_est_accepte(tracker: JiraTracker) -> None:
-    """Le contrôle le plus utile quand rien ne marche : qui sommes-nous pour Jira ?
+    """The most useful check when nothing works: who are we, as far as Jira is concerned?
 
-    `AUTHENTICATED_FAILED` sur cet appel veut dire jeton expiré, révoqué, ou schéma
-    d'authentification erroné — et non « le site n'existe pas ».
+    `AUTHENTICATED_FAILED` on this call means an expired or revoked token, or a wrong
+    authentication scheme — not "the site does not exist".
     """
     moi = await tracker.client.request("GET", "/rest/api/3/myself")
-    assert moi.get("accountId"), f"réponse inattendue de /myself : {moi}"
+    assert moi.get("accountId"), f"unexpected response from /myself: {moi}"
