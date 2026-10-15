@@ -2,8 +2,8 @@
 """Les références de secret (ADR 0034) — la couture `SecretResolver`.
 
 Un connecteur ne porte jamais un secret en clair : sa configuration nomme une RÉFÉRENCE
-(`env:CONNECTOR_JIRA_TOKEN`), que la plateforme résout quand elle construit l'adaptateur — dans le processus
-qui en a besoin, jamais dans la base, jamais dans la réponse d'une API. Le cœur sait lire
+(`env:CONNECTOR_JIRA_TOKEN`), which the platform resolves when it builds the adapter, in the process
+that needs it, jamais dans la base, jamais dans la réponse d'une API. Le cœur sait lire
 l'environnement (`env:`) ; un greffon déclare les autres schémas — un coffre (`vault:`,
 `infisical:`) — par `declarer_un_resolveur`.
 

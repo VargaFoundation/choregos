@@ -56,10 +56,10 @@ def verifier_les_secrets(
 
     Les champs secrets d'un type (`api_token` de Jira, `token` d'Argo CD…) partaient dans `config`,
     en clair dans la base et dans chaque réponse de l'API. Ils s'écrivent désormais en
-    références (`secret_refs`), résolues quand l'adaptateur est construit.
+    references (`secret_refs`), resolved when the adapter is built.
 
-    Une référence nomme une variable de l'environnement de la plateforme (S39-06b) : seul qui peut
-    décider de ce que l'organisation ouvre à ses projets l'écrit (`may_reference`)."""
+    A reference names a variable of the platform's environment (S39-06b): only the organisation's
+    administrator writes one (`may_reference`)."""
     from choregos_core.secrets import ReferenceInvalide, verifier
 
     en_clair = sorted(set(config) & set(spec.secret_fields))
