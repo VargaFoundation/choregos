@@ -170,6 +170,48 @@ async def test_matrice_d_evals_publiee_et_opposable(platform: Platform) -> None:
     assert ("codex", True) in validated
 
 
+async def test_the_matrix_shows_the_four_context_cells_with_their_tokens(platform: Platform) -> None:
+    """S37-09: cells as `run_eval_cell` publishes them, `details` and all, come back with their tokens."""
+    await login(platform.client)
+    from choregos_orchestrator.activities import evals as eval_activities
+
+    cells = [
+        {
+            "backend": "claude-code",
+            "model": "platform/standard",
+            "with_memory": True,
+            "context": context,
+            "cases": 3,
+            "skipped": 0,
+            "metered": 3,
+            "success_rate": 1.0,
+            "validated": True,
+            "median_cost_usd": cost,
+            "median_duration_s": 140.0,
+            "median_tokens_in": tokens_in,
+            "median_tokens_cached": tokens_in * 2 // 3,
+            "median_tokens_out": 4800.0,
+            "median_turns": 14.0,
+            "details": [{"fixture": "py-bug-arrondi", "ok": True, "reason": ""}],
+        }
+        for context, tokens_in, cost in [
+            ("none", 144000.0, 0.32),
+            ("rtk", 121600.0, 0.28),
+            ("headroom", 112800.0, 0.26),
+            ("rtk+headroom", 94400.0, 0.22),
+        ]
+    ]
+    await eval_activities.publish_matrix({"project_slug": platform.project_slug, "results": cells})
+    response = await platform.client.get(f"/api/v1/projects/{platform.project_id}/models/matrix")
+    assert response.status_code == 200, response.text
+    shown = {entry["context"]: entry for entry in response.json()["entries"] if entry.get("context")}
+    assert list(shown) == ["none", "rtk", "headroom", "rtk+headroom"]
+    assert shown["rtk+headroom"]["median_tokens_in"] == 94400.0
+    assert shown["headroom"]["median_tokens_cached"] == 75200.0
+    assert shown["rtk"]["metered"] == 3 and shown["none"]["median_turns"] == 14.0
+    assert "details" not in shown["none"], "the matrix shows its own fields, not the cell's journal"
+
+
 async def test_changement_de_modele_sans_redeploiement(platform: Platform) -> None:
     """Un projet change de profil par l'API : aucun redéploiement, la résolution suit."""
     await login(platform.client)

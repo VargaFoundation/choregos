@@ -5,10 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { use, useState } from "react";
 import { Connecteurs } from "@/components/connecteurs";
+import { EvalMatrixTable } from "@/components/eval-matrix";
 import { OperationsDuProjet } from "@/components/operations-du-projet";
 import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
 import { api } from "@/lib/api";
-import { eur, usd } from "@/lib/format";
+import { eur } from "@/lib/format";
 import type { ProjectModels } from "@/lib/types";
 
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
@@ -134,40 +135,11 @@ export default function SettingsPage({ params }: { params: Promise<{ slug: strin
         </p>
       </Card>
 
-      <Card title="Backend × model matrix" className="lg:col-span-2">
+      <Card title="Backend × model × context matrix" className="lg:col-span-2">
         <p className="mb-2 text-sm text-ink-muted">
           Published by the nightly evals: an unvalidated combination is refused on save.
         </p>
-        <div className="overflow-x-auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Backend</th>
-                <th>Model</th>
-                <th>Validated</th>
-                <th className="text-right">Success</th>
-                <th className="text-right">Median cost</th>
-                <th>Memory</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(matrix.data?.entries ?? []).map((entry, index) => (
-                <tr key={index}>
-                  <td>{entry.backend}</td>
-                  <td className="font-mono text-xs">{entry.model}</td>
-                  <td>{entry.validated ? "✓" : <span className="text-danger">✗</span>}</td>
-                  <td className="text-right">
-                    {entry.success_rate != null ? `${Math.round(entry.success_rate * 100)} %` : "—"}
-                  </td>
-                  <td className="text-right">
-                    {entry.median_cost_usd != null ? usd(entry.median_cost_usd) : "—"}
-                  </td>
-                  <td>{entry.with_memory == null ? "—" : entry.with_memory ? "With" : "Without"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EvalMatrixTable entries={matrix.data?.entries ?? []} />
         <EtatDeLecture lecture={matrix} quoi="the eval matrix" />
         {matrix.data && (matrix.data.entries ?? []).length === 0 && <Empty>No eval published yet</Empty>}
       </Card>

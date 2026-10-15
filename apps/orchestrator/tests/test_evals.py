@@ -160,3 +160,169 @@ async def test_le_depot_jouet_n_est_jamais_modifie_sur_place(setup: Fixture) -> 
     )
     apres = (evals.REPOS / "python-toy" / "src" / "panier" / "panier.py").read_text(encoding="utf-8")
     assert avant == apres, "les évals travaillent dans une copie jetable"
+
+
+# ── S37-09: the context reduction as a dimension, tokens from the ledger (ADR 0055) ──
+
+PLAYABLE = ["py-bug-arrondi", "py-remise-volume", "py-test-manquant"]
+
+
+def _usage(name: str, context: str) -> dict[str, int]:
+    spec = yaml.safe_load((evals.TICKETS / f"{name}.yaml").read_text(encoding="utf-8"))
+    return dict(spec["scripted_usage"][context])
+
+
+@pytest.mark.parametrize("path", TICKETS, ids=lambda p: p.stem)
+def test_every_ticket_scripts_its_usage_for_the_four_contexts(path: Path) -> None:
+    spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+    usage = spec["scripted_usage"]
+    assert set(usage) == set(evals.CONTEXTS)
+    for numbers in usage.values():
+        assert set(numbers) == {"tokens_in", "tokens_cached", "tokens_out", "turns"}
+        assert numbers["tokens_cached"] <= numbers["tokens_in"], "the gateway counts cache reads as input"
+
+
+async def test_a_fake_matrix_has_four_context_cells_with_tokens_from_the_ledger(setup: Fixture) -> None:
+    import statistics
+
+    cells = [
+        await evals.run_eval_cell(
+            {
+                "project_slug": setup.project_slug,
+                "backend": "claude-code",
+                "model": "platform/standard",
+                "with_memory": True,
+                "context": context,
+                "fixtures": PLAYABLE,
+            }
+        )
+        for context in evals.CONTEXTS
+    ]
+    assert [cell["context"] for cell in cells] == list(evals.CONTEXTS)
+    for cell in cells:
+        expected = [_usage(name, cell["context"]) for name in PLAYABLE]
+        assert cell["cases"] == cell["metered"] == len(PLAYABLE)
+        for column, key in [
+            ("median_tokens_in", "tokens_in"),
+            ("median_tokens_cached", "tokens_cached"),
+            ("median_tokens_out", "tokens_out"),
+            ("median_turns", "turns"),
+        ]:
+            assert cell[column] == statistics.median(u[key] for u in expected), (cell["context"], column)
+        assert cell["median_cost_usd"] and cell["success_rate"] == 1.0
+    costs = [cell["median_cost_usd"] for cell in cells]
+    assert costs == sorted(costs, reverse=True), "the scripted usage shrinks from none to rtk+headroom"
+    gateway = setup.adapters.gateway
+    assert not gateway.keys, "every ticket's key is revoked once played"
+    assert len(gateway.revoked) == len(PLAYABLE) * len(evals.CONTEXTS), "one key per ticket and context"
+
+
+async def test_the_cell_reports_what_the_ledger_says_not_what_the_fixture_scripts(setup: Fixture) -> None:
+    """A gateway that cannot be billed by hand is the real one: its ledger is the only measure."""
+    from choregos_core.domain import Spend
+
+    class Ledger:
+        """A gateway without `record_usage`: it only says what it saw."""
+
+        def __init__(self, seen: Spend) -> None:
+            self.seen = seen
+            self.minted = 0
+
+        async def mint_key(
+            self, metadata: dict[str, Any], budget_usd: float, ttl_s: int, models: list[str]
+        ) -> Any:
+            from types import SimpleNamespace
+
+            self.minted += 1
+            return SimpleNamespace(key_id=f"real-{self.minted}")
+
+        async def spend(self, key_id: str) -> Spend:
+            return self.seen
+
+        async def revoke(self, key_id: str) -> None:
+            return None
+
+    payload = {
+        "project_slug": setup.project_slug,
+        "backend": "claude-code",
+        "model": "platform/standard",
+        "with_memory": True,
+        "context": "headroom",
+        "fixtures": ["py-bug-arrondi"],
+    }
+    setup.adapters.gateway = Ledger(
+        Spend(tokens_in=7_000, tokens_cached=3_000, tokens_out=500, cost_usd=0.04, requests=3)
+    )
+    cell = await evals.run_eval_cell(payload)
+    assert (cell["median_tokens_in"], cell["median_tokens_cached"], cell["median_tokens_out"]) == (
+        7000,
+        3000,
+        500,
+    )
+    assert cell["median_cost_usd"] == 0.04
+    assert cell["median_turns"] is None, "turns are scripted, and a real gateway billed nothing scripted"
+
+    setup.adapters.gateway = Ledger(Spend())
+    silent = await evals.run_eval_cell(payload)
+    assert silent["cases"] == 1 and silent["metered"] == 0
+    assert silent["median_tokens_in"] is None and silent["median_cost_usd"] is None, (
+        "no measure, never a guess"
+    )
+
+
+async def test_an_unknown_context_fails_the_cell_without_retry(setup: Fixture) -> None:
+    from temporalio.exceptions import ApplicationError
+
+    with pytest.raises(ApplicationError) as refused:
+        await evals.run_eval_cell(
+            {
+                "project_slug": setup.project_slug,
+                "backend": "claude-code",
+                "model": "platform/standard",
+                "with_memory": True,
+                "context": "zip",
+                "fixtures": PLAYABLE,
+            }
+        )
+    assert refused.value.non_retryable and "rtk+headroom" in str(refused.value)
+
+
+async def test_a_cell_without_context_is_the_none_cell(setup: Fixture) -> None:
+    """A matrix started before S37-09 sends no context: its cells are the `none` ones."""
+    cell = await evals.run_eval_cell(
+        {
+            "project_slug": setup.project_slug,
+            "backend": "claude-code",
+            "model": "platform/standard",
+            "with_memory": True,
+            "fixtures": ["py-bug-arrondi"],
+        }
+    )
+    assert cell["context"] == "none"
+    assert cell["median_tokens_in"] == _usage("py-bug-arrondi", "none")["tokens_in"]
+
+
+async def test_a_backend_is_validated_by_its_cells_without_context_reduction(setup: Fixture) -> None:
+    from choregos_api.db.models import ModelProfileRow
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    cell = {"model": "platform/standard", "with_memory": True, "success_rate": 0.9}
+    await evals.publish_matrix(
+        {
+            "project_slug": setup.project_slug,
+            "results": [
+                {**cell, "backend": "codex", "context": "rtk+headroom", "validated": True},
+                {**cell, "backend": "codex", "context": "none", "validated": False},
+                {**cell, "backend": "claude-code", "context": "none", "validated": True},
+                {**cell, "backend": "opencode", "validated": True},
+            ],
+        }
+    )
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(ModelProfileRow).where(ModelProfileRow.litellm_model == "platform/standard")
+            )
+        ).scalar_one()
+    assert row.validated_backends == ["claude-code", "opencode"], "codex only passed with a reduction"
