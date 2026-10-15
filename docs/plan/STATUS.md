@@ -310,7 +310,7 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S33-02 | S33 | 🟡 | #418 | merged 2026-10-14. knowledge bases served as read-only files in the workspace, digest checked by the runner. |
 | S33-03 | S33 | 🟡 | #419 | merged 2026-10-15. knowledge index: contextual chunks, hybrid search, `knowledge_search` with citations. No real embedding model called; recall unmeasured; no large-corpus latency. |
 | S33-04 | S33 | 🟡 | #431 | merged 2026-10-15. knowledge sources: SharePoint/OneDrive delta, web crawl, git. No call to a real Microsoft Graph (Entra app to be registered by Vincent); Graph throttling only via Temporal retries. |
-| S33-05 | S33 | 🟡 | #444 | PR open, not merged. distillation: a knowledge base compiled into a reviewed principles skill. No real model called; web bundle 1 610 kB > 1 600 kB on this branch. |
+| S33-05 | S33 | 🟡 | #444 | merged 2026-10-15. distillation: a knowledge base compiled into a reviewed principles skill. No real model called. Web bundle 1 455 kB in its last CI, under the 1 600 kB budget. |
 | S33-06 | S33 | 🟡 | #445 | merged 2026-10-14. specialist agents in the catalogue, each with an output contract, tools and an eval. The evals check instructions, not behaviour; runner image not rebuilt. |
 | S33-07 | S33 | 🟡 | #449 | merged 2026-10-14. template `software-delivery-governed`, one ticket through every specialist with gates and people, on fakes. "One ticket traverses it on the dev" is NOT done: needs the dev tenant (Vincent). |
 | S33-08 | S33 | 🟡 | #389 | merged 2026-10-14. netops read connectors: pfSense, Cilium/Hubble, nginx (ADR 0052). No real pfSense, cluster or forge contacted; full images not built. |
