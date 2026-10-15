@@ -1,0 +1,144 @@
+# What the registry does not say (ADR 0065): the catalogue version, the vendor map that decides
+# `official`, the hosted remotes the registry does not list, and the licences GitHub cannot
+# detect. Everything here is reviewed by hand, like the seed.
+
+# CalVer of the shipped file; bump it when a refresh is merged.
+catalogue_version: 2026.10.0
+
+# Hosted remotes the registry does not list or lists differently. Every URL was answered with an
+# MCP-shaped reply (a 200 or a 401 asking for credentials) on 2026-10-15.
+remotes:
+  github: { url: "https://api.githubcopilot.com/mcp/", protocol: streamable-http }
+  semgrep: { url: "https://mcp.semgrep.ai/mcp", protocol: streamable-http }
+  deepwiki: { url: "https://mcp.deepwiki.com/mcp", protocol: streamable-http }
+  aws-knowledge: { url: "https://knowledge-mcp.global.api.aws", protocol: streamable-http }
+  vercel: { url: "https://mcp.vercel.com", protocol: streamable-http }
+  cloudflare-observability: { url: "https://observability.mcp.cloudflare.com/mcp", protocol: streamable-http }
+  cloudflare-radar: { url: "https://radar.mcp.cloudflare.com/mcp", protocol: streamable-http }
+  cloudflare-bindings: { url: "https://bindings.mcp.cloudflare.com/mcp", protocol: streamable-http }
+  socket: { url: "https://mcp.socket.dev/", protocol: streamable-http }
+  asana: { url: "https://mcp.asana.com/v2/mcp", protocol: streamable-http }
+  clickup: { url: "https://mcp.clickup.com/mcp", protocol: streamable-http }
+  todoist: { url: "https://ai.todoist.net/mcp", protocol: streamable-http }
+  box: { url: "https://mcp.box.com", protocol: streamable-http }
+  intercom: { url: "https://mcp.intercom.com/mcp", protocol: streamable-http }
+  hubspot: { url: "https://mcp.hubspot.com/", protocol: streamable-http }
+  sanity: { url: "https://mcp.sanity.io", protocol: streamable-http }
+  jina: { url: "https://mcp.jina.ai/v1", protocol: streamable-http }
+
+# Licences GitHub reports as NOASSERTION (a repository mixing licences) or none, checked by hand
+# against the server's own folder. A stdio server we would host needs an OSI licence.
+licences:
+  fetch: MIT
+  filesystem: MIT
+  git: MIT
+  memory: MIT
+  sequential-thinking: MIT
+  time: MIT
+  aws-documentation: Apache-2.0
+  aws-cdk: Apache-2.0
+  aws-terraform: Apache-2.0
+  aws-cost-analysis: Apache-2.0
+  azure: MIT
+  markitdown: MIT
+
+# The vendor map: an entry is `official` when its registry namespace, its repository owner or its
+# remote host belongs to the vendor named here. Never set by hand on an entry.
+vendors:
+  github: { domains: [github.com, githubcopilot.com], orgs: [github] }
+  gitlab: { domains: [gitlab.com], orgs: [gitlab-org] }
+  atlassian: { domains: [atlassian.com], orgs: [atlassian] }
+  linear: { domains: [linear.app], orgs: [linear] }
+  sentry: { domains: [sentry.dev, sentry.io], orgs: [getsentry] }
+  circleci: { domains: [circleci.com], orgs: [CircleCI-Public] }
+  semgrep: { domains: [semgrep.ai, semgrep.dev], orgs: [semgrep] }
+  postman: { domains: [postman.com], orgs: [postmanlabs] }
+  context7: { domains: [context7.com, upstash.com], orgs: [upstash] }
+  deepwiki: { domains: [deepwiki.com], orgs: [] }
+  microsoft-learn: { domains: [microsoft.com], orgs: [MicrosoftDocs, microsoft] }
+  aws-knowledge: { domains: [aws, amazonaws.com], orgs: [awslabs] }
+  aws-documentation: { domains: [], orgs: [awslabs] }
+  aws-cdk: { domains: [], orgs: [awslabs] }
+  aws-terraform: { domains: [], orgs: [awslabs] }
+  aws-cost-analysis: { domains: [], orgs: [awslabs] }
+  chrome-devtools: { domains: [], orgs: [ChromeDevTools] }
+  playwright: { domains: [], orgs: [microsoft] }
+  terraform: { domains: [hashicorp.com], orgs: [hashicorp] }
+  kubernetes: { domains: [], orgs: [containers] }
+  argocd: { domains: [], orgs: [argoproj-labs] }
+  docker-hub: { domains: [docker.com], orgs: [docker] }
+  heroku: { domains: [heroku.com], orgs: [heroku] }
+  vercel: { domains: [vercel.com], orgs: [vercel] }
+  cloudflare-docs: { domains: [cloudflare.com], orgs: [cloudflare] }
+  cloudflare-observability: { domains: [cloudflare.com], orgs: [cloudflare] }
+  cloudflare-radar: { domains: [cloudflare.com], orgs: [cloudflare] }
+  cloudflare-bindings: { domains: [cloudflare.com], orgs: [cloudflare] }
+  supabase: { domains: [supabase.com], orgs: [supabase, supabase-community] }
+  neon: { domains: [neon.tech, neon.com], orgs: [neondatabase] }
+  planetscale: { domains: [pscale.dev, planetscale.com], orgs: [planetscale] }
+  firebase: { domains: [], orgs: [firebase] }
+  azure: { domains: [microsoft.com], orgs: [microsoft] }
+  google-cloud-toolbox: { domains: [], orgs: [googleapis] }
+  dbt: { domains: [], orgs: [dbt-labs] }
+  trivy: { domains: [], orgs: [aquasecurity] }
+  auth0: { domains: [auth0.com], orgs: [auth0] }
+  launchdarkly: { domains: [launchdarkly.com], orgs: [launchdarkly] }
+  socket: { domains: [socket.dev], orgs: [SocketDev] }
+  gitguardian: { domains: [gitguardian.com], orgs: [GitGuardian] }
+  mongodb: { domains: [mongodb.com], orgs: [mongodb-js] }
+  redis: { domains: [redis.io], orgs: [redis] }
+  clickhouse: { domains: [clickhouse.com], orgs: [ClickHouse] }
+  snowflake: { domains: [snowflake.com], orgs: [Snowflake-Labs] }
+  elasticsearch: { domains: [elastic.co], orgs: [elastic] }
+  opensearch: { domains: [], orgs: [opensearch-project] }
+  neo4j: { domains: [neo4j.com], orgs: [neo4j-contrib, neo4j] }
+  qdrant: { domains: [qdrant.tech], orgs: [qdrant] }
+  chroma: { domains: [trychroma.com], orgs: [chroma-core] }
+  milvus: { domains: [zilliz.com], orgs: [zilliztech] }
+  pinecone: { domains: [pinecone.io], orgs: [pinecone-io] }
+  confluent: { domains: [confluent.io], orgs: [confluentinc] }
+  motherduck: { domains: [motherduck.com], orgs: [motherduckdb] }
+  jupyter: { domains: [datalayer.ai], orgs: [datalayer] }
+  grafana: { domains: [grafana.com], orgs: [grafana] }
+  victoriametrics: { domains: [victoriametrics.com], orgs: [VictoriaMetrics, VictoriaMetrics-Community] }
+  logfire: { domains: [pydantic.dev], orgs: [pydantic] }
+  opik: { domains: [comet.com], orgs: [comet-ml] }
+  posthog: { domains: [posthog.com], orgs: [PostHog] }
+  notion: { domains: [notion.com], orgs: [makenotion] }
+  asana: { domains: [asana.com], orgs: [Asana] }
+  monday: { domains: [monday.com], orgs: [mondaycom] }
+  clickup: { domains: [clickup.com], orgs: [] }
+  todoist: { domains: [todoist.net, todoist.com], orgs: [Doist] }
+  box: { domains: [box.com], orgs: [box] }
+  miro: { domains: [miro.com], orgs: [miroapp] }
+  airtable: { domains: [airtable.com], orgs: [Airtable] }
+  zapier: { domains: [zapier.com], orgs: [zapier] }
+  make: { domains: [make.com], orgs: [integromat] }
+  intercom: { domains: [intercom.com], orgs: [intercom] }
+  hubspot: { domains: [hubspot.com], orgs: [HubSpot] }
+  salesforce: { domains: [salesforce.com], orgs: [salesforcecli] }
+  xero: { domains: [xero.com], orgs: [XeroAPI] }
+  figma: { domains: [figma.com], orgs: [figma] }
+  canva: { domains: [canva.com], orgs: [] }
+  webflow: { domains: [webflow.com], orgs: [webflow] }
+  contentful: { domains: [contentful.com], orgs: [contentful] }
+  sanity: { domains: [sanity.io], orgs: [sanity-io] }
+  stripe: { domains: [stripe.com], orgs: [stripe] }
+  paypal: { domains: [paypal.com], orgs: [paypal] }
+  square: { domains: [squareup.com], orgs: [square] }
+  brave-search: { domains: [brave.com], orgs: [brave] }
+  exa: { domains: [exa.ai], orgs: [exa-labs] }
+  tavily: { domains: [tavily.com], orgs: [tavily-ai] }
+  firecrawl: { domains: [firecrawl.dev], orgs: [firecrawl] }
+  apify: { domains: [apify.com], orgs: [apify] }
+  brightdata: { domains: [brightdata.com], orgs: [brightdata] }
+  kagi: { domains: [kagi.com], orgs: [kagisearch] }
+  serpapi: { domains: [serpapi.com], orgs: [serpapi] }
+  perplexity: { domains: [perplexity.ai], orgs: [perplexityai] }
+  jina: { domains: [jina.ai], orgs: [jina-ai] }
+  hugging-face: { domains: [huggingface.co], orgs: [huggingface] }
+  markitdown: { domains: [], orgs: [microsoft] }
+  mapbox: { domains: [mapbox.com], orgs: [mapbox] }
+  twilio: { domains: [twilio.com], orgs: [twilio-labs] }
+  mailgun: { domains: [mailgun.com], orgs: [mailgun] }
+  resend: { domains: [resend.com], orgs: [resend] }

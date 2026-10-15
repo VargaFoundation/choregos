@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json\",\"name\":\"com.gitlab/mcp\",\"description\":\"Official GitLab MCP Server\",\"repository\":{\"url\":\"https://gitlab.com/gitlab-org/gitlab\",\"source\":\"gitlab\"},\"version\":\"0.0.1\",\"remotes\":[{\"type\":\"streamable-http\",\"url\":\"https://gitlab.com/api/v4/mcp\"}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2025-10-02T04:59:37.530539Z\",\"publishedAt\":\"2025-10-02T04:59:37.530539Z\",\"updatedAt\":\"2025-10-02T04:59:37.530539Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/com.gitlab%2Fmcp/versions/latest"
+}

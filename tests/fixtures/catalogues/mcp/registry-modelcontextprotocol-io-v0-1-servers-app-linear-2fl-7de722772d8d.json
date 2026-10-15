@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json\",\"name\":\"app.linear/linear\",\"description\":\"MCP server for Linear project management and issue tracking\",\"title\":\"Linear\",\"version\":\"1.0.1\",\"websiteUrl\":\"https://linear.app\",\"remotes\":[{\"type\":\"streamable-http\",\"url\":\"https://mcp.linear.app/mcp\"}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2026-08-04T09:59:17.029443Z\",\"publishedAt\":\"2026-08-04T09:59:17.029443Z\",\"updatedAt\":\"2026-08-04T09:59:17.029443Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/app.linear%2Flinear/versions/latest"
+}

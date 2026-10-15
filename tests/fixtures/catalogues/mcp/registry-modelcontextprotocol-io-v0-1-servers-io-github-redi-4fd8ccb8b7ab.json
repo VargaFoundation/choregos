@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json\",\"name\":\"io.github.redis/mcp-redis\",\"description\":\"Natural language interface designed for agentic applications to manage and search data in Redis.\",\"title\":\"Redis MCP Server\",\"version\":\"0.5.1\",\"packages\":[{\"registryType\":\"pypi\",\"identifier\":\"redis-mcp-server\",\"version\":\"0.5.1\",\"transport\":{\"type\":\"stdio\"}},{\"registryType\":\"oci\",\"identifier\":\"docker.io/mcp/redis:latest\",\"transport\":{\"type\":\"stdio\"}}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2026-08-05T06:12:04.936936Z\",\"publishedAt\":\"2026-08-05T06:12:04.936936Z\",\"updatedAt\":\"2026-08-05T06:12:04.936936Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.redis%2Fmcp-redis/versions/latest"
+}

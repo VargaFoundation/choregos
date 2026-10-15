@@ -31,6 +31,7 @@ lint:  ## ruff check + format --check + no French in lines added since origin/ma
 	$(UV) run ruff check $(PY_PATHS)
 	$(UV) run ruff format --check $(PY_PATHS)
 	$(UV) run python tools/check_english.py
+	$(UV) run python -m tools.catalogues.build_mcp_catalogue --check
 
 .PHONY: format
 format:  ## Formate le code Python
@@ -52,6 +53,18 @@ test-cov:  ## Tests avec couverture (seuil 80 % sur core, runner, orchestrator)
 .PHONY: contracts
 contracts:  ## Régénère les types depuis packages/contracts (à committer)
 	$(UV) run python tools/gen_contracts.py
+
+.PHONY: catalogues
+catalogues:  ## Regenerates the shipped catalogues from the recorded sources, no network (ADR 0065)
+	$(UV) run python -m tools.catalogues.build_mcp_catalogue
+
+.PHONY: catalogues-check
+catalogues-check:  ## Fails if a shipped catalogue differs from what its recording yields
+	$(UV) run python -m tools.catalogues.build_mcp_catalogue --check
+
+.PHONY: catalogues-record
+catalogues-record:  ## A maintainer, WITH network and GITHUB_TOKEN: re-record the sources, then regenerate
+	$(UV) run python -m tools.catalogues.build_mcp_catalogue --record
 
 .PHONY: docs-cli
 docs-cli:  ## Régénère docs/cli.md depuis la CLI (à committer)

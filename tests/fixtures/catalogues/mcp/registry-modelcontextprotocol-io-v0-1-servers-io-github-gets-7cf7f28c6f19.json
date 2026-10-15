@@ -1,0 +1,9 @@
+{
+ "body": "{\"server\":{\"$schema\":\"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json\",\"name\":\"io.github.getsentry/sentry-mcp\",\"description\":\"MCP server for Sentry - error monitoring, issue tracking, and debugging for AI assistants\",\"repository\":{\"url\":\"https://github.com/getsentry/sentry-mcp\",\"source\":\"github\",\"subfolder\":\"packages/mcp-server\"},\"version\":\"0.42.0\",\"packages\":[{\"registryType\":\"npm\",\"identifier\":\"@sentry/mcp-server\",\"version\":\"0.42.0\",\"transport\":{\"type\":\"stdio\"},\"environmentVariables\":[{\"description\":\"Your Sentry user authentication token\",\"isRequired\":true,\"format\":\"string\",\"isSecret\":true,\"name\":\"SENTRY_ACCESS_TOKEN\"}]}],\"remotes\":[{\"type\":\"streamable-http\",\"url\":\"https://mcp.sentry.dev/mcp\"}]},\"_meta\":{\"io.modelcontextprotocol.registry/official\":{\"status\":\"active\",\"statusChangedAt\":\"2026-09-25T14:49:17.516259Z\",\"publishedAt\":\"2026-09-25T14:49:17.516259Z\",\"updatedAt\":\"2026-09-25T14:49:17.516259Z\",\"isLatest\":true}}}\n",
+ "headers": {
+  "content-type": "application/json"
+ },
+ "method": "GET",
+ "status": 200,
+ "url": "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.getsentry%2Fsentry-mcp/versions/latest"
+}
