@@ -40,6 +40,10 @@ slot (`runner.maxActive`), and the run says so (ADR 0013).
    ```bash
    choregos items action <ticket-id> rerun_stage
    ```
+   This also works on a work item parked in `needs_human` whose interpreter was started again
+   since it escalated (S22-41): the interpreter reads, from the work item's state changes, the
+   stage that escalated and the state it left, and replays that stage with a new run number. A
+   `rerun_stage` sent to such a work item before S22-41 was dropped: send it again.
 
 ## Check it is fixed
 

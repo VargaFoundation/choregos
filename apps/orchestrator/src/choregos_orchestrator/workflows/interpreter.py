@@ -44,6 +44,7 @@ with workflow.unsafe.imports_passed_through():
     from ..activities import tracker as tracker_activities
     from ..activities.interpretation import (
         activite_de,
+        escalation_context,
         load_context,
         message_de,
         record_migration,
@@ -121,6 +122,15 @@ TICKET_SPEND_FROM_LEDGER = "ticket-spend-from-ledger"
 #: Before this marker, the synchronous ones kept the verdict read when the transition was entered,
 #: and an ADR number taken on the default branch during the CI was merged as a duplicate.
 GATES_REREAD_AFTER_WAIT = "gates-reread-after-wait"
+#: An escalation writes where the work item resumes — `[parked, origin, transition]` — on its
+#: `state_changed` event (S22-41). Before this marker the mirror carried the state and the reason.
+ESCALATION_CONTEXT_STORED = "escalation-context-stored"
+#: An interpreter started again from the database (#497) did not know where its parked work item
+#: resumes: `rerun_stage` and an answer were dropped (S22-41). A request to resume on a work item
+#: this interpreter did not park now reads it back (`escalation_context`). The id is numbered per
+#: request (`-1`, `-2`…): a request the old code dropped, replayed, must answer no without making
+#: every later request answer no — `patched` gives one answer per id for the whole run.
+ESCALATION_CONTEXT_AFTER_RESTART = "escalation-context-after-restart"
 
 
 @dataclass
@@ -198,13 +208,21 @@ class WorkflowInterpreter:
         self.suspension: dict[str, Any] | None = None
         #: How many suspended runs were resumed: names each resumption, for idempotence.
         self.resumptions: int = 0
+        #: A request to resume (`rerun_stage`, an answer) on a work item this interpreter did not
+        #: park: where it resumes is read from the database before the request is played (S22-41).
+        self.resume_lookup_pending: bool = False
+        #: How many such requests arrived: numbers the patch id of each (see the marker).
+        self.resume_lookups: int = 0
         self.project_id: str = ""
+        self.work_item_id: str = ""
 
     # ───────────────────────── signaux et requêtes ─────────────────────────
 
     @workflow.signal
     def human_decision(self, decision: dict[str, Any]) -> None:
         self.decisions.append(decision)
+        if decision.get("kind") == "question":
+            self._look_up_resume()
 
     @workflow.signal
     def inbound(self, event: dict[str, Any]) -> None:
@@ -245,6 +263,7 @@ class WorkflowInterpreter:
             self.migration = dict(message)
         elif action == "rerun_stage":
             self.relance = True
+            self._look_up_resume()
 
     @workflow.query
     def status(self) -> dict[str, Any]:
@@ -296,6 +315,7 @@ class WorkflowInterpreter:
             self.reprise = (params.parked[0], params.parked[1], params.parked[2])
         self.suspension = dict(params.suspended) if params.suspended else None
         self.project_id = params.project_id
+        self.work_item_id = params.work_item_id
         self.cost_usd = params.cost_usd
 
         context = await executer_activite(
@@ -787,7 +807,7 @@ class WorkflowInterpreter:
                 # `sandbox.suspend_max_hours` passed: the sandbox goes (the executor's platform
                 # deletes it at that instant anyway), and the answer will replay the stage.
                 await self._release_suspension()
-            if self._relance_acceptee():
+            if await self._replay_requested():
                 return await self._reprendre("replay requested", self.pending_request)
             if self.decisions:
                 decision = self.decisions.popleft()
@@ -1052,9 +1072,45 @@ class WorkflowInterpreter:
 
     def _relance_jouable(self) -> bool:
         """« Replay the stage » ne joue que sur un ticket garé ; ailleurs, il est oublié."""
-        if self.relance and not self._est_gare():
+        if self.relance and not self._est_gare() and not self.resume_lookup_pending:
             self.relance = False
         return self.relance
+
+    def _look_up_resume(self) -> None:
+        """A request to resume a work item this interpreter did not park — it was started again
+        from the database (#497): where it resumes is to be read before the request plays."""
+        if self._est_gare():
+            return
+        # The condition first, `patched` next — and one id per request (see the marker).
+        self.resume_lookups += 1
+        if workflow.patched(f"{ESCALATION_CONTEXT_AFTER_RESTART}-{self.resume_lookups}"):
+            self.resume_lookup_pending = True
+
+    async def _replay_requested(self) -> bool:
+        """`_relance_acceptee`, once a restarted interpreter has read where its work item resumes —
+        which an answer waiting in `decisions` needs as well."""
+        if self.resume_lookup_pending:
+            await self._read_the_parking()
+        return self._relance_acceptee()
+
+    async def _read_the_parking(self) -> None:
+        """Rebuilds `reprise` from what the escalation left in the database (S22-41), and the
+        transition's attempts: the replayed stage gets a new run number, not the failed run's."""
+        self.resume_lookup_pending = False
+        if self._est_gare():
+            return
+        found = await executer_activite(
+            escalation_context,
+            {"project_id": self.project_id, "work_item_id": self.work_item_id, "state": self.state},
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=DEFAULT_RETRY,
+        )
+        parked = found.get("parked")
+        if not parked or parked[0] != self.state:
+            return
+        self.reprise = (str(parked[0]), str(parked[1]), str(parked[2]))
+        key = self.reprise[2]
+        self.attempts[key] = max(self.attempts[key], int(found.get("attempts") or 0))
 
     def _relance_acceptee(self) -> bool:
         """La relance demandée joue-t-elle ? Sinon elle est OUBLIÉE : laissée en place, elle tenait
@@ -1182,7 +1238,7 @@ class WorkflowInterpreter:
                 # the answer, when it comes, replays the stage.
                 await self._release_suspension()
                 continue
-            if self._relance_acceptee():
+            if await self._replay_requested():
                 return (await self._reprendre("replay requested", self.pending_request)).next_state
             if self.migration and not (self.inbox or self.decisions or self.stopped):
                 if workflow.patched(MIGRATION_PAR_DEFINITION):
@@ -1212,14 +1268,17 @@ class WorkflowInterpreter:
         return None
 
     async def _mirror(self, params: InterpreterInput, reason: str) -> None:
+        mirrored: dict[str, Any] = {
+            "project_id": params.project_id,
+            "work_item_id": params.work_item_id,
+            "state": self.state,
+            "reason": reason,
+        }
+        if self.reprise is not None and self._est_gare() and workflow.patched(ESCALATION_CONTEXT_STORED):
+            mirrored["parked"] = list(self.reprise)  # where it resumes, for a restarted interpreter
         await executer_activite(
             tracker_activities.mirror_state,
-            {
-                "project_id": params.project_id,
-                "work_item_id": params.work_item_id,
-                "state": self.state,
-                "reason": reason,
-            },
+            mirrored,
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=DEFAULT_RETRY,
         )

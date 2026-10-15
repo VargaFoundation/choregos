@@ -50,6 +50,9 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
         )
         await bundle.adapters.tracker.set_state(item.tracker_key, mapping)
         if previous != state_name:
+            # An escalation says where the work item resumes (S22-41): an interpreter started again
+            # from the database reads it there (`escalation_context`).
+            parked = {"parked": list(payload["parked"])} if payload.get("parked") else {}
             await persist_event(
                 session,
                 EventType.WORKITEM_STATE_CHANGED,
@@ -57,7 +60,7 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
                 work_item_id=item.id,
                 project_slug=bundle.slug,
                 subject=item.tracker_key,
-                **{"from": previous, "to": state_name, "reason": payload.get("reason", "")},
+                **{"from": previous, "to": state_name, "reason": payload.get("reason", ""), **parked},
             )
         return {"state": state_name, "display": state.display if state else state_name}
 
