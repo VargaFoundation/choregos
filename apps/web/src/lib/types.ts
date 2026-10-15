@@ -73,6 +73,8 @@ export type {
   McpCatalogue,
   McpCatalogueEntry,
   McpCatalogueInstall,
+  SkillCatalogue,
+  SkillCatalogueEntry,
   ConnectorDiscovery,
   ConnectorOperation,
   Integrations,

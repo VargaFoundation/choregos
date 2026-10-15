@@ -491,6 +491,13 @@ function SkillsSection({
             Attach
           </Button>
         </div>
+        <p className="text-xs text-ink-muted">
+          Not in the library yet?{" "}
+          <Link href="/skills/catalogue" className="underline">
+            Browse the skills catalogue
+          </Link>
+          .
+        </p>
       </div>
     </Section>
   );

@@ -32,6 +32,7 @@ const PAGES = [
   "/agents",
   "/agents/onboarding-coordinator",
   "/skills",
+  "/skills/catalogue",
   "/costs",
   "/skills/onboarding-procedure",
   "/integrations",

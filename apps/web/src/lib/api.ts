@@ -13,6 +13,7 @@ import type {
   OperationPatch,
   McpCatalogue,
   McpCatalogueInstall,
+  SkillCatalogue,
   OrgConnector,
   OrgConnectorCreate,
   ProjectOperation,
@@ -340,6 +341,10 @@ export const api = {
     request<void>(`/projects/${qualify(id)}/agents/${slug}`, { method: "DELETE" }),
   /** La bibliothèque de skills : un dossier, importé en zip, versionné, jamais réécrit. */
   skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
+  /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
+  skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
+  installSkillCatalogueEntry: (org: string, id: string) =>
+    request<Skill>(`/orgs/${org}/skill-catalogue/${encodeURIComponent(id)}/install`, { method: "POST" }),
   skill: (org: string, slug: string) => request<Skill>(`/orgs/${org}/skills/${slug}`),
   skillVersion: (org: string, slug: string, version: number) =>
     request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}`),

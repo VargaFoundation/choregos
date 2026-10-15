@@ -22,6 +22,8 @@ import type {
   McpCatalogueEntry,
   McpCatalogueInstall,
   OrgConnector,
+  SkillCatalogue,
+  SkillCatalogueEntry,
   ProjectOperation,
   ProjectRequirement,
   AgentCredential,
@@ -64,6 +66,7 @@ import { ApiError } from "@/lib/api";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
+import skillCatalogueFile from "./skill-catalogue.json";
 
 export { peopleOpsFixtures };
 
@@ -1553,6 +1556,27 @@ export function mcpCatalogue(): McpCatalogue {
   };
 }
 
+/** The skills this demo organisation installed from the catalogue, by name (ADR 0065). */
+const catalogueSkills = new Map<string, { skill: Skill; version: SkillVersion }>();
+
+/**
+ * The skills catalogue (ADR 0065): the real shipped entries, generated into `skill-catalogue.json` by
+ * `make catalogues`, with the state this demo organisation gives them. A high-risk skill fetched from
+ * git waits for a second administrator, as the API says.
+ */
+export function skillCatalogue(): SkillCatalogue {
+  const file = skillCatalogueFile as unknown as SkillCatalogue;
+  return {
+    ...file,
+    entries: file.entries.map((entry: SkillCatalogueEntry) => {
+      const installed = catalogueSkills.get(entry.id);
+      if (!installed) return entry;
+      const waiting = installed.skill.review_status === "pending_review";
+      return { ...entry, state: waiting ? ("pending_review" as const) : ("installed" as const), installed_version: 1 };
+    }),
+  };
+}
+
 /** Un annuaire de l'organisation (ADR 0034) : chaque opération porte sa politique. */
 export const orgConnectors: OrgConnector[] = [
   {
@@ -1845,6 +1869,46 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       temporal_wf_id: `action-${action.id}`,
     } as T;
   }
+  const skillInstall = /^\/orgs\/[^/]+\/skill-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
+  if (method === "POST" && skillInstall) {
+    // As the API does: the skill is published at version 1 with where it came from, and a high-risk
+    // one fetched from git waits for a second administrator.
+    const entry = skillCatalogue().entries.find((e) => e.id === skillInstall[1]);
+    if (!entry) throw new ApiError(404, { title: "Not found" });
+    const waiting = entry.risk === "high" && entry.delivery === "git";
+    const source = {
+      repo: entry.repo,
+      sha: entry.sha,
+      path: entry.path,
+      licence: entry.licence,
+      catalogue: `${entry.id}@${skillCatalogueFile.meta.catalogue_version}`,
+      delivery: entry.delivery,
+    };
+    const version: SkillVersion = {
+      version: 1,
+      digest: entry.digest,
+      created_by: me.email,
+      created_at: new Date().toISOString(),
+      files: { "SKILL.md": `---\nname: ${entry.id}\ndescription: ${entry.description}\n---\n` },
+      source,
+      risk: entry.risk,
+      review_status: waiting ? "pending_review" : "approved",
+      reviewed_by: waiting ? undefined : "platform",
+      findings: [],
+    };
+    const skill: Skill = {
+      slug: entry.id,
+      description: entry.description,
+      status: "active",
+      latest_version: 1,
+      used_by: [],
+      risk: entry.risk,
+      review_status: version.review_status,
+      versions: [version],
+    };
+    catalogueSkills.set(entry.id, { skill, version });
+    return skill as T;
+  }
   const catalogueInstall = /^\/orgs\/[^/]+\/mcp-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
   if (method === "POST" && catalogueInstall) {
     // As the API does: a connector declared with the entry's URL, no operation until a discovery.
@@ -1870,6 +1934,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (method !== "GET") return { ok: true } as T;
   const [route] = path.split("?");
+  const installedVersion = /^\/orgs\/[^/]+\/skills\/([^/]+)\/versions\/1$/.exec(route ?? "");
+  if (installedVersion && catalogueSkills.has(installedVersion[1]!)) return catalogueSkills.get(installedVersion[1]!)!.version as T;
+  const installedSkill = /^\/orgs\/[^/]+\/skills\/([^/]+)$/.exec(route ?? "");
+  if (installedSkill && catalogueSkills.has(installedSkill[1]!)) return catalogueSkills.get(installedSkill[1]!)!.skill as T;
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
@@ -1910,7 +1978,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, projectAgents],
-    [/^\/orgs\/[^/]+\/skills$/, skills],
+    [/^\/orgs\/[^/]+\/skills$/, [...skills, ...[...catalogueSkills.values()].map((c) => c.skill)]],
+    [/^\/orgs\/[^/]+\/skill-catalogue$/, skillCatalogue()],
     [/^\/orgs\/[^/]+\/knowledge$/, [{ ...knowledgeBase, documents: null }]],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...knowledgeBase, documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
