@@ -1,6 +1,6 @@
 # -*- mode: Python -*-
-# Rechargement à chaud de l'API, du front, des workers, du runner et du sidecar.
-# `make dev-up` monte le cluster kind puis lance `tilt up` avec ce fichier.
+# Hot reload of the API, the front end, the workers, the runner and the sidecar.
+# `make dev-up` brings up the kind cluster, then runs `tilt up` with this file.
 
 load('ext://restart_process', 'docker_build_with_restart')
 
@@ -16,13 +16,13 @@ k8s_yaml(helm(
     values=['../charts/choregos/values.yaml', '../charts/choregos/values/dev.yaml'],
 ))
 
-# ── images, reconstruites à chaque changement ──
+# ── images, rebuilt on every change ──
 docker_build_with_restart(
     'ghcr.io/vargafoundation/choregos-api',
     context='..',
     dockerfile='../docker/api.Dockerfile',
-    # `target` explicite : sans lui, buildx construit la **dernière** étape du fichier, qui est
-    # `worker` — l'API partirait avec la commande d'un worker.
+    # Explicit `target`: without it, buildx builds the **last** stage of the file, which is
+    # `worker` — the API would start with a worker's command.
     target='api',
     entrypoint=['uvicorn', 'choregos_api.main:app', '--host', '0.0.0.0', '--port', '8000', '--reload'],
     live_update=[
@@ -53,18 +53,18 @@ docker_build(
 docker_build('ghcr.io/vargafoundation/choregos-tools', context='..', dockerfile='../docker/tools.Dockerfile')
 docker_build('ghcr.io/vargafoundation/choregos-runner', context='..', dockerfile='../docker/runner.Dockerfile')
 
-# ── accès local ──
-k8s_resource('choregos-api', port_forwards=['8000:8000'], labels=['plateforme'])
-k8s_resource('choregos-web', port_forwards=['3000:3000'], labels=['plateforme'])
-k8s_resource('choregos-orchestrator-orchestrator', labels=['plateforme'])
+# ── local access ──
+k8s_resource('choregos-api', port_forwards=['8000:8000'], labels=['platform'])
+k8s_resource('choregos-web', port_forwards=['3000:3000'], labels=['platform'])
+k8s_resource('choregos-orchestrator-orchestrator', labels=['platform'])
 
-# ── commandes utiles depuis l'interface Tilt ──
+# ── useful commands from the Tilt UI ──
 local_resource('seed', cmd='make -C .. dev-seed', auto_init=False, trigger_mode=TRIGGER_MODE_MANUAL,
-               labels=['outils'])
-local_resource('démo hors ligne', cmd='make -C .. demo', auto_init=False,
-               trigger_mode=TRIGGER_MODE_MANUAL, labels=['outils'])
+               labels=['tools'])
+local_resource('offline demo', cmd='make -C .. demo', auto_init=False,
+               trigger_mode=TRIGGER_MODE_MANUAL, labels=['tools'])
 local_resource('tests', cmd='make -C .. test', auto_init=False, trigger_mode=TRIGGER_MODE_MANUAL,
-               labels=['outils'])
+               labels=['tools'])
 
 
 def namespace_yaml(name):

@@ -182,6 +182,7 @@ def test_makefile_reads_comments_only() -> None:
         ("docs/plan/STATUS.md", True),
         ("AGENTS.md", True),
         (".github/workflows/ci.yml", True),
+        ("dev/compose.yaml", True),
         ("Makefile", True),
         ("docs/fr/guide.md", False),
         ("docs/cli.md", False),
