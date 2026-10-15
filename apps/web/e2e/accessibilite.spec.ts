@@ -27,6 +27,7 @@ const PAGES = [
   "/admin/x/scim",
   "/integrations",
   "/inbox",
+  "/p/billing-api/inbox",
   "/p/billing-api/actions",
   "/p/billing-api/actions/act-poste",
   "/p/billing-api/actions/act-comptes",

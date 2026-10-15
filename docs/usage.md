@@ -782,7 +782,11 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   request (approval, question, scope change, task — overdue first, then the nearest due date, then
   the oldest), decided in place as on the board, and the actions waiting for approval. Groups are
   not checked yet: everyone sees everything that waits, including what is addressed to others. The
-  former `/approvals` link redirects there.
+  former `/approvals` link redirects there. There are two inboxes: the organisation's, which a
+  **Project** filter (`/inbox?project=<slug>`) narrows to one project, and each project's own
+  (`/p/<slug>/inbox`, the **Inbox** entry of the project's sidebar), which lists and counts only
+  that project's tickets, actions and project budget alerts. An agent's budget alert stays in the
+  organisation's inbox, because an agent serves several projects.
 
 The core ships two effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { libelleDeDemande, resumeDeDemande, ticketsEnAttente } from "@/lib/a-decider";
-import type { HumanRequest, WorkItemDto } from "@/lib/types";
+import { libelleDeDemande, resumeDeDemande, ticketsEnAttente, waitingInProject } from "@/lib/a-decider";
+import type { Action, BudgetAlert, HumanRequest, WorkItemDto } from "@/lib/types";
 
 const MAINTENANT = Date.parse("2026-10-08T12:00:00Z");
 const heure = (h: number) => new Date(MAINTENANT + h * 3_600_000).toISOString();
@@ -47,5 +47,20 @@ describe("ce qui attend une personne (S23-02)", () => {
     );
     expect(resumeDeDemande({ ...base, kind: "scope_change", payload: {} })).toBe("scope change");
     expect(libelleDeDemande("une_sorte_nouvelle")).toBe("une sorte nouvelle");
+  });
+});
+
+describe("what waits in one project (S39-04)", () => {
+  const action = (id: string, project_slug: string) => ({ id, project_slug }) as unknown as Action;
+  const alert = (id: string, scope: "project" | "agent", subject: string) => ({ id, scope, subject }) as unknown as BudgetAlert;
+
+  it("keeps the project's actions and its own budget alerts, not the others' nor an agent's", () => {
+    const narrowed = waitingInProject(
+      [action("a1", "billing-api"), action("a2", "checkout-web")],
+      [alert("b1", "project", "billing-api"), alert("b2", "project", "checkout-web"), alert("b3", "agent", "billing-api")],
+      "billing-api",
+    );
+    expect(narrowed.actions.map((a) => a.id)).toEqual(["a1"]);
+    expect(narrowed.budgets.map((b) => b.id)).toEqual(["b1"]);
   });
 });
