@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import base64
+import copy
 from typing import Any
 
 import pytest
+from choregos_adapters.errors import UpstreamError
 from choregos_adapters.executor.k8s_job import RUNNER_POD_LABELS, KubernetesJobExecutor
 from choregos_adapters.registry import default_executor_kind
 from choregos_contracts import ExecutorKind
@@ -282,10 +285,8 @@ async def test_le_jeton_d_un_run_en_file_se_remplace() -> None:
     await executeur.renew(ref, "jeton-tout-neuf")
 
     secret = next(
-        body for method, path, body in client.calls if method == "PUT" and path.endswith("/secrets/run-r-0")
+        body for method, path, body in client.calls if method == "PATCH" and path.endswith("/secrets/run-r-0")
     )
-    import base64
-
     assert base64.b64decode(secret["data"]["token"]).decode() == "jeton-tout-neuf"
     assert "renew" in KubernetesJobExecutor.capabilities
 
@@ -436,3 +437,131 @@ async def test_an_image_that_does_not_pull_gives_its_reason() -> None:
         ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
     )
     assert (status.exit_code, status.reason) == (None, "ErrImagePull")
+
+
+# ──────── the run's token never outlives its run (S22-34, dev tenant 2026-10-14) ────────
+
+
+class _ApiServer:
+    """What the API server does to Jobs and Secrets, where it matters for the token's life:
+    every object gets a `uid`; a PUT REPLACES the object (owner references it omits are gone);
+    a merge PATCH merges; deleting a Job collects the Secrets it owns (the garbage collector,
+    after `ttlSecondsAfterFinished`). `refuse` fails the next matching call with its code."""
+
+    def __init__(self) -> None:
+        self.jobs: dict[str, dict[str, Any]] = {}
+        self.secrets: dict[str, dict[str, Any]] = {}
+        self.refuse: dict[tuple[str, str], int] = {}
+        self._uid = 0
+
+    def _new_uid(self) -> str:
+        self._uid += 1
+        return f"uid-{self._uid}"
+
+    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        for (m, suffix), code in list(self.refuse.items()):
+            if m == method and path.endswith(suffix):
+                del self.refuse[(m, suffix)]
+                raise UpstreamError("kubernetes", f"{method} {path} -> {code}", status_code=code)
+        body = copy.deepcopy(kwargs.get("json"))
+        store = self.jobs if "/jobs" in path else self.secrets
+        tail = path.rsplit("/", 1)[-1]
+        if method == "POST":
+            body["metadata"]["uid"] = self._new_uid()
+            body.setdefault("status", {})
+            store[body["metadata"]["name"]] = body
+            return copy.deepcopy(body)
+        if method == "GET" and tail in ("jobs", "secrets"):
+            return {"items": [copy.deepcopy(o) for o in store.values()]}
+        if tail not in store:
+            return None
+        if method == "GET":
+            return copy.deepcopy(store[tail])
+        if method == "PUT":
+            body["metadata"]["uid"] = store[tail]["metadata"]["uid"]
+            store[tail] = body
+            return copy.deepcopy(body)
+        if method == "PATCH":
+            for key, value in body.items():
+                store[tail].setdefault(key, {}).update(value)
+            return copy.deepcopy(store[tail])
+        if method == "DELETE":
+            del store[tail]
+            return {}
+        raise AssertionError(f"unexpected {method} {path}")
+
+    def ttl_collects(self, name: str) -> None:
+        """`ttlSecondsAfterFinished` passed: the Job goes, and with it what it owns."""
+        uid = self.jobs.pop(name)["metadata"]["uid"]
+        for key, secret in list(self.secrets.items()):
+            if any(o.get("uid") == uid for o in secret["metadata"].get("ownerReferences") or []):
+                del self.secrets[key]
+
+
+def _ref_of(run_id: str) -> ExecRef:
+    return ExecRef(kind=ExecutorKind.K8S_JOB, name=f"run-{run_id}", namespace="choregos", run_id=run_id)
+
+
+async def test_the_token_of_a_run_that_ends_normally_goes_with_its_job() -> None:
+    api = _ApiServer()
+    await KubernetesJobExecutor(client=api).start(_spec_pour("r-0"))  # type: ignore[arg-type]
+    api.jobs["run-r-0"]["status"] = {"succeeded": 1}
+    api.ttl_collects("run-r-0")
+    assert api.secrets == {}
+
+
+async def test_the_token_of_a_queued_run_survives_neither_its_renewal_nor_its_job() -> None:
+    """Three of the five orphan Secrets on the dev tenant came from runs that waited for a slot
+    on 2026-10-08: the renewal rewrote the Secret with a PUT that dropped its owner reference."""
+    api = _ApiServer()
+    executor = KubernetesJobExecutor(client=api, max_active=1)  # type: ignore[arg-type]
+    await executor.start(_spec_pour("r-0"))
+    await executor.start(_spec_pour("r-1"))  # queued: suspended Job
+    await executor.renew(_ref_of("r-1"), "fresh-token")
+
+    assert base64.b64decode(api.secrets["run-r-1"]["data"]["token"]).decode() == "fresh-token"
+    assert api.secrets["run-r-1"]["metadata"]["labels"] == {"choregos/run-id": "r-1"}
+    api.ttl_collects("run-r-1")
+    assert "run-r-1" not in api.secrets, "the renewed token outlived its Job"
+
+
+async def test_a_start_replayed_after_a_refused_handover_still_gives_the_token_to_the_job() -> None:
+    """The two 2026-09-27 orphans: `PATCH .../secrets/run-... -> 403` after the Job was made;
+    the activity retried, found the Job, and returned without handing the Secret over."""
+    api = _ApiServer()
+    executor = KubernetesJobExecutor(client=api)  # type: ignore[arg-type]
+    api.refuse[("PATCH", "/secrets/run-r-0")] = 403
+    with pytest.raises(Exception, match="403"):
+        await executor.start(_spec_pour("r-0"))
+    assert "run-r-0" in api.secrets, "the Job exists and its pod needs the token"
+
+    await executor.start(_spec_pour("r-0"))  # the activity's retry
+    api.ttl_collects("run-r-0")
+    assert api.secrets == {}
+
+
+async def test_a_job_that_cannot_be_created_leaves_no_token_behind() -> None:
+    """Admission, quota or RBAC refuses the Job after the Secret was written: nothing will
+    ever own that Secret, so it is deleted on the spot and the error still surfaces."""
+    api = _ApiServer()
+    api.refuse[("POST", "/jobs")] = 403
+    with pytest.raises(Exception, match="403"):
+        await KubernetesJobExecutor(client=api).start(_spec_pour("r-0"))  # type: ignore[arg-type]
+    assert api.jobs == {} and api.secrets == {}
+
+
+async def test_a_job_created_despite_a_lost_answer_keeps_its_token() -> None:
+    """The create reached the cluster but its answer was lost: the Job exists, its pod needs the
+    Secret. The clean-up only deletes a Secret whose Job really does not exist."""
+
+    class _LostAnswer(_ApiServer):
+        async def request(self, method: str, path: str, **kwargs: Any) -> Any:
+            answer = await super().request(method, path, **kwargs)
+            if method == "POST" and path.endswith("/jobs"):
+                raise TimeoutError("answer lost")
+            return answer
+
+    api = _LostAnswer()
+    with pytest.raises(TimeoutError):
+        await KubernetesJobExecutor(client=api).start(_spec_pour("r-0"))  # type: ignore[arg-type]
+    assert "run-r-0" in api.secrets

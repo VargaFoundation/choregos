@@ -188,6 +188,46 @@ async def test_start_is_idempotent() -> None:
     assert [m for m, p in cluster.calls if p.endswith("/sandboxclaims")].count("POST") == 1
 
 
+async def test_a_start_replayed_after_a_refused_handover_still_gives_the_token_to_the_claim() -> None:
+    """S22-34: the claim is made, then handing it the Secret fails (a 403, a timeout). The
+    activity retries, finds the claim and returns: before, the Secret then stayed ownerless and
+    outlived the run (the dev tenant's leak, seen with `k8s_job` on 2026-09-27)."""
+    cluster = FakeSandboxCluster()
+    executor = _executor(cluster)
+    cluster.refuse[("PATCH", "/secrets/run-r-1")] = 403
+    with pytest.raises(UpstreamError):
+        await executor.start(_spec("r-1"))
+    assert "run-r-1" in cluster.claims and "run-r-1" in cluster.secrets, "the claim exists: its token stays"
+
+    await executor.start(_spec("r-1"))  # the activity's retry
+    (owner,) = cluster.secrets["run-r-1"]["metadata"]["ownerReferences"]
+    assert (owner["kind"], owner["name"]) == ("SandboxClaim", "run-r-1")
+    cluster.expire("r-1")
+    assert "run-r-1" not in cluster.secrets, "the claim's end takes the token with it"
+
+
+async def test_a_claim_that_cannot_be_made_leaves_no_token_behind() -> None:
+    """S22-34: the Secret is written, then the claim is refused (quota, admission, RBAC). The
+    run fails, and nothing will ever own that Secret: it is deleted on the spot."""
+    cluster = FakeSandboxCluster()
+    executor = _executor(cluster)
+    cluster.refuse[("POST", "/sandboxclaims")] = 403
+    with pytest.raises(UpstreamError):
+        await executor.start(_spec("r-1"))
+    assert cluster.claims == {} and cluster.secrets == {}
+
+
+async def test_renewing_a_token_keeps_it_owned_by_the_claim() -> None:
+    """A PUT replaces the metadata: a renewal that dropped the owner reference would make the
+    token outlive its run — what `k8s_job`'s renewal did to queued runs (S22-34)."""
+    cluster = FakeSandboxCluster()
+    executor = _executor(cluster)
+    ref = await executor.start(_spec("r-1", token="old"))
+    await executor.renew(ref, "fresh")
+    cluster.expire("r-1")
+    assert "run-r-1" not in cluster.secrets
+
+
 async def test_the_queue_holds_runs_without_a_claim_and_admits_in_arrival_order() -> None:
     cluster = FakeSandboxCluster()
     cluster.warm(3)

@@ -278,7 +278,10 @@ class FakeSandboxCluster:
         if method == "PUT":
             kept = self.secrets[name]["metadata"]
             replaced = copy.deepcopy(body)
-            for key in ("uid", "creationTimestamp", "ownerReferences"):
+            # As the API server does: a PUT replaces the object, so only server-set fields
+            # survive. Owner references the body omits are GONE — a token rewritten that way
+            # no longer belongs to its claim, and outlives it.
+            for key in ("uid", "creationTimestamp"):
                 if key in kept:
                     replaced["metadata"].setdefault(key, kept[key])
             self.secrets[name] = replaced

@@ -19,6 +19,7 @@ est sans commune mesure avec le problème qu'on évite.
 from __future__ import annotations
 
 import base64
+import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -73,6 +74,11 @@ class KubernetesJobExecutor:
         name = self._name(spec.run_id)
         existing = await self.client.request("GET", f"{BATCH_API}/namespaces/{spec.namespace}/jobs/{name}")
         if existing is not None:
+            # A REPLAYED start (the activity failed after the Job was created): what failed
+            # may have been handing the Secret to the Job. Seen on the dev tenant on
+            # 2026-09-27 — `PATCH .../secrets/run-... -> 403`, the activity retried, found the
+            # Job, returned... and the Secret stayed ownerless for good. It is handed over here.
+            await self._rattacher_le_secret(spec.namespace, name, existing)
             return ExecRef(kind=self.kind, name=name, namespace=spec.namespace, run_id=spec.run_id)
         await self._ensure_secret(spec, name)
         job = self._job(spec, name)
@@ -82,8 +88,14 @@ class KubernetesJobExecutor:
                 # Suspendu : aucun pod, aucune image tirée, aucune place prise dans le
                 # quota. Le tour viendra à un relevé d'état, dans l'ordre d'arrivée.
                 job["spec"]["suspend"] = True
-        cree = await self.client.request("POST", f"{BATCH_API}/namespaces/{spec.namespace}/jobs", json=job)
-        await self._rattacher_le_secret(spec.namespace, name, cree)
+        try:
+            created = await self.client.request(
+                "POST", f"{BATCH_API}/namespaces/{spec.namespace}/jobs", json=job
+            )
+        except Exception:
+            await self._drop_secret_without_job(spec.namespace, name)
+            raise
+        await self._rattacher_le_secret(spec.namespace, name, created)
         return ExecRef(kind=self.kind, name=name, namespace=spec.namespace, run_id=spec.run_id)
 
     async def _rattacher_le_secret(self, namespace: str, name: str, job: Any) -> None:
@@ -109,6 +121,17 @@ class KubernetesJobExecutor:
             },
             headers={"Content-Type": "application/merge-patch+json"},
         )
+
+    async def _drop_secret_without_job(self, namespace: str, name: str) -> None:
+        """The Job could not be created: the Secret written just before it has no owner.
+
+        Deleted only if the Job really does not exist — a lost answer after a successful
+        create would otherwise leave a pod without its token. In doubt (the API does not
+        answer), it is left: the replayed start hands it to the Job or rewrites it.
+        """
+        with contextlib.suppress(Exception):  # the original error is the one to raise
+            if await self.client.request("GET", f"{BATCH_API}/namespaces/{namespace}/jobs/{name}") is None:
+                await self.client.request("DELETE", f"{CORE_API}/namespaces/{namespace}/secrets/{name}")
 
     async def _file(self, namespace: str) -> tuple[int, list[dict[str, Any]]]:
         """Combien de runs tournent, et quels Jobs attendent — les plus anciens d'abord."""
@@ -275,20 +298,20 @@ class KubernetesJobExecutor:
         tard démarre avec un jeton périmé et reçoit « Signature has expired » sur son
         premier appel — vu sur le banc du 2026-09-24. Le secret porte le même nom que le
         Job, donc le remplacer suffit : le pod le lira à son démarrage.
+
+        A merge PATCH of the `token` key alone, never a PUT of the whole object: a PUT
+        replaces the metadata, and a Secret rewritten without `ownerReferences` no longer
+        belongs to its Job. That is how queued runs left their token behind (three orphan
+        Secrets on the dev tenant on 2026-10-08, all from runs that waited for a slot).
+        No Secret (already collected): nothing to renew.
         """
         namespace = ref.namespace or ""
-        secret = {
-            "apiVersion": "v1",
-            "kind": "Secret",
-            "metadata": {
-                "name": ref.name,
-                "namespace": namespace,
-                "labels": {"choregos/run-id": ref.run_id},
-            },
-            "type": "Opaque",
-            "data": {"token": base64.b64encode(run_token.encode()).decode()},
-        }
-        await self.client.request("PUT", f"{CORE_API}/namespaces/{namespace}/secrets/{ref.name}", json=secret)
+        await self.client.request(
+            "PATCH",
+            f"{CORE_API}/namespaces/{namespace}/secrets/{ref.name}",
+            json={"data": {"token": base64.b64encode(run_token.encode()).decode()}},
+            headers={"Content-Type": "application/merge-patch+json"},
+        )
 
     async def status(self, ref: ExecRef) -> ExecStatus:
         payload = await self.client.request("GET", f"{BATCH_API}/namespaces/{ref.namespace}/jobs/{ref.name}")
