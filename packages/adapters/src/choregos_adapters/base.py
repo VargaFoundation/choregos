@@ -50,6 +50,9 @@ class TrackerAdapter(Protocol):
     Sans cette distinction, un ticket créé par la plateforme (un finding promu, une demande
     saisie dans le front) n'était jamais découvert : `list_candidates` rendait une liste
     vide, et le ticket restait en `inbox` pour toujours. Vu sur le banc du 2026-09-23.
+
+    `create_item` is also what files a person's request from the board or MCP in an external
+    tracker (ADR 0059): the work item is then recorded under the key it returns.
     """
 
     #: Faux quand la base de Choregos est la source (cf. `tracker: internal`).

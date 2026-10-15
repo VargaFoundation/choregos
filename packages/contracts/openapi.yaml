@@ -599,14 +599,21 @@ paths:
     post:
       tags: [work-items]
       operationId: createWorkItem
-      summary: File a request in Choregos (internal tracker only)
+      summary: File a work item, in Choregos and in the project's tracker when it is external
+      description: >-
+        With an internal tracker (or none) the platform mints the key. With an external tracker
+        (GitHub, Jira, GitLab) it first creates the issue there, labelled `source:choregos` plus the
+        request's labels and never `agent-ready`, and records the work item under the issue's key.
+        Fields, workflow and budget are validated before the issue is created, so a 422 leaves
+        nothing behind. If the tracker refuses or does not answer, nothing is created (502).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemCreate" } } }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: Unknown workflow, invalid fields or a budget wider than allowed }
+        "502": { description: The project's tracker refused or did not answer; nothing was created }
   /work-items/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:

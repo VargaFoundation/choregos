@@ -124,6 +124,16 @@ async def _budget_at_launch(
     return naissance.budget_usd
 
 
+async def verifier_la_naissance(session: AsyncSession, project: Project, naissance: Naissance) -> None:
+    """Refuses (422) a birth that `nouveau_ticket` would refuse: unknown workflow, invalid fields,
+    a budget wider than allowed. Nothing is written, so a caller can run it BEFORE a side effect
+    it could not take back (the issue created in an external tracker, S39-16)."""
+    ligne = await choisir_workflow(session, project, naissance)
+    workflow = workflow_model(ligne)
+    valider_les_champs(workflow.metadata.inputs, naissance.fields, workflow.metadata.name)
+    await _budget_at_launch(session, project, workflow, naissance)
+
+
 async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Naissance) -> WorkItem:
     """Le seul constructeur : l'état initial DU workflow choisi, et l'épingle de sa version."""
     ligne = await choisir_workflow(session, project, naissance)
