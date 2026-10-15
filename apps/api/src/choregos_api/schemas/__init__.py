@@ -7,6 +7,9 @@ Huit modules, un par domaine, réexportés : `choregos_api.schemas.X` reste l'ad
 from __future__ import annotations
 
 from .agents import (
+    A2aDeclaredCost,
+    A2aPinnedCard,
+    A2aRuntime,
     AcpRuntime,
     AgentCatalogueConnect,
     AgentCatalogueConnection,
@@ -188,6 +191,16 @@ from .projets import (
     TemplateSummary,
     TemplateUpsert,
 )
+from .remote import (
+    RemoteAgentDiscover,
+    RemoteAgentDiscovery,
+    RemoteCardSummary,
+    RemoteCredentialAuthorization,
+    RemoteCredentialCreate,
+    RemoteCredentialDto,
+    RemoteCredentialType,
+    RemoteSkillInfo,
+)
 from .tickets import (
     ArtifactRef,
     CiLogs,
@@ -225,6 +238,9 @@ from .tickets import (
 )
 
 __all__ = [
+    "A2aDeclaredCost",
+    "A2aPinnedCard",
+    "A2aRuntime",
     "AbortRequest",
     "AcpRuntime",
     "AgentBackendInfo",
@@ -368,6 +384,14 @@ __all__ = [
     "ReleaseDto",
     "ReleaseItemDto",
     "ReleasePage",
+    "RemoteAgentDiscover",
+    "RemoteAgentDiscovery",
+    "RemoteCardSummary",
+    "RemoteCredentialAuthorization",
+    "RemoteCredentialCreate",
+    "RemoteCredentialDto",
+    "RemoteCredentialType",
+    "RemoteSkillInfo",
     "RoutingCondition",
     "RoutingRule",
     "RunDto",

@@ -20,6 +20,11 @@ class RunnerSettings(BaseSettings):
     #: orchestrator is older than #523: the runner then uses the key of its input
     #: (`GET /internal/runs/{id}/input`), as before — kept for one release.
     gateway_key: str = Field(default="", validation_alias="CHOREGOS_RUN_GATEWAY_KEY")
+    #: The access token for the run's remote agent (ADR 0062), from the run's Secret, never from the
+    #: StageInput: the orchestrator exchanged the credential's refresh token for it, short-lived.
+    remote_token: str = Field(default="", validation_alias="CHOREGOS_RUN_REMOTE_TOKEN")
+    #: How often a remote task that does not stream is asked for its state.
+    remote_poll_seconds: float = Field(default=5.0, gt=0, validation_alias="CHOREGOS_REMOTE_POLL_SECONDS")
     workspace: Path = Path("/workspace")
     tools_url: str = "http://localhost:7777/mcp"
     git_user_name: str = "choregos-bot"

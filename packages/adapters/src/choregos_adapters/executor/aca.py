@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 from choregos_contracts import ExecutorKind
-from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, ExecStatus, StageJobSpec
+from choregos_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 
 from ..errors import ConfigurationError, UpstreamError
 
@@ -183,6 +183,12 @@ class AcaExecutor:
                     if spec.gateway_key
                     else []
                 ),
+                # The access token of a remote agent (ADR 0062), a job secret like the key above.
+                *(
+                    [{"name": RUN_REMOTE_TOKEN_ENV, "secretRef": "run-remote-token"}]
+                    if spec.remote_token
+                    else []
+                ),
                 *[{"name": key, "value": value} for key, value in spec.env.items()],
             ],
             "resources": self._resources(spec),
@@ -195,6 +201,7 @@ class AcaExecutor:
             "secrets": [
                 {"name": "run-token", "value": spec.run_token},
                 *([{"name": "run-gateway-key", "value": spec.gateway_key}] if spec.gateway_key else []),
+                *([{"name": "run-remote-token", "value": spec.remote_token}] if spec.remote_token else []),
             ],
         }
         if self.registry_server and self.identity_id:

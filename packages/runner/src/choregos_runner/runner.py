@@ -20,11 +20,15 @@ from typing import Any, cast
 from choregos_contracts import (
     Artifacts,
     Diagnostics,
+    Evidence,
+    Question,
     StageInput,
+    StageOutputs,
     StageResult,
     StageStatus,
 )
 from choregos_core.redaction import REDACTED, redact
+from pydantic import ValidationError
 
 from . import compression
 from .acp import AcpClient, AgentUnreachableError
@@ -43,6 +47,13 @@ from .knowledge import KnowledgeInvalidError, lay_out
 from .outils_locaux import arreter as arreter_outils
 from .outils_locaux import demarrer_si_absent
 from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_outputs
+from .remote import (
+    REPORT_CARD,
+    REPORT_ENDPOINT,
+    REPORT_PROVENANCE,
+    REPORT_TASK,
+    run_remote,
+)
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
 from .skills import SkillInvalide, poser
@@ -133,6 +144,8 @@ class Runner:
     def __init__(self, settings: RunnerSettings | None = None, client: InternalClient | None = None) -> None:
         self.settings = settings or get_settings()
         self.client = client
+        #: For tests only: the transport the A2A client and the card fetch go through (ADR 0062).
+        self.remote_transport: Any = None
         self.started = time.monotonic()
         #: L'index des skills qu'un backend ne lit pas lui-même, ajouté au prompt.
         self.index_des_skills = ""
@@ -212,6 +225,8 @@ class Runner:
             return refus
         if stage_input.job is not None:
             return await self._execute_job(client, journal, stage_input, workspace, base, depart)
+        if stage_input.remote is not None:
+            return await self._execute_remote(client, journal, stage_input, workspace, base, depart)
 
         # The agent reaches its model through the run's proxy, if the run asks for one.
         if (refusal := await self._compress(stage_input, journal)) is not None:
@@ -403,7 +418,7 @@ class Runner:
         believing it had some, its StageInput promising the address. So we serve it ourselves when
         it is silent. A job (ADR 0056) speaks MCP to no one: it calls the internal API with its run
         token."""
-        if stage_input.job is not None:
+        if stage_input.job is not None or stage_input.remote is not None:
             return None
         announced = stage_input.tools.mcp.get("choregos")
         try:
@@ -509,6 +524,73 @@ class Runner:
         await journal.record(
             "context.savings", {"compression": "headroom", "provenance": "inferred", **counts}
         )
+
+    async def _execute_remote(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        base: str,
+        depart: str,
+    ) -> RunOutcome:
+        """A step a remote agent carries over A2A (ADR 0062): the call instead of an agent, then the
+        same publication. No local agent, no gateway key; the result goes through the same gates."""
+        assert stage_input.remote is not None
+        remote = stage_input.remote
+        token = self.settings.remote_token
+        outcome = await run_remote(
+            stage_input,
+            workspace.path,
+            token,
+            journal.record,
+            transport=self.remote_transport,
+            poll_seconds=self.settings.remote_poll_seconds,
+        )
+        try:
+            produced = StageOutputs.model_validate(
+                outcome.outputs if outcome.status is StageStatus.DONE else {}
+            )
+        except ValidationError as exc:
+            outcome.status, outcome.reason = StageStatus.FAILED, "remote_result_invalid"
+            outcome.summary = f"the remote agent's outputs are refused by the contract: {str(exc)[:500]}"
+            produced = StageOutputs()
+        result = StageResult(
+            status=outcome.status,
+            reason=outcome.reason,
+            summary=_mask(outcome.summary, token) or f"remote agent `{remote.agent_slug}` ended",
+            outputs=produced,
+            questions=[Question(text=_mask(q, token)[:2000]) for q in outcome.questions],
+            # Declared by the remote agent, never measured: `merge_evidence` keeps them out of `measured`.
+            evidence=Evidence(facts=outcome.facts or None),
+        )
+        # No repository was cloned: the project's test, lint and typecheck commands would run in an
+        # empty folder and fail the step for nothing. Only its fact commands (`dod.facts`) can run.
+        no_repo = stage_input.project.model_copy(
+            update={"test_command": "", "lint_command": "", "typecheck_command": ""}
+        )
+        report = await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
+        final = complete_result(
+            result,
+            measured=report.evidence(),
+            artifacts=Artifacts(
+                branch=stage_input.repo.work_branch if stage_input.repo else None,
+                reports={
+                    REPORT_ENDPOINT: remote.endpoint,
+                    REPORT_TASK: outcome.task_id,
+                    REPORT_CARD: outcome.card_digest or remote.card_digest,
+                    REPORT_PROVENANCE: f"remote:{remote.agent_slug}",
+                },
+            ),
+            diagnostics=Diagnostics(
+                duration_s=round(time.monotonic() - self.started, 2),
+                agent_exit="timeout"
+                if outcome.reason == "remote_timeout"
+                else ("normal" if outcome.status is StageStatus.DONE else "crashed"),
+            ),
+        )
+        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     async def _poser_les_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any
