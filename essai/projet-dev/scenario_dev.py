@@ -21,7 +21,7 @@ Variables :
     ESSAI_DEPOT            (défaut DiametralGroup/choregos-sandbox-dev) le dépôt bac à sable
     ESSAI_INSTALLATION     l'identifiant d'installation de l'App GitHub de Choregos sur ce dépôt
     ESSAI_FAUX_URL         (défaut http://choregos-demo-fakes:8090) les faux, vus depuis le cluster
-    ESSAI_JETON_REF        (facultatif) la référence du jeton des faux, ex. `env:CHOREGOS_DEMO_JETON`
+    ESSAI_JETON_REF        (facultatif) la référence du jeton des faux, ex. `env:CONNECTOR_DEMO_JETON`
     ESSAI_BACKEND          (défaut opencode) le backend que le dev fait tourner
     ESSAI_MODELES          (défaut standard=platform/standard,cheap=platform/cheap) les profils servis
 """

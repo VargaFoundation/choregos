@@ -485,7 +485,7 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await page.getByTestId("connecteur-tracker").getByRole("combobox").first().selectOption("jira");
   await page.getByLabel("api token").fill("s3cr3t");
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("a reference is expected");
-  await page.getByLabel("api token").fill("env:JIRA_TOKEN");
+  await page.getByLabel("api token").fill("env:CONNECTOR_JIRA_TOKEN");
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
   await expect(connecteurs).toBeVisible();
 });

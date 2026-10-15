@@ -1538,7 +1538,7 @@ export const orgConnectors: OrgConnector[] = [
     kind: "identity",
     type: "entra",
     config: { tenant: "acme.onmicrosoft.com" },
-    secret_refs: { client_secret: "env:ENTRA_CLIENT_SECRET" },
+    secret_refs: { client_secret: "env:CONNECTOR_ENTRA_CLIENT_SECRET" },
     status: "ok",
     created_by: "lea@acme.dev",
     operations: [
@@ -1554,7 +1554,7 @@ orgConnectors.push({
   kind: "mcp",
   type: "mcp",
   config: { url: "https://supplier.example/mcp" },
-  secret_refs: { token: "env:SUPPLIER_TOKEN" },
+  secret_refs: { token: "env:CONNECTOR_SUPPLIER_TOKEN" },
   status: "ok",
   operations: [
     { name: "track_order", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },

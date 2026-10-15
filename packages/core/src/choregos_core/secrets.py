@@ -2,7 +2,7 @@
 """Les références de secret (ADR 0034) — la couture `SecretResolver`.
 
 Un connecteur ne porte jamais un secret en clair : sa configuration nomme une RÉFÉRENCE
-(`env:JIRA_TOKEN`), que la plateforme résout quand elle construit l'adaptateur — dans le processus
+(`env:CONNECTOR_JIRA_TOKEN`), que la plateforme résout quand elle construit l'adaptateur — dans le processus
 qui en a besoin, jamais dans la base, jamais dans la réponse d'une API. Le cœur sait lire
 l'environnement (`env:`) ; un greffon déclare les autres schémas — un coffre (`vault:`,
 `infisical:`) — par `declarer_un_resolveur`.
@@ -29,9 +29,39 @@ class ReferenceInvalide(ValueError):  # noqa: N818 - un refus motivé, rendu en 
     """Ce n'est pas une référence de secret qu'un résolveur déclaré sait lire."""
 
 
-def _environnement(nom: str) -> str:
+class VariableRefusee(ReferenceInvalide):
+    """`env:NAME` names a variable outside the allowlist (S39-06b)."""
+
+
+#: Which variables an `env:NAME` reference may read (S39-06b). A reference is written by a tenant
+#: role and resolved by the API or the orchestrator, whose environment also holds the platform's own
+#: secrets (session key, gateway master key, database password): a name outside this pattern is
+#: refused at write and again at resolution. A deployment widens it with this variable.
+PATTERN_ENV = "CHOREGOS_SECRET_ENV_PATTERN"
+PATTERN_PAR_DEFAUT = r"^CONNECTOR_[A-Z0-9_]+$"
+
+#: Never readable through a reference, whatever the pattern says: the platform's own variables.
+_TOUJOURS_REFUSEES = re.compile(r"^(CHOREGOS_|DATABASE_|PG|AWS_|KUBERNETES_|TEMPORAL_)")
+
+
+def _pattern() -> str:
+    return os.environ.get(PATTERN_ENV) or PATTERN_PAR_DEFAUT
+
+
+def _verifier_le_nom(nom: str) -> None:
     if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", nom):
         raise ReferenceInvalide(f"`env:{nom}`: an UPPERCASE variable name is expected")
+    pattern = _pattern()
+    try:
+        allowed = re.search(pattern, nom) is not None
+    except re.error as erreur:
+        raise ReferenceInvalide(f"{PATTERN_ENV} is not a valid pattern: {erreur}") from erreur
+    if _TOUJOURS_REFUSEES.match(nom) or not allowed:
+        raise VariableRefusee(f"env:NAME: only variables matching {pattern} can be referenced")
+
+
+def _environnement(nom: str) -> str:
+    _verifier_le_nom(nom)
     valeur = os.environ.get(nom)
     if not valeur:
         raise SecretIntrouvable(f"`env:{nom}`: the variable is not set in this process")
@@ -66,10 +96,17 @@ def verifier(reference: str) -> None:
         raise ReferenceInvalide(
             f"unknown secret scheme: `{m.group(1)}` (known: {', '.join(sorted(_RESOLVEURS))})"
         )
+    if m.group(1) == "env":
+        _verifier_le_nom(m.group(2))
 
 
 def resoudre(reference: str) -> str:
-    verifier(reference)
+    try:
+        verifier(reference)
+    except VariableRefusee as refus:
+        # A reference written before the allowlist (or by hand in the database) puts its connector
+        # in error, like any reference nothing resolves: it never reads the variable.
+        raise SecretIntrouvable(str(refus)) from refus
     m = _REFERENCE.match(reference)
     assert m is not None
     return _RESOLVEURS[m.group(1)](m.group(2))
@@ -84,6 +121,7 @@ def reinitialiser() -> None:
 __all__ = [
     "ReferenceInvalide",
     "SecretIntrouvable",
+    "VariableRefusee",
     "declarer_un_resolveur",
     "reinitialiser",
     "resoudre",

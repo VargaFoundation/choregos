@@ -51,7 +51,7 @@ def test_un_seul_pod_que_l_api_et_l_orchestrateur_joignent() -> None:
     (conteneur,) = deploiement["spec"]["template"]["spec"]["containers"]
     assert conteneur["command"] == ["python", "-m", "choregos_adapters.fakes.serveur"]
     assert conteneur["image"].split("/")[-1].startswith("choregos-api:"), "l'image de l'API porte les faux"
-    jeton = next(e for e in conteneur["env"] if e["name"] == "CHOREGOS_DEMO_JETON")
+    jeton = next(e for e in conteneur["env"] if e["name"] == "CONNECTOR_DEMO_JETON")
     assert jeton["valueFrom"]["secretKeyRef"] == {"name": "demo", "key": "jeton"}, "par référence"
     assert service["spec"]["ports"][0]["port"] == 8090
     sortie = next(

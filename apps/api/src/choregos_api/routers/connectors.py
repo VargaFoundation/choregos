@@ -82,7 +82,12 @@ async def put_connector(
     from ..services.connecteurs import spec_du_type, verifier_les_secrets
 
     verifier_les_secrets(
-        spec_du_type(kind, body.type), body.type, body.config, body.secret_refs, body.secret_ref
+        spec_du_type(kind, body.type),
+        body.type,
+        body.config,
+        body.secret_refs,
+        body.secret_ref,
+        may_reference=ctx.principal.can(Permission.TOOLS_GRANT, ctx.org_slug),
     )
     row = (
         await session.execute(select(Connector).where(Connector.project_id == ctx.id, Connector.kind == kind))

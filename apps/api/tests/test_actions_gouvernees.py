@@ -26,9 +26,9 @@ async def annuaire(client: AsyncClient, project: dict[str, Any], monkeypatch: py
     from choregos_adapters.fakes.entra import FakeEntra
 
     monkeypatch.setattr(choregos_adapters, "FAUX_ENTRA", FakeEntra())
-    monkeypatch.setenv("ENTRA_CLIENT_SECRET", "secret-du-connecteur")
+    monkeypatch.setenv("CONNECTOR_ENTRA_CLIENT_SECRET", "secret-du-connecteur")
     corps = {"name": "entra-acme", "type": "entra", "config": {"tenant_id": "acme", "client_id": "choregos"},
-             "secret_refs": {"client_secret": "env:ENTRA_CLIENT_SECRET"}}  # fmt: skip
+             "secret_refs": {"client_secret": "env:CONNECTOR_ENTRA_CLIENT_SECRET"}}  # fmt: skip
     cree = await client.post("/api/v1/orgs/varga/connectors", json=corps)
     assert cree.status_code == 201, cree.text
 

@@ -32,13 +32,13 @@ def fournisseur(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     serveur = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="cle-fournisseur")
     monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur)
-    monkeypatch.setenv("CHOREGOS_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
+    monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield serveur
 
 
 async def _declarer(client: AsyncClient) -> None:
     corps = {"name": "fournisseur", "type": "mcp", "config": {"url": "https://fournisseur.test/mcp"},
-             "secret_refs": {"token": "env:CHOREGOS_TEST_CLE_FOURNISSEUR"}}  # fmt: skip
+             "secret_refs": {"token": "env:CONNECTOR_TEST_CLE_FOURNISSEUR"}}  # fmt: skip
     cree = await client.post("/api/v1/orgs/varga/connectors", json=corps)
     assert cree.status_code == 201, cree.text
     assert cree.json()["operations"] == [], "un serveur MCP ne déclare rien : il se découvre"
@@ -102,9 +102,9 @@ async def test_seule_la_cle_du_connecteur_part_vers_le_serveur(
         assert entetes["authorization"] == "Bearer cle-fournisseur", methode
         assert "cookie" not in entetes and "chg_" not in str(entetes), methode
 
-    monkeypatch.delenv("CHOREGOS_TEST_CLE_FOURNISSEUR")
+    monkeypatch.delenv("CONNECTOR_TEST_CLE_FOURNISSEUR")
     panne = await client.post("/api/v1/orgs/varga/connectors/fournisseur/discover")
-    assert panne.status_code == 502 and "CHOREGOS_TEST_CLE_FOURNISSEUR" in panne.text
+    assert panne.status_code == 502 and "CONNECTOR_TEST_CLE_FOURNISSEUR" in panne.text
     assert (await client.get("/api/v1/orgs/varga/connectors/fournisseur")).json()["status"] == "error"
 
 

@@ -34,7 +34,7 @@ only its `image.digest` or its tag count.
 
 {{/* Common environment variables: 12-factor configuration, secrets by reference. */}}
 {{- define "choregos.commonEnv" -}}
-{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" }}
+{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRET_ENV_PATTERN" }}
 {{- range (.Values.global.extraEnv | default list) }}
 {{- if has .name $poses }}
 {{- fail (printf "global.extraEnv: %s is already set by the chart; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
@@ -113,6 +113,10 @@ only its `image.digest` or its tag count.
     secretKeyRef:
       name: {{ .Values.global.database.secretRef }}
       key: url
+{{- end }}
+{{- with (.Values.global.secrets | default dict).envPattern }}
+- name: CHOREGOS_SECRET_ENV_PATTERN
+  value: {{ . | quote }}
 {{- end }}
 {{- range (.Values.global.extraEnv | default list) }}
 - name: {{ .name }}

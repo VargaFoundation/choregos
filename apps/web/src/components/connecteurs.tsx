@@ -27,7 +27,7 @@ export function lignesDeConnecteurs(exigences: ProjectRequirement[], configures:
   });
 }
 
-/** Une référence de secret, pas une valeur : `schéma:reste` (`env:JIRA_TOKEN`). */
+/** Une référence de secret, pas une valeur : `schéma:reste` (`env:CONNECTOR_JIRA_TOKEN`). */
 export function estUneReference(valeur: string): boolean {
   return /^[a-z][a-z0-9-]{1,31}:.+$/.test(valeur);
 }

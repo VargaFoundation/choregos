@@ -42,18 +42,23 @@ def test_les_secrets_connus_sont_declares_comme_tels() -> None:
 
 
 def test_une_reference_est_resolue_champ_par_champ(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JIRA_TOKEN", "s3cr3t")
-    config = configuration_resolue("tracker", "jira", {"project_key": "RH"}, {"api_token": "env:JIRA_TOKEN"})
+    monkeypatch.setenv("CONNECTOR_JIRA_TOKEN", "s3cr3t")
+    config = configuration_resolue(
+        "tracker", "jira", {"project_key": "RH"}, {"api_token": "env:CONNECTOR_JIRA_TOKEN"}
+    )
     assert config == {"project_key": "RH", "api_token": "s3cr3t"}
     # `secret_ref`, d'avant l'ADR : il vaut pour le premier champ secret du type.
-    assert configuration_resolue("tracker", "jira", {}, None, "env:JIRA_TOKEN")["api_token"] == "s3cr3t"
+    assert (
+        configuration_resolue("tracker", "jira", {}, None, "env:CONNECTOR_JIRA_TOKEN")["api_token"]
+        == "s3cr3t"
+    )
 
 
 def test_une_reference_irresoluble_arrete_la_construction(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mieux qu'un adaptateur qui retombe en silence sur sa valeur par défaut."""
-    monkeypatch.delenv("ARGO_TOKEN", raising=False)
-    with pytest.raises(SecretIntrouvable, match="ARGO_TOKEN"):
-        configuration_resolue("cd", "argocd", {}, {"token": "env:ARGO_TOKEN"})
+    monkeypatch.delenv("CONNECTOR_ARGO_TOKEN", raising=False)
+    with pytest.raises(SecretIntrouvable, match="CONNECTOR_ARGO_TOKEN"):
+        configuration_resolue("cd", "argocd", {}, {"token": "env:CONNECTOR_ARGO_TOKEN"})
 
 
 def test_les_adaptateurs_d_un_projet_recoivent_leurs_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,12 +69,12 @@ def test_les_adaptateurs_d_un_projet_recoivent_leurs_secrets(monkeypatch: pytest
         for sorte in sortes:
             register(sorte, "sonde")(lambda cfg, s=sorte: recus.__setitem__(s, cfg) or object())
         monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-        monkeypatch.setenv("SONDE_TOKEN", "t0k")
+        monkeypatch.setenv("CONNECTOR_SONDE_TOKEN", "t0k")
         connecteurs: dict[str, dict[str, Any]] = {s: {"type": "sonde"} for s in sortes}
         connecteurs["notify"] = {
             "type": "sonde",
             "config": {"channel": "#rh"},
-            "secret_refs": {"bot_token": "env:SONDE_TOKEN"},
+            "secret_refs": {"bot_token": "env:CONNECTOR_SONDE_TOKEN"},
         }
         AdapterSet.from_connectors(connecteurs)
     finally:

@@ -29,7 +29,7 @@ def fournisseur(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     serveur = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="cle-fournisseur")
     monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur)
-    monkeypatch.setenv("CHOREGOS_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
+    monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield serveur
 
 
@@ -43,7 +43,7 @@ async def _preparer(
     from choregos_api.security import mint_run_token
 
     corps = {"name": "fournisseur", "type": "mcp", "config": {"url": "https://fournisseur.test/mcp"},
-             "secret_refs": {"token": "env:CHOREGOS_TEST_CLE_FOURNISSEUR"}}  # fmt: skip
+             "secret_refs": {"token": "env:CONNECTOR_TEST_CLE_FOURNISSEUR"}}  # fmt: skip
     assert (await client.post(f"{ORG}/connectors", json=corps)).status_code == 201
     assert (await client.post(f"{ORG}/connectors/fournisseur/discover")).status_code == 200
     for operation, politique in (

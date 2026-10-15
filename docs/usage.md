@@ -64,12 +64,20 @@ A secret is never written in `config` — a secret field there is refused (`422`
 ```bash
 curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
   "config": {"base_url": "https://acme.atlassian.net", "email": "bot@acme.test", "project_key": "RH"},
-  "secret_refs": {"api_token": "env:JIRA_TOKEN"}}'
+  "secret_refs": {"api_token": "env:CONNECTOR_JIRA_TOKEN"}}'
 ```
 
 The core reads `env:NAME`; a plugin declares other schemes (a vault) with
 `choregos_core.secrets.declarer_un_resolveur`. A reference the process cannot resolve fails the
 connector test with its name — never a silent fallback to a default value.
+
+`env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
+`^CONNECTOR_[A-Z0-9_]+$`, chart value `global.secrets.envPattern`); the platform's own variables
+(`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
+pattern. A name outside it is a `422` at write and a connector in error at use. Only the
+organisation's administrator writes a reference: a project owner's `PUT` of a connector with one is
+refused. **Breaking:** a reference written before this rule that is outside the pattern stops
+resolving; rename the variable (or widen the pattern) and rewrite the reference.
 
 **The organisation's connectors.** A directory, a device manager, an MCP server is declared once
 by the organisation's administrator (*Administration → connectors*, `POST /orgs/{org}/connectors`),
@@ -83,7 +91,7 @@ and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operat
 later hardening by the organisation always overrides.
 
 **An MCP server** is a connector of type `mcp`: its URL, and its key by reference
-(`secret_refs: {"token": "env:SUPPLIER_KEY"}`). It declares no operation — they are
+(`secret_refs: {"token": "env:CONNECTOR_SUPPLIER_KEY"}`). It declares no operation — they are
 **discovered**: `POST /orgs/{org}/connectors/{name}/discover` (or *discover* in the console) runs
 `initialize` and `tools/list` over Streamable HTTP — JSON or SSE answers, the session the server
 gives, every page of the list — and returns the diff. **A new tool is born closed**
