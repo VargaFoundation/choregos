@@ -155,4 +155,38 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "sync all now" }));
     await waitFor(() => expect(api.syncKnowledgeBase).toHaveBeenCalledWith("varga", "framework"));
   });
+
+  it("adds a Confluence space or page tree through its connector (S39-20)", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    vi.mocked(api.orgConnectors).mockResolvedValue([
+      connector("diametral", "documents", "sharepoint"),
+      connector("wiki", "documents", "confluence"),
+    ]);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
+    await screen.findByRole("option", { name: "wiki" });
+    expect(screen.queryByRole("option", { name: "diametral" })).toBeNull();
+    expect(screen.queryByLabelText("site or drive id")).toBeNull();
+    fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
+    fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
+    fireEvent.change(screen.getByLabelText("page id"), { target: { value: " 12345 " } });
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
+        kind: "confluence",
+        name: "Confluence space or page tree",
+        connector: "wiki",
+        config: { space_key: "ENG", page_id: "12345", include_attachments: false },
+        refresh_mode: "interval",
+        interval_minutes: 60,
+      }),
+    );
+    expect(screen.getByText(/everything the connector/)).toBeInTheDocument();
+  });
+
+  it("sends no page id for a whole space, and asks for attachments when ticked", () => {
+    const base = { site: "", folder: "", url: "", ref: "", paths: "" };
+    expect(sourceConfig("confluence", { ...base, space: "ENG", pageId: "" })).toEqual({ space_key: "ENG", include_attachments: false });
+    expect(sourceConfig("confluence", { ...base, space: "ENG", attachments: true })).toEqual({ space_key: "ENG", include_attachments: true });
+  });
 });

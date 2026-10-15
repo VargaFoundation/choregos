@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import re
 from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
@@ -700,6 +701,36 @@ def _sharepoint_config(config: dict[str, object]) -> dict[str, object]:
     return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
 
 
+_SPACE_KEY = re.compile(r"^[A-Z0-9~][A-Za-z0-9_~-]{0,254}$")
+
+
+def _confluence_config(config: dict[str, object]) -> dict[str, object]:
+    space = str(config.get("space_key") or "")
+    if not _SPACE_KEY.match(space):
+        raise unprocessable("a Confluence source names a `space_key` (letters and digits, e.g. ENG)")
+    page = config.get("page_id")
+    if page not in (None, "") and not re.fullmatch(r"\d{1,20}", str(page)):
+        raise unprocessable("`page_id` is the number in the page's URL (/pages/<id>/…)")
+    for flag in ("include_root", "include_attachments"):
+        if flag in config and not isinstance(config[flag], bool):
+            raise unprocessable(f"`{flag}` is true or false")
+    labels = config.get("labels") or []
+    if (
+        not isinstance(labels, list)
+        or len(labels) > 20
+        or not all(isinstance(x, str) and 0 < len(x) <= 255 for x in labels)
+    ):
+        raise unprocessable("`labels` is a list of at most 20 labels")
+    out: dict[str, object] = {"space_key": space}
+    if page not in (None, ""):
+        out["page_id"] = str(page)
+    out["include_root"] = bool(config.get("include_root", True))
+    out["include_attachments"] = bool(config.get("include_attachments", False))
+    if labels:
+        out["labels"] = labels
+    return out
+
+
 def _web_config(config: dict[str, object]) -> dict[str, object]:
     url = _https_url(config, "web")
     return {
@@ -730,11 +761,12 @@ def _https_url(config: dict[str, object], kind: str) -> str:
 #: One validator per source kind: the configuration it keeps, or the reason it is refused.
 _SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] = {
     "sharepoint": _sharepoint_config,
+    "confluence": _confluence_config,
     "web": _web_config,
     "git": _git_config,
 }
 
-_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive"}
+_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive", "confluence": "Confluence"}
 
 
 async def _checked_source_config(

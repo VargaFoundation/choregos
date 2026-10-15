@@ -17,7 +17,7 @@ import hashlib
 from pathlib import PurePosixPath
 from typing import Any
 
-from choregos_adapters.documents.base import Changes, DocumentSource, SourceItem
+from choregos_adapters.documents.base import Changes, DocumentSource, ItemUnreadableError, SourceItem
 from choregos_adapters.registry import build, fakes_enabled
 from choregos_core import utcnow
 from choregos_core.redaction import redact
@@ -33,12 +33,14 @@ from .formats import FORMATS, DocumentRefusedError, accept
 
 logger = get_logger("choregos.knowledge.sync")
 
-KINDS = ("sharepoint", "web", "git")
+KINDS = ("sharepoint", "confluence", "web", "git")
 #: kinds opened through an organisation `documents` connector, which holds the credentials
-CONNECTED_KINDS = frozenset({"sharepoint"})
-
-# The connector types a source kind may be served by (S39-06a). Confluence and git sources extend it.
-SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {"sharepoint": frozenset({"sharepoint"})}
+CONNECTED_KINDS = frozenset({"sharepoint", "confluence"})
+#: the connector types a connected source kind may be served by
+SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {
+    "sharepoint": frozenset({"sharepoint"}),
+    "confluence": frozenset({"confluence"}),
+}
 
 
 class SourceUnavailableError(RuntimeError):
@@ -117,7 +119,11 @@ async def _apply_item(
     if item.size is not None and item.size > cap:
         _skip(summary, item, f"larger than {cap // (1024 * 1024)} MiB")
         return None
-    data = await adapter.fetch(item)
+    try:
+        data = await adapter.fetch(item)
+    except ItemUnreadableError as unreadable:
+        _skip(summary, item, f"unreadable: {unreadable}")
+        return None
     if len(data) > cap:
         _skip(summary, item, f"larger than {cap // (1024 * 1024)} MiB")
         return None

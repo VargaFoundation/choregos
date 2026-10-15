@@ -163,3 +163,31 @@ there (D10), with full-text search built in and `pgvector` one extension away.
     **Temporal Schedules** were rejected (a second mechanism beside the loop, with its own lifecycle
     on create, patch and delete, for no gain over an activity that reads the row), and so was changing
     the workflow to sleep until a timestamp (a patch and a new history for the same behaviour).
+
+## Update — 2026-10-15: Confluence (S39-20)
+
+19. **A Confluence Cloud space, or one page and its descendants, is a source** (`confluence`),
+    through an organisation connector `documents/confluence` (a new adapter on the ADR 0034
+    registry: no new seam). The connector holds a service account's email and API token
+    (`api_token` is a secret field); a classic token is used as HTTP Basic against the site, a
+    *scoped* token through `api.atlassian.com/ex/confluence/{cloud_id}`. OAuth 2.0 (3LO) is not
+    built: it needs a registered Atlassian app and a refresh token that the platform rewrites, which
+    is a later story (S39-20c).
+20. **The generalised connector interface.** A `documents` connector opens a source from the
+    source's own configuration, `source(config, *, key)` (`DocumentsConnector` protocol), instead of
+    SharePoint's keywords; the API holds `CONNECTED_KINDS`, `SOURCE_CONNECTOR_TYPES` (which
+    connector type serves which kind) and one config validator per kind.
+21. **Delta by version, deletions by listing.** Each sync lists the space once (no bodies,
+    cursor-paginated) and a sub-tree is computed locally from `parentId`. The item version is the
+    page's `version.number`, so the engine fetches a body only when it changed; the listing is
+    `full`, so a page no longer listed is deleted from the base. A listing that fails part-way raises
+    instead of returning a partial list (which would read as deletions); a page that became unreadable
+    between the listing and its fetch is skipped and said (`ItemUnreadableError`). Bodies are
+    Confluence's rendered `export_view` (macros expanded), with the storage format reduced to text
+    as the fallback; the existing converter makes markdown of it. Limit: 5 000 pages per sync.
+22. **The account's view, not the reader's.** The source mirrors what the connector's account can
+    read: a page restricted against it is invisible and so leaves the base. Page and space
+    restrictions are **not** mirrored per Choregos user: who reads the base is decided by the base's
+    scope (org, projects, groups). Everything the account can read in the chosen space or tree
+    becomes readable by everyone the base is open to; the service account should be given read on
+    the spaces to index only.

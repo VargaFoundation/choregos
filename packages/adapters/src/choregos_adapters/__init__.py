@@ -331,6 +331,29 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("client_secret",),
     ),
+    ("documents", "confluence"): ConnectorTypeSpec(
+        "Atlassian Confluence Cloud (read)",
+        ("documents",),
+        _objet(
+            {
+                "base_url": {
+                    "type": "string",
+                    "pattern": r"^https://[a-z0-9-]+\.atlassian\.net/?$",
+                    "description": "the Atlassian Cloud site, https://<site>.atlassian.net",
+                },
+                "email": {"type": "string", "description": "the service account the API token belongs to"},
+                "auth": {
+                    "type": "string",
+                    "enum": ["basic", "scoped"],
+                    "default": "basic",
+                    "description": "`scoped` for a scoped API token: it is called through api.atlassian.com",
+                },
+                "cloud_id": {"type": "string", "description": "scoped tokens only; `test` reports it"},
+            },
+            ("base_url", "email"),
+        ),
+        ("api_token",),
+    ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
         ("identity",),
@@ -869,6 +892,11 @@ def _register_builtins() -> None:
     from .documents.graph import GraphDocumentsConnector
 
     register("documents", "sharepoint", _SPECS_LIVREES[("documents", "sharepoint")])(GraphDocumentsConnector)
+    from .documents.confluence import ConfluenceDocumentsConnector
+
+    register("documents", "confluence", _SPECS_LIVREES[("documents", "confluence")])(
+        ConfluenceDocumentsConnector
+    )
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(

@@ -49,3 +49,8 @@ class DocumentsConnector(Protocol):
 
 class SourceRefusedError(ValueError):
     """A source configuration the platform refuses (a private address, a non-https URL…)."""
+
+
+class ItemUnreadableError(Exception):
+    """One item cannot be read now (gone or restricted since the listing): it is skipped and said,
+    the sync goes on."""

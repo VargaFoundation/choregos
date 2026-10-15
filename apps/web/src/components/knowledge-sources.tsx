@@ -11,13 +11,14 @@ import { RefreshFields } from "@/components/knowledge-refresh";
 import { draftOf, nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary, type RefreshDraft } from "@/lib/knowledge";
 import type { KnowledgeSource } from "@/lib/types";
 
-type Kind = "sharepoint" | "web" | "git";
+type Kind = "sharepoint" | "confluence" | "web" | "git";
+const CONNECTED: Kind[] = ["sharepoint", "confluence"];
 const TONE: Record<string, Tone> = { idle: "ok", syncing: "neutral", failed: "danger" };
-const KIND: Record<Kind, string> = { sharepoint: "SharePoint / OneDrive", web: "web site", git: "git repository" };
+const KIND: Record<Kind, string> = { sharepoint: "SharePoint / OneDrive", confluence: "Confluence space or page tree", web: "web site", git: "git repository" };
 
 /**
  * Where a knowledge base's documents are synced from (S33-04): SharePoint or OneDrive through the
- * organisation's `documents` connector (Graph, `Sites.Selected`), an https site, a git repository.
+ * organisation's `documents` connector (Graph, `Sites.Selected`), a Confluence Cloud space or page tree (S39-20, same kind of connector), an https site, a git repository.
  * Each says when it last synced and what that did; a document deleted at the source leaves the base.
  */
 export function KnowledgeSources({
@@ -32,15 +33,16 @@ export function KnowledgeSources({
   onChange: () => void;
 }) {
   const [kind, setKind] = useState<Kind>("sharepoint");
-  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", url: "", ref: "main", paths: "*.md" });
+  const [fields, setFields] = useState({ name: "", connector: "", site: "", folder: "", space: "", pageId: "", url: "", ref: "main", paths: "*.md" });
   const [refresh, setRefresh] = useState<RefreshDraft>(draftOf());
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<RefreshDraft>(draftOf());
   const [applyAll, setApplyAll] = useState(false);
+  const [attachments, setAttachments] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // A SharePoint source picks one of the organisation's `documents/sharepoint` connectors: never typed.
+  // A connected source picks one of the organisation's `documents/<kind>` connectors: never typed.
   const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
-  const pickable = (connectors.data ?? []).filter((c) => c.kind === "documents" && c.type === "sharepoint");
+  const pickable = (connectors.data ?? []).filter((c) => c.kind === "documents" && c.type === kind);
   const set = (key: keyof typeof fields) => (e: { target: { value: string } }) => setFields({ ...fields, [key]: e.target.value });
   async function act(gesture: () => Promise<unknown>) {
     setError(null);
@@ -136,8 +138,8 @@ export function KnowledgeSources({
               api.createKnowledgeSource(org, slug, {
                 kind,
                 name: fields.name || KIND[kind],
-                connector: kind === "sharepoint" ? fields.connector : null,
-                config: sourceConfig(kind, fields),
+                connector: CONNECTED.includes(kind) ? fields.connector : null,
+                config: sourceConfig(kind, { ...fields, attachments }),
                 ...refreshBody(refresh),
               }),
             );
@@ -145,12 +147,13 @@ export function KnowledgeSources({
         >
           <Select aria-label="source kind" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
             <option value="sharepoint">SharePoint / OneDrive</option>
+            <option value="confluence">Confluence space or page tree</option>
             <option value="web">web site (https, same host)</option>
             <option value="git">git repository (https)</option>
           </Select>
           <Input aria-label="source name" placeholder="name" value={fields.name} onChange={set("name")} />
           <RefreshFields value={refresh} onChange={setRefresh} />
-          {kind === "sharepoint" ? (
+          {CONNECTED.includes(kind) && (
             <>
               {pickable.length > 0 || !connectors.data ? (
                 <Select aria-label="documents connector" value={fields.connector} onChange={set("connector")}>
@@ -163,14 +166,27 @@ export function KnowledgeSources({
                 </Select>
               ) : (
                 <p className="text-xs text-ink-muted" data-testid="no-documents-connector">
-                  No SharePoint connector in this organisation.{" "}
-                  <Link className="underline" href="/admin/connectors?type=documents/sharepoint">
-                    declare a SharePoint connector
+                  No {kind === "confluence" ? "Confluence" : "SharePoint"} connector in this organisation.{" "}
+                  <Link className="underline" href={`/admin/connectors?type=documents/${kind}`}>
+                    declare a {kind === "confluence" ? "Confluence" : "SharePoint"} connector
                   </Link>
                 </p>
               )}
+            </>
+          )}
+          {kind === "sharepoint" ? (
+            <>
               <Input aria-label="site or drive id" placeholder="site id, or drive id (b!…)" value={fields.site} onChange={set("site")} />
               <Input aria-label="folder" placeholder="folder (optional)" value={fields.folder} onChange={set("folder")} />
+            </>
+          ) : kind === "confluence" ? (
+            <>
+              <Input aria-label="space key" placeholder="space key (ENG)" value={fields.space} onChange={set("space")} />
+              <Input aria-label="page id" placeholder="page id (optional: that page and everything under it)" value={fields.pageId} onChange={set("pageId")} />
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={attachments} onChange={(e) => setAttachments(e.target.checked)} />
+                include attachments (pdf, docx, pptx, xlsx, md, txt)
+              </label>
             </>
           ) : (
             <Input aria-label="url" placeholder="https://…" value={fields.url} onChange={set("url")} className="sm:col-span-2" />
@@ -188,7 +204,9 @@ export function KnowledgeSources({
           </div>
         </form>
         <p className="text-xs text-ink-muted">
-          SharePoint reads with <code>Sites.Selected</code> only.
+          SharePoint reads with <code>Sites.Selected</code> only. A Confluence source mirrors everything the connector&apos;s account
+          can read in the space: it becomes readable by everyone this base is open to. The page id is the number in the page&apos;s
+          URL (<code>/pages/&lt;id&gt;/…</code>).
         </p>
         {error && <ErrorNote>{error}</ErrorNote>}
       </div>

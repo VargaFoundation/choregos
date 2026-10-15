@@ -1895,7 +1895,7 @@ paths:
       operationId: createKnowledgeSource
       description: >-
         Where the base's documents are synced from (S33-04): `sharepoint` (a site or drive through an
-        organisation connector of capability `documents`, Graph `Sites.Selected`, delta sync), `web` (one
+        organisation connector of capability `documents`, Graph `Sites.Selected`, delta sync), `confluence` (a Confluence Cloud space, or a page and its descendants, through a `documents` connector holding an API token; S39-20), `web` (one
         https site, same host, robots.txt obeyed) or `git` (an https repository). Synced at once, then every
         `interval_minutes`; a document deleted at the source leaves the base and its index. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
@@ -3627,12 +3627,12 @@ components:
       required: [kind, name]
       additionalProperties: false
       properties:
-        kind: { type: string, enum: [sharepoint, web, git] }
+        kind: { type: string, enum: [sharepoint, confluence, web, git] }
         name: { type: string, minLength: 1, maxLength: 200 }
-        connector: { type: [string, "null"], description: "`sharepoint`: the organisation connector of capability `documents`" }
+        connector: { type: [string, "null"], description: "`sharepoint`, `confluence`: the organisation connector of capability `documents`" }
         config:
           type: object
-          description: "`sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`)"
+          description: "`sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`)"
         interval_minutes: { type: integer, minimum: 5, maximum: 10080, default: 60 }
         refresh_mode: { type: string, enum: [interval, cron, manual], default: interval, description: "`interval`: every `interval_minutes`; `cron`: `refresh_cron` in `refresh_timezone`; `manual`: only on demand (S39-19)" }
         refresh_cron: { type: [string, "null"], maxLength: 100, description: "five fields (minute hour day month weekday); at least 5 minutes between two fires" }
@@ -3652,7 +3652,7 @@ components:
       required: [id, kind, name, interval_minutes, status]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [sharepoint, web, git] }
+        kind: { type: string, enum: [sharepoint, confluence, web, git] }
         name: { type: string }
         connector: { type: [string, "null"] }
         config: { type: object }
