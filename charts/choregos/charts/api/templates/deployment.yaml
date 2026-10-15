@@ -207,6 +207,9 @@ spec:
             {{- with .Values.global.playbooks.configMap }}
             - { name: playbooks, mountPath: {{ $.Values.global.playbooks.mountPath }}, readOnly: true }
             {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
@@ -221,6 +224,17 @@ spec:
         {{- with .Values.global.playbooks.configMap }}
         - name: playbooks
           configMap: { name: {{ . }} }
+        {{- end }}
+        {{- /* Volumes the chart owns: a name of `extraVolumes` that collides with one of them would
+             give an invalid pod, or worse, silently replace a mount. */}}
+        {{- $owned := list "tmp" "catalogue" "workflow-templates" "playbooks" }}
+        {{- range (.Values.extraVolumes | default list) }}
+        {{- if has .name $owned }}
+        {{- fail (printf "extraVolumes: %q is a volume of the chart; pick another name" .name) }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       topologySpreadConstraints:
         - maxSkew: 1

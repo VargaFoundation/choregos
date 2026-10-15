@@ -316,6 +316,20 @@ A project declares what it calls in its own configuration (`tools: [verifier_adr
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
+## Extra volumes for the API
+
+`choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
+API pod and container, so a deployment can hand files to a plugin without forking the chart:
+
+```yaml
+choregos-api:
+  extraVolumes: [{ name: theme, configMap: { name: my-theme } }]
+  extraVolumeMounts: [{ name: theme, mountPath: /etc/choregos/theme, readOnly: true }]
+```
+
+A volume named like one the chart owns (`tmp`, `catalogue`, `workflow-templates`, `playbooks`)
+fails at render.
+
 ## Multi-tenant installations
 
 For a tenant that may not create cluster-scoped resources:
