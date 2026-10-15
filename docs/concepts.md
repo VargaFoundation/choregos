@@ -91,7 +91,7 @@ minimum. Gates shipped today:
 
 ```
 action_succeeded · adr_number_free · ci_green · coverage_delta_min · diff_size_max
-evidence_facts · evidence_present · external · flag_present · markdown_sections
+docs_updated · evidence_facts · evidence_present · external · flag_present · markdown_sections
 no_secrets · outputs_in · outputs_present · provenance_signed · review_approved
 scans_ok · scope_respected · tool_called
 ```
@@ -101,6 +101,18 @@ pattern is the `pattern` parameter), it lists the records already on the default
 a number that one of them carries — two studies running together both pick "the highest plus
 one", and the second to merge is sent back to renumber. The refusal names the files in question.
 It is evaluated when the merge transition starts, alongside the other synchronous gates.
+
+`docs_updated` guards documentation: the work item's **whole** branch diff must update a
+documentation file whenever it changes anything else. Documentation is the `docs` parameter
+(default `docs/**`, `*.md`, `*.mdx`, `*.rst`, `*.adoc`, `CHANGELOG*`); the `ignore` parameter lists
+what needs none (default: tests, lockfiles, CI files); `min_files` (default 1) sets how many
+documentation files must be updated. A documentation file counts when the diff adds text to it (or
+changes it with no patch, which GitHub does for big files); a file that is only deleted does not. A
+changelog line is enough. A change that touches nothing but tests, lockfiles and CI passes. It reads
+the branch, not the writer's report, so a developer who already documented lets the writer change
+nothing and still pass; it never takes an agent's word that nothing needed saying. The
+`dev-complex` workflow of the `github-software-delivery` template (version 2) uses it on its
+documentation step.
 
 **A gate that cannot see what it must check refuses.** If the SCM connector cannot produce a
 diff, `scope_respected` does not pass — it declines. A guarantee that passes blindly is worse

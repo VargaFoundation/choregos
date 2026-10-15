@@ -17,6 +17,7 @@ AGENTS = {
     "security-reviewer",
     "review-responder",
     "ci-fixer",
+    "docs-writer",
     "release-notes-writer",
     "prod-verifier",
     "researcher",

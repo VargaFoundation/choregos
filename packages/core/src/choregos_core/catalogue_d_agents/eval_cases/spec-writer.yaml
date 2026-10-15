@@ -6,5 +6,6 @@ must_contain:
 - out of scope
 - allowed_paths
 - minimal
+- documentation paths
 - ask_human
 - '"spec_markdown"'

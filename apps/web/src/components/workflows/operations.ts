@@ -39,5 +39,6 @@ export const GARANTIES_COURANTES = [
   "outputs_present",
   "no_secrets",
   "diff_size_max",
+  "docs_updated",
   "tool_called",
 ];

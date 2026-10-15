@@ -97,3 +97,9 @@ def test_l_architecte_d_une_etude_ecrit_dans_le_depot() -> None:
     etude = ARRIVEE.replace("role: plan", "role: architect")
     (scm,) = [e for e in exigences([parse_workflow(etude)[0]]) if e.capacite == "scm"]
     assert any("coordinateur (architect) works in a repository" in r for r in scm.raisons)
+
+
+def test_a_documentation_step_works_in_the_repository() -> None:
+    """The `document` role reads a diff and pushes a branch: it requires `scm` (S39-15)."""
+    texte = ARRIVEE.replace("role: plan", "role: document")
+    assert "scm" in _capacites(texte)

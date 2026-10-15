@@ -303,6 +303,25 @@ curl         $API/projects/acme:hr/workflows                                    
   `workitem.migrated`; if its state changed in between, the migration is refused
   (`workitem.migration_refused`) and the item carries on, on its own version.
 
+### Bringing a project to a newer template version
+
+A project receives its template's workflows once, when it is born; a newer template version does
+not reach it by itself. To adopt one (for instance `dev-complex` version 2 of
+`github-software-delivery` 1.1.0, which adds a documentation step), publish the template's YAML as
+the workflow's next version, from the console's YAML tab or the API with the version you are
+replacing as `base_version`; the catalogue agents the workflow names install themselves
+(ADR 0040). The running Choregos must already know the gates the YAML uses, or validation refuses
+it.
+
+```bash
+curl -X PUT "$API/projects/acme:dev/workflows/dev-complex" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --rawfile y dev-complex.yaml '{yaml: $y, base_version: 1}')"
+```
+
+Running items stay pinned to their version until they are migrated (see above); every state of
+the old version exists in the new one, so no `state_mapping` is needed.
+
 ### Editing a workflow without rewriting it
 
 The console's map and process view change a workflow through typed operations, grafted into the

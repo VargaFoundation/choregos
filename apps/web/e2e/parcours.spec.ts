@@ -73,7 +73,7 @@ test("ticket : le parcours se suit en direct, se rejoue, et chaque agent montre 
 
   await parcours.getByRole("button", { name: "2×" }).click();
   await parcours.getByRole("button", { name: "Replay the journey" }).click();
-  await expect(parcours.getByTestId("parcours-moment")).toContainText("/ 30");
+  await expect(parcours.getByTestId("parcours-moment")).toContainText("/ 34");
   await expect(parcours.getByTestId("etape-t-triage")).toHaveAttribute("data-statut", "fait", { timeout: 5000 });
   await parcours.getByRole("button", { name: "Pause the replay" }).click();
   await parcours.getByRole("navigation", { name: "Stages of the journey" }).getByRole("button", { name: /In progress/ }).click();

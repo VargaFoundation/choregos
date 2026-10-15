@@ -1,6 +1,6 @@
 {
  "workflow_name": "dev-complex",
- "workflow_version": 1,
+ "workflow_version": 2,
  "initial": "inbox",
  "graph": {
   "nodes": [
@@ -55,6 +55,14 @@
    {
     "id": "tested",
     "display": "Tested",
+    "kind": "work",
+    "terminal": false,
+    "lane": "agent",
+    "tracker_status": "In progress"
+   },
+   {
+    "id": "documented",
+    "display": "Documented",
     "kind": "work",
     "terminal": false,
     "lane": "agent",
@@ -411,6 +419,52 @@
     "timeout_hours": null
    },
    {
+    "actor": "docs_writer",
+    "actor_type": "agent",
+    "role": "document",
+    "gates": [
+     "scope_respected",
+     "no_secrets",
+     "docs_updated"
+    ],
+    "via": null,
+    "timeout_hours": null,
+    "id": "t-document",
+    "from": "tested",
+    "to": "documented",
+    "kind": "nominal",
+    "label": "docs_writer",
+    "wildcard": false
+   },
+   {
+    "id": "tested->tested:retry:on failure (≤2)",
+    "from": "tested",
+    "to": "tested",
+    "kind": "retry",
+    "label": "on failure (≤2)",
+    "wildcard": false,
+    "actor": null,
+    "actor_type": null,
+    "role": null,
+    "gates": [],
+    "via": null,
+    "timeout_hours": null
+   },
+   {
+    "id": "tested->needs_human:escalate:when retries run out",
+    "from": "tested",
+    "to": "needs_human",
+    "kind": "escalate",
+    "label": "when retries run out",
+    "wildcard": false,
+    "actor": null,
+    "actor_type": null,
+    "role": null,
+    "gates": [],
+    "via": null,
+    "timeout_hours": null
+   },
+   {
     "actor": "reviewer",
     "actor_type": "agent",
     "role": "review",
@@ -420,15 +474,15 @@
     "via": null,
     "timeout_hours": null,
     "id": "t-review",
-    "from": "tested",
+    "from": "documented",
     "to": "reviewed",
     "kind": "nominal",
     "label": "reviewer",
     "wildcard": false
    },
    {
-    "id": "tested->addressing_review:retry:on changes requested",
-    "from": "tested",
+    "id": "documented->addressing_review:retry:on changes requested",
+    "from": "documented",
     "to": "addressing_review",
     "kind": "retry",
     "label": "on changes requested",
@@ -441,8 +495,8 @@
     "timeout_hours": null
    },
    {
-    "id": "tested->needs_human:escalate:when reviews run out",
-    "from": "tested",
+    "id": "documented->needs_human:escalate:when reviews run out",
+    "from": "documented",
     "to": "needs_human",
     "kind": "escalate",
     "label": "when reviews run out",
@@ -862,6 +916,48 @@
    {
     "id": "addressing_review->needs_human:default:timeout",
     "from": "addressing_review",
+    "to": "needs_human",
+    "kind": "default",
+    "label": "timeout",
+    "wildcard": false,
+    "actor": null,
+    "actor_type": null,
+    "role": null,
+    "gates": [],
+    "via": null,
+    "timeout_hours": null
+   },
+   {
+    "id": "documented->needs_human:default:question",
+    "from": "documented",
+    "to": "needs_human",
+    "kind": "default",
+    "label": "question",
+    "wildcard": false,
+    "actor": null,
+    "actor_type": null,
+    "role": null,
+    "gates": [],
+    "via": null,
+    "timeout_hours": null
+   },
+   {
+    "id": "documented->needs_human:default:budget exceeded",
+    "from": "documented",
+    "to": "needs_human",
+    "kind": "default",
+    "label": "budget exceeded",
+    "wildcard": false,
+    "actor": null,
+    "actor_type": null,
+    "role": null,
+    "gates": [],
+    "via": null,
+    "timeout_hours": null
+   },
+   {
+    "id": "documented->needs_human:default:timeout",
+    "from": "documented",
     "to": "needs_human",
     "kind": "default",
     "label": "timeout",
@@ -1420,6 +1516,19 @@
     "in_pull_request": false
    },
    {
+    "name": "docs_report",
+    "type": null,
+    "produced_by": [
+     "t-document"
+    ],
+    "read_by": [
+     "t-release-notes"
+    ],
+    "origin": "step",
+    "context": false,
+    "in_pull_request": true
+   },
+   {
     "name": "review_markdown",
     "type": null,
     "produced_by": [
@@ -1480,6 +1589,7 @@
     "read_by": [
      "t-specify",
      "t-implement",
+     "t-document",
      "t-address-review"
     ],
     "origin": "feedback",
@@ -1691,9 +1801,54 @@
    "writes_branch": false
   },
   {
-   "id": "t-review",
+   "id": "t-document",
    "from": "tested",
    "from_display": "Tested",
+   "to": "documented",
+   "to_display": "Documented",
+   "actor": "docs_writer",
+   "actor_type": "agent",
+   "who": "the agent `docs_writer` (role document, model profile:standard)",
+   "outputs": [
+    "docs_report"
+   ],
+   "gates": [
+    {
+     "name": "scope_respected",
+     "summary": "the agent stayed within its allowed paths"
+    },
+    {
+     "name": "no_secrets",
+     "summary": "no secret leaks into the change"
+    },
+    {
+     "name": "docs_updated",
+     "summary": "the change updates its documentation when it changes anything else"
+    }
+   ],
+   "on_fail": "On failure it retries up to 2 time(s) from “Tested”, then goes to “Needs a human”.",
+   "on_reject": null,
+   "timeout_hours": null,
+   "action": null,
+   "task": null,
+   "sentence": "From “Tested”, the agent `docs_writer` (role document, model profile:standard) moves the item to “Documented” once it produced `docs_report`; the agent stayed within its allowed paths; no secret leaks into the change; the change updates its documentation when it changes anything else. On failure it retries up to 2 time(s) from “Tested”, then goes to “Needs a human”.",
+   "agent": "docs-writer",
+   "role": "document",
+   "model": "profile:standard",
+   "group": null,
+   "sla_hours": null,
+   "command": null,
+   "image": null,
+   "inputs": [
+    "human_feedback"
+   ],
+   "output_types": {},
+   "writes_branch": true
+  },
+  {
+   "id": "t-review",
+   "from": "documented",
+   "from_display": "Documented",
    "to": "reviewed",
    "to_display": "Reviewed by an agent",
    "actor": "reviewer",
@@ -1714,7 +1869,7 @@
    "timeout_hours": null,
    "action": null,
    "task": null,
-   "sentence": "From “Tested”, the agent `reviewer` (role review, model profile:standard) moves the item to “Reviewed by an agent” once it produced `review_markdown`, `verdict`; the outputs take an allowed value (a review's verdict, a size).",
+   "sentence": "From “Documented”, the agent `reviewer` (role review, model profile:standard) moves the item to “Reviewed by an agent” once it produced `review_markdown`, `verdict`; the outputs take an allowed value (a review's verdict, a size).",
    "agent": "reviewer",
    "role": "review",
    "model": "profile:standard",
@@ -1831,7 +1986,9 @@
    "sla_hours": null,
    "command": null,
    "image": null,
-   "inputs": [],
+   "inputs": [
+    "docs_report"
+   ],
    "output_types": {},
    "writes_branch": false
   },
