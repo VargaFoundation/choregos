@@ -64,6 +64,30 @@ LE_TRAIN_AU_REPOS_SE_RELAIE = "idle-train-continues-as-new"
 #: `False` pour toute la vie du run, et le relais qu'il avait enregistré à 15 000 devenait un écart
 #: de déterminisme (TMPRL1100, vérifié).
 LE_TRAIN_SE_RELAIE_TOT = "train-continues-as-new-early"
+#: A departure requested on a train WITHOUT A BATCH is dropped (#370, S22-29). Before this marker,
+#: `depart_now` (or `express`) raised a flag that only `_depart` resets; but `_collect` does not depart
+#: without a batch, and its wait (`depart_requested or express or abort_requested`) returned at once:
+#: the train chained `check_window` activities without a pause until the next boarding or the relay.
+#: Choice: the request is NOT carried over to the next item that boards. A manual departure is a
+#: deliberate act on a visible batch (it overrides the window and the cron); carrying it over would
+#: send, hours later, an item nobody chose to send outside its window. The relay already behaves that
+#: way (it does not carry `depart_requested`). The API still answers 202: the signal is accepted, the
+#: train ignores it for want of a batch. `express` follows the same rule (a hotfix only raises it by
+#: boarding, hence with a batch: a theoretical case, covered at no cost).
+#: Same discipline as `LE_TRAIN_AU_REPOS_SE_RELAIE`: the condition first, `patched` second.
+EMPTY_TRAIN_DROPS_DEPARTURE = "empty-train-drops-departure"
+#: A FROZEN train no longer spins on a pending departure (#515, S22-29). Before this marker, a frozen
+#: train with a batch and `depart_requested` (or `express`) skipped both exits of `_collect` (both
+#: require `not self.frozen`), and its wait returned at once: `check_window` back to back until the
+#: unfreeze or the relay.
+#: Choice: a MANUAL departure requested while frozen is dropped, not kept for the unfreeze. The freeze
+#: is a deliberate stop and the unfreeze a deliberate restart: a departure clicked before it (possibly
+#: hours before, by someone else) leaving the instant the train is unfrozen would be a surprise; whoever
+#: unfreezes can ask again. `express` is KEPT: it is not a request but a property of the batch (a hotfix
+#: boarded), cleared only by a departure; it simply stops waking the wait while frozen, and the unfreeze
+#: wakes it, so the hotfix leaves as express as soon as the train is unfrozen, as before the freeze.
+#: Same discipline: the condition first, `patched` second.
+FROZEN_TRAIN_DOES_NOT_SPIN = "frozen-train-does-not-spin"
 #: Le seuil (en événements d'historique) au-delà duquel le train se relaie — au repos, après un départ
 #: et après une synchro `auto_sync`. 2 000 : le rejeu coûte ~2 ms par événement sur le pod (33,9 s pour
 #: 16 000), soit ~4 s, sous les 10 s de la tâche de workflow avec une marge pour un CPU disputé par les
@@ -321,10 +345,35 @@ class ReleaseTrain:
                         "frozen": self.frozen,
                     }
                 )
-            await _wait(
-                lambda: self.depart_requested or self.express or self.abort_requested,
-                timedelta(seconds=max(5.0, min(wait_s, 900.0))),
+            # A departure requested without a batch does not leave (above): drop it here, or the
+            # wait would return at once and the next turn would rerun `check_window` without a pause.
+            if (
+                not self.batch
+                and (self.depart_requested or self.express)
+                and workflow.patched(EMPTY_TRAIN_DROPS_DEPARTURE)
+            ):
+                self.depart_requested = False
+                self.express = False
+            # A frozen train does not leave (above): a manual request is dropped, `express` is kept
+            # but no longer wakes the wait until the unfreeze (see `FROZEN_TRAIN_DOES_NOT_SPIN`).
+            held_by_freeze = (
+                self.frozen
+                and (self.depart_requested or self.express)
+                and workflow.patched(FROZEN_TRAIN_DOES_NOT_SPIN)
             )
+            if held_by_freeze:
+                self.depart_requested = False
+                await _wait(
+                    lambda: (
+                        self.depart_requested or (self.express and not self.frozen) or self.abort_requested
+                    ),
+                    timedelta(seconds=max(5.0, min(wait_s, 900.0))),
+                )
+            else:
+                await _wait(
+                    lambda: self.depart_requested or self.express or self.abort_requested,
+                    timedelta(seconds=max(5.0, min(wait_s, 900.0))),
+                )
             if self.abort_requested:
                 return
 
