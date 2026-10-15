@@ -156,6 +156,28 @@ choregos-orchestrator:
 Under a namespace `LimitRange`, set `runner.limits` **below** the per-container ceiling.
 Above it, the pod is rejected and the Job waits without saying why.
 
+### Images for jobs and for agents written in code
+
+A `job` step ([ADR 0056](adr/0056-a-deterministic-step.md)) and an agent written in code
+([ADR 0063](adr/0063-agents-written-in-code.md)) may run in their own image. Neither names a
+reference: they name an image, and the operator maps names to references.
+
+```yaml
+global:
+  images:
+    jobs:   { quant: harbor.example.com/choregos/quant@sha256:… }
+    agents: { ticket-triager: harbor.example.com/agents/ticket-triager@sha256:… }
+    requireDigest: true     # the default: a tag-only reference stops the API and the workers at start-up
+```
+
+The chart renders them as `CHOREGOS_JOB_IMAGES`, `CHOREGOS_AGENT_IMAGES` and
+`CHOREGOS_REQUIRE_IMAGE_DIGEST` on the API (which refuses a version naming an unknown image and lists
+the names at `GET /platform/agent-images`, never the references) and on every orchestrator worker
+(which resolves the name when the stage starts, and fails the step without a retry on an unknown one).
+Each image is built **from** the runner image: the runner is the entrypoint, the agent is a
+subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
+warm pool built from the runner image: use `k8s_job` for steps that name their own image.
+
 ### The `agent_sandbox` executor (opt-in)
 
 [ADR 0016](adr/0016-agent-sandbox-executor.md) adds an executor on

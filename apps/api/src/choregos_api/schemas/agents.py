@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -74,12 +74,52 @@ class AgentEvalResult(Dto):
     error: str | None = None
 
 
+class AcpRuntime(Dto):
+    """A coding agent that speaks ACP (ADR 0002): one of the backends the runner ships."""
+
+    kind: Literal["acp"] = "acp"
+    backend: str | None = None
+
+
+class CodeRuntime(Dto):
+    """An agent written in code (ADR 0063): an ACP agent in an image the operator named.
+
+    `image` is a NAME in the operator's `CHOREGOS_AGENT_IMAGES`, never a reference: whoever writes
+    an agent does not choose what the platform pulls. `command` is the argv the runner starts in
+    that image; it speaks ACP on stdio (the `choregos-agent-sdk` does it for a Python agent).
+    """
+
+    kind: Literal["code"] = "code"
+    image: str = Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")
+    command: list[str] = Field(min_length=1, max_length=64)
+    api_format: Literal["openai", "anthropic"] = "openai"
+
+    @field_validator("command")
+    @classmethod
+    def _no_empty_argument(cls, command: list[str]) -> list[str]:
+        if any(not part or len(part) > 1024 for part in command):
+            raise ValueError("every argument of the command is 1 to 1024 characters")
+        return command
+
+
+class AgentImageInfo(Dto):
+    """An image an operator named for code agents; the reference itself is never returned."""
+
+    name: str
+    digest_pinned: bool
+
+
+AgentRuntime = Annotated[AcpRuntime | CodeRuntime, Field(discriminator="kind")]
+
+
 class AgentSpec(Dto):
     """Ce qu'une version d'agent EST. Elle ne se modifie jamais : un changement publie la suivante."""
 
     instructions: str = Field(default="", max_length=65_536)
     model: str | None = None
     backend: str | None = None
+    #: How the version runs (ADR 0063); absent means `acp` with `backend`.
+    runtime: AgentRuntime | None = None
     limits: AgentLimits = Field(default_factory=AgentLimits)
     budget: AgentBudget = Field(default_factory=AgentBudget)
     skills: list[AgentSkillRef] = Field(default_factory=list)
@@ -91,6 +131,21 @@ class AgentSpec(Dto):
     #: Whose memory a run reads and writes (S32-02): `project` (shared, the default), `agent` (its
     #: own, within the project) or `none`.
     memory: Literal["none", "project", "agent"] = "project"
+
+    @model_validator(mode="after")
+    def _one_way_to_say_the_backend(self) -> AgentSpec:
+        """A code agent runs as the `code` backend, and an ACP runtime that names a backend must
+        agree with the top-level `backend`: two answers to one question are refused."""
+        if isinstance(self.runtime, CodeRuntime) and self.backend:
+            raise ValueError("a `code` runtime fixes the backend: `backend` must be empty")
+        if (
+            isinstance(self.runtime, AcpRuntime)
+            and self.runtime.backend
+            and self.backend
+            and self.runtime.backend != self.backend
+        ):
+            raise ValueError("`backend` and `runtime.backend` disagree: set only one")
+        return self
 
 
 class AgentTrialCreate(Dto):
