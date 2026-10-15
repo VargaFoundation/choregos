@@ -951,11 +951,11 @@ export type KnowledgeBase = {
 };
 
 export type KnowledgeSourceCreate = {
-  kind: "sharepoint" | "web" | "git";
+  kind: "sharepoint" | "confluence" | "web" | "git";
   name: string;
-  /** `sharepoint`: the organisation connector of capability `documents` */
+  /** `sharepoint`, `confluence`: the organisation connector of capability `documents` */
   connector?: string | null;
-  /** `sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
+  /** `sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
   config?: {
     [key: string]: unknown;
   };
@@ -972,7 +972,7 @@ export type KnowledgeSourcePatch = {
 
 export type KnowledgeSource = {
   id: string;
-  kind: "sharepoint" | "web" | "git";
+  kind: "sharepoint" | "confluence" | "web" | "git";
   name: string;
   connector?: string | null;
   config?: {

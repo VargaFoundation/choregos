@@ -129,16 +129,17 @@ class KnowledgeSearchResult(Dto):
     hits: list[KnowledgeCitation] = Field(default_factory=list)
 
 
-SourceKind = Literal["sharepoint", "web", "git"]
+SourceKind = Literal["sharepoint", "confluence", "web", "git"]
 
 
 class KnowledgeSourceCreate(Dto):
     kind: SourceKind
     name: str = Field(min_length=1, max_length=200)
-    #: `sharepoint`: the organisation connector (capability `documents`) holding the credentials
+    #: `sharepoint`, `confluence`: the organisation connector (capability `documents`) holding the credentials
     connector: str | None = None
-    #: `sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url`, `max_depth`, `max_pages`;
-    #: `git`: `url`, `ref`, `paths`
+    #: `sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional
+    #: `page_id` (that page and its descendants), `include_root`, `include_attachments`, `labels`;
+    #: `web`: `url`, `max_depth`, `max_pages`; `git`: `url`, `ref`, `paths`
     config: dict[str, Any] = Field(default_factory=dict)
     interval_minutes: int = Field(default=60, ge=5, le=7 * 24 * 60)
 

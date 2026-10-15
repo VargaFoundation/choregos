@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import re
 from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
@@ -39,7 +40,7 @@ from ..knowledge.access import can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
-from ..knowledge.sync import CONNECTED_KINDS
+from ..knowledge.sync import CONNECTED_KINDS, SOURCE_CONNECTOR_TYPES
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
@@ -580,6 +581,7 @@ async def _connected_config(
     session: AsyncSession,
     organisation: Organization,
     connector: str | None,
+    kind: str,
     what: str,
 ) -> None:
     """A connected source names an existing `documents` connector of its organisation."""
@@ -587,7 +589,7 @@ async def _connected_config(
         raise unprocessable(f"a {what} source names its `documents` connector")
     found = (
         await session.execute(
-            select(OrgConnector.id).where(
+            select(OrgConnector.type).where(
                 OrgConnector.org_id == organisation.id,
                 OrgConnector.name == connector,
                 OrgConnector.kind == "documents",
@@ -596,12 +598,48 @@ async def _connected_config(
     ).first()
     if found is None:
         raise unprocessable(f"no `documents` connector `{connector}` in {organisation.slug}")
+    allowed = SOURCE_CONNECTOR_TYPES[kind]
+    if found[0] not in allowed:
+        raise unprocessable(
+            f"`{connector}` is a documents/{found[0]} connector: "
+            f"a {kind} source needs {' or '.join(sorted(allowed))}"
+        )
 
 
 def _sharepoint_config(config: dict[str, object]) -> dict[str, object]:
     if not (config.get("site_id") or config.get("drive_id")):
         raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
     return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
+
+
+_SPACE_KEY = re.compile(r"^[A-Z0-9~][A-Za-z0-9_~-]{0,254}$")
+
+
+def _confluence_config(config: dict[str, object]) -> dict[str, object]:
+    space = str(config.get("space_key") or "")
+    if not _SPACE_KEY.match(space):
+        raise unprocessable("a Confluence source names a `space_key` (letters and digits, e.g. ENG)")
+    page = config.get("page_id")
+    if page not in (None, "") and not re.fullmatch(r"\d{1,20}", str(page)):
+        raise unprocessable("`page_id` is the number in the page's URL (/pages/<id>/…)")
+    for flag in ("include_root", "include_attachments"):
+        if flag in config and not isinstance(config[flag], bool):
+            raise unprocessable(f"`{flag}` is true or false")
+    labels = config.get("labels") or []
+    if (
+        not isinstance(labels, list)
+        or len(labels) > 20
+        or not all(isinstance(x, str) and 0 < len(x) <= 255 for x in labels)
+    ):
+        raise unprocessable("`labels` is a list of at most 20 labels")
+    out: dict[str, object] = {"space_key": space}
+    if page not in (None, ""):
+        out["page_id"] = str(page)
+    out["include_root"] = bool(config.get("include_root", True))
+    out["include_attachments"] = bool(config.get("include_attachments", False))
+    if labels:
+        out["labels"] = labels
+    return out
 
 
 def _web_config(config: dict[str, object]) -> dict[str, object]:
@@ -634,11 +672,12 @@ def _https_url(config: dict[str, object], kind: str) -> str:
 #: One validator per source kind: the configuration it keeps, or the reason it is refused.
 _SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] = {
     "sharepoint": _sharepoint_config,
+    "confluence": _confluence_config,
     "web": _web_config,
     "git": _git_config,
 }
 
-_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive"}
+_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive", "confluence": "Confluence"}
 
 
 async def _checked_source_config(
@@ -650,7 +689,7 @@ async def _checked_source_config(
 ) -> dict[str, object]:
     """What a source may be: refused here, with its reason, rather than at its first sync."""
     if kind in CONNECTED_KINDS:
-        await _connected_config(session, organisation, connector, _CONNECTED_WHAT.get(kind, kind))
+        await _connected_config(session, organisation, connector, kind, _CONNECTED_WHAT[kind])
     return _SOURCE_VALIDATORS[kind](config)
 
 

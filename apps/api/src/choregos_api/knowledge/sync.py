@@ -17,7 +17,7 @@ import hashlib
 from pathlib import PurePosixPath
 from typing import Any
 
-from choregos_adapters.documents.base import Changes, DocumentSource, SourceItem
+from choregos_adapters.documents.base import Changes, DocumentSource, ItemUnreadableError, SourceItem
 from choregos_adapters.registry import build, configuration_resolue, fakes_enabled
 from choregos_core import utcnow
 from sqlalchemy import delete, func, select
@@ -31,9 +31,14 @@ from .formats import FORMATS, DocumentRefusedError, accept
 
 logger = get_logger("choregos.knowledge.sync")
 
-KINDS = ("sharepoint", "web", "git")
+KINDS = ("sharepoint", "confluence", "web", "git")
 #: kinds opened through an organisation `documents` connector, which holds the credentials
-CONNECTED_KINDS = frozenset({"sharepoint"})
+CONNECTED_KINDS = frozenset({"sharepoint", "confluence"})
+#: the connector types a connected source kind may be served by
+SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {
+    "sharepoint": frozenset({"sharepoint"}),
+    "confluence": frozenset({"confluence"}),
+}
 
 
 class SourceUnavailableError(RuntimeError):
@@ -55,6 +60,11 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
         ).scalar_one_or_none()
         if connector is None:
             raise SourceUnavailableError(f"the `documents` connector `{source.connector}` does not exist")
+        if connector.type not in SOURCE_CONNECTOR_TYPES[source.kind]:
+            raise SourceUnavailableError(
+                f"the connector `{source.connector}` is a documents/{connector.type} connector: "
+                f"a {source.kind} source needs {' or '.join(sorted(SOURCE_CONNECTOR_TYPES[source.kind]))}"
+            )
         resolved = configuration_resolue(
             connector.kind, connector.type, connector.config, connector.secret_refs
         )
@@ -106,7 +116,11 @@ async def _apply_item(
     if item.size is not None and item.size > cap:
         _skip(summary, item, f"larger than {cap // (1024 * 1024)} MiB")
         return None
-    data = await adapter.fetch(item)
+    try:
+        data = await adapter.fetch(item)
+    except ItemUnreadableError as unreadable:
+        _skip(summary, item, f"unreadable: {unreadable}")
+        return None
     if len(data) > cap:
         _skip(summary, item, f"larger than {cap // (1024 * 1024)} MiB")
         return None
