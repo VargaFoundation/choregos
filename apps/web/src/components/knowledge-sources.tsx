@@ -78,7 +78,7 @@ export function KnowledgeSources({
               api.createKnowledgeSource(org, slug, {
                 kind,
                 name: fields.name || KIND[kind],
-                connector: kind === "sharepoint" ? fields.connector : null,
+                connector: kind === "sharepoint" ? fields.connector : kind === "git" ? fields.connector.trim() || null : null,
                 config: sourceConfig(kind, fields),
                 interval_minutes: Number(fields.interval) || 60,
               }),
@@ -105,6 +105,7 @@ export function KnowledgeSources({
             <>
               <Input aria-label="ref" placeholder="branch or commit" value={fields.ref} onChange={set("ref")} />
               <Input aria-label="paths" placeholder="docs/*.md, *.md" value={fields.paths} onChange={set("paths")} />
+              <Input aria-label="git connector" placeholder="documents/git connector (private repository, optional)" value={fields.connector} onChange={set("connector")} className="sm:col-span-2" />
             </>
           )}
           <div>

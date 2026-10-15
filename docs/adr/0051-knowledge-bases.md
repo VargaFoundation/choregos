@@ -115,3 +115,12 @@ there (D10), with full-text search built in and `pgvector` one extension away.
    guidance reaches no agent before a person approves it. The version's author is the agent
    (`agent:knowledge-distiller`), so the administrator who asked may approve it; the request and
    the documents used are recorded on the base (`distillation`).
+
+## Update — 2026-10-15: private git (S39-18b)
+
+11. **A git source reads a private repository through a `documents/git` connector.** The connector
+    holds a token or a GitHub App's credentials (secret fields, ADR 0058 once sealed). The
+    credential reaches `git fetch` as `GIT_CONFIG_COUNT/KEY_0/VALUE_0` (`http.<host>/.extraHeader`),
+    so it is in no argv, error message or `.git/config`, and it is pinned to the connector's host.
+    A git listing that matches no file is unreadable, not empty (decision 10). Documents are named
+    by their whole path.

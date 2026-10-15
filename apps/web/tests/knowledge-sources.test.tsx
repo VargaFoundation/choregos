@@ -65,4 +65,20 @@ describe("the sources of a base (S33-04)", () => {
       }),
     );
   });
+
+  it("adds a git source, through a git connector when the repository is private", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    render(<KnowledgeSources org="varga" slug="framework" sources={[]} onChange={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "git" } });
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://github.com/acme/private.git" } });
+    fireEvent.change(screen.getByLabelText("git connector"), { target: { value: "acme-github" } });
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith(
+        "varga",
+        "framework",
+        expect.objectContaining({ kind: "git", connector: "acme-github" }),
+      ),
+    );
+  });
 });

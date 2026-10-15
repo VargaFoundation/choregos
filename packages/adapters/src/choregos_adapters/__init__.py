@@ -318,6 +318,22 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("client_secret",),
     ),
+    # A private git repository as a knowledge source (S39-18b): a token, or a GitHub App's short-lived
+    # installation token. The credential is pinned to `host`.
+    ("documents", "git"): ConnectorTypeSpec(
+        "Git over https (token or GitHub App)",
+        ("documents",),
+        _objet(
+            {
+                "host": {"type": "string", "default": "github.com"},
+                "auth": {"type": "string", "enum": ["token", "github_app"], "default": "token"},
+                "app_id": _TEXTE,
+                "installation_id": {"type": "integer"},
+                "api_url": {"type": "string", "default": "https://api.github.com"},
+            }
+        ),
+        ("token", "private_key"),
+    ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
         ("identity",),
@@ -831,6 +847,9 @@ def _register_builtins() -> None:
     from .documents.graph import GraphDocumentsConnector
 
     register("documents", "sharepoint", _SPECS_LIVREES[("documents", "sharepoint")])(GraphDocumentsConnector)
+    from .documents.git import GitDocumentsConnector
+
+    register("documents", "git", _SPECS_LIVREES[("documents", "git")])(GitDocumentsConnector)
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(

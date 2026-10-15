@@ -634,7 +634,15 @@ A base also **syncs from sources** (`POST …/sources`), each on its own Tempora
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
   `max_pages` ≤ 500; a host that resolves to a private address is refused.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
-  (`*.md` by default).
+  (`*.md` by default). A document is named by its whole path (`docs-adr-0001.md`), so two
+  `README.md` do not collide; a repository where no file matches `paths` is reported unreadable and
+  deletes nothing. A **private** repository is read through a `documents` connector of type `git`
+  (`host`, default `github.com`, and `auth`): `auth: token` with a fine-grained access token
+  (`Contents: read`) in the `token` secret field, or `auth: github_app` with the App's `app_id`, its
+  `private_key` secret and optionally the `installation_id`, from which a one-hour installation
+  token limited to that repository and `contents: read` is minted at each read. The source names the
+  connector (`connector`); the repository's host must be the connector's host, so the credential is
+  never sent elsewhere, and it travels to git in the environment, never in a command line.
 
 A document deleted at the source leaves the base **and its index** at the next sync. Each source
 shows when it last synced, what it did (added, updated, deleted, skipped and why) and its last

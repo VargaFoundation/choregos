@@ -39,7 +39,7 @@ from ..knowledge.access import can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
-from ..knowledge.sync import CONNECTED_KINDS
+from ..knowledge.sync import CONNECTED_KINDS, OPTIONALLY_CONNECTED, SOURCE_CONNECTOR_TYPES
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
@@ -580,14 +580,15 @@ async def _connected_config(
     session: AsyncSession,
     organisation: Organization,
     connector: str | None,
+    kind: str,
     what: str,
 ) -> None:
-    """A connected source names an existing `documents` connector of its organisation."""
+    """A source names an existing `documents` connector of its organisation, of a type its kind reads."""
     if not connector:
         raise unprocessable(f"a {what} source names its `documents` connector")
     found = (
         await session.execute(
-            select(OrgConnector.id).where(
+            select(OrgConnector.type).where(
                 OrgConnector.org_id == organisation.id,
                 OrgConnector.name == connector,
                 OrgConnector.kind == "documents",
@@ -596,6 +597,11 @@ async def _connected_config(
     ).first()
     if found is None:
         raise unprocessable(f"no `documents` connector `{connector}` in {organisation.slug}")
+    if found[0] not in SOURCE_CONNECTOR_TYPES[kind]:
+        wanted = ", ".join(f"`{t}`" for t in sorted(SOURCE_CONNECTOR_TYPES[kind] - {"fake"}))
+        raise unprocessable(
+            f"a {what} source reads a `documents` connector of type {wanted}, not `{found[0]}`"
+        )
 
 
 def _sharepoint_config(config: dict[str, object]) -> dict[str, object]:
@@ -638,7 +644,7 @@ _SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] 
     "git": _git_config,
 }
 
-_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive"}
+_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive", "git": "private git"}
 
 
 async def _checked_source_config(
@@ -649,8 +655,8 @@ async def _checked_source_config(
     config: dict[str, object],
 ) -> dict[str, object]:
     """What a source may be: refused here, with its reason, rather than at its first sync."""
-    if kind in CONNECTED_KINDS:
-        await _connected_config(session, organisation, connector, _CONNECTED_WHAT.get(kind, kind))
+    if kind in CONNECTED_KINDS or (kind in OPTIONALLY_CONNECTED and connector):
+        await _connected_config(session, organisation, connector, kind, _CONNECTED_WHAT.get(kind, kind))
     return _SOURCE_VALIDATORS[kind](config)
 
 
@@ -694,7 +700,7 @@ async def create_knowledge_source(
         knowledge_base_id=base.id,
         kind=body.kind,
         name=body.name,
-        connector=body.connector if body.kind in CONNECTED_KINDS else None,
+        connector=body.connector if body.kind in CONNECTED_KINDS | OPTIONALLY_CONNECTED else None,
         config=config,
         interval_minutes=body.interval_minutes,
         status="idle",

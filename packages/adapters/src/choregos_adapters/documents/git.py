@@ -4,15 +4,22 @@
 One shallow fetch of the ref into a temporary directory; the files matching `paths` (by default
 markdown anywhere) become documents, versioned by their blob id. The cursor is the commit: the
 same commit is no change; another is a full listing, and a file gone from it was deleted.
+
+A private repository is read with a credential (a token, or a GitHub App's short-lived installation
+token) that goes to git through `GIT_CONFIG_*` environment variables as an `http.extraHeader`: never
+in argv (`ps`), in an error message or in `.git/config`. The credential is pinned to its host: a URL
+on another host is refused, so a token cannot be sent elsewhere.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import fnmatch
 import os
 import shutil
 import tempfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -23,15 +30,35 @@ DEFAULT_PATHS = ("*.md", "**/*.md")
 MAX_FILES = 500
 MAX_FILE_BYTES = 5 * 1024 * 1024
 TIMEOUT_S = 300.0
+DEFAULT_HOST = "github.com"
+
+#: A credential is a token, or a coroutine that mints one when the source is read (a GitHub App's).
+Credential = str | Callable[[], Awaitable[str]]
 
 
 class GitSource:
     def __init__(
-        self, *, url: str, ref: str = "main", paths: list[str] | None = None, allow_file: bool = False
+        self,
+        *,
+        url: str,
+        ref: str = "main",
+        paths: list[str] | None = None,
+        allow_file: bool = False,
+        credential: Credential | None = None,
+        host: str | None = None,
     ) -> None:
-        scheme = urlsplit(url).scheme
-        if scheme != "https" and not (allow_file and scheme == "file"):
+        parts = urlsplit(url)
+        scheme = parts.scheme
+        if scheme != "https" and not (allow_file and scheme == "file" and credential is None):
             raise SourceRefusedError(f"a git source is fetched over https: `{url}`")
+        self.host = (host or DEFAULT_HOST).lower()
+        if credential is not None and (parts.hostname or "").lower() != self.host:
+            raise SourceRefusedError(
+                f"`{url}` is not on `{self.host}`: the connector's credential is never sent to another host"
+            )
+        if parts.username or parts.password:
+            raise SourceRefusedError("a git URL carries no credentials: use a `documents/git` connector")
+        self._credential = credential
         if ref.startswith("-") or not ref.strip():
             raise SourceRefusedError(f"not a ref: `{ref}`")
         self.url = url
@@ -39,14 +66,25 @@ class GitSource:
         self.paths = tuple(paths or DEFAULT_PATHS)
         self._checkout: Path | None = None
 
-    async def _git(self, cwd: Path, *args: str) -> str:
+    def _env(self, cwd: Path, token: str | None) -> dict[str, str]:
+        env = {"PATH": os.environ.get("PATH", ""), "GIT_TERMINAL_PROMPT": "0", "HOME": str(cwd)}
+        if token:
+            basic = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+            env |= {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": f"http.https://{self.host}/.extraHeader",
+                "GIT_CONFIG_VALUE_0": f"Authorization: Basic {basic}",
+            }
+        return env
+
+    async def _git(self, cwd: Path, *args: str, token: str | None = None) -> str:
         process = await asyncio.create_subprocess_exec(
             "git",
             *args,
             cwd=cwd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={"PATH": os.environ.get("PATH", ""), "GIT_TERMINAL_PROMPT": "0", "HOME": str(cwd)},
+            env=self._env(cwd, token),
         )
         try:
             out, err = await asyncio.wait_for(process.communicate(), TIMEOUT_S)
@@ -55,8 +93,16 @@ class GitSource:
             await process.wait()
             raise
         if process.returncode != 0:
-            raise RuntimeError(f"git {args[0]}: {err.decode('utf-8', 'replace').strip()[:300]}")
+            message = err.decode("utf-8", "replace").strip()
+            if token:
+                message = message.replace(token, "***")
+            raise RuntimeError(f"git {args[0]}: {message[:300]}")
         return out.decode("utf-8", "replace")
+
+    async def _token(self) -> str | None:
+        if self._credential is None or isinstance(self._credential, str):
+            return self._credential
+        return await self._credential()
 
     def _wanted(self, path: str) -> bool:
         return any(fnmatch.fnmatch(path, pattern) for pattern in self.paths)
@@ -65,7 +111,8 @@ class GitSource:
         self.close()
         self._checkout = Path(tempfile.mkdtemp(prefix="choregos-kb-git-"))
         await self._git(self._checkout, "init", "-q")
-        await self._git(self._checkout, "fetch", "-q", "--depth", "1", "--", self.url, self.ref)
+        token = await self._token()
+        await self._git(self._checkout, "fetch", "-q", "--depth", "1", "--", self.url, self.ref, token=token)
         commit = (await self._git(self._checkout, "rev-parse", "FETCH_HEAD")).strip()
         if (cursor or {}).get("commit") == commit:
             return Changes(cursor={"commit": commit})
@@ -77,9 +124,14 @@ class GitSource:
             _, kind, blob, size = meta.split()
             if kind != "blob" or not self._wanted(path) or size == "-" or int(size) > MAX_FILE_BYTES:
                 continue
-            items.append(SourceItem(ref=path, name=Path(path).name, version=blob, url=None, size=int(size)))
+            # Named by the whole path: two `README.md` in two folders are two documents.
+            name = path.replace("/", "-")
+            items.append(SourceItem(ref=path, name=name, version=blob, url=None, size=int(size)))
             if len(items) >= MAX_FILES:
                 break
+        if not items:
+            # No file matched: a wrong `paths`, a renamed branch, an emptied repository. Not a deletion.
+            return Changes(items=[], full=True, cursor={"commit": commit}, unreadable=[self.url])
         return Changes(items=items, full=True, cursor={"commit": commit})
 
     async def fetch(self, item: SourceItem) -> bytes:
@@ -94,3 +146,63 @@ class GitSource:
         if self._checkout is not None:
             shutil.rmtree(self._checkout, ignore_errors=True)
             self._checkout = None
+
+
+class GitDocumentsConnector:
+    """A `documents/git` connector: the credentials of a git host, opened per repository.
+
+    `auth: token` reads a token (a fine-grained personal access token with `Contents: read`);
+    `auth: github_app` mints, at each read, a one-hour installation token of the GitHub App
+    (`app_id`, `private_key`, optional `installation_id`) scoped to that repository with
+    `contents: read`: no long-lived personal token.
+    """
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.host = str(config.get("host") or DEFAULT_HOST)
+        self.auth = str(config.get("auth") or "token")
+
+    def _credential(self, url: str) -> Credential:
+        if self.auth == "token":
+            token = str(self.config.get("token") or "")
+            if not token:
+                raise SourceRefusedError("the `documents/git` connector has no `token`")
+            return token
+        if self.auth != "github_app":
+            raise SourceRefusedError(f"unknown git auth `{self.auth}`: `token` or `github_app`")
+        app_id, key = str(self.config.get("app_id") or ""), str(self.config.get("private_key") or "")
+        if not (app_id and key):
+            raise SourceRefusedError("a `github_app` connector has an `app_id` and a `private_key`")
+        repo = urlsplit(url).path.strip("/").removesuffix(".git")
+        installation = self.config.get("installation_id")
+
+        async def mint() -> str:
+            import httpx
+
+            from choregos_adapters.github.auth import GitHubAppAuth
+
+            auth = GitHubAppAuth(
+                app_id=app_id,
+                private_key=key,
+                base_url=str(self.config.get("api_url") or "https://api.github.com"),
+            )
+            async with httpx.AsyncClient(timeout=20.0) as http:
+                issued = await auth.token_for(
+                    http,
+                    repo,
+                    installation_id=int(installation) if installation else None,
+                    permissions={"contents": "read"},
+                )
+            return issued.token
+
+        return mint
+
+    def source(self, config: dict[str, Any], *, key: str) -> GitSource:
+        url = str(config["url"])
+        return GitSource(
+            url=url,
+            ref=str(config.get("ref") or "main"),
+            paths=config.get("paths"),
+            credential=self._credential(url),
+            host=self.host,
+        )
