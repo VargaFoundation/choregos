@@ -145,16 +145,14 @@ class GraphDocumentsConnector:
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 
-    def source(
-        self, *, site_id: str | None, drive_id: str | None, folder: str | None, key: str
-    ) -> GraphDriveSource:
+    def source(self, config: dict[str, Any], *, key: str) -> GraphDriveSource:
         return GraphDriveSource(
             tenant_id=self.config["tenant_id"],
             client_id=self.config["client_id"],
             client_secret=self.config.get("client_secret", ""),
-            site_id=site_id,
-            drive_id=drive_id,
-            folder=folder,
+            site_id=config.get("site_id"),
+            drive_id=config.get("drive_id"),
+            folder=config.get("folder"),
             graph_url=self.config.get("graph_url", GRAPH),
             login_url=self.config.get("login_url", LOGIN),
         )

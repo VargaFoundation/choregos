@@ -17,6 +17,7 @@ Ce qu'il ne fait pas : les notifications du serveur, les requêtes du serveur ve
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -76,11 +77,21 @@ class ClientMcp:
         url: str,
         *,
         token: str = "",
+        auth_scheme: str = "bearer",
+        username: str = "",
         timeout_s: float = 30.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
+        if auth_scheme not in {"bearer", "basic"}:
+            raise ValueError(f"unknown MCP auth scheme `{auth_scheme}`: `bearer` or `basic`")
+        if auth_scheme == "basic" and not username:
+            raise ValueError("the `basic` auth scheme needs a `username` (the account's email)")
         self.url = url
         self._token = token
+        # `bearer` (default): `Authorization: Bearer <token>`. `basic`: `Basic base64(username:token)`,
+        # which Atlassian's Rovo MCP Server asks for when it is given an API token.
+        self._auth_scheme = auth_scheme
+        self._username = username
         self._timeout = timeout_s
         self._transport = transport
         self._session: str | None = None
@@ -94,7 +105,10 @@ class ClientMcp:
             "Accept": "application/json, text/event-stream",
             "MCP-Protocol-Version": self._version,
         }
-        if self._token:
+        if self._token and self._auth_scheme == "basic":
+            pair = base64.b64encode(f"{self._username}:{self._token}".encode()).decode("ascii")
+            entetes["Authorization"] = f"Basic {pair}"
+        elif self._token:
             entetes["Authorization"] = f"Bearer {self._token}"
         if self._session:
             entetes["Mcp-Session-Id"] = self._session

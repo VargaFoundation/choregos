@@ -15,7 +15,8 @@ notification (`slack`). Each one has a `fake` twin used by the test suite.
 
 `tracker: internal` means there is no outside tracker: Choregos' own database holds the
 tickets, assigns their keys and discovers them. Use it for work that exists nowhere else —
-an HR request, a file to process — or for a bench.
+an HR request, a file to process — or for a bench. A work item filed from the console or MCP on
+a project with an external tracker is created in that tracker first, then mirrored (ADR 0059).
 
 ## Workflow
 
@@ -54,6 +55,23 @@ Three kinds:
 - **`human`** — a group, an SLA in hours, a reminder and an escalation.
 - **`system`** — a transition the platform performs itself, with no agent and no cost.
 
+## Agent scope
+
+An agent is a registered, versioned object ([ADR 0033](adr/0033-agent-registry-and-skill-library.md))
+with an **owner**, its scope ([ADR 0061](adr/0061-agent-ownership-scopes-and-forks.md)):
+
+- **common** (`platform`) — installed from the built-in catalogue; only an organisation administrator
+  changes it. To extend it, **fork** it;
+- **organisation** (`org`) — shared by every project, written by the organisation;
+- **project** — one project's; its project owner changes it, and it runs only in that project;
+- **personal** — one person's drafts and experiments; nobody else sees it.
+
+A **personal agent never runs in a workflow**: a process a whole team runs must not depend on an agent
+one person can change at will or take away when they leave. It runs in trials, and is promoted to a
+project (or forked into one) to reach a workflow. A **fork** is a new agent whose first version copies
+one version of its source and which remembers where it came from; it never follows the source on its
+own — it tells you when the source moved on.
+
 ## Stage and run
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,
@@ -74,7 +92,7 @@ minimum. Gates shipped today:
 
 ```
 action_succeeded · adr_number_free · ci_green · coverage_delta_min · diff_size_max
-evidence_facts · evidence_present · external · flag_present · markdown_sections
+docs_updated · evidence_facts · evidence_present · external · flag_present · markdown_sections
 no_secrets · numbers_measured · output_schema · outputs_in · outputs_present
 provenance_signed · review_approved · scans_ok · scope_respected · tool_called
 ```
@@ -94,6 +112,18 @@ a number that one of them carries — two studies running together both pick "th
 one", and the second to merge is sent back to renumber. The refusal names the files in question.
 It is evaluated when the merge transition starts, alongside the other synchronous gates.
 
+`docs_updated` guards documentation: the work item's **whole** branch diff must update a
+documentation file whenever it changes anything else. Documentation is the `docs` parameter
+(default `docs/**`, `*.md`, `*.mdx`, `*.rst`, `*.adoc`, `CHANGELOG*`); the `ignore` parameter lists
+what needs none (default: tests, lockfiles, CI files); `min_files` (default 1) sets how many
+documentation files must be updated. A documentation file counts when the diff adds text to it (or
+changes it with no patch, which GitHub does for big files); a file that is only deleted does not. A
+changelog line is enough. A change that touches nothing but tests, lockfiles and CI passes. It reads
+the branch, not the writer's report, so a developer who already documented lets the writer change
+nothing and still pass; it never takes an agent's word that nothing needed saying. The
+`dev-complex` workflow of the `github-software-delivery` template (version 2) uses it on its
+documentation step.
+
 **A gate that cannot see what it must check refuses.** If the SCM connector cannot produce a
 diff, `scope_respected` does not pass — it declines. A guarantee that passes blindly is worse
 than no guarantee, because it reassures.
@@ -103,6 +133,9 @@ than no guarantee, because it reassures.
 What a step leaves behind, in the result: tests run and passed, lint, typing, coverage delta,
 diff size — and `facts`, a flat map named by the business for work that has none of those.
 Evidence is what gates read and what the UI shows; it is not prose.
+
+A drafted agent is a proposal: a model can write a first version from a description, and a person
+reads it, edits it and creates the agent.
 
 ## Tools
 

@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -539,6 +540,35 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class OrgSecret(Base, PkMixin, TimestampMixin):
+    """A secret value typed in the console, sealed at rest (ADR 0058).
+
+    Envelope encryption: the value is encrypted with a random data key (AES-256-GCM); the data key
+    is wrapped under a key-encryption key (KEK) the DEPLOYMENT holds (`CHOREGOS_SECRETS_KEKS`), never
+    the database. The additional authenticated data binds a row to its organisation, name and
+    version, so it cannot be moved. No plaintext, no hash, no fingerprint: the hash of a
+    low-entropy secret leaks it."""
+
+    __tablename__ = "org_secrets"
+    __table_args__ = (UniqueConstraint("org_id", "name", name="uq_org_secrets_org_name"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    #: `connector/<name>/<field>` or `project/<slug>/<kind>/<field>`
+    name: Mapped[str] = mapped_column(String(200))
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    wrapped_dek: Mapped[bytes] = mapped_column(LargeBinary)
+    dek_nonce: Mapped[bytes] = mapped_column(LargeBinary)
+    kek_id: Mapped[str] = mapped_column(String(32))
+    algorithm: Mapped[str] = mapped_column(String(16), default="A256GCM")
+    #: +1 at every set
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: The time of the last set.
+    rotated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ConnectorOperation(Base, PkMixin, TimestampMixin):
     """Une opération d'une instance, et sa politique dans l'organisation : `allowed`, `approval`
     (une action gouvernée, ADR 0035) ou `forbidden` ; les groupes de projets qui y ont droit
@@ -739,11 +769,27 @@ class Agent(Base, PkMixin, TimestampMixin):
     état — actif, suspendu, révoqué, expiré."""
 
     __tablename__ = "agents"
-    __table_args__ = (UniqueConstraint("org_id", "slug", name="uq_agents_org_slug"),)
+    __table_args__ = (
+        UniqueConstraint("org_id", "slug", name="uq_agents_org_slug"),
+        # A project agent has a project, and only a project agent has one (S39-09, ADR 0061).
+        CheckConstraint("(scope = 'project') = (project_id IS NOT NULL)", name="scope_project"),
+    )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     slug: Mapped[str] = mapped_column(String(64))
     kind: Mapped[str] = mapped_column(String(16), default="internal")
+    #: Who owns the agent (ADR 0061): `platform` (a common agent installed from the catalogue), `org`,
+    #: `project` (see `project_id`) or `personal` (see `owner_id`). The slug stays unique per organisation.
+    scope: Mapped[str] = mapped_column(String(16), default="org", server_default="org", index=True)
+    project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: The agent this one was forked from, and the version it copied; the slug survives the source's deletion.
+    forked_from_agent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL"), nullable=True
+    )
+    forked_from_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    forked_from_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     display_name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     owner_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -884,6 +930,8 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     eval_result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     #: the last distillation into a principles skill (S33-05): status, skill, version, dropped, error
     distillation: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: the project this base was created from (S39-14): its owners curate it, never widen it
+    owner_project: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class KnowledgeDocument(Base, PkMixin, TimestampMixin):
@@ -944,6 +992,15 @@ class KnowledgeSource(Base, PkMixin, TimestampMixin):
     #: where the next sync starts: a Graph deltaLink, a commit
     cursor: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    #: interval | cron | manual (S39-19): what decides when the loop syncs
+    refresh_mode: Mapped[str] = mapped_column(String(8), default="interval", server_default="interval")
+    #: five fields, minute resolution, read in `refresh_timezone`; set in `cron` mode
+    refresh_cron: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    refresh_timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
+    #: when the source syncs next (an estimate: the worker may be down); null = due, or manual
+    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: set by "sync now": a request later than `last_synced_at` makes the next pass sync
+    sync_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: idle | syncing | failed
     status: Mapped[str] = mapped_column(String(16), default="idle")
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

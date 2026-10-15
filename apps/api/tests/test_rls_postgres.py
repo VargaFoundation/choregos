@@ -600,3 +600,42 @@ async def test_a_knowledge_base_and_its_documents_stay_in_their_organisation(
         assert (await session.execute(select(KnowledgeDocument))).scalars().all() == [], (
             "without a scope, nothing"
         )
+
+
+async def test_org_secrets_are_isolated(deux_organisations: dict[str, str]) -> None:
+    """Sealed connector secrets (ADR 0058): org `a` reads none of `b`'s, writes none into it, and
+    a session without a scope sees nothing — the AAD is a second lock, not the first."""
+    import base64
+    import os
+
+    from choregos_api.db.models import Organization, OrgSecret
+    from choregos_api.db.session import session_scope
+    from choregos_api.secret_store import SealedDbSecretStore, parse_keyring
+    from sqlalchemy import update
+    from sqlalchemy.exc import DBAPIError
+
+    store = SealedDbSecretStore(parse_keyring("k1:" + base64.b64encode(os.urandom(32)).decode()))
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for slug in ("a", "b"):
+            await store.put(session, ids[slug], "connector/vendor/token", f"value-of-{slug}", "x@y.z")
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(OrgSecret.org_id))).scalars().all() == [ids["a"]]
+        assert await store.get_many(session, ids["a"], ["connector/vendor/token"]) == {
+            "connector/vendor/token": "value-of-a"
+        }
+        assert await store.meta(session, ids["b"], ["connector/vendor/token"]) == {}, (
+            "b's row does not exist for a"
+        )
+        touched = await session.execute(
+            update(OrgSecret).where(OrgSecret.org_id == ids["b"]).values(kek_id="zz")
+        )
+        assert touched.rowcount == 0, "an UPDATE across organisations touches nothing"
+    with pytest.raises(DBAPIError):  # a write INTO b from a's session is refused by the policy
+        async with session_scope(orgs=["a"]) as session:
+            await store.put(session, ids["b"], "connector/vendor/other", "stolen", "x@y.z")
+    async with session_scope() as session:
+        assert (await session.execute(select(OrgSecret))).scalars().all() == [], "no scope, nothing"
+    async with session_scope(orgs="*") as session:
+        rows = (await session.execute(select(OrgSecret))).scalars().all()
+        assert sorted(r.kek_id for r in rows) == ["k1", "k1"]

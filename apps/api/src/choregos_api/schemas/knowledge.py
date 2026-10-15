@@ -38,6 +38,15 @@ class KnowledgeBaseCreate(Dto):
         return self
 
 
+class ProjectKnowledgeBaseCreate(Dto):
+    """A base created from a project: scoped to it and owned by it, so there is no scope to give."""
+
+    slug: str = Field(pattern=SLUG)
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    serving_mode: ServingMode = "files"
+
+
 class KnowledgeBasePatch(Dto):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
@@ -94,6 +103,8 @@ class KnowledgeBaseDto(Dto):
     sources: list[KnowledgeSourceDto] | None = None
     #: the last distillation into a principles skill (S33-05)
     distillation: dict[str, Any] | None = None
+    #: the project this base was created from (S39-14): its owners curate it, never widen it
+    owner_project: str | None = None
 
 
 class KnowledgeEvalCase(Dto):
@@ -129,24 +140,35 @@ class KnowledgeSearchResult(Dto):
     hits: list[KnowledgeCitation] = Field(default_factory=list)
 
 
-SourceKind = Literal["sharepoint", "web", "git"]
+SourceKind = Literal["sharepoint", "confluence", "web", "git"]
+#: interval: every `interval_minutes`; cron: `refresh_cron` in `refresh_timezone`; manual: on demand only
+RefreshMode = Literal["interval", "cron", "manual"]
 
 
 class KnowledgeSourceCreate(Dto):
     kind: SourceKind
     name: str = Field(min_length=1, max_length=200)
-    #: `sharepoint`: the organisation connector (capability `documents`) holding the credentials
+    #: `sharepoint`, `confluence`: the organisation connector (capability `documents`) holding the credentials
     connector: str | None = None
-    #: `sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url`, `max_depth`, `max_pages`;
-    #: `git`: `url`, `ref`, `paths`
+    #: `sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional
+    #: `page_id` (that page and its descendants), `include_root`, `include_attachments`, `labels`;
+    #: `web`: `url`, `max_depth`, `max_pages`; `git`: `url`, `ref`, `paths`
     config: dict[str, Any] = Field(default_factory=dict)
     interval_minutes: int = Field(default=60, ge=5, le=7 * 24 * 60)
+    refresh_mode: RefreshMode = "interval"
+    #: five fields (minute hour day month weekday), at least 5 minutes between two fires
+    refresh_cron: str | None = Field(default=None, max_length=100)
+    #: an IANA name, for example `Europe/Paris`
+    refresh_timezone: str = Field(default="UTC", max_length=64)
 
 
 class KnowledgeSourcePatch(Dto):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     config: dict[str, Any] | None = None
     interval_minutes: int | None = Field(default=None, ge=5, le=7 * 24 * 60)
+    refresh_mode: RefreshMode | None = None
+    refresh_cron: str | None = Field(default=None, max_length=100)
+    refresh_timezone: str | None = Field(default=None, max_length=64)
 
 
 class KnowledgeSourceDto(Dto):
@@ -156,6 +178,12 @@ class KnowledgeSourceDto(Dto):
     connector: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     interval_minutes: int
+    refresh_mode: RefreshMode = "interval"
+    refresh_cron: str | None = None
+    refresh_timezone: str = "UTC"
+    #: an estimate: the worker may be down at that moment; absent in manual mode
+    next_sync_at: datetime | None = None
+    sync_requested_at: datetime | None = None
     status: str
     last_synced_at: datetime | None = None
     last_error: str | None = None

@@ -21,6 +21,7 @@ const ACTEURS: Record<string, [string, string]> = {
   "t-plan": ["planner", "plan"],
   "t-implement": ["developer", "implement"],
   "t-test": ["tester", "verify"],
+  "t-document": ["docs_writer", "document"],
   "t-review": ["reviewer", "review"],
   "t-security-review": ["security_reviewer", "review"],
   "t-address-review": ["responder", "address_review"],
@@ -214,12 +215,17 @@ function jusquALaRevue(v: ReturnType<typeof vie>) {
     cost: 0.58,
   });
   v.deplacer(140, "implemented", "tested", "nominal", "t-test");
-  v.agent("t-review", 141, 150, {
+  v.agent("t-document", 141, 143, {
+    summary: "Documented in docs/billing/credit-notes.md and CHANGELOG.md.",
+    cost: 0.21,
+  });
+  v.deplacer(143, "tested", "documented", "nominal", "t-document");
+  v.agent("t-review", 144, 150, {
     summary: "Two remarks: a zero total is not tested; `cn` is a poor name.",
     verdict: "changes_requested",
     cost: 0.47,
   });
-  v.deplacer(150, "tested", "addressing_review", "changes_requested", "t-review", "two remarks");
+  v.deplacer(150, "documented", "addressing_review", "changes_requested", "t-review", "two remarks");
   v.agent("t-address-review", 151, 160, {
     summary: "Both remarks addressed: test added, variable renamed.",
     cost: 0.66,
@@ -231,12 +237,17 @@ function jusquALaRevue(v: ReturnType<typeof vie>) {
     cost: 0.55,
   });
   v.deplacer(168, "implemented", "tested", "nominal", "t-test");
-  v.agent("t-review", 169, 176, {
+  v.agent("t-document", 169, 171, {
+    summary: "Documentation follows the corrected code: the zero-total case is described.",
+    cost: 0.18,
+  });
+  v.deplacer(171, "tested", "documented", "nominal", "t-document");
+  v.agent("t-review", 172, 176, {
     summary: "Approved: the change is small, tested and named well.",
     verdict: "approve",
     cost: 0.44,
   });
-  v.deplacer(176, "tested", "reviewed", "nominal", "t-review");
+  v.deplacer(176, "documented", "reviewed", "nominal", "t-review");
 }
 
 /** Le ticket `#123`, en cours : la revue de sécurité tourne depuis six minutes. */

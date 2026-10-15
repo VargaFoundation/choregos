@@ -21,6 +21,7 @@ organisations must assume **a member of one will try to read another**.
 | leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
 | spending without limit | one virtual key per run with a hard cap, a budget per ticket, tool calls in the same ledger | ADR 0004, ADR 0014 |
 | touching production | `prod.requires_train` in the DSL, release train, Argo windows, GitHub Environment | ADR 0006 |
+| changing what an agent does | an agent has a scope — common, organisation, project or personal — and one server-side function decides who may publish, suspend or pin it, with the reason for every refusal: common and organisation agents are an `org_admin`'s, a project's agent its `project_owner`'s, a personal agent its owner's (and an `org_admin`'s); an agent you may not see is a 404; a personal agent or another project's agent can neither be pinned nor named in a workflow nor run in one (ADR 0061) | `services/agent_governance.py`, `routers/agents.py`, `services/agents.py`, `tests/test_agent_governance_matrix.py` |
 | changing its own configuration | `.choregos/**` refused for writing (except `result.json`) | `guardrails.py` |
 | escaping the container | non-root, no capabilities, seccomp — **required** by a strict Kyverno rule on every pod of a `choregos-*` or `proj-*` namespace (a pod with no security context is refused, not tolerated); no service-account token; `RuntimeClass gvisor` where the policy requires it, `runner.runtimeClass` (gVisor, Kata) for every agent pod where the deployment chooses it | `infra/policies/pod-security.yaml`, `tests/charts/test_securite_des_pods.py`, `k8s_job.py`, `tekton.py` |
 | prompt injection through what the agent reads | lexical detection over the ticket, its documents and the memory pack **before** the run: `sandbox.prompt_injection: warn` journals a security event on the ticket, `block` (the `regulated` preset) stops the stage before any run with the reason — a net against the crude cases, not an understanding; the walls remain the ones below | `choregos_core/injection.py`, `activities/stage.py` |
@@ -46,6 +47,17 @@ organisations must assume **a member of one will try to read another**.
 - **Development login opens the API** to anyone who can reach it. It exists for benches
   without an identity provider (`values/local.yaml`), nowhere else.
 
+## Who curates a knowledge base
+
+A knowledge base is what agents read as reference: whoever feeds it steers them, so curating is
+a permission, not a convenience ([ADR 0051](adr/0051-knowledge-bases.md)). An organisation
+administrator (`agent:manage`) curates every base and alone decides its **reach** (`scope`,
+`projects`, `groups`). A base created from a project (`POST /projects/{id}/knowledge`) is owned by
+it (`owner_project`): its owners (`project:write` on that project) upload, sync, distil, rename and
+archive it, but cannot widen it to the organisation, to other projects or to groups, so a project
+never decides what *other* projects' runs read. An administrator who widens it makes it the
+organisation's: the owner stops curating. Another project's owners, and developers, read at most.
+
 ## Injection through context
 
 Context packs and tickets contain text written by third parties. Two rules:
@@ -53,6 +65,11 @@ Context packs and tickets contain text written by third parties. Two rules:
 1. it is **marked untrusted** in the prompt ("data, not instructions");
 2. it grants **no power**: even if an agent follows an injected instruction, the mechanisms
    above apply unchanged. A gate that cannot read what it must check refuses.
+
+Drafting an agent from a description (S39-05) sends the description and the **names and one-line
+descriptions** of the organisation's skills, knowledge bases and connector operations to the
+gateway's model, never documents, files or secrets. The description is marked as data; the answer is
+filtered to names that exist, and a draft is never saved or run.
 
 ## Secrets
 
@@ -94,6 +111,15 @@ Context packs and tickets contain text written by third parties. Two rules:
   the Secret, and removes from the row, a key an older `prepare_stage` stored there. A runner
   image older than #523 behind a newer orchestrator gets no key: the orchestrator and its
   `runner_image` ship together.
+- Connector secrets typed in the console ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)):
+  sealed in `org_secrets` (forced RLS) with an AES-256-GCM envelope — a random data key per value,
+  wrapped under a key-encryption key that the **deployment** holds (`CHOREGOS_SECRETS_KEKS`, never the
+  database), the organisation, name and version bound as authenticated data. No plaintext, no hash.
+  An organisation administrator can set, replace and clear a secret but **cannot read it back**: no
+  response, audit entry or `last_error` carries the value, and the platform reads it only to build an
+  adapter (values it resolved are masked in logs and error texts). A `store:` reference is derived by
+  the platform and refused when written by hand, so a connector cannot point at another's secret.
+  A database dump or backup alone reveals nothing; losing the KEK loses the values.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
 - Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).

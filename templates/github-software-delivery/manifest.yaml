@@ -2,13 +2,13 @@ apiVersion: choregos/v1
 kind: Template
 metadata:
   name: github-software-delivery
-  version: 1.0.0
+  version: 1.1.0
   display: GitHub · software delivery (fix, study, feature)
   description: >-
     Three workflows for a software team on GitHub, run by agents from the catalogue. A bug or a small
     fix goes from the issue to production with no human (dev-simple). A study ends with one
     architecture decision record in MADR 4 format, approved by the architects and merged, never
-    deployed (study). A feature waits for three people: a product owner on the specification, a
+    deployed (study). A feature documents itself, and waits for three people: a product owner on the specification, a
     maintainer on the pull request, a release captain on production (dev-complex). Checks run in
     GitHub Actions; the release train deploys.
 requires:
@@ -43,6 +43,7 @@ defaults:
     - catalogue:security-reviewer
     - catalogue:review-responder
     - catalogue:ci-fixer
+    - catalogue:docs-writer
     - catalogue:release-notes-writer
     - catalogue:prod-verifier
     - catalogue:researcher

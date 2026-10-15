@@ -8,7 +8,7 @@ utilisé par les tests, le mode démo du front et `make demo`.
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -163,21 +163,33 @@ def configuration_resolue(
     config: dict[str, Any] | None,
     secret_refs: dict[str, str] | None,
     secret_ref: str | None = None,
+    preresolved: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """La configuration, ses secrets RÉSOLUS : de quoi construire l'adaptateur — jamais de quoi
-    enregistrer ni rendre. Une référence irrésoluble lève `SecretIntrouvable` : mieux vaut un
-    connecteur en erreur qu'un adaptateur qui retombe en silence sur sa valeur par défaut."""
+    """The configuration with its secrets RESOLVED: enough to build the adapter, never to save or
+    return. An unresolvable reference raises `SecretIntrouvable`: a connector in error beats an
+    adapter that silently falls back to its default value.
+
+    `preresolved` (field -> value): the fields the platform already read with the organisation's
+    context — the sealed `store:` values (ADR 0058). They are not resolved again."""
     from choregos_core.secrets import resoudre
 
     resolue = dict(config or {})
+    deja = dict(preresolved or {})
     for champ, reference in references_de_secret(kind, type_name, secret_refs, secret_ref).items():
-        resolue[champ] = resoudre(reference)
+        resolue[champ] = deja[champ] if champ in deja else resoudre(reference)
     return resolue
+
+
+def default_gateway_type() -> str:
+    """The gateway of a project that declares none: the deployment's (`CHOREGOS_GATEWAY_TYPE`)."""
+    return os.environ.get("CHOREGOS_GATEWAY_TYPE", "") or TYPES_PAR_DEFAUT["gateway"]
 
 
 def type_par_defaut(kind: str) -> str | None:
     if kind == "runtime":
         return default_executor_kind()
+    if kind == "gateway":
+        return default_gateway_type()
     return TYPES_PAR_DEFAUT.get(kind)
 
 
@@ -260,7 +272,12 @@ class AdapterSet:
             type_name = spec.get("type", default_type)
             # Les secrets résolus ICI, dans le processus qui construit l'adaptateur (ADR 0034).
             config = configuration_resolue(
-                kind, type_name, spec.get("config", {}), spec.get("secret_refs"), spec.get("secret_ref")
+                kind,
+                type_name,
+                spec.get("config", {}),
+                spec.get("secret_refs"),
+                spec.get("secret_ref"),
+                preresolved=spec.get("resolved"),
             )
             return build(kind, type_name, config)
 
@@ -271,6 +288,6 @@ class AdapterSet:
             cd=get("cd", TYPES_PAR_DEFAUT["cd"]),
             executor=get("runtime", default_executor_kind()),
             memory=get("memory", TYPES_PAR_DEFAUT["memory"]),
-            gateway=get("gateway", TYPES_PAR_DEFAUT["gateway"]),
+            gateway=get("gateway", default_gateway_type()),
             notify=get("notify", TYPES_PAR_DEFAUT["notify"]),
         )

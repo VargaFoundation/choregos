@@ -50,6 +50,9 @@ class TrackerAdapter(Protocol):
     Sans cette distinction, un ticket créé par la plateforme (un finding promu, une demande
     saisie dans le front) n'était jamais découvert : `list_candidates` rendait une liste
     vide, et le ticket restait en `inbox` pour toujours. Vu sur le banc du 2026-09-23.
+
+    `create_item` is also what files a person's request from the board or MCP in an external
+    tracker (ADR 0059): the work item is then recorded under the key it returns.
     """
 
     #: Faux quand la base de Choregos est la source (cf. `tracker: internal`).
@@ -162,9 +165,27 @@ class MemoryAdapter(Protocol):
     async def search(self, project: str, query: str, k: int) -> list[Memory]: ...
 
 
+#: What a gateway can do. A gateway declares the subset it really implements, and a conformance
+#: test refuses a declaration its behaviour contradicts (same discipline as `Executor.capabilities`).
+#:
+#: - `list_models`: discovers the models it routes;
+#: - `virtual_keys`: mints one key per run, limited to the models asked for;
+#: - `hard_budget`: the key's budget is a cap enforced at the source;
+#: - `spend_readback`: the spend of a key can be read back (cost measured at the source);
+#: - `teams`: a project's day budget is held by the gateway;
+#: - `pricing`: the catalogue carries input/output prices.
+GATEWAY_CAPABILITIES: frozenset[str] = frozenset(
+    {"list_models", "virtual_keys", "hard_budget", "spend_readback", "teams", "pricing"}
+)
+
+
 @runtime_checkable
 class GatewayAdapter(Protocol):
-    """Le gateway de modèles : une clé virtuelle par run, le coût compté à la source."""
+    """The model gateway: one virtual key per run, the cost counted at the source.
+
+    Documented as `LlmGateway`: nothing in the protocol is specific to LiteLLM."""
+
+    capabilities: frozenset[str]
 
     async def mint_key(
         self,
@@ -178,6 +199,10 @@ class GatewayAdapter(Protocol):
     async def spend(self, key_id: str) -> Spend: ...
     async def revoke(self, key_id: str) -> None: ...
     async def list_models(self) -> list[GatewayModel]: ...
+    async def test(self) -> dict[str, Any]: ...
+
+
+LlmGateway = GatewayAdapter
 
 
 @runtime_checkable
@@ -186,11 +211,13 @@ class Notifier(Protocol):
 
 
 __all__ = [
+    "GATEWAY_CAPABILITIES",
     "AgentBackend",
     "CdAdapter",
     "CiAdapter",
     "Executor",
     "GatewayAdapter",
+    "LlmGateway",
     "MemoryAdapter",
     "Notifier",
     "ScmAdapter",

@@ -52,6 +52,17 @@ and *add a connector* for the rest. `GET /connectors/types` reads the adapter re
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
 draws the form from it) and its **secret fields**.
 
+**Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
+SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
+([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
+console shows `set · rotated 3 d ago by x`, with *Replace* (type a new value) and *Clear*. An
+operator who prefers a vault can instead give a **reference** (`env:NAME`, or a plugin scheme) behind
+*use a reference instead*. The API: `secret_values` on create or update, `PUT|DELETE
+/orgs/{org}/connectors/{name}/secrets/{field}` (the organisation's administrator) and
+`PUT|DELETE /projects/{id}/connectors/{kind}/secrets/{field}` (`connector:write`). If the deployment
+holds no secrets key, typing a value answers 409 and says so ([deployment](deployment.md#secrets)).
+An org connector can be edited with `PATCH /orgs/{org}/connectors/{name}`.
+
 Until a project can run, its overview opens on a **getting started** list: provisioned, a workflow
 published, each required capability covered (by the project's connector, tested, or by the
 platform's default), no configured connector failing its last test, and a first request — each
@@ -91,7 +102,9 @@ and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operat
 later hardening by the organisation always overrides.
 
 **An MCP server** is a connector of type `mcp`: its URL, and its key by reference
-(`secret_refs: {"token": "env:CONNECTOR_SUPPLIER_KEY"}`). It declares no operation — they are
+(`secret_refs: {"token": "env:CONNECTOR_SUPPLIER_KEY"}`); the token is sent as a Bearer by default, or as
+`Basic base64(username:token)` with `auth_scheme: basic` and a `username`
+([Atlassian's Rovo MCP Server](integrations.md#atlassians-rovo-mcp-server-as-a-connector)). It declares no operation — they are
 **discovered**: `POST /orgs/{org}/connectors/{name}/discover` (or *discover* in the console) runs
 `initialize` and `tools/list` over Streamable HTTP — JSON or SSE answers, the session the server
 gives, every page of the list — and returns the diff. **A new tool is born closed**
@@ -312,6 +325,25 @@ curl         $API/projects/acme:hr/workflows                                    
   paused item moves at once, its pin follows the new version, and its timeline shows
   `workitem.migrated`; if its state changed in between, the migration is refused
   (`workitem.migration_refused`) and the item carries on, on its own version.
+
+### Bringing a project to a newer template version
+
+A project receives its template's workflows once, when it is born; a newer template version does
+not reach it by itself. To adopt one (for instance `dev-complex` version 2 of
+`github-software-delivery` 1.1.0, which adds a documentation step), publish the template's YAML as
+the workflow's next version, from the console's YAML tab or the API with the version you are
+replacing as `base_version`; the catalogue agents the workflow names install themselves
+(ADR 0040). The running Choregos must already know the gates the YAML uses, or validation refuses
+it.
+
+```bash
+curl -X PUT "$API/projects/acme:dev/workflows/dev-complex" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --rawfile y dev-complex.yaml '{yaml: $y, base_version: 1}')"
+```
+
+Running items stay pinned to their version until they are migrated (see above); every state of
+the old version exists in the new one, so no `state_mapping` is needed.
 
 ### Editing a workflow without rewriting it
 
@@ -561,8 +593,12 @@ curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
 In the console, **Agents → New agent** opens a full page (`/agents/new`), in two steps:
 
 1. **Describe.** Two fields: the *name* and *what it should do* (ten characters at least; it becomes the
-   agent's description). **Start from a blank form** goes on; **Or add one from the catalogue** goes
-   back to the catalogue's drawer.
+   agent's description). **Draft it for me** asks a model for a first version (see below) and goes on
+   with the form pre-filled: instructions, suggested skills, knowledge bases and tools (their sections
+   open), the sample of **Try it**, and, above the form, what the platform changed in the draft. It
+   saves nothing. If the draft fails (too many drafts in a minute, gateway down), the page says so.
+   **Start from a blank form** goes on empty; **Or add one from the catalogue** goes back to the
+   catalogue's drawer.
 2. **Configure.** The *basics* are always open: name, slug (derived from the name, editable until the
    agent exists, then fixed; `new` is refused because `/agents/new` is a page), description and
    instructions. The seven other sections are folded and each says its value in one line: model and
@@ -594,6 +630,30 @@ An agent carries **skills** — a folder with a `SKILL.md` whose header gives it
 ```bash
 curl -X POST $API/orgs/acme/skills/import -H 'Content-Type: application/zip' --data-binary @onboarding.zip
 ```
+
+### Draft an agent from a description
+
+Writing instructions is the hard part, so the platform can propose a first version
+(`POST /orgs/acme/agent-drafts`, `agent:manage`):
+
+```bash
+curl -X POST $API/orgs/acme/agent-drafts -d '{"display_name": "Release notes writer",
+  "description": "Writes release notes from the pull requests merged since the last tag."}'
+```
+
+The answer is an `AgentDraft`: a slug, a `spec` (numbered instructions, suggested skills, knowledge
+bases, connectors and tool patterns, limits, an eval case or two), a `sample` work item for **Try
+it**, `notes` and the `model` that wrote it. **A draft is a proposal and is never saved**: a person
+reads it, edits it and creates the agent (`POST /orgs/acme/agents`) themselves. One model call on the
+gateway, capped at 2,500 output tokens and 60 seconds, with the instructions of the catalogue's
+`agent-drafter` — or the organisation's own version of it, once installed and edited, as for the
+knowledge distiller. The model sees the description (marked as data) and only the names and one-line
+descriptions of the skills, knowledge bases and connectors the organisation has; anything it suggests
+beyond them is dropped and listed in `notes`, limits are clamped, and instructions that use a template
+variable outside the sandbox's list are emptied with a note. Ten drafts a minute per person (429 with
+`Retry-After`); a gateway failure is a 502. The slug `new` is reserved (422): `/agents/new` is the
+console's page. The drafting model call appears in the gateway's logs under `agent-drafter`, not in
+Choregos' spend ledger.
 
 A skill **declares no permission**: an `allowed-tools` field is refused, because what an agent may
 call is decided by its version and its project, never by a file it reads. An archive that leaves
@@ -652,8 +712,89 @@ and the proposals of the run follow it, and the memory MCP server — which serv
 memory — is only handed to a run whose scope is the project.
 
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
-an override that widens is refused (`422`). Creating, publishing and revoking need
-`agent:manage` (organisation administrators); a revocation is final.
+an override that widens is refused (`422`). A revocation is final.
+
+### Who owns an agent, who may change it
+
+An agent has a **scope** ([ADR 0061](adr/0061-agent-ownership-scopes-and-forks.md)):
+
+| scope | what it is | changed by |
+| :-- | :-- | :-- |
+| `platform` | a **common** agent, installed from the built-in catalogue | an `org_admin` only |
+| `org` | an agent shared by every project, written by the organisation | an `org_admin` |
+| `project` | one project's agent; it runs only in that project | that project's `project_owner`, or an `org_admin` |
+| `personal` | someone's own agent: drafts, experiments | its owner, or an `org_admin` |
+
+The server decides — the console only shows its answer. Each agent carries `can`
+(`publish`, `manage`, `pin`, `fork_scopes`) and, when something is refused, `cannot_reason`, one
+sentence saying why and what to do instead ("`developer` is a common agent: only an org_admin changes
+it; fork it into your project or your own agents to extend it"). The matrix, by who may:
+
+| action | common | organisation | project P | personal (owner U) |
+| :-- | :-- | :-- | :-- | :-- |
+| see | any member | any member | members of P, org_admin | U, org_admin |
+| create | org_admin (catalogue) | org_admin | P's project_owner, org_admin | any developer and above (becomes U) |
+| publish a version, edit, lifecycle | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
+| suspend, revoke, transfer, clients | org_admin | org_admin | P's project_owner, org_admin | U, org_admin |
+| pin on project Q | Q's project_owner | Q's project_owner | only Q = P | refused (`422`): promote or fork first |
+| trial run | `item:control` on the trial project | same | trial project must be P | U only |
+| fork into a scope | whoever sees it and may create in that scope | same | same | same |
+
+An agent you may not see is a **404**, not a 403: a personal agent of someone else does not exist for
+you. `GET /orgs/{org}/agents` returns only what you may see, and takes `?scope=` and `?project=`.
+
+```bash
+# a developer's own agent, then a project owner's
+curl -X POST $API/orgs/acme/agents -d '{"slug": "my-helper", "display_name": "Mine", "scope": "personal", "spec": {...}}'
+curl -X POST $API/orgs/acme/agents -d '{"slug": "hr-helper", "display_name": "HR", "scope": "project", "project": "hr", "spec": {...}}'
+```
+
+**A personal agent never runs in a project's workflow, and a project's agent runs only in its
+project**: a process a whole team runs must not depend on one person's agent. Pinning one (`422`),
+publishing a workflow that names one (`422`, naming the agent, its scope and the fix) and starting a
+run with one (the stage stops, without retry) are all refused. A personal agent runs in **trials**
+(`POST /orgs/{org}/agent-trials`, which needs `item:control` on the trial project and the right to
+create a personal agent).
+
+**Fork** a common agent to extend it:
+
+```bash
+curl -X POST $API/orgs/acme/agents/developer/fork \
+  -d '{"slug": "hr-developer", "scope": "project", "project": "hr", "version": 3}'
+```
+
+The fork's version 1 is a byte-for-byte copy of the source's version 3 (the latest when `version` is
+left out — same spec, same checksum). It records `forked_from` and inherits nothing else: no pin, no
+client, no metrics. The source is never touched. The fork reports its upstream: `forked_from` says
+`behind: true` when the source published a newer version — nothing re-bases by itself; publishing the
+fork's next version from the upstream's is your decision. A developer forks into `personal`, a project
+owner into their project, an `org_admin` anywhere; nothing is forked into the common agents.
+
+**Promote** an agent to hand it over (`POST /orgs/{org}/agents/{slug}/scope`):
+
+```bash
+curl -X POST $API/orgs/acme/agents/my-helper/scope -d '{"scope": "project", "project": "hr"}'
+```
+
+A personal agent goes to a project (its owner **and** that project's owner, or an `org_admin`) or to
+the organisation (`org_admin`); a project's agent to the organisation (`org_admin`); an organisation
+agent into one project (`org_admin`, refused while another project pins or names it). A common agent
+never moves. Existing agents were migrated by ADR 0061: those installed from the catalogue are common,
+every other one is an organisation agent — nothing changed hands and no pin moved.
+
+In the console, `/agents` carries a scope badge per agent (Common, Organisation, Project · name,
+Personal) and filter chips by scope. An agent's page disables its edit, publish, lifecycle and
+suspend controls when the API says `can.publish` or `can.manage` is false, and prints `cannot_reason`
+in the page itself (never only in a tooltip). **Fork** opens a dialog limited to `can.fork_scopes`
+(new slug, project, source version) and lands on the fork; a fork that is behind its source shows a
+banner, and whoever holds `can.manage` on a personal or project agent finds **Change scope** on its
+overview. A project's agents page lists the agents that project owns first, and its "Pin an agent"
+list leaves out personal agents and other projects' agents. `/agents/new` asks for a scope among those
+the person's memberships can create; the API stays the judge.
+
+The permissions behind it: `agent:manage` (org_admin: organisation and common agents),
+`agent:project_manage` (project_owner: the agents of that project) and `agent:create_personal`
+(developer, release captain, project owner: a personal agent).
 
 An agent also has a **lifecycle**, apart from that operational status: `draft` (no project pins
 it, no run starts with it) → `active` → `deprecated` (it still runs; a pin of it answers with a
@@ -697,11 +838,14 @@ background**, in a child process that sees none of the API's secrets and is stop
 gives its text without headings, and a scanned PDF fails (no OCR). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
 twice is one document. `scope` says who uses the base: `org`, `projects` (the listed ones) or
-`groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage`. In the
+`groups` (people of the listed IdP groups, never a run). Curating needs `agent:manage` (an organisation administrator), or, for a base created from a project
+(`POST /projects/{id}/knowledge`, `owner_project`), `project:write` on that project: its owners feed,
+sync, distil and archive it, and only an administrator widens its scope. In the
 console there are two ways in. **From a project**: its sidebar's **Knowledge** section lists what its
 runs are served (the project's own bases, then the organisation-wide ones, read-only from there;
 a group's base is never served to a run, so it is not listed), and **New knowledge base** creates one
-served to this project's runs only (there is no scope to choose); the base opens inside the project,
+served to this project's runs only (there is no scope to choose), owned by the project: its owners
+(and organisation administrators) curate it; the base opens inside the project,
 where you upload documents or add a source. **From the organisation**: **Knowledge** (`/knowledge`) is
 the registry of every base, filterable by scope (organisation-wide, project, group), with who uses
 each one; its creation form is where a base is shared with several projects (picked from a list) or
@@ -728,7 +872,8 @@ by file name or title, expected to answer them); `POST …/eval/run` measures **
 base's page shows it, per question.
 
 A base also **syncs from sources** (`POST …/sources`), each on its own Temporal loop
-(`KnowledgeSync`, every `interval_minutes`, or now with `POST …/sources/{id}/sync`):
+(`KnowledgeSync`; the refresh is set per source, see below; now with `POST …/sources/{id}/sync`, or
+for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on the page):
 
 - **SharePoint or OneDrive**: create an organisation connector of capability `documents`, type
   `sharepoint` (`tenant_id`, `client_id`, `secret_refs.client_secret`), for an Entra application
@@ -740,10 +885,38 @@ A base also **syncs from sources** (`POST …/sources`), each on its own Tempora
   to declare one. The API refuses a wrong name and says why: names are lowercase (the message
   suggests the right one), the connector is of another kind (`identity/entra`) or another type, or
   no `documents` connector exists yet (then an organisation administrator declares one).
+- **A Confluence Cloud space or page tree**: create an organisation connector of capability
+  `documents`, type `confluence` (`base_url` = `https://<site>.atlassian.net`, `email`,
+  `secret_refs.api_token`). Use a **dedicated Atlassian service account** (or a Confluence-only
+  user) holding **read** on the spaces to index and nothing else, and create its API token at
+  `id.atlassian.com/manage-profile/security/api-tokens`. A classic token works with `auth: basic`
+  (the default). A *scoped* token needs `auth: scoped` and the site's `cloud_id` (the connector's
+  **test** reports it) and the scopes `read:space:confluence`, `read:page:confluence`,
+  `read:hierarchical-content:confluence`, plus `read:attachment:confluence` when attachments are
+  on. The source names a `space_key` (`ENG`; a personal space starts with `~`) and optionally a
+  `page_id`: that page **and everything under it** (`include_root: false` leaves the page itself
+  out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
+  Options: `include_attachments` (pdf, docx, pptx, xlsx, md, txt, html), `labels` (keep only pages
+  carrying one of them; one request per page). Each sync lists the space once; only pages whose
+  version number changed are downloaded again. A page that is deleted, archived, **moved out of the
+  chosen tree** or **restricted against the account** leaves the base at the next sync. A listing
+  that fails part-way stops the sync and deletes nothing. The source mirrors what the connector's
+  account can read: everything it can read in the space becomes readable by everyone the base is
+  open to, whatever the page restrictions say for other people. A space larger than 5 000 pages is
+  refused until a `page_id` narrows it. Signing in per person (OAuth 2.0, 3LO) is a possible
+  follow-up; today the service account is the identity.
 - **A web site**: an https `url`; same host, under its path, `robots.txt` obeyed, `max_depth` ≤ 5,
   `max_pages` ≤ 500; a host that resolves to a private address is refused.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
   (`*.md` by default).
+
+**Refresh schedule.** A source refreshes in one of three modes (`refresh_mode`): `interval` (every
+`interval_minutes`, 5 minutes to 7 days; the default), `cron` (`refresh_cron` with five fields, for
+example `0 6 * * 1-5`, read in `refresh_timezone`, for example `Europe/Paris`; at least 5 minutes
+between two fires) or `manual` (only when someone syncs). The page shows `next sync` beside each
+source (an estimate: a worker that is down at the cron minute syncs at its next pass), and **edit
+refresh** changes the mode, with **apply to all sources** to set the same schedule everywhere; the
+change takes effect at once, not at the end of the current wait. A manual sync always runs.
 
 A document deleted at the source leaves the base **and its index** at the next sync. Each source
 shows when it last synced, what it did (added, updated, deleted, skipped and why) and its last
@@ -1001,6 +1174,13 @@ Label a ticket `agent-ready` in your tracker (or create it in Choregos with
 `tracker: internal`). The platform starts one workflow per ticket, with a deterministic id —
 so a webhook delivered twice starts nothing twice. If a webhook is lost, a reconciliation
 pass every 60 seconds catches up.
+
+You can also file a work item yourself. On a project's board, **New work item** opens a drawer: the workflow, the inputs that workflow declares, a title, a description, a size and an optional budget (which only tightens the workflow's). MCP does the same with `create_work_item`. With
+an internal tracker (or none) the platform mints the key. With GitHub, Jira or GitLab it creates
+the issue there first, labelled `source:choregos` and never `agent-ready`, and records the work
+item under the issue's key, with its creation inputs, workflow and budget (ADR 0059). The tracker's
+credentials need the right to create issues (GitHub App: *Issues: read and write*; Jira: create
+issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
 
 ```bash
 choregos items list billing-api

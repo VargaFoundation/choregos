@@ -31,7 +31,7 @@ from ..gates import gate_needs
 
 #: Les rôles dont le playbook travaille dans un dépôt : ils lisent un diff, poussent une branche.
 ROLES_DANS_UN_DEPOT = frozenset(
-    {"implement", "fix_ci", "address_review", "review", "release_notes", "architect"}
+    {"implement", "fix_ci", "address_review", "review", "release_notes", "architect", "document"}
 )
 #: Ceux qui regardent la production.
 ROLES_EN_PRODUCTION = frozenset({"verify_prod"})

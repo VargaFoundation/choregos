@@ -247,6 +247,7 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "warm_pool": {"type": "string", "default": "choregos-runner"},
                 "assignment_port": _ENTIER,
                 "runtime_class": _TEXTE,
+                "pool_image": _TEXTE,
                 "max_active": _ENTIER,
                 "env_from_secrets": {"type": "array", "items": _TEXTE},
             }
@@ -303,6 +304,18 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("master_key",),
     ),
+    ("gateway", "openai-compatible"): ConnectorTypeSpec(
+        "OpenAI-compatible gateway (discovery only: no virtual keys, no cap, no measured cost)",
+        ("gateway",),
+        _objet(
+            {
+                "base_url": _TEXTE,
+                "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+                "timeout_s": _ENTIER,
+            }
+        ),
+        ("api_key", "run_key"),
+    ),
     # Knowledge base sources (S33-04, ADR 0051): one Entra application holding `Sites.Selected`,
     # granted `read` on the chosen sites only — never `Files.Read.All` nor `Sites.Read.All`.
     ("documents", "sharepoint"): ConnectorTypeSpec(
@@ -318,6 +331,29 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("tenant_id", "client_id"),
         ),
         ("client_secret",),
+    ),
+    ("documents", "confluence"): ConnectorTypeSpec(
+        "Atlassian Confluence Cloud (read)",
+        ("documents",),
+        _objet(
+            {
+                "base_url": {
+                    "type": "string",
+                    "pattern": r"^https://[a-z0-9-]+\.atlassian\.net/?$",
+                    "description": "the Atlassian Cloud site, https://<site>.atlassian.net",
+                },
+                "email": {"type": "string", "description": "the service account the API token belongs to"},
+                "auth": {
+                    "type": "string",
+                    "enum": ["basic", "scoped"],
+                    "default": "basic",
+                    "description": "`scoped` for a scoped API token: it is called through api.atlassian.com",
+                },
+                "cloud_id": {"type": "string", "description": "scoped tokens only; `test` reports it"},
+            },
+            ("base_url", "email"),
+        ),
+        ("api_token",),
     ),
     ("identity", "entra"): ConnectorTypeSpec(
         "Microsoft Entra ID (Graph)",
@@ -503,6 +539,13 @@ _SPECS_LIVREES: dict[tuple[str, str], ConnectorTypeSpec] = {
         _objet(
             {
                 "url": {"type": "string", "description": "the server's MCP endpoint, https"},
+                "auth_scheme": {
+                    "type": "string",
+                    "enum": ["bearer", "basic"],
+                    "default": "bearer",
+                    "description": "how the token is sent: Bearer, or Basic base64(username:token)",
+                },
+                "username": {"type": "string", "description": "the account, for `basic` (an email)"},
                 "timeout_s": {"type": "number", "default": 30},
             },
             ("url",),
@@ -530,7 +573,11 @@ def _client_du_faux_mcp(cfg: dict[str, Any]) -> Any:
     if FAUX_MCP is None:
         FAUX_MCP = FakeMcpServer()
     return ClientMcp(
-        cfg.get("url", "http://fake-mcp.test/mcp"), token=cfg.get("token", ""), transport=FAUX_MCP.transport()
+        cfg.get("url", "http://fake-mcp.test/mcp"),
+        token=cfg.get("token", ""),
+        auth_scheme=cfg.get("auth_scheme", "bearer"),
+        username=cfg.get("username", ""),
+        transport=FAUX_MCP.transport(),
     )
 
 
@@ -887,6 +934,9 @@ def _register_builtins() -> None:
             # The template's RuntimeClass, which the chart sets from `runner.runtimeClass`.
             runtime_class=cfg.get("runtime_class", os.environ.get("CHOREGOS_RUNNER_RUNTIME_CLASS", ""))
             or None,
+            # The chart builds the warm pool's template and the orchestrator's `CHOREGOS_RUNNER_IMAGE`
+            # from the same value: a run asking for another image cannot be honoured.
+            pool_image=cfg.get("pool_image", os.environ.get("CHOREGOS_RUNNER_IMAGE", "")) or None,
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
             env_from_secrets=cfg.get("env_from_secrets")
             or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
@@ -936,9 +986,25 @@ def _register_builtins() -> None:
             enterprise_tags=cfg.get("enterprise_tags", False),
         )
     )
+    from .gateway.openai_compatible import OpenAiCompatibleGateway
+
+    register("gateway", "openai-compatible", _SPECS_LIVREES[("gateway", "openai-compatible")])(
+        lambda cfg: OpenAiCompatibleGateway(
+            cfg.get("base_url", _env("CHOREGOS_GATEWAY_URL", "")),
+            api_key=cfg.get("api_key", _env("CHOREGOS_GATEWAY_MASTER_KEY", "")),
+            run_key=cfg.get("run_key", ""),
+            headers=cfg.get("headers", {}),
+            timeout=float(cfg.get("timeout_s", 20)),
+        )
+    )
     from .documents.graph import GraphDocumentsConnector
 
     register("documents", "sharepoint", _SPECS_LIVREES[("documents", "sharepoint")])(GraphDocumentsConnector)
+    from .documents.confluence import ConfluenceDocumentsConnector
+
+    register("documents", "confluence", _SPECS_LIVREES[("documents", "confluence")])(
+        ConfluenceDocumentsConnector
+    )
     from .identity import EntraIdentity
 
     register("identity", "entra", _SPECS_LIVREES[("identity", "entra")])(
@@ -968,7 +1034,11 @@ def _register_builtins() -> None:
 
     register("mcp", "mcp", _SPECS_LIVREES[("mcp", "mcp")])(
         lambda cfg: ClientMcp(
-            cfg["url"], token=cfg.get("token", ""), timeout_s=float(cfg.get("timeout_s", 30))
+            cfg["url"],
+            token=cfg.get("token", ""),
+            auth_scheme=cfg.get("auth_scheme", "bearer"),
+            username=cfg.get("username", ""),
+            timeout_s=float(cfg.get("timeout_s", 30)),
         )
     )
     register("notify", "slack", _SPECS_LIVREES[("notify", "slack")])(

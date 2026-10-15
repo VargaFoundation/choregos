@@ -246,13 +246,35 @@ export type Connector = {
     [key: string]: unknown;
   };
   secret_ref?: string | null;
-  /** the secrets, field by field, as references (`env:NAME`) — never their value (ADR 0034) */
+  /** the secrets, field by field, as references (`env:NAME`, or `store:...` for a sealed value) — never their value (ADR 0034, ADR 0058) */
   secret_refs?: {
     [key: string]: string;
   };
+  /** one state per configured secret field: where it comes from and when it was last set */
+  secrets?: Array<ConnectorSecretState>;
   status: "unknown" | "ok" | "degraded" | "error";
   last_check_at?: string | null;
   last_error?: string | null;
+};
+
+/** What the console may know of one secret field. Never its value (ADR 0058). */
+export type ConnectorSecretState = {
+  field: string;
+  source: "store" | "reference";
+  /** only for source=reference: the reference itself (`env:NAME`) */
+  reference?: string | null;
+  /** only for source=store: +1 at every set; null when the sealed value is gone */
+  version?: number | null;
+  rotated_at?: string | null;
+  rotated_by?: string | null;
+};
+
+export type SecretValue = {
+  value: string;
+};
+
+export type SecretsRewrap = {
+  rewrapped: number;
 };
 
 export type ConnectorUpsert = {
@@ -263,6 +285,10 @@ export type ConnectorUpsert = {
   };
   secret_ref?: string | null;
   secret_refs?: {
+    [key: string]: string;
+  };
+  /** secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058). */
+  secret_values?: {
     [key: string]: string;
   };
 };
@@ -324,6 +350,7 @@ export type OrgConnector = {
   secret_refs?: {
     [key: string]: string;
   };
+  secrets?: Array<ConnectorSecretState>;
   status: string;
   last_check_at?: string | null;
   last_error?: string | null;
@@ -341,6 +368,23 @@ export type OrgConnectorCreate = {
   secret_refs?: {
     [key: string]: string;
   };
+  /** secret values typed in the console, field -> value: sealed, never returned (ADR 0058) */
+  secret_values?: {
+    [key: string]: string;
+  };
+};
+
+/** Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's. */
+export type OrgConnectorUpdate = {
+  config?: {
+    [key: string]: unknown;
+  } | null;
+  secret_refs?: {
+    [key: string]: string;
+  } | null;
+  secret_values?: {
+    [key: string]: string;
+  } | null;
 };
 
 export type OperationPatch = {
@@ -676,6 +720,7 @@ export type AgentTrial = {
 };
 
 export type AgentCreate = {
+  /** `new` is reserved: the console's `/agents/new` page would shadow it (422) */
   slug: string;
   kind?: "internal" | "external";
   display_name: string;
@@ -683,6 +728,71 @@ export type AgentCreate = {
   spec?: AgentSpec;
   /** a draft is neither pinned nor run until it is activated */
   lifecycle?: "draft" | "active";
+  /** who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue */
+  scope?: "org" | "project" | "personal";
+  /** the project's slug: required for, and only for, a `project` agent */
+  project?: string | null;
+};
+
+export type AgentFork = {
+  /** slugs are unique per organisation: a fork takes a new one */
+  slug: string;
+  display_name?: string | null;
+  scope: "org" | "project" | "personal";
+  /** required for, and only for, a `project` fork */
+  project?: string | null;
+  /** the source version to copy; absent, its latest */
+  version?: number | null;
+};
+
+export type AgentScopeChange = {
+  scope: "org" | "project" | "personal";
+  /** required for, and only for, a move to a `project` */
+  project?: string | null;
+};
+
+/** What a fork was copied from, and whether the source moved on since (ADR 0061). */
+export type AgentUpstream = {
+  slug: string;
+  /** the version the fork copied */
+  version: number;
+  /** absent when the source is no longer visible to the caller */
+  scope?: "platform" | "org" | "project" | "personal" | null;
+  latest_version?: number | null;
+  /** the source published a version newer than the one copied */
+  behind?: boolean;
+  /** false when the source is deleted or not visible to the caller */
+  available?: boolean;
+};
+
+/** What the caller may do with an agent, decided by the server (ADR 0061). */
+export type AgentPermissions = {
+  /** publish a version, edit it, move it through its life */
+  publish?: boolean;
+  /** suspend, revoke, change its owner, attach clients */
+  manage?: boolean;
+  /** pin it on a project the caller owns */
+  pin?: boolean;
+  fork_scopes?: Array<"org" | "project" | "personal">;
+};
+
+export type AgentDraftRequest = {
+  display_name: string;
+  /** what the agent is for; data for the drafting model */
+  description: string;
+};
+
+/** A proposal that is never saved; the builder is pre-filled with it and a person creates the agent. */
+export type AgentDraft = {
+  display_name: string;
+  slug: string;
+  description: string;
+  spec: AgentSpec;
+  sample: AgentSampleInput;
+  /** what the platform changed or dropped in the model's answer */
+  notes?: Array<string>;
+  /** the model that drafted it */
+  model: string;
 };
 
 /** An agent the platform's catalogue offers (ADR 0040), and its state in the organisation. */
@@ -705,6 +815,8 @@ export type AgentCatalogueEntry = {
   installed_version?: number | null;
   /** an agent of the organisation has this name and does not come from the catalogue */
   own_agent?: boolean;
+  /** the scope of the agent of this name in the organisation, if any (ADR 0061) */
+  scope?: "platform" | "org" | "project" | "personal" | null;
   update_available?: boolean;
   /** false for a client the door does not accept yet (OAuth, registered client, https) */
   offered?: boolean;
@@ -762,6 +874,15 @@ export type Agent = {
   last_run_at?: string | null;
   /** no run for 60 days (since its creation if it never ran) */
   unused?: boolean;
+  /** who owns it (ADR 0061) */
+  scope?: "platform" | "org" | "project" | "personal";
+  /** the slug of its project, for a `project` agent */
+  project?: string | null;
+  /** set on a fork */
+  forked_from?: AgentUpstream | null;
+  can?: AgentPermissions;
+  /** the server's sentence for what the caller may not do: shown as is, never guessed from roles */
+  cannot_reason?: string | null;
 };
 
 export type AgentLifecycleChange = {
@@ -1016,6 +1137,13 @@ export type KnowledgeBaseCreate = {
   serving_mode?: "files" | "index";
 };
 
+export type ProjectKnowledgeBaseCreate = {
+  slug: string;
+  name: string;
+  description?: string | null;
+  serving_mode?: "files" | "index";
+};
+
 export type KnowledgeBasePatch = {
   name?: string | null;
   description?: string | null;
@@ -1076,6 +1204,8 @@ export type KnowledgeBase = {
   eval_set?: Array<KnowledgeEvalCase>;
   /** returned by the reading of one base */
   sources?: Array<KnowledgeSource> | null;
+  /** the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base */
+  owner_project?: string | null;
   /** the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at` */
   distillation?: {
     [key: string]: unknown;
@@ -1097,15 +1227,21 @@ export type KnowledgeBase = {
 };
 
 export type KnowledgeSourceCreate = {
-  kind: "sharepoint" | "web" | "git";
+  kind: "sharepoint" | "confluence" | "web" | "git";
   name: string;
-  /** `sharepoint`: the organisation connector of capability `documents` */
+  /** `sharepoint`, `confluence`: the organisation connector of capability `documents` */
   connector?: string | null;
-  /** `sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
+  /** `sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
   config?: {
     [key: string]: unknown;
   };
   interval_minutes?: number;
+  /** `interval`: every `interval_minutes`; `cron`: `refresh_cron` in `refresh_timezone`; `manual`: only on demand (S39-19) */
+  refresh_mode?: "interval" | "cron" | "manual";
+  /** five fields (minute hour day month weekday); at least 5 minutes between two fires */
+  refresh_cron?: string | null;
+  /** IANA name */
+  refresh_timezone?: string;
 };
 
 export type KnowledgeSourcePatch = {
@@ -1114,17 +1250,26 @@ export type KnowledgeSourcePatch = {
     [key: string]: unknown;
   } | null;
   interval_minutes?: number | null;
+  refresh_mode?: "interval" | "cron" | "manual" | null;
+  refresh_cron?: string | null;
+  refresh_timezone?: string | null;
 };
 
 export type KnowledgeSource = {
   id: string;
-  kind: "sharepoint" | "web" | "git";
+  kind: "sharepoint" | "confluence" | "web" | "git";
   name: string;
   connector?: string | null;
   config?: {
     [key: string]: unknown;
   };
   interval_minutes: number;
+  refresh_mode?: "interval" | "cron" | "manual";
+  refresh_cron?: string | null;
+  refresh_timezone?: string;
+  /** an estimate (the worker may be down); null in manual mode or when due */
+  next_sync_at?: string | null;
+  sync_requested_at?: string | null;
   status: "idle" | "syncing" | "failed";
   last_synced_at?: string | null;
   last_error?: string | null;
@@ -2078,7 +2223,10 @@ export interface Operations {
   remaining?: number;
 } };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
+  changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
   checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
+  clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
+  clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
@@ -2088,6 +2236,7 @@ export interface Operations {
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
+  createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
   createSkill: { method: "POST"; path: "/orgs/{org}/skills"; body: SkillFiles; response: Skill };
   createTemplate: { method: "POST"; path: "/templates"; body: TemplateUpsert; response: TemplateSummary };
   createWorkItem: { method: "POST"; path: "/projects/{id}/work-items"; body: WorkItemCreate; response: WorkItem };
@@ -2102,14 +2251,21 @@ export interface Operations {
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: never; response: KnowledgeBase };
+  draftAgent: { method: "POST"; path: "/orgs/{org}/agent-drafts"; body: AgentDraftRequest; response: AgentDraft };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
   edition: { method: "GET"; path: "/edition"; body: never; response: {
   edition: "community" | "enterprise";
   features: Array<string>;
+  /** the core's version */
   version: string;
+  /** who publishes the running edition, as announced by its plugin; null in the community edition */
+  publisher?: string | null;
+  /** the version of the edition plugin; null in the community edition */
+  edition_version?: string | null;
 } };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
+  forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
 }; response: void };
@@ -2331,12 +2487,16 @@ export interface Operations {
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
+  rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
+  setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
+  setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
+  syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
@@ -2352,6 +2512,7 @@ export interface Operations {
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
+  updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
   updateTemplate: { method: "PUT"; path: "/templates/{name}"; body: TemplateUpsert; response: TemplateSummary };
   updateWorkItem: { method: "PATCH"; path: "/work-items/{id}"; body: WorkItemUpdate; response: WorkItem };

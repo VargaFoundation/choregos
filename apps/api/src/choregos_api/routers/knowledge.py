@@ -3,14 +3,17 @@
 
 A knowledge base is a curated corpus a human chose; its documents are uploaded here, answered 202
 `pending`, and converted to markdown in the background (`knowledge.conversion`), never inside the
-request. Curating is the organisation administrator's (`agent:manage`); reading follows the base's
-scope (`knowledge.access`).
+request. Curating is the organisation administrator's (`agent:manage`), or the owners' of the project that
+owns the base (`project:write`, S39-14); widening a base's scope stays the administrator's. Reading
+follows the base's scope (`knowledge.access`).
 """
 
 from __future__ import annotations
 
 import contextlib
 import hashlib
+import re
+from collections.abc import Callable
 from dataclasses import asdict
 from functools import partial
 from typing import Annotated
@@ -32,13 +35,15 @@ from ..db.models import (
     OrgConnector,
     Project,
 )
-from ..deps import Db, Me
+from ..deps import Db, Me, ProjectCtx
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
-from ..knowledge.access import can_manage, visible_to
+from ..knowledge import refresh
+from ..knowledge.access import can_curate, can_manage, visible_to
 from ..knowledge.conversion import PENDING, conversions
 from ..knowledge.formats import DocumentRefusedError, accept
 from ..knowledge.index import evaluate, reindex_base, search, search_mode
-from ..knowledge.sync import SOURCE_CONNECTOR_TYPES
+from ..knowledge.sync import CONNECTED_KINDS, SOURCE_CONNECTOR_TYPES
+from ..rbac import Permission
 from ..schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
@@ -50,6 +55,7 @@ from ..schemas.knowledge import (
     KnowledgeSourceCreate,
     KnowledgeSourceDto,
     KnowledgeSourcePatch,
+    ProjectKnowledgeBaseCreate,
 )
 from ..temporal import get_temporal, knowledge_sync_id
 
@@ -79,6 +85,14 @@ def _member(principal: Me, org: str) -> None:
 def _manage(principal: Me, org: str) -> None:
     if not can_manage(principal, org):
         raise forbidden("curating a knowledge base needs the org_admin role")
+
+
+def _curate(principal: Me, org: str, base: KnowledgeBase) -> None:
+    """Feeding a base: an organisation administrator, or the owner of the project that owns it."""
+    if not can_curate(principal, org, base):
+        raise forbidden(
+            "curating this knowledge base needs the org_admin role, or project_owner of its project"
+        )
 
 
 async def _base(session: AsyncSession, principal: Me, org: str, slug: str) -> KnowledgeBase:
@@ -175,6 +189,7 @@ async def _dto(
         if with_documents
         else None,
         distillation=base.distillation,
+        owner_project=base.owner_project,
     )
 
 
@@ -201,6 +216,11 @@ async def _source_dto(session: AsyncSession, source: KnowledgeSource) -> Knowled
         connector=source.connector,
         config=dict(source.config or {}),
         interval_minutes=source.interval_minutes,
+        refresh_mode=source.refresh_mode,
+        refresh_cron=source.refresh_cron,
+        refresh_timezone=source.refresh_timezone,
+        next_sync_at=source.next_sync_at,
+        sync_requested_at=source.sync_requested_at,
         status=source.status,
         last_synced_at=source.last_synced_at,
         last_error=source.last_error,
@@ -278,6 +298,55 @@ async def create_knowledge_base(
     return await _dto(session, base, with_documents=True)
 
 
+@router.post(
+    "/projects/{id}/knowledge",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="createProjectKnowledgeBase",
+)
+async def create_project_knowledge_base(
+    ctx: ProjectCtx, body: ProjectKnowledgeBaseCreate, session: Db
+) -> KnowledgeBaseDto:
+    """A base owned by this project (S39-14): served to its runs only, curated by its owners
+    (`project:write`). Its reach is the organisation administrator's to widen."""
+    ctx.require(Permission.PROJECT_WRITE)
+    organisation = await _organisation(session, ctx.org_slug)
+    if (
+        await session.execute(
+            select(KnowledgeBase.id).where(
+                KnowledgeBase.org_id == organisation.id, KnowledgeBase.slug == body.slug
+            )
+        )
+    ).first():
+        raise conflict(f"knowledge base `{body.slug}` already exists")
+    base = KnowledgeBase(
+        org_id=organisation.id,
+        slug=body.slug,
+        name=body.name,
+        description=body.description,
+        scope="projects",
+        projects=[ctx.project.slug],
+        groups=[],
+        owner_project=ctx.project.slug,
+        serving_mode=body.serving_mode,
+        status="active",
+        created_by=ctx.principal.email,
+    )
+    session.add(base)
+    await session.flush()
+    await record(
+        session,
+        ctx.principal,
+        "knowledge.create",
+        org_id=organisation.id,
+        target_type="knowledge_base",
+        target_id=base.id,
+        scope=base.scope,
+        owner_project=ctx.project.slug,
+    )
+    return await _dto(session, base, with_documents=True)
+
+
 @router.get("/orgs/{org}/knowledge/{slug}", response_model=KnowledgeBaseDto, operation_id="getKnowledgeBase")
 async def get_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     _member(principal, org)
@@ -290,9 +359,14 @@ async def get_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -
 async def update_knowledge_base(
     org: str, slug: Slug, body: KnowledgeBasePatch, session: Db, principal: Me
 ) -> KnowledgeBaseDto:
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
     changes = body.model_dump(exclude_unset=True)
+    widens = any(field in changes for field in ("scope", "projects", "groups"))
+    if widens:
+        # Who reads and who is served a base is the organisation's call, not its owning project's.
+        _manage(principal, org)
+    else:
+        _curate(principal, org, base)
     scope = changes.get("scope", base.scope)
     projects = changes.get("projects", base.projects) or []
     groups = changes.get("groups", base.groups) or []
@@ -308,6 +382,9 @@ async def update_knowledge_base(
     base.scope = scope
     base.projects = sorted(set(projects)) if scope == "projects" else []
     base.groups = sorted(set(groups)) if scope == "groups" else []
+    if widens:
+        # An administrator re-scoped it: it is no longer the owning project's to curate.
+        base.owner_project = None
     await session.flush()
     await record(
         session,
@@ -339,13 +416,13 @@ async def upload_knowledge_document(
 
     The same bytes twice are one document: the second upload answers the first (200).
     """
-    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     settings = get_settings()
     cap = settings.knowledge_max_upload_mib * 1024 * 1024
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > cap + ENVELOPE:
         raise _too_large(settings.knowledge_max_upload_mib)
-    base = await _base(session, principal, org, slug)
     if base.status != "active":
         raise conflict(f"knowledge base `{slug}` is archived")
     async with request.form(max_files=1, max_fields=2) as form:
@@ -450,8 +527,8 @@ async def get_knowledge_document(
 async def delete_knowledge_document(
     org: str, slug: Slug, document_id: str, session: Db, principal: Me
 ) -> None:
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     document = await _document(session, base, document_id)
     await session.delete(document)
     await record(
@@ -475,8 +552,8 @@ async def convert_knowledge_document(
     org: str, slug: Slug, document_id: str, session: Db, principal: Me
 ) -> KnowledgeDocumentDto:
     """Converts a document again — after a failure, or a converter upgrade."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     document = await _document(session, base, document_id)
     if document.status in {PENDING, "converting"}:
         raise conflict(f"document `{document_id}` is already being converted")
@@ -516,8 +593,8 @@ async def search_knowledge_base(
 async def reindex_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     """Cuts and embeds every ready document again, in the background (after pgvector was installed,
     or the embedding model changed)."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     if base.serving_mode != "index":
         raise conflict(f"knowledge base `{slug}` is served as files: switch it to `index` first")
     dto = await _dto(session, base, with_documents=True)
@@ -535,8 +612,8 @@ async def put_knowledge_eval_set(
     org: str, slug: Slug, body: KnowledgeEvalSet, session: Db, principal: Me
 ) -> KnowledgeBaseDto:
     """The base's eval set: questions, and the documents expected to answer each."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     base.eval_set = [case.model_dump() for case in body.cases]
     base.eval_result = None
     await session.flush()
@@ -550,8 +627,8 @@ async def put_knowledge_eval_set(
 )
 async def run_knowledge_eval(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
     """Runs the eval set against the index: recall@5, per question. Shown on the base's page."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     if base.serving_mode != "index":
         raise conflict(f"knowledge base `{slug}` is served as files: it has no index to evaluate")
     if not base.eval_set:
@@ -618,6 +695,80 @@ async def _documents_connector(
     raise unprocessable(f"no `documents` connector `{name}` in {organisation.slug} ({listing})")
 
 
+def _sharepoint_config(config: dict[str, object]) -> dict[str, object]:
+    if not (config.get("site_id") or config.get("drive_id")):
+        raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
+    return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
+
+
+_SPACE_KEY = re.compile(r"^[A-Z0-9~][A-Za-z0-9_~-]{0,254}$")
+
+
+def _confluence_config(config: dict[str, object]) -> dict[str, object]:
+    space = str(config.get("space_key") or "")
+    if not _SPACE_KEY.match(space):
+        raise unprocessable("a Confluence source names a `space_key` (letters and digits, e.g. ENG)")
+    page = config.get("page_id")
+    if page not in (None, "") and not re.fullmatch(r"\d{1,20}", str(page)):
+        raise unprocessable("`page_id` is the number in the page's URL (/pages/<id>/…)")
+    for flag in ("include_root", "include_attachments"):
+        if flag in config and not isinstance(config[flag], bool):
+            raise unprocessable(f"`{flag}` is true or false")
+    labels = config.get("labels") or []
+    if (
+        not isinstance(labels, list)
+        or len(labels) > 20
+        or not all(isinstance(x, str) and 0 < len(x) <= 255 for x in labels)
+    ):
+        raise unprocessable("`labels` is a list of at most 20 labels")
+    out: dict[str, object] = {"space_key": space}
+    if page not in (None, ""):
+        out["page_id"] = str(page)
+    out["include_root"] = bool(config.get("include_root", True))
+    out["include_attachments"] = bool(config.get("include_attachments", False))
+    if labels:
+        out["labels"] = labels
+    return out
+
+
+def _web_config(config: dict[str, object]) -> dict[str, object]:
+    url = _https_url(config, "web")
+    return {
+        "url": url,
+        "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
+        "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
+    }
+
+
+def _git_config(config: dict[str, object]) -> dict[str, object]:
+    url = _https_url(config, "git")
+    ref = str(config.get("ref") or "main")
+    if ref.startswith("-"):
+        raise unprocessable(f"not a git ref: `{ref}`")
+    paths = config.get("paths") or ["*.md"]
+    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+        raise unprocessable("`paths` is a list of glob patterns")
+    return {"url": url, "ref": ref, "paths": paths}
+
+
+def _https_url(config: dict[str, object], kind: str) -> str:
+    url = str(config.get("url") or "")
+    if not url.startswith(_HTTPS):
+        raise unprocessable(f"a {kind} source is reached over https: `{url}`")
+    return url
+
+
+#: One validator per source kind: the configuration it keeps, or the reason it is refused.
+_SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] = {
+    "sharepoint": _sharepoint_config,
+    "confluence": _confluence_config,
+    "web": _web_config,
+    "git": _git_config,
+}
+
+_CONNECTED_WHAT = {"sharepoint": "SharePoint or OneDrive", "confluence": "Confluence"}
+
+
 async def _checked_source_config(
     session: AsyncSession,
     organisation: Organization,
@@ -626,29 +777,11 @@ async def _checked_source_config(
     config: dict[str, object],
 ) -> dict[str, object]:
     """What a source may be: refused here, with its reason, rather than at its first sync."""
-    if kind == "sharepoint":
+    if kind in CONNECTED_KINDS:
         if not connector:
-            raise unprocessable("a SharePoint or OneDrive source names its `documents` connector")
+            raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
         await _documents_connector(session, organisation, connector, kind)
-        if not (config.get("site_id") or config.get("drive_id")):
-            raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
-        return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
-    url = str(config.get("url") or "")
-    if not url.startswith(_HTTPS):
-        raise unprocessable(f"a {kind} source is reached over https: `{url}`")
-    if kind == "web":
-        return {
-            "url": url,
-            "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
-            "max_pages": max(1, min(int(str(config.get("max_pages", 50))), 500)),
-        }
-    ref = str(config.get("ref") or "main")
-    if ref.startswith("-"):
-        raise unprocessable(f"not a git ref: `{ref}`")
-    paths = config.get("paths") or ["*.md"]
-    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
-        raise unprocessable("`paths` is a list of glob patterns")
-    return {"url": url, "ref": ref, "paths": paths}
+    return _SOURCE_VALIDATORS[kind](config)
 
 
 async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) -> KnowledgeSource:
@@ -662,6 +795,36 @@ async def _source(session: AsyncSession, base: KnowledgeBase, source_id: str) ->
     if source is None:
         raise not_found("Knowledge source", source_id)
     return source
+
+
+def _checked_refresh(mode: str, cron: str | None, timezone: str) -> tuple[str | None, str]:
+    """The refresh of a source: refused here, with its reason (a bad cron, a gap under 5 minutes, an
+    unknown time zone). `interval` and `manual` keep no cron."""
+    from ..knowledge.refresh import check_cron
+
+    if mode != "cron":
+        return None, timezone if _zone_known(timezone) else _refuse_zone(timezone)
+    if not cron:
+        raise unprocessable("a `cron` refresh needs a `refresh_cron`")
+    try:
+        check_cron(cron, timezone)
+    except ValueError as error:
+        raise unprocessable(str(error)) from error
+    return " ".join(cron.split()), timezone
+
+
+def _zone_known(name: str) -> bool:
+    from zoneinfo import ZoneInfo
+
+    try:
+        ZoneInfo(name)
+    except Exception:
+        return False
+    return True
+
+
+def _refuse_zone(name: str) -> str:
+    raise unprocessable(f"unknown time zone `{name}`")
 
 
 async def _start_sync_loop(org: str, source: KnowledgeSource) -> None:
@@ -682,18 +845,25 @@ async def create_knowledge_source(
 ) -> KnowledgeSourceDto:
     """SharePoint/OneDrive (through a `documents` connector), an allow-listed web site, or a git
     repository; synced at once, then every `interval_minutes`. `agent:manage`."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     organisation = await _organisation(session, org)
     config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
+    refresh_cron, refresh_timezone = _checked_refresh(
+        body.refresh_mode, body.refresh_cron, body.refresh_timezone
+    )
     source = KnowledgeSource(
         org_id=base.org_id,
         knowledge_base_id=base.id,
         kind=body.kind,
         name=body.name,
-        connector=body.connector if body.kind == "sharepoint" else None,
+        connector=body.connector if body.kind in CONNECTED_KINDS else None,
         config=config,
         interval_minutes=body.interval_minutes,
+        refresh_mode=body.refresh_mode,
+        refresh_cron=refresh_cron,
+        refresh_timezone=refresh_timezone,
+        next_sync_at=None,  # due: the first pass syncs
         status="idle",
         created_by=principal.email,
     )
@@ -722,21 +892,56 @@ async def create_knowledge_source(
 async def update_knowledge_source(
     org: str, slug: Slug, source_id: str, body: KnowledgeSourcePatch, session: Db, principal: Me
 ) -> KnowledgeSourceDto:
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     source = await _source(session, base, source_id)
     if body.name is not None:
         source.name = body.name
-    if body.interval_minutes is not None:
-        source.interval_minutes = body.interval_minutes
+    refresh_changed = any(
+        value is not None
+        for value in (body.interval_minutes, body.refresh_mode, body.refresh_cron, body.refresh_timezone)
+    )
+    if refresh_changed:
+        if body.interval_minutes is not None:
+            source.interval_minutes = body.interval_minutes
+        mode = body.refresh_mode or source.refresh_mode
+        cron = body.refresh_cron if body.refresh_cron is not None else source.refresh_cron
+        zone = body.refresh_timezone or source.refresh_timezone
+        source.refresh_cron, source.refresh_timezone = _checked_refresh(mode, cron, zone)
+        source.refresh_mode = mode
+        # A schedule never synced has no "last": it stays due. Otherwise the next sync moves now.
+        now = refresh.utcnow()
+        source.next_sync_at = (
+            None
+            if source.last_synced_at is None
+            else refresh.next_sync_after(source, now if mode == "cron" else source.last_synced_at)
+        )
     if body.config is not None:
         source.config = await _checked_source_config(
             session, await _organisation(session, org), source.kind, source.connector, body.config
         )
         # Another site, URL or ref: the next sync starts from scratch.
         source.cursor = None
+    if refresh_changed:
+        await record(
+            session,
+            principal,
+            "knowledge.source.refresh",
+            org_id=base.org_id,
+            target_type="knowledge_source",
+            target_id=source.id,
+            mode=source.refresh_mode,
+        )
     await session.flush()
-    return await _source_dto(session, source)
+    dto = await _source_dto(session, source)
+    if refresh_changed:
+        # Takes effect now, not at the end of the current sleep: the woken pass is "not due" (a
+        # reschedule) unless a sync was requested.
+        await session.commit()
+        await _start_sync_loop(org, source)
+        with contextlib.suppress(Exception):
+            await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
+    return dto
 
 
 @router.delete(
@@ -746,8 +951,8 @@ async def update_knowledge_source(
 )
 async def delete_knowledge_source(org: str, slug: Slug, source_id: str, session: Db, principal: Me) -> None:
     """The source and the documents it brought (and their chunks) leave the base."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     source = await _source(session, base, source_id)
     await session.execute(delete(KnowledgeDocument).where(KnowledgeDocument.source_id == source.id))
     await session.delete(source)
@@ -775,13 +980,49 @@ async def sync_knowledge_source(
     org: str, slug: Slug, source_id: str, session: Db, principal: Me
 ) -> KnowledgeSourceDto:
     """Syncs now rather than at the end of the interval. `agent:manage`."""
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     source = await _source(session, base, source_id)
+    source.sync_requested_at = refresh.utcnow()
     dto = await _source_dto(session, source)
     await session.commit()
     await _start_sync_loop(org, source)
     await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
+    return dto
+
+
+@router.post(
+    "/orgs/{org}/knowledge/{slug}/sync",
+    response_model=KnowledgeBaseDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="syncKnowledgeBase",
+)
+async def sync_knowledge_base(org: str, slug: Slug, session: Db, principal: Me) -> KnowledgeBaseDto:
+    """Syncs every source of the base now: one gesture for the whole base. `agent:manage`."""
+    _manage(principal, org)
+    base = await _base(session, principal, org, slug)
+    sources = (
+        (await session.execute(select(KnowledgeSource).where(KnowledgeSource.knowledge_base_id == base.id)))
+        .scalars()
+        .all()
+    )
+    now = refresh.utcnow()
+    for source in sources:
+        source.sync_requested_at = now
+    await record(
+        session,
+        principal,
+        "knowledge.sync",
+        org_id=base.org_id,
+        target_type="knowledge_base",
+        target_id=base.id,
+        sources=len(sources),
+    )
+    dto = await _dto(session, base)
+    await session.commit()
+    for source in sources:
+        await _start_sync_loop(org, source)
+        await get_temporal().signal(knowledge_sync_id(source.id), "sync_now", {})
     return dto
 
 
@@ -796,8 +1037,8 @@ async def distill_knowledge_base(org: str, slug: Slug, session: Db, principal: M
     version waits for a person's approval (`pending_review`). `agent:manage`."""
     from ..knowledge.distill import distill
 
-    _manage(principal, org)
     base = await _base(session, principal, org, slug)
+    _curate(principal, org, base)
     if (base.distillation or {}).get("status") == "running":
         raise conflict(f"knowledge base `{slug}` is already being distilled")
     base.distillation = {"status": "running", "requested_by": principal.email}

@@ -6,12 +6,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from .base import Dto
 from .identite import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
+
+#: Who owns an agent (ADR 0061). `platform` is never asked for: a common agent comes from the catalogue.
+AgentScope = Literal["platform", "org", "project", "personal"]
+CreatableScope = Literal["org", "project", "personal"]
 
 
 class AgentLimits(Dto):
@@ -109,6 +113,10 @@ class AgentTrial(Dto):
     evals: list[AgentEvalResult] = Field(default_factory=list)
 
 
+#: Slugs no agent may take: `/agents/new` is a static page of the console and would shadow it (S39-05).
+RESERVED_SLUGS = frozenset({"new"})
+
+
 class AgentCreate(Dto):
     slug: str = Field(pattern=SLUG)
     kind: Literal["internal", "external"] = "internal"
@@ -117,6 +125,102 @@ class AgentCreate(Dto):
     spec: AgentSpec = Field(default_factory=AgentSpec)
     #: `draft` until it is activated (S32-04); `active` by default, as before.
     lifecycle: Literal["draft", "active"] = "active"
+    #: Who owns it (ADR 0061); `org` by default, so a client written before scopes keeps its behaviour.
+    scope: CreatableScope = "org"
+    #: The project's slug: required for, and only for, a `project` agent.
+    project: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _a_project_agent_names_its_project(self) -> AgentCreate:
+        if (self.scope == "project") != (self.project is not None):
+            raise ValueError("`project` is required for, and only for, a `project` agent")
+        return self
+
+    @field_validator("slug")
+    @classmethod
+    def _slug_is_not_reserved(cls, value: str) -> str:
+        if value in RESERVED_SLUGS:
+            raise ValueError(f"`{value}` is reserved: the console's `/agents/{value}` page is not an agent")
+        return value
+
+
+class AgentFork(Dto):
+    """Fork an agent: a new agent whose version 1 is a copy of one of the source's versions (ADR 0061)."""
+
+    slug: str = Field(pattern=SLUG)
+    display_name: str | None = Field(default=None, min_length=1, max_length=200)
+    scope: CreatableScope
+    project: str | None = Field(default=None, min_length=1)
+    #: The source version to copy; absent, its latest.
+    version: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def _a_project_fork_names_its_project(self) -> AgentFork:
+        if (self.scope == "project") != (self.project is not None):
+            raise ValueError("`project` is required for, and only for, a `project` fork")
+        return self
+
+
+class AgentScopeChange(Dto):
+    """Promote an agent: personal to a project or the organisation, a project's to the organisation."""
+
+    scope: CreatableScope
+    project: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _a_move_to_a_project_names_it(self) -> AgentScopeChange:
+        if (self.scope == "project") != (self.project is not None):
+            raise ValueError("`project` is required for, and only for, a move to a `project`")
+        return self
+
+
+class AgentUpstream(Dto):
+    """What a fork was copied from, and whether the source moved on since (ADR 0061)."""
+
+    slug: str
+    #: The version the fork copied.
+    version: int
+    #: Absent when the source is no longer visible to the caller (or deleted).
+    scope: AgentScope | None = None
+    latest_version: int | None = None
+    #: The source published a version newer than the one copied.
+    behind: bool = False
+    available: bool = True
+
+
+class AgentPermissions(Dto):
+    """What the caller may do with an agent, decided by the server (ADR 0061)."""
+
+    #: Publish a version, edit its metadata, move it through its life.
+    publish: bool = False
+    #: Suspend, revoke, change its owner, attach clients.
+    manage: bool = False
+    #: Pin it on a project the caller owns.
+    pin: bool = False
+    #: The scopes the caller may fork it into.
+    fork_scopes: list[CreatableScope] = Field(default_factory=list)
+
+
+class AgentDraftRequest(Dto):
+    """What a person wants an agent for (S39-05): the description is DATA for the drafting model."""
+
+    display_name: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=10, max_length=4000)
+
+
+class AgentDraft(Dto):
+    """A proposal, never saved: the console pre-fills the builder with it and a person creates the agent."""
+
+    display_name: str
+    slug: str = Field(pattern=SLUG)
+    description: str
+    spec: AgentSpec
+    #: An input to try the agent on (the builder's "Try it").
+    sample: AgentSampleInput
+    #: What the platform changed or dropped in the model's answer, in words.
+    notes: list[str] = Field(default_factory=list)
+    #: The model that drafted it.
+    model: str
 
 
 class AgentCatalogueEntry(Dto):
@@ -138,6 +242,8 @@ class AgentCatalogueEntry(Dto):
     installed_version: int | None = None
     #: Un agent du même nom existe, mais l'organisation l'a créé elle-même : le catalogue n'y touche pas.
     own_agent: bool = False
+    #: The scope of the agent of this name in the organisation, if any (ADR 0061).
+    scope: AgentScope | None = None
     update_available: bool = False
     #: Faux pour un client qui appelle depuis le cloud de son éditeur quand la porte ne l'accepte pas
     #: encore (OAuth, client enregistré, https) : la page le dit, et ne le propose pas.
@@ -200,6 +306,15 @@ class AgentDto(Dto):
     last_run_at: datetime | None = None
     #: No run for 60 days (since its creation if it never ran): a candidate for retirement.
     unused: bool = False
+    #: Who owns it (ADR 0061).
+    scope: AgentScope = "org"
+    #: The slug of its project, for a `project` agent.
+    project: str | None = None
+    #: Set on a fork.
+    forked_from: AgentUpstream | None = None
+    #: What the caller may do, and the server's own sentence for what they may not.
+    can: AgentPermissions = Field(default_factory=AgentPermissions)
+    cannot_reason: str | None = None
 
 
 class AgentOverrides(Dto):

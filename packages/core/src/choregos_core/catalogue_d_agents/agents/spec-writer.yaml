@@ -1,5 +1,5 @@
 catalogue:
-  version: 1
+  version: 2
   role: refine
   summary: Turns a work item into a testable specification and the minimal list of paths the change may touch.
 agent:
@@ -18,7 +18,9 @@ agent:
       5. **Risk and rollback** — what can break, and how to go back.
       6. **`allowed_paths`** — the **minimal** list of paths the implementation may change, each justified in a few words.
          For a study, the scope is the decision record only: `["docs/adr/**"]`, and the specification states the
-         question to decide and the decision drivers.
+         question to decide and the decision drivers. When the change is visible to a user, an operator or an
+         API client, include the documentation paths it needs (`docs/**`, `README*`, `CHANGELOG*`, the API
+         reference) in `allowed_paths`, so the documentation step can write them.
 
       If a product decision is missing, ask (`ask_human`) rather than invent.
 

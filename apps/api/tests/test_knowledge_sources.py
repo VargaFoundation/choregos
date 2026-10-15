@@ -167,6 +167,21 @@ async def test_a_full_listing_deletes_what_it_does_not_list_unless_a_page_was_un
     assert await _deleted(Changes(items=[], deleted=["b", "z"]), known) == {"b"}
 
 
+async def test_an_unknown_source_kind_is_unavailable_not_faked(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from choregos_api.knowledge.sync import SourceUnavailableError, open_source
+
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    from choregos_adapters import registry
+
+    monkeypatch.setattr(registry, "fakes_enabled", lambda: False)
+    monkeypatch.setattr("choregos_api.knowledge.sync.fakes_enabled", lambda: False)
+    source = SimpleNamespace(kind="carrier-pigeon", config={}, connector=None, org_id="o", id="s")
+    with pytest.raises(SourceUnavailableError, match="carrier-pigeon"):
+        await open_source(None, source)  # type: ignore[arg-type]
+
+
 async def test_the_loop_starts_with_the_source_and_syncs_on_demand(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch, app: Any
 ) -> None:
@@ -298,3 +313,193 @@ async def test_web_and_git_sources_sync_through_their_fakes(client: AsyncClient,
         assert (await _sync(created.json()["id"]))["added"] == 1
     titles = {d["title"] for d in (await client.get(f"{BASE}/framework")).json()["documents"]}
     assert titles == {"Restart", "ADR"}
+
+
+async def test_the_activity_skips_a_pass_that_is_not_due(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S39-19: a restarted worker or a `continue_as_new` pass must not sync off-schedule."""
+    from datetime import UTC, datetime, timedelta
+
+    from choregos_adapters.fakes.documents import fake_source
+    from choregos_api.knowledge import refresh
+    from choregos_orchestrator.activities.knowledge import sync_knowledge_source
+
+    now = [datetime(2026, 10, 16, 8, 0, tzinfo=UTC)]
+    monkeypatch.setattr(refresh, "utcnow", lambda: now[0])
+    await client.post(BASE, json={"slug": "framework", "name": "Framework", "serving_mode": "files"})
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "Docs", "config": {"url": "https://git.example.com/p.git"}},
+    )
+    source_id = created.json()["id"]
+    fake_source(source_id).put("a", "a.md", b"# A\n")
+    payload = {"org": "varga", "source_id": source_id}
+
+    first = await sync_knowledge_source(payload)
+    assert first["added"] == 1
+    assert first["interval_seconds"] == 3600
+    shown = (await client.get(f"{BASE}/framework")).json()["sources"][0]
+    assert datetime.fromisoformat(shown["next_sync_at"]).replace(tzinfo=UTC) == now[0] + timedelta(minutes=60)
+
+    fetched = len(fake_source(source_id).fetched)
+    now[0] += timedelta(minutes=10)
+    second = await sync_knowledge_source(payload)
+    assert second == {"status": "not_due", "interval_seconds": 3000}
+    assert len(fake_source(source_id).fetched) == fetched
+
+    now[0] += timedelta(minutes=51)
+    third = await sync_knowledge_source(payload)
+    assert third["status"] == "synced"
+
+
+async def _confluence(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, site: Any, **config: Any
+) -> dict[str, Any]:
+    """An `index` base, a `documents/confluence` connector, and a source on the fake site, with the
+    real adapter (fakes off) talking to `FakeConfluence` through the module's transport seam."""
+    from choregos_adapters.documents import confluence
+
+    monkeypatch.setenv("CONNECTOR_KB_CONFLUENCE_TOKEN", site.token)
+    created = await client.post(
+        BASE, json={"slug": "framework", "name": "Framework", "serving_mode": "index"}
+    )
+    assert created.status_code == 201, created.text
+    declared = await client.post(
+        "/api/v1/orgs/varga/connectors",
+        json={
+            "name": "wiki",
+            "kind": "documents",
+            "type": "confluence",
+            "config": {"base_url": "https://fake.atlassian.net", "email": site.email},
+            "secret_refs": {"api_token": "env:CONNECTOR_KB_CONFLUENCE_TOKEN"},
+        },
+    )
+    assert declared.status_code == 201, declared.text
+    monkeypatch.delenv("CHOREGOS_FAKES")
+    monkeypatch.setattr(confluence, "TRANSPORT", site.transport())
+    source = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "confluence", "name": "Engineering wiki", "connector": "wiki", "config": config},
+    )
+    assert source.status_code == 201, source.text
+    return dict(source.json())
+
+
+async def test_a_confluence_page_tree_syncs_and_follows_the_source(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_adapters.fakes.confluence import FakeConfluence
+
+    site = FakeConfluence()
+    site.add_space("ENG")
+    site.put_page("ENG", "100", "Handbook", "<p>how we work</p>")
+    site.put_page("ENG", "101", "Deploy guide", "<h2>Rollout</h2><p>use argo rollouts</p>", parent="100")
+    site.put_page("ENG", "102", "Runbook", "<p>restart the pod</p>", parent="101")
+    site.put_page("ENG", "103", "Pager", "<p>call the oncall</p>", parent="100")
+    site.put_page("ENG", "900", "Lunch", "<p>pasta</p>")
+    source = await _confluence(client, monkeypatch, site, space_key="ENG", page_id="100")
+    assert source["config"] == {
+        "space_key": "ENG", "page_id": "100", "include_root": True, "include_attachments": False,
+    }  # fmt: skip
+
+    first = await _sync(source["id"])
+    assert (first["added"], first["unchanged"]) == (4, 0), first
+    documents = (await client.get(f"{BASE}/framework")).json()["documents"]
+    assert len(documents) == 4
+    deploy = next(d for d in documents if "deploy-guide" in d["filename"])
+    assert deploy["status"] == "ready"
+    assert deploy["source_url"] == "https://fake.atlassian.net/wiki/spaces/ENG/pages/101/Deploy+guide"
+    assert "Lunch" not in {d["title"] for d in documents}
+
+    site.requests.clear()
+    site.put_page("ENG", "101", "Deploy guide", "<p>use flux and canaries</p>", parent="100")
+    second = await _sync(source["id"])
+    assert (second["updated"], second["unchanged"], second["deleted"]) == (1, 3, 0), second
+    assert [site.fetched(pid) for pid in ("100", "101", "102", "103")] == [0, 1, 0, 0], "only the edited page"
+    assert "deploy-guide-101.html" in await _search(client, "canaries")
+
+    site.delete_page("102")
+    site.restrict("103")
+    third = await _sync(source["id"])
+    assert third["deleted"] == 2, third
+    assert {d["filename"] for d in (await client.get(f"{BASE}/framework")).json()["documents"]} == {
+        "handbook-100.html", "deploy-guide-101.html",
+    }  # fmt: skip
+
+
+async def test_a_listing_that_fails_deletes_nothing(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from choregos_adapters.fakes.confluence import FakeConfluence
+    from choregos_adapters.http import rest
+
+    monkeypatch.setattr(rest, "_backoff", lambda response, attempt: 0.0)
+    site = FakeConfluence()
+    site.add_space("ENG")
+    site.put_page("ENG", "100", "Handbook", "<p>how we work</p>")
+    source = await _confluence(client, monkeypatch, site, space_key="ENG")
+    assert (await _sync(source["id"]))["added"] == 1
+    site.fail_next("/pages", 503, times=10)
+    with pytest.raises(Exception, match="503"):
+        await _sync(source["id"])
+    assert len((await client.get(f"{BASE}/framework")).json()["documents"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("config", "needle"),
+    [
+        ({}, "space_key"),
+        ({"space_key": "eng lowercase"}, "space_key"),
+        ({"space_key": "ENG", "page_id": "abc"}, "page_id"),
+        ({"space_key": "ENG", "include_attachments": "yes"}, "include_attachments"),
+        ({"space_key": "ENG", "labels": ["x"] * 21}, "labels"),
+    ],
+)
+async def test_a_confluence_source_is_refused_before_its_first_sync(
+    client: AsyncClient, admin: str, config: dict[str, Any], needle: str
+) -> None:
+    await client.post(BASE, json={"slug": "framework", "name": "Framework", "serving_mode": "index"})
+    declared = await client.post(
+        "/api/v1/orgs/varga/connectors",
+        json={"name": "wiki", "kind": "documents", "type": "confluence",
+              "config": {"base_url": "https://x.atlassian.net", "email": "a@b.c"},
+              "secret_refs": {"api_token": "env:CONNECTOR_KB_CONFLUENCE_TOKEN"}},
+    )  # fmt: skip
+    assert declared.status_code == 201, declared.text
+    refused = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "confluence", "name": "w", "connector": "wiki", "config": config},
+    )
+    assert refused.status_code == 422 and needle in refused.text, refused.text
+
+
+async def test_a_confluence_source_refuses_a_connector_of_another_type(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _sharepoint(client, monkeypatch)
+    refused = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "confluence", "name": "w", "connector": "sharepoint", "config": {"space_key": "ENG"}},
+    )
+    assert refused.status_code == 422 and "documents/sharepoint" in refused.text, refused.text
+    missing = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "confluence", "name": "w", "config": {"space_key": "ENG"}},
+    )
+    assert missing.status_code == 422 and "connector" in missing.text
+
+
+async def test_the_confluence_connector_type_is_listed_with_its_secret_field(
+    client: AsyncClient, admin: str
+) -> None:
+    types = {(t["kind"], t["type"]): t for t in (await client.get("/api/v1/connectors/types")).json()}
+    spec = types[("documents", "confluence")]
+    assert spec["secret_fields"] == ["api_token"] and spec["capabilities"] == ["documents"]
+    assert set(spec["config_schema"]["required"]) == {"base_url", "email"}
+    clear = await client.post(
+        "/api/v1/orgs/varga/connectors",
+        json={"name": "w", "kind": "documents", "type": "confluence",
+              "config": {"base_url": "https://x.atlassian.net", "email": "a@b.c", "api_token": "plain"}},
+    )  # fmt: skip
+    assert clear.status_code == 422

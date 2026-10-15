@@ -73,7 +73,7 @@ test("ticket : le parcours se suit en direct, se rejoue, et chaque agent montre 
 
   await parcours.getByRole("button", { name: "2×" }).click();
   await parcours.getByRole("button", { name: "Replay the journey" }).click();
-  await expect(parcours.getByTestId("parcours-moment")).toContainText("/ 30");
+  await expect(parcours.getByTestId("parcours-moment")).toContainText("/ 34");
   await expect(parcours.getByTestId("etape-t-triage")).toHaveAttribute("data-statut", "fait", { timeout: 5000 });
   await parcours.getByRole("button", { name: "Pause the replay" }).click();
   await parcours.getByRole("navigation", { name: "Stages of the journey" }).getByRole("button", { name: /In progress/ }).click();
@@ -288,8 +288,8 @@ test("historique d'un workflow : deux versions se comparent, une ancienne se rep
 test("board par workflow : la demande choisit son workflow, et ses champs en viennent", async ({ page }) => {
   await page.goto("/p/billing-api/board");
   await expect(page.getByText("Credit notes are not deducted from the total")).toBeVisible();
-  await page.getByRole("button", { name: "New request" }).click();
-  await page.getByLabel("Workflow of the request").selectOption("hotfix");
+  await page.getByRole("button", { name: "New work item" }).click();
+  await page.getByLabel("Workflow", { exact: true }).selectOption("hotfix");
   const champs = page.getByTestId("request-fields");
   await expect(champs.getByLabel("incident id (required)")).toBeVisible();
   await expect(champs.getByLabel("severity (required)")).toBeVisible();
@@ -490,12 +490,15 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await page.getByLabel("Add a connector").selectOption("notify");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByTestId("connecteur-notify")).toBeVisible();
-  // Jira : le formulaire vient de son schéma, ses secrets se nomment par référence.
+  // Jira: the form comes from its schema; a secret is typed (a password, sealed by the platform,
+  // ADR 0058) or, for an operator, named by reference.
   await page.getByTestId("connecteur-tracker").getByRole("button", { name: "Edit" }).click();
   await page.getByTestId("connecteur-tracker").getByRole("combobox").first().selectOption("jira");
-  await page.getByLabel("api token").fill("s3cr3t");
-  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("a reference is expected");
-  await page.getByLabel("api token").fill("env:CONNECTOR_JIRA_TOKEN");
+  await expect(page.getByLabel("api token value")).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Use a reference instead" }).first().click();
+  await page.getByLabel("api token reference").fill("s3cr3t");
+  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("A reference is expected");
+  await page.getByLabel("api token reference").fill("env:CONNECTOR_JIRA_TOKEN");
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
   await expect(connecteurs).toBeVisible();
 });

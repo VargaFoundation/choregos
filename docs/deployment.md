@@ -77,9 +77,11 @@ The chart never writes production secrets. It expects them to exist:
 | Secret | Keys | Used by |
 | :-- | :-- | :-- |
 | `global.apiSecretRef` (default `choregos-api-secrets`) | `session-secret`, `run-token-private-key`, `run-token-public-key`, `github-app-id`, `github-app-private-key`, `github-webhook-secret` | API **and** orchestrator |
+| `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
 | `global.gateway.secretRef` | `master-key` | orchestrator |
+| `global.gateway.type` | `litellm` (default), `openai-compatible`, `direct`: the gateway adapter, as `CHOREGOS_GATEWAY_TYPE` | API, orchestrator |
 | `global.memory.tokenSecret` | `token` | orchestrator |
 | `global.objectStore.secretRef` | `access-key`, `secret-key` | API |
 
@@ -94,7 +96,25 @@ openssl ecparam -name prime256v1 -genkey -noout    # ES256 private key
 
 The public key is derived from the private one when it is absent.
 
-`global.devSecrets: true` makes the chart generate all of the above itself. It exists for a
+**The secrets key** (`secrets-keks`, [ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) seals
+the connector secrets typed in the console. It is a list `id:base64`, the first entry sealing and the
+others only opening: `k2:<base64 of 32 bytes>,k1:<...>`. Generate one:
+
+```bash
+python -c "import os,base64;print('k1:'+base64.b64encode(os.urandom(32)).decode())"
+```
+
+Both the API and the orchestrator read it (`global.secrets.keksSecretRef`, default `apiSecretRef`;
+`global.secrets.keksKey`, default `secrets-keks`; the entry is optional in the pod spec). Without
+it, `env:` references keep working, the API logs `secrets.key_missing` at start-up, and typing a
+secret answers 409. Keep it in the vault: **losing it loses every sealed value**. To rotate, put the
+new key first, redeploy, then run `choregos admin secrets rewrap` (see
+[the runbook](runbooks/rotation-secrets.md#connector-secrets-key-secrets-keks)) before dropping the
+old key. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
+(turn it on once the key exists in the store: a missing remote property fails the whole object).
+
+`global.devSecrets: true` makes the chart generate all of the above itself, the secrets key
+included (drawn once, then re-read). It exists for a
 bench and says so; never use it in production.
 
 **Connector secrets by `env:NAME`.** A secret a connector references (`secret_refs: {api_token:
@@ -182,7 +202,10 @@ executor reads the public key the pod printed at boot (through the API server, `
 the token and the run's environment to it, and pushes only that ciphertext; the pod opens it,
 drops its key, and serves that one run for its whole life. Beyond `maxActive`, a run waits as its Secret alone, with no claim and no pod, and
 is admitted in arrival order. A policy that asks for a RuntimeClass the pool was not made with
-is refused, never run without it.
+is refused, never run without it. The same goes for the image: a pool's pods are made from one
+image (`CHOREGOS_RUNNER_IMAGE`, or `pool_image` in the connector), so a step that names its own
+image (a `job` with `image:`) is refused with a `ConfigurationError` instead of running in the
+pool's image; use `runner.executor: k8s_job` for such steps.
 
 When an agent asks a question, its sandbox is **suspended** (pod gone, workspace volume kept)
 and the answer resumes the same run in it: one run, not two. The policy bounds the wait:
@@ -612,8 +635,13 @@ scenario against it.
 
 ```bash
 curl -s https://<api-host>/edition
-{"edition":"community","features":[],"version":"0.4.1"}
+{"edition":"community","features":[],"version":"0.4.1","publisher":null,"edition_version":null}
 ```
+
+`version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:
+on the enterprise edition they say who publishes it and which version of the plugin runs
+(`"publisher":"graal.systems","edition_version":"0.2.0"`), and the admin page and the footer show
+them. They are `null` on the community edition, and absent from an older core.
 
 This repository is the **community edition**: Apache-2.0, and **one organisation**. Creating a
 second one is refused with a 409 that names the decision behind it
@@ -699,3 +727,23 @@ The proxy is the honest part of "egress allowlist": before 2026-09-25 the Networ
 opened a `choregos-egress` namespace that no chart delivered, and the allowlist was an
 annotation. It is verified on a cluster (`tests/cluster/test_egress_proxy.py`: an
 allowed domain answers 200 through the proxy, any other gets 403 from Squid).
+
+## Gateways and what each can do
+
+`/platform/models` and a project that declares no `gateway` connector use the deployment's gateway
+adapter (`global.gateway.type`, env `CHOREGOS_GATEWAY_TYPE`), not LiteLLM by default whatever was
+configured. Each adapter declares its `capabilities`:
+
+| Capability | Meaning | `litellm` | `openai-compatible` | `direct` |
+|---|---|---|---|---|
+| `list_models` | discovers the models it routes | yes | yes (`GET {base_url}/models`) | no (static list) |
+| `virtual_keys` | one key per run, limited to its models | yes | no | no |
+| `hard_budget` | the key's budget is a cap enforced at the source | yes | no | no |
+| `spend_readback` | the spend of a key is read back | yes | no | no |
+| `teams` | a project's day budget held by the gateway | yes | no | no |
+| `pricing` | the catalogue carries prices | yes | no | no |
+
+With `openai-compatible` (Portkey, Kong AI Gateway, Envoy AI Gateway, OpenRouter, a vLLM router...)
+the budget is enforced by Choregos only (the reservation, turns and minutes): there is no cap at
+the source and no measured cost. Configure two secrets, `api_key` (discovery) and `run_key` (what
+runs receive, the same for every run: scope it at the gateway with its own rate limit).

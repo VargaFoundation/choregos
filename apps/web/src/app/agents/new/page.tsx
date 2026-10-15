@@ -6,8 +6,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { slugFromName } from "@/components/agents/builder";
+import { creatableScopes, makeScopes } from "@/components/agents/registre";
+import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/lib/session";
-import { Breadcrumbs, Button, Card, Empty, Heading, Input, Lead, Textarea, buttonClasses } from "@/components/ui";
+import { api, ApiError } from "@/lib/api";
+import type { AgentDraft } from "@/lib/types";
+import { Alert, Breadcrumbs, Button, Card, Empty, ErrorNote, Heading, Input, Lead, Textarea, buttonClasses } from "@/components/ui";
 
 // The builder is the heaviest form of the console: the first step does not need it (S32-01).
 const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {
@@ -30,12 +34,56 @@ function NewAgent() {
   const [description, setDescription] = useState("");
   // The values that step 2 starts from, taken when one leaves step 1.
   const [initial, setInitial] = useState<{ display_name: string; slug: string; description: string } | null>(null);
-  const { org } = useSession();
+  // What a draft adds to step 2: its spec, its Try it sample and what the platform changed in it.
+  const [start, setStart] = useState<AgentDraft["spec"]>({});
+  const [sample, setSample] = useState<AgentDraft["sample"] | undefined>(undefined);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const { org, me } = useSession();
+  // `?scope=project&project=dev`: the project page's "New project agent" says where it starts.
+  const wantedScope = search.get("scope");
+  const wantedProject = search.get("project");
+  const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org), enabled: !!me && !!org, retry: false });
+  const allProjects = (projects.data?.items ?? []).map((p) => p.slug);
+  const configureUrl = `/agents/new?step=configure${wantedScope ? `&scope=${wantedScope}` : ""}${wantedProject ? `&project=${wantedProject}` : ""}`;
+  const creatable = me ? creatableScopes(me.memberships ?? [], org) : null;
+  const scopes = creatable
+    ? {
+        options: makeScopes(creatable, allProjects),
+        projects: creatable.org ? allProjects : creatable.projects,
+      }
+    : undefined;
   const ready = name.trim().length > 0 && description.trim().length >= MIN_DESCRIPTION;
 
   function toConfigure() {
     setInitial({ display_name: name.trim(), slug: slugFromName(name), description: description.trim() });
-    router.push("/agents/new?step=configure");
+    setStart({});
+    setSample(undefined);
+    setNotes([]);
+    router.push(configureUrl);
+  }
+
+  /** One model call; nothing is saved. The form opens pre-filled and a person reviews it. */
+  async function draftIt() {
+    setDraftError(null);
+    setDrafting(true);
+    try {
+      const draft = await api.draftAgent(org, { display_name: name.trim(), description: description.trim() });
+      setInitial({ display_name: draft.display_name, slug: draft.slug, description: draft.description });
+      setStart(draft.spec);
+      setSample(draft.sample);
+      setNotes(draft.notes ?? []);
+      router.push(configureUrl);
+    } catch (cause) {
+      setDraftError(
+        cause instanceof ApiError && cause.status === 429
+          ? "Too many drafts in a minute: wait a moment, or start from a blank form."
+          : `The draft failed: ${cause instanceof Error ? cause.message : "unknown error"}. You can start from a blank form.`,
+      );
+    } finally {
+      setDrafting(false);
+    }
   }
 
   return (
@@ -80,23 +128,46 @@ function NewAgent() {
               <p className="text-xs text-ink-muted">{MIN_DESCRIPTION} characters at least. It becomes the agent&apos;s description.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" tone="primary" disabled={!ready}>
+              <Button type="button" tone="primary" disabled={!ready || drafting || !org} onClick={() => void draftIt()}>
+                {drafting ? "Drafting…" : "Draft it for me"}
+              </Button>
+              <Button type="submit" disabled={!ready || drafting}>
                 Start from a blank form
               </Button>
               <Link href="/agents?catalogue=1" className={buttonClasses("ghost")}>
                 Or add one from the catalogue
               </Link>
             </div>
+            {drafting && (
+              <p role="status" className="text-sm text-ink-muted">
+                A model is drafting the instructions — nothing is saved.
+              </p>
+            )}
+            {draftError && <ErrorNote>{draftError}</ErrorNote>}
           </form>
         </Card>
       ) : org ? (
-        <AgentBuilder
-          org={org}
-          mode={{ kind: "create" }}
-          initial={initial}
-          onBack={() => router.back()}
-          onCreated={(agent) => router.push(`/agents/${agent.slug}`)}
-        />
+        <>
+          {notes.length > 0 && (
+            <Alert tone="warn" title="The platform changed the draft">
+              <ul className="list-disc pl-5">
+                {notes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+          <AgentBuilder
+            org={org}
+            mode={{ kind: "create" }}
+            start={start}
+            initial={{ ...initial, scope: wantedScope ?? undefined, project: wantedProject ?? undefined }}
+            scopes={scopes}
+            initialSample={sample}
+            onBack={() => router.back()}
+            onCreated={(agent) => router.push(`/agents/${agent.slug}`)}
+          />
+        </>
       ) : (
         <Empty>Reading your session…</Empty>
       )}

@@ -10,6 +10,23 @@ from typing import Any
 import structlog
 
 
+def redact_known_secrets(_logger: Any, _method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    """Mask, in every string of a log line, the secret values this process resolved (ADR 0058):
+    a connector secret that an exception text or a debug line would carry out of the process."""
+    from choregos_core.redaction import redact_known
+
+    def clean(value: Any) -> Any:
+        if isinstance(value, str):
+            return redact_known(value)
+        if isinstance(value, dict):
+            return {k: clean(v) for k, v in value.items()}
+        if isinstance(value, list | tuple):
+            return type(value)(clean(v) for v in value)
+        return value
+
+    return {k: clean(v) for k, v in event_dict.items()}
+
+
 def configure_logging(level: str = "INFO", json_logs: bool = True) -> None:
     logging.basicConfig(
         format="%(message)s", stream=sys.stdout, level=getattr(logging, level.upper(), logging.INFO)
@@ -20,6 +37,7 @@ def configure_logging(level: str = "INFO", json_logs: bool = True) -> None:
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        redact_known_secrets,
     ]
     processors.append(structlog.processors.JSONRenderer() if json_logs else structlog.dev.ConsoleRenderer())
     structlog.configure(

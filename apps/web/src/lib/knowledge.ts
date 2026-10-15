@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /** What the knowledge pages say about a base and its documents (ADR 0051). */
-import type { KnowledgeBase, KnowledgeEvalCase } from "./types";
+import { relative } from "./format";
+import type { KnowledgeBase, KnowledgeEvalCase, KnowledgeSource } from "./types";
 
 /** Where a base is served, said in words: who reads it, which runs get it. */
 export function scopeLabel(base: Pick<KnowledgeBase, "scope" | "projects" | "groups">): string {
@@ -14,9 +15,14 @@ export function servedToProject(base: Pick<KnowledgeBase, "scope" | "projects">,
   return base.scope === "org" || (base.scope === "projects" && (base.projects ?? []).includes(slug));
 }
 
-/** Whether a base is the project's own: scoped to projects and naming this one. */
-export function ownedByProject(base: Pick<KnowledgeBase, "scope" | "projects">, slug: string): boolean {
-  return base.scope === "projects" && (base.projects ?? []).includes(slug);
+/** Whether a base is the project's own: created from it, so its owners curate it (`owner_project`). */
+export function ownedByProject(base: Pick<KnowledgeBase, "owner_project">, slug: string): boolean {
+  return base.owner_project === slug;
+}
+
+/** A base the project is served without owning: an organisation's base scoped to several projects. */
+export function alsoServedToProject(base: Pick<KnowledgeBase, "scope" | "projects" | "owner_project">, slug: string): boolean {
+  return base.scope === "projects" && (base.projects ?? []).includes(slug) && !ownedByProject(base, slug);
 }
 
 /** The registry's "Used by", in words: who is served, with the projects' names where known. */
@@ -82,9 +88,13 @@ export function syncSummary(summary: Record<string, unknown> | null | undefined)
 
 /** The configuration a source form sends, by kind. */
 export function sourceConfig(
-  kind: "sharepoint" | "web" | "git",
-  fields: { site: string; folder: string; url: string; ref: string; paths: string },
+  kind: "sharepoint" | "confluence" | "web" | "git",
+  fields: { site: string; folder: string; url: string; ref: string; paths: string; space?: string; pageId?: string; attachments?: boolean },
 ): Record<string, unknown> {
+  if (kind === "confluence") {
+    const page = (fields.pageId ?? "").trim();
+    return { space_key: (fields.space ?? "").trim(), ...(page ? { page_id: page } : {}), include_attachments: Boolean(fields.attachments) };
+  }
   if (kind === "sharepoint") {
     const site = fields.site.trim();
     const key = site.startsWith("b!") ? "drive_id" : "site_id";
@@ -105,4 +115,58 @@ export function distillationLabel(d: Record<string, unknown> | null | undefined)
   if (d.status === "failed") return `failed: ${String(d.error ?? "")}`;
   const dropped = Array.isArray(d.dropped) ? d.dropped.length : 0;
   return `${String(d.skill)} v${String(d.version)}: ${String(d.principles)} principles, waiting for review${dropped ? ` (${dropped} dropped: no source)` : ""}`;
+}
+
+/** How a source refreshes, in words: `every 60 min`, `cron 0 6 * * 1-5 (Europe/Paris)` or `manual`. */
+export function refreshLabel(
+  source: Pick<KnowledgeSource, "refresh_mode" | "refresh_cron" | "refresh_timezone" | "interval_minutes">,
+): string {
+  if (source.refresh_mode === "manual") return "manual";
+  if (source.refresh_mode === "cron") return `cron ${source.refresh_cron} (${source.refresh_timezone ?? "UTC"})`;
+  return `every ${source.interval_minutes} min`;
+}
+
+/** When it syncs next (an estimate: the worker may be down): `next in 23 minutes`; manual → `—`. */
+export function nextSyncLabel(source: Pick<KnowledgeSource, "refresh_mode" | "next_sync_at">): string {
+  if (source.refresh_mode === "manual") return "—";
+  return source.next_sync_at ? `next ${relative(source.next_sync_at)}` : "due now";
+}
+
+/** The refresh as the console edits it. */
+export type RefreshDraft = {
+  mode: "interval" | "cron" | "manual";
+  interval: string;
+  cron: string;
+  timezone: string;
+};
+
+export function browserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+export function draftOf(source?: Partial<KnowledgeSource>): RefreshDraft {
+  return {
+    mode: source?.refresh_mode ?? "interval",
+    interval: String(source?.interval_minutes ?? 60),
+    cron: source?.refresh_cron ?? "",
+    timezone: source?.refresh_timezone && source.refresh_timezone !== "UTC" ? source.refresh_timezone : browserTimezone(),
+  };
+}
+
+export type RefreshBody = {
+  refresh_mode: "interval" | "cron" | "manual";
+  interval_minutes?: number;
+  refresh_cron?: string;
+  refresh_timezone?: string;
+};
+
+/** The body of a create or a patch: only the fields the mode uses. */
+export function refreshBody(draft: RefreshDraft): RefreshBody {
+  if (draft.mode === "cron") return { refresh_mode: "cron", refresh_cron: draft.cron.trim(), refresh_timezone: draft.timezone };
+  if (draft.mode === "manual") return { refresh_mode: "manual" };
+  return { refresh_mode: "interval", interval_minutes: Number(draft.interval) || 60 };
 }

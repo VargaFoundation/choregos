@@ -115,3 +115,79 @@ there (D10), with full-text search built in and `pgvector` one extension away.
    guidance reaches no agent before a person approves it. The version's author is the agent
    (`agent:knowledge-distiller`), so the administrator who asked may approve it; the request and
    the documents used are recorded on the base (`distillation`).
+
+## Update — 2026-10-15: ownership, a project-owned base (S39-14)
+
+11. **Ownership is a fact apart from reach.** `knowledge_bases.owner_project` (nullable) names the
+    project a base was created from. Reach stays `scope`: a project-owned base is `scope: projects`
+    naming its owner, so reading and serving a run (`served_to_project`) are unchanged. No new scope
+    value: it would duplicate `projects: [x]` and every consumer of the scope (agent specs, the
+    builder) would need a new branch for nothing. Ownership is explicit, never inferred from "one
+    project in the list": an administrator narrowing an organisation base to one project must not
+    hand its curation to that project's owners by accident.
+12. **Who curates what.** `POST /projects/{id}/knowledge` (`project:write`, the project's owners)
+    creates a base with `owner_project` set. The owners of `owner_project` upload and delete
+    documents, add, edit, sync and remove sources, edit the eval set, reindex, distil, rename, change
+    the serving mode and archive it (`can_curate`). They never change `scope`, `projects` or `groups`:
+    that stays `agent:manage` (an organisation administrator), and an administrator who changes
+    them clears `owner_project`, so the base becomes the organisation's. Organisation administrators
+    keep every right, over every base. A base without `owner_project` (every base created from
+    `/orgs/{org}/knowledge`) is curated by administrators only, as before.
+13. **The console.** A project's *Knowledge* section lists what its runs are served and creates a
+    base owned by the project; the organisation's registry (`/knowledge`) lists every base with its
+    scope. The migration adds one nullable column: existing bases have no owner.
+
+## Update — 2026-10-16: refresh schedule (S39-19)
+
+15. **The loop is a timer; the source's row decides.** The `KnowledgeSync` workflow is unchanged: a
+    pass runs `sync_knowledge_source`, then sleeps the `interval_seconds` the activity answers (at
+    least 300 s), or wakes on `sync_now`. The activity reads the row and calls `decide_pass`: it
+    syncs only when the pass is due, and otherwise answers `{"status": "not_due", "interval_seconds": …}`
+    touching nothing. So a worker restart or a `continue_as_new` no longer syncs off-schedule, and
+    the archived histories keep replaying (no `workflow.patched`).
+16. **Three refresh modes per source** (`refresh_mode`): `interval` (every `interval_minutes`, 5
+    minutes to 7 days, the previous behaviour and the default), `cron` (`refresh_cron`, five fields,
+    read in `refresh_timezone`, an IANA name; at least 5 minutes between two fires, checked over the
+    next 50) and `manual` (only on demand, the loop idles). A sync requested by a person
+    (`sync_requested_at` later than `last_synced_at`) runs in every mode. A knowledge base has no
+    refresh of its own: it is the union of its sources, each with its natural cadence (a crawl daily,
+    SharePoint hourly); the console's "apply to all sources" is a convenience, and `POST
+    …/knowledge/{slug}/sync` syncs every source of a base now.
+17. **"Next sync" is stored** (`next_sync_at`), written by the activity after each pass, failed or
+    not, and by the API when the refresh changes. It is an estimate: a worker down at the cron
+    minute syncs at its next pass. Editing the refresh takes effect at once: the API recomputes
+    `next_sync_at`, commits and signals `sync_now`; the woken pass is a reschedule unless a sync
+    was requested.
+18. **Cron is in-house** (`choregos_core.cron`: parse, next fire with `zoneinfo`, minimum gap); a
+    local time skipped by the spring DST change does not fire, one that exists twice fires once.
+    **Temporal Schedules** were rejected (a second mechanism beside the loop, with its own lifecycle
+    on create, patch and delete, for no gain over an activity that reads the row), and so was changing
+    the workflow to sleep until a timestamp (a patch and a new history for the same behaviour).
+
+## Update — 2026-10-15: Confluence (S39-20)
+
+19. **A Confluence Cloud space, or one page and its descendants, is a source** (`confluence`),
+    through an organisation connector `documents/confluence` (a new adapter on the ADR 0034
+    registry: no new seam). The connector holds a service account's email and API token
+    (`api_token` is a secret field); a classic token is used as HTTP Basic against the site, a
+    *scoped* token through `api.atlassian.com/ex/confluence/{cloud_id}`. OAuth 2.0 (3LO) is not
+    built: it needs a registered Atlassian app and a refresh token that the platform rewrites, which
+    is a later story (S39-20c).
+20. **The generalised connector interface.** A `documents` connector opens a source from the
+    source's own configuration, `source(config, *, key)` (`DocumentsConnector` protocol), instead of
+    SharePoint's keywords; the API holds `CONNECTED_KINDS`, `SOURCE_CONNECTOR_TYPES` (which
+    connector type serves which kind) and one config validator per kind.
+21. **Delta by version, deletions by listing.** Each sync lists the space once (no bodies,
+    cursor-paginated) and a sub-tree is computed locally from `parentId`. The item version is the
+    page's `version.number`, so the engine fetches a body only when it changed; the listing is
+    `full`, so a page no longer listed is deleted from the base. A listing that fails part-way raises
+    instead of returning a partial list (which would read as deletions); a page that became unreadable
+    between the listing and its fetch is skipped and said (`ItemUnreadableError`). Bodies are
+    Confluence's rendered `export_view` (macros expanded), with the storage format reduced to text
+    as the fallback; the existing converter makes markdown of it. Limit: 5 000 pages per sync.
+22. **The account's view, not the reader's.** The source mirrors what the connector's account can
+    read: a page restricted against it is invisible and so leaves the base. Page and space
+    restrictions are **not** mirrored per Choregos user: who reads the base is decided by the base's
+    scope (org, projects, groups). Everything the account can read in the chosen space or tree
+    becomes readable by everyone the base is open to; the service account should be given read on
+    the spaces to index only.

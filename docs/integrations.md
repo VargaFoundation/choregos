@@ -27,7 +27,7 @@ and `2025-03-26`.
 | `get_work_item` | A work item's state, recent timeline and pending decision, with its link | `mcp:read` |
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
-| `create_work_item` | Opens a work item in a project whose tracker is Choregos itself | `mcp:write` and the right to control work items |
+| `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
 
@@ -198,6 +198,32 @@ Its calls then carry the agent's name in the audit, and its rights are **the per
 with the agent's**: a `choregos` entry in the version's `mcp_servers` names the door's tools it may
 call (patterns allowed); a person without a right gives an agent without it. The agent's state is
 read on **every call**: revoked, suspended or expired, the next call answers `401`.
+
+## Atlassian's Rovo MCP Server, as a connector
+
+The other direction: an internal agent calling **Rovo's tools** (search, Jira, Confluence, JSM,
+Bitbucket, Compass) through an `mcp` connector. This gives the agents Atlassian's tools under the
+platform's per-operation policy and approvals; it does not invoke the Rovo agent itself.
+
+1. In Atlassian Administration, allow API-token access to the Rovo MCP Server.
+2. Create a service account (or a dedicated user) with the Jira and Confluence permissions the
+   agents should have, and an API token with granular scopes, for example `read:jira-work`,
+   `write:jira-work` (only if writes are wanted), `read:page:confluence`, `search:confluence`,
+   `search:rovo:mcp`. Without the search scopes only some tools appear.
+3. Declare the connector. The token is sent as `Authorization: Basic base64(email:token)`, which
+   is what the server expects for an API token (Bearer is refused):
+
+```bash
+curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "rovo", "type": "mcp",
+  "config": {"url": "https://mcp.atlassian.com/v1/mcp", "auth_scheme": "basic",
+             "username": "choregos-bot@example.com"},
+  "secret_refs": {"token": "env:CONNECTOR_ROVO_API_TOKEN"}}'
+```
+
+4. *Discover* the connector, then open the tools the agents need: a new tool is born closed.
+
+`auth_scheme` is `bearer` (the default, unchanged) or `basic`; `basic` needs `username`. The
+server allows about 1 000 calls per hour on Standard and Premium plans.
 
 ## Limits
 

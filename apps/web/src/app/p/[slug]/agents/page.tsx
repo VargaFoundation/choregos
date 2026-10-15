@@ -11,7 +11,8 @@ import {
   versionDeLActeur,
   type AgentImplicite,
 } from "@/components/agents/registre";
-import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
+import { ScopeBadge } from "@/components/agents/governance";
+import { Badge, Button, Card, Empty, ErrorNote, Input, Select, buttonClasses } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Agent, ProjectAgent } from "@/lib/types";
@@ -26,8 +27,46 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
   const { org } = useSession();
   const epingles = useQuery({ queryKey: ["project-agents", slug], queryFn: () => api.projectAgents(slug) });
   const registre = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
+  // A project's own agents come first; a personal agent, or another project's, cannot be pinned here (ADR 0061).
+  const own = (registre.data ?? []).filter((a) => a.scope === "project" && a.project === slug);
+  const pinnable = (registre.data ?? []).filter(
+    (a) => a.status === "active" && a.scope !== "personal" && !(a.scope === "project" && a.project !== slug),
+  );
   return (
     <div className="space-y-6">
+      <Card title="Project agents">
+        <div className="space-y-3">
+          <p className="text-sm text-ink-muted">
+            Agents this project owns: its owner changes them, and they run only in its workflows.
+          </p>
+          {own.length === 0 ? (
+            <p className="text-sm text-ink-muted" data-testid="project-owned-none">
+              None yet. Fork a common agent into this project, or write one.
+            </p>
+          ) : (
+            <ul className="space-y-2" data-testid="project-owned">
+              {own.map((a) => (
+                <li key={a.slug} className="flex flex-wrap items-center gap-3 text-sm">
+                  <Link href={`/agents/${a.slug}`} className="font-medium hover:underline">
+                    {a.display_name}
+                  </Link>
+                  <ScopeBadge agent={a} />
+                  <Badge tone="neutral">v{a.latest_version}</Badge>
+                  {a.forked_from && (
+                    <span className="text-xs text-ink-muted">
+                      forked from {a.forked_from.slug} v{a.forked_from.version}
+                      {a.forked_from.behind ? " (behind)" : ""}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href={`/agents/new?scope=project&project=${slug}`} className={buttonClasses("secondary", "sm")}>
+            New project agent
+          </Link>
+        </div>
+      </Card>
       <Card title="Pinned agents">
         {epingles.error ? (
           <ErrorNote>{String(epingles.error)}</ErrorNote>
@@ -45,7 +84,7 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
           </ul>
         )}
       </Card>
-      <Epingler projet={slug} agents={(registre.data ?? []).filter((a) => a.status === "active")} />
+      <Epingler projet={slug} agents={pinnable} />
       <Implicites projet={slug} org={org} registre={registre.data ?? []} />
     </div>
   );

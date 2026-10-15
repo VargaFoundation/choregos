@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { api } from "@/lib/api";
-import { sourceConfig, syncSummary } from "@/lib/knowledge";
+import { nextSyncLabel, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
 import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
-  return { ...real, api: { ...real.api, orgConnectors: vi.fn(), createKnowledgeSource: vi.fn(), syncKnowledgeSource: vi.fn(), deleteKnowledgeSource: vi.fn() } };
+  return { ...real, api: { ...real.api, orgConnectors: vi.fn(), createKnowledgeSource: vi.fn(), updateKnowledgeSource: vi.fn(), syncKnowledgeBase: vi.fn(), syncKnowledgeSource: vi.fn(), deleteKnowledgeSource: vi.fn() } };
 });
 
 const source: KnowledgeSource = {
@@ -45,6 +45,10 @@ describe("what a source says", () => {
 });
 
 describe("the sources of a base (S33-04)", () => {
+  beforeEach(() => {
+    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+  });
+
   it("shows when each last synced, what it did and why it failed; syncs on demand", async () => {
     vi.mocked(api.syncKnowledgeSource).mockResolvedValue(source);
     const onChange = vi.fn();
@@ -73,6 +77,7 @@ describe("the sources of a base (S33-04)", () => {
         name: "SharePoint / OneDrive",
         connector: "sharepoint",
         config: { site_id: "acme.sharepoint.com,1,2" },
+        refresh_mode: "interval",
         interval_minutes: 60,
       }),
     );
@@ -97,5 +102,91 @@ describe("the sources of a base (S33-04)", () => {
     const note = await screen.findByTestId("no-documents-connector");
     expect(screen.queryByLabelText("documents connector")).toBeNull();
     expect(within(note).getByRole("link")).toHaveAttribute("href", "/admin/connectors?type=documents/sharepoint");
+  });
+
+  it("says how each source refreshes and when it syncs next", () => {
+    const cron: KnowledgeSource = {
+      ...source,
+      refresh_mode: "cron",
+      refresh_cron: "0 6 * * 1-5",
+      refresh_timezone: "Europe/Paris",
+      next_sync_at: new Date(Date.now() + 23 * 60_000).toISOString(),
+    };
+    view([cron]);
+    expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("cron 0 6 * * 1-5 (Europe/Paris) · next in 23 minutes");
+    expect(refreshLabel({ ...source, refresh_mode: "manual" })).toBe("manual");
+    expect(nextSyncLabel({ refresh_mode: "manual" })).toBe("—");
+    expect(refreshBody({ mode: "manual", interval: "5", cron: "", timezone: "UTC" })).toEqual({ refresh_mode: "manual" });
+  });
+
+  it("edits the refresh of a source, or of all of them", async () => {
+    vi.mocked(api.updateKnowledgeSource).mockResolvedValue(source);
+    const other = { ...source, id: "src-2", name: "Other" };
+    view([source, other]);
+    fireEvent.click(screen.getAllByRole("button", { name: "edit refresh" })[0]!);
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
+    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    await waitFor(() =>
+      expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1", { refresh_mode: "manual" }),
+    );
+    expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(1);
+
+    vi.mocked(api.updateKnowledgeSource).mockClear();
+    fireEvent.click(screen.getAllByRole("button", { name: "edit refresh" })[0]!);
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
+    fireEvent.click(screen.getByLabelText("apply to all sources"));
+    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    await waitFor(() => expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows the API's reason when a cron is refused", async () => {
+    vi.mocked(api.updateKnowledgeSource).mockRejectedValue(new Error("`*/1 * * * *` fires every 1 min: the minimum is 5"));
+    view([source]);
+    fireEvent.click(screen.getByRole("button", { name: "edit refresh" }));
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "cron" } });
+    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("cron expression"), { target: { value: "*/1 * * * *" } });
+    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    expect(await screen.findByText(/the minimum is 5/)).toBeInTheDocument();
+  });
+
+  it("syncs a whole base at once", async () => {
+    vi.mocked(api.syncKnowledgeBase).mockResolvedValue({} as never);
+    view([source]);
+    fireEvent.click(screen.getByRole("button", { name: "sync all now" }));
+    await waitFor(() => expect(api.syncKnowledgeBase).toHaveBeenCalledWith("varga", "framework"));
+  });
+
+  it("adds a Confluence space or page tree through its connector (S39-20)", async () => {
+    vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
+    vi.mocked(api.orgConnectors).mockResolvedValue([
+      connector("diametral", "documents", "sharepoint"),
+      connector("wiki", "documents", "confluence"),
+    ]);
+    view();
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
+    await screen.findByRole("option", { name: "wiki" });
+    expect(screen.queryByRole("option", { name: "diametral" })).toBeNull();
+    expect(screen.queryByLabelText("site or drive id")).toBeNull();
+    fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
+    fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
+    fireEvent.change(screen.getByLabelText("page id"), { target: { value: " 12345 " } });
+    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    await waitFor(() =>
+      expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
+        kind: "confluence",
+        name: "Confluence space or page tree",
+        connector: "wiki",
+        config: { space_key: "ENG", page_id: "12345", include_attachments: false },
+        refresh_mode: "interval",
+        interval_minutes: 60,
+      }),
+    );
+    expect(screen.getByText(/everything the connector/)).toBeInTheDocument();
+  });
+
+  it("sends no page id for a whole space, and asks for attachments when ticked", () => {
+    const base = { site: "", folder: "", url: "", ref: "", paths: "" };
+    expect(sourceConfig("confluence", { ...base, space: "ENG", pageId: "" })).toEqual({ space_key: "ENG", include_attachments: false });
+    expect(sourceConfig("confluence", { ...base, space: "ENG", attachments: true })).toEqual({ space_key: "ENG", include_attachments: true });
   });
 });

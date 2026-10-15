@@ -215,6 +215,30 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/connectors/{kind}/secrets/{field}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { $ref: "#/components/parameters/ConnectorKind" }
+      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+    put:
+      tags: [connectors]
+      operationId: setConnectorSecret
+      description: Type a secret once, or replace it. Sealed in the database (AES-256-GCM envelope, key from the deployment) and never returned; the connector keeps a derived `store:` reference. Needs `connector:write`. 409 when the deployment has no secrets key (ADR 0058).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SecretValue" } } }
+      responses:
+        "200": { description: Set; the connector with its secret states, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [connectors]
+      operationId: clearConnectorSecret
+      description: Remove the secret field's value or reference from the connector; a sealed value is deleted.
+      responses:
+        "200": { description: Cleared, content: { application/json: { schema: { $ref: "#/components/schemas/Connector" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/connectors/{kind}/test:
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/ConnectorKind" }]
     post:
@@ -267,12 +291,51 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [connectors]
+      operationId: updateOrgConnector
+      description: Edit the configuration and the secrets of a declared connector. `secret_refs` and `secret_values` merge into the connector's; the operations are not touched. The organisation's administrator only.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnectorUpdate" } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     delete:
       tags: [connectors]
       operationId: deleteOrgConnector
       responses:
         "204": { description: "Removed, with its operations" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/connectors/{name}/secrets/{field}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+      - { name: field, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" } }
+    put:
+      tags: [connectors]
+      operationId: setOrgConnectorSecret
+      description: Type a secret once, or replace it. Sealed (AES-256-GCM envelope, key from the deployment), never returned; the connector keeps a derived `store:` reference. The organisation's administrator only. 409 when the deployment has no secrets key (ADR 0058).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SecretValue" } } }
+      responses:
+        "200": { description: Set; the connector with its secret states, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [connectors]
+      operationId: clearOrgConnectorSecret
+      description: Remove the secret field's value or reference from the connector; a sealed value is deleted.
+      responses:
+        "200": { description: Cleared, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnector" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/connectors/{name}/discover:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -399,6 +462,7 @@ paths:
     put:
       tags: [workflows]
       operationId: putWorkflow
+      description: "A workflow that names a personal agent or another project's agent is refused with 422 naming the agent, its scope and the fix (ADR 0061)."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowPut" } } }
@@ -426,6 +490,7 @@ paths:
     put:
       tags: [workflows]
       operationId: putNamedWorkflow
+      description: "A workflow that names a personal agent or another project's agent is refused with 422 (ADR 0061)."
       summary: Publish the next version of THIS workflow; a stale `base_version`, or `create_only` on an existing name → 409
       requestBody:
         required: true
@@ -599,14 +664,21 @@ paths:
     post:
       tags: [work-items]
       operationId: createWorkItem
-      summary: File a request in Choregos (internal tracker only)
+      summary: File a work item, in Choregos and in the project's tracker when it is external
+      description: >-
+        With an internal tracker (or none) the platform mints the key. With an external tracker
+        (GitHub, Jira, GitLab) it first creates the issue there, labelled `source:choregos` plus the
+        request's labels and never `agent-ready`, and records the work item under the issue's key.
+        Fields, workflow and budget are validated before the issue is created, so a 422 leaves
+        nothing behind. If the tracker refuses or does not answer, nothing is created (502).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/WorkItemCreate" } } }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/WorkItem" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { description: Unknown workflow, invalid fields or a budget wider than allowed }
+        "502": { description: The project's tracker refused or did not answer; nothing was created }
   /work-items/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1098,6 +1170,15 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/TemplateUpsert" } } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TemplateSummary" } } } }
+  /platform/secrets/rewrap:
+    post:
+      tags: [admin]
+      operationId: rewrapSecrets
+      description: After a key rotation (the new key first in `CHOREGOS_SECRETS_KEKS`), re-wrap the data key of every sealed secret under the active key. The values are never read out nor changed (ADR 0058). The platform administrator only.
+      responses:
+        "200": { description: Re-wrapped, content: { application/json: { schema: { $ref: "#/components/schemas/SecretsRewrap" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /platform/backends:
     get:
       tags: [admin]
@@ -1196,13 +1277,16 @@ paths:
     get:
       tags: [agents]
       operationId: listAgents
-      description: The organisation's agent registry (ADR 0033).
+      description: The agents the caller may see (ADR 0033, ADR 0061) — a personal agent only to its owner and an org_admin, a project's agent to the members of that project.
+      parameters:
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [platform, org, project, personal] } }
+        - { name: project, in: query, required: false, schema: { type: string }, description: "a project's slug: only the agents that project owns" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
     post:
       tags: [agents]
       operationId: createAgent
-      description: Create an agent and its version 1; `agent:manage` (org_admin).
+      description: "Create an agent and its version 1, in the scope asked (ADR 0061): an `org` agent needs `agent:manage` (org_admin), a `project` agent the project's owner (`agent:project_manage`), a `personal` agent `agent:create_personal` (developer and above). The 403 carries the reason."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentCreate" } } }
@@ -1210,6 +1294,26 @@ paths:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agent-drafts:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [agents]
+      operationId: draftAgent
+      description: >-
+        One capped model call (2,500 output tokens, 60 s) proposes an agent from its description (S39-05). The
+        instructions are those of the catalogue's `agent-drafter`, or of the organisation's installed version. The
+        answer holds only skills, knowledge bases and connectors the organisation has and may use; what was dropped
+        or clamped is said in `notes`. Nothing is saved: a person creates the agent from the draft. Ten drafts a
+        minute per person. `agent:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentDraftRequest" } } }
+      responses:
+        "200": { description: The proposal, not saved, content: { application/json: { schema: { $ref: "#/components/schemas/AgentDraft" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { description: More than ten drafts in a minute (`Retry-After`), content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "502": { description: The gateway did not answer, or its answer holds no JSON object, or no gateway key is configured }
   /orgs/{org}/agents/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1334,6 +1438,40 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/agents/{slug}/fork:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: forkAgent
+      description: A new agent, in the scope asked, whose version 1 is a byte-for-byte copy of one of the source's versions (its latest by default; same checksum). It records `forked_from` and inherits nothing else. Needs to see the source AND to create in that scope (a developer forks into `personal`, a project owner into their project, an org_admin anywhere). A source the caller may not see is a 404. Audited (`agent.fork`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentFork" } } }
+      responses:
+        "201": { description: The fork, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/scope:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: changeAgentScope
+      description: Promote an agent (ADR 0061). A personal agent goes to a project (its owner AND that project's owner, or an org_admin) or to the organisation (org_admin); a project's agent to the organisation (org_admin); an organisation agent into one project (org_admin; 409 while another project pins or names it). A common agent never moves. Audited (`agent.scope`).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AgentScopeChange" } } }
+      responses:
+        "200": { description: The agent in its new scope, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/owner:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1552,6 +1690,21 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/knowledge:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [knowledge]
+      operationId: createProjectKnowledgeBase
+      description: "A knowledge base owned by this project (S39-14, ADR 0051): scope `projects` naming it, `owner_project` set, so its owners curate it and an organisation administrator alone widens it. `project:write`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ProjectKnowledgeBaseCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/knowledge/{slug}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1566,7 +1719,7 @@ paths:
     patch:
       tags: [knowledge]
       operationId: updateKnowledgeBase
-      description: Renames it, changes its scope or serving mode, archives it. `agent:manage`.
+      description: Renames it, changes its serving mode, archives it (`agent:manage`, or `project:write` on the owning project). Changing its scope, projects or groups is `agent:manage` only, and clears `owner_project`.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBasePatch" } } }
@@ -1585,7 +1738,7 @@ paths:
       description: >-
         One document (docx, pptx, xlsx, pdf, md, html, txt), converted to markdown in the background:
         answered 202 `pending`, then `ready` or `failed` with its reason. The same bytes twice answer the
-        existing document (200). `agent:manage`.
+        existing document (200). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content:
@@ -1617,7 +1770,7 @@ paths:
     delete:
       tags: [knowledge]
       operationId: deleteKnowledgeDocument
-      description: "`agent:manage`."
+      description: "`agent:manage`, or `project:write` on the owning project (`owner_project`)."
       responses:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1630,7 +1783,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: convertKnowledgeDocument
-      description: Converts the document again (after a failure, or a converter upgrade). `agent:manage`.
+      description: Converts the document again (after a failure, or a converter upgrade). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Accepted for conversion, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeDocument" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1685,10 +1838,21 @@ paths:
     post:
       tags: [knowledge]
       operationId: reindexKnowledgeBase
-      description: Cuts and embeds every ready document again, in the background. `agent:manage`.
+      description: Cuts and embeds every ready document again, in the background. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Reindexing, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/knowledge/{slug}/sync:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [knowledge]
+      operationId: syncKnowledgeBase
+      description: Syncs every source of the base now, rather than at their next scheduled time (S39-19). `agent:manage`.
+      responses:
+        "202": { description: Sync requested for every source, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/knowledge/{slug}/distill:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1699,7 +1863,7 @@ paths:
       description: >-
         The `knowledge-distiller` agent compiles the base into a principles skill (`<slug>-principles`), each principle
         citing its source documents, in the background. The version is published `pending_review` whatever its risk:
-        a person approves it before any agent carries it (S32-06). The outcome lands in `distillation`. `agent:manage`.
+        a person approves it before any agent carries it (S32-06). The outcome lands in `distillation`. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Distilling, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1710,7 +1874,7 @@ paths:
     put:
       tags: [knowledge]
       operationId: putKnowledgeEvalSet
-      description: The base's eval set — questions and the documents (file name or title) expected to answer them. `agent:manage`.
+      description: The base's eval set — questions and the documents (file name or title) expected to answer them. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEvalSet" } } }
@@ -1724,7 +1888,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: runKnowledgeEval
-      description: Runs the eval set against the index and records recall@5 (`eval_result`). `agent:manage`.
+      description: Runs the eval set against the index and records recall@5 (`eval_result`). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBase" } } } }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1738,9 +1902,9 @@ paths:
       operationId: createKnowledgeSource
       description: >-
         Where the base's documents are synced from (S33-04): `sharepoint` (a site or drive through an
-        organisation connector of capability `documents`, Graph `Sites.Selected`, delta sync), `web` (one
+        organisation connector of capability `documents`, Graph `Sites.Selected`, delta sync), `confluence` (a Confluence Cloud space, or a page and its descendants, through a `documents` connector holding an API token; S39-20), `web` (one
         https site, same host, robots.txt obeyed) or `git` (an https repository). Synced at once, then every
-        `interval_minutes`; a document deleted at the source leaves the base and its index. `agent:manage`.
+        `interval_minutes`; a document deleted at the source leaves the base and its index. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSourceCreate" } } }
@@ -1756,7 +1920,7 @@ paths:
     patch:
       tags: [knowledge]
       operationId: updateKnowledgeSource
-      description: Renames it, changes its interval or configuration (a new configuration syncs from scratch). `agent:manage`.
+      description: Renames it, changes its interval or configuration (a new configuration syncs from scratch). `agent:manage`, or `project:write` on the owning project (`owner_project`).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSourcePatch" } } }
@@ -1767,7 +1931,7 @@ paths:
     delete:
       tags: [knowledge]
       operationId: deleteKnowledgeSource
-      description: The source and the documents it brought leave the base. `agent:manage`.
+      description: The source and the documents it brought leave the base. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1779,7 +1943,7 @@ paths:
     post:
       tags: [knowledge]
       operationId: syncKnowledgeSource
-      description: Syncs now rather than at the end of the interval. `agent:manage`.
+      description: Syncs now rather than at the end of the interval. `agent:manage`, or `project:write` on the owning project (`owner_project`).
       responses:
         "202": { description: Sync requested, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSource" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1828,7 +1992,7 @@ paths:
     put:
       tags: [agents]
       operationId: pinProjectAgent
-      description: Pin a version; an override that widens the version gets 422.
+      description: "Pin a version; an override that widens the version gets 422, and so does a personal agent or another project's agent (ADR 0061). 403 carries the reason; an agent the caller may not see is a 404."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentPut" } } }
@@ -2242,7 +2406,14 @@ paths:
                 properties:
                   edition: { type: string, enum: [community, enterprise] }
                   features: { type: array, items: { type: string } }
-                  version: { type: string }
+                  version: { type: string, description: "the core's version" }
+                  publisher:
+                    type: [string, "null"]
+                    maxLength: 80
+                    description: who publishes the running edition, as announced by its plugin; null in the community edition
+                  edition_version:
+                    type: [string, "null"]
+                    description: the version of the edition plugin; null in the community edition
   /theme:
     get:
       tags: [session]
@@ -2568,10 +2739,32 @@ components:
         type: { type: string }
         config: { type: object, additionalProperties: true }
         secret_ref: { type: [string, "null"] }
-        secret_refs: { type: object, additionalProperties: { type: string }, description: "the secrets, field by field, as references (`env:NAME`) — never their value (ADR 0034)" }
+        secret_refs: { type: object, additionalProperties: { type: string }, description: "the secrets, field by field, as references (`env:NAME`, or `store:...` for a sealed value) — never their value (ADR 0034, ADR 0058)" }
+        secrets: { type: array, items: { $ref: "#/components/schemas/ConnectorSecretState" }, description: "one state per configured secret field: where it comes from and when it was last set" }
         status: { type: string, enum: [unknown, ok, degraded, error] }
         last_check_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
+    ConnectorSecretState:
+      type: object
+      required: [field, source]
+      description: What the console may know of one secret field. Never its value (ADR 0058).
+      properties:
+        field: { type: string }
+        source: { type: string, enum: [store, reference] }
+        reference: { type: [string, "null"], description: "only for source=reference: the reference itself (`env:NAME`)" }
+        version: { type: [integer, "null"], description: "only for source=store: +1 at every set; null when the sealed value is gone" }
+        rotated_at: { type: [string, "null"], format: date-time }
+        rotated_by: { type: [string, "null"] }
+    SecretValue:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string, minLength: 1, maxLength: 16384, writeOnly: true }
+    SecretsRewrap:
+      type: object
+      required: [rewrapped]
+      properties:
+        rewrapped: { type: integer }
     ConnectorUpsert:
       type: object
       required: [type, config]
@@ -2580,6 +2773,7 @@ components:
         config: { type: object, additionalProperties: true, description: "no secret field: a plaintext secret gets 422" }
         secret_ref: { type: [string, "null"] }
         secret_refs: { type: object, additionalProperties: { type: string } }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, replaced by a derived `store:` reference, never returned. A stored secret the body does not name is kept (ADR 0058)." }
     ConnectorTestResult:
       type: object
       required: [ok, checks]
@@ -2634,6 +2828,7 @@ components:
         type: { type: string }
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
+        secrets: { type: array, items: { $ref: "#/components/schemas/ConnectorSecretState" } }
         status: { type: string }
         last_check_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }
@@ -2648,6 +2843,14 @@ components:
         kind: { type: [string, "null"] }
         config: { type: object, additionalProperties: true }
         secret_refs: { type: object, additionalProperties: { type: string } }
+        secret_values: { type: object, additionalProperties: { type: string }, writeOnly: true, description: "secret values typed in the console, field -> value: sealed, never returned (ADR 0058)" }
+    OrgConnectorUpdate:
+      type: object
+      description: Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's.
+      properties:
+        config: { type: [object, "null"], additionalProperties: true }
+        secret_refs: { type: [object, "null"], additionalProperties: { type: string } }
+        secret_values: { type: [object, "null"], additionalProperties: { type: string }, writeOnly: true }
     OperationPatch:
       type: object
       properties:
@@ -2956,12 +3159,66 @@ components:
       type: object
       required: [slug, display_name]
       properties:
-        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$", description: "`new` is reserved: the console's `/agents/new` page would shadow it (422)" }
         kind: { type: string, enum: [internal, external], default: internal }
         display_name: { type: string }
         description: { type: [string, "null"] }
         spec: { $ref: "#/components/schemas/AgentSpec" }
         lifecycle: { type: string, enum: [draft, active], default: active, description: a draft is neither pinned nor run until it is activated }
+        scope: { type: string, enum: [org, project, personal], default: org, description: "who owns the agent (ADR 0061); `platform` is never asked for, a common agent comes from the catalogue" }
+        project: { type: [string, "null"], description: "the project's slug: required for, and only for, a `project` agent" }
+    AgentFork:
+      type: object
+      required: [slug, scope]
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$", description: "slugs are unique per organisation: a fork takes a new one" }
+        display_name: { type: [string, "null"] }
+        scope: { type: string, enum: [org, project, personal] }
+        project: { type: [string, "null"], description: "required for, and only for, a `project` fork" }
+        version: { type: [integer, "null"], minimum: 1, description: "the source version to copy; absent, its latest" }
+    AgentScopeChange:
+      type: object
+      required: [scope]
+      properties:
+        scope: { type: string, enum: [org, project, personal] }
+        project: { type: [string, "null"], description: "required for, and only for, a move to a `project`" }
+    AgentUpstream:
+      type: object
+      description: What a fork was copied from, and whether the source moved on since (ADR 0061).
+      required: [slug, version]
+      properties:
+        slug: { type: string }
+        version: { type: integer, description: the version the fork copied }
+        scope: { type: [string, "null"], enum: [platform, org, project, personal, null], description: absent when the source is no longer visible to the caller }
+        latest_version: { type: [integer, "null"] }
+        behind: { type: boolean, description: the source published a version newer than the one copied }
+        available: { type: boolean, description: false when the source is deleted or not visible to the caller }
+    AgentPermissions:
+      type: object
+      description: What the caller may do with an agent, decided by the server (ADR 0061).
+      properties:
+        publish: { type: boolean, description: "publish a version, edit it, move it through its life" }
+        manage: { type: boolean, description: "suspend, revoke, change its owner, attach clients" }
+        pin: { type: boolean, description: pin it on a project the caller owns }
+        fork_scopes: { type: array, items: { type: string, enum: [org, project, personal] } }
+    AgentDraftRequest:
+      type: object
+      required: [display_name, description]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 10, maxLength: 4000, description: what the agent is for; data for the drafting model, never instructions }
+    AgentDraft:
+      type: object
+      description: A proposal that is never saved; the builder is pre-filled with it and a person creates the agent.
+      required: [display_name, slug, description, spec, sample, model]
+      properties:
+        display_name: { type: string }
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        description: { type: string }
+        spec: { $ref: "#/components/schemas/AgentSpec" }
+        sample: { $ref: "#/components/schemas/AgentSampleInput" }
+        notes: { type: array, items: { type: string }, description: what the platform changed or dropped in the model's answer }
+        model: { type: string, description: the model that drafted it }
     AgentCatalogueEntry:
       type: object
       description: An agent the platform's catalogue offers (ADR 0040), and its state in the organisation.
@@ -2980,6 +3237,7 @@ components:
         installed: { type: boolean }
         installed_version: { type: [integer, "null"] }
         own_agent: { type: boolean, description: "an agent of the organisation has this name and does not come from the catalogue" }
+        scope: { type: [string, "null"], enum: [platform, org, project, personal, null], description: "the scope of the agent of this name in the organisation, if any (ADR 0061)" }
         update_available: { type: boolean }
         offered: { type: boolean, description: "false for a client the door does not accept yet (OAuth, registered client, https)" }
         unavailable_reason: { type: [string, "null"] }
@@ -3034,6 +3292,11 @@ components:
         retired_at: { type: [string, "null"], format: date-time }
         last_run_at: { type: [string, "null"], format: date-time }
         unused: { type: boolean, description: no run for 60 days (since its creation if it never ran) }
+        scope: { type: string, enum: [platform, org, project, personal], default: org, description: "who owns it (ADR 0061)" }
+        project: { type: [string, "null"], description: "the slug of its project, for a `project` agent" }
+        forked_from: { oneOf: [{ $ref: "#/components/schemas/AgentUpstream" }, { type: "null" }], description: set on a fork }
+        can: { $ref: "#/components/schemas/AgentPermissions" }
+        cannot_reason: { type: [string, "null"], description: "the server's sentence for what the caller may not do: shown as is, never guessed from roles" }
     AgentLifecycleChange:
       type: object
       required: [to]
@@ -3279,6 +3542,15 @@ components:
         projects: { type: array, items: { type: string }, maxItems: 200 }
         groups: { type: array, items: { type: string }, maxItems: 200 }
         serving_mode: { type: string, enum: [files, index], default: files, description: "`files`: the converted corpus mounted read-only in the workspace; `index`: hybrid search" }
+    ProjectKnowledgeBaseCreate:
+      type: object
+      required: [slug, name]
+      additionalProperties: false
+      properties:
+        slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        serving_mode: { type: string, enum: [files, index], default: files }
     KnowledgeBasePatch:
       type: object
       additionalProperties: false
@@ -3336,6 +3608,7 @@ components:
             mode: { type: string }
         eval_set: { type: array, items: { $ref: "#/components/schemas/KnowledgeEvalCase" } }
         sources: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeSource" }, description: returned by the reading of one base }
+        owner_project: { type: [string, "null"], description: "the project this base was created from (S39-14): its owners curate it, never widen it; null for an organisation's base" }
         distillation:
           type: [object, "null"]
           description: "the last distillation: `status` (running, pending_review, failed), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`"
@@ -3361,13 +3634,16 @@ components:
       required: [kind, name]
       additionalProperties: false
       properties:
-        kind: { type: string, enum: [sharepoint, web, git] }
+        kind: { type: string, enum: [sharepoint, confluence, web, git] }
         name: { type: string, minLength: 1, maxLength: 200 }
-        connector: { type: [string, "null"], description: "`sharepoint`: the organisation connector of capability `documents`" }
+        connector: { type: [string, "null"], description: "`sharepoint`, `confluence`: the organisation connector of capability `documents`" }
         config:
           type: object
-          description: "`sharepoint`: `site_id` or `drive_id`, optional `folder`; `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`)"
+          description: "`sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`)"
         interval_minutes: { type: integer, minimum: 5, maximum: 10080, default: 60 }
+        refresh_mode: { type: string, enum: [interval, cron, manual], default: interval, description: "`interval`: every `interval_minutes`; `cron`: `refresh_cron` in `refresh_timezone`; `manual`: only on demand (S39-19)" }
+        refresh_cron: { type: [string, "null"], maxLength: 100, description: "five fields (minute hour day month weekday); at least 5 minutes between two fires" }
+        refresh_timezone: { type: string, maxLength: 64, default: UTC, description: IANA name, for example `Europe/Paris` }
     KnowledgeSourcePatch:
       type: object
       additionalProperties: false
@@ -3375,16 +3651,24 @@ components:
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
         config: { type: [object, "null"] }
         interval_minutes: { type: [integer, "null"], minimum: 5, maximum: 10080 }
+        refresh_mode: { type: [string, "null"], enum: [interval, cron, manual, null] }
+        refresh_cron: { type: [string, "null"], maxLength: 100 }
+        refresh_timezone: { type: [string, "null"], maxLength: 64 }
     KnowledgeSource:
       type: object
       required: [id, kind, name, interval_minutes, status]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [sharepoint, web, git] }
+        kind: { type: string, enum: [sharepoint, confluence, web, git] }
         name: { type: string }
         connector: { type: [string, "null"] }
         config: { type: object }
         interval_minutes: { type: integer }
+        refresh_mode: { type: string, enum: [interval, cron, manual] }
+        refresh_cron: { type: [string, "null"] }
+        refresh_timezone: { type: string }
+        next_sync_at: { type: [string, "null"], format: date-time, description: an estimate (the worker may be down); null in manual mode or when due }
+        sync_requested_at: { type: [string, "null"], format: date-time }
         status: { type: string, enum: [idle, syncing, failed] }
         last_synced_at: { type: [string, "null"], format: date-time }
         last_error: { type: [string, "null"] }

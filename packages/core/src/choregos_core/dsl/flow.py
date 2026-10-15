@@ -25,6 +25,7 @@ PULL_REQUEST_SECTIONS: tuple[tuple[str, str | None], ...] = (
     ("spec_markdown", None),
     ("plan_markdown", "Plan"),
     ("review_markdown", "Agent review"),
+    ("docs_report", "Documentation"),
     ("release_notes_markdown", "Release notes"),
 )
 

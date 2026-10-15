@@ -31,6 +31,7 @@ RESUMES: dict[str, str] = {
     "ci_green": "the CI pipeline is green",
     "coverage_delta_min": "test coverage does not drop below the threshold",
     "diff_size_max": "the change stays under the size limit",
+    "docs_updated": "the change updates its documentation when it changes anything else",
     "evidence_facts": "the facts the step counted meet the declared minimums",
     "evidence_present": "the platform measured the evidence the stage owes",
     "external": "an external check reports success",

@@ -97,12 +97,4 @@ async def test_une_demande_se_pose_dans_choregos_quand_le_tracker_est_interne(
     ).json()
     assert second["tracker_key"] == "BILLING-API-2" and second["temporal_wf_id"] is None
 
-    # tracker externe : la demande se crée là-bas, pas ici
-    # (`github-issues` : le type `github` n'existe pas pour un tracker, et l'API l'acceptait.)
-    pose = await client.put(
-        f"/api/v1/projects/{project['id']}/connectors/tracker",
-        json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
-    )
-    assert pose.status_code == 200, pose.text
-    refus = await client.post(f"/api/v1/projects/{project['id']}/work-items", json={"title": "x"})
-    assert refus.status_code == 409
+    # An external tracker no longer refuses: see test_work_item_external_tracker.py.

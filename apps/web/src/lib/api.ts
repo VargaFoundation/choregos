@@ -13,11 +13,16 @@ import type {
   OperationPatch,
   OrgConnector,
   OrgConnectorCreate,
+  OrgConnectorUpdate,
   ProjectOperation,
   ProjectRequirement,
   AgentCatalogueConnection,
   AgentCatalogueEntry,
   AgentCreate,
+  AgentDraft,
+  AgentDraftRequest,
+  AgentFork,
+  AgentScopeChange,
   AgentCredential,
   AgentLifecycleChange,
   AgentLifecycleResult,
@@ -41,12 +46,14 @@ import type {
   SkillVersion,
   KnowledgeBase,
   KnowledgeBaseCreate,
+  ProjectKnowledgeBaseCreate,
   KnowledgeBasePatch,
   KnowledgeDocument,
   KnowledgeEvalCase,
   KnowledgeSearchResult,
   KnowledgeSource,
   KnowledgeSourceCreate,
+  KnowledgeSourcePatch,
   AgentBackendInfo,
   ApiToken,
   ApiTokenCreate,
@@ -288,6 +295,15 @@ export const api = {
   agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
   createAgent: (org: string, body: AgentCreate) =>
     request<Agent>(`/orgs/${org}/agents`, { method: "POST", body: JSON.stringify(body) }),
+  /** A model drafts an agent from its description: a proposal, never saved (S39-05). */
+  draftAgent: (org: string, body: AgentDraftRequest) =>
+    request<AgentDraft>(`/orgs/${org}/agent-drafts`, { method: "POST", body: JSON.stringify(body) }),
+  /** A fork: a new agent in the scope asked, whose v1 copies a version of the source (ADR 0061). */
+  forkAgent: (org: string, slug: string, body: AgentFork) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/fork`, { method: "POST", body: JSON.stringify(body) }),
+  /** Move an agent to another scope (promote a personal or project agent); the server decides who may. */
+  changeAgentScope: (org: string, slug: string, body: AgentScopeChange) =>
+    request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (org: string, slug: string, body: AgentPatch) =>
     request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
   /** Its life (S32-04): activate a draft, deprecate, retire — retiring runs its checklist. */
@@ -358,6 +374,9 @@ export const api = {
   knowledgeBase: (org: string, slug: string) => request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`),
   createKnowledgeBase: (org: string, body: KnowledgeBaseCreate) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
+  /** A base owned by the project (S39-14): scoped to it, curated by its owners. */
+  createProjectKnowledgeBase: (project: string, body: ProjectKnowledgeBaseCreate) =>
+    request<KnowledgeBase>(`/projects/${encodeURIComponent(project)}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
   updateKnowledgeBase: (org: string, slug: string, body: KnowledgeBasePatch) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
   uploadKnowledgeDocument: (org: string, slug: string, file: File) => {
@@ -396,6 +415,10 @@ export const api = {
     request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/eval/run`, { method: "POST" }),
   createKnowledgeSource: (org: string, slug: string, body: KnowledgeSourceCreate) =>
     request<KnowledgeSource>(`/orgs/${org}/knowledge/${slug}/sources`, { method: "POST", body: JSON.stringify(body) }),
+  updateKnowledgeSource: (org: string, slug: string, id: string, body: KnowledgeSourcePatch) =>
+    request<KnowledgeSource>(`/orgs/${org}/knowledge/${slug}/sources/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  syncKnowledgeBase: (org: string, slug: string) =>
+    request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}/sync`, { method: "POST" }),
   syncKnowledgeSource: (org: string, slug: string, id: string) =>
     request<KnowledgeSource>(`/orgs/${org}/knowledge/${slug}/sources/${id}/sync`, { method: "POST" }),
   deleteKnowledgeSource: (org: string, slug: string, id: string) =>
@@ -471,6 +494,17 @@ export const api = {
     request<OrgConnector>(`/orgs/${org}/connectors`, { method: "POST", body: JSON.stringify(body) }),
   deleteOrgConnector: (org: string, name: string) =>
     request<void>(`/orgs/${org}/connectors/${name}`, { method: "DELETE" }),
+  /** Edit a declared connector: its configuration, and its secrets by reference (ADR 0058). */
+  updateOrgConnector: (org: string, name: string, body: OrgConnectorUpdate) =>
+    request<OrgConnector>(`/orgs/${org}/connectors/${name}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /** A secret is typed once and never read back: the answer says it is set, not what it is. */
+  setOrgConnectorSecret: (org: string, name: string, field: string, value: string) =>
+    request<OrgConnector>(`/orgs/${org}/connectors/${name}/secrets/${field}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+  clearOrgConnectorSecret: (org: string, name: string, field: string) =>
+    request<OrgConnector>(`/orgs/${org}/connectors/${name}/secrets/${field}`, { method: "DELETE" }),
   updateConnectorOperation: (org: string, name: string, operation: string, body: OperationPatch) =>
     request<ConnectorOperation>(`/orgs/${org}/connectors/${name}/operations/${encodeURIComponent(operation)}`, {
       method: "PATCH",
@@ -493,6 +527,13 @@ export const api = {
   projectRequirements: (id: string) => request<ProjectRequirement[]>(`/projects/${qualify(id)}/requirements`),
   putConnector: (id: string, kind: string, body: unknown) =>
     request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}`, { method: "PUT", body: JSON.stringify(body) }),
+  setConnectorSecret: (id: string, kind: string, field: string, value: string) =>
+    request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}/secrets/${field}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+  clearConnectorSecret: (id: string, kind: string, field: string) =>
+    request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}/secrets/${field}`, { method: "DELETE" }),
   testConnector: (id: string, kind: string) =>
     request<ConnectorTestResult>(`/projects/${qualify(id)}/connectors/${kind}/test`, { method: "POST" }),
 

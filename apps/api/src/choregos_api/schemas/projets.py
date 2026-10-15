@@ -80,6 +80,30 @@ class ProvisionStatus(Dto):
     steps: list[ProvisionStep] = Field(default_factory=list)
 
 
+class ConnectorSecretState(Dto):
+    """What the console may know of one secret field: where it comes from and when it was last set,
+    never its value (ADR 0058)."""
+
+    field: str
+    source: Literal["store", "reference"]
+    #: only for `source == "reference"`: the reference itself (`env:NAME`) reveals nothing
+    reference: str | None = None
+    #: only for `source == "store"`: null when the sealed value is gone (a cleared secret)
+    version: int | None = None
+    rotated_at: datetime | None = None
+    rotated_by: str | None = None
+
+
+class SecretsRewrap(Dto):
+    rewrapped: int
+
+
+class SecretValue(Dto):
+    """The body of a secret write: the value, typed once, never returned."""
+
+    value: str = Field(min_length=1, max_length=16384, repr=False)
+
+
 class ConnectorDto(Dto):
     id: str | None = None
     kind: str
@@ -88,6 +112,8 @@ class ConnectorDto(Dto):
     secret_ref: str | None = None
     #: Les secrets, champ par champ, en références (`env:NOM`) — jamais leur valeur (ADR 0034).
     secret_refs: dict[str, str] = Field(default_factory=dict)
+    #: One entry per configured secret field: its source and last rotation (ADR 0058).
+    secrets: list[ConnectorSecretState] = Field(default_factory=list)
     status: str = "unknown"
     last_check_at: datetime | None = None
     last_error: str | None = None
@@ -103,6 +129,9 @@ class ConnectorUpsert(Dto):
     config: dict[str, Any] = Field(default_factory=dict)
     secret_ref: str | None = None
     secret_refs: dict[str, str] = Field(default_factory=dict)
+    #: Secret values typed in the console, field -> value. Write-only: sealed in the database and
+    #: replaced by a derived `store:` reference; never returned (ADR 0058).
+    secret_values: dict[str, str] = Field(default_factory=dict, repr=False)
 
 
 class ConnectorCheck(Dto):
@@ -183,6 +212,7 @@ class OrgConnectorDto(Dto):
     type: str
     config: dict[str, Any] = Field(default_factory=dict)
     secret_refs: dict[str, str] = Field(default_factory=dict)
+    secrets: list[ConnectorSecretState] = Field(default_factory=list)
     status: str = "unknown"
     last_check_at: datetime | None = None
     last_error: str | None = None
@@ -202,6 +232,17 @@ class OrgConnectorCreate(Dto):
     kind: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     secret_refs: dict[str, str] = Field(default_factory=dict)
+    #: Secret values typed in the console, field -> value: write-only (ADR 0058).
+    secret_values: dict[str, str] = Field(default_factory=dict, repr=False)
+
+
+class OrgConnectorUpdate(Dto):
+    """Edit a declared connector. Absent: unchanged. `secret_refs` and `secret_values` MERGE into
+    what is there; a stored secret is cleared with its own DELETE."""
+
+    config: dict[str, Any] | None = None
+    secret_refs: dict[str, str] | None = None
+    secret_values: dict[str, str] | None = Field(default=None, repr=False)
 
 
 class OperationPatch(Dto):

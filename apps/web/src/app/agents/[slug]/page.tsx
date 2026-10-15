@@ -7,7 +7,15 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { LifecycleBadges, LifecyclePanel } from "@/components/agents/lifecycle";
-import { estUnClientMcp, etatDuClient, resumeDeLaVersion } from "@/components/agents/registre";
+import {
+  CatalogueWarning,
+  ForkDialog,
+  ReasonNote,
+  ScopeBadge,
+  ScopePanel,
+  UpstreamBanner,
+} from "@/components/agents/governance";
+import { estUnClientMcp, etatDuClient, readOnly, resumeDeLaVersion } from "@/components/agents/registre";
 import {
   Badge,
   Breadcrumbs,
@@ -61,6 +69,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   const demande = search.get("tab");
   const onglet: AgentTab = AGENT_TABS.some((o) => o.id === demande) ? (demande as AgentTab) : "overview";
   const agent = useQuery({ queryKey: ["agent", org, slug], queryFn: () => api.agent(org, slug) });
+  const [forking, setForking] = useState(false);
   if (agent.error) return <ErrorNote>{String(agent.error)}</ErrorNote>;
   if (!agent.data) return <Empty>Reading the agent…</Empty>;
   const a = agent.data;
@@ -73,11 +82,23 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
         </Heading>
         <span className="font-mono text-sm text-ink-muted">{a.slug}</span>
         <Badge tone={a.kind === "external" ? "accent" : "neutral"}>{a.kind === "external" ? "External" : "Internal"}</Badge>
+        <ScopeBadge agent={a} />
         <Badge tone={a.status === "active" ? "ok" : "danger"}>{a.status}</Badge>
         <LifecycleBadges agent={a} />
         {a.owner && <span className="text-xs text-ink-muted">Owned by {a.owner}</span>}
         {a.expires_at && <span className="text-xs text-ink-muted">Expires {shortDate(a.expires_at)}</span>}
       </div>
+      <ReasonNote agent={a} />
+      <UpstreamBanner agent={a} />
+      {(a.can?.fork_scopes ?? []).length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={() => setForking(true)}>
+            Fork
+          </Button>
+          <span className="text-xs text-ink-muted">Copy it into a scope of yours and change the copy.</span>
+        </div>
+      )}
+      <ForkDialog key={`${a.slug}-${a.latest_version}`} org={org} agent={a} open={forking} onClose={() => setForking(false)} />
       <Tabs aria-label={`Sections of ${a.display_name}`}>
         {AGENT_TABS.map((o) => (
           <Link
@@ -95,8 +116,13 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
           {a.description && <p className="max-w-3xl text-sm text-ink-muted">{a.description}</p>}
           <Statut org={org} agent={a} />
           <Card title="Lifecycle">
-            <LifecyclePanel org={org} agent={a} />
+            <LifecyclePanel org={org} agent={a} disabled={a.can?.manage === false || readOnly(a)} />
           </Card>
+          {a.can?.manage === true && a.scope !== "platform" && (
+            <Card title="Scope">
+              <ScopePanel org={org} agent={a} />
+            </Card>
+          )}
           <Mesures org={org} slug={slug} />
         </>
       )}
@@ -130,14 +156,15 @@ function Statut({ org, agent }: { org: string; agent: Agent }) {
     }
   }
   if (agent.status === "revoked") return null;
+  const locked = agent.can?.manage === false;
   return (
     <div className="flex flex-wrap items-center gap-2">
       {agent.status === "active" ? (
-        <Button size="sm" onClick={() => void passer("suspended")}>
+        <Button size="sm" disabled={locked} onClick={() => void passer("suspended")}>
           Suspend
         </Button>
       ) : (
-        <Button size="sm" onClick={() => void passer("active")}>
+        <Button size="sm" disabled={locked} onClick={() => void passer("active")}>
           Reactivate
         </Button>
       )}
@@ -152,7 +179,7 @@ function Statut({ org, agent }: { org: string; agent: Agent }) {
           </Button>
         </span>
       ) : (
-        <Button size="sm" tone="danger" onClick={() => setAConfirmer(true)}>
+        <Button size="sm" tone="danger" disabled={locked} onClick={() => setAConfirmer(true)}>
           Revoke…
         </Button>
       )}
@@ -246,7 +273,18 @@ function Definition({ org, agent }: { org: string; agent: Agent }) {
       <Card title={`Version ${courante?.version ?? "—"}`}>
         {courante ? <Specification spec={courante.spec} /> : <p className="text-sm text-ink-muted">No version</p>}
       </Card>
-      {agent.status !== "revoked" && (
+      <CatalogueWarning agent={agent} />
+      {readOnly(agent) ? (
+        <section className="space-y-2" aria-labelledby="new-version-title">
+          <Heading as="h2" size="md" id="new-version-title">{`New version (v${agent.latest_version + 1})`}</Heading>
+          <Button disabled aria-describedby="why-readonly">
+            {`Publish v${agent.latest_version + 1}`}
+          </Button>
+          <p id="why-readonly" className="text-sm text-ink-muted" data-testid="why-readonly">
+            {agent.cannot_reason ?? "You may not change this agent."}
+          </p>
+        </section>
+      ) : agent.status !== "revoked" && (
         // No card around the builder: it lays out its own two columns, and a card's padding took the width (S39-05).
         <section className="space-y-3" aria-labelledby="new-version-title">
           <Heading as="h2" size="md" id="new-version-title">{`New version (v${agent.latest_version + 1})`}</Heading>

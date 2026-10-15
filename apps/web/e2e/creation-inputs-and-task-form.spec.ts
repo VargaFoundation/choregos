@@ -19,7 +19,7 @@ test("an onboarding ticket is filed from its input form, and its fields reach th
   await page.goto("/p/people-ops/board");
   const shipped = page.getByRole("region", { name: /^Laptop ordered, enrolled, shipped/ });
   await expect(shipped.getByRole("link", { name: "Paul Martin joins as data analyst" })).toBeVisible();
-  await page.getByRole("button", { name: "new request" }).click();
+  await page.getByRole("button", { name: "new work item" }).click();
   const fields = page.getByTestId("request-fields");
   // The form is the workflow's `metadata.inputs`: its titles, its required fields, a date picker.
   await expect(fields.getByLabel("Start date (required)")).toHaveAttribute("type", "date");
@@ -30,8 +30,8 @@ test("an onboarding ticket is filed from its input form, and its fields reach th
   await fields.getByLabel("Access group of the role (required)").fill("grp-payroll");
   await fields.getByLabel("Sensitive group (stronger approval) (required)").fill("grp-payroll-admin");
   await fields.getByLabel("Laptop delivery address (required)").fill("4 Quay Road, Nantes");
-  await page.getByLabel("request title").fill("Nora Benali joins payroll");
-  await page.getByRole("button", { name: "file and start" }).click();
+  await page.getByLabel("Title", { exact: true }).fill("Nora Benali joins payroll");
+  await page.getByRole("button", { name: "create and start" }).click();
 
   // The ticket is on the board, in the workflow's first column.
   const received = page.getByRole("region", { name: /^Request received/ });

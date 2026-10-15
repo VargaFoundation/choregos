@@ -23,7 +23,10 @@ tester runs the checks and writes the missing tests (a failure goes back to the 
 report), a reviewer with a fresh context approves or asks for changes (a review responder handles
 them), the platform opens and merges the pull request once GitHub Actions is green (a CI fixer
 handles a red run), the release train deploys to production **without approval**, and the
-production verifier gives a go or no-go from measured facts.
+production verifier gives a go or no-go from measured facts. It has no documentation step: its
+promise is no human unless something goes wrong, and most fixes change nothing documentable, so a
+strict gate would escalate many of them. A fix that changes behaviour visibly carries the `feature`
+label and goes through `dev-complex`.
 
 **study** — the spec writer frames the question and the decision criteria, the researcher gathers
 options with `path:line` evidence, the architect writes **one** ADR in `docs/adr/` with the `madr-4`
@@ -36,7 +39,14 @@ same "highest plus one": the second to merge is sent back to the architect, who 
 **Nothing is deployed.**
 
 **dev-complex** — the same chain as `dev-simple`, plus a plan, a security review and release notes
-(they are added to the pull request). Three people decide: `product-owners` on the specification,
+(they are added to the pull request). A **documentation step** follows the tests: the catalogue's
+`docs-writer` updates the documentation from the diff (role `document`, commits as `docs`) and the
+`docs_updated` guarantee checks the work item's diff — it must update a documentation file
+(`docs/**`, `*.md`, `CHANGELOG*`) whenever it changes anything but tests, lockfiles and CI, a
+changelog line being enough. The reviewers then see code and documentation together, the release
+notes read the writer's report, and the pull request carries a `## Documentation` section. The spec
+writer puts the documentation paths in the allowed paths; otherwise the writer asks for them
+(`request_scope_change`, auto-granted up to three files). Three people decide: `product-owners` on the specification,
 `maintainers` on the pull request — again after a CI fix, since what changed has not been seen —
 and `release-captains` on the production departure of the release train
 ([ADR 0041](../../docs/adr/0041-approval-follows-what-the-batch-ships.md)). Staging comes first,

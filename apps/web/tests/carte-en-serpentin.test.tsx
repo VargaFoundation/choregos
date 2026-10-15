@@ -11,7 +11,7 @@ describe("la carte d'un workflow en serpentin (S22-05)", () => {
   it("dessine chaque étape colorée par qui la porte, sans lecteur ni statut", () => {
     render(<CarteEnSerpentin graph={graph} process={process} initial={initial} />);
     const carte = screen.getByTestId("carte-en-serpentin");
-    expect(carte.querySelectorAll("[data-etape]")).toHaveLength(17); // quinze étapes et deux détours
+    expect(carte.querySelectorAll("[data-etape]")).toHaveLength(18); // sixteen steps and two detours
     expect(screen.queryByRole("toolbar", { name: "Replay the journey" })).not.toBeInTheDocument();
     expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer, agent, writes the change — produces branch — 0 attempts$/);
     const forme = (id: string) => carte.querySelector(`[data-etape="${id}"] .parcours-forme`)!.getAttribute("stroke");

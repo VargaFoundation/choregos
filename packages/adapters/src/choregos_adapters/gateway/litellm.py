@@ -15,6 +15,7 @@ import httpx
 import structlog
 from choregos_core.domain import GatewayModel, Spend, VirtualKey, utcnow
 
+from ..base import GATEWAY_CAPABILITIES
 from ..errors import UpstreamError
 
 logger = structlog.get_logger("choregos.gateway.litellm")
@@ -22,6 +23,8 @@ logger = structlog.get_logger("choregos.gateway.litellm")
 
 class LiteLlmGateway:
     """Client du proxy LiteLLM (clés, dépenses, catalogue de modèles)."""
+
+    capabilities: frozenset[str] = GATEWAY_CAPABILITIES
 
     def __init__(
         self,

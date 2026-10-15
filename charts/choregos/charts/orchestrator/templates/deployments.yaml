@@ -89,6 +89,10 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: github-app-id, optional: true } }
             - name: CHOREGOS_GITHUB_APP_PRIVATE_KEY
               valueFrom: { secretKeyRef: { name: {{ $root.Values.global.apiSecretRef }}, key: github-app-private-key, optional: true } }
+            # The key that seals the connector secrets typed in the console (ADR 0058). Optional: a
+            # deployment without it keeps `env:` references and answers 409 when a value is typed.
+            - name: CHOREGOS_SECRETS_KEKS
+              valueFrom: { secretKeyRef: { name: {{ $root.Values.global.secrets.keksSecretRef | default $root.Values.global.apiSecretRef }}, key: {{ $root.Values.global.secrets.keksKey | default "secrets-keks" }}, optional: true } }
             # The API's internal service: this is what agents call back, never
             # the public URL, which a pod cannot resolve.
             - name: CHOREGOS_INTERNAL_API_URL

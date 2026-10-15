@@ -71,10 +71,12 @@ export type {
   ActionEffect,
   ConnectorDiscovery,
   ConnectorOperation,
+  ConnectorSecretState,
   Integrations,
   OperationPatch,
   OrgConnector,
   OrgConnectorCreate,
+  OrgConnectorUpdate,
   ProjectOperation,
   ProjectRequirement,
 } from "@choregos/contracts/api";
@@ -86,6 +88,12 @@ export type {
   AgentCatalogueEntry,
   AgentCreate,
   AgentCredential,
+  AgentDraft,
+  AgentDraftRequest,
+  AgentFork,
+  AgentPermissions,
+  AgentScopeChange,
+  AgentUpstream,
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentEvalCase,
@@ -120,12 +128,14 @@ export type { Artifact } from "@choregos/contracts/schemas";
 export type {
   KnowledgeBase,
   KnowledgeBaseCreate,
+  ProjectKnowledgeBaseCreate,
   KnowledgeBasePatch,
   KnowledgeDocument,
   KnowledgeEvalCase,
   KnowledgeSearchResult,
   KnowledgeSource,
   KnowledgeSourceCreate,
+  KnowledgeSourcePatch,
 } from "@choregos/contracts/api";
 
 /** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */

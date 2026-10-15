@@ -1,16 +1,22 @@
-# Une fonctionnalité, ou tout ce qui n'est pas petit : la même chaîne que `dev-simple`, avec trois
-# décisions humaines — la spec (product owners), la pull request (maintainers), la mise en production
-# (release captains, par le train : ADR 0041).
+# A feature, or anything that is not small: the same chain as `dev-simple`, with three human decisions:
+# the specification (product owners), the pull request (maintainers) and production (release captains,
+# through the train: ADR 0041).
 #
-# Un refus renvoie le travail avec sa raison (`human_feedback`). Une CI rouge après l'approbation de
-# la PR part chez le réparateur, puis la PR redemande une approbation : ce qui a changé n'a pas été vu.
-# Staging d'abord, sans approbation ; la prod ensuite, sous le capitaine.
+# The change documents itself: after the tests, the docs writer updates the documentation from the diff
+# and the `docs_updated` guarantee checks that a documentation file really changed. The writer stays
+# within the allowed paths the specification sets, or asks for more (`request_scope_change`).
+# The reviewers then judge code and documentation together, and a review that asks for changes goes
+# back through the tests and the documentation.
+#
+# A refusal sends the work back with its reason (`human_feedback`). A red CI after the pull request
+# approval goes to the fixer, then the pull request asks for approval again: what changed was not seen.
+# Staging first, with no approval; production next, under the captain.
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: dev-complex
-  version: 1
-  description: "A feature or a large change: specification approved by a product owner, plan, implementation, tests, agent and security reviews, release notes, pull request approved by a maintainer, staging, production approved by a release captain, production check."
+  version: 2
+  description: "A feature or a large change: specification approved by a product owner, plan, implementation, tests, documentation, agent and security reviews, release notes, pull request approved by a maintainer, staging, production approved by a release captain, production check."
 initial: inbox
 actors:
   triager: { type: agent, role: triage, agent: triager, model: "profile:cheap" }
@@ -18,6 +24,7 @@ actors:
   planner: { type: agent, role: plan, agent: planner, model: "profile:standard" }
   developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
   tester: { type: agent, role: verify, agent: tester, model: "profile:standard" }
+  docs_writer: { type: agent, role: document, agent: docs-writer, model: "profile:standard" }
   reviewer: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
   security_reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true }
   responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
@@ -36,6 +43,7 @@ states:
   planned: { display: Planned, tracker: { status: Ready } }
   implemented: { display: Implemented, tracker: { status: In progress } }
   tested: { display: Tested, tracker: { status: In progress } }
+  documented: { display: Documented, tracker: { status: In progress } }
   reviewed: { display: Reviewed by an agent, tracker: { status: In progress } }
   secured: { display: Security reviewed, tracker: { status: In progress } }
   addressing_review: { display: Addressing the review, tracker: { status: In progress } }
@@ -88,8 +96,16 @@ transitions:
     outputs: [test_report]
     gates: [evidence_present]
     on_fail: { to: planned, max_attempts: 3, escalate_to: needs_human }
-  - id: t-review
+  - id: t-document
     from: tested
+    to: documented
+    by: docs_writer
+    inputs: [human_feedback]
+    outputs: [docs_report]
+    gates: [scope_respected, no_secrets, docs_updated]
+    on_fail: { to: tested, max_attempts: 2, escalate_to: needs_human }
+  - id: t-review
+    from: documented
     to: reviewed
     by: reviewer
     outputs: [review_markdown, verdict]
@@ -116,6 +132,7 @@ transitions:
     from: secured
     to: notes_written
     by: notes_writer
+    inputs: [docs_report]
     outputs: [release_notes_markdown]
     on_fail: { to: secured, max_attempts: 2, escalate_to: needs_human }
   - id: t-open-pr

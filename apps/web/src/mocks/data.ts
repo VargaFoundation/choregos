@@ -14,6 +14,8 @@ import type {
   GatewayModel,
   AgentCatalogueEntry,
   AgentCreate,
+  AgentFork,
+  AgentScopeChange,
   AgentEvalCase,
   AgentEvalResult,
   AgentSpec,
@@ -55,6 +57,7 @@ import type {
   WorkflowRouting,
   WorkflowSummary,
   WorkflowValidation,
+  WorkItemCreate,
   WorkItemDto,
   WorkItemPage,
 } from "@/lib/types";
@@ -1270,6 +1273,8 @@ export const agents: Agent[] = [
     status: "active",
     owner: "lea@acme.dev",
     latest_version: 2,
+    scope: "org",
+    can: { publish: true, manage: true, pin: true, fork_scopes: ["org", "project", "personal"] },
     created_at: iso(60 * 24 * 9),
     versions: [
       {
@@ -1308,6 +1313,81 @@ export const agents: Agent[] = [
         version: 1,
         spec: { mcp_servers: [{ connector: "choregos", tools: ["list_*", "search_*", "get_*", "create_work_item"] }] },
         checksum: "sha256:5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+        created_by: "lea@acme.dev",
+        created_at: iso(60 * 24),
+      },
+    ],
+  },
+  // One agent per scope (S39-09, ADR 0061). The `can` and the reason are the server's: the console shows them as they are.
+  {
+    slug: "developer",
+    kind: "internal",
+    display_name: "Developer",
+    description: "Implements the specification inside the allowed paths, test first.",
+    status: "active",
+    owner: null,
+    latest_version: 2,
+    scope: "platform",
+    project: null,
+    can: { publish: false, manage: false, pin: true, fork_scopes: ["project", "personal"] },
+    cannot_reason: "This is a common agent of the platform's catalogue: only an organisation admin changes it. Fork it into your project to change a copy.",
+    versions: [
+      {
+        version: 2,
+        spec: { instructions: "Implement the specification, test first.\nSmall conventional commits.", model: "profile:standard" },
+        checksum: "sha256:2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a",
+        created_by: "catalogue:developer@2",
+        created_at: iso(60 * 24 * 3),
+      },
+      {
+        version: 1,
+        spec: { instructions: "Implement the specification.", model: "profile:standard" },
+        checksum: "sha256:1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
+        created_by: "catalogue:developer@1",
+        created_at: iso(60 * 24 * 20),
+      },
+    ],
+  },
+  {
+    slug: "developer-billing-api",
+    kind: "internal",
+    display_name: "Developer (billing-api)",
+    description: "The common developer, forked into billing-api.",
+    status: "active",
+    owner: "lea@acme.dev",
+    latest_version: 1,
+    scope: "project",
+    project: "billing-api",
+    forked_from: { slug: "developer", version: 1, scope: "platform", latest_version: 2, behind: true, available: true },
+    can: { publish: true, manage: true, pin: true, fork_scopes: ["project", "personal"] },
+    cannot_reason: null,
+    versions: [
+      {
+        version: 1,
+        spec: { instructions: "Implement the specification.", model: "profile:standard" },
+        checksum: "sha256:1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b",
+        created_by: "lea@acme.dev",
+        created_at: iso(60 * 24 * 5),
+      },
+    ],
+  },
+  {
+    slug: "leas-scratchpad",
+    kind: "internal",
+    display_name: "Lea's scratchpad",
+    description: "An experiment of Lea's: it never runs in a workflow.",
+    status: "active",
+    owner: "lea@acme.dev",
+    latest_version: 1,
+    scope: "personal",
+    project: null,
+    can: { publish: true, manage: true, pin: false, fork_scopes: ["project", "personal"] },
+    cannot_reason: null,
+    versions: [
+      {
+        version: 1,
+        spec: { instructions: "Try ideas.", model: "profile:cheap" },
+        checksum: "sha256:3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
         created_by: "lea@acme.dev",
         created_at: iso(60 * 24),
       },
@@ -1517,6 +1597,7 @@ export const projectKnowledgeBase: KnowledgeBase = {
   scope: "projects",
   projects: ["billing-api"],
   groups: [],
+  owner_project: "billing-api",
   serving_mode: "files",
   status: "active",
   document_count: 0,
@@ -1587,6 +1668,14 @@ export const connectorTypes: ConnectorType[] = [
   { kind: "gateway", type: "litellm", display: "LiteLLM", config_schema: objet({ base_url: { type: "string" } }), capabilities: ["gateway"], secret_fields: ["master_key"] },
   { kind: "notify", type: "slack", display: "Slack", config_schema: objet({ channel: { type: "string" } }), capabilities: ["notify"], secret_fields: ["webhook_url", "bot_token"] },
   { kind: "identity", type: "entra", display: "Microsoft Entra ID", config_schema: objet({ tenant: { type: "string" } }, ["tenant"]), capabilities: ["identity"], secret_fields: ["client_secret"] },
+  {
+    kind: "documents",
+    type: "sharepoint",
+    display: "SharePoint / OneDrive",
+    config_schema: objet({ tenant_id: { type: "string" }, client_id: { type: "string" } }, ["tenant_id", "client_id"]),
+    capabilities: ["documents"],
+    secret_fields: ["client_secret"],
+  },
 ];
 
 /** Un annuaire de l'organisation (ADR 0034) : chaque opération porte sa politique. */
@@ -1597,6 +1686,8 @@ export const orgConnectors: OrgConnector[] = [
     type: "entra",
     config: { tenant: "acme.onmicrosoft.com" },
     secret_refs: { client_secret: "env:CONNECTOR_ENTRA_CLIENT_SECRET" },
+    // A reference an operator wrote: the console shows it as such (ADR 0058).
+    secrets: [{ field: "client_secret", source: "reference", reference: "env:CONNECTOR_ENTRA_CLIENT_SECRET" }],
     status: "ok",
     created_by: "lea@acme.dev",
     operations: [
@@ -1612,7 +1703,9 @@ orgConnectors.push({
   kind: "mcp",
   type: "mcp",
   config: { url: "https://supplier.example/mcp" },
-  secret_refs: { token: "env:CONNECTOR_SUPPLIER_TOKEN" },
+  secret_refs: { token: "store:connector/supplier-agent/token" },
+  // A value typed in the console: the console only knows it is set, when and by whom.
+  secrets: [{ field: "token", source: "store", version: 2, rotated_at: new Date(Date.now() - 3 * 86_400_000).toISOString(), rotated_by: "lea@acme.dev" }],
   status: "ok",
   operations: [
     { name: "track_order", access: "read", policy: "allowed", groups: [], schema_digest: "sha256:5e1f" },
@@ -1720,6 +1813,9 @@ function recordWrite(method: string, path: string, body: unknown): void {
   (target.__mockWrites ??= []).push({ method, path, body });
 }
 
+/** The work items filed on Checkout Web (Jira) during this page's life, so the board shows them. */
+const filedOnTheMock: WorkItemDto[] = [];
+
 /** Routeur des fixtures : reproduit les chemins de l'API réelle. */
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
@@ -1728,6 +1824,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method !== "GET") recordWrite(method, path, body);
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
+  const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
+  if (method === "POST" && filed) {
+    // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
+    const corps = (body ?? {}) as WorkItemCreate;
+    const jira = /checkout-web$/.test(decodeURIComponent(filed[1]!));
+    const made = {
+      ...item(`w-new-${filedOnTheMock.length + 1}`, jira ? `CHK-${101 + filedOnTheMock.length}` : `BILL-${900 + filedOnTheMock.length}`, corps.title, "inbox", "Inbox", { size: corps.size ?? undefined }),
+      url: jira ? `https://jira.example/browse/CHK-${101 + filedOnTheMock.length}` : null,
+    } as WorkItemDto;
+    if (jira) filedOnTheMock.push(made);
+    return made as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]*checkout-web\/work-items$/.test(path.split("?")[0] ?? path) && filedOnTheMock.length)
+    return { items: filedOnTheMock, meta: { has_more: false } } as T;
   if (method === "POST" && path === "/workflows/validate") {
     // Comme l'API : un texte sans `states:` n'est pas un workflow, et ne se dessine pas.
     const texte = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
@@ -1741,6 +1851,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && /^\/orgs\/[^/]+\/knowledge$/.test(path)) {
     // The base created, as the body says it (its slug, scope and projects): the page opens it next.
     return { ...knowledgeBase, documents: [], document_count: 0, documents_by_status: {}, ...(body as object) } as T;
+  }
+  if (method === "POST" && /^\/projects\/[^/]+\/knowledge$/.test(path)) {
+    // A base owned by the project: scoped to it by the API, not by the body.
+    const slug = decodeURIComponent(path.split("/")[2] ?? "");
+    return {
+      ...knowledgeBase,
+      documents: [],
+      document_count: 0,
+      documents_by_status: {},
+      ...(body as object),
+      scope: "projects",
+      projects: [slug],
+      owner_project: slug,
+    } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
     // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
@@ -1816,6 +1940,55 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (!agents.some((a) => a.slug === cree.slug)) agents.push(cree);
     return structuredClone(cree) as T;
   }
+  if (method === "POST" && /^\/orgs\/[^/]+\/agent-drafts$/.test(chemin ?? "")) {
+    // A fixed proposal (S39-05): nothing is saved, as on the real endpoint.
+    const corps = JSON.parse(String(init.body ?? "{}")) as { display_name: string; description: string };
+    return {
+      display_name: corps.display_name,
+      slug: "release-notes-writer",
+      description: corps.description,
+      spec: {
+        instructions: "You are a release notes writer.\n\n1. Read {{ ticket.title }}.\n2. List the merged pull requests.\n\n## Output\nThe notes, grouped by theme.",
+        skills: [{ slug: "onboarding-procedure" }],
+        limits: { max_turns: 20, max_minutes: 30 },
+        budget: { run_usd: 1 },
+        evals: [{ name: "groups by theme", input: { title: "Release 1.2", body: "" }, must_contain: ["theme"] }],
+      },
+      sample: { title: "Release notes for 1.2", body: "Merged: 14 pull requests since v1.1." },
+      notes: ["dropped skill `ghost`: not in the organisation, or not usable yet"],
+      model: "mock/drafter",
+    } as T;
+  }
+  if (method === "POST" && agentEcrit?.[2] === "/fork") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as AgentFork;
+    const source = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
+    if (agents.some((a) => a.slug === corps.slug)) throw new ApiError(409, { detail: `\`${corps.slug}\` already exists: a fork takes a new slug` });
+    const copied = source.versions?.find((v) => v.version === (corps.version ?? source.latest_version)) ?? source.versions![0]!;
+    const fork = {
+      slug: corps.slug,
+      kind: source.kind,
+      display_name: corps.display_name || `${source.display_name} (fork)`,
+      description: source.description ?? null,
+      status: "active",
+      owner: me.email,
+      latest_version: 1,
+      scope: corps.scope,
+      project: corps.scope === "project" ? (corps.project ?? null) : null,
+      forked_from: { slug: source.slug, version: copied.version, scope: source.scope ?? "org", latest_version: source.latest_version, behind: copied.version < source.latest_version, available: true },
+      can: { publish: true, manage: true, pin: corps.scope !== "personal", fork_scopes: ["org", "project", "personal"] },
+      cannot_reason: null,
+      versions: [{ version: 1, spec: copied.spec, checksum: copied.checksum, created_by: me.email }],
+    } as Agent;
+    agents.push(fork);
+    return structuredClone(fork) as T;
+  }
+  if (method === "POST" && agentEcrit?.[2] === "/scope") {
+    const corps = JSON.parse(String(init.body ?? "{}")) as AgentScopeChange;
+    const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
+    agent.scope = corps.scope;
+    agent.project = corps.scope === "project" ? (corps.project ?? null) : null;
+    return structuredClone(agent) as T;
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/agent-trials$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentTrialCreate;
     const publiee = agents.find((a) => a.slug === corps.agent);
@@ -1887,6 +2060,61 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       temporal_wf_id: `action-${action.id}`,
     } as T;
   }
+  // Connector secrets (ADR 0058): the mock keeps what the console may know — set, version, who — and,
+  // like the API, never a value.
+  if (/^\/orgs\/[^/]+\/connectors(\/|$)/.test(chemin ?? "") && !/\/(discover|operations)/.test(chemin ?? "")) {
+    const [, , , , nom, , champ] = (chemin ?? "").split("/");
+    const corps = JSON.parse(String(init.body ?? "{}")) as {
+      name?: string;
+      kind?: string;
+      type?: string;
+      config?: Record<string, unknown>;
+      secret_refs?: Record<string, string>;
+      secret_values?: Record<string, string>;
+    };
+    const maintenant = new Date().toISOString();
+    const etat = (field: string, version = 1): NonNullable<OrgConnector["secrets"]>[number] => ({
+      field,
+      source: "store",
+      version,
+      rotated_at: maintenant,
+      rotated_by: me.email,
+    });
+    if (method === "POST" && !nom) {
+      const cree: OrgConnector = {
+        name: corps.name ?? "new",
+        kind: corps.kind ?? "mcp",
+        type: corps.type ?? "mcp",
+        config: corps.config ?? {},
+        secret_refs: {
+          ...(corps.secret_refs ?? {}),
+          ...Object.fromEntries(Object.keys(corps.secret_values ?? {}).map((f) => [f, `store:connector/${corps.name}/${f}`])),
+        },
+        secrets: [
+          ...Object.keys(corps.secret_values ?? {}).map((f) => etat(f)),
+          ...Object.entries(corps.secret_refs ?? {}).map(([f, r]) => ({ field: f, source: "reference" as const, reference: r })),
+        ],
+        status: "unknown",
+        operations: [],
+      };
+      orgConnectors.push(cree);
+      return cree as T;
+    }
+    const cible = orgConnectors.find((c) => c.name === nom);
+    if (cible && method === "PUT" && champ) {
+      const avant = cible.secrets?.find((s) => s.field === champ);
+      cible.secrets = [...(cible.secrets ?? []).filter((s) => s.field !== champ), etat(champ, (avant?.version ?? 0) + 1)];
+      return structuredClone(cible) as T;
+    }
+    if (cible && method === "DELETE" && champ) {
+      cible.secrets = (cible.secrets ?? []).filter((s) => s.field !== champ);
+      return structuredClone(cible) as T;
+    }
+    if (cible && method === "PATCH") {
+      cible.config = corps.config ?? cible.config;
+      return structuredClone(cible) as T;
+    }
+  }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
@@ -1898,6 +2126,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const statut = new URLSearchParams(path.split("?")[1] ?? "").get("status");
     return actions.filter((a) => !statut || a.status === statut) as T;
   }
+  // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
+  // would be seen by the query cache as unchanged.
+  if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
   if (agentLu) return structuredClone(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]) as T;
@@ -1923,7 +2154,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
-    [/^\/edition$/, { edition: "community", features: [], version: "0.13.1" }],
+    [/^\/edition$/, { edition: "community", features: [], version: "0.13.1", publisher: null, edition_version: null }],
     [
       /^\/integrations$/,
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },

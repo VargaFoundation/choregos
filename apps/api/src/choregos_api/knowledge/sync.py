@@ -17,24 +17,30 @@ import hashlib
 from pathlib import PurePosixPath
 from typing import Any
 
-from choregos_adapters.documents.base import Changes, DocumentSource, SourceItem
-from choregos_adapters.registry import build, configuration_resolue, fakes_enabled
+from choregos_adapters.documents.base import Changes, DocumentSource, ItemUnreadableError, SourceItem
+from choregos_adapters.registry import build, fakes_enabled
 from choregos_core import utcnow
+from choregos_core.redaction import redact
 from sqlalchemy import delete, func, select
 
 from ..config import get_settings
 from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, OrgConnector
 from ..db.session import session_scope
 from ..logging import get_logger
+from ..secret_store import resolved_configuration
 from .conversion import PENDING, convert_document
 from .formats import FORMATS, DocumentRefusedError, accept
 
 logger = get_logger("choregos.knowledge.sync")
 
-KINDS = ("sharepoint", "web", "git")
-
-# The connector types a source kind may be served by (S39-06a). Confluence and git sources extend it.
-SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {"sharepoint": frozenset({"sharepoint"})}
+KINDS = ("sharepoint", "confluence", "web", "git")
+#: kinds opened through an organisation `documents` connector, which holds the credentials
+CONNECTED_KINDS = frozenset({"sharepoint", "confluence"})
+#: the connector types a connected source kind may be served by
+SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {
+    "sharepoint": frozenset({"sharepoint"}),
+    "confluence": frozenset({"confluence"}),
+}
 
 
 class SourceUnavailableError(RuntimeError):
@@ -44,7 +50,7 @@ class SourceUnavailableError(RuntimeError):
 async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     """The adapter of a source: under `CHOREGOS_FAKES`, its scripted fake."""
     config = source.config or {}
-    if source.kind == "sharepoint":
+    if source.kind in CONNECTED_KINDS:
         connector = (
             await session.execute(
                 select(OrgConnector).where(
@@ -56,19 +62,17 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
         ).scalar_one_or_none()
         if connector is None:
             raise SourceUnavailableError(f"the `documents` connector `{source.connector}` does not exist")
-        if connector.type not in SOURCE_CONNECTOR_TYPES["sharepoint"]:
+        allowed = SOURCE_CONNECTOR_TYPES.get(source.kind, frozenset())
+        if connector.type not in allowed:
             raise SourceUnavailableError(
                 f"the connector `{source.connector}` is a documents/{connector.type} connector: "
-                f"a sharepoint source needs {' or '.join(sorted(SOURCE_CONNECTOR_TYPES['sharepoint']))}"
+                f"a {source.kind} source needs {' or '.join(sorted(allowed))}"
             )
-        resolved = configuration_resolue(
-            connector.kind, connector.type, connector.config, connector.secret_refs
+        resolved = await resolved_configuration(
+            session, source.org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
         return build("documents", connector.type, resolved).source(  # type: ignore[no-any-return]
-            site_id=config.get("site_id"),
-            drive_id=config.get("drive_id"),
-            folder=config.get("folder"),
-            key=source.id,
+            dict(config), key=source.id
         )
     if fakes_enabled():
         from choregos_adapters.fakes.documents import fake_source
@@ -115,7 +119,11 @@ async def _apply_item(
     if item.size is not None and item.size > cap:
         _skip(summary, item, f"larger than {cap // (1024 * 1024)} MiB")
         return None
-    data = await adapter.fetch(item)
+    try:
+        data = await adapter.fetch(item)
+    except ItemUnreadableError as unreadable:
+        _skip(summary, item, f"unreadable: {unreadable}")
+        return None
     if len(data) > cap:
         _skip(summary, item, f"larger than {cap // (1024 * 1024)} MiB")
         return None
@@ -220,8 +228,10 @@ async def sync_source(org: str, source_id: str, *, adapter: DocumentSource | Non
         async with session_scope(orgs=[org]) as session:
             failed = await session.get(KnowledgeSource, source_id)
             if failed is not None:
-                failed.status, failed.last_error = "failed", f"{type(exc).__name__}: {exc}"[:2000]
-        logger.warning("knowledge.source.sync_failed", org=org, source=source_id, error=str(exc)[:300])
+                failed.status, failed.last_error = "failed", redact(f"{type(exc).__name__}: {exc}")[:2000]
+        logger.warning(
+            "knowledge.source.sync_failed", org=org, source=source_id, error=redact(str(exc))[:300]
+        )
         raise
     finally:
         close = getattr(adapter, "close", None)

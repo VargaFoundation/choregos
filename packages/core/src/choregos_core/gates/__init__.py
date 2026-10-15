@@ -6,7 +6,7 @@ Une gate est **le** mécanisme de garantie (docs/plan/01) : elle ne fait pas con
 
 - **synchrones** : évaluables immédiatement à partir du `StageResult`, du diff et de la politique
   (`scope_respected`, `evidence_present`, `diff_size_max`, `no_secrets`, `coverage_delta_min`,
-  `adr_number_free`…) ;
+  `adr_number_free`, `docs_updated`…) ;
 - **asynchrones** : elles attendent un événement externe (`ci_green`, `review_approved`,
   `scans_ok`, `provenance_signed`, `flag_present`, `external`).
 """
@@ -92,7 +92,14 @@ GateFn = Callable[[GateContext, dict[str, Any]], GateOutcome]
 #: work item's branch: the orchestrator fetches the diff for them, and the process view says so
 #: (`writes_branch`). One place: a new diff gate is added here, nowhere else.
 DIFF_GATES: frozenset[str] = frozenset(
-    {"scope_respected", "diff_size_max", "no_secrets", "markdown_sections", "adr_number_free"}
+    {
+        "scope_respected",
+        "diff_size_max",
+        "no_secrets",
+        "markdown_sections",
+        "adr_number_free",
+        "docs_updated",
+    }
 )
 
 _REGISTRY: dict[str, GateFn] = {}
@@ -268,6 +275,63 @@ def _markdown_sections(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         not manques,
         detail=f"{len(fichiers)} document(s) with their sections" if not manques else "; ".join(manques),
         annotations=manques,
+    )
+
+
+#: The files that count as documentation for `docs_updated` (`*` matches `/` under `fnmatch`).
+DOCS_PATHS = ("docs/**", "*.md", "*.mdx", "*.rst", "*.adoc", "CHANGELOG*")
+#: The files whose change needs no documentation: tests, lockfiles, CI.
+NO_DOCS_NEEDED = (
+    "tests/**",
+    "test/**",
+    "*/tests/*",
+    "*test_*",
+    "*_test.*",
+    "*.test.*",
+    "*.spec.*",
+    "*/__tests__/*",
+    ".github/**",
+    "*.lock",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+)
+
+
+@gate("docs_updated", needs=("scm",))
+def _docs_updated(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """The work item's whole branch updates its documentation when it changes anything else.
+
+    Params: `docs` (globs of documentation files), `ignore` (globs that need no documentation:
+    tests, lockfiles, CI), `min_files` (documentation files to update, default 1). A documentation
+    file counts when the diff adds text to it, or changes it with no patch (the forge omits big
+    patches); a file that is only deleted does not. A changelog line is enough. The gate reads the
+    branch diff, not the agent's report: it never takes the writer's word that nothing needed saying.
+    """
+    if not ctx.diff_available:
+        return _sans_diff("docs_updated")
+    docs = [str(p) for p in params.get("docs") or DOCS_PATHS]
+    ignore = [str(p) for p in params.get("ignore") or NO_DOCS_NEEDED]
+    minimum = int(params.get("min_files", 1))
+    needing = [p for p in ctx.changed_files if not matches_any(p, docs) and not matches_any(p, ignore)]
+    if not needing:
+        return GateOutcome("docs_updated", True, detail="nothing outside documentation and tests changed")
+    updated = sorted(
+        p
+        for p in ctx.changed_files
+        if matches_any(p, docs) and (p not in ctx.added_text or ctx.added_text[p].strip())
+    )
+    if len(updated) >= minimum:
+        return GateOutcome(
+            "docs_updated",
+            True,
+            detail=f"{len(updated)} documentation file(s) updated: {', '.join(updated[:5])}",
+        )
+    return GateOutcome(
+        "docs_updated",
+        False,
+        detail=f"{len(needing)} file(s) changed outside documentation and tests, and "
+        f"{len(updated)} documentation file(s) updated, {minimum} expected ({', '.join(docs)})",
+        annotations=needing[:20],
     )
 
 

@@ -88,6 +88,36 @@ describe("the agents' page", () => {
   });
 });
 
+describe("agent scopes in the registry (S39-09)", () => {
+  const scoped = (slug: string, scope: Agent["scope"], project: string | null = null): Agent => ({ ...agent(slug), scope, project });
+
+  it("shows who owns each agent, and filters by scope", async () => {
+    vi.mocked(api.agents).mockResolvedValue([
+      scoped("developer", "platform"),
+      scoped("shared", "org"),
+      scoped("dev-agent", "project", "dev"),
+      scoped("mine", "personal"),
+      agent("legacy"),
+    ]);
+    vi.mocked(api.agentMetricsList).mockResolvedValue([]);
+    wrap(<AgentsPage />);
+    const badge = async (slug: string) => (await screen.findByTestId(`agent-${slug}`)).querySelector("[data-testid=scope]")!;
+    expect((await badge("developer")).textContent).toBe("Common");
+    expect((await badge("shared")).textContent).toBe("Organisation");
+    expect((await badge("dev-agent")).textContent).toBe("Project · dev");
+    expect((await badge("mine")).textContent).toBe("Personal");
+    // An API that predates the scopes sends none: an organisation agent.
+    expect((await badge("legacy")).textContent).toBe("Organisation");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Personal \(1\)/ }));
+    expect(screen.getByTestId("agent-mine")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-developer")).toBeNull();
+    expect(screen.queryByTestId("agent-shared")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    expect(screen.getByTestId("agent-developer")).toBeInTheDocument();
+  });
+});
+
 describe("the AI clients' list", () => {
   it("reads every external agent's clients in one request, and says which agent a client acts as", async () => {
     vi.mocked(api.orgAgentCredentials).mockResolvedValue([

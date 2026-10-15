@@ -8,6 +8,8 @@ from typing import Any
 
 from choregos_core.domain import GatewayModel, Spend, VirtualKey, utcnow
 
+from ..base import GATEWAY_CAPABILITIES
+
 DEFAULT_MODELS = [
     GatewayModel(
         model_name="platform/strong",
@@ -46,7 +48,16 @@ DEFAULT_MODELS = [
 class FakeGateway:
     """Gateway de test : `record_usage()` simule des requêtes, le plafond coupe comme LiteLLM."""
 
-    def __init__(self, models: list[GatewayModel] | None = None, *, auto_usage: bool = False) -> None:
+    def __init__(
+        self,
+        models: list[GatewayModel] | None = None,
+        *,
+        auto_usage: bool = False,
+        capabilities: frozenset[str] | None = None,
+    ) -> None:
+        # Scriptable down to any subset: a test of a platform behaviour that depends on what
+        # the gateway cannot do (no hard budget, no spend readback) declares just that.
+        self.capabilities = GATEWAY_CAPABILITIES if capabilities is None else frozenset(capabilities)
         self.models = models or list(DEFAULT_MODELS)
         # `auto_usage` simule la consommation d'un agent : utile pour la démo et les
         # captures d'écran, inutile (et faussant) pour les tests de coût.
@@ -139,6 +150,9 @@ class FakeGateway:
 
     async def list_models(self) -> list[GatewayModel]:
         return list(self.models)
+
+    async def test(self) -> dict[str, Any]:
+        return {"ok": bool(self.models), "models": len(self.models)}
 
 
 class BudgetExceededError(RuntimeError):

@@ -126,7 +126,7 @@ it has a budget.
 | :-- | :-- |
 | `github-tekton-argo-k8s` | you have a cluster and run the agents there |
 | `github-aca` | you are on Azure and want no Kubernetes pool for agents: runs are Container Apps *jobs*, billed by the second |
-| `github-software-delivery` | a software team on GitHub Actions, run by agents from the catalogue: a fix ships with no human (`dev-simple`), a study ends with a merged MADR 4 decision record (`study`), a feature waits for a product owner, a maintainer and a release captain (`dev-complex`) — see its [README](../templates/github-software-delivery/README.md) |
+| `github-software-delivery` | a software team on GitHub Actions, run by agents from the catalogue: a fix ships with no human (`dev-simple`), a study ends with a merged MADR 4 decision record (`study`), a feature documents itself, then waits for a product owner, a maintainer and a release captain (`dev-complex`) — see its [README](../templates/github-software-delivery/README.md) |
 | `software-delivery-governed` | changes that must pass everything: an approved decision record, QA with mutation testing, security review, supply-chain scan, a compliance review decided by people, documentation, release readiness, production under a release captain, verification from observed signals — see its [README](../templates/software-delivery-governed/README.md) |
 | `joiners-leavers` | HR, no repository: arrivals and departures, two workflows, two agents, two skills — every write into the directory, the device manager, the carrier or the badge readers is a governed action |
 | *none* | a project with no repository, or one whose connectors you attach yourself |
