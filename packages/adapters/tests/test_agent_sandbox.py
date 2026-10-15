@@ -515,6 +515,7 @@ async def test_a_finished_sandbox_gives_its_volume_back_in_minutes(monkeypatch: 
     from choregos_adapters.registry import build
 
     kubernetes = {"kubernetes": {"token": "t", "verify": False}}
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # the real executor, not its fake
     monkeypatch.delenv("CHOREGOS_SANDBOX_TTL_SECONDS", raising=False)
     assert build("runtime", "agent_sandbox", kubernetes).ttl_seconds <= 600
     monkeypatch.setenv("CHOREGOS_SANDBOX_TTL_SECONDS", "120")
