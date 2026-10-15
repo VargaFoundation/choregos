@@ -52,6 +52,20 @@ and *add a connector* for the rest. `GET /connectors/types` reads the adapter re
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
 draws the form from it) and its **secret fields**.
 
+**Network access.** The platform calls an MCP server, a git repository or a web site from its own
+pods, for your organisation, and only for hosts the organisation has opened
+([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). Declaring an `mcp` connector, importing
+skills from git or adding a web or git knowledge source checks the hosts first. If one is missing the
+console opens a **network access** modal listing each host, whether this organisation allows it
+(`allowed` / `requested by X` / `not allowed`) and whether the platform's network does (`declared
+open` / `outside the declared ceiling` / `not declared by this deployment`). An administrator
+presses *Allow and install*: the hosts are opened and the connector created in one call. Anyone else
+sees who the administrators are and presses *Ask an administrator*; the request waits in the
+administrators' inbox and the person retries once it is approved. When the cluster's network also
+needs a change, the modal shows it (a snippet to copy, and a prefilled issue when the deployment
+configures one): Choregos cannot apply it. `/admin/egress` lists the rules, the requests and the
+ceiling. The API: `allow_egress` on the add endpoints, `409 egress_required`, `/orgs/{org}/egress`.
+
 **Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the

@@ -36,6 +36,7 @@ class ApiError(Exception):
         type_: str = "about:blank",
         errors: list[dict[str, Any]] | None = None,
         retry_after: int | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(title)
         self.status_code = status_code
@@ -44,6 +45,8 @@ class ApiError(Exception):
         self.type = type_
         self.errors = errors or []
         self.retry_after = retry_after
+        #: more members of the problem document (`code`, `verdicts`...), never overriding the standard ones
+        self.extra = extra or {}
 
     def to_problem(self, instance: str = "") -> dict[str, Any]:
         problem: dict[str, Any] = {"type": self.type, "title": self.title, "status": self.status_code}
@@ -55,6 +58,8 @@ class ApiError(Exception):
             problem["errors"] = self.errors
         if self.retry_after is not None:
             problem["retry_after"] = self.retry_after
+        for key, value in self.extra.items():
+            problem.setdefault(key, value)
         return problem
 
 

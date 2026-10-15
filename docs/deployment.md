@@ -392,6 +392,46 @@ A project declares what it calls in its own configuration (`tools: [verifier_adr
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
 
+## Network access: the egress allowlist and its ceiling
+
+The organisation's administrator decides, in the console, which hosts the platform may call for
+the organisation ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). What only the
+operator sets is under `global.egress`, rendered as `CHOREGOS_EGRESS_MODE`,
+`CHOREGOS_EGRESS_CEILING` and `CHOREGOS_EGRESS_PLATFORM_CHANGE` on the API and every worker:
+
+```yaml
+global:
+  egress:
+    mode: enforce          # enforce | warn | off
+    ceiling:               # mirror the cluster's network policy, per pod family
+      api: [api.github.com, github.com]
+      workers: [api.github.com, "*.atlassian.net"]
+      runners: [github.com, pypi.org]
+    platformChange:
+      format: text         # cilium-fqdn | kubernetes-networkpolicy | text
+      owner: "the platform team"
+      entries: {api: api-github, workers: provisioning, runners: runner}   # opaque template data
+      template: |
+        platform/tenant-base/values-choregos-dev.yaml, entry `{{entry}}` (selector {{selector}}), add:
+        {{#hosts}}  - {{.}}
+        {{/hosts}}Reason: {{reason}} (requested by {{requested_by}}, origin {{origin}}).
+      issueUrl: "https://github.com/ACME/platform/issues/new?title=egress%3A%20{{hosts_csv}}&body={{snippet_urlencoded}}"
+```
+
+- **`ceiling`** is what the cluster lets through. An absent or empty family is *unknown*: it is not
+  checked and the organisation's list alone governs. Keep it in step with the cluster's policy:
+  nothing verifies the mirror.
+- **`template`** is mustache: `{{family}}`, `{{selector}}`, `{{entry}}`, `{{hosts_csv}}`,
+  `{{ports}}`, `{{reason}}`, `{{origin}}`, `{{requested_by}}`, `{{#hosts}}…{{.}}…{{/hosts}}` and
+  `{{#fqdns}}` (`matchName: "h"` lines). Without one, the console shows a neutral Cilium `toFQDNs`
+  fragment per family. `issueUrl` takes the same placeholders, URL-encoded, plus
+  `{{snippet_urlencoded}}`. Choregos can prefill an issue; it cannot open a pull request.
+- **`mode`**: `enforce` refuses a host the organisation has not allowed (and a call with no policy
+  in context); `warn` logs `egress.would_refuse` and passes; the code default under
+  `CHOREGOS_FAKES=1` is `warn`.
+- **Upgrading**: the migration seeds an `allowed` rule for every host an organisation already calls
+  (connectors, web and git knowledge sources, skill sources). Review them in `/admin/egress`.
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the

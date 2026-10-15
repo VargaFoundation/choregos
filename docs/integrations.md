@@ -220,6 +220,10 @@ curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "rovo", "type
   "secret_refs": {"token": "env:CONNECTOR_ROVO_API_TOKEN"}}'
 ```
 
+   Declaring it opens `mcp.atlassian.com` in the organisation's egress allowlist: an administrator
+   does it in the same call (`allow_egress`) or from the console's network-access modal; anyone else
+   asks ([ADR 0066](adr/0066-the-organisation-egress-allowlist.md)). On a cluster with a restricted
+   network, the platform team may also need to open the host (the modal shows the change).
 4. *Discover* the connector, then open the tools the agents need: a new tool is born closed.
 
 `auth_scheme` is `bearer` (the default, unchanged) or `basic`; `basic` needs `username`. The

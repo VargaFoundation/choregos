@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
+from ..config import Settings
 from ..db.models import Agent, AgentVersion, Connector, Organization, Project, Skill, SkillVersion
 from ..deps import Config, Db, Me
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
@@ -33,6 +34,7 @@ from ..schemas import (
     SkillUpdate,
     SkillVersionDto,
 )
+from ..services.egress import ensure_or_409, skill_import_targets
 from ..services.skill_gate import assess
 from ..services.skill_sources import (
     DEFAULT_SOURCES,
@@ -285,6 +287,28 @@ def _may_import(principal: Me, org: str, source: GitSource, permis: bool, exista
         )
 
 
+async def _egress_gate(
+    session: AsyncSession,
+    principal: Me,
+    organisation: Organization,
+    source: GitSource,
+    allow_egress: bool,
+    settings: Settings,
+) -> None:
+    """The hosts a git import calls must be in the organisation's egress allowlist (S39-22): the
+    modal's 409, or, for an administrator who says so, opened in this same transaction."""
+    await ensure_or_409(
+        session,
+        principal,
+        organisation,
+        skill_import_targets(source.url),
+        allow_egress=allow_egress,
+        origin=f"skill-import:{source.key}",
+        reason=f"importing skills from {source.key}",
+        settings=settings,
+    )
+
+
 def _source(repo_url: str, path: str) -> tuple[GitSource, str]:
     try:
         return parse_repo_url(repo_url), folder(path)
@@ -366,6 +390,7 @@ async def preview_skills_from_git(
     sources, _ = await _skill_sources(session, organisation)
     permis = allowed(source, sources)
     _may_import(principal, org, source, permis, [])
+    await _egress_gate(session, principal, organisation, source, body.allow_egress, settings)
     fetcher = get_fetcher(settings.fakes)
     sha = await _resolve(fetcher, source, body.ref)
     snapshot = await _snapshot(fetcher, source, sha, base)
@@ -424,6 +449,7 @@ async def import_skills_from_git(
     noms = list(dict.fromkeys(body.skills))
     existantes = await _latest_versions(session, organisation, noms)
     _may_import(principal, org, source, allowed(source, sources), sorted(existantes))
+    await _egress_gate(session, principal, organisation, source, body.allow_egress, settings)
     snapshot = await _snapshot(get_fetcher(settings.fakes), source, body.sha, base)
     choisies: list[FoundSkill] = []
     for nom in noms:

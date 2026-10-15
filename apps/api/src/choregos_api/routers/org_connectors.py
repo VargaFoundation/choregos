@@ -40,6 +40,7 @@ from ..services.connector_secrets import (
     refs_with_values,
     require_store,
 )
+from ..services.egress import egress_gate_for_connector
 
 router = APIRouter(tags=["connectors"])
 
@@ -176,6 +177,9 @@ async def declare_org_connector(
         store_prefix=prefix,
     )
     store = require_store(body.secret_values)
+    await egress_gate_for_connector(
+        session, principal, organisation, kind, body.type, body.config, body.name, body.allow_egress
+    )
     deja = (
         await session.execute(
             select(OrgConnector.id).where(OrgConnector.org_id == organisation.id, OrgConnector.name == name)
@@ -258,6 +262,10 @@ async def update_org_connector(
     refs_in, values = dict(body.secret_refs or {}), dict(body.secret_values or {})
     verifier_les_secrets(spec, instance.type, config, refs_in, secret_values=values, store_prefix=prefix)
     store = require_store(values)
+    if body.config is not None:
+        await egress_gate_for_connector(
+            session, principal, organisation, instance.kind, instance.type, config, name, body.allow_egress
+        )
     before = dict(instance.secret_refs or {})
     after = refs_with_values({**before, **refs_in}, prefix, values)
     metas = await put_values(session, store, organisation.id, prefix, values, principal.email)

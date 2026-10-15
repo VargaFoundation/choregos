@@ -625,6 +625,41 @@ class RemoteCredential(Base, PkMixin, TimestampMixin):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class OrgEgressRule(Base, PkMixin, TimestampMixin):
+    """One host an organisation lets the platform call for it (S39-22, ADR 0066).
+
+    `status` is `requested` (a member asked, nobody decided), `allowed`, `refused` or `revoked`;
+    only `allowed` opens anything. At most one live (`requested` or `allowed`) row per host."""
+
+    __tablename__ = "org_egress_rules"
+    __table_args__ = (
+        Index(
+            "uq_org_egress_rules_live_host",
+            "org_id",
+            "host",
+            unique=True,
+            postgresql_where=text("status IN ('requested', 'allowed')"),
+            sqlite_where=text("status IN ('requested', 'allowed')"),
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    #: exact, or `*.` as the leftmost label only; lowercased and IDNA-encoded
+    host: Mapped[str] = mapped_column(String(255))
+    ports: Mapped[list[int]] = mapped_column(Json, default=lambda: [443])
+    #: the pod families that make the call: a subset of `api`, `workers`, `runners`
+    used_by: Mapped[list[str]] = mapped_column(Json, default=lambda: ["api"])
+    status: Mapped[str] = mapped_column(String(16), default="requested")
+    reason: Mapped[str] = mapped_column(String(500), default="")
+    #: `mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `manual`, `migration`...
+    origin: Mapped[str] = mapped_column(String(200), default="manual")
+    requested_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
 class ConnectorOperation(Base, PkMixin, TimestampMixin):
     """Une opération d'une instance, et sa politique dans l'organisation : `allowed`, `approval`
     (une action gouvernée, ADR 0035) ou `forbidden` ; les groupes de projets qui y ont droit

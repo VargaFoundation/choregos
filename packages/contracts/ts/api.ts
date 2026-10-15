@@ -490,6 +490,8 @@ export type OrgConnectorCreate = {
   secret_values?: {
     [key: string]: string;
   };
+  /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
 };
 
 /** Absent fields are unchanged; `secret_refs` and `secret_values` merge into the connector's. */
@@ -503,6 +505,8 @@ export type OrgConnectorUpdate = {
   secret_values?: {
     [key: string]: string;
   } | null;
+  /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
 };
 
 export type OperationPatch = {
@@ -1308,6 +1312,8 @@ export type SkillGitPreviewRequest = {
   path?: string;
   /** a branch */
   ref: string;
+  /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
 };
 
 export type SkillGitImport = {
@@ -1316,6 +1322,8 @@ export type SkillGitImport = {
   /** a full commit SHA; a branch or a tag is refused */
   sha: string;
   skills: Array<string>;
+  /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
 };
 
 export type SkillCandidate = {
@@ -1487,6 +1495,8 @@ export type KnowledgeSourceCreate = {
   refresh_cron?: string | null;
   /** IANA name */
   refresh_timezone?: string;
+  /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
 };
 
 export type KnowledgeSourcePatch = {
@@ -1498,6 +1508,8 @@ export type KnowledgeSourcePatch = {
   refresh_mode?: "interval" | "cron" | "manual" | null;
   refresh_cron?: string | null;
   refresh_timezone?: string | null;
+  /** open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required` */
+  allow_egress?: boolean;
 };
 
 export type KnowledgeSource = {
@@ -2327,6 +2339,122 @@ export type MemoryDecision = {
   reason?: string | null;
 };
 
+export type EgressRule = {
+  id: string;
+  /** exact, or `*.` as the leftmost label only; lowercased, IDNA-encoded */
+  host: string;
+  ports: Array<number>;
+  /** the pod families that make the call */
+  used_by: Array<"api" | "workers" | "runners">;
+  status: "requested" | "allowed" | "refused" | "revoked";
+  reason?: string;
+  /** `mcp-catalogue:<id>@<version>`, `org-connector:<name>`, `skill-import:<repo>`, `knowledge-source:<name>`, `manual`, `migration` */
+  origin?: string;
+  requested_by?: string | null;
+  requested_at?: string | null;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  decision_note?: string | null;
+};
+
+/** A host to check — a `url` (its host and port are read) or a `host` and `port`. */
+export type EgressTarget = {
+  url?: string | null;
+  host?: string | null;
+  port?: number | null;
+  used_by?: Array<"api" | "workers" | "runners">;
+};
+
+/** What the server derives the hosts from. */
+export type EgressOrigin = {
+  kind: "org-connector" | "skill-import" | "knowledge-source" | "mcp-catalogue" | "remote-agent";
+  /** `org-connector`: the connector type; `knowledge-source`: the source kind */
+  type?: string | null;
+  config?: {
+    [key: string]: unknown;
+  };
+  repo_url?: string | null;
+  name?: string | null;
+};
+
+export type EgressCheck = {
+  targets?: Array<EgressTarget>;
+  origin?: EgressOrigin | null;
+  reason?: string;
+};
+
+export type Approver = {
+  display_name: string;
+  email: string;
+};
+
+/** What the platform must still do: Choregos cannot change the cluster's network policy, it only shows the change. */
+export type PlatformChange = {
+  needed: boolean;
+  format?: "cilium-fqdn" | "kubernetes-networkpolicy" | "text";
+  snippet?: string | null;
+  /** a prefilled issue on the platform's repository */
+  issue_url?: string | null;
+  /** who applies it, for example `the platform team` */
+  owner?: string | null;
+};
+
+export type EgressVerdict = {
+  host: string;
+  port: number;
+  used_by: "api" | "workers" | "runners";
+  /** this organisation's list */
+  org: "allowed" | "requested" | "absent";
+  /** the platform's network as the deployment declares it */
+  ceiling: "open" | "outside" | "unknown";
+  /** whether the caller holds `tools:grant` */
+  can_allow: boolean;
+  approvers?: Array<Approver>;
+  platform_change: PlatformChange;
+  requested_by?: string | null;
+  requested_at?: string | null;
+};
+
+export type EgressCheckResult = {
+  verdicts: Array<EgressVerdict>;
+  ok: boolean;
+};
+
+/** The 409 body of every governed "add" while a host is missing: an RFC 9457 problem with `code` and `verdicts`. */
+export type EgressRequired = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  code?: "egress_required";
+  verdicts?: Array<EgressVerdict>;
+};
+
+export type EgressRuleCreate = {
+  host: string;
+  ports?: Array<number>;
+  used_by?: Array<"api" | "workers" | "runners">;
+  reason?: string;
+  origin?: string;
+};
+
+export type EgressRequestCreate = EgressRuleCreate;
+
+export type EgressDecision = {
+  note?: string | null;
+};
+
+export type EgressOverview = {
+  mode: "enforce" | "warn" | false;
+  /** family -> host patterns the deployment declares open; an absent family is unknown */
+  ceiling: {
+    [key: string]: Array<string>;
+  };
+  rules: Array<EgressRule>;
+  requests: Array<EgressRule>;
+  can_decide?: boolean;
+};
+
 export type BudgetAlert = {
   id: string;
   scope: "project" | "agent";
@@ -2557,6 +2685,7 @@ export interface Operations {
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  approveOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/approve"; body: EgressDecision; response: EgressRule };
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
@@ -2578,6 +2707,7 @@ export interface Operations {
 } };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
+  checkOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/check"; body: EgressCheck; response: EgressCheckResult };
   checkSkillUpdate: { method: "GET"; path: "/orgs/{org}/skills/{slug}/update"; body: never; response: SkillUpdate };
   clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
@@ -2589,6 +2719,7 @@ export interface Operations {
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
+  createOrgEgressRule: { method: "POST"; path: "/orgs/{org}/egress/rules"; body: EgressRuleCreate; response: EgressRule };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
   createRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials"; body: RemoteCredentialCreate; response: RemoteCredential };
@@ -2640,6 +2771,7 @@ export interface Operations {
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
+  getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
   getProject: { method: "GET"; path: "/projects/{id}"; body: never; response: Project };
@@ -2845,6 +2977,7 @@ export interface Operations {
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
+  refuseOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/refuse"; body: EgressDecision; response: EgressRule };
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
 }; response: void };
@@ -2852,9 +2985,11 @@ export interface Operations {
   relaxProjectOperation: { method: "DELETE"; path: "/projects/{id}/operations/{connector}/{operation}"; body: never; response: void };
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
+  requestOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/requests"; body: EgressRequestCreate; response: EgressRule };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
+  revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };

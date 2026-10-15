@@ -99,6 +99,9 @@ class ConnectorTypeSpec:
     deprecated: bool = False
     #: Ce qu'un agent peut appeler par ce type ; un serveur `mcp` découvre les siennes (S19-03).
     operations: tuple[OperationSpec, ...] = ()
+    #: The `(host, port)` pairs an instance configured so calls (S39-22, ADR 0066). `None`: the
+    #: hosts of the URL-shaped configuration fields, falling back to the schema's defaults.
+    egress: Callable[[dict[str, Any]], list[tuple[str, int]]] | None = None
 
 
 _REGISTRY: dict[tuple[str, str], Factory] = {}
@@ -291,3 +294,15 @@ class AdapterSet:
             gateway=get("gateway", default_gateway_type()),
             notify=get("notify", TYPES_PAR_DEFAUT["notify"]),
         )
+
+
+def egress_hosts(kind: str, type_name: str, config: dict[str, Any]) -> list[tuple[str, int]]:
+    """The hosts a connector of this type, configured so, calls: derived on the server, never typed."""
+    from choregos_core.egress import hosts_of_config
+
+    spec = _SPECS.get((kind, type_name))
+    if spec is not None and spec.egress is not None:
+        return spec.egress(config)
+    properties = (spec.config_schema.get("properties") if spec else None) or {}
+    defaults = {name: p.get("default") for name, p in properties.items() if isinstance(p, dict)}
+    return hosts_of_config(config, defaults)

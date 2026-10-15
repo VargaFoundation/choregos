@@ -24,6 +24,28 @@ global:
   # healthy and refusing the second organization weeks later.
   edition: community
   fakes: false
+  # The organisation egress allowlist (S39-22, ADR 0066): what the platform's own outbound clients
+  # (API, workers) may call for a tenant. The organisation's administrator decides the hosts in the
+  # console; this block is what only the operator sets.
+  egress:
+    # enforce | warn (log `egress.would_refuse` and pass) | off
+    mode: enforce
+    # What the cluster's network lets through, per pod family, as host patterns. An absent or empty
+    # family is unknown: the ceiling is not checked and the organisation's list alone governs.
+    #   ceiling:
+    #     api: [api.github.com, github.com]
+    #     workers: [api.github.com, "*.atlassian.net"]
+    #     runners: [github.com, pypi.org]
+    ceiling: {}
+    # How the console renders "what the platform must still open" for a host the ceiling excludes
+    # (or does not know). Choregos cannot change the cluster's network policy: it shows the change.
+    #   platformChange:
+    #     format: text            # cilium-fqdn | kubernetes-networkpolicy | text
+    #     owner: "the platform team, #platform"
+    #     template: "add {{hosts_csv}} to the {{family}} egress"   # mustache: see docs/deployment.md
+    #     issueUrl: ""            # optional, same placeholders, URL-encoded
+    #     entries: {}             # family -> the name of the platform's egress entry, as template data
+    platformChange: {}
   # Secrets by reference (ADR 0034). A connector's `env:NAME` reference reads only the variables
   # matching `envPattern` (regular expression); empty: `^CONNECTOR_[A-Z0-9_]+$`. The platform's
   # own variables (`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are

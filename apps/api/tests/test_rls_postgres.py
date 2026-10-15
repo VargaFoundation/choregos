@@ -639,3 +639,28 @@ async def test_org_secrets_are_isolated(deux_organisations: dict[str, str]) -> N
     async with session_scope(orgs="*") as session:
         rows = (await session.execute(select(OrgSecret))).scalars().all()
         assert sorted(r.kek_id for r in rows) == ["k1", "k1"]
+
+
+async def test_org_egress_rules_are_isolated(deux_organisations: dict[str, str]) -> None:
+    """The egress allowlist (S39-22): org `a` reads none of `b`'s rules, writes none into it, and a
+    session without a scope sees nothing."""
+    from choregos_api.db.models import Organization, OrgEgressRule
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import update
+    from sqlalchemy.exc import DBAPIError
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for slug in ("a", "b"):
+            session.add(OrgEgressRule(org_id=ids[slug], host=f"{slug}.example.test", status="allowed"))
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(OrgEgressRule.host))).scalars().all() == ["a.example.test"]
+        touched = await session.execute(
+            update(OrgEgressRule).where(OrgEgressRule.org_id == ids["b"]).values(status="revoked")
+        )
+        assert touched.rowcount == 0, "an UPDATE across organisations touches nothing"
+    with pytest.raises(DBAPIError):  # a write INTO b from a's session is refused by the policy
+        async with session_scope(orgs=["a"]) as session:
+            session.add(OrgEgressRule(org_id=ids["b"], host="stolen.example.test", status="allowed"))
+    async with session_scope() as session:
+        assert (await session.execute(select(OrgEgressRule))).scalars().all() == [], "no scope, nothing"
