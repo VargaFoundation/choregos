@@ -59,6 +59,15 @@ Reading: OpenHands' injection detection and the mature HITL chat of the products
 Choregos' answer to injection today is mechanical (scope refused, diff reverted, secrets
 gated), not detective.
 
+## Frameworks live inside a step
+
+Choregos orchestrates; it is not an agent framework and does not ship one. A step may run a coding
+agent, a prompt agent or code written on LangGraph, the OpenAI Agents SDK, Pydantic AI or any other
+framework: the workflow (Temporal) owns durable state, retries and human gates, the step owns its own
+control flow. The only thing a code agent needs from Choregos is the run contract, through four
+standards: ACP to the runner, MCP for tools, an OpenAI-compatible endpoint for the model, and the
+result file. See [agents written in code](code-agents.md#why-no-choregos-framework).
+
 ## Against the tool brokers
 
 | | treg | Obot / Docker MCP Gateway | Choregos catalogue (ADR 0014) |

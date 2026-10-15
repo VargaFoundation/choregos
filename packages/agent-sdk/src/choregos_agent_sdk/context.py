@@ -87,8 +87,8 @@ class Context:
     async def write_output(self, name: str, content: str | bytes) -> Path:
         """Writes a deliverable to `.choregos/outputs/<name>`, after the runner's guard allowed it.
 
-        The runner stores it as an artifact, never in a commit. Raises `PermissionDenied` when
-        refused. `name` is a file name, not a path out of the folder.
+        The runner stores it as an artifact, never in a commit. Counts as a turn, as the runner counts
+        it. Raises `PermissionDenied` when refused. `name` is a file name, not a path out of the folder.
         """
         relative = (OUTPUTS_DIR / name).as_posix()
         if not name or Path(name).is_absolute() or ".." in Path(name).parts:
@@ -103,9 +103,7 @@ class Context:
                 target.write_text(content, encoding="utf-8")
             return target
 
-        return await self._session.guarded(
-            f"write {relative}", "edit", {"path": relative}, write, count=False
-        )
+        return await self._session.guarded(f"write {relative}", "edit", {"path": relative}, write)
 
     async def say(self, text: str) -> None:
         """A progress message for the run's journal."""

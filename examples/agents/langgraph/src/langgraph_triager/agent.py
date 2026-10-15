@@ -1,25 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 """The ticket triager as a LangGraph graph.
 
-Three nodes: `lookup` (the knowledge search, as a governed tool call), `read` (the model, through a
-LangChain chat model pointed at the run's gateway) and `deliver` (the deliverable). The graph is
-ordinary LangGraph; the three things the platform governs are wired through the SDK:
+Three nodes: `lookup` (the knowledge search), `read` (the model) and `deliver` (the deliverable). The
+graph is ordinary LangGraph; what the platform governs is wired in two lines each:
 
-- the model: `ChatOpenAI(base_url=ctx.llm.base_url, api_key=ctx.llm.api_key)` — the run's gateway and
-  the run's own key, nothing else; its spend is bounded by the run's budget;
-- the tool: `ctx.tools()` — NOT `langchain-mcp-adapters` on the run's MCP servers. The adapters call
-  the servers directly, which skips the runner's permission request, the journal and the turn count.
-  `tools.call` is the same call with all three, and `as_langchain_tool` below wraps it;
-- the deliverable: `ctx.write_output` asks the guard before it writes.
+- the model: `ChatOpenAI(..., http_async_client=ctx.llm.http_client())` — the run's gateway and the
+  run's own key, and every request counts as a turn against `max_turns`;
+- the tools: `langchain.tools(await ctx.tools())` — NOT `langchain-mcp-adapters` on the run's MCP
+  servers, which would call them directly and skip the runner's permission request.
 """
 
 from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from choregos_agent_sdk import Context, LlmError, Result, ToolError, agent
+from choregos_agent_sdk import Context, Result, ToolError, agent
+from choregos_agent_sdk.errors import sdk_error_in
+from choregos_agent_sdk.integrations import langchain as bridge
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
@@ -30,20 +28,13 @@ class State(TypedDict, total=False):
     reading: str
 
 
-def as_langchain_tool(ctx: Context, tools: Any, name: str) -> StructuredTool:
-    """A LangChain tool whose every call goes through the SDK's permission-checked `tools.call`."""
+async def build_graph(ctx: Context, tools: Any) -> Any:
+    by_name = {tool.name: tool for tool in await bridge.tools(tools)}
 
-    async def call(**arguments: Any) -> str:
-        return str((await tools.call(name, arguments)).text)
-
-    return StructuredTool.from_function(coroutine=call, name=name, description=f"The run's `{name}` tool.")
-
-
-def build_graph(ctx: Context, tools: Any) -> Any:
     async def lookup(state: State) -> State:
-        if not await tools.has("knowledge_search"):
+        search = by_name.get("knowledge_search")
+        if search is None:
             return {"related": ""}
-        search = as_langchain_tool(ctx, tools, "knowledge_search")
         try:
             return {"related": str(await search.ainvoke({"query": state["ticket"][:200]}))[:1500]}
         except ToolError as problem:
@@ -53,7 +44,13 @@ def build_graph(ctx: Context, tools: Any) -> Any:
     async def read(state: State) -> State:
         if not ctx.llm.available:
             return {"reading": ""}
-        model = ChatOpenAI(model=ctx.llm.model, base_url=ctx.llm.base_url, api_key=ctx.llm.api_key)
+        model = ChatOpenAI(
+            model=ctx.llm.model,
+            base_url=ctx.llm.base_url,
+            api_key=ctx.llm.api_key,
+            http_async_client=ctx.llm.http_client(),
+            max_retries=0,
+        )
         try:
             answer = await model.ainvoke(
                 [
@@ -62,6 +59,8 @@ def build_graph(ctx: Context, tools: Any) -> Any:
                 ]
             )
         except Exception as problem:  # the gateway refused or is down: the rule below stands alone
+            if sdk_error_in(problem) is not None:
+                raise  # the turn limit or the guard: the step ends, it is not a missing reading
             await ctx.say(f"no model reading: {type(problem).__name__}")
             return {"reading": ""}
         return {"reading": str(answer.content)}
@@ -87,7 +86,7 @@ def build_graph(ctx: Context, tools: Any) -> Any:
 @agent(name="langgraph-triager")
 async def run(ctx: Context) -> Result:
     tools = await ctx.tools()
-    final = await build_graph(ctx, tools).ainvoke({"ticket": ctx.task})
+    final = await (await build_graph(ctx, tools)).ainvoke({"ticket": ctx.task})
     used = bool(final.get("reading"))
     return Result(
         summary="Triaged with a model reading" if used else "Triaged without a model reading",
@@ -95,4 +94,4 @@ async def run(ctx: Context) -> Result:
     )
 
 
-__all__ = ["LlmError", "build_graph", "run"]
+__all__ = ["build_graph", "run"]

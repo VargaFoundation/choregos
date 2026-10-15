@@ -10,7 +10,7 @@ observable is a deliverable the SDK writes through the guard.
 | initialize | `initialize` answers with the agent's info |
 | mcp | `session/new` accepts the run's MCP servers |
 | prompt_trivial | one prompt turn ends and leaves a deliverable in `.choregos/outputs/` |
-| permission_denied | when the guard refuses every write, the deliverable is not written |
+| permission_denied | in a second session where every write is refused, the deliverable is not written |
 | result_valid | `.choregos/result.json` is valid after the turn, accepted and refused alike |
 | max_turns | the agent's first turn made no more calls (tool and model calls) than `max_turns` |
 | cost_at_gateway | the run's key is in the agent's environment; the gateway saw no other key |
@@ -182,7 +182,9 @@ async def run_code_suite(name: str, spec: Any, gateway: FakeGateway, workspace: 
             session = await client.new_session(str(workspace), plan.mcp_servers)
             verdict("mcp", bool(session), "session/new refused")
 
+            asked_before = len(gateway.seen)
             first = await client.prompt(stage_input.work_item.title, timeout=90)
+            reached = len(gateway.seen) - asked_before
             delivered = outputs.is_dir() and any(outputs.iterdir())
             verdict(
                 "prompt_trivial",
@@ -192,15 +194,19 @@ async def run_code_suite(name: str, spec: Any, gateway: FakeGateway, workspace: 
             )
             first_result = load_result(result_path)
             calls = guard.turns
+            # What the runner heard of, and what the gateway actually served: a model client the SDK
+            # does not count shows only in the second.
             verdict(
                 "max_turns",
-                guard.tripped is None and calls <= stage_input.budget.max_turns,
-                f"{calls} calls in one turn, the step allows {stage_input.budget.max_turns}",
+                guard.tripped is None and max(calls, reached) <= stage_input.budget.max_turns,
+                f"{calls} announced calls, {reached} model requests at the gateway in one turn, "
+                f"the step allows {stage_input.budget.max_turns}",
             )
 
             # The limit was judged on the first turn; the second is about refusals, not about turns.
             guard.max_turns = None
-            # Same agent, same session, every write now refused.
+            # Same agent, a fresh session (the agent's own turn count starts again), every write now refused.
+            await client.new_session(str(workspace), plan.mcp_servers)
             shutil.rmtree(outputs, ignore_errors=True)
             deny_writes = True
             await client.prompt(stage_input.work_item.title, timeout=90)
@@ -219,11 +225,11 @@ async def run_code_suite(name: str, spec: Any, gateway: FakeGateway, workspace: 
             )
 
             model_env = backend.model_env(stage_input.model, stage_input.gateway_key)
-            reached = [auth for auth in gateway.seen if auth != f"Bearer {RUN_KEY}"]
+            foreign = [auth for auth in gateway.seen if auth != f"Bearer {RUN_KEY}"]
             verdict(
                 "cost_at_gateway",
-                any(RUN_KEY in value for value in model_env.values()) and not reached,
-                f"the run's key is not the only one the gateway saw: {reached}",
+                any(RUN_KEY in value for value in model_env.values()) and not foreign,
+                f"the run's key is not the only one the gateway saw: {foreign}",
             )
     except AgentUnreachableError as exc:
         result.failed["initialize"] = str(exc)
@@ -251,6 +257,29 @@ async def test_a_code_agent_that_ignores_the_guard_fails_conformance(
     (tmp_path / "ws").mkdir()
     result = await run_code_suite("rogue", [sys.executable, str(rogue)], gateway, tmp_path / "ws")
     assert "permission_denied" in result.failed, result.to_dict()
+
+
+async def test_a_framework_style_client_on_the_counting_transport_passes_max_turns(
+    gateway: FakeGateway, tmp_path: Path
+) -> None:
+    """A framework given `ctx.llm.openai_client()` wants five calls; the step allows three turns."""
+    (tmp_path / "ws").mkdir()
+    agent = Path(__file__).with_name("framework_like_code_agent.py")
+    result = await run_code_suite("framework", [sys.executable, str(agent)], gateway, tmp_path / "ws")
+    assert result.ok, result.failed
+    assert len(gateway.seen) == 2, "the deliverable and two model requests; the third request never left"
+
+
+async def test_a_bare_model_client_escapes_the_count_and_fails_max_turns(
+    gateway: FakeGateway, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gap 1 of the framework decision: a client built from the URL and the key alone is not counted,
+    and the conformance suite says so."""
+    monkeypatch.setenv("BARE", "1")
+    (tmp_path / "ws").mkdir()
+    agent = Path(__file__).with_name("framework_like_code_agent.py")
+    result = await run_code_suite("bare", [sys.executable, str(agent)], gateway, tmp_path / "ws")
+    assert "max_turns" in result.failed, result.to_dict()
 
 
 def test_an_image_agent_runs_through_docker_with_the_workspace_and_the_environment(tmp_path: Path) -> None:

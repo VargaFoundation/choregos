@@ -31,3 +31,17 @@ class ToolError(AgentSdkError):
 
 class LlmError(AgentSdkError):
     """The model could not be called: no gateway in this run, or the call failed."""
+
+
+def sdk_error_in(exc: BaseException) -> AgentSdkError | None:
+    """The SDK error a framework's client wrapped: `openai` turns whatever its transport raises into
+    an `APIConnectionError`, with the original as `__cause__`. The limits (`PermissionDenied`,
+    `MaxTurnsExceeded`) must reach the step as themselves, not as a connection error."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        if isinstance(current, AgentSdkError):
+            return current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return None

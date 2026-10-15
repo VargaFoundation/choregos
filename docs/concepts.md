@@ -53,7 +53,7 @@ Three kinds:
 
 A transition performed by an agent becomes a **run**: one disposable sandbox, one workspace,
 one short-lived token, one model key with a hard cap. The runner speaks
-**ACP** (Agent Client Protocol, JSON-RPC over stdio) to the agent, records every message, applies the
+**ACP** (Agent Client Protocol, from Zed — not IBM's Agent Communication Protocol, which merged into A2A; JSON-RPC over stdio) to the agent, records every message, applies the
 guardrails (scope, forbidden commands, network, sensitive files), loops on the definition of
 done, and publishes a `StageResult`.
 
