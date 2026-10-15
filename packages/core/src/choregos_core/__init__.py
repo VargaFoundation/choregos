@@ -83,6 +83,7 @@ from .models import (
     ResolvedModel,
     estimate_tokens,
 )
+from .network import EffectiveNetwork, effective_network, host_matches, pattern_within, validate_pattern
 from .policy import (
     PRESET_NAMES,
     PolicyEngine,
@@ -109,6 +110,7 @@ __all__ = [
     "Decision",
     "DiffFile",
     "DiffSummary",
+    "EffectiveNetwork",
     "ExecRef",
     "ExecStatus",
     "Fact",
@@ -160,10 +162,12 @@ __all__ = [
     "checksum",
     "construire_requete",
     "dump_workflow",
+    "effective_network",
     "elapsed_seconds",
     "engine_for",
     "estimate_tokens",
     "evaluate",
+    "host_matches",
     "is_async_gate",
     "known_gates",
     "load_preset",
@@ -173,6 +177,7 @@ __all__ = [
     "parse_policy",
     "parse_workflow",
     "parse_workflow_file",
+    "pattern_within",
     "policy_warnings",
     "preset_yaml",
     "rapport_d_acces",
@@ -185,5 +190,6 @@ __all__ = [
     "to_mermaid",
     "to_process",
     "utcnow",
+    "validate_pattern",
     "validate_workflow",
 ]

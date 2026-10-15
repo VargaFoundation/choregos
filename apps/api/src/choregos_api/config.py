@@ -109,6 +109,10 @@ class Settings(BaseSettings):
     run_token_issuer: str = "choregos-api"
     run_token_audience: str = "internal"
 
+    #: Hosts no run of this deployment may reach, whatever an organisation or a project says (ADR 0070):
+    #: a comma-separated list of host patterns (`CHOREGOS_NETWORK_INSTANCE_DENY`).
+    network_instance_deny: str = ""
+
     # Services
     temporal_address: str = "localhost:7233"
     temporal_namespace: str = "default"

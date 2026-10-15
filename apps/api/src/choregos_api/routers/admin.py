@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import datetime, timedelta
+from typing import Annotated, Any, Literal
 
 from choregos_adapters.registry import default_executor_kind
 from choregos_contracts import Role
+from choregos_core import utcnow
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
 
@@ -17,6 +19,7 @@ from ..db.models import (
     ExecutorRow,
     GatewayKeyRow,
     Membership,
+    NetworkDecision,
     Organization,
     Project,
     User,
@@ -37,6 +40,7 @@ from ..schemas import (
     PageMeta,
     SecretsRewrap,
 )
+from ..schemas.network import NetworkActivity, NetworkActivityRow
 
 router = APIRouter(tags=["admin"])
 
@@ -433,4 +437,68 @@ async def list_audit(
     return AuditPage(
         items=[AuditEntry.model_validate(row) for row in window],
         meta=PageMeta(next_cursor=cursor, has_more=has_more),
+    )
+
+
+@router.get("/orgs/{org}/network-activity", response_model=NetworkActivity, operation_id="getNetworkActivity")
+async def get_network_activity(
+    org: str,
+    session: Db,
+    principal: Me,
+    since: Annotated[datetime | None, Query()] = None,
+    decision: Annotated[Literal["allowed", "denied", "rate_limited", "unreachable"] | None, Query()] = None,
+    project: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> NetworkActivity:
+    """Which hosts the organisation's runs reached or were refused, by host, layer, decision and
+    reason (ADR 0070). Reading it takes `audit:read` (the organisation's administrators and owners)."""
+    from ..rbac import Permission
+
+    if not principal.can(Permission.AUDIT_READ, org):
+        raise forbidden("reading the network activity is reserved for owners and administrators")
+    organisation = (
+        await session.execute(select(Organization).where(Organization.slug == org))
+    ).scalar_one_or_none()
+    if organisation is None:
+        raise not_found("Organisation", org)
+    floor = since or (utcnow() - timedelta(hours=24))
+    query = (
+        select(NetworkDecision, Project.slug)
+        .join(Project, Project.id == NetworkDecision.project_id)
+        .where(NetworkDecision.org_id == organisation.id, NetworkDecision.last_at >= floor)
+        .order_by(NetworkDecision.last_at.desc())
+        .limit(20_000)
+    )
+    if decision:
+        query = query.where(NetworkDecision.decision == decision)
+    if project:
+        query = query.where(Project.slug == project)
+    groups: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for row, slug in (await session.execute(query)).all():
+        key = (row.host, row.layer, row.decision, row.reason)
+        group = groups.setdefault(
+            key, {"count": 0, "runs": set(), "projects": set(), "agents": set(), "last_at": row.last_at}
+        )
+        group["count"] += row.count
+        group["runs"].add(row.run_id or row.id)
+        group["projects"].add(slug)
+        if row.agent_slug:
+            group["agents"].add(row.agent_slug)
+        group["last_at"] = max(group["last_at"], row.last_at)
+    ranked = sorted(groups.items(), key=lambda kv: kv[1]["last_at"], reverse=True)[:limit]
+    return NetworkActivity(
+        rows=[
+            NetworkActivityRow(
+                host=host,
+                layer=layer,
+                decision=decided,
+                reason=reason,
+                count=int(g["count"]),
+                runs=len(g["runs"]),
+                projects=sorted(g["projects"]),
+                agents=sorted(g["agents"]),
+                last_at=g["last_at"],
+            )
+            for (host, layer, decided, reason), g in ranked
+        ]
     )

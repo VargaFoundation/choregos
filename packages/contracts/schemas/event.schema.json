@@ -26,7 +26,7 @@
         "choregos.cost.recorded", "choregos.cost.alert",
         "choregos.project.provisioning.step", "choregos.project.provisioning.completed",
         "choregos.project.provisioning.failed",
-        "choregos.security.injection_suspected", "choregos.tool.called",
+        "choregos.security.injection_suspected", "choregos.tool.called", "choregos.network.denied",
         "choregos.action.proposed", "choregos.action.decided", "choregos.action.effect_done",
         "choregos.action.effect_compensated", "choregos.action.succeeded", "choregos.action.failed"
       ]

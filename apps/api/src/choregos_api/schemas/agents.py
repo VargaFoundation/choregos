@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
+from choregos_core.network import validate_pattern
 from pydantic import Field, field_validator, model_validator
 
 from .base import Dto
@@ -74,6 +75,37 @@ class AgentEvalResult(Dto):
     error: str | None = None
 
 
+class AgentNetwork(Dto):
+    """What one agent version may reach (ADR 0070). It only ever narrows the project's network and
+    the organisation's: a host they do not allow refuses the publication and the run.
+
+    Every field defaults to `None`, and a version that leaves them all there carries no `network`
+    in its digest: versions published before the field existed keep theirs."""
+
+    #: `None`: the project's list; `[]`: no internet; a list: only these hosts.
+    domains: list[str] | None = None
+    #: New connections a run may open to one host per minute.
+    per_host_per_minute: int | None = Field(default=None, ge=1)
+    #: `False` switches the agent CLI's own web tools off; `None` or `True`: as the policy says.
+    builtin_web_tools: bool | None = None
+
+    @field_validator("domains")
+    @classmethod
+    def _patterns(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        errors: list[str] = []
+        patterns: list[str] = []
+        for entry in value:
+            try:
+                patterns.append(validate_pattern(entry))
+            except ValueError as error:
+                errors.append(str(error))
+        if errors:
+            raise ValueError("; ".join(errors))
+        return list(dict.fromkeys(patterns))
+
+
 class AgentSpec(Dto):
     """Ce qu'une version d'agent EST. Elle ne se modifie jamais : un changement publie la suivante."""
 
@@ -91,6 +123,8 @@ class AgentSpec(Dto):
     #: Whose memory a run reads and writes (S32-02): `project` (shared, the default), `agent` (its
     #: own, within the project) or `none`.
     memory: Literal["none", "project", "agent"] = "project"
+    #: The hosts the agent may reach and how fast (ADR 0070).
+    network: AgentNetwork = Field(default_factory=AgentNetwork)
 
 
 class AgentTrialCreate(Dto):

@@ -145,6 +145,13 @@ class Permissions(Strict):
     write_paths: list[str] = Field(default_factory=list)
     deny_commands: list[str] = Field(default_factory=list)
     allow_domains: list[str] = Field(default_factory=list)
+    #: Hosts the run must never reach: a deny always wins over `allow_domains` (ADR 0070).
+    deny_domains: list[str] = Field(default_factory=list)
+    #: `unlisted`: an empty `allow_domains` means "no list, the sandbox filters" (old behaviour);
+    #: `listed`: the list is complete, an empty one means no internet at all.
+    egress: Literal["unlisted", "listed"] = "unlisted"
+    #: Whether the agent CLI's own `WebFetch` / `WebSearch` may be used.
+    builtin_web_tools: bool = True
     dod_iterations: int = Field(default=3, ge=0)
     max_findings: int = Field(default=5, ge=0)
     unknown_requests: Literal["allow", "reject"] = "allow"

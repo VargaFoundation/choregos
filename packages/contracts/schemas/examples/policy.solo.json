@@ -26,7 +26,7 @@
   "scope": { "auto_grant_max_files": 3, "deny_paths": [".choregos/**", ".github/workflows/**"],
     "max_diff_files": 60, "max_diff_lines": 3000 },
   "sandbox": { "runtime": "default", "deny_commands": ["kubectl", "terraform apply", "git push --force", "sudo"],
-    "network": { "allow_domains": ["github.com", "pypi.org", "registry.npmjs.org"], "deny_by_default": true },
+    "network": { "allow_domains": ["github.com", "pypi.org", "files.pythonhosted.org", "githubusercontent.com", "registry.npmjs.org"], "deny_by_default": true },
     "llm_security_analyzer": false },
   "findings": { "max_per_run": 5, "dedupe_threshold": 0.86, "auto_agent_ready_sizes": ["S"],
     "notify_severities": ["critical"], "false_positive_alert_ratio": 0.3 },

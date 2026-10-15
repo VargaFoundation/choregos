@@ -35,6 +35,7 @@ from ..schemas import (
     WorkflowValidateRequest,
     WorkflowValidation,
 )
+from ..schemas.network import EffectiveNetworkDto, ProjectNetwork
 from ..services import (
     active_policy,
     default_workflow,
@@ -44,7 +45,8 @@ from ..services import (
     signaler_ce_que_la_politique_n_applique_pas,
     workflow_actif,
 )
-from ..services.definitions import CEILING_KEY, ceiling_of
+from ..services.definitions import CEILING_KEY, ceiling_of, policy_model
+from ..services.network import project_effective_network
 
 router = APIRouter(tags=["workflows"])
 
@@ -382,6 +384,30 @@ async def get_policy(ctx: ProjectCtx, session: Db) -> PolicyDto:
         json_doc=row.json_doc,
         is_active=row.is_active,
         clamps=clamps,
+    )
+
+
+@router.get("/projects/{id}/network", response_model=ProjectNetwork, operation_id="getProjectNetwork")
+async def get_project_network(ctx: ProjectCtx, session: Db) -> ProjectNetwork:
+    """What the project's runs may reach: its own `sandbox.network`, the organisation's ceiling, and the
+    effective lists once the ceiling is applied (the repository host is implied)."""
+    row = await active_policy(session, ctx.id)
+    stored = policy_model(row)
+    _, clamps = await effective_policy_and_clamps(session, ctx.id)
+    effective, ceiling = await project_effective_network(session, ctx.project)
+    return ProjectNetwork(
+        policy=stored.sandbox.network.model_dump(mode="json"),
+        ceiling=ceiling.network.model_dump(mode="json") if ceiling else None,
+        effective=EffectiveNetworkDto(
+            allow=effective.allow,
+            deny=effective.deny,
+            implied=effective.implied,
+            per_host_per_minute=effective.per_host_per_minute,
+            per_run_per_minute=effective.per_run_per_minute,
+            org_per_host_per_minute=effective.org_per_host_per_minute,
+            builtin_web_tools=effective.builtin_web_tools,
+        ),
+        clamps=[c for c in clamps if c.startswith("network.")],
     )
 
 
