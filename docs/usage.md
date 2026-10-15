@@ -484,11 +484,35 @@ curl -X PUT  $API/projects/acme:hr/agents/onboarding-coordinator \
   -d '{"version": 2, "overrides": {"budget": {"run_usd": 1}}}'
 ```
 
-In the console, **Agents → New agent** (or **New version** on an agent's page) is the same thing as
-a form: every field of the version — instructions, model, backend, limits, budget, skills, MCP
-servers and their tool patterns, knowledge bases, memory scope, eval suite — with, beside it, what
-each choice costs and allows: the model's price, the operations a tool pattern reaches and their
-policy, and the projects a knowledge base is served to (a run elsewhere stops before it starts).
+In the console, **Agents → New agent** opens a full page (`/agents/new`), in two steps:
+
+1. **Describe.** Two fields: the *name* and *what it should do* (ten characters at least; it becomes the
+   agent's description). **Start from a blank form** goes on; **Or add one from the catalogue** goes
+   back to the catalogue's drawer.
+2. **Configure.** The *basics* are always open: name, slug (derived from the name, editable until the
+   agent exists, then fixed; `new` is refused because `/agents/new` is a page), description and
+   instructions. The seven other sections are folded and each says its value in one line: model and
+   runtime, limits and budget, skills, tools (MCP servers), knowledge, memory, eval suite. A section
+   opens by itself when it holds something other than the default. **Create and activate** registers
+   an active agent; **Save as draft** registers it as a `draft` (nothing pins or runs it until it is
+   activated, see S32-04).
+
+   From 1280 px, a panel stays beside the form with two tabs: **Try it** (a real, capped trial run,
+   see below) and **What it costs and allows** (the model's price, the operations a tool pattern
+   reaches and their policy, and the projects a knowledge base is served to: a run elsewhere stops
+   before it starts). Below 1280 px the panel falls under the form.
+
+**New version**, on an agent's page (Definition tab), is the same form without the first step.
+
+*Why not a clone of Microsoft's Agent Builder or Copilot Studio?* We took what fits and left the rest.
+Kept: a short first step in which the author says what the agent is for, one form for the details with
+the advanced fields folded, a test pane beside it, and draft-then-publish. Not kept: a conversational
+"describe" turn (one round, describe then edit the form, is enough), starter prompts (a Choregos agent
+is a stage worker invoked on a work item, not a chat assistant, so its equivalent is the eval suite
+and the trial's sample input), topics, triggers and channels (workflows are the triggers, and the AI
+clients page is the channel), and a visual canvas (the definition stays data, YAML or JSON, with a
+form on top; OpenAI is retiring its visual Agent Builder on 2026-11-30). Drafting the instructions
+from the description with a model is a later step; until then, step 1 starts a blank form.
 
 An agent carries **skills** — a folder with a `SKILL.md` whose header gives its `name` and
 `description` — from the organisation's library:

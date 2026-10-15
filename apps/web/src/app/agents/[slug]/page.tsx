@@ -247,7 +247,9 @@ function Definition({ org, agent }: { org: string; agent: Agent }) {
         {courante ? <Specification spec={courante.spec} /> : <p className="text-sm text-ink-muted">No version</p>}
       </Card>
       {agent.status !== "revoked" && (
-        <Card title={`New version (v${agent.latest_version + 1})`}>
+        // No card around the builder: it lays out its own two columns, and a card's padding took the width (S39-05).
+        <section className="space-y-3" aria-labelledby="new-version-title">
+          <Heading as="h2" size="md" id="new-version-title">{`New version (v${agent.latest_version + 1})`}</Heading>
           <AgentBuilder
             key={agent.latest_version}
             org={org}
@@ -255,7 +257,7 @@ function Definition({ org, agent }: { org: string; agent: Agent }) {
             start={courante?.spec ?? {}}
             onDone={setPubliee}
           />
-        </Card>
+        </section>
       )}
       {publiee && (
         <p className="text-sm" role="status">

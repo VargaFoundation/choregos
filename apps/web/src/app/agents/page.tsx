@@ -2,9 +2,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { AgentCatalogue } from "@/components/agents/catalogue";
 import { LifecycleBadges } from "@/components/agents/lifecycle";
 import { resumeDeLaVersion } from "@/components/agents/registre";
@@ -24,27 +24,32 @@ import {
   TH,
   THead,
   TR,
+  buttonClasses,
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
-// The builder is the heaviest form of the console, and most visits never open it (S32-01).
-const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {
-  loading: () => <p className="text-sm text-ink-muted">Loading the builder…</p>,
-});
-
 /**
  * The organisation's agents (ADR 0033): the registry, and nothing else (S30-04, plan item 7). A new
- * agent and the catalogue open in a drawer; AI clients and their tokens live on the AI clients'
+ * agent has its own page (`/agents/new`, S39-05) and the catalogue opens in a drawer; AI clients and their tokens live on the AI clients'
  * page. Each column comes from one request: the registry, and the metrics of every agent at once.
  */
 export default function AgentsPage() {
+  return (
+    <Suspense>
+      <Agents />
+    </Suspense>
+  );
+}
+
+function Agents() {
   const { org } = useSession();
+  // `/agents?catalogue=1`: the way back from the new-agent page's "add one from the catalogue".
+  const catalogue = useSearchParams().get("catalogue") === "1";
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   const metrics = useQuery({ queryKey: ["agent-metrics", org], queryFn: () => api.agentMetricsList(org) });
-  const [drawer, setDrawer] = useState<"new" | "catalogue" | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState<"catalogue" | null>(catalogue ? "catalogue" : null);
   const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
@@ -60,9 +65,9 @@ export default function AgentsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setDrawer("catalogue")}>Add from catalogue</Button>
-          <Button tone="primary" onClick={() => setDrawer("new")}>
+          <Link href="/agents/new" className={buttonClasses("primary")}>
             New agent
-          </Button>
+          </Link>
         </div>
       </div>
       <Glossaire ici="agents" />
@@ -136,21 +141,6 @@ export default function AgentsPage() {
       <Drawer open={drawer === "catalogue"} onClose={() => setDrawer(null)} title="Add from catalogue">
         <AgentCatalogue org={org} />
       </Drawer>
-      <Drawer open={drawer === "new"} onClose={() => setDrawer(null)} title="New agent">
-        <AgentBuilder
-          org={org}
-          mode={{ kind: "create" }}
-          onDone={(message) => {
-            setDone(message);
-            setDrawer(null);
-          }}
-        />
-      </Drawer>
-      {done && (
-        <p className="text-sm" role="status">
-          {done}
-        </p>
-      )}
     </div>
   );
 }

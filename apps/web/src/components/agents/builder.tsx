@@ -7,12 +7,17 @@
  * bases and memory scope — with, on the side, what each choice costs and allows. The definition stays data (`AgentSpec`); this is
  * a form on top of it, not a canvas.
  *
+ * S39-05: it takes a full page. The basics (name, slug, description, instructions) are always open;
+ * every other section folds and says its current value in one line, and opens on its own when it
+ * holds something other than the default (`openByDefault`). The trial and what the draft costs sit
+ * in a sticky panel on the right from 1280 px, under the form below.
+ *
  * Loaded lazily (`next/dynamic`) by the pages that open it: it is the heaviest form of the console
  * and most visits never open it.
  */
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState, type ReactNode } from "react";
-import { Button, ErrorNote, Input, Select, Textarea } from "@/components/ui";
+import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usd } from "@/lib/format";
@@ -89,26 +94,106 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
   };
 }
 
+/** Slugs a page of the console already uses: `/agents/new` is a static route (S39-05). */
+export const RESERVED_SLUGS = ["new"] as const;
+
+/**
+ * The slug an agent's name suggests: lowercase, accents stripped, anything else a dash, 2 to 63
+ * characters, starting with a letter. A reserved slug, or a name that leaves nothing, gives "".
+ */
+export function slugFromName(name: string): string {
+  let slug = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/['\u2019]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (/^[0-9]/.test(slug)) slug = `a-${slug}`;
+  slug = slug.slice(0, 63).replace(/-+$/, "");
+  if (slug.length < 2 || (RESERVED_SLUGS as readonly string[]).includes(slug)) return "";
+  return slug;
+}
+
+/** Why a slug cannot be used, or null. */
+export function slugProblem(slug: string): string | null {
+  if (!slug) return null;
+  if ((RESERVED_SLUGS as readonly string[]).includes(slug)) return `\`${slug}\` is reserved: it is a page of the console.`;
+  if (!/^[a-z][a-z0-9-]{1,62}$/.test(slug)) return "Use lowercase letters, digits and dashes, starting with a letter (2 to 63 characters).";
+  return null;
+}
+
+export type SectionId = "model" | "limits" | "skills" | "tools" | "knowledge" | "memory" | "evals";
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** One line per folded section: what it holds now, so a closed section still tells. */
+export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
+  const limits = [
+    spec.limits?.max_turns != null ? plural(spec.limits.max_turns, "turn", "turns") : null,
+    spec.limits?.max_minutes != null ? `${spec.limits.max_minutes} min` : null,
+    spec.budget?.run_usd != null ? `${usd(spec.budget.run_usd)} a run` : null,
+    spec.budget?.daily_usd != null ? `${usd(spec.budget.daily_usd)} a day` : null,
+    spec.budget?.monthly_usd != null ? `${usd(spec.budget.monthly_usd)} a month` : null,
+  ].filter((part): part is string => part !== null);
+  const skills = (spec.skills ?? []).length;
+  const servers = (spec.mcp_servers ?? []).filter((s) => s.connector).length;
+  const bases = (spec.knowledge ?? []).length;
+  const cases = (spec.evals ?? []).length;
+  return {
+    model: `${spec.model || "the project's profile"} · ${spec.backend || "the project's backend"}`,
+    limits: limits.length ? limits.join(" · ") : "the role's defaults",
+    skills: skills ? `${skills} attached` : "none",
+    tools: servers ? plural(servers, "MCP server", "MCP servers") : "none",
+    knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
+    memory: MEMORY_SCOPES[spec.memory ?? "project"].toLowerCase(),
+    evals: plural(cases, "case", "cases"),
+  };
+}
+
+/** A section starts open when it holds something other than the default. */
+export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
+  const spent = [spec.budget?.run_usd, spec.budget?.daily_usd, spec.budget?.monthly_usd, spec.limits?.max_turns, spec.limits?.max_minutes];
+  return {
+    model: Boolean(spec.model || spec.backend),
+    limits: spent.some((v) => v != null),
+    skills: (spec.skills ?? []).length > 0,
+    tools: (spec.mcp_servers ?? []).length > 0,
+    knowledge: (spec.knowledge ?? []).length > 0,
+    memory: Boolean(spec.memory && spec.memory !== "project"),
+    evals: (spec.evals ?? []).length > 0,
+  };
+}
+
 type Mode = { kind: "create" } | { kind: "version"; agent: Agent };
 
 export function AgentBuilder({
   org,
   mode,
   start = {},
+  initial,
   onDone,
-  extra,
+  onCreated,
+  onBack,
 }: {
   org: string;
   mode: Mode;
   /** The version one starts from: the latest, for a new version. */
   start?: AgentSpec;
-  onDone: (message: string) => void;
-  /** Rendered under the form, with the draft spec: the "try it" bench (S32-03). */
-  extra?: (spec: AgentSpec) => ReactNode;
+  /** What the first step of the page collected (create mode). */
+  initial?: { display_name?: string; slug?: string; description?: string };
+  onDone?: (message: string) => void;
+  /** Create mode: the agent that was registered, to go and read it. */
+  onCreated?: (agent: Agent) => void;
+  /** Create mode: the way back to the first step. */
+  onBack?: () => void;
 }) {
   const client = useQueryClient();
-  const [slug, setSlug] = useState("");
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initial?.display_name ?? "");
+  const [slug, setSlug] = useState(initial?.slug ?? slugFromName(initial?.display_name ?? ""));
+  // The slug follows the name until a person edits it: it never changes once the agent exists.
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [spec, setSpec] = useState<AgentSpec>(() => ({
     ...start,
     limits: { ...start.limits },
@@ -121,6 +206,7 @@ export function AgentBuilder({
   const [error, setError] = useState<string | null>(null);
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState<"try" | "costs">("try");
 
   const models = useQuery({ queryKey: ["platform-models"], queryFn: () => api.platformModels(), retry: false });
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
@@ -131,8 +217,12 @@ export function AgentBuilder({
   const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
   const set = (patch: Partial<AgentSpec>) => setSpec((s) => ({ ...s, ...patch }));
   const creating = mode.kind === "create";
+  const problem = creating ? slugProblem(slug) : null;
+  // What the form held when it opened decides which sections start open.
+  const [opened] = useState(() => openByDefault(spec));
+  const summaries = sectionSummaries(spec);
 
-  async function submit() {
+  async function submit(lifecycle: "active" | "draft" = "active") {
     setError(null);
     setFailing([]);
     setBusy(true);
@@ -142,13 +232,16 @@ export function AgentBuilder({
           slug,
           kind: "internal",
           display_name: name || slug,
+          description: description.trim() || null,
           spec: cleanSpec(spec),
+          lifecycle,
         });
-        onDone(`${agent.display_name} registered as v${agent.latest_version}`);
         await client.invalidateQueries({ queryKey: ["agents", org] });
+        onDone?.(`${agent.display_name} registered as v${agent.latest_version}${lifecycle === "draft" ? ", as a draft" : ""}`);
+        onCreated?.(agent);
       } else {
         const published = await api.publishAgentVersion(org, mode.agent.slug, cleanSpec(spec));
-        onDone(`v${published.version} published: projects keep the version they pinned`);
+        onDone?.(`v${published.version} published: projects keep the version they pinned`);
         await client.invalidateQueries({ queryKey: ["agent", org, mode.agent.slug] });
       }
     } catch (cause) {
@@ -166,53 +259,60 @@ export function AgentBuilder({
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]" data-testid="agent-builder">
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]" data-testid="agent-builder">
       <form
-        className="space-y-5"
+        className="min-w-0 space-y-4"
         aria-label={creating ? "New agent" : `New version of ${mode.agent.display_name}`}
         onSubmit={(event) => {
           event.preventDefault();
-          void submit();
+          if (!busy && !(creating && (!slug || problem))) void submit("active");
         }}
       >
         {creating && (
-          <Section title="Identity">
+          <Section title="Basics">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Slug" hint="Lowercase letters, digits and dashes; it never changes.">
+              <Field label="Name">
                 {(id) => (
-                  <Input id={id} value={slug} onChange={(e) => setSlug(e.target.value)} pattern="[a-z][a-z0-9-]{1,62}" required />
+                  <Input
+                    id={id}
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (!slugTouched) setSlug(slugFromName(e.target.value));
+                    }}
+                  />
                 )}
               </Field>
-              <Field label="Name">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
+              <Field label="Slug" hint={problem ?? "Lowercase letters, digits and dashes; it never changes once the agent exists."}>
+                {(id) => (
+                  <Input
+                    id={id}
+                    value={slug}
+                    onChange={(e) => {
+                      setSlugTouched(true);
+                      setSlug(e.target.value);
+                    }}
+                    aria-invalid={problem ? true : undefined}
+                    required
+                  />
+                )}
+              </Field>
             </div>
+            <Field label="Description" hint="What the agent is for, in a sentence or two. People read it in the registry.">
+              {(id) => (
+                <Textarea id={id} rows={3} maxLength={4000} value={description} onChange={(e) => setDescription(e.target.value)} />
+              )}
+            </Field>
+            <InstructionsField spec={spec} set={set} />
+          </Section>
+        )}
+        {!creating && (
+          <Section title="Instructions">
+            <InstructionsField spec={spec} set={set} />
           </Section>
         )}
 
-        <Section title="Instructions">
-          <Field
-            label="Instructions"
-            hint={
-              <>
-                A template rendered in a sandbox: it reads <code>ticket</code>, <code>spec</code>,{" "}
-                <code>plan_markdown</code>, <code>inputs</code>, <code>allowed_paths</code>, <code>context</code> and{" "}
-                <code>project</code>, and nothing else. The platform appends its frame after it — the output contract and
-                the invariants — which the instructions cannot change. Empty: the playbook of the role speaks.
-              </>
-            }
-          >
-            {(id) => (
-              <Textarea
-                id={id}
-                className="font-mono text-xs"
-                rows={8}
-                value={spec.instructions ?? ""}
-                onChange={(e) => set({ instructions: e.target.value })}
-              />
-            )}
-          </Field>
-        </Section>
-
-        <Section title="Model and backend">
+        <Disclosure title="Model and runtime" summary={summaries.model} defaultOpen={opened.model}>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Model" hint="A profile follows the project's mapping; a model is fixed.">
               {(id) => (
@@ -258,10 +358,37 @@ export function AgentBuilder({
               }
             </Field>
           </div>
-        </Section>
+        </Disclosure>
 
-        <Section title="Limits and budget">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SkillsSection library={library.data ?? []} spec={spec} set={set} summary={summaries.skills} defaultOpen={opened.skills} />
+
+        <McpSection connectors={mcpConnectors} spec={spec} set={set} summary={summaries.tools} defaultOpen={opened.tools} />
+
+        <KnowledgeSection bases={bases.data ?? []} spec={spec} set={set} summary={summaries.knowledge} defaultOpen={opened.knowledge} />
+
+        <Disclosure title="Memory" summary={summaries.memory} defaultOpen={opened.memory}>
+          <Field
+            label="Memory scope"
+            hint="What a run remembers from earlier runs, and where it writes what it learns. Memory is data in the context, never instructions."
+          >
+            {(id) => (
+              <Select
+                id={id}
+                value={spec.memory ?? "project"}
+                onChange={(e) => set({ memory: e.target.value as keyof typeof MEMORY_SCOPES })}
+              >
+                {Object.entries(MEMORY_SCOPES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </Disclosure>
+
+        <Disclosure title="Limits and budget" summary={summaries.limits} defaultOpen={opened.limits}>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Max turns">
               {(id) => (
                 <Input
@@ -323,44 +450,12 @@ export function AgentBuilder({
               )}
             </Field>
           </div>
-        </Section>
+        </Disclosure>
 
-        <SkillsSection library={library.data ?? []} spec={spec} set={set} />
-
-        <McpSection connectors={mcpConnectors} spec={spec} set={set} />
-
-        <KnowledgeSection bases={bases.data ?? []} spec={spec} set={set} />
-
-        <Section title="Memory">
-          <Field
-            label="Memory scope"
-            hint="What a run remembers from earlier runs, and where it writes what it learns. Memory is data in the context, never instructions."
-          >
-            {(id) => (
-              <Select
-                id={id}
-                value={spec.memory ?? "project"}
-                onChange={(e) => set({ memory: e.target.value as keyof typeof MEMORY_SCOPES })}
-              >
-                {Object.entries(MEMORY_SCOPES).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        </Section>
-
-        <Section title="Eval suite">
+        <Disclosure title="Eval suite" summary={summaries.evals} defaultOpen={opened.evals || failing.length > 0}>
           <EvalSuiteEditor cases={spec.evals ?? []} onChange={(evals) => set({ evals })} />
-        </Section>
+        </Disclosure>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" tone="primary" disabled={busy || (creating && !slug)}>
-            {creating ? "Create the agent" : `Publish v${mode.agent.latest_version + 1}`}
-          </Button>
-        </div>
         {error && <ErrorNote>{error}</ErrorNote>}
         {failing.length > 0 && (
           <ul className="space-y-1 text-sm text-failed-ink" aria-label="Failing eval cases" data-testid="evals-en-echec">
@@ -369,17 +464,100 @@ export function AgentBuilder({
             ))}
           </ul>
         )}
+
+        <div
+          className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-line bg-surface/95 py-3 backdrop-blur-sm"
+          data-testid="action-bar"
+        >
+          {creating ? (
+            <>
+              <Button type="submit" tone="primary" disabled={busy || !slug || problem !== null}>
+                Create and activate
+              </Button>
+              <Button type="button" disabled={busy || !slug || problem !== null} onClick={() => void submit("draft")}>
+                Save as draft
+              </Button>
+              {onBack && (
+                <Button type="button" onClick={onBack}>
+                  ← Back to the description
+                </Button>
+              )}
+            </>
+          ) : (
+            <Button type="submit" tone="primary" disabled={busy}>
+              {`Publish v${mode.agent.latest_version + 1}`}
+            </Button>
+          )}
+        </div>
       </form>
-      <div className="lg:col-start-1">
-        {extra ? extra(cleanSpec(spec)) : <TrialBench spec={cleanSpec(spec)} agent={mode.kind === "version" ? mode.agent.slug : undefined} />}
-      </div>
-      <BuilderSummary
-        spec={spec}
-        models={models.data ?? []}
-        connectors={mcpConnectors}
-        library={library.data ?? []}
-        bases={bases.data ?? []}
-      />
+
+      <aside
+        className="min-w-0 space-y-3 xl:sticky xl:top-16 xl:max-h-[calc(100dvh-5rem)] xl:overflow-y-auto"
+        aria-label="Try it and what it costs"
+        data-testid="panneau-lateral"
+      >
+        <h2 className="sr-only">Trial and costs</h2>
+        <div role="tablist" aria-label="Side panel" className="flex gap-6 border-b border-line">
+          {(
+            [
+              ["try", "Try it"],
+              ["costs", "What it costs and allows"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`builder-tab-${id}`}
+              aria-selected={panel === id}
+              aria-controls={`builder-panel-${id}`}
+              className={tabClasses(panel === id)}
+              onClick={() => setPanel(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* Both panels stay mounted: a trial under way is not lost when one looks at the costs. */}
+        <div role="tabpanel" id="builder-panel-try" aria-labelledby="builder-tab-try" hidden={panel !== "try"}>
+          <TrialBench spec={cleanSpec(spec)} agent={mode.kind === "version" ? mode.agent.slug : undefined} />
+        </div>
+        <div role="tabpanel" id="builder-panel-costs" aria-labelledby="builder-tab-costs" hidden={panel !== "costs"}>
+          <BuilderSummary
+            spec={spec}
+            models={models.data ?? []}
+            connectors={mcpConnectors}
+            library={library.data ?? []}
+            bases={bases.data ?? []}
+          />
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function InstructionsField({ spec, set }: { spec: AgentSpec; set: (patch: Partial<AgentSpec>) => void }) {
+  return (
+    <div className="space-y-2">
+      <Field label="Instructions" hint="Empty: the playbook of the role speaks.">
+        {(id) => (
+          <Textarea
+            id={id}
+            className="font-mono text-xs"
+            rows={14}
+            value={spec.instructions ?? ""}
+            onChange={(e) => set({ instructions: e.target.value })}
+          />
+        )}
+      </Field>
+      <Disclosure title="Which variables can I use?" className="border-0" id="template-variables">
+        <p className="text-xs text-ink-muted">
+          The instructions are a template rendered in a sandbox: it reads <code>ticket</code>, <code>spec</code>,{" "}
+          <code>plan_markdown</code>, <code>inputs</code>, <code>allowed_paths</code>, <code>context</code> and{" "}
+          <code>project</code>, and nothing else. The platform appends its frame after it — the output contract and the
+          invariants — which the instructions cannot change.
+        </p>
+      </Disclosure>
     </div>
   );
 }
@@ -410,17 +588,21 @@ function SkillsSection({
   library,
   spec,
   set,
+  summary,
+  defaultOpen,
 }: {
   library: Skill[];
   spec: AgentSpec;
   set: (patch: Partial<AgentSpec>) => void;
+  summary: string;
+  defaultOpen: boolean;
 }) {
   const [adding, setAdding] = useState("");
   const [version, setVersion] = useState("");
   const carried = spec.skills ?? [];
   const chosen = library.find((s) => s.slug === adding);
   return (
-    <Section title="Skills">
+    <Disclosure title="Skills" summary={summary} defaultOpen={defaultOpen}>
       <div data-testid="skills-de-la-version" className="space-y-2">
         {carried.length === 0 ? (
           <p className="text-xs text-ink-muted">None — the playbook of its role is all it reads.</p>
@@ -491,7 +673,7 @@ function SkillsSection({
           </Button>
         </div>
       </div>
-    </Section>
+    </Disclosure>
   );
 }
 
@@ -499,17 +681,21 @@ function McpSection({
   connectors,
   spec,
   set,
+  summary,
+  defaultOpen,
 }: {
   connectors: OrgConnector[];
   spec: AgentSpec;
   set: (patch: Partial<AgentSpec>) => void;
+  summary: string;
+  defaultOpen: boolean;
 }) {
   const servers = spec.mcp_servers ?? [];
   const [adding, setAdding] = useState("");
   const update = (index: number, tools: string[]) =>
     set({ mcp_servers: servers.map((s, i) => (i === index ? { ...s, tools } : s)) });
   return (
-    <Section title="Tools (MCP servers)">
+    <Disclosure title="Tools (MCP servers)" summary={summary} defaultOpen={defaultOpen}>
       <p className="text-xs text-ink-muted">
         The organisation&apos;s MCP connectors, and the tools of each the agent may call: names, or patterns such as{" "}
         <code>search_*</code>. None: the tools the platform gives a run of its project.
@@ -563,7 +749,7 @@ function McpSection({
       {connectors.length === 0 && (
         <p className="text-xs text-ink-muted">No MCP connector in the organisation yet: an administrator declares one.</p>
       )}
-    </Section>
+    </Disclosure>
   );
 }
 
@@ -571,15 +757,19 @@ function KnowledgeSection({
   bases,
   spec,
   set,
+  summary,
+  defaultOpen,
 }: {
   bases: KnowledgeBase[];
   spec: AgentSpec;
   set: (patch: Partial<AgentSpec>) => void;
+  summary: string;
+  defaultOpen: boolean;
 }) {
   const [adding, setAdding] = useState("");
   const read = spec.knowledge ?? [];
   return (
-    <Section title="Knowledge">
+    <Disclosure title="Knowledge" summary={summary} defaultOpen={defaultOpen}>
       <div data-testid="bases-de-la-version" className="space-y-2">
         {read.length === 0 ? (
           <p className="text-xs text-ink-muted">None — it reads no knowledge base.</p>
@@ -625,8 +815,15 @@ function KnowledgeSection({
           </Button>
         </div>
         {bases.length === 0 && <p className="text-xs text-ink-muted">No knowledge base in the organisation yet.</p>}
+        <p className="text-xs text-ink-muted">
+          Not there?{" "}
+          <a href="/knowledge" target="_blank" rel="noreferrer" className="underline">
+            Create a knowledge base
+          </a>{" "}
+          (opens in a new tab), then come back.
+        </p>
       </div>
-    </Section>
+    </Disclosure>
   );
 }
 
@@ -647,7 +844,7 @@ export function BuilderSummary({
   const model = models.find((m) => m.model_name === spec.model);
   const servers = spec.mcp_servers ?? [];
   return (
-    <aside className="raised h-fit space-y-4 rounded-md border border-line p-4 text-sm lg:sticky lg:top-16" aria-label="What this version costs and allows" data-testid="ce-que-ca-permet">
+    <section className="raised h-fit space-y-4 rounded-md border border-line p-4 text-sm" aria-label="What this version costs and allows" data-testid="ce-que-ca-permet">
       <h3 className="text-sm font-semibold">What it costs and allows</h3>
       <div className="space-y-1">
         <h4 className="text-xs font-medium text-ink-muted">Model</h4>
@@ -764,6 +961,6 @@ export function BuilderSummary({
               : "The project's shared memory: it reads and adds to what every agent of the project learnt."}
         </p>
       </div>
-    </aside>
+    </section>
   );
 }
