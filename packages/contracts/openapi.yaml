@@ -596,7 +596,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ModelCatalogueSettings" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "422": { $ref: "#/components/responses/Unprocessable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/models/sync:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     post:
