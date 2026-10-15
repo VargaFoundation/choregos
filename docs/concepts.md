@@ -174,6 +174,15 @@ applications rolls the departure back at once, without waiting for the next poll
 Polling stays the safety net; an event received while the train was collecting describes the
 previous release and is dropped.
 
+## Which model a stage uses
+
+A stage asks for `profile:<tier>`, `profile:by_size` or a model name. The resolver looks in this order:
+the **project's** profiles, the **organisation's tier** (`/admin/models`), the **platform** aliases
+(`platform/<tier>`); then it checks the result against the gateway's list, the backend, the eval
+matrix and, last, the **organisation's model catalogue** for the stage's role (a disabled model, or a
+model without an entry in `curated` mode, is refused, and `allow_unvalidated` does not bypass it). See
+[ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md).
+
 ## Where the money goes
 
 Every model call is minted against a per-run virtual key with a hard cap, and lands in a cost

@@ -1573,6 +1573,108 @@ export type GatewayModel = {
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
   internal_price?: boolean;
+  source?: "gateway" | "manual";
+  owned_by?: string;
+};
+
+export type PriceOverride = {
+  input_per_1k: number;
+  output_per_1k: number;
+};
+
+export type ModelGatewayFacts = {
+  provider?: string;
+  upstream_model?: string;
+  input_cost_per_1k?: number | null;
+  output_cost_per_1k?: number | null;
+  max_input_tokens?: number | null;
+  supports_tool_calling?: boolean;
+  supports_vision?: boolean;
+};
+
+export type ModelCatalogueEntry = {
+  id: string;
+  model_name: string;
+  display_name: string;
+  source: "gateway" | "manual";
+  enabled: boolean;
+  allowed_roles: Array<string>;
+  usages: Array<"agent" | "embed" | "distill" | "eval">;
+  price_override?: PriceOverride | null;
+  gateway?: ModelGatewayFacts | null;
+  last_seen_at?: string | null;
+  missing_since?: string | null;
+  notes?: string;
+  updated_by?: string | null;
+  updated_at?: string | null;
+};
+
+export type ModelCatalogueEntryCreate = {
+  model_name: string;
+  display_name?: string | null;
+  enabled?: boolean;
+  allowed_roles?: Array<string>;
+  usages?: Array<"agent" | "embed" | "distill" | "eval">;
+  price_override?: PriceOverride | null;
+  notes?: string;
+};
+
+export type ModelCataloguePatch = {
+  display_name?: string | null;
+  enabled?: boolean | null;
+  allowed_roles?: Array<string> | null;
+  usages?: Array<"agent" | "embed" | "distill" | "eval"> | null;
+  price_override?: PriceOverride | null;
+  clear_price_override?: boolean;
+  notes?: string | null;
+};
+
+export type ModelTiers = {
+  cheap?: string | null;
+  standard?: string | null;
+  strong?: string | null;
+  aux?: string | null;
+  embed?: string | null;
+  local?: string | null;
+};
+
+export type ModelCatalogue = {
+  mode: "open" | "curated";
+  gateway: {
+    type: string;
+    capabilities?: Array<string>;
+  };
+  tiers: ModelTiers;
+  entries: Array<ModelCatalogueEntry>;
+};
+
+export type ModelCatalogueSettings = {
+  mode: "open" | "curated";
+  tiers?: ModelTiers;
+};
+
+export type ModelCuratePreview = {
+  refused?: Array<{
+    kind: "agent" | "project_profile";
+    ref: string;
+    model: string;
+  }>;
+};
+
+export type ModelSyncResult = {
+  added: number;
+  missing: number;
+  seen: number;
+};
+
+export type UsableModel = {
+  model_name: string;
+  display_name: string;
+  provider?: string;
+  input_cost_per_1k?: number | null;
+  output_cost_per_1k?: number | null;
+  priced_by?: "gateway" | "override" | "none";
+  tiers?: Array<string>;
 };
 
 export type ProjectModels = {
@@ -2319,6 +2421,7 @@ export interface Operations {
 }; response: void };
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
+  addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
   alertmanagerWebhook: { method: "POST"; path: "/webhooks/alertmanager"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2363,6 +2466,7 @@ export interface Operations {
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
+  deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
@@ -2396,6 +2500,7 @@ export interface Operations {
   getKnowledgeDocument: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: KnowledgeDocument };
   getMe: { method: "GET"; path: "/me"; body: never; response: Me };
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
+  getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
@@ -2559,6 +2664,7 @@ export interface Operations {
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
+  listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
@@ -2582,6 +2688,7 @@ export interface Operations {
   justification: string;
 }; response: ScopeChangeDecision };
   postWorkItemAction: { method: "POST"; path: "/work-items/{id}/actions"; body: WorkItemAction; response: void };
+  previewModelCuration: { method: "GET"; path: "/orgs/{org}/models/curate-preview"; body: never; response: ModelCuratePreview };
   previewSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git/preview"; body: SkillGitPreviewRequest; response: SkillGitPreview };
   proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
@@ -2591,6 +2698,7 @@ export interface Operations {
   putConnector: { method: "PUT"; path: "/projects/{id}/connectors/{kind}"; body: ConnectorUpsert; response: Connector };
   putExecutor: { method: "PUT"; path: "/platform/executors"; body: ExecutorInfo; response: ExecutorInfo };
   putKnowledgeEvalSet: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/eval"; body: KnowledgeEvalSet; response: KnowledgeBase };
+  putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
   putPolicyCeiling: { method: "PUT"; path: "/orgs/{org}/policy-ceiling"; body: PolicyCeilingPut; response: PolicyCeilingState };
@@ -2620,6 +2728,7 @@ export interface Operations {
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
+  syncModelCatalogue: { method: "POST"; path: "/orgs/{org}/models/sync"; body: never; response: ModelSyncResult };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -2633,6 +2742,7 @@ export interface Operations {
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
+  updateModelCatalogueEntry: { method: "PATCH"; path: "/orgs/{org}/models/{entry_id}"; body: ModelCataloguePatch; response: ModelCatalogueEntry };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };

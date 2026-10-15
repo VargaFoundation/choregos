@@ -9,6 +9,7 @@ puis valide le résultat (modèle listé au gateway, tool calling, backend compa
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from choregos_contracts import ApiFormat, ModelProfile, ModelRef, ProjectConfig, Size
 
@@ -63,6 +64,70 @@ KNOWN_BACKEND_NAMES: tuple[str, ...] = (
 )
 
 
+USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval")
+TIERS: tuple[str, ...] = ("cheap", "standard", "strong", "aux", "embed", "local")
+
+
+@dataclass(slots=True)
+class CatalogueEntry:
+    """What the organisation decided about one model (ADR 0060)."""
+
+    enabled: bool = True
+    allowed_roles: tuple[str, ...] = ()
+    usages: tuple[str, ...] = ("agent",)
+    disabled_by: str = ""
+
+
+@dataclass(slots=True)
+class ModelPolicy:
+    """The organisation's model catalogue, as the resolver reads it.
+
+    `open` (the default) lets through anything the gateway lists, unless an entry says it is
+    disabled; `curated` lets through only what an entry enables. Roles and usages restrict an
+    entry that exists; a model without entry is free in `open` and refused in `curated`.
+    """
+
+    mode: str = "open"
+    entries: dict[str, CatalogueEntry] = field(default_factory=dict)
+    tiers: dict[str, str | None] = field(default_factory=dict)
+
+    def check(
+        self, name: str, provider_model: str | None = None, *, role: str | None = None, usage: str = "agent"
+    ) -> str | None:
+        """The text of the refusal, or `None` when the model may be used for this role and usage."""
+        # The alias first, then the model behind it: disabling either one refuses.
+        for candidate in dict.fromkeys(n for n in (name, provider_model) if n):
+            entry = self.entries.get(candidate)
+            if entry is None:
+                if self.mode == "curated" and candidate == name and not self._covered(name, provider_model):
+                    return (
+                        f"the model `{candidate}` is not in the organisation's model catalogue "
+                        "(curated mode: ask an administrator to enable it in /admin/models)"
+                    )
+                continue
+            if not entry.enabled:
+                who = f" by {entry.disabled_by}" if entry.disabled_by else ""
+                return f"the model `{candidate}` is disabled{who} in the organisation's model catalogue"
+            if usage not in entry.usages:
+                return (
+                    f"the model `{candidate}` is not enabled for the usage `{usage}` "
+                    f"(enabled for: {', '.join(entry.usages) or 'nothing'})"
+                )
+            if role is not None and entry.allowed_roles and role not in entry.allowed_roles:
+                return (
+                    f"the model `{candidate}` is not allowed for the role `{role}` "
+                    f"(allowed: {', '.join(entry.allowed_roles)})"
+                )
+        return None
+
+    def _covered(self, name: str, provider_model: str | None) -> bool:
+        """An alias with no entry of its own is covered when the model behind it has one."""
+        return bool(provider_model) and provider_model in self.entries and provider_model != name
+
+    def tier_model(self, tier: str) -> str | None:
+        return self.tiers.get(tier) or None
+
+
 @dataclass(slots=True)
 class ResolvedModel:
     """Modèle résolu pour une étape, prêt à entrer dans un `StageInput`."""
@@ -98,8 +163,10 @@ class ModelResolver:
         platform_profiles: dict[str, ModelProfile] | None = None,
         gateway_models: list[GatewayModel] | None = None,
         validated_backends: dict[str, list[str]] | None = None,
+        catalogue: ModelPolicy | None = None,
     ) -> None:
         self.gateway_url = gateway_url
+        self.catalogue = catalogue
         self.platform_profiles = {**PLATFORM_PROFILES, **(platform_profiles or {})}
         self.gateway_models = gateway_models or []
         # modèle → backends validés par EvalMatrix
@@ -113,6 +180,8 @@ class ModelResolver:
         size: Size | str | None = None,
         backend: str = "claude-code",
         allow_unvalidated: bool | None = None,
+        role: str | None = None,
+        usage: str = "agent",
     ) -> ResolvedModel:
         """Résout `profile:x`, `profile:by_size` ou un identifiant LiteLLM direct."""
         profile_name, turns_factor = self._profile_name(requested, size)
@@ -136,6 +205,7 @@ class ModelResolver:
         if permissive is None:
             permissive = project.models.allow_unvalidated if project else False
         self._validate(resolved, backend=backend, allow_unvalidated=permissive)
+        self._check_catalogue(resolved, role=role, usage=usage)
         return resolved
 
     # ───────────────────────── interne ─────────────────────────
@@ -153,12 +223,37 @@ class ModelResolver:
             profile = project.models.profiles.get(name)
             if profile is not None:
                 return profile
+        tier_model = self.catalogue.tier_model(name) if self.catalogue is not None else None
+        if tier_model is not None:  # the organisation's tier: between the project and the platform
+            return ModelProfile(
+                litellm_model=tier_model,
+                **self._platform_defaults(name),  # params of the platform tier
+            )
         profile = self.platform_profiles.get(name)
         if profile is not None:
             return profile
         if "/" in name:  # identifiant LiteLLM direct, ex. anthropic/claude-sonnet-5
             return ModelProfile(litellm_model=name)
         return None
+
+    def _platform_defaults(self, name: str) -> dict[str, Any]:
+        platform = self.platform_profiles.get(name)
+        return (
+            {"params": dict(platform.params), "max_turns_factor": platform.max_turns_factor}
+            if platform
+            else {}
+        )
+
+    def _check_catalogue(self, resolved: ResolvedModel, *, role: str | None, usage: str) -> None:
+        """The organisation's catalogue: never bypassed by `allow_unvalidated`, which is about the
+        eval matrix and the gateway, not about what the organisation allows."""
+        if self.catalogue is None:
+            return
+        refusal = self.catalogue.check(
+            resolved.litellm_model, resolved.provider_model, role=role, usage=usage
+        )
+        if refusal is not None:
+            raise ModelResolutionError(refusal)
 
     def _validate(self, resolved: ResolvedModel, *, backend: str, allow_unvalidated: bool) -> None:
         model = resolved.litellm_model

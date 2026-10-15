@@ -87,6 +87,10 @@ filtered to names that exist, and a draft is never saved or run.
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while
   the run waits for a slot. Minted by `start_run` for the run's Secret only: never stored in
   `runs.stage_input`, never carried by a Temporal payload (#519).
+- The organisation's model catalogue (ADR 0060) limits which models an agent may name; it is a
+  governance control in front of the gateway, not a replacement for the key's own model list. With an
+  OpenAI-compatible gateway the `run_key` is shared by runs: scope it at the gateway (a consumer with
+  a token rate limit), since Choregos cannot cap it.
 - Gateway key: one per run, capped. `prepare_stage` reserves its cap (a `gateway_keys` row named
   `reserved:<run_id>`); `start_run` mints it and the executor puts it in the run's Secret next to
   the run token (`k8s_job`, `tekton`: Secret key `gateway-key`; `agent_sandbox`: sealed in the

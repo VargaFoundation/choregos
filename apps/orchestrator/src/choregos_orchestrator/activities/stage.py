@@ -16,6 +16,7 @@ from typing import Any
 from choregos_api.db.models import Run
 from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
+from choregos_api.services.model_catalogue import load_policy
 from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
 from choregos_contracts import (
     AgentRef,
@@ -151,8 +152,12 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             await _budget_du_jour(session, bundle, agent)
         if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
+        # The organisation's model catalogue (ADR 0060): a model it disabled after the agent was
+        # published stops the stage here, before any key is minted.
         resolver = ModelResolver(
-            gateway_url=settings.gateway_url, gateway_models=await _gateway_catalogue(bundle)
+            gateway_url=settings.gateway_url,
+            gateway_models=await _gateway_catalogue(bundle),
+            catalogue=await load_policy(session, bundle.project.org_id),
         )
         backend = plan.backend or bundle.config.agent.default_backend
         if plan.role == str(StageRole.REVIEW) and engine.cross_backend_review():
@@ -338,7 +343,9 @@ def _resolve_model(resolver: ModelResolver, plan: StagePlan, bundle: Any, item: 
     from temporalio.exceptions import ApplicationError
 
     try:
-        return resolver.resolve(plan.model_request, project=bundle.config, size=item.size, backend=backend)
+        return resolver.resolve(
+            plan.model_request, project=bundle.config, size=item.size, backend=backend, role=plan.role
+        )
     except ModelResolutionError as refusal:
         raise ApplicationError(str(refusal), type="ModelResolutionError", non_retryable=True) from refusal
 
@@ -751,7 +758,9 @@ async def _reviewer_backend(
         if candidate == implementer:
             continue
         try:
-            resolver.resolve(plan.model_request, project=bundle.config, size=item.size, backend=candidate)
+            resolver.resolve(
+                plan.model_request, project=bundle.config, size=item.size, backend=candidate, role=plan.role
+            )
         except ModelResolutionError:
             continue
         logger.info(

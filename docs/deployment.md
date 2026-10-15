@@ -762,7 +762,7 @@ allowed domain answers 200 through the proxy, any other gets 403 from Squid).
 
 `/platform/models` and a project that declares no `gateway` connector use the deployment's gateway
 adapter (`global.gateway.type`, env `CHOREGOS_GATEWAY_TYPE`), not LiteLLM by default whatever was
-configured. Each adapter declares its `capabilities`:
+configured. The organisation's model catalogue (`/admin/models`, [ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)) is filled from the gateway of the organisation: an organisation connector of kind `gateway` if it has one, else this deployment default. Each adapter declares its `capabilities`:
 
 | Capability | Meaning | `litellm` | `openai-compatible` | `direct` |
 |---|---|---|---|---|

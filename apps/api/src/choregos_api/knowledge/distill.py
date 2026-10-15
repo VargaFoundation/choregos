@@ -264,6 +264,13 @@ async def distill(
             corpus = await load_corpus(session, base)
             instructions = await instructions_for(session, base.org_id, base)
             distiller = distiller or get_distiller()
+            # The organisation's catalogue decides whether this model may distil (ADR 0060).
+            from .embeddings import ModelNotAllowedError, check_model_usage
+
+            try:
+                await check_model_usage(session, base.org_id, distiller.model, "distill")
+            except ModelNotAllowedError as refusal:
+                raise DistillationError(str(refusal)) from refusal
         answer = await distiller.principles(instructions, corpus)
         principles, dropped = checked(answer, corpus)
         if not principles:

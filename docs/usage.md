@@ -902,6 +902,30 @@ is the library: import a zip or a repository (preview, pick, import at the resol
 **agents** tab shows what it pins and its **implicit agents**: workflow actors that run as agents
 without naming one, which you can register, then name in the workflow (`agent: <slug>`).
 
+### Models
+
+`/admin/models` (the **Models** page of the administration) is the organisation's model catalogue
+([ADR 0060](adr/0060-a-gateway-agnostic-model-catalogue.md)), whatever the gateway is. **Sync from
+the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
+list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
+the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price per 1k tokens that
+replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
+a spend back leaves the line `unmeasured`).
+
+- **Modes**: `open` (the default; everything the gateway lists is usable, the catalogue only
+  restricts what it has an entry for) and `curated` (only enabled entries are usable; a model
+  discovered later arrives disabled). Switching to `curated` shows first the agents and project
+  profiles it would refuse.
+- **Tiers**: the model behind `cheap`, `standard`, `strong`, `aux`, `embed` and `local` for the
+  organisation. Resolution is project profile, then organisation tier, then the platform alias.
+- **Refusals**: a disabled model cannot be named by an agent version (publication and trial answer
+  422 naming it) nor mapped by a project profile, and a stage whose model was disabled after
+  publication stops without a key and goes to a person (not retried). Embedding and distillation
+  refuse a model that lost the `embed` / `distill` usage, and say to change it in `/admin/models`.
+  `allow_unvalidated` never bypasses the catalogue.
+- **Reading**: every member sees the page read-only and the agent builder offers only the usable
+  models (`GET /orgs/{org}/models/usable`); changes need the `org_admin` role.
+
 ### Knowledge bases
 
 A **knowledge base** is a corpus you curate — an architecture framework, a security policy,

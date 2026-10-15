@@ -419,7 +419,11 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
-**Total** : 250 livrées, 85 partielles, 4 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+| S39-07a | S39 | 🟡 | — | gateway capabilities (`GatewayAdapter.capabilities`, `test()`, alias `LlmGateway`), an OpenAI-compatible adapter (discovery only), `CHOREGOS_GATEWAY_TYPE` (chart `global.gateway.type`), and `/platform/models` asks the configured gateway instead of a hard-coded LiteLLM. Proves: the router on a scripted gateway and on an OpenAI-compatible one over a mocked transport (red with the hard-coded `litellm`), the declarations of every registered gateway, the chart value. Does not prove: a real non-LiteLLM gateway; the organisation catalogue, per-org gateway connector and the admin page (7b/7c, not built here). |
+| S39-07b | S39 | 🟡 | #592 | the organisation's model catalogue (ADR 0060, migration `c8e0a2b4d6f1`): `model_catalogue` filled by sync from the organisation's gateway (connector of kind `gateway`, else the deployment's) plus manual entries; enabled, roles, usages, price override per model; `open` (default) or `curated` mode with a preview; tiers per organisation between project profiles and platform aliases; refusals at agent publication and trial, project profile writes, run time (`prepare_stage`, non-retryable, no key minted), embedding and distillation; override applied to the ledger, `unmeasured` without `spend_readback`; 8 operations in the contract. Proves: each guard on the API test client, the resolver and the orchestrator activities with fakes (each test red with its guard removed). Does not prove: a real LiteLLM `/model/info` or non-LiteLLM gateway; the console page (7c); catalogue agents are not checked at install; the `eval` usage is recorded, not consulted. |
+
+
+
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction

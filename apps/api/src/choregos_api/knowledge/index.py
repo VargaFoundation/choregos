@@ -29,7 +29,7 @@ from ..db.models import KnowledgeBase, KnowledgeChunk, KnowledgeDocument
 from ..db.session import session_scope
 from ..logging import get_logger
 from .chunking import chunk
-from .embeddings import Embedder, cosine, get_embedder, words
+from .embeddings import Embedder, check_model_usage, cosine, embedding_model, get_embedder, words
 
 logger = get_logger("choregos.knowledge.index")
 
@@ -108,6 +108,8 @@ async def index_document(org: str, document_id: str, embedder: Embedder | None =
         vectors: list[list[float]] | None = None
         mode = await search_mode(session, embedder)
         if embedder is not None and mode != FULL_TEXT:
+            # The organisation's catalogue decides whether this model may embed (ADR 0060).
+            await check_model_usage(session, document.org_id, embedding_model(get_settings()), "embed")
             vectors = await embedder.embed([c.text for c in chunks])
         rows = [
             KnowledgeChunk(
