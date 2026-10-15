@@ -54,17 +54,32 @@ function cle(contenu: string): string {
   return contenu.trim().replace(/\s+/g, " ");
 }
 
+/**
+ * The entries of a plan revision, wherever the agent publishes them: an ACP `plan` update, or the
+ * `todowrite` tool of opencode, which carries the same fields (`content`, `status`, `priority`) in
+ * the input of its tool call instead of an ACP `plan` update.
+ */
+function planEntries(update: Record<string, unknown>): unknown[] | null {
+  if (update.sessionUpdate === "plan") return Array.isArray(update.entries) ? update.entries : null;
+  if (update.sessionUpdate !== "tool_call" && update.sessionUpdate !== "tool_call_update") return null;
+  const name = `${update.title ?? ""} ${update.name ?? ""}`;
+  const input = update.rawInput as { todos?: unknown } | undefined;
+  return /todo/i.test(name) && Array.isArray(input?.todos) ? input.todos : null;
+}
+
 /** Les tâches d'une révision, ou rien si l'événement n'est pas un plan. Un doublon garde sa première place. */
 function tachesDe(evenement: RunEventDto): Tache[] | null {
   if (evenement.type !== "session/update") return null;
   const payload = (evenement.payload ?? {}) as Record<string, unknown>;
   const update = (payload.update ?? payload) as Record<string, unknown>;
-  if (update.sessionUpdate !== "plan" || !Array.isArray(update.entries)) return null;
+  const entrees = planEntries(update);
+  if (!entrees) return null;
   const vues = new Set<string>();
   const taches: Tache[] = [];
-  for (const brute of update.entries as Record<string, unknown>[]) {
+  for (const brute of entrees as Record<string, unknown>[]) {
     const contenu = typeof brute?.content === "string" ? cle(brute.content) : "";
-    if (!contenu || vues.has(contenu)) continue;
+    // A cancelled todo leaves the plan: it shows as removed, never as done.
+    if (!contenu || vues.has(contenu) || brute.status === "cancelled") continue;
     vues.add(contenu);
     const statut = brute.status as StatutDeTache;
     const priorite = brute.priority as PrioriteDeTache;
