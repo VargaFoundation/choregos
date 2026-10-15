@@ -1,0 +1,35 @@
+# A knowledge base as code, about a fictitious company. Apply it with:
+#   choregos knowledge apply -f essai/knowledge/example-kb.yaml --dry-run
+#   choregos knowledge apply -f essai/knowledge/example-kb.yaml
+apiVersion: choregos/v1
+kind: KnowledgeBase
+slug: acme
+name: Acme
+description: What Acme sells, and how it talks about itself.
+scope: org                # org | projects | groups
+serving_mode: index       # files | index (searchable, needed for the eval set)
+sources:
+  - name: website
+    kind: web
+    config:
+      url: https://example.com/          # the final URL: a redirect off this host is refused
+      max_depth: 3
+      max_pages: 200
+      exclude: ["/fr", "/fr/*"]         # path globs, neither fetched nor followed
+    interval_minutes: 1440
+  - name: handbook
+    kind: git
+    # connector: acme-github              # optional: a `documents/git` connector, for a private repository
+    config:
+      url: https://github.com/acme/handbook.git
+      ref: main
+      paths: ["docs/**/*.md"]
+    interval_minutes: 1440
+uploads:
+  - corpus/*.md                           # globs, relative to this file
+  # - url: https://example.com/brochure.pdf
+eval:
+  - question: What does Acme sell?
+    expected: [offers.md]
+  - question: Who founded Acme?
+    expected: [about.md]
