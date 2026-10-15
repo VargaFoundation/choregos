@@ -172,6 +172,7 @@ export function AgentBuilder({
   mode,
   start = {},
   initial,
+  initialSample,
   onDone,
   onCreated,
   onBack,
@@ -182,6 +183,8 @@ export function AgentBuilder({
   start?: AgentSpec;
   /** What the first step of the page collected (create mode). */
   initial?: { display_name?: string; slug?: string; description?: string };
+  /** The input "Try it" starts with, such as a drafted agent's sample (S39-05). */
+  initialSample?: { title?: string; body?: string };
   onDone?: (message: string) => void;
   /** Create mode: the agent that was registered, to go and read it. */
   onCreated?: (agent: Agent) => void;
@@ -520,7 +523,11 @@ export function AgentBuilder({
         </div>
         {/* Both panels stay mounted: a trial under way is not lost when one looks at the costs. */}
         <div role="tabpanel" id="builder-panel-try" aria-labelledby="builder-tab-try" hidden={panel !== "try"}>
-          <TrialBench spec={cleanSpec(spec)} agent={mode.kind === "version" ? mode.agent.slug : undefined} />
+          <TrialBench
+            spec={cleanSpec(spec)}
+            agent={mode.kind === "version" ? mode.agent.slug : undefined}
+            initialSample={initialSample}
+          />
         </div>
         <div role="tabpanel" id="builder-panel-costs" aria-labelledby="builder-tab-costs" hidden={panel !== "costs"}>
           <BuilderSummary
