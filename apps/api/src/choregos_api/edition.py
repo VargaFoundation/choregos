@@ -46,7 +46,7 @@ def declarer(
     publisher: str | None = None,
     version: str | None = None,
 ) -> None:
-    """Appelée par l'édition entreprise à son chargement. Le cœur ne l'appelle jamais.
+    """Called by the enterprise edition when it loads. The core never calls it.
 
     `publisher` (who publishes the running edition) and `version` (the edition plugin's own version)
     are announced by the plugin and only rendered by the core: the core never names an edition's
