@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les outils exposés à l'agent par le sidecar `choregos-tools`.
+"""The tools the `choregos-tools` sidecar exposes to the agent.
 
-Toutes les écritures passent par l'API interne : l'agent n'a **aucun** credential,
-ni GitHub, ni base, ni cloud. C'est le seul moyen pour lui d'agir hors du workspace.
+Every write goes through the internal API: the agent holds **no** credential, no GitHub,
+no database, no cloud. It is its only way to act outside the workspace.
 """
 
 from __future__ import annotations
@@ -180,14 +180,14 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 
 @dataclass
 class ToolContext:
-    """État partagé par les appels d'outils d'un run."""
+    """State shared by the tool calls of a run."""
 
     findings_used: int = 0
     max_findings: int = 5
     granted_paths: list[str] = field(default_factory=list)
     questions_asked: int = 0
-    #: Les sorties que la transition du run déclare, lues une fois dans l'entrée du run (S22-15).
-    #: `None` : pas encore lues.
+    #: The outputs the run's transition declares, read once from the run's input (S22-15).
+    #: `None`: not read yet.
     declared_outputs: list[str] | None = None
     #: The run's workspace: what `validate_nginx_config` may read, and nothing outside it.
     workspace: Path = field(default_factory=lambda: Path(os.environ.get("CHOREGOS_WORKSPACE", "/workspace")))
@@ -200,7 +200,7 @@ class ToolContext:
 
 
 def text_result(text: str, *, is_error: bool = False) -> dict[str, Any]:
-    """Réponse MCP `tools/call` : un contenu texte, plus un drapeau d'erreur."""
+    """An MCP `tools/call` answer: one text content, plus an error flag."""
     return {"content": [{"type": "text", "text": text}], "isError": is_error}
 
 

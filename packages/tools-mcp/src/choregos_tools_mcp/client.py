@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Client de l'API interne : le seul canal de sortie du runner."""
+"""The internal API client: the runner's only way out."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from choregos_contracts import ContextPack, Finding, StageInput, StageResult
 
 
 class InternalApiError(RuntimeError):
-    """L'API interne a refusé un appel."""
+    """The internal API refused a call."""
 
     def __init__(self, status_code: int, detail: str) -> None:
         super().__init__(f"internal API: {status_code} — {detail}")
@@ -20,7 +20,7 @@ class InternalApiError(RuntimeError):
 
 
 class InternalClient:
-    """Appels au `/internal` de l'API, authentifiés par le jeton de run."""
+    """Calls to the API's `/internal`, authenticated with the run token."""
 
     def __init__(self, base_url: str, run_id: str, token: str, *, timeout: float = 30.0) -> None:
         self.base_url = base_url.rstrip("/")
@@ -50,7 +50,7 @@ class InternalClient:
         return StageInput.model_validate(await self._request("GET", "/input"))
 
     async def post_events(self, events: list[dict[str, Any]]) -> int:
-        """Journal ACP en lot ; l'API déduplique par `seq`, donc un rejeu est sans effet."""
+        """The ACP log in batches; the API deduplicates by `seq`, so a replay has no effect."""
         if not events:
             return 0
         async with self._event_lock:
@@ -76,20 +76,20 @@ class InternalClient:
         return dict(await self._request("POST", "/question", json={"text": text, "options": options or []}))
 
     async def fetch_tools(self) -> list[dict[str, Any]]:
-        """Les outils du catalogue que CE run peut appeler, au format MCP."""
+        """The catalogue tools THIS run may call, in MCP format."""
         payload = await self._request("GET", "/tools")
-        outils = (payload or {}).get("tools", [])
-        return [dict(o) for o in outils]
+        tools = (payload or {}).get("tools", [])
+        return [dict(t) for t in tools]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Appelle un outil du catalogue. La clé du fournisseur reste côté plateforme."""
+        """Calls a catalogue tool. The provider's key stays on the platform side."""
         return dict(await self._request("POST", f"/tools/{name}", json=arguments))
 
     async def fetch_context(self) -> ContextPack:
         return ContextPack.model_validate(await self._request("GET", "/context"))
 
     async def fetch_skills(self) -> list[dict[str, Any]]:
-        """Les fichiers des skills que le `StageInput` nomme (ADR 0033) ; l'empreinte s'y vérifie."""
+        """The files of the skills the `StageInput` names (ADR 0033); their digest is checked."""
         return list(await self._request("GET", "/skills") or [])
 
     async def fetch_inputs(self) -> list[dict[str, Any]]:
@@ -135,10 +135,10 @@ class InternalClient:
         return dict(await self._request("GET", "/ticket"))
 
     async def fetch_git_token(self) -> str | None:
-        """Le jeton git du run (S22-07) : limité à son dépôt, une heure ; `None` sans App ou hors GitHub."""
+        """The run's git token (S22-07): its repository only, one hour; `None` without App or off GitHub."""
         payload = await self._request("POST", "/git-token")
-        jeton = (payload or {}).get("token")
-        return str(jeton) if jeton else None
+        token = (payload or {}).get("token")
+        return str(token) if token else None
 
     async def fetch_ci_logs(self, tail: int = 500) -> str:
         payload = await self._request("GET", "/ci-logs", params={"tail": tail})

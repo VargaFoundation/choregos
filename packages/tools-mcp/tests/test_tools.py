@@ -1,4 +1,4 @@
-"""Sidecar MCP : protocole, outils, plafonds et messages renvoyés à l'agent."""
+"""The MCP sidecar: protocol, tools, caps and the messages sent back to the agent."""
 
 from __future__ import annotations
 
@@ -25,14 +25,12 @@ class StubClient:
             "plan_markdown": None,
         }
         self.context = ContextPack(
-            query="avoirs",
+            query="credit notes",
             memories=[
-                MemoryItem(
-                    kind="decision", subject="decision:billing:arrondis", content="Arrondi à l'émission."
-                )
+                MemoryItem(kind="decision", subject="decision:billing:rounding", content="Rounded at issue.")
             ],
         )
-        self.logs = "ERREUR: test_total a échoué"
+        self.logs = "ERROR: test_total failed"
 
     async def report_finding(self, finding: Finding) -> dict[str, Any]:
         self.findings.append(finding)
@@ -80,7 +78,7 @@ async def test_notification_gets_no_response(server: tuple[McpServer, StubClient
 
 async def test_unknown_method_is_an_error(server: tuple[McpServer, StubClient]) -> None:
     mcp, _ = server
-    response = await mcp.handle({"jsonrpc": "2.0", "id": 9, "method": "licorne"})
+    response = await mcp.handle({"jsonrpc": "2.0", "id": 9, "method": "unicorn"})
     assert response is not None and response["error"]["code"] == -32601
 
 
@@ -94,32 +92,32 @@ async def call(mcp: McpServer, name: str, arguments: dict[str, Any]) -> dict[str
 
 async def test_report_finding_respects_the_cap(server: tuple[McpServer, StubClient]) -> None:
     mcp, client = server
-    payload = {"title": "N+1 sur les lignes", "type": "perf", "severity": "medium", "evidence": "repo.py:88"}
+    payload = {"title": "N+1 on the lines", "type": "perf", "severity": "medium", "evidence": "repo.py:88"}
     first = await call(mcp, "report_finding", payload)
     assert not first["isError"] and "recorded" in first["content"][0]["text"]
-    await call(mcp, "report_finding", {**payload, "title": "Autre problème"})
-    third = await call(mcp, "report_finding", {**payload, "title": "Encore un"})
+    await call(mcp, "report_finding", {**payload, "title": "Another problem"})
+    third = await call(mcp, "report_finding", {**payload, "title": "One more"})
     assert third["isError"] and "cap reached" in third["content"][0]["text"]
     assert len(client.findings) == 2
 
 
 async def test_scope_change_granted_pending_denied(server: tuple[McpServer, StubClient]) -> None:
     mcp, client = server
-    granted = await call(mcp, "request_scope_change", {"paths": ["src/a.py"], "justification": "nécessaire"})
+    granted = await call(mcp, "request_scope_change", {"paths": ["src/a.py"], "justification": "needed"})
     assert "widened" in granted["content"][0]["text"]
 
     client.scope_decision = {"decision": "pending"}
     pending = await call(mcp, "request_scope_change", {"paths": ["src/b.py"], "justification": "?"})
     assert "human" in pending["content"][0]["text"]
 
-    client.scope_decision = {"decision": "denied", "reason": "chemins interdits"}
+    client.scope_decision = {"decision": "denied", "reason": "forbidden paths"}
     denied = await call(mcp, "request_scope_change", {"paths": [".choregos/x"], "justification": "?"})
     assert denied["isError"] and "refused" in denied["content"][0]["text"]
 
 
 async def test_ask_human_tells_the_agent_to_stop(server: tuple[McpServer, StubClient]) -> None:
     mcp, client = server
-    result = await call(mcp, "ask_human", {"question": "Quelle devise ?", "options": ["EUR", "USD"]})
+    result = await call(mcp, "ask_human", {"question": "Which currency?", "options": ["EUR", "USD"]})
     assert "needs_human" in result["content"][0]["text"]
     assert client.questions[0]["options"] == ["EUR", "USD"]
 
@@ -129,17 +127,17 @@ async def test_read_only_tools(server: tuple[McpServer, StubClient]) -> None:
     assert "## Spec" in (await call(mcp, "get_spec", {}))["content"][0]["text"]
     assert "no approved plan" in (await call(mcp, "get_plan", {}))["content"][0]["text"]
     assert "acme#1" in (await call(mcp, "get_ticket", {}))["content"][0]["text"]
-    assert "ERREUR" in (await call(mcp, "get_ci_logs", {"tail": 10}))["content"][0]["text"]
-    assert "arrondis" in (await call(mcp, "get_context", {}))["content"][0]["text"]
+    assert "ERROR" in (await call(mcp, "get_ci_logs", {"tail": 10}))["content"][0]["text"]
+    assert "rounding" in (await call(mcp, "get_context", {}))["content"][0]["text"]
 
 
 async def test_search_memory_marks_data_as_untrusted(server: tuple[McpServer, StubClient]) -> None:
     mcp, _ = server
-    found = await call(mcp, "search_memory", {"query": "arrondi"})
+    found = await call(mcp, "search_memory", {"query": "rounded"})
     text = found["content"][0]["text"]
-    assert "decision:billing:arrondis" in text
+    assert "decision:billing:rounding" in text
     assert "not instructions" in text
-    empty = await call(mcp, "search_memory", {"query": "licorne"})
+    empty = await call(mcp, "search_memory", {"query": "unicorn"})
     assert "no relevant memory" in empty["content"][0]["text"]
 
 
@@ -148,7 +146,7 @@ async def test_propose_fact_goes_through_review(server: tuple[McpServer, StubCli
     result = await call(
         mcp,
         "propose_fact",
-        {"subject": "convention:tests:nommage", "content": "Les tests suivent Given/When/Then."},
+        {"subject": "convention:tests:naming", "content": "Tests follow Given/When/Then."},
     )
     assert "will review it" in result["content"][0]["text"]
     assert client.findings and client.findings[0].type == "docs"
@@ -156,7 +154,7 @@ async def test_propose_fact_goes_through_review(server: tuple[McpServer, StubCli
 
 async def test_unknown_tool_is_reported(server: tuple[McpServer, StubClient]) -> None:
     mcp, _ = server
-    result = await call(mcp, "licorne", {})
+    result = await call(mcp, "unicorn", {})
     assert result["isError"]
 
 
@@ -164,50 +162,50 @@ async def test_api_failure_does_not_kill_the_session(server: tuple[McpServer, St
     mcp, client = server
 
     async def boom(finding: Finding) -> dict[str, Any]:
-        raise RuntimeError("API interne indisponible")
+        raise RuntimeError("internal API unavailable")
 
     client.report_finding = boom  # type: ignore[method-assign]
     result = await call(
-        mcp, "report_finding", {"title": "un vrai titre", "type": "bug", "severity": "low", "evidence": "y"}
+        mcp, "report_finding", {"title": "a real title", "type": "bug", "severity": "low", "evidence": "y"}
     )
-    assert result["isError"] and "indisponible" in result["content"][0]["text"]
+    assert result["isError"] and "unavailable" in result["content"][0]["text"]
 
 
-async def test_validate_result_dit_avant_de_finir_ce_que_le_runner_dirait_apres(
+async def test_validate_result_says_before_finishing_what_the_runner_would_say_after(
     server: tuple[McpServer, StubClient],
 ) -> None:
-    """Cinq réparations sur huit runs au banc : l'agent peut maintenant se vérifier lui-même."""
+    """Five repairs in eight runs on the bench: the agent can now check itself."""
     mcp, _ = server
-    mauvais = {
+    bad = {
         "schema": "choregos/StageResult/v1",
         "status": "done",
         "summary": "x",
-        "questions": ["une chaîne au lieu d'un objet"],
+        "questions": ["a string instead of an object"],
         "findings": [{"severity": "low"}],
     }
-    reponse = await mcp.call("validate_result", {"result": mauvais})
-    assert reponse["isError"] is True
-    texte = reponse["content"][0]["text"]
-    assert "questions.0" in texte and "findings.0.title" in texte
+    answer = await mcp.call("validate_result", {"result": bad})
+    assert answer["isError"] is True
+    text = answer["content"][0]["text"]
+    assert "questions.0" in text and "findings.0.title" in text
 
-    bon = {
+    good = {
         "schema": "choregos/StageResult/v1",
         "status": "done",
         "summary": "x",
         "questions": [],
         "findings": [],
     }
-    ok = await mcp.call("validate_result", {"result": json.dumps(bon)})
+    ok = await mcp.call("validate_result", {"result": json.dumps(good)})
     assert not ok.get("isError") and "conforms" in ok["content"][0]["text"]
 
-    assert (await mcp.call("validate_result", {"result": "{pas du json"}))["isError"] is True
+    assert (await mcp.call("validate_result", {"result": "{not json"}))["isError"] is True
 
 
-async def test_validate_result_exige_les_sorties_que_la_transition_declare(
+async def test_validate_result_requires_the_outputs_the_transition_declares(
     server: tuple[McpServer, StubClient],
 ) -> None:
-    """Le triage de #4 (locataire dev, 09/10) rangeait `size` et `risk` dans une sortie à lui :
-    l'agent l'apprend avant de finir, pas dans la boucle de réparation (S22-15)."""
+    """The triage of #4 (dev tenant, 09/10) put `size` and `risk` in an output of its own:
+    the agent learns it before finishing, not in the repair loop (S22-15)."""
     from types import SimpleNamespace
 
     mcp, client = server
@@ -216,16 +214,16 @@ async def test_validate_result_exige_les_sorties_que_la_transition_declare(
         return SimpleNamespace(transition=SimpleNamespace(outputs=["size", "risk"]))
 
     client.fetch_input = fetch_input  # type: ignore[attr-defined]
-    base = {"schema": "choregos/StageResult/v1", "status": "done", "summary": "trié"}
-    imbrique = await mcp.call(
+    base = {"schema": "choregos/StageResult/v1", "status": "done", "summary": "triaged"}
+    nested = await mcp.call(
         "validate_result", {"result": {**base, "outputs": {"triage": '{"size": "S", "risk": "medium"}'}}}
     )
-    assert imbrique["isError"] is True
-    assert "`size`" in imbrique["content"][0]["text"] and "`risk`" in imbrique["content"][0]["text"]
+    assert nested["isError"] is True
+    assert "`size`" in nested["content"][0]["text"] and "`risk`" in nested["content"][0]["text"]
 
-    juste = await mcp.call(
+    right = await mcp.call(
         "validate_result", {"result": {**base, "outputs": {"size": "S", "risk": "medium"}}}
     )
-    assert not juste.get("isError"), juste
+    assert not right.get("isError"), right
     question = {**base, "status": "needs_human", "outputs": {}}
     assert not (await mcp.call("validate_result", {"result": question})).get("isError")
