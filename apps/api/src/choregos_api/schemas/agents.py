@@ -136,6 +136,13 @@ class AgentCreate(Dto):
             raise ValueError("`project` is required for, and only for, a `project` agent")
         return self
 
+    @field_validator("slug")
+    @classmethod
+    def _slug_is_not_reserved(cls, value: str) -> str:
+        if value in RESERVED_SLUGS:
+            raise ValueError(f"`{value}` is reserved: the console's `/agents/{value}` page is not an agent")
+        return value
+
 
 class AgentFork(Dto):
     """Fork an agent: a new agent whose version 1 is a copy of one of the source's versions (ADR 0061)."""
@@ -192,13 +199,6 @@ class AgentPermissions(Dto):
     pin: bool = False
     #: The scopes the caller may fork it into.
     fork_scopes: list[CreatableScope] = Field(default_factory=list)
-
-    @field_validator("slug")
-    @classmethod
-    def _slug_is_not_reserved(cls, value: str) -> str:
-        if value in RESERVED_SLUGS:
-            raise ValueError(f"`{value}` is reserved: the console's `/agents/{value}` page is not an agent")
-        return value
 
 
 class AgentDraftRequest(Dto):
