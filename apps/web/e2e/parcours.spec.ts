@@ -360,6 +360,42 @@ test("an agent is created from the builder alone, every field of its version set
   await expect(version).toContainText("onboarding-procedure");
 });
 
+test("the builder sets which knowledge bases an agent reads and whose memory it keeps, and the version holds them (S32-01)", async ({ page }) => {
+  await page.goto("/agents");
+  await page.getByRole("button", { name: "New agent" }).click();
+  const builder = page.getByRole("dialog", { name: "New agent" }).getByTestId("agent-builder");
+  await builder.getByLabel("Slug").fill("zoning-reviewer");
+  await builder.getByLabel("Name").fill("Zoning reviewer");
+  await builder.getByLabel("Instructions").fill("Review {{ ticket.title }} against the zoning principles.");
+  const bases = builder.getByTestId("bases-de-la-version");
+  await expect(bases).toContainText("None — it reads no knowledge base.");
+  await expect(builder.getByRole("button", { name: "Read it" })).toBeDisabled();
+  await builder.getByLabel("Add a knowledge base").selectOption("architecture-framework");
+  await builder.getByRole("button", { name: "Read it" }).click();
+  await expect(bases).toContainText("architecture-framework");
+  // A base already read is no longer offered.
+  await expect(builder.getByLabel("Add a knowledge base").locator("option")).toHaveCount(1);
+  await builder.getByLabel("Memory scope").selectOption("agent");
+  const allows = page.getByTestId("ce-que-ca-permet");
+  await expect(allows.getByTestId("connaissances-resolues")).toContainText(
+    "architecture-framework — laid read-only in the workspace; served to every project of the organisation.",
+  );
+  await expect(allows.getByTestId("memoire-resolue")).toContainText("Its own memory within each project");
+  await builder.getByRole("button", { name: "Create the agent" }).click();
+  await expect(page.getByRole("status").first()).toContainText("Zoning reviewer registered as v1");
+
+  // Its next version starts from what v1 holds, and can drop both.
+  await page.getByRole("link", { name: "Zoning reviewer" }).click();
+  await page.getByRole("link", { name: "Definition" }).click();
+  const suivante = page.getByTestId("agent-builder");
+  await expect(suivante.getByTestId("bases-de-la-version")).toContainText("architecture-framework");
+  await expect(suivante.getByLabel("Memory scope")).toHaveValue("agent");
+  await suivante.getByRole("button", { name: "Remove architecture-framework" }).click();
+  await suivante.getByLabel("Memory scope").selectOption("none");
+  await expect(page.getByTestId("connaissances-resolues")).toContainText("None.");
+  await expect(page.getByTestId("memoire-resolue")).toContainText("No memory: a run neither reads nor writes");
+});
+
 test("an agent made from the form runs on a sample under a capped budget, and a failing eval blocks its next version (S32-03)", async ({ page }) => {
   await page.goto("/agents");
   await page.getByRole("button", { name: "New agent" }).click();
