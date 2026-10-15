@@ -41,6 +41,9 @@ class Permission(StrEnum):
     #: owner may, since the allowlist is what the administrator decided to trust. Another source,
     #: or a new version of an existing skill, still needs `agent:manage`.
     SKILL_IMPORT = "skill:import"
+    #: Enable, disable and price the models of the organisation's catalogue, choose its mode and
+    #: its tiers (S39-07, ADR 0060): what the organisation lets its agents use.
+    MODEL_CATALOGUE_MANAGE = "model:catalogue:manage"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {

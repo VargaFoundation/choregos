@@ -32,7 +32,7 @@ async def _gateway_models() -> list[GatewayModelDto]:
     # The deployment's gateway (`CHOREGOS_GATEWAY_TYPE`), not LiteLLM whatever was configured.
     gateway = build("gateway", default_gateway_type(), {})
     models = await gateway.list_models()
-    return [GatewayModelDto.model_validate(m.model_dump(exclude={"source", "owned_by"})) for m in models]
+    return [GatewayModelDto.model_validate(m.model_dump()) for m in models]
 
 
 @router.get("/platform/models", response_model=list[GatewayModelDto], operation_id="listPlatformModels")
@@ -75,7 +75,13 @@ async def put_models(ctx: ProjectCtx, body: ProjectModels, session: Db) -> Proje
         .all()
     )
     validated = {row.litellm_model: list(row.validated_backends or []) for row in rows}
-    resolver = ModelResolver(gateway_url="", gateway_models=[], validated_backends=validated)
+    from ..services.model_catalogue import load_policy
+
+    # The organisation's catalogue refuses a profile mapped to a model that is not enabled (ADR 0060).
+    policy = await load_policy(session, ctx.project.org_id)
+    resolver = ModelResolver(
+        gateway_url="", gateway_models=[], validated_backends=validated, catalogue=policy
+    )
     backend = config.agent.default_backend
     from choregos_core import ModelResolutionError
 

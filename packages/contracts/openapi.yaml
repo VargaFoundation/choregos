@@ -558,8 +558,102 @@ paths:
     get:
       tags: [models]
       operationId: listPlatformModels
+      deprecated: true
+      description: The deployment gateway's models, unfiltered. Use `GET /orgs/{org}/models/usable`.
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayModel" } } } } }
+  /orgs/{org}/models:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [models]
+      operationId: getModelCatalogue
+      description: >-
+        The organisation's model catalogue (ADR 0060): its mode, the gateway that backs it and what
+        that gateway can do, the model behind each tier, and the entries. Every member may read it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ModelCatalogue" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [models]
+      operationId: addModelCatalogueEntry
+      description: Add a model the gateway routes but does not list; `model:catalogue:manage` (org_admin).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ModelCatalogueEntryCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ModelCatalogueEntry" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/models/settings:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    put:
+      tags: [models]
+      operationId: putModelCatalogueSettings
+      description: Set the mode (`open` or `curated`) and the model behind each tier; `model:catalogue:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ModelCatalogueSettings" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ModelCatalogueSettings" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Unprocessable" }
+  /orgs/{org}/models/sync:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    post:
+      tags: [models]
+      operationId: syncModelCatalogue
+      description: >-
+        Read the gateway's models into the catalogue. A new model arrives enabled in `open` mode and
+        disabled in `curated` mode; a model the gateway no longer lists is marked, never deleted.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ModelSyncResult" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/models/curate-preview:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [models]
+      operationId: previewModelCuration
+      description: What switching to `curated` would refuse today (agents and project profiles naming a model that is not enabled).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ModelCuratePreview" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/models/usable:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [models]
+      operationId: listUsableModels
+      description: The models an agent may be given for a stage role and a usage; every member may read it.
+      parameters:
+        - { name: role, in: query, required: false, schema: { type: string } }
+        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval], default: agent } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/UsableModel" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /orgs/{org}/models/{entry_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: entry_id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [models]
+      operationId: updateModelCatalogueEntry
+      description: Enable or disable a model, set its roles, usages, name, notes or price override; `model:catalogue:manage`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ModelCataloguePatch" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ModelCatalogueEntry" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [models]
+      operationId: deleteModelCatalogueEntry
+      description: Delete a manual entry. An entry the gateway lists is disabled, not deleted (409).
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /projects/{id}/models:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3374,6 +3468,121 @@ components:
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
         internal_price: { type: boolean, default: false }
+        source: { type: string, enum: [gateway, manual], default: gateway }
+        owned_by: { type: string, default: "" }
+    PriceOverride:
+      type: object
+      required: [input_per_1k, output_per_1k]
+      properties:
+        input_per_1k: { type: number, minimum: 0 }
+        output_per_1k: { type: number, minimum: 0 }
+    ModelGatewayFacts:
+      type: object
+      properties:
+        provider: { type: string }
+        upstream_model: { type: string }
+        input_cost_per_1k: { type: [number, "null"] }
+        output_cost_per_1k: { type: [number, "null"] }
+        max_input_tokens: { type: [integer, "null"] }
+        supports_tool_calling: { type: boolean, default: true }
+        supports_vision: { type: boolean, default: false }
+    ModelCatalogueEntry:
+      type: object
+      required: [id, model_name, display_name, source, enabled, allowed_roles, usages]
+      properties:
+        id: { type: string }
+        model_name: { type: string }
+        display_name: { type: string }
+        source: { type: string, enum: [gateway, manual] }
+        enabled: { type: boolean }
+        allowed_roles: { type: array, items: { type: string } }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] } }
+        price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
+        last_seen_at: { type: [string, "null"], format: date-time }
+        missing_since: { type: [string, "null"], format: date-time }
+        notes: { type: string }
+        updated_by: { type: [string, "null"] }
+        updated_at: { type: [string, "null"], format: date-time }
+    ModelCatalogueEntryCreate:
+      type: object
+      required: [model_name]
+      properties:
+        model_name: { type: string, minLength: 1, maxLength: 200 }
+        display_name: { type: [string, "null"], maxLength: 200 }
+        enabled: { type: boolean, default: true }
+        allowed_roles: { type: array, items: { type: string } }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] }, default: [agent] }
+        price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        notes: { type: string, default: "" }
+    ModelCataloguePatch:
+      type: object
+      properties:
+        display_name: { type: [string, "null"], maxLength: 200 }
+        enabled: { type: [boolean, "null"] }
+        allowed_roles: { type: [array, "null"], items: { type: string } }
+        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval] } }
+        price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        clear_price_override: { type: boolean, default: false }
+        notes: { type: [string, "null"] }
+    ModelTiers:
+      type: object
+      properties:
+        cheap: { type: [string, "null"] }
+        standard: { type: [string, "null"] }
+        strong: { type: [string, "null"] }
+        aux: { type: [string, "null"] }
+        embed: { type: [string, "null"] }
+        local: { type: [string, "null"] }
+    ModelCatalogue:
+      type: object
+      required: [mode, gateway, tiers, entries]
+      properties:
+        mode: { type: string, enum: [open, curated] }
+        gateway:
+          type: object
+          required: [type]
+          properties:
+            type: { type: string }
+            capabilities: { type: array, items: { type: string } }
+        tiers: { $ref: "#/components/schemas/ModelTiers" }
+        entries: { type: array, items: { $ref: "#/components/schemas/ModelCatalogueEntry" } }
+    ModelCatalogueSettings:
+      type: object
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [open, curated] }
+        tiers: { $ref: "#/components/schemas/ModelTiers" }
+    ModelCuratePreview:
+      type: object
+      properties:
+        refused:
+          type: array
+          items:
+            type: object
+            required: [kind, ref, model]
+            properties:
+              kind: { type: string, enum: [agent, project_profile] }
+              ref: { type: string }
+              model: { type: string }
+    ModelSyncResult:
+      type: object
+      required: [added, missing, seen]
+      properties:
+        added: { type: integer }
+        missing: { type: integer }
+        seen: { type: integer }
+    UsableModel:
+      type: object
+      required: [model_name, display_name]
+      properties:
+        model_name: { type: string }
+        display_name: { type: string }
+        provider: { type: string }
+        input_cost_per_1k: { type: [number, "null"] }
+        output_cost_per_1k: { type: [number, "null"] }
+        priced_by: { type: string, enum: [gateway, override, none], default: none }
+        tiers: { type: array, items: { type: string } }
     ProjectModels:
       type: object
       required: [profiles]

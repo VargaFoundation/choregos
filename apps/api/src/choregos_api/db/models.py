@@ -539,6 +539,32 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class ModelCatalogueRow(Base, PkMixin, TimestampMixin):
+    """One model of the organisation's catalogue (ADR 0060): what the organisation decided about a
+    model the gateway routes — enabled or not, for which stage roles and usages, at which price —
+    plus a snapshot of what the gateway said about it. Rows are never deleted by a sync: a model
+    that leaves the gateway keeps its settings and gets `missing_since`."""
+
+    __tablename__ = "model_catalogue"
+    __table_args__ = (UniqueConstraint("org_id", "model_name", name="uq_model_catalogue_org_model"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    model_name: Mapped[str] = mapped_column(String(200))
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    source: Mapped[str] = mapped_column(String(16), default="gateway")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    #: Stage roles allowed to use it; empty = all.
+    allowed_roles: Mapped[list[str]] = mapped_column(Json, default=list)
+    usages: Mapped[list[str]] = mapped_column(Json, default=lambda: ["agent"])
+    input_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
+    output_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gateway_facts: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
 class ConnectorOperation(Base, PkMixin, TimestampMixin):
     """Une opération d'une instance, et sa politique dans l'organisation : `allowed`, `approval`
     (une action gouvernée, ADR 0035) ou `forbidden` ; les groupes de projets qui y ont droit

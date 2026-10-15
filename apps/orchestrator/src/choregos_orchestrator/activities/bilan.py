@@ -16,6 +16,7 @@ from choregos_api.services import persist_event, ranger_les_sorties, record_cost
 from choregos_api.services.artifacts import record_inline_outputs
 from choregos_api.services.budget_alerts import unsent_month_alerts
 from choregos_api.services.budgets import ticket_budget, ticket_spent
+from choregos_api.services.model_catalogue import priced_spend
 from choregos_api.services.tickets import sorties_a_ranger
 from choregos_contracts import EventType, StageResult, StageStatus
 from choregos_core import Message, Spend, elapsed_seconds, utcnow
@@ -73,6 +74,15 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         spend = Spend()
         if run.gateway_key_id:
             spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
+        # The organisation's price override (ADR 0060) replaces the gateway's figure when tokens are
+        # known; a gateway that cannot read a spend back leaves the line `unmeasured`.
+        spend, pricing = await priced_spend(
+            session,
+            bundle.project.org_id,
+            [run.model or "", *spend.models_used],
+            spend,
+            measured="spend_readback" in getattr(bundle.adapters.gateway, "capabilities", {"spend_readback"}),
+        )
         item = await load_work_item(session, run.work_item_id)
         segment = {
             "tokens_in": spend.tokens_in,
@@ -91,6 +101,7 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         for name in ("cost_usd", "cost_eur"):
             of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
         of_the_run["runs"] = 1
+        of_the_run.update(pricing)
         run.tokens = of_the_run
         run.cost_usd = float(of_the_run["cost_usd"])
         run.spend_collected = True
