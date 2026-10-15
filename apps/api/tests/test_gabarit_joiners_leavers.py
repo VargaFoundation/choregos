@@ -1,7 +1,7 @@
-"""Le gabarit `joiners-leavers` (S20-07) : un projet RH naît avec ses deux workflows, leur défaut et
-leur routage, et l'organisation reçoit ses deux agents et ses deux skills — en version 1 quand ils
-n'y sont pas, jamais réécrits quand ils y sont. Les effets du cœur que ses workflows appellent :
-`connector.call`, dont un serveur MCP rend ce qu'il a structuré, et `check`, un contrôle.
+"""The `joiners-leavers` template (S20-07): an HR project is born with its two workflows, their default
+and their routing, and the organisation receives its two agents and its two skills — in version 1 when
+they are not there, never rewritten when they are. The core effects its workflows call:
+`connector.call`, of which an MCP server returns what it structured, and `check`, a control.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ async def test_un_second_projet_ne_reecrit_pas_ce_que_l_organisation_a_fait_evol
     assert publiee.status_code == 201, publiee.text
     await _projet(client, slug="rh-lyon")
     skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
-    assert skills["access-profiles"]["latest_version"] == 2, "la version de l'organisation tient"
+    assert skills["access-profiles"]["latest_version"] == 2, "the organisation's version stands"
     detail = (await client.get(f"{ORG}/agents/onboarding-coordinator")).json()
     assert len(detail["versions"]) == 1, "l'agent n'est pas réinstallé"
 
@@ -123,7 +123,7 @@ async def test_verifier_tient_ou_refuse_et_un_serveur_mcp_rend_ce_qu_il_a_struct
     from choregos_api.db.session import session_scope
     from choregos_api.effets import ContexteEffet, EffetRefuse, effet, politique_de_l_effet
 
-    assert politique_de_l_effet("check") == "allowed", "un contrôle ne touche rien au-dehors"
+    assert politique_de_l_effet("check") == "allowed", "a check touches nothing outside"
     monkeypatch.setattr(choregos_adapters, "FAUX_MCP", serveur_mcp(FakeFournisseur()))
     async with session_scope() as session:
         projet = await session.get(Project, project["id"])

@@ -78,7 +78,7 @@ def test_every_identifier_of_a_template_is_english(path: pathlib.Path) -> None:
 
 
 def test_a_planted_french_state_id_is_caught() -> None:
-    planted = "states:\n  demande: { display: Request received }\n  a_revoir: { display: To review }\n"
+    planted = "states:\n  demande: { display: Request received }\n  a_revoir: { display: To review }\n"  # lang: fr-ok
     words = {word for _, word in french_words_in(pathlib.Path("w/x.yaml"), planted)}
     assert {"demande", "revoir"} <= words
 
