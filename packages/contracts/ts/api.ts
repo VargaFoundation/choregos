@@ -767,7 +767,10 @@ export type AgentBudget = {
 export type AgentSpec = {
   instructions?: string;
   model?: string | null;
+  /** the ACP coding agent that carries the version; set only with an `acp` runtime (or none) */
   backend?: string | null;
+  /** How the version runs (ADR 0063). Absent means an `acp` runtime, the coding agent named by `backend`. Later runtimes (remote agents) add a `kind` to this union. */
+  runtime?: AcpRuntime | CodeRuntime;
   limits?: AgentLimits;
   budget?: AgentBudget;
   skills?: Array<{
@@ -786,6 +789,30 @@ export type AgentSpec = {
   evals?: Array<AgentEvalCase>;
   /** whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none */
   memory?: "none" | "project" | "agent";
+};
+
+/** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
+export type AcpRuntime = {
+  kind: "acp";
+  backend?: string | null;
+};
+
+/** An agent written in code (ADR 0063) - an ACP agent in an image the operator named, built from the runner image. */
+export type CodeRuntime = {
+  kind: "code";
+  /** the NAME of an image of the operator's `CHOREGOS_AGENT_IMAGES` map, never an image reference */
+  image: string;
+  /** the argv the runner starts in the image; it speaks ACP on stdio */
+  command: Array<string>;
+  /** the model API the code calls through the gateway */
+  api_format?: "openai" | "anthropic";
+};
+
+/** An image an operator named for code agents. The reference itself is never returned. */
+export type AgentImageInfo = {
+  name: string;
+  /** the reference carries an `@sha256:` digest */
+  digest_pinned: boolean;
 };
 
 /** A deterministic case (ADR 0020, level 1) — the instructions rendered on its sample input contain what they must, and nothing they must not. */
@@ -2633,6 +2660,7 @@ export interface Operations {
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
+  listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };

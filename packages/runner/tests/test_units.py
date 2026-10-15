@@ -17,7 +17,13 @@ from choregos_contracts import (
     StageResult,
     StageStatus,
 )
-from choregos_runner.backends import BACKENDS, backend_version, get_backend, known_backends
+from choregos_runner.backends import (
+    BACKENDS,
+    RUNTIME_BACKENDS,
+    backend_version,
+    get_backend,
+    known_backends,
+)
 from choregos_runner.client import InternalApiError, InternalClient
 from choregos_runner.dod import CheckOutcome, DodReport, commands_for, run_checks
 from choregos_runner.guardrails import GuardRails
@@ -274,7 +280,9 @@ def test_un_fichier_du_depot_n_est_jamais_ecrase(tmp_path: Path) -> None:
 def test_backend_inconnu_et_versions() -> None:
     with pytest.raises(KeyError, match="unknown backend"):
         get_backend("licorne")
-    assert set(known_backends()) == set(BACKENDS)
+    assert set(known_backends()) | RUNTIME_BACKENDS == set(BACKENDS)
+    assert "code" in RUNTIME_BACKENDS
+    assert "code" not in known_backends(), "a runtime backend ships no agent to rotate over"
     assert backend_version("claude-code"), "la version du binaire est épinglée"
     assert backend_version("licorne") is None
 

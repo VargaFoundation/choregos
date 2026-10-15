@@ -420,6 +420,8 @@ export type StageInput = {
   };
   agent: {
     backend: string;
+    /** The image the run's pod uses instead of the runner image (ADR 0063): the reference the operator's `CHOREGOS_AGENT_IMAGES` maps the agent's image name to, built from the runner image. */
+    image?: string;
     launch?: {
       command?: Array<string>;
       env?: {
