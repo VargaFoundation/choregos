@@ -34,7 +34,7 @@ def dev_complex() -> Any:
         (None, "inbox", "started", ("start", None)),
         ("implemented", "tested", "", ("nominal", "t-test")),
         ("implemented", "planned", "failing gates: evidence_present", ("retry", "t-test")),
-        ("tested", "addressing_review", "", ("changes_requested", "t-review")),
+        ("documented", "addressing_review", "", ("changes_requested", "t-review")),
         ("reviewed", "addressing_review", "", ("changes_requested", "t-security-review")),
         ("addressing_review", "implemented", "", ("nominal", "t-address-review")),
         (
@@ -63,12 +63,12 @@ def test_chaque_deplacement_nomme_l_arete_qui_l_a_porte(
 def test_un_defaut_depuis_tout_etat_d_agent_se_reconnait(dev_complex: Any) -> None:
     from choregos_api.services import arete_du_deplacement
 
-    # `tested` n'a pas d'escalade vers `needs_human` par sa transition : c'est le défaut `on_question`.
+    # `documented` has no escalation to `needs_human` on its transition: it is the `on_question` default.
     sans_escalade = dev_complex.model_copy(deep=True)
     for t in sans_escalade.transitions:
         if t.key == "t-review":
             t.on_changes_requested = None
-    assert arete_du_deplacement(sans_escalade, "tested", "needs_human", "a question") == ("default", None)
+    assert arete_du_deplacement(sans_escalade, "documented", "needs_human", "a question") == ("default", None)
 
 
 LIVRAISON = """apiVersion: choregos/v1
