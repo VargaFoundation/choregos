@@ -28,6 +28,7 @@ ENGLISH = (
     "charts/",  # #534
     ".github/",  # S34-04f
     "dev/",  # S34-04f
+    "demo/",  # S34-04g
 )
 
 #: (file, start of the line) — French that stays, each with its reason.
