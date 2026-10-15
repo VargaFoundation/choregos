@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+
 import pytest
 from choregos_adapters.fakes.mcp import FakeMcpServer
 from choregos_adapters.mcp import ClientMcp, ErreurMcp, empreinte_du_schema
@@ -67,3 +69,51 @@ def test_l_empreinte_d_un_schema_change_avec_le_moindre_ecart() -> None:
     assert empreinte_du_schema(a) == empreinte_du_schema(b), "l'ordre des clés ne compte pas"
     elargi = {"type": "object", "properties": {"modele": {"type": "string"}, "quantite": {"type": "integer"}}}
     assert empreinte_du_schema(a) != empreinte_du_schema(elargi)
+
+
+async def test_basic_sends_the_email_and_token_pair_and_never_bearer() -> None:
+    """Atlassian's Rovo MCP Server refuses Bearer for an API token (S39-08a)."""
+    serveur = FakeMcpServer(outils=OUTILS[:1])
+    client = ClientMcp(
+        "https://mcp.atlassian.com/v1/mcp",
+        token="api-token",
+        auth_scheme="basic",
+        username="bot@example.com",
+        transport=serveur.transport(),
+    )
+    await client.list_tools()
+    expected = "Basic " + base64.b64encode(b"bot@example.com:api-token").decode()
+    assert serveur.recues
+    for methode, entetes, _ in serveur.recues:
+        assert entetes["authorization"] == expected, methode
+        assert "bearer" not in entetes["authorization"].lower()
+
+
+async def test_the_default_scheme_is_still_bearer() -> None:
+    serveur = FakeMcpServer(outils=OUTILS[:1])
+    await ClientMcp("https://f.test/mcp", token="t", transport=serveur.transport()).list_tools()
+    assert all(entetes["authorization"] == "Bearer t" for _, entetes, _ in serveur.recues)
+
+
+def test_basic_without_a_username_or_an_unknown_scheme_is_refused() -> None:
+    with pytest.raises(ValueError, match="username"):
+        ClientMcp("https://f.test/mcp", token="t", auth_scheme="basic")
+    with pytest.raises(ValueError, match="scheme"):
+        ClientMcp("https://f.test/mcp", token="t", auth_scheme="digest")
+
+
+def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    from choregos_adapters import build
+
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    client = build(
+        "mcp",
+        "mcp",
+        {
+            "url": "https://mcp.atlassian.com/v1/mcp",
+            "token": "t",
+            "auth_scheme": "basic",
+            "username": "a@b.c",
+        },
+    )
+    assert client._entetes()["Authorization"].startswith("Basic ")

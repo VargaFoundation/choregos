@@ -375,6 +375,10 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 
 
 
+| S39-08a | S39 | ✅ | — | the `mcp` connector authenticates with Basic (`auth_scheme: basic` + `username`, token = the API token) besides Bearer (default), so Atlassian's Rovo MCP Server is usable by internal agents. Proves: the exact header on every request, the default unchanged, a missing username or unknown scheme refused, the connector type builds it (red without the change). Does not prove: a call to the real Rovo MCP Server (needs the Atlassian gestures), nor A2A / remote agents (S39-08b, not built), nor the catalogue entry (task 10). |
+
+
+
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
 remplacée.** La revue de la console du dev a relevé cinq manques (un seul workflow par projet, aucune fonction
