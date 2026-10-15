@@ -426,6 +426,15 @@ function Acces({ agent }: { agent: Agent }) {
 }
 
 function Specification({ spec }: { spec: AgentSpec }) {
+  // A code agent names an image; whether the operator pinned it by digest is the platform's to say.
+  const images = useQuery({
+    queryKey: ["platform-agent-images"],
+    queryFn: () => api.agentImages(),
+    retry: false,
+    enabled: spec.runtime?.kind === "code",
+  });
+  const imageName = spec.runtime?.kind === "code" ? spec.runtime.image : undefined;
+  const pinned = images.data?.find((i) => i.name === imageName)?.digest_pinned;
   const outils = (spec.mcp_servers ?? []).flatMap((s) => (s.tools ?? []).map((t) => `${s.connector}: ${t}`));
   return (
     <div className="space-y-3 text-sm" data-testid="version">
@@ -433,8 +442,23 @@ function Specification({ spec }: { spec: AgentSpec }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
         <dt className="text-ink-muted">Model</dt>
         <dd>{spec.model ?? "The project's profile"}</dd>
-        <dt className="text-ink-muted">Backend</dt>
-        <dd>{spec.backend ?? "The project's"}</dd>
+        {spec.runtime?.kind === "code" ? (
+          <>
+            <dt className="text-ink-muted">Runtime</dt>
+            <dd data-testid="runtime-code">
+              <span className="rounded border border-line px-1.5 py-0.5">Code · {spec.runtime.image}</span>{" "}
+              <span className={pinned === false ? "text-warn" : "text-ink-muted"} data-testid="image-pinned">
+                {pinned === undefined ? "" : pinned ? "pinned by digest" : "not pinned by digest"}
+              </span>
+              <span className="mt-1 block font-mono text-ink-muted">{(spec.runtime.command ?? []).join(" ")}</span>
+            </dd>
+          </>
+        ) : (
+          <>
+            <dt className="text-ink-muted">Backend</dt>
+            <dd>{spec.backend ?? "The project's"}</dd>
+          </>
+        )}
         <dt className="text-ink-muted">Limits</dt>
         <dd>
           {spec.limits?.max_turns ?? "—"} turns · {spec.limits?.max_minutes ?? "—"} min

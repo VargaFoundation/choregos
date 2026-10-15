@@ -58,6 +58,7 @@ import type {
   KnowledgeSourceCreate,
   KnowledgeSourcePatch,
   AgentBackendInfo,
+  AgentImageInfo,
   ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
@@ -465,6 +466,8 @@ export const api = {
     request<void>(`/orgs/${org}/models/${id}`, { method: "DELETE" }),
   previewModelCuration: (org: string) => request<ModelCuratePreview>(`/orgs/${org}/models/curate-preview`),
   backends: () => request<AgentBackendInfo[]>("/platform/backends"),
+  /** The images an operator named for agents written in code: names only (ADR 0063). */
+  agentImages: () => request<AgentImageInfo[]>("/platform/agent-images"),
   executors: () => request<ExecutorInfo[]>("/platform/executors"),
   models: (id: string) => request<ProjectModels>(`/projects/${qualify(id)}/models`),
   putModels: (id: string, body: ProjectModels) =>
